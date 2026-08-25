@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -8,6 +9,7 @@ type AgentDefinition = {
   description: string | null
   version: string
   enabled: boolean
+  created_at: string
 }
 
 type ToolDefinition = {
@@ -25,36 +27,19 @@ export default async function AgentsPage() {
 
   const supabase = await createClient()
 
-  const { data: agentRows, error: agentError } = await supabase
+  const { data: agents, error: agentsError } = await supabase
     .schema('agent')
     .from('agent_definitions')
     .select(
-      'id, agent_key, name, description, version, enabled'
+      'id, agent_key, name, description, version, enabled, created_at'
     )
     .eq('enabled', true)
-    .order('agent_key')
+    .order('agent_key', { ascending: true })
     .order('version', { ascending: false })
 
-  if (agentError) {
-    throw new Error(`Unable to load agent definitions: ${agentError.message}`)
-  }
+  const enabledAgents = (agents ?? []) as AgentDefinition[]
 
-  const agents = (agentRows ?? []).reduce<AgentDefinition[]>(
-    (selected, agent) => {
-      const existing = selected.find(
-        (item) => item.agent_key === agent.agent_key
-      )
-
-      if (!existing) {
-        selected.push(agent)
-      }
-
-      return selected
-    },
-    []
-  )
-
-  const agentIds = agents.map((agent) => agent.id)
+  const agentIds = enabledAgents.map((agent) => agent.id)
 
   let tools: ToolDefinition[] = []
 
@@ -65,101 +50,138 @@ export default async function AgentsPage() {
       .select(
         'id, agent_definition_id, tool_key, name, description, version, enabled'
       )
-      .eq('enabled', true)
       .in('agent_definition_id', agentIds)
-      .order('name')
+      .eq('enabled', true)
+      .order('name', { ascending: true })
 
     if (toolError) {
       throw new Error(`Unable to load agent tools: ${toolError.message}`)
     }
 
-    tools = toolRows ?? []
+    tools = (toolRows ?? []) as ToolDefinition[]
+  }
+
+  const toolsByAgent = new Map<string, ToolDefinition[]>()
+
+  for (const tool of tools) {
+    const existing = toolsByAgent.get(tool.agent_definition_id) ?? []
+    existing.push(tool)
+    toolsByAgent.set(tool.agent_definition_id, existing)
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-12">
-      <h1 className="text-3xl font-semibold">AI Agents</h1>
+    <main className="min-h-screen p-8">
+      <div className="mx-auto max-w-6xl space-y-8">
+        <Link href="/dashboard" className="text-sm underline">
+          ← Back to dashboard
+        </Link>
 
-      <p className="mt-2 text-muted-foreground">
-        Manage and run AI-powered data quality agents.
-      </p>
+        <header>
+          <h1 className="text-3xl font-semibold">AI Agents</h1>
+          <p className="mt-2 text-muted-foreground">
+            View enabled AI agents and their registered tools.
+          </p>
+        </header>
 
-      <section className="mt-8 space-y-6">
-        {agents.length === 0 ? (
-          <div className="rounded-xl border p-6">
-            <h2 className="text-xl font-semibold">No enabled agents</h2>
+        {agentsError ? (
+          <section className="rounded-xl border border-red-200 p-6">
+            <h2 className="font-medium">Unable to load agents</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              There are currently no enabled agents available to this user.
+              The agent registry could not be loaded.
             </p>
-          </div>
+          </section>
+        ) : enabledAgents.length === 0 ? (
+          <section className="rounded-xl border p-6 text-sm text-muted-foreground">
+            No enabled agents are currently registered.
+          </section>
         ) : (
-          agents.map((agent) => {
-            const agentTools = tools.filter(
-              (tool) => tool.agent_definition_id === agent.id
-            )
+          <div className="space-y-6">
+            {enabledAgents.map((agent) => {
+              const agentTools = toolsByAgent.get(agent.id) ?? []
 
-            return (
-              <section
-                key={agent.id}
-                className="rounded-xl border p-6"
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold">
-                      {agent.name}
-                    </h2>
+              return (
+                <section
+                  key={agent.id}
+                  className="rounded-xl border p-6 space-y-5"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-xl font-semibold">
+                          {agent.name}
+                        </h2>
 
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {agent.description}
-                    </p>
-                  </div>
+                        <span className="rounded-full border px-2 py-1 text-xs">
+                          v{agent.version}
+                        </span>
 
-                  <div className="flex items-center gap-3">
-                    <span className="rounded-full border px-3 py-1 text-sm">
-                      Enabled
-                    </span>
+                        <span className="rounded-full border px-2 py-1 text-xs">
+                          Enabled
+                        </span>
+                      </div>
 
-                    <span className="text-sm text-muted-foreground">
-                      Version {agent.version}
-                    </span>
-                  </div>
-                </div>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {agent.description ||
+                          'No description is registered for this agent.'}
+                      </p>
 
-                <div className="mt-6">
-                  <h3 className="text-sm font-semibold">
-                    Tools ({agentTools.length})
-                  </h3>
-
-                  {agentTools.length === 0 ? (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      No enabled tools are currently registered.
-                    </p>
-                  ) : (
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {agentTools.map((tool) => (
-                        <div
-                          key={tool.id}
-                          className="rounded-lg border p-4"
-                        >
-                          <h4 className="font-medium">{tool.name}</h4>
-
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {tool.description}
-                          </p>
-
-                          <p className="mt-3 text-xs text-muted-foreground">
-                            v{tool.version}
-                          </p>
-                        </div>
-                      ))}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Key: {agent.agent_key}
+                      </p>
                     </div>
-                  )}
-                </div>
-              </section>
-            )
-          })
+
+                    <div className="text-sm text-muted-foreground">
+                      {agentTools.length}{' '}
+                      {agentTools.length === 1 ? 'tool' : 'tools'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium">Registered tools</h3>
+
+                    {agentTools.length === 0 ? (
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        No enabled tools are registered for this agent.
+                      </p>
+                    ) : (
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        {agentTools.map((tool) => (
+                          <div
+                            key={tool.id}
+                            className="rounded-lg border p-4"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <h4 className="font-medium">{tool.name}</h4>
+                              <span className="text-xs text-muted-foreground">
+                                v{tool.version}
+                              </span>
+                            </div>
+
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {tool.tool_key}
+                            </p>
+
+                            {tool.description && (
+                              <p className="mt-2 text-sm text-muted-foreground">
+                                {tool.description}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )
+            })}
+          </div>
         )}
-      </section>
+
+        <p className="text-xs text-muted-foreground">
+          Agent execution is not enabled from this page yet. This registry is
+          currently read-only.
+        </p>
+      </div>
     </main>
   )
 }
