@@ -26,8 +26,9 @@ The production dashboard is authenticated and currently shows:
 
 The **AI Agents** card is visible in production and links to `/agents`.
 
-This confirms the AI Agents dashboard entry has successfully reached
-production.
+This was also independently shown in the user-provided production screenshot.
+The production dashboard currently renders five modules: Datasets, Profiling,
+Data Quality, Observability, and AI Agents.
 
 ## 3. Git Checkpoint
 
@@ -149,7 +150,8 @@ membership/admin checks and RLS policies.
 
 ## 6. Agent Schema
 
-The remote `agent` schema has been confirmed to exist.
+The remote `agent` schema has been independently re-verified against the live Supabase project.
+The project is ACTIVE_HEALTHY in `ap-southeast-1`, running PostgreSQL 17.6.1.155.
 
 ### Enums
 
@@ -253,9 +255,22 @@ created_at
 
 ### `agent.tool_definitions`
 
-The table exists and is part of the agent registry. Exact tool
-columns/RLS should be inspected before implementing tool-driven
-execution.
+The table exists and is part of the agent registry. Live verification confirmed
+the exact columns are:
+
+``` text
+id
+agent_definition_id
+tool_key
+name
+description
+version
+input_schema
+output_schema
+execution_config
+enabled
+created_at
+```
 
 ## 7. Security Principles
 
@@ -341,25 +356,68 @@ AI Agents
 The implementation must use the actual remote schema and existing RLS
 policies.
 
-## 10. Known Issues / Investigations
+## 10. Live Re-verification Findings
 
 ### Migration history
 
-Resolved. Local and remote `20260825000000` are synchronized.
+Resolved and independently re-verified against the live project.
+
+``` text
+Local CLI history: 20260825000000
+Remote Supabase history: 20260825000000
+Migration name: profiling_agent_hardening_v6
+```
+
+### Agent registry discrepancy — IMPORTANT
+
+The live database contains **two enabled rows** with the same `agent_key`
+`profiling_agent`:
+
+``` text
+Profiling Agent | version 1.0 | enabled | 8 tools
+Profiling Agent | version 2.0 | enabled | 12 tools
+```
+
+This is real live database state and was not represented in the earlier
+checkpoint. It must be resolved deliberately before building execution
+selection logic. We must not guess which version should be canonical.
+
+### Agent RLS — independently verified
+
+All six agent tables have RLS enabled. Authenticated users currently have
+SELECT policies on enabled agent/tool definitions and project-scoped SELECT
+policies for runs, steps, messages, and artifacts. Anonymous users do not
+have SELECT privilege on these tables.
+
+### Security advisor findings — OPEN
+
+The live Supabase security advisor currently reports WARN-level findings for:
+
+- `public.create_file_dataset(...)` — authenticated users can execute a
+  `SECURITY DEFINER` function.
+- `public.create_organization(...)` — authenticated users can execute a
+  `SECURITY DEFINER` function.
+- `public.create_project(...)` — authenticated users can execute a
+  `SECURITY DEFINER` function.
+- Leaked password protection is disabled.
+
+These are not automatically defects; the intended security model must be
+verified before changing them. They are now explicit open security-review
+items.
+
+### Performance advisor findings — informational/warnings
+
+The live performance advisor reports duplicate indexes, including duplicate
+indexes in `agent.agent_runs`, `agent.agent_run_steps`, and other schemas,
+and unused-index notices. These are not part of the immediate agent UI
+implementation and must not be deleted blindly.
 
 ### `pg_net`
 
-A schema diff previously warned about:
-
-``` sql
-drop extension if exists "pg_net"
-```
-
-This was treated as a warning requiring verification, not an instruction
-to remove the extension.
-
-Do not remove `pg_net` unless the remote environment and application
-requirements explicitly establish that it is safe.
+A previous schema diff warned about dropping `pg_net`. Live database verification
+now shows **no installed `pg_net` extension**. Therefore the prior diff warning
+was not evidence that an installed production `pg_net` extension should be
+removed. Do not add or remove extensions based solely on that historical diff.
 
 ### Supabase CLI
 
@@ -467,7 +525,7 @@ For risky database changes:
 -   Build verification.
 -   Production smoke test.
 
-## 14. Last Known Good State
+## 14. Re-verification Status
 
 The last confirmed production state is:
 
@@ -487,7 +545,64 @@ AI Agents card visible
 
 This is the recovery baseline.
 
-## 15. Next Action
+## 15. Remaining Verification Gap
+
+The local Windows working tree was re-checked during the current session. The
+following is the latest user-provided evidence:
+
+``` text
+git status --short
+ M .gitignore
+ M PROJECT_STATE.md
+?? pnpm-workspace.yml
+?? supabase/
+```
+
+A full untracked-files check showed the following intentionally relevant files
+under `supabase/`:
+
+``` text
+?? supabase/migrations/20260825000000_profiling_agent_hardening_v6.sql
+?? supabase/remote_agent_schema.sql
+?? supabase/remote_app_schema.sql
+?? supabase/remote_profiling_schema.sql
+?? supabase/remote_public_schema.sql
+?? supabase/verify_agent_schema.sql
+?? supabase/verify_profiling_schema.sql
+```
+
+The `supabase/.temp/` contents are ignored by `.gitignore` and were confirmed
+with `git check-ignore -v`. The two local backup directories are also ignored:
+
+``` text
+supabase_backup_before_history_fix/
+supabase_backup_before_migration_repair/
+```
+
+`PROJECT_STATE_v1.md` is intentionally ignored and must be ignored going forward.
+It is a disposable alternate project-state draft and is not the continuity
+source. `PROJECT_STATE.md` is the authoritative continuity document.
+
+The current `.gitignore` changes are not yet committed. The `supabase/`
+production-relevant migration and schema/verification files are currently
+untracked and therefore are not yet in GitHub. This must be resolved deliberately
+before claiming that the repository contains all required Supabase project files.
+
+Required local verification at the start of the next session remains:
+
+``` powershell
+git status --short
+git status --short --untracked-files=all
+git log --oneline -5
+git rev-parse HEAD
+git rev-parse origin/main
+npx supabase migration list
+Get-Content .\app\dashboard\page.tsx
+Get-Content .\app\agents\page.tsx
+Get-Content .\PROJECT_STATE.md
+```
+
+## 16. Last Known Good State
 
 Before implementing agent execution, inspect:
 
@@ -503,14 +618,117 @@ Select-String -Path .\supabase\remote_agent_schema.sql `
 
 Then implement the agent registry against the verified schema.
 
-## 16. Session Continuity
+## 17. Session Continuity
 
 When continuing this project in a new session:
 
 1.  Read `PROJECT_STATE.md`.
 2.  Check `git status`.
-3.  Check `git log --oneline -5`.
-4.  Check `npx supabase migration list`.
-5.  Inspect the relevant current source files.
-6.  Verify the database schema before changing database-dependent code.
-7.  Continue from **Current Work Queue**, not from assumptions.
+3.  Check `git status --short --untracked-files=all`.
+4.  Check `git log --oneline -5`.
+5.  Check `git rev-parse HEAD` and `git rev-parse origin/main`.
+6.  Check `npx supabase migration list`.
+7.  Inspect the relevant current source files.
+8.  Verify the database schema before changing database-dependent code.
+9.  Determine deliberately which `supabase/` files should be committed; do not
+    assume that untracked schema dumps are already present on GitHub.
+10. Continue from **Current Work Queue**, not from assumptions.
+
+## 18. Latest Local Repository / Ignore-State Evidence
+
+The current `.gitignore` contains these additional intentional rules:
+
+``` text
+# Supabase local state
+supabase/.temp/
+
+# Local Supabase backup snapshots
+supabase_backup_before_history_fix/
+supabase_backup_before_migration_repair/
+
+# Alternate project-state draft
+PROJECT_STATE_v1.md
+```
+
+`git check-ignore -v` explicitly confirmed that these paths are ignored by the
+above rules. The earlier PowerShell error
+
+``` text
+supabase/.temp/: The term 'supabase/.temp/' is not recognized as a name of a
+cmdlet, function, script file, or executable program.
+```
+
+was only a shell-command/path-entry mistake; it is not evidence of a Supabase
+problem. Use commands such as `Get-ChildItem .\supabase\.temp` or Git
+ignore checks rather than entering a directory path by itself at the PowerShell
+prompt.
+
+The latest visible Supabase file inventory is:
+
+``` text
+supabase/remote_agent_schema.sql
+supabase/remote_app_schema.sql
+supabase/remote_profiling_schema.sql
+supabase/remote_public_schema.sql
+supabase/verify_agent_schema.sql
+supabase/verify_profiling_schema.sql
+supabase/migrations/20260825000000_profiling_agent_hardening_v6.sql
+```
+
+The backup directories contain copies of the remote schema dumps and the
+hardening migration used during repair/history work. They are intentionally
+excluded from production commits.
+
+## 19. Dependency / Package-Manager Continuity Note
+
+A dependency override instruction was supplied during the current session:
+
+``` yaml
+overrides:
+  hono: 4.12.25
+```
+
+This must be preserved when continuing package/dependency work. The exact file
+containing this override was not established by the evidence captured in this
+checkpoint, so do not assume its location without inspecting the repository.
+
+`pnpm-workspace.yml` is currently untracked and must be inspected before deciding
+whether it belongs in the production repository.
+
+## 20. Supabase Grant / Secret-Scan Interpretation
+
+A repository-wide PowerShell search for strings such as `password`,
+`secret`, `service_role`, `anon_key`, `access_token`, `Bearer`, and `token`
+was run against `supabase\*.sql`. The visible results were database GRANT
+statements in the remote/verification schema dumps, including grants to the
+PostgreSQL `service_role` role.
+
+Important distinction: these results are schema metadata showing database
+privileges; they are not service-role credentials or API keys. No credential
+value should be copied into source control. Continue to treat actual service
+role keys, anon keys, passwords, access tokens, and other secrets as forbidden
+in Git.
+
+## 21. Immediate Next-Session Starting Point
+
+Before implementing the real AI Agent registry UI, do not perform another
+migration repair/reset. First establish the repository checkpoint:
+
+``` powershell
+git status --short --untracked-files=all
+git diff -- .gitignore PROJECT_STATE.md
+git log --oneline -5
+git rev-parse HEAD
+git rev-parse origin/main
+npx supabase migration list
+```
+
+Then inspect the exact agent schema/policies from the already captured schema
+dumps and the live project as required. The next implementation target remains
+connecting `/app/agents` to the real `agent.agent_definitions` registry, while
+resolving the duplicate enabled `profiling_agent` versions deliberately before
+adding execution-selection logic.
+
+Do not claim the full repository is backed up on GitHub until the currently
+untracked `supabase/` files and the intended `.gitignore` / `PROJECT_STATE.md`
+changes have been deliberately reviewed, committed, pushed, and verified.
