@@ -1,87 +1,65 @@
+import { NextResponse } from "next/server"
+
+import { executeProfilingExecutor } from "@/lib/agents/executors/profiling-executor"
 import type {
   ToolExecutionContext,
-  ToolExecutionResult,
-} from "../types"
+} from "@/lib/agents/types"
 
 
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
 
-export async function executeProfilingExecutor(
-  operation:string,
-  input:any,
-  context:ToolExecutionContext
-):Promise<ToolExecutionResult>{
-
-
-
-  const {
-    agentRunId,
-    stepId,
-    projectId
-  } = context
+    const {
+      operation,
+      input = {},
+      agentRunId,
+      stepId,
+      projectId,
+    } = body
 
 
-
-
-  switch(operation){
-
-
-    case "profile_dataset":
-
-
-      //
-      // Future:
-      //
-      // Call Python profiling service here
-      //
-      // POST /profile
-      //
-      // Receive:
-      //
-      // dataset_profile
-      // column_profiles
-      // anomalies
-      // candidate_keys
-      //
-
-
-
-      return {
-
-
-        output:{
-
-
-          execution_started:true,
-
-
-          agent_run_id:
-            agentRunId,
-
-
-          step_id:
-            stepId,
-
-
-          project_id:
-            projectId,
-
-
-          input
-
+    if (!operation) {
+      return NextResponse.json(
+        {
+          error: "operation is required",
+        },
+        {
+          status: 400,
         }
-
-      }
-
-
-
-
-    default:
-
-
-      throw new Error(
-        `Unsupported operation ${operation}`
       )
+    }
+
+
+    const context: ToolExecutionContext = {
+      agentRunId,
+      stepId,
+      projectId,
+    }
+
+
+    const result = await executeProfilingExecutor(
+      operation,
+      input,
+      context
+    )
+
+
+    return NextResponse.json(result)
+
+  } catch (error) {
+
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown error",
+      },
+      {
+        status: 500,
+      }
+    )
 
   }
-
 }
