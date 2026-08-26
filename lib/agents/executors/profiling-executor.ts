@@ -53,6 +53,49 @@ export async function executeProfilingExecutor(
         if (error) {
           throw error
         }
+
+        const findings = results
+          .filter((result) => result.status === "FAILED")
+          .map((result) => ({
+            profile_run_id: profileRunId,
+            finding_type: "METRIC_EXECUTION",
+            severity: "MEDIUM",
+            title: `Metric execution failed: ${result.metric_name}`,
+            description: result.error ?? "Metric execution failed",
+            confidence: 0.8,
+            evidence: {
+              metric_definition_id: result.metric_definition_id,
+            },
+          }))
+
+        if (findings.length > 0) {
+          const { error: findingError } = await supabase
+            .schema("profiling")
+            .from("profile_findings")
+            .insert(findings)
+
+          if (findingError) {
+            throw findingError
+          }
+        }
+
+        const failedCount = results.filter((result) => result.status === "FAILED").length
+        const overallScore = results.length === 0
+          ? 0
+          : Number((((results.length - failedCount) / results.length) * 100).toFixed(2))
+
+        const { error: scoreError } = await supabase
+          .schema("profiling")
+          .from("data_quality_scores")
+          .upsert({
+            profile_run_id: profileRunId,
+            completeness_score: overallScore,
+            overall_score: overallScore,
+          })
+
+        if (scoreError) {
+          throw scoreError
+        }
       }
 
       return {
