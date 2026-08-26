@@ -11,7 +11,7 @@ export default async function ProfilingPage() {
     .schema('profiling')
     .from('profile_runs')
     .select('id,status,engine_name,row_count,column_count,started_at,completed_at')
-    .order('created_at', { ascending: false })
+    .order('started_at', { ascending: false })
     .limit(10)
 
   const latestRun = runs?.[0]
@@ -31,7 +31,7 @@ export default async function ProfilingPage() {
         .from('profile_findings')
         .select('finding_type,severity,title,description')
         .eq('profile_run_id', latestRun.id)
-        .order('created_at', { ascending: false })
+        .order('started_at', { ascending: false })
         .limit(10)
     : { data: [] }
 

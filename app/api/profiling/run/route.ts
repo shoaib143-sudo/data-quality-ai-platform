@@ -49,17 +49,27 @@ export async function POST(request: Request) {
 
   } catch (error) {
 
+    console.error(
+      "PROFILING_EXECUTION_ERROR",
+      error,
+    )
+
     return NextResponse.json(
       {
         error:
           error instanceof Error
             ? error.message
             : "Unknown error",
+
+        stack:
+          error instanceof Error
+            ? error.stack
+            : null,
       },
       {
         status: 500,
       }
     )
 
-  }
+}
 }
