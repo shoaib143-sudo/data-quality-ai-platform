@@ -5,13 +5,11 @@ import type {
 } from "../types"
 import { executeMetrics, type MetricDefinition } from "../../profiling/metric-runtime"
 
-
 export async function executeProfilingExecutor(
   operation: string,
   input: any,
   context: ToolExecutionContext
 ): Promise<ToolExecutionResult> {
-
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -23,18 +21,39 @@ export async function executeProfilingExecutor(
     }
   )
 
-  const {
-    agentRunId,
-    stepId,
-    projectId
-  } = context
+  const { agentRunId, stepId, projectId } = context
 
-  switch(operation) {
+  switch (operation) {
     case "profile_dataset": {
       const definitions = (input.metricDefinitions ?? []) as MetricDefinition[]
       const rows = (input.rows ?? []) as Record<string, unknown>[]
+      const profileRunId = input.profileRunId as string | undefined
 
       const results = await executeMetrics(definitions, rows)
+
+      if (profileRunId) {
+        const metrics = results.map((result) => ({
+          profile_run_id: profileRunId,
+          metric_definition_id: result.metric_definition_id,
+          metric_key: result.metric_name,
+          ...(typeof result.value === "number"
+            ? { numeric_value: result.value }
+            : typeof result.value === "boolean"
+              ? { boolean_value: result.value }
+              : typeof result.value === "string"
+                ? { text_value: result.value }
+                : { json_value: { value: result.value } }),
+        }))
+
+        const { error } = await supabase
+          .schema("profiling")
+          .from("profile_metrics")
+          .insert(metrics)
+
+        if (error) {
+          throw error
+        }
+      }
 
       return {
         output: {
@@ -42,14 +61,12 @@ export async function executeProfilingExecutor(
           agent_run_id: agentRunId,
           project_id: projectId,
           status: "COMPLETED",
-          metrics: results
-        }
+          metrics: results,
+        },
       }
     }
 
     default:
-      throw new Error(
-        `Unsupported operation ${operation}`
-      )
+      throw new Error(`Unsupported operation ${operation}`)
   }
 }
