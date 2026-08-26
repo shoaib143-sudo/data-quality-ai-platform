@@ -5,6 +5,26 @@ import type {
 } from "../types"
 import { executeMetrics, type MetricDefinition } from "../../profiling/metric-runtime"
 
+const PERSISTENCE_RETRY_LIMIT = 3
+
+async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= PERSISTENCE_RETRY_LIMIT; attempt++) {
+    try {
+      return await operation()
+    } catch (error) {
+      lastError = error
+
+      if (attempt < PERSISTENCE_RETRY_LIMIT) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 500))
+      }
+    }
+  }
+
+  throw lastError
+}
+
 export async function executeProfilingExecutor(
   operation: string,
   input: any,
@@ -63,18 +83,20 @@ export async function executeProfilingExecutor(
             ? 0
             : Number((((results.length - failedCount) / results.length) * 100).toFixed(2))
 
-          const { error } = await supabase
-            .schema("profiling")
-            .rpc("persist_profile_execution_result", {
-              p_profile_run_id: profileRunId,
-              p_metrics: metrics,
-              p_findings: findings,
-              p_quality_scores: {
-                completeness_score: overallScore,
-                overall_score: overallScore,
-              },
-              p_run_status: "COMPLETED",
-            })
+          const { error } = await withRetry(() =>
+            supabase
+              .schema("profiling")
+              .rpc("persist_profile_execution_result", {
+                p_profile_run_id: profileRunId,
+                p_metrics: metrics,
+                p_findings: findings,
+                p_quality_scores: {
+                  completeness_score: overallScore,
+                  overall_score: overallScore,
+                },
+                p_run_status: "COMPLETED",
+              })
+          )
 
           if (error) throw error
         }
