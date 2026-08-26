@@ -46,13 +46,6 @@ export async function executeProfilingExecutor(
                   : { json_value: { value: result.value } }),
           }))
 
-          const { error } = await supabase
-            .schema("profiling")
-            .from("profile_metrics")
-            .insert(metrics)
-
-          if (error) throw error
-
           const findings = results
             .filter((result) => result.status === "FAILED")
             .map((result) => ({
@@ -65,41 +58,25 @@ export async function executeProfilingExecutor(
               evidence: { metric_definition_id: result.metric_definition_id },
             }))
 
-          if (findings.length > 0) {
-            const { error: findingError } = await supabase
-              .schema("profiling")
-              .from("profile_findings")
-              .insert(findings)
-
-            if (findingError) throw findingError
-          }
-
           const failedCount = results.filter((result) => result.status === "FAILED").length
           const overallScore = results.length === 0
             ? 0
             : Number((((results.length - failedCount) / results.length) * 100).toFixed(2))
 
-          const { error: scoreError } = await supabase
+          const { error } = await supabase
             .schema("profiling")
-            .from("data_quality_scores")
-            .upsert({
-              profile_run_id: profileRunId,
-              completeness_score: overallScore,
-              overall_score: overallScore,
+            .rpc("persist_profile_execution_result", {
+              p_profile_run_id: profileRunId,
+              p_metrics: metrics,
+              p_findings: findings,
+              p_quality_scores: {
+                completeness_score: overallScore,
+                overall_score: overallScore,
+              },
+              p_run_status: "COMPLETED",
             })
 
-          if (scoreError) throw scoreError
-
-          const { error: runError } = await supabase
-            .schema("profiling")
-            .from("profile_runs")
-            .update({
-              status: "COMPLETED",
-              completed_at: new Date().toISOString(),
-            })
-            .eq("id", profileRunId)
-
-          if (runError) throw runError
+          if (error) throw error
         }
 
         return {
