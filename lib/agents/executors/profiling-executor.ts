@@ -3,6 +3,7 @@ import type {
   ToolExecutionContext,
   ToolExecutionResult,
 } from "../types"
+import { executeMetrics, type MetricDefinition } from "../../profiling/metric-runtime"
 
 
 export async function executeProfilingExecutor(
@@ -10,7 +11,6 @@ export async function executeProfilingExecutor(
   input: any,
   context: ToolExecutionContext
 ): Promise<ToolExecutionResult> {
-
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,47 +23,33 @@ export async function executeProfilingExecutor(
     }
   )
 
-
   const {
     agentRunId,
     stepId,
     projectId
   } = context
 
-
-
   switch(operation) {
+    case "profile_dataset": {
+      const definitions = (input.metricDefinitions ?? []) as MetricDefinition[]
+      const rows = (input.rows ?? []) as Record<string, unknown>[]
 
-
-    case "profile_dataset":
+      const results = await executeMetrics(definitions, rows)
 
       return {
-
         output: {
-
-          profile_step_id:
-            stepId,
-
-          agent_run_id:
-            agentRunId,
-
-          project_id:
-            projectId,
-
-          status:
-            "RUNNING"
-
+          profile_step_id: stepId,
+          agent_run_id: agentRunId,
+          project_id: projectId,
+          status: "COMPLETED",
+          metrics: results
         }
-
       }
-
-
+    }
 
     default:
-
       throw new Error(
         `Unsupported operation ${operation}`
       )
-
   }
 }
