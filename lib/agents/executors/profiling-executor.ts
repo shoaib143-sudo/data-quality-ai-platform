@@ -19,7 +19,8 @@ export async function executeProfilingExecutor(
   } = context
 
   const datasetVersionId =
-    input?.datasetVersionId
+    input?.datasetVersionId ??
+    input?.dataset_version_id
 
   if (!datasetVersionId) {
     throw new Error(
@@ -32,7 +33,8 @@ export async function executeProfilingExecutor(
       toolKey: operation,
       datasetVersionId,
       profilingRunId:
-        input?.profilingRunId,
+        input?.profilingRunId ??
+        input?.profiling_run_id,
       input,
     })
 
