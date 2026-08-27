@@ -245,25 +245,12 @@ async function inferColumnTypes(
   supabase: ReturnType<typeof createAdminClient>,
   datasetVersionId: string,
 ) {
-  const { data, error } = await supabase
-    .schema('catalog')
-    .from('dataset_versions')
-    .select(`
-      metadata,
-      row_count,
-      column_count,
-      source_uri,
-      datasets (
-        source_identifier,
-        metadata,
-        data_sources (
-          source_type,
-          connection_metadata
-        )
-      )
-    `)
-    .eq('id', datasetVersionId)
-    .single()
+  const { data, error } = await supabase.rpc(
+    'get_dataset_version_for_profiling',
+    {
+      dataset_version_id: datasetVersionId,
+    }
+  )
 
   if (error) {
     throw new Error(
@@ -298,12 +285,12 @@ async function profileDataset(
     )
   }
 
-  const { data, error } = await supabase
-    .schema('catalog')
-    .from('dataset_versions')
-    .select('metadata')
-    .eq('id', datasetVersionId)
-    .single()
+  const { data, error } = await supabase.rpc(
+    'get_dataset_version_for_profiling',
+    {
+      dataset_version_id: datasetVersionId,
+    }
+  )
 
   if (error) {
     throw new Error(
@@ -1309,12 +1296,12 @@ async function inspectDataset(
   supabase: ReturnType<typeof createAdminClient>,
   datasetVersionId: string,
 ) {
-  const { data, error } = await supabase
-    .schema('catalog')
-    .from('dataset_versions')
-    .select('*')
-    .eq('id', datasetVersionId)
-    .single()
+  const { data, error } = await supabase.rpc(
+    'get_dataset_version_for_profiling',
+    {
+      dataset_version_id: datasetVersionId,
+    }
+  )
 
   if (error) {
     throw new Error(
