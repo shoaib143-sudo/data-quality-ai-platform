@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { MonitoringAgent, MonitoringDataset, MonitoringRun } from './job-monitor'
 
@@ -23,17 +23,23 @@ export function JobTermination({ initialRuns, initialAgents, initialDatasets }: 
   const agents = useMemo(() => new Map(initialAgents.map((agent) => [agent.id, agent])), [initialAgents])
   const datasets = useMemo(() => new Map(initialDatasets.map((dataset) => [dataset.id, dataset])), [initialDatasets])
 
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(timer)
+  const refreshRuns = useCallback(async () => {
+    const supabase = createClient()
+    const { data, error } = await supabase.schema('agent').from('agent_runs').select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message').order('created_at', { ascending: false }).limit(50)
+    if (!error && data) setRuns(data as MonitoringRun[])
   }, [])
+
+  useEffect(() => {
+    const clock = window.setInterval(() => setNow(Date.now()), 1000)
+    const refresh = window.setInterval(refreshRuns, 3000)
+    return () => { window.clearInterval(clock); window.clearInterval(refresh) }
+  }, [refreshRuns])
 
   const activeRuns = runs.filter((run) => ACTIVE.has(run.status)).sort((a, b) => {
     const aStart = new Date(a.started_at ?? a.created_at).getTime()
     const bStart = new Date(b.started_at ?? b.created_at).getTime()
     return aStart - bStart
   })
-
   const longRunning = activeRuns.filter((run) => now - new Date(run.started_at ?? run.created_at).getTime() >= LONG_RUNNING_MS)
 
   async function terminate(run: MonitoringRun) {
@@ -48,8 +54,9 @@ export function JobTermination({ initialRuns, initialAgents, initialDatasets }: 
       const response = await fetch(`/api/agents/runs/${run.id}/terminate`, { method: 'POST' })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error ?? 'Unable to terminate job.')
-      setRuns((current) => current.map((item) => item.id === run.id ? { ...item, status: 'CANCELLED', completed_at: payload.terminatedAt ?? new Date().toISOString(), error_code: 'TERMINATED_BY_USER', error_message: payload.error ?? 'Terminated from Job Monitor.' } : item))
-      setMessage('Job terminated and lifecycle state persisted.')
+      setRuns((current) => current.map((item) => item.id === run.id ? { ...item, status: 'CANCELLED', completed_at: payload.terminatedAt ?? new Date().toISOString(), error_code: 'TERMINATED_BY_USER', error_message: 'Terminated from Job Monitor.' } : item))
+      setMessage('Job terminated. Run, steps, and profiling lifecycle state were persisted.')
+      await refreshRuns()
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to terminate job.')
     } finally {
