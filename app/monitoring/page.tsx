@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type MonitoringRun, type MonitoringStep } from './job-monitor'
 import { JobTermination } from './job-termination'
+import { JobLogs } from './job-logs'
 
 export default async function MonitoringPage() {
   const user = await requireUser()
@@ -72,6 +73,8 @@ export default async function MonitoringPage() {
           initialAgents={typedAgents}
           initialDatasets={typedDatasets}
         />
+
+        {typedRuns[0] && <JobLogs runId={typedRuns[0].id} />}
       </div>
     </main>
   )
