@@ -56,9 +56,22 @@ export async function POST(request: Request) {
       )
     }
 
+    const productionAgentId = agentDefinition.id
+    const productionAgentVersion = agentDefinition.version
+
+    if (
+      typeof productionAgentId !== 'string' ||
+      typeof productionAgentVersion !== 'string'
+    ) {
+      return NextResponse.json(
+        { error: 'The selected agent definition is invalid.' },
+        { status: 500 },
+      )
+    }
+
     if (
       agentDefinition.agent_key !== PRODUCTION_AGENT_KEY ||
-      agentDefinition.version !== PRODUCTION_AGENT_VERSION
+      productionAgentVersion !== PRODUCTION_AGENT_VERSION
     ) {
       return NextResponse.json(
         { error: 'Only Profiling Agent 2.0 is available for production execution.' },
@@ -90,7 +103,7 @@ export async function POST(request: Request) {
       .schema('agent')
       .from('agent_runs')
       .insert({
-        agent_definition_id: agentDefinition.id,
+        agent_definition_id: productionAgentId,
         project_id: projectId,
         dataset_id: datasetVersion.dataset_id,
         dataset_version_id: datasetVersion.id,
@@ -114,13 +127,13 @@ export async function POST(request: Request) {
         dataset_version_id: datasetVersion.id,
         agent_run_id: agentRun.id,
         engine_name: 'profiling-executor',
-        engine_version: agentDefinition.version,
+        engine_version: productionAgentVersion,
         sampling_mode: 'ADAPTIVE',
         sampling_size: Number(asObject(agentDefinition.configuration).default_sample_rows) || null,
         configuration: {
-          agent_definition_id: agentDefinition.id,
+          agent_definition_id: productionAgentId,
           agent_key: agentDefinition.agent_key,
-          agent_version: agentDefinition.version,
+          agent_version: productionAgentVersion,
           options: asObject(body.options),
         },
       })
@@ -137,7 +150,7 @@ export async function POST(request: Request) {
       .schema('agent')
       .from('tool_definitions')
       .select('id, tool_key, version, execution_config')
-      .eq('agent_definition_id', agentDefinition.id)
+      .eq('agent_definition_id', productionAgentId)
       .eq('tool_key', 'profile_dataset')
       .eq('enabled', true)
       .order('version', { ascending: false })
@@ -177,8 +190,8 @@ export async function POST(request: Request) {
       agentRunId,
       stepId,
       projectId,
-      agentDefinitionId: agentDefinition.id,
-      agentVersion: agentDefinition.version,
+      agentDefinitionId: productionAgentId,
+      agentVersion: productionAgentVersion,
     }
 
     const result = await executeProfilingExecutor(
@@ -196,92 +209,83 @@ export async function POST(request: Request) {
       .schema('agent')
       .from('agent_run_steps')
       .update({
-        status: 'COMPLETED',
-        output: result.output,
+        status: 'SUCCEEDED',
+        output: result,
         completed_at: completedAt,
       })
-      .eq('id', stepId)
+      .eq('id', step.id)
 
     await admin
       .schema('agent')
       .from('agent_runs')
       .update({
-        status: 'COMPLETED',
-        output: result.output,
+        status: 'SUCCEEDED',
+        output: result,
         completed_at: completedAt,
       })
-      .eq('id', agentRunId)
+      .eq('id', agentRun.id)
+
+    await admin
+      .schema('profiling')
+      .from('profile_runs')
+      .update({
+        status: 'COMPLETED',
+        completed_at: completedAt,
+      })
+      .eq('id', profilingRun.id)
 
     return NextResponse.json({
-      agentRunId,
-      profilingRunId,
-      status: 'COMPLETED',
-      result: result.output,
+      agentRunId: agentRun.id,
+      profilingRunId: profilingRun.id,
+      stepId: step.id,
+      agent: {
+        id: productionAgentId,
+        key: PRODUCTION_AGENT_KEY,
+        version: PRODUCTION_AGENT_VERSION,
+      },
+      result,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Agent execution failed.'
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    const completedAt = new Date().toISOString()
+    const admin = createAdminClient()
 
     if (stepId) {
-      try {
-        const admin = createAdminClient()
-        await admin
-          .schema('agent')
-          .from('agent_run_steps')
-          .update({
-            status: 'FAILED',
-            error_code: 'EXECUTION_FAILED',
-            error_message: message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', stepId)
-      } catch {
-        // Preserve the original execution error.
-      }
+      await admin
+        .schema('agent')
+        .from('agent_run_steps')
+        .update({
+          status: 'FAILED',
+          error: { message },
+          completed_at: completedAt,
+        })
+        .eq('id', stepId)
     }
 
     if (agentRunId) {
-      try {
-        const admin = createAdminClient()
-        await admin
-          .schema('agent')
-          .from('agent_runs')
-          .update({
-            status: 'FAILED',
-            error_code: 'EXECUTION_FAILED',
-            error_message: message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', agentRunId)
-      } catch {
-        // Preserve the original execution error.
-      }
+      await admin
+        .schema('agent')
+        .from('agent_runs')
+        .update({
+          status: 'FAILED',
+          error: { message },
+          completed_at: completedAt,
+        })
+        .eq('id', agentRunId)
     }
 
     if (profilingRunId) {
-      try {
-        const admin = createAdminClient()
-        await admin
-          .schema('profiling')
-          .from('profile_runs')
-          .update({
-            status: 'FAILED',
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', profilingRunId)
-      } catch {
-        // Preserve the original execution error.
-      }
+      await admin
+        .schema('profiling')
+        .from('profile_runs')
+        .update({
+          status: 'FAILED',
+          error: { message },
+          completed_at: completedAt,
+        })
+        .eq('id', profilingRunId)
     }
 
-    console.error('AGENT_EXECUTION_ERROR', { message, agentRunId, stepId, profilingRunId })
-
-    return NextResponse.json(
-      {
-        error: message,
-        agentRunId,
-        profilingRunId,
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
