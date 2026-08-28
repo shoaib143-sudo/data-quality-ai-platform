@@ -9,6 +9,7 @@ import {
 import {
   executeProfilingMetrics,
 } from "@/lib/profiling/metric-engine"
+import { writeAgentRunLog } from "@/lib/agents/run-log"
 
 const PRODUCTION_AGENT_KEY = "profiling_agent"
 const PRODUCTION_AGENT_VERSION = "2.0"
@@ -50,18 +51,66 @@ export async function executeProfilingExecutor(
     input?.profilingRunId ??
     input?.profiling_run_id
 
-  if (operation === "execute_metrics") {
-    if (!profilingRunId) {
-      throw new Error(
-        "profilingRunId is required for execute_metrics",
+  await writeAgentRunLog({
+    agentRunId,
+    agentRunStepId: stepId,
+    level: 'LIFECYCLE',
+    eventType: 'PROFILING_EXECUTION_STARTED',
+    message: `Profiling Agent ${PRODUCTION_AGENT_VERSION} started ${operation}.`,
+    details: { operation, projectId, datasetVersionId, profilingRunId, agentDefinitionId, agentVersion },
+  })
+
+  try {
+    if (operation === "execute_metrics") {
+      if (!profilingRunId) {
+        throw new Error(
+          "profilingRunId is required for execute_metrics",
+        )
+      }
+
+      const result = await executeProfilingMetrics(
+        datasetVersionId,
+        profilingRunId,
+        input,
       )
+
+      await writeAgentRunLog({
+        agentRunId,
+        agentRunStepId: stepId,
+        level: 'METRIC',
+        eventType: 'PROFILING_METRICS_COMPLETED',
+        message: 'Profiling metrics execution completed.',
+        details: { operation, datasetVersionId, profilingRunId },
+      })
+
+      return {
+        output: {
+          execution_completed: true,
+          agent_run_id: agentRunId,
+          step_id: stepId,
+          project_id: projectId,
+          operation,
+          result,
+        },
+      }
     }
 
-    const result = await executeProfilingMetrics(
-      datasetVersionId,
-      profilingRunId,
-      input,
-    )
+    const result =
+      await executeProfilingTool({
+        toolKey: operation,
+        datasetVersionId,
+        profilingRunId,
+        input,
+      })
+
+    await writeAgentRunLog({
+      agentRunId,
+      agentRunStepId: stepId,
+      level: 'TOOL',
+      eventType: 'PROFILING_TOOL_COMPLETED',
+      message: `Profiling tool ${operation} completed.`,
+      details: { operation, datasetVersionId, profilingRunId },
+    })
 
     return {
       output: {
@@ -73,24 +122,15 @@ export async function executeProfilingExecutor(
         result,
       },
     }
-  }
-
-  const result =
-    await executeProfilingTool({
-      toolKey: operation,
-      datasetVersionId,
-      profilingRunId,
-      input,
+  } catch (error) {
+    await writeAgentRunLog({
+      agentRunId,
+      agentRunStepId: stepId,
+      level: 'ERROR',
+      eventType: 'PROFILING_EXECUTION_FAILED',
+      message: error instanceof Error ? error.message : 'Profiling execution failed.',
+      details: { operation, datasetVersionId, profilingRunId },
     })
-
-  return {
-    output: {
-      execution_completed: true,
-      agent_run_id: agentRunId,
-      step_id: stepId,
-      project_id: projectId,
-      operation,
-      result,
-    },
+    throw error
   }
 }
