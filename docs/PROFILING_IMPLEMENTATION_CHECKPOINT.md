@@ -4,7 +4,7 @@ Date: 2026-08-28
 
 ## Current truth
 
-The profiling implementation, persistence layer, agent executor and dataset execution source registry are present on `main`.
+The profiling implementation, persistence layer, agent executor, generic metric runtime, deterministic metric engine, FILE source adapter and dataset execution source registry are present on `main`.
 
 The current dataset version under investigation is registered as `FILE / demo.csv` in `profiling.dataset_execution_sources`. The source has `execution_config = {}`. There is no matching `storage.objects` record for `demo.csv`, and the dataset version currently has no rows in `profiling.dataset_execution_registry` or `profiling.dataset_row_access_registry`.
 
@@ -22,7 +22,9 @@ The current dataset version under investigation is registered as `FILE / demo.cs
 10. Added `lib/profiling/file-source-adapter.ts` supporting HTTPS CSV sources and Supabase Storage objects.
 11. Added CSV parsing with quoted-field support, sampling limits, byte limits and SHA-256 content hashing.
 12. Added `profiling.get_dataset_execution_source(uuid)` and an active-source uniqueness invariant through migration `20260826000000_harden_file_execution_sources.sql`.
-13. Merged the implementation into `main` through PR #1.
+13. Merged the source-aware deterministic profiling implementation into `main` through PR #1.
+14. Completed `lib/profiling/metric-runtime.ts` so the generic runtime supports the same deterministic core metric family rather than returning placeholder failures for supported metrics.
+15. Verified the production Vercel build for commit `9a6d8496b4b2335a4e47b20cc51fabbb1ae45962`: build completed successfully, TypeScript completed successfully, deployment reached `READY`, and no runtime errors were reported for the selected validation window.
 
 ## Runtime contract
 
@@ -33,11 +35,13 @@ FILE sources must provide one of the following:
 
 A bare `source_uri` such as `demo.csv` is not treated as an executable physical location. This is intentional and prevents false successful runs with empty or NULL metrics.
 
+The generic metric runtime operates only on already resolved rows. Source loading remains owned by the FILE adapter or table source path.
+
 ## Remaining live acceptance checkpoint
 
 The code implementation is complete for the supported FILE execution forms. The remaining blocker is live environment configuration and migration execution for the investigated dataset:
 
-* Apply `20260826000000_harden_file_execution_sources.sql` to Supabase project `tvjnavjxuehpesxcfvrx`.
+* Apply `20260826000000_harden_file_execution_sources.sql` to Supabase project `tvjnavjxuehpesxcfvrx` if it is not already applied.
 * Configure the physical FILE source for `demo.csv` using a supported execution configuration.
 * Execute the existing 100-row, 3-column acceptance dataset end to end.
 * Verify populated metrics, deterministic findings, persisted quality score and a terminal `COMPLETED` profile run.
