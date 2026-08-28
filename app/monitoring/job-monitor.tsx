@@ -47,10 +47,28 @@ type Props = {
   initialAgents: MonitoringAgent[]
   initialDatasets: MonitoringDataset[]
   initialSteps: MonitoringStep[]
+  initialNow: string
   userId: string
 }
 
 const ACTIVE_STATUSES = new Set(['RUNNING', 'QUEUED', 'PENDING'])
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-SG', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Asia/Singapore',
+})
+const TIME_FORMATTER = new Intl.DateTimeFormat('en-SG', {
+  timeStyle: 'medium',
+  timeZone: 'Asia/Singapore',
+})
+
+function formatDate(value: string) {
+  return DATE_FORMATTER.format(new Date(value))
+}
+
+function formatTime(value: string) {
+  return TIME_FORMATTER.format(new Date(value))
+}
 
 function statusClass(status: string) {
   if (status === 'SUCCEEDED' || status === 'COMPLETED') return 'border-green-300 text-green-700'
@@ -59,10 +77,10 @@ function statusClass(status: string) {
   return 'border-gray-300 text-gray-700'
 }
 
-function duration(run: MonitoringRun) {
+function duration(run: MonitoringRun, now: Date) {
   const start = run.started_at ?? run.created_at
-  const end = run.completed_at ?? new Date().toISOString()
-  const seconds = Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000))
+  const end = run.completed_at ? new Date(run.completed_at) : now
+  const seconds = Math.max(0, Math.floor((end.getTime() - new Date(start).getTime()) / 1000))
   const minutes = Math.floor(seconds / 60)
   const remaining = seconds % 60
   return minutes ? `${minutes}m ${remaining}s` : `${remaining}s`
@@ -79,12 +97,12 @@ function progress(steps: MonitoringStep[]) {
   return { label: `${completed}/${steps.length} steps complete`, percent: 100 }
 }
 
-export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initialSteps, userId }: Props) {
+export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initialSteps, initialNow, userId }: Props) {
   const [runs, setRuns] = useState(initialRuns)
   const [steps, setSteps] = useState(initialSteps)
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [selectedRunId, setSelectedRunId] = useState<string | null>(initialRuns[0]?.id ?? null)
-  const [lastUpdated, setLastUpdated] = useState(new Date())
+  const [lastUpdated, setLastUpdated] = useState(() => new Date(initialNow))
   const [refreshing, setRefreshing] = useState(false)
 
   const agentsById = useMemo(() => new Map(initialAgents.map((agent) => [agent.id, agent])), [initialAgents])
@@ -172,7 +190,7 @@ export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initia
         <button type="button" onClick={refresh} disabled={refreshing} className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
           {refreshing ? 'Refreshing…' : 'Refresh now'}
         </button>
-        <span className="ml-auto text-xs text-muted-foreground">Auto refresh: 3s · Updated {lastUpdated.toLocaleTimeString()}</span>
+        <span className="ml-auto text-xs text-muted-foreground">Auto refresh: 3s · Updated {formatTime(lastUpdated.toISOString())}</span>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -204,8 +222,8 @@ export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initia
                       <span className="w-28 text-right text-xs text-muted-foreground">{runProgress.label}</span>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span>{duration(run)}</span>
-                      <span>{new Date(run.created_at).toLocaleString()}</span>
+                      <span>{duration(run, lastUpdated)}</span>
+                      <span>{formatDate(run.created_at)}</span>
                       <span className="font-mono">{run.id.slice(0, 8)}…</span>
                     </div>
                   </button>
@@ -239,8 +257,8 @@ export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initia
 
               <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
                 <div><dt className="text-xs text-muted-foreground">Dataset</dt><dd className="mt-1">{selectedRun.dataset_id ? datasetsById.get(selectedRun.dataset_id)?.name ?? selectedRun.dataset_id : 'Unavailable'}</dd></div>
-                <div><dt className="text-xs text-muted-foreground">Duration</dt><dd className="mt-1">{duration(selectedRun)}</dd></div>
-                <div><dt className="text-xs text-muted-foreground">Started</dt><dd className="mt-1">{selectedRun.started_at ? new Date(selectedRun.started_at).toLocaleString() : 'Not started'}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Duration</dt><dd className="mt-1">{duration(selectedRun, lastUpdated)}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Started</dt><dd className="mt-1">{selectedRun.started_at ? formatDate(selectedRun.started_at) : 'Not started'}</dd></div>
                 <div><dt className="text-xs text-muted-foreground">Correlation</dt><dd className="mt-1 font-mono text-xs">{selectedRun.id.slice(0, 12)}…</dd></div>
               </dl>
 
@@ -269,8 +287,8 @@ export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initia
                         </div>
                         <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                           <span>Attempt {step.attempt}</span>
-                          {step.started_at && <span>Started {new Date(step.started_at).toLocaleTimeString()}</span>}
-                          {step.completed_at && <span>Completed {new Date(step.completed_at).toLocaleTimeString()}</span>}
+                          {step.started_at && <span>Started {formatTime(step.started_at)}</span>}
+                          {step.completed_at && <span>Completed {formatTime(step.completed_at)}</span>}
                         </div>
                         {step.error_message && <p className="mt-2 text-xs text-red-700">{step.error_message}</p>}
                       </li>
