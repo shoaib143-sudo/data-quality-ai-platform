@@ -4,7 +4,7 @@ This folder is the durable repository for useful product discussions, decisions,
 
 ## Important boundary
 
-This repository records **discussion summaries, decisions, rationale, examples, open questions, and resulting actions**. It does not attempt to store private model chain of thought or hidden reasoning. The goal is to preserve the useful project knowledge needed by future contributors and AI agents.
+This repository records discussion summaries, decisions, rationale, examples, open questions, and resulting actions. It does not attempt to store private model chain of thought or hidden reasoning. The goal is to preserve the useful project knowledge needed by future contributors and AI agents.
 
 ## Product identity
 
@@ -56,8 +56,15 @@ Human approval initially required for:
 - Change governance policies
 - Alter production pipelines
 
-## Discussion index
+## Major discussion index
 
 - `2026-08-28-product-direction.md` captures the current product vision, AI capability direction, personas, criticality model, data source strategy, autonomy guard rails, and product naming decision.
+- `2026-08-28-ai-capability-matrix.md` preserves the broad AI capability exploration, including 75 strategic use cases, concrete examples, business benefits, problem statements, AI contribution, prioritisation, governed autonomy, investigation, explanation, prediction, recommendation, remediation, verification, and agent capabilities.
 
-New major discussions should be added as dated Markdown files and linked from this index.
+The capability matrix is intentionally broader than the current implementation scope. Future implementation should draw from it rather than recreate the exploration from scratch.
+
+## Preservation rule
+
+New discussions should be added as dated Markdown files. Older ideas must not be deleted when direction changes. Mark them as superseded, rejected, deferred, or replaced and append the newer decision with its context.
+
+New architecture or implementation decisions with strategic significance should also be cross referenced from the Architecture repository.
