@@ -9,6 +9,8 @@ export type ToolExecutionContext = {
   agentRunId: string
   stepId: string
   projectId: string
+  agentDefinitionId: string
+  agentVersion: string
 }
 
 export type ToolExecutionResult = {
