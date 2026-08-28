@@ -7,12 +7,14 @@ import { JobTermination } from './job-termination'
 import { JobLogs } from './job-logs'
 import { JobHealth } from './job-health'
 
-export default async function MonitoringPage() {
+export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string }> }) {
   const user = await requireUser()
+  const { run: requestedRunId } = await searchParams
   const supabase = await createClient()
   const { data: runs, error: runsError } = await supabase.schema('agent').from('agent_runs').select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message').order('created_at', { ascending: false }).limit(50)
   if (runsError) throw new Error(`Unable to load agent runs: ${runsError.message}`)
   const typedRuns = (runs ?? []) as MonitoringRun[]
+  const selectedRunId = requestedRunId && typedRuns.some((run) => run.id === requestedRunId) ? requestedRunId : null
   const agentIds = [...new Set(typedRuns.map((run) => run.agent_definition_id))]
   const datasetIds = [...new Set(typedRuns.flatMap((run) => run.dataset_id ? [run.dataset_id] : []))]
   const runIds = typedRuns.map((run) => run.id)
@@ -32,6 +34,6 @@ export default async function MonitoringPage() {
     <JobHealth runs={typedRuns} steps={typedSteps} />
     <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialSteps={typedSteps} initialNow={new Date().toISOString()} userId={user.id} />
     <section id="job-termination" className="scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
-    <section id="job-logs" className="scroll-mt-6"><JobLogs initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
+    <section id="job-logs" className="scroll-mt-6"><JobLogs initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialRunId={selectedRunId} /></section>
   </div></main>
 }
