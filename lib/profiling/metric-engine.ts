@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 
 type Row = Record<string, unknown>
 
@@ -162,6 +163,37 @@ async function loadRowsFromTable(
   datasetVersionId: string,
   maxRows: number,
 ) {
+  const { data: source, error: sourceError } = await supabase.rpc(
+    'get_dataset_execution_source',
+    { p_dataset_version_id: datasetVersionId },
+  )
+
+  if (!sourceError && source) {
+    const sourceType = String(source.source_type ?? '').trim().toLowerCase()
+    const executionConfig = source.execution_config && typeof source.execution_config === 'object'
+      ? source.execution_config as Record<string, unknown>
+      : {}
+
+    if (sourceType === 'file') {
+      const loaded = await loadFileSource(supabase, {
+        sourceUri: source.source_uri,
+        executionConfig,
+      }, { maxRows })
+
+      return {
+        rowCount: loaded.rowCount,
+        rows: loaded.rows as Row[],
+        sourceAccess: {
+          source_type: 'FILE',
+          source_uri: loaded.sourceUri,
+          content_hash: loaded.contentHash,
+          sampled_rows: loaded.rows.length,
+          warnings: loaded.warnings,
+        },
+      }
+    }
+  }
+
   const { data: version, error: versionError } = await supabase.rpc('get_dataset_version_for_profiling', {
     dataset_version_id: datasetVersionId,
   })
@@ -175,9 +207,13 @@ async function loadRowsFromTable(
   const schema = metadata.schema ?? metadata.schema_name ?? metadata.schemaName ?? 'public'
 
   if (!['supabase', 'supabase_table', 'postgres', 'postgres_table', 'table'].includes(sourceType) || !table) {
+    if (sourceError) {
+      throw new Error(`Unable to resolve execution source for dataset version ${datasetVersionId}: ${sourceError.message}`)
+    }
+
     throw new Error(
-      `No executable table source is configured for dataset version ${datasetVersionId}. ` +
-      'FILE sources require a storage/HTTP adapter before row profiling can execute.',
+      `No executable source is configured for dataset version ${datasetVersionId}. ` +
+      'FILE sources require execution_config.url or execution_config.bucket + execution_config.path.',
     )
   }
 
@@ -289,7 +325,12 @@ export async function executeProfilingMetrics(
   await supabase.schema('profiling').from('profile_runs').update({
     row_count: loaded.rowCount,
     column_count: columnNames.length,
-    summary: { metric_engine: 'deterministic', sample_size: rows.length, score: scorePayload },
+    summary: {
+      metric_engine: 'deterministic',
+      sample_size: rows.length,
+      score: scorePayload,
+      source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
+    },
   }).eq('id', profilingRunId)
 
   return {
@@ -302,6 +343,7 @@ export async function executeProfilingMetrics(
     metrics_persisted: metricRows.length,
     findings_persisted: findings.length,
     score: scorePayload,
+    source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
     columns: results,
   }
 }
