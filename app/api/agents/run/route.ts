@@ -1,45 +1,52 @@
 import { NextResponse } from 'next/server'
-
-import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-executor'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { requireUser } from '@/lib/auth/require-user'
+import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-executor'
 import type { ToolExecutionContext } from '@/lib/agents/types'
-
-export const runtime = 'nodejs'
-export const maxDuration = 300
 
 const PRODUCTION_AGENT_KEY = 'profiling_agent'
 const PRODUCTION_AGENT_VERSION = '2.0'
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {}
 }
 
 export async function POST(request: Request) {
   let agentRunId: string | null = null
-  let stepId: string | null = null
   let profilingRunId: string | null = null
+  let stepId: string | null = null
 
   try {
-    await requireUser()
-    const body = asObject(await request.json())
+    const user = await requireUser()
+    const supabase = await createClient()
+    const admin = createAdminClient()
+    const body = await request.json()
 
-    const agentDefinitionId = String(body.agentDefinitionId ?? '')
-    const projectId = String(body.projectId ?? '')
-    const datasetVersionId = String(body.datasetVersionId ?? '')
+    const projectId = typeof body.projectId === 'string' ? body.projectId : null
+    const datasetVersionId = typeof body.datasetVersionId === 'string' ? body.datasetVersionId : null
+    const agentDefinitionId = typeof body.agentDefinitionId === 'string' ? body.agentDefinitionId : null
 
-    if (!agentDefinitionId || !projectId || !datasetVersionId) {
+    if (!projectId || !datasetVersionId || !agentDefinitionId) {
       return NextResponse.json(
-        { error: 'agentDefinitionId, projectId and datasetVersionId are required' },
+        { error: 'projectId, datasetVersionId, and agentDefinitionId are required.' },
         { status: 400 },
       )
     }
 
-    const supabase = await createClient()
-    const admin = createAdminClient()
+    const { data: membership, error: membershipError } = await supabase
+      .schema('catalog')
+      .from('project_members')
+      .select('project_id')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (membershipError || !membership) {
+      return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
+    }
 
     const { data: agentDefinition, error: agentError } = await supabase
       .schema('agent')
@@ -56,18 +63,18 @@ export async function POST(request: Request) {
       )
     }
 
-    const productionAgentId = agentDefinition.id
-    const productionAgentVersion = agentDefinition.version
-
     if (
-      typeof productionAgentId !== 'string' ||
-      typeof productionAgentVersion !== 'string'
+      typeof agentDefinition.id !== 'string' ||
+      typeof agentDefinition.version !== 'string'
     ) {
       return NextResponse.json(
         { error: 'The selected agent definition is invalid.' },
         { status: 500 },
       )
     }
+
+    const productionAgentId: string = agentDefinition.id
+    const productionAgentVersion: string = agentDefinition.version
 
     if (
       agentDefinition.agent_key !== PRODUCTION_AGENT_KEY ||
@@ -225,30 +232,18 @@ export async function POST(request: Request) {
       })
       .eq('id', agentRun.id)
 
-    await admin
-      .schema('profiling')
-      .from('profile_runs')
-      .update({
-        status: 'COMPLETED',
-        completed_at: completedAt,
-      })
-      .eq('id', profilingRun.id)
-
     return NextResponse.json({
       agentRunId: agentRun.id,
       profilingRunId: profilingRun.id,
       stepId: step.id,
-      agent: {
-        id: productionAgentId,
-        key: PRODUCTION_AGENT_KEY,
-        version: PRODUCTION_AGENT_VERSION,
-      },
+      agentDefinitionId: productionAgentId,
+      agentVersion: productionAgentVersion,
       result,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    const completedAt = new Date().toISOString()
+    const message = error instanceof Error ? error.message : 'Unknown execution error'
     const admin = createAdminClient()
+    const completedAt = new Date().toISOString()
 
     if (stepId) {
       await admin
@@ -256,7 +251,7 @@ export async function POST(request: Request) {
         .from('agent_run_steps')
         .update({
           status: 'FAILED',
-          error: { message },
+          error_message: message,
           completed_at: completedAt,
         })
         .eq('id', stepId)
@@ -268,7 +263,7 @@ export async function POST(request: Request) {
         .from('agent_runs')
         .update({
           status: 'FAILED',
-          error: { message },
+          error_message: message,
           completed_at: completedAt,
         })
         .eq('id', agentRunId)
@@ -280,7 +275,7 @@ export async function POST(request: Request) {
         .from('profile_runs')
         .update({
           status: 'FAILED',
-          error: { message },
+          error_message: message,
           completed_at: completedAt,
         })
         .eq('id', profilingRunId)
