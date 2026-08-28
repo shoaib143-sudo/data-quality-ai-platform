@@ -168,19 +168,31 @@ export async function POST(request: Request) {
       throw new Error('The selected Profiling Agent has no enabled profile_dataset tool.')
     }
 
+    if (
+      typeof toolDefinition.id !== 'string' ||
+      typeof toolDefinition.tool_key !== 'string' ||
+      typeof toolDefinition.version !== 'string'
+    ) {
+      throw new Error('The selected Profiling Agent tool definition is invalid.')
+    }
+
+    const toolDefinitionId: string = toolDefinition.id
+    const toolKey: string = toolDefinition.tool_key
+    const toolVersion: string = toolDefinition.version
+
     const { data: step, error: stepError } = await admin
       .schema('agent')
       .from('agent_run_steps')
       .insert({
         agent_run_id: agentRun.id,
-        step_name: toolDefinition.tool_key,
+        step_name: toolKey,
         step_order: 1,
         status: 'RUNNING',
         input: {
           ...input,
           profilingRunId,
-          tool_definition_id: toolDefinition.id,
-          tool_version: toolDefinition.version,
+          tool_definition_id: toolDefinitionId,
+          tool_version: toolVersion,
         },
         started_at: new Date().toISOString(),
       })
