@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type MonitoringRun, type MonitoringStep } from './job-monitor'
 import { JobTermination } from './job-termination'
 import { JobLogs } from './job-logs'
+import { JobHealth } from './job-health'
 
 export default async function MonitoringPage() {
   const user = await requireUser()
@@ -25,11 +26,13 @@ export default async function MonitoringPage() {
   if (stepsResult.error) throw new Error(`Unable to load agent run steps: ${stepsResult.error.message}`)
   const typedAgents = (agentsResult.data ?? []) as MonitoringAgent[]
   const typedDatasets = (datasetsResult.data ?? []) as MonitoringDataset[]
+  const typedSteps = (stepsResult.data ?? []) as MonitoringStep[]
   return (
     <main className="min-h-screen p-8">
       <div className="mx-auto max-w-7xl space-y-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><Link href="/dashboard" className="text-sm underline">← Back to dashboard</Link><h1 className="mt-3 text-3xl font-semibold">Job Monitor</h1><p className="mt-2 text-sm text-muted-foreground">Live operational view of authenticated agent jobs, execution steps, failures, completion state, and manual termination.</p></div><Link href="/agents" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Run an agent</Link></div>
-        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialSteps={(stepsResult.data ?? []) as MonitoringStep[]} initialNow={new Date().toISOString()} userId={user.id} />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><Link href="/dashboard" className="text-sm underline">← Back to dashboard</Link><h1 className="mt-3 text-3xl font-semibold">Job Monitor</h1><p className="mt-2 text-sm text-muted-foreground">Live operational view of authenticated agent jobs, execution health, failures, completion state, diagnostics, and manual termination.</p></div><Link href="/agents" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Run an agent</Link></div>
+        <JobHealth runs={typedRuns} steps={typedSteps} />
+        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialSteps={typedSteps} initialNow={new Date().toISOString()} userId={user.id} />
         <JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} />
         <JobLogs initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} />
       </div>
