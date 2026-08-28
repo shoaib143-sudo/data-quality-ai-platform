@@ -101,6 +101,10 @@ export async function POST(request: Request) {
       )
     }
 
+    if (typeof datasetVersion.id !== 'string' || typeof datasetVersion.dataset_id !== 'string') {
+      throw new Error('The selected dataset version is invalid.')
+    }
+
     const input = {
       datasetVersionId,
       options: asObject(body.options),
@@ -121,18 +125,19 @@ export async function POST(request: Request) {
       .select('id, correlation_id')
       .single()
 
-    if (agentRunError || !agentRun) {
+    if (agentRunError || !agentRun || typeof agentRun.id !== 'string') {
       throw new Error(`Unable to create agent run: ${agentRunError?.message ?? 'unknown error'}`)
     }
 
-    agentRunId = agentRun.id
+    const executionAgentRunId = agentRun.id
+    agentRunId = executionAgentRunId
 
     const { data: profilingRun, error: profilingRunError } = await admin
       .schema('profiling')
       .from('profile_runs')
       .insert({
         dataset_version_id: datasetVersion.id,
-        agent_run_id: agentRun.id,
+        agent_run_id: executionAgentRunId,
         engine_name: 'profiling-executor',
         engine_version: productionAgentVersion,
         sampling_mode: 'ADAPTIVE',
@@ -147,11 +152,12 @@ export async function POST(request: Request) {
       .select('id')
       .single()
 
-    if (profilingRunError || !profilingRun) {
+    if (profilingRunError || !profilingRun || typeof profilingRun.id !== 'string') {
       throw new Error(`Unable to create profiling run: ${profilingRunError?.message ?? 'unknown error'}`)
     }
 
-    profilingRunId = profilingRun.id
+    const executionProfilingRunId = profilingRun.id
+    profilingRunId = executionProfilingRunId
 
     const { data: toolDefinition, error: toolError } = await supabase
       .schema('agent')
@@ -184,13 +190,13 @@ export async function POST(request: Request) {
       .schema('agent')
       .from('agent_run_steps')
       .insert({
-        agent_run_id: agentRun.id,
+        agent_run_id: executionAgentRunId,
         step_name: toolKey,
         step_order: 1,
         status: 'RUNNING',
         input: {
           ...input,
-          profilingRunId,
+          profilingRunId: executionProfilingRunId,
           tool_definition_id: toolDefinitionId,
           tool_version: toolVersion,
         },
@@ -199,15 +205,16 @@ export async function POST(request: Request) {
       .select('id')
       .single()
 
-    if (stepError || !step) {
+    if (stepError || !step || typeof step.id !== 'string') {
       throw new Error(`Unable to create agent run step: ${stepError?.message ?? 'unknown error'}`)
     }
 
-    stepId = step.id
+    const executionStepId = step.id
+    stepId = executionStepId
 
     const context: ToolExecutionContext = {
-      agentRunId,
-      stepId,
+      agentRunId: executionAgentRunId,
+      stepId: executionStepId,
       projectId,
       agentDefinitionId: productionAgentId,
       agentVersion: productionAgentVersion,
@@ -217,7 +224,7 @@ export async function POST(request: Request) {
       'profile_dataset',
       {
         ...input,
-        profilingRunId,
+        profilingRunId: executionProfilingRunId,
       },
       context,
     )
@@ -232,7 +239,7 @@ export async function POST(request: Request) {
         output: result,
         completed_at: completedAt,
       })
-      .eq('id', step.id)
+      .eq('id', executionStepId)
 
     await admin
       .schema('agent')
@@ -242,12 +249,12 @@ export async function POST(request: Request) {
         output: result,
         completed_at: completedAt,
       })
-      .eq('id', agentRun.id)
+      .eq('id', executionAgentRunId)
 
     return NextResponse.json({
-      agentRunId: agentRun.id,
-      profilingRunId: profilingRun.id,
-      stepId: step.id,
+      agentRunId: executionAgentRunId,
+      profilingRunId: executionProfilingRunId,
+      stepId: executionStepId,
       agentDefinitionId: productionAgentId,
       agentVersion: productionAgentVersion,
       result,
