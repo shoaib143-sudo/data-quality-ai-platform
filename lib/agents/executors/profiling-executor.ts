@@ -10,6 +10,9 @@ import {
   executeProfilingMetrics,
 } from "@/lib/profiling/metric-engine"
 
+const PRODUCTION_AGENT_KEY = "profiling_agent"
+const PRODUCTION_AGENT_VERSION = "2.0"
+
 export async function executeProfilingExecutor(
   operation: string,
   input: any,
@@ -19,7 +22,19 @@ export async function executeProfilingExecutor(
     agentRunId,
     stepId,
     projectId,
+    agentDefinitionId,
+    agentVersion,
   } = context
+
+  if (!agentDefinitionId || !agentVersion) {
+    throw new Error("Profiling executor requires an agent definition and version")
+  }
+
+  if (agentVersion !== PRODUCTION_AGENT_VERSION) {
+    throw new Error(
+      `Profiling Agent ${agentVersion} is disabled for execution; production version is ${PRODUCTION_AGENT_VERSION}`,
+    )
+  }
 
   const datasetVersionId =
     input?.datasetVersionId ??
