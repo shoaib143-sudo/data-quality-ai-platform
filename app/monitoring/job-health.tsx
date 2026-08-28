@@ -67,7 +67,7 @@ export function JobHealth({ runs, steps }: { runs: Run[]; steps: Step[] }) {
     <div className="mt-4 grid gap-3">
       {attention.map(({ run, severity, title, detail }) => <div key={run.id} className="flex flex-col gap-3 rounded-xl border bg-background/80 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${severity === 'critical' ? 'bg-red-500' : 'bg-amber-500'}`} /><p className="font-medium">{title}</p></div><p className="mt-1 text-xs text-muted-foreground">{detail}</p><p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">Run {run.id}</p></div>
-        <a href={`/monitoring?run=${encodeURIComponent(run.id)}`} className="shrink-0 rounded-lg border px-3 py-2 text-xs font-medium hover:bg-muted">Inspect job</a>
+        <a href={`/monitoring?run=${encodeURIComponent(run.id)}#job-logs`} className="shrink-0 rounded-lg border px-3 py-2 text-xs font-medium hover:bg-muted">Inspect diagnostics</a>
       </div>)}
     </div>
   </section>
