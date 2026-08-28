@@ -7,6 +7,7 @@ const modules = [
   { name: 'Data Quality', href: '/data-quality', description: 'Define and execute quality checks.' },
   { name: 'Observability', href: '/observability', description: 'Monitor data health and trends.' },
   { name: 'AI Agents', href: '/agents', description: 'Manage and run AI-powered data quality agents.' },
+  { name: 'Job Monitor', href: '/monitoring', description: 'Track agent jobs, steps, progress, and failures.' },
 ]
 
 export default async function DashboardPage() {
@@ -14,7 +15,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="min-h-screen p-8">
-      <div className="mx-auto max-w-5xl space-y-8">
+      <div className="mx-auto max-w-6xl space-y-8">
         <header>
           <h1 className="text-3xl font-semibold">Data Quality Platform</h1>
           <p className="mt-2 text-muted-foreground">Authenticated dashboard.</p>
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
           )}
         </header>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           {modules.map((item) => (
             <Link
               key={item.href}
