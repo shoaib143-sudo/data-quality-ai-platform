@@ -115,7 +115,10 @@ export default async function AgentsPage() {
   return (
     <main className="min-h-screen p-8">
       <div className="mx-auto max-w-6xl space-y-8">
-        <Link href="/dashboard" className="text-sm underline">← Back to dashboard</Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link href="/dashboard" className="text-sm underline">← Back to dashboard</Link>
+          <Link href="/monitoring" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link>
+        </div>
 
         <header>
           <h1 className="text-3xl font-semibold">AI Agents</h1>
