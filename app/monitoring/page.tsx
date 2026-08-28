@@ -27,15 +27,11 @@ export default async function MonitoringPage() {
   const typedAgents = (agentsResult.data ?? []) as MonitoringAgent[]
   const typedDatasets = (datasetsResult.data ?? []) as MonitoringDataset[]
   const typedSteps = (stepsResult.data ?? []) as MonitoringStep[]
-  return (
-    <main className="min-h-screen p-8">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><Link href="/dashboard" className="text-sm underline">← Back to dashboard</Link><h1 className="mt-3 text-3xl font-semibold">Job Monitor</h1><p className="mt-2 text-sm text-muted-foreground">Live operational view of authenticated agent jobs, execution health, failures, completion state, diagnostics, and manual termination.</p></div><Link href="/agents" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Run an agent</Link></div>
-        <JobHealth runs={typedRuns} steps={typedSteps} />
-        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialSteps={typedSteps} initialNow={new Date().toISOString()} userId={user.id} />
-        <section id="job-termination" className="scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
-        <section id="job-logs" className="scroll-mt-6"><JobLogs initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
-      </div>
-    </main>
-  )
+  return <main className="min-h-screen bg-gradient-to-br from-slate-50 via-background to-blue-50/40 p-5 sm:p-8 dark:from-slate-950 dark:via-background dark:to-blue-950/20"><div className="mx-auto max-w-7xl space-y-8">
+    <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><Link href="/dashboard" className="text-sm font-medium text-muted-foreground transition hover:text-foreground">← Dashboard</Link><div className="mt-3 flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-lg text-white shadow-lg">◈</span><div><h1 className="text-3xl font-bold tracking-tight">Job Monitor</h1><p className="mt-1 text-sm text-muted-foreground">Operations center for agent execution health, progress, diagnostics, and lifecycle control.</p></div></div></div><Link href="/agents" className="rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background shadow-sm transition hover:opacity-90">Run an agent</Link></header>
+    <JobHealth runs={typedRuns} steps={typedSteps} />
+    <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialSteps={typedSteps} initialNow={new Date().toISOString()} userId={user.id} />
+    <section id="job-termination" className="scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
+    <section id="job-logs" className="scroll-mt-6"><JobLogs initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
+  </div></main>
 }
