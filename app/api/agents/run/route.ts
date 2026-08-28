@@ -9,6 +9,9 @@ import type { ToolExecutionContext } from '@/lib/agents/types'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
+const PRODUCTION_AGENT_KEY = 'profiling_agent'
+const PRODUCTION_AGENT_VERSION = '2.0'
+
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -21,7 +24,7 @@ export async function POST(request: Request) {
   let profilingRunId: string | null = null
 
   try {
-    const user = await requireUser()
+    await requireUser()
     const body = asObject(await request.json())
 
     const agentDefinitionId = String(body.agentDefinitionId ?? '')
@@ -53,9 +56,12 @@ export async function POST(request: Request) {
       )
     }
 
-    if (agentDefinition.agent_key !== 'profiling_agent') {
+    if (
+      agentDefinition.agent_key !== PRODUCTION_AGENT_KEY ||
+      agentDefinition.version !== PRODUCTION_AGENT_VERSION
+    ) {
       return NextResponse.json(
-        { error: 'Only the registered Profiling Agent executor is currently runnable.' },
+        { error: 'Only Profiling Agent 2.0 is available for production execution.' },
         { status: 400 },
       )
     }
@@ -171,6 +177,8 @@ export async function POST(request: Request) {
       agentRunId,
       stepId,
       projectId,
+      agentDefinitionId: agentDefinition.id,
+      agentVersion: agentDefinition.version,
     }
 
     const result = await executeProfilingExecutor(
