@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type MonitoringRun, type MonitoringStep } from './job-monitor'
+import { JobTermination } from './job-termination'
 
 export default async function MonitoringPage() {
   const user = await requireUser()
@@ -38,6 +39,9 @@ export default async function MonitoringPage() {
   if (datasetsResult.error) throw new Error(`Unable to load datasets: ${datasetsResult.error.message}`)
   if (stepsResult.error) throw new Error(`Unable to load agent run steps: ${stepsResult.error.message}`)
 
+  const typedAgents = (agentsResult.data ?? []) as MonitoringAgent[]
+  const typedDatasets = (datasetsResult.data ?? []) as MonitoringDataset[]
+
   return (
     <main className="min-h-screen p-8">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -46,7 +50,7 @@ export default async function MonitoringPage() {
             <Link href="/dashboard" className="text-sm underline">← Back to dashboard</Link>
             <h1 className="mt-3 text-3xl font-semibold">Job Monitor</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Live operational view of authenticated agent jobs, execution steps, failures, and completion state.
+              Live operational view of authenticated agent jobs, execution steps, failures, completion state, and manual termination.
             </p>
           </div>
           <Link href="/agents" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">
@@ -56,11 +60,17 @@ export default async function MonitoringPage() {
 
         <JobMonitor
           initialRuns={typedRuns}
-          initialAgents={(agentsResult.data ?? []) as MonitoringAgent[]}
-          initialDatasets={(datasetsResult.data ?? []) as MonitoringDataset[]}
+          initialAgents={typedAgents}
+          initialDatasets={typedDatasets}
           initialSteps={(stepsResult.data ?? []) as MonitoringStep[]}
           initialNow={new Date().toISOString()}
           userId={user.id}
+        />
+
+        <JobTermination
+          initialRuns={typedRuns}
+          initialAgents={typedAgents}
+          initialDatasets={typedDatasets}
         />
       </div>
     </main>
