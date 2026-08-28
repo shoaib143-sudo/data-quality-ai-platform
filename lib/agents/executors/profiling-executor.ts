@@ -6,6 +6,9 @@ import type {
 import {
   executeProfilingTool,
 } from "@/lib/profiling/executor"
+import {
+  executeProfilingMetrics,
+} from "@/lib/profiling/metric-engine"
 
 export async function executeProfilingExecutor(
   operation: string,
@@ -28,13 +31,40 @@ export async function executeProfilingExecutor(
     )
   }
 
+  const profilingRunId =
+    input?.profilingRunId ??
+    input?.profiling_run_id
+
+  if (operation === "execute_metrics") {
+    if (!profilingRunId) {
+      throw new Error(
+        "profilingRunId is required for execute_metrics",
+      )
+    }
+
+    const result = await executeProfilingMetrics(
+      datasetVersionId,
+      profilingRunId,
+      input,
+    )
+
+    return {
+      output: {
+        execution_completed: true,
+        agent_run_id: agentRunId,
+        step_id: stepId,
+        project_id: projectId,
+        operation,
+        result,
+      },
+    }
+  }
+
   const result =
     await executeProfilingTool({
       toolKey: operation,
       datasetVersionId,
-      profilingRunId:
-        input?.profilingRunId ??
-        input?.profiling_run_id,
+      profilingRunId,
       input,
     })
 
