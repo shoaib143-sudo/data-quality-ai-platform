@@ -59,6 +59,7 @@ export default async function MonitoringPage() {
           initialAgents={(agentsResult.data ?? []) as MonitoringAgent[]}
           initialDatasets={(datasetsResult.data ?? []) as MonitoringDataset[]}
           initialSteps={(stepsResult.data ?? []) as MonitoringStep[]}
+          initialNow={new Date().toISOString()}
           userId={user.id}
         />
       </div>
