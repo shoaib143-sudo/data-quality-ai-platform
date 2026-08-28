@@ -9,19 +9,6 @@ export function createAdminClient() {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
   }
 
-  const payload = JSON.parse(
-    Buffer.from(
-      serviceRoleKey.split(".")[1],
-      "base64"
-    ).toString()
-  )
-
-  console.log("ADMIN_CLIENT_DEBUG", {
-    url,
-    role: payload.role,
-    ref: payload.ref,
-  })
-
   return createClient(url, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
