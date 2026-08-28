@@ -15,11 +15,19 @@ export async function POST(_request: Request, context: { params: Promise<{ runId
     const { data: run, error: runError } = await admin.schema('agent').from('agent_runs').select('id, project_id, status').eq('id', runId).single()
     if (runError || !run) return NextResponse.json({ error: 'Agent run not found.' }, { status: 404 })
 
+    const { data: project, error: projectError } = await admin
+      .schema('app')
+      .from('projects')
+      .select('id, organization_id')
+      .eq('id', run.project_id)
+      .single()
+    if (projectError || !project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
+
     const { data: membership, error: membershipError } = await admin
-      .schema('catalog')
-      .from('project_members')
-      .select('project_id')
-      .eq('project_id', run.project_id)
+      .schema('app')
+      .from('organization_members')
+      .select('organization_id')
+      .eq('organization_id', project.organization_id)
       .eq('user_id', user.id)
       .maybeSingle()
     if (membershipError) throw new Error(`Unable to verify project access: ${membershipError.message}`)
