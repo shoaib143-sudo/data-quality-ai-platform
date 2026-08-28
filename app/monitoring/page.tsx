@@ -33,8 +33,8 @@ export default async function MonitoringPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><Link href="/dashboard" className="text-sm underline">← Back to dashboard</Link><h1 className="mt-3 text-3xl font-semibold">Job Monitor</h1><p className="mt-2 text-sm text-muted-foreground">Live operational view of authenticated agent jobs, execution health, failures, completion state, diagnostics, and manual termination.</p></div><Link href="/agents" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Run an agent</Link></div>
         <JobHealth runs={typedRuns} steps={typedSteps} />
         <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialSteps={typedSteps} initialNow={new Date().toISOString()} userId={user.id} />
-        <JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} />
-        <JobLogs initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} />
+        <section id="job-termination" className="scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
+        <section id="job-logs" className="scroll-mt-6"><JobLogs initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
       </div>
     </main>
   )
