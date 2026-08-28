@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 
 export async function GET(
@@ -11,8 +11,8 @@ export async function GET(
     const { runId } = await context.params
     if (!runId) return NextResponse.json({ error: 'runId is required.' }, { status: 400 })
 
-    const supabase = await createClient()
-    const { data: run, error: runError } = await supabase
+    const admin = createAdminClient()
+    const { data: run, error: runError } = await admin
       .schema('agent')
       .from('agent_runs')
       .select('id, project_id')
@@ -20,18 +20,19 @@ export async function GET(
       .single()
     if (runError || !run) return NextResponse.json({ error: 'Agent run not found.' }, { status: 404 })
 
-    const { data: membership } = await supabase
+    const { data: membership, error: membershipError } = await admin
       .schema('catalog')
       .from('project_members')
       .select('project_id')
       .eq('project_id', run.project_id)
       .eq('user_id', user.id)
       .maybeSingle()
+    if (membershipError) throw new Error(`Unable to verify project access: ${membershipError.message}`)
     if (!membership) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
 
     const url = new URL(request.url)
     const level = url.searchParams.get('level')
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .schema('agent')
       .from('agent_run_logs')
       .select('id, agent_run_id, agent_run_step_id, level, event_type, message, details, created_at')
