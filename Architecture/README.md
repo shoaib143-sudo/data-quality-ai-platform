@@ -46,6 +46,16 @@ This folder is the source of truth for current architecture, architecture decisi
               Policies / RBAC / Audit / Risk
 ```
 
+## Current implementation increment
+
+The latest approved architecture increment is documented in:
+
+- `2026-08-29-ADR-001-initial-vertical-slice-and-investigation-agent.md`
+
+It narrows implementation priority to CSV and database tables, with PostgreSQL / Supabase first and Databricks next. It introduces the Data Profiling Investigation Agent as the first specialist agent and evolves the Monitor toward an issue centric AI Operations Center that includes business issue, impact, risk, recommendation, benefit, outcome, evidence, and verification.
+
+This is a prioritisation increment, not a rejection of the broader architecture. The long term architecture continues to include unstructured documents, logs, APIs, governance knowledge, lineage, policy evaluation, and progressive autonomy.
+
 ## Progressive autonomy architecture
 
 ```text
@@ -89,6 +99,7 @@ Policy / Risk Evaluation
 - Observability and operations
 - Audit and evidence
 - Data estate knowledge model
+- Business impact and value measurement
 
 ## Infrastructure requirements
 
@@ -98,6 +109,8 @@ Policy / Risk Evaluation
 - Supabase Auth
 - PostgreSQL / Supabase
 - PostgreSQL extensions such as pgvector where appropriate
+- Tenant scoped encrypted connection records
+- Persisted profile, quality, evidence, recommendation, verification and audit data
 
 ### Candidate open source / free components
 
@@ -128,6 +141,8 @@ Policy / Risk Evaluation
 Do not deploy the entire candidate stack at once. Introduce infrastructure only when the product capability requires it. Keep interfaces modular so managed or commercial replacements can be adopted later without rewriting DataNexus core logic.
 
 ## Architecture change log
+
+- `2026-08-29-ADR-001-initial-vertical-slice-and-investigation-agent.md` accepted the first concrete architecture increment for CSV and database profiling, secure connection onboarding, the Data Profiling Investigation Agent, and the issue centric AI Operations Center.
 
 Significant architecture changes should be recorded as dated ADR style Markdown files in this folder. Each change should capture:
 
