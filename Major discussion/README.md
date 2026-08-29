@@ -60,6 +60,9 @@ Human approval initially required for:
 
 - `2026-08-28-product-direction.md` captures the current product vision, AI capability direction, personas, criticality model, data source strategy, autonomy guard rails, and product naming decision.
 - `2026-08-28-ai-capability-matrix.md` preserves the broad AI capability exploration, including 75 strategic use cases, concrete examples, business benefits, problem statements, AI contribution, prioritisation, governed autonomy, investigation, explanation, prediction, recommendation, remediation, verification, and agent capabilities.
+- `2026-08-28-knowledge-capture-policy.md` defines the capture first, reconcile second rule and the requirement to preserve useful history, examples, alternatives, superseded ideas, and rejected approaches.
+- `2026-08-28-session-summary-and-next-plan.md` records the prior session summary and implementation starting plan.
+- `2026-08-29-reconciliation.md` records the latest confirmed priorities: CSV and database tables first, PostgreSQL / Supabase followed by Databricks, the Data Profiling Investigation Agent, an issue centric AI Operations Center, and business benefit measurement.
 
 The capability matrix is intentionally broader than the current implementation scope. Future implementation should draw from it rather than recreate the exploration from scratch.
 
