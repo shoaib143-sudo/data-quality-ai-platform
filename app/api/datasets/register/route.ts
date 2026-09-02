@@ -7,6 +7,9 @@ function text(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  let datasetId: string | null = null
+  let versionId: string | null = null
+
   try {
     const user = await requireUser()
     const admin = createAdminClient()
@@ -57,6 +60,7 @@ export async function POST(request: Request) {
       metadata: { registration: 'manual', registered_source_type: source.source_type },
     }).select('id, project_id, data_source_id, name, description, source_identifier, business_domain, status, created_at').single()
     if (datasetError || !dataset) throw new Error(`Unable to register dataset: ${datasetError?.message ?? 'unknown error'}`)
+    datasetId = dataset.id
 
     const { data: latestVersion, error: versionLookupError } = await admin.schema('catalog').from('dataset_versions')
       .select('version_number').eq('dataset_id', dataset.id).order('version_number', { ascending: false }).limit(1).maybeSingle()
@@ -74,10 +78,8 @@ export async function POST(request: Request) {
       observed_at: new Date().toISOString(),
       metadata: { registration: 'manual', source_type: source.source_type },
     }).select('id, dataset_id, version_number, source_uri, status, observed_at, created_at').single()
-    if (versionError || !version) {
-      await admin.schema('catalog').from('datasets').delete().eq('id', dataset.id)
-      throw new Error(`Unable to create dataset version: ${versionError?.message ?? 'unknown error'}`)
-    }
+    if (versionError || !version) throw new Error(`Unable to create dataset version: ${versionError?.message ?? 'unknown error'}`)
+    versionId = version.id
 
     const { error: executionSourceError } = await admin.schema('profiling').from('dataset_execution_sources').insert({
       dataset_version_id: version.id,
@@ -86,11 +88,7 @@ export async function POST(request: Request) {
       execution_config: { source_id: source.id, source_type: source.source_type, connection_metadata: source.connection_metadata ?? {} },
       active: true,
     })
-    if (executionSourceError) {
-      await admin.schema('catalog').from('dataset_versions').delete().eq('id', version.id)
-      await admin.schema('catalog').from('datasets').delete().eq('id', dataset.id)
-      throw new Error(`Unable to configure profiling source: ${executionSourceError.message}`)
-    }
+    if (executionSourceError) throw new Error(`Unable to configure profiling source: ${executionSourceError.message}`)
 
     const { data: agentDefinition, error: agentError } = await admin.schema('agent').from('agent_definitions')
       .select('id, agent_key, version, enabled').eq('agent_key', 'profiling_agent').eq('version', '2.0').eq('enabled', true).maybeSingle()
@@ -106,6 +104,11 @@ export async function POST(request: Request) {
       agent_version: agentDefinition.version,
     }, { status: 201 })
   } catch (error) {
+    const admin = createAdminClient()
+    if (versionId) await admin.schema('profiling').from('dataset_execution_sources').delete().eq('dataset_version_id', versionId)
+    if (versionId) await admin.schema('catalog').from('dataset_versions').delete().eq('id', versionId)
+    if (datasetId) await admin.schema('catalog').from('datasets').delete().eq('id', datasetId)
+
     const message = error instanceof Error ? error.message : 'Dataset registration failed.'
     return NextResponse.json({ error: message }, { status: 500 })
   }
