@@ -1,8 +1,16 @@
+import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
+import { DETERMINISTIC_METRICS, type MetricScope } from '@/lib/profiling/metric-registry'
 
 type Row = Record<string, unknown>
-type MetricValue = { metric_key: string; numeric_value: number | null; text_value?: string | null; profile_column_id?: string | null }
+type MetricValue = {
+  metric_key: string
+  numeric_value?: number | null
+  text_value?: string | null
+  json_value?: unknown
+  profile_column_id?: string | null
+}
 type ColumnResult = {
   column_name: string
   metrics: MetricValue[]
@@ -20,24 +28,20 @@ type ColumnResult = {
   }
 }
 
+type Definition = { id: string; metric_key: string; scope: MetricScope; enabled: boolean }
 const RATE_SCALE = 4
+
 function round(value: number, places = RATE_SCALE) {
   const factor = 10 ** places
   return Math.round((value + Number.EPSILON) * factor) / factor
 }
-function isMissing(value: unknown) {
-  return value === null || value === undefined
-}
-function normalized(value: unknown) {
-  return typeof value === 'string' ? value.trim() : value
-}
-function key(value: unknown) {
+function isMissing(value: unknown) { return value === null || value === undefined }
+function normalized(value: unknown) { return typeof value === 'string' ? value.trim() : value }
+function stableKey(value: unknown) {
   const v = normalized(value)
   return v === null || v === undefined ? '__NULL__' : typeof v === 'string' ? v : JSON.stringify(v)
 }
-function emailMatch(value: unknown) {
-  return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
-}
+function emailMatch(value: unknown) { return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) }
 function sensitiveMatch(columnName: string, value: unknown) {
   if (isMissing(value)) return false
   const name = columnName.toLowerCase()
@@ -54,26 +58,97 @@ function patternMatch(columnName: string, value: unknown) {
   if (name.includes('phone') || name.includes('mobile')) return typeof value === 'string' && /^[+()\d\s.-]{7,}$/.test(value.trim())
   return true
 }
+function numericValues(values: unknown[]) {
+  return values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+}
+function percentile(values: number[], p: number) {
+  if (!values.length) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const index = (sorted.length - 1) * p
+  const lower = Math.floor(index)
+  const upper = Math.ceil(index)
+  if (lower === upper) return sorted[lower]
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower)
+}
+function numericStats(values: unknown[]) {
+  const nums = numericValues(values)
+  if (!nums.length) return { nums, min: null, max: null, mean: null, median: null, stddev: null, negative: 0, zero: 0, outlier: 0 }
+  const mean = nums.reduce((a, b) => a + b, 0) / nums.length
+  const variance = nums.reduce((sum, value) => sum + (value - mean) ** 2, 0) / nums.length
+  const q1 = percentile(nums, 0.25)!
+  const q3 = percentile(nums, 0.75)!
+  const iqr = q3 - q1
+  const lower = q1 - 1.5 * iqr
+  const upper = q3 + 1.5 * iqr
+  return {
+    nums,
+    min: Math.min(...nums),
+    max: Math.max(...nums),
+    mean,
+    median: percentile(nums, 0.5),
+    stddev: Math.sqrt(variance),
+    negative: nums.filter((v) => v < 0).length,
+    zero: nums.filter((v) => v === 0).length,
+    outlier: nums.filter((v) => v < lower || v > upper).length,
+  }
+}
+function numericValue(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value)
+  return null
+}
+function histogram(values: number[]) {
+  if (!values.length) return []
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  if (min === max) return [{ min: round(min), max: round(max), count: values.length }]
+  const bins = Math.min(10, Math.max(2, Math.ceil(Math.sqrt(values.length))))
+  const width = (max - min) / bins
+  const result = Array.from({ length: bins }, (_, i) => ({ min: round(min + i * width), max: round(i === bins - 1 ? max : min + (i + 1) * width), count: 0 }))
+  for (const value of values) {
+    const index = Math.min(bins - 1, Math.floor((value - min) / width))
+    result[index].count += 1
+  }
+  return result
+}
+function schemaHash(columnNames: string[]) {
+  return createHash('sha256').update(JSON.stringify([...columnNames].sort())).digest('hex')
+}
+function duplicateRowCount(rows: Row[]) {
+  const frequencies = new Map<string, number>()
+  for (const row of rows) {
+    const k = stableKey(row)
+    frequencies.set(k, (frequencies.get(k) ?? 0) + 1)
+  }
+  return Array.from(frequencies.values()).reduce((sum, count) => sum + (count > 1 ? count - 1 : 0), 0)
+}
+function metricDefinitionMap(definitions: Definition[]) {
+  return new Map(definitions.map((definition) => [`${definition.scope}:${definition.metric_key}`, definition]))
+}
 
-function calculateColumnMetrics(columnName: string, rows: Row[]): Omit<ColumnResult, 'metrics'> & { metrics: MetricValue[] } {
+function calculateColumnMetrics(columnName: string, rows: Row[]): ColumnResult {
   const values = rows.map((row) => row[columnName])
   const rowCount = values.length
   const nullCount = values.filter(isMissing).length
   const nonNullValues = values.filter((value) => !isMissing(value))
-  const distinctCount = new Set(nonNullValues.map(key)).size
+  const distinctCount = new Set(nonNullValues.map(stableKey)).size
   const frequencies = new Map<string, number>()
-  for (const value of nonNullValues) {
-    const k = key(value)
-    frequencies.set(k, (frequencies.get(k) ?? 0) + 1)
-  }
+  for (const value of nonNullValues) frequencies.set(stableKey(value), (frequencies.get(stableKey(value)) ?? 0) + 1)
   const uniqueCount = Array.from(frequencies.values()).filter((count) => count === 1).length
-  const uniqueRate = nonNullValues.length === 0 ? 0 : uniqueCount / nonNullValues.length
-  const nullRate = rowCount === 0 ? 0 : nullCount / rowCount
-  const distinctRate = rowCount === 0 ? 0 : distinctCount / rowCount
+  const uniqueRate = nonNullValues.length ? uniqueCount / nonNullValues.length : 0
+  const nullRate = rowCount ? nullCount / rowCount : 0
+  const distinctRate = rowCount ? distinctCount / rowCount : 0
   const patternEligible = values.filter((value) => !isMissing(value))
-  const patternMatchRate = patternEligible.length === 0 ? null : patternEligible.filter((value) => patternMatch(columnName, value)).length / patternEligible.length
-  const sensitiveMatchRate = patternEligible.length === 0 ? 0 : patternEligible.filter((value) => sensitiveMatch(columnName, value)).length / patternEligible.length
-  const candidateKeyConfidence = rowCount === 0 ? 0 : round(uniqueRate * (1 - nullRate))
+  const patternCount = patternEligible.filter((value) => patternMatch(columnName, value)).length
+  const patternMatchRate = patternEligible.length ? patternCount / patternEligible.length : null
+  const sensitiveCount = patternEligible.filter((value) => sensitiveMatch(columnName, value)).length
+  const sensitiveMatchRate = patternEligible.length ? sensitiveCount / patternEligible.length : 0
+  const strings = nonNullValues.filter((value): value is string => typeof value === 'string')
+  const lengths = strings.map((value) => value.length)
+  const whitespaceOnlyCount = strings.filter((value) => value.trim() === '').length
+  const emptyStringCount = strings.filter((value) => value === '').length
+  const stats = numericStats(values)
+  const candidateKeyConfidence = rowCount ? round(uniqueRate * (1 - nullRate)) : 0
   const metrics: MetricValue[] = [
     { metric_key: 'non_null_count', numeric_value: nonNullValues.length },
     { metric_key: 'null_count', numeric_value: nullCount },
@@ -82,40 +157,38 @@ function calculateColumnMetrics(columnName: string, rows: Row[]): Omit<ColumnRes
     { metric_key: 'distinct_rate', numeric_value: round(distinctRate) },
     { metric_key: 'unique_count', numeric_value: uniqueCount },
     { metric_key: 'unique_rate', numeric_value: round(uniqueRate) },
+    { metric_key: 'pattern_count', numeric_value: patternCount },
     { metric_key: 'pattern_match_rate', numeric_value: patternMatchRate === null ? null : round(patternMatchRate) },
     { metric_key: 'sensitive_match_rate', numeric_value: round(sensitiveMatchRate) },
     { metric_key: 'candidate_key_confidence', numeric_value: candidateKeyConfidence },
+    { metric_key: 'empty_string_count', numeric_value: emptyStringCount },
+    { metric_key: 'whitespace_only_count', numeric_value: whitespaceOnlyCount },
+    { metric_key: 'length_min', numeric_value: lengths.length ? Math.min(...lengths) : null },
+    { metric_key: 'length_max', numeric_value: lengths.length ? Math.max(...lengths) : null },
+    { metric_key: 'length_mean', numeric_value: lengths.length ? round(lengths.reduce((a, b) => a + b, 0) / lengths.length) : null },
+    { metric_key: 'min', numeric_value: stats.min === null ? null : round(stats.min) },
+    { metric_key: 'max', numeric_value: stats.max === null ? null : round(stats.max) },
+    { metric_key: 'mean', numeric_value: stats.mean === null ? null : round(stats.mean) },
+    { metric_key: 'median', numeric_value: stats.median === null ? null : round(stats.median) },
+    { metric_key: 'stddev', numeric_value: stats.stddev === null ? null : round(stats.stddev) },
+    { metric_key: 'negative_count', numeric_value: stats.negative },
+    { metric_key: 'zero_count', numeric_value: stats.zero },
+    { metric_key: 'outlier_count', numeric_value: stats.outlier },
+    { metric_key: 'outlier_rate', numeric_value: stats.nums.length ? round(stats.outlier / stats.nums.length) : null },
   ]
   let finding: ColumnResult['finding']
-  if (nullRate > 0.2) {
-    finding = {
-      finding_type: 'COMPLETENESS',
-      severity: nullRate >= 0.5 ? 'HIGH' : 'MEDIUM',
-      title: `${columnName} has missing values`,
-      description: `${round(nullRate * 100)}% of observed rows are null or missing.`,
-      confidence: 1,
-      evidence: { null_count: nullCount, row_count: rowCount, null_rate: round(nullRate) },
-      recommendation: { action: 'review_source_completeness', threshold: 0.2 },
-    }
-  } else if (sensitiveMatchRate > 0.8) {
-    finding = {
-      finding_type: 'SENSITIVITY',
-      severity: 'INFO',
-      title: `${columnName} appears sensitive`,
-      description: 'Observed values match a known sensitive data pattern.',
-      confidence: round(sensitiveMatchRate),
-      evidence: { sensitive_match_rate: round(sensitiveMatchRate) },
-      recommendation: { action: 'apply_data_classification_and_access_controls' },
-    }
+  if (nullRate > 0.2) finding = {
+    finding_type: 'COMPLETENESS', severity: nullRate >= 0.5 ? 'HIGH' : 'MEDIUM',
+    title: `${columnName} has missing values`, description: `${round(nullRate * 100)}% of observed rows are null or missing.`,
+    confidence: 1, evidence: { null_count: nullCount, row_count: rowCount, null_rate: round(nullRate) },
+    recommendation: { action: 'review_source_completeness', threshold: 0.2 },
   }
-  return {
-    column_name: columnName,
-    metrics,
-    candidate_key_confidence: candidateKeyConfidence,
-    sensitive_match_rate: round(sensitiveMatchRate),
-    pattern_match_rate: patternMatchRate === null ? null : round(patternMatchRate),
-    finding,
+  else if (sensitiveMatchRate > 0.8) finding = {
+    finding_type: 'SENSITIVITY', severity: 'INFO', title: `${columnName} appears sensitive`,
+    description: 'Observed values match a known sensitive data pattern.', confidence: round(sensitiveMatchRate),
+    evidence: { sensitive_match_rate: round(sensitiveMatchRate) }, recommendation: { action: 'apply_data_classification_and_access_controls' },
   }
+  return { column_name: columnName, metrics, candidate_key_confidence: candidateKeyConfidence, sensitive_match_rate: round(sensitiveMatchRate), pattern_match_rate: patternMatchRate === null ? null : round(patternMatchRate), finding }
 }
 
 async function loadRowsFromTable(supabase: ReturnType<typeof createAdminClient>, datasetVersionId: string, maxRows: number) {
@@ -125,17 +198,7 @@ async function loadRowsFromTable(supabase: ReturnType<typeof createAdminClient>,
     const executionConfig = source.execution_config && typeof source.execution_config === 'object' ? source.execution_config as Record<string, unknown> : {}
     if (sourceType === 'file') {
       const loaded = await loadFileSource(supabase, { sourceUri: source.source_uri, executionConfig }, { maxRows })
-      return {
-        rowCount: loaded.rowCount,
-        rows: loaded.rows as Row[],
-        sourceAccess: {
-          source_type: 'FILE',
-          source_uri: loaded.sourceUri,
-          content_hash: loaded.contentHash,
-          sampled_rows: loaded.rows.length,
-          warnings: loaded.warnings,
-        },
-      }
+      return { rowCount: loaded.rowCount, rows: loaded.rows as Row[], sourceAccess: { source_type: 'FILE', source_uri: loaded.sourceUri, content_hash: loaded.contentHash, sampled_rows: loaded.rows.length, warnings: loaded.warnings } }
     }
   }
   const { data: version, error: versionError } = await supabase.rpc('get_dataset_version_for_profiling', { dataset_version_id: datasetVersionId })
@@ -148,7 +211,7 @@ async function loadRowsFromTable(supabase: ReturnType<typeof createAdminClient>,
   const schema = metadata.schema ?? metadata.schema_name ?? metadata.schemaName ?? 'public'
   if (!['supabase', 'supabase_table', 'postgres', 'postgres_table', 'table'].includes(sourceType) || !table) {
     if (sourceError) throw new Error(`Unable to resolve execution source for dataset version ${datasetVersionId}: ${sourceError.message}`)
-    throw new Error(`No executable source is configured for dataset version ${datasetVersionId}. FILE sources require execution_config.url or execution_config.bucket + execution_config.path.`)
+    throw new Error(`No executable source is configured for dataset version ${datasetVersionId}.`)
   }
   const { count, error: countError } = await supabase.schema(schema).from(table).select('*', { count: 'exact', head: true })
   if (countError) throw new Error(`Unable to count source rows: ${countError.message}`)
@@ -169,15 +232,14 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   const loaded = inputRows ? { rowCount: inputRows.length, rows: inputRows } : await loadRowsFromTable(supabase, datasetVersionId, 1000)
   const rows = loaded.rows
   const columnNames = Array.from(new Set(rows.flatMap((row) => Object.keys(row))))
-  const metricKeys = ['column_count', 'row_count', 'non_null_count', 'null_count', 'null_rate', 'distinct_count', 'distinct_rate', 'unique_count', 'unique_rate', 'pattern_match_rate', 'sensitive_match_rate', 'candidate_key_confidence']
-
-  const { data: definitions, error: definitionError } = await supabase.schema('profiling').from('metric_definitions').select('id, metric_key, scope, enabled').in('metric_key', metricKeys)
+  const registryKeys = DETERMINISTIC_METRICS.map((metric) => metric.metric_key)
+  const { data: definitions, error: definitionError } = await supabase.schema('profiling').from('metric_definitions').select('id, metric_key, scope, enabled').in('metric_key', registryKeys)
   if (definitionError) throw new Error(`Unable to load metric definitions: ${definitionError.message}`)
-  const definitionByKey = new Map((definitions ?? []).map((definition) => [definition.metric_key, definition]))
-  for (const metricKey of metricKeys) {
-    const definition = definitionByKey.get(metricKey)
-    if (!definition?.enabled) throw new Error(`Metric definition contract violation: enabled definition missing for ${metricKey}.`)
-  }
+  const definitionMap = metricDefinitionMap((definitions ?? []) as Definition[])
+  const missingEnabled = (definitions ?? []).filter((d) => d.enabled && !DETERMINISTIC_METRICS.some((m) => m.metric_key === d.metric_key && m.scope === d.scope))
+  if (missingEnabled.length) throw new Error(`Metric registry does not implement enabled definitions: ${missingEnabled.map((d) => `${d.scope}:${d.metric_key}`).join(', ')}`)
+  const enabled = DETERMINISTIC_METRICS.filter((metric) => definitionMap.get(`${metric.scope}:${metric.metric_key}`)?.enabled)
+  if (!enabled.length) throw new Error('No enabled deterministic metric definitions are available for execution.')
 
   const results = columnNames.map((columnName) => calculateColumnMetrics(columnName, rows))
   const { data: profileColumns, error: columnsError } = await supabase.schema('profiling').from('profile_columns').select('id, column_name').eq('profile_run_id', profilingRunId)
@@ -185,85 +247,60 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   const columnIdByName = new Map((profileColumns ?? []).map((column) => [column.column_name, column.id]))
   if (columnNames.some((name) => !columnIdByName.has(name))) throw new Error(`Profile column contract violation for run ${profilingRunId}: source columns are not fully registered.`)
 
-  const metricRows = results.flatMap((result) => result.metrics.map((metric) => {
-    const definition = definitionByKey.get(metric.metric_key)
-    if (!definition || definition.scope !== 'COLUMN') throw new Error(`Metric definition contract violation for ${metric.metric_key}: expected enabled COLUMN definition.`)
-    return {
-      metric_definition_id: definition.id,
-      profile_column_id: columnIdByName.get(result.column_name),
-      metric_key: metric.metric_key,
-      numeric_value: metric.numeric_value,
+  const metricRows: Record<string, unknown>[] = []
+  for (const result of results) {
+    for (const metric of result.metrics) {
+      const definition = definitionMap.get(`COLUMN:${metric.metric_key}`)
+      if (!definition?.enabled) continue
+      metricRows.push({ metric_definition_id: definition.id, profile_column_id: columnIdByName.get(result.column_name), metric_key: metric.metric_key, numeric_value: metric.numeric_value ?? null, text_value: metric.text_value ?? null, json_value: metric.json_value ?? null })
     }
-  }))
-  const datasetMetrics = ['column_count', 'row_count'].map((metric_key) => {
-    const definition = definitionByKey.get(metric_key)
-    if (!definition || definition.scope !== 'DATASET') throw new Error(`Metric definition contract violation for ${metric_key}: expected enabled DATASET definition.`)
-    return {
-      metric_definition_id: definition.id,
-      profile_column_id: null,
-      metric_key,
-      numeric_value: metric_key === 'column_count' ? columnNames.length : loaded.rowCount,
+  }
+  const datasetMetricValues: Record<string, number | string> = {
+    column_count: columnNames.length,
+    row_count: loaded.rowCount,
+    duplicate_row_count: duplicateRowCount(rows),
+    duplicate_row_rate: loaded.rowCount ? round(duplicateRowCount(rows) / loaded.rowCount) : 0,
+    schema_hash: schemaHash(columnNames),
+  }
+  for (const metric of enabled.filter((m) => m.scope === 'DATASET')) {
+    const definition = definitionMap.get(`DATASET:${metric.metric_key}`)
+    if (!definition) throw new Error(`Enabled dataset metric ${metric.metric_key} is missing from the registry catalog.`)
+    const value = datasetMetricValues[metric.metric_key]
+    metricRows.push({ metric_definition_id: definition.id, profile_column_id: null, metric_key: metric.metric_key, numeric_value: typeof value === 'number' ? value : null, text_value: typeof value === 'string' ? value : null })
+  }
+  for (const result of results) {
+    const values = result.column_name ? rows.map((row) => row[result.column_name]) : []
+    const stats = numericStats(values)
+    const distribution = enabled.filter((m) => m.scope === 'DISTRIBUTION')
+    for (const metric of distribution) {
+      const definition = definitionMap.get(`DISTRIBUTION:${metric.metric_key}`)
+      if (!definition) throw new Error(`Enabled distribution metric ${metric.metric_key} is missing from the registry catalog.`)
+      const nonNull = values.filter((v) => !isMissing(v))
+      const frequencies = new Map<string, { value: unknown; count: number }>()
+      for (const value of nonNull) {
+        const k = stableKey(value)
+        const existing = frequencies.get(k)
+        frequencies.set(k, existing ? { value: existing.value, count: existing.count + 1 } : { value, count: 1 })
+      }
+      let jsonValue: unknown = []
+      if (metric.metric_key === 'top_values') jsonValue = Array.from(frequencies.values()).sort((a, b) => b.count - a.count).slice(0, 10)
+      if (metric.metric_key === 'quantiles') jsonValue = stats.nums.length ? { p01: round(percentile(stats.nums, 0.01)!), p05: round(percentile(stats.nums, 0.05)!), p25: round(percentile(stats.nums, 0.25)!), p50: round(percentile(stats.nums, 0.5)!), p75: round(percentile(stats.nums, 0.75)!), p95: round(percentile(stats.nums, 0.95)!), p99: round(percentile(stats.nums, 0.99)!) } : {}
+      if (metric.metric_key === 'histogram') jsonValue = histogram(stats.nums)
+      metricRows.push({ metric_definition_id: definition.id, profile_column_id: columnIdByName.get(result.column_name), metric_key: metric.metric_key, numeric_value: null, json_value: jsonValue })
     }
-  })
-  const allMetricRows = [...datasetMetrics, ...metricRows]
-  const findings = results.filter((result) => result.finding).map((result) => ({
-    profile_column_id: columnIdByName.get(result.column_name),
-    ...result.finding,
-  }))
+  }
 
-  const completeness = results.length === 0 ? 0 : results.reduce((sum, result) => sum + (1 - (result.metrics.find((item) => item.metric_key === 'null_rate')?.numeric_value ?? 1)), 0) / results.length
-  const uniqueness = results.length === 0 ? 0 : results.reduce((sum, result) => sum + (result.metrics.find((item) => item.metric_key === 'unique_rate')?.numeric_value ?? 0), 0) / results.length
+  const findings = results.filter((result) => result.finding).map((result) => ({ profile_column_id: columnIdByName.get(result.column_name), ...result.finding }))
+  const completeness = results.length ? results.reduce((sum, result) => sum + (1 - (result.metrics.find((m) => m.metric_key === 'null_rate')?.numeric_value ?? 1)), 0) / results.length : 0
+  const uniqueness = results.length ? results.reduce((sum, result) => sum + (result.metrics.find((m) => m.metric_key === 'unique_rate')?.numeric_value ?? 0), 0) / results.length : 0
   const validityCandidates = results.map((result) => result.pattern_match_rate).filter((value): value is number => value !== null)
   const validity = validityCandidates.length ? validityCandidates.reduce((sum, value) => sum + value, 0) / validityCandidates.length : 1
-  const scorePayload = {
-    completeness_score: round(completeness),
-    uniqueness_score: round(uniqueness),
-    validity_score: round(validity),
-    accuracy_score: null,
-    overall_score: round((completeness + uniqueness + validity) / 3),
-    scoring_basis: 'deterministic_metrics',
-  }
-
+  const scorePayload = { completeness_score: round(completeness), uniqueness_score: round(uniqueness), validity_score: round(validity), accuracy_score: null, overall_score: round((completeness + uniqueness + validity) / 3), scoring_basis: 'deterministic_metrics' }
   const existingSummary = activeRun.summary && typeof activeRun.summary === 'object' && !Array.isArray(activeRun.summary) ? activeRun.summary as Record<string, unknown> : {}
-  const baseSummary = {
-    ...existingSummary,
-    metric_engine: 'deterministic',
-    sample_size: rows.length,
-    score: scorePayload,
-    source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
-  }
-
-  const metricsPayload = allMetricRows.map((metric) => ({
-    profile_run_id: profilingRunId,
-    ...metric,
-  }))
-  const findingsPayload = findings.map((finding) => ({
-    profile_run_id: profilingRunId,
-    ...finding,
-  }))
-
-  const { error: persistenceError } = await supabase.rpc('persist_profiling_results', {
-    p_profile_run_id: profilingRunId,
-    p_dataset_version_id: datasetVersionId,
-    p_metrics: metricsPayload,
-    p_findings: findingsPayload,
-    p_score: scorePayload,
-    p_summary: baseSummary,
-    p_status: 'COMPLETED',
-  })
+  const baseSummary = { ...existingSummary, metric_engine: 'deterministic_registry', metric_registry_version: '1.1', sample_size: rows.length, score: scorePayload, source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' }, enabled_metric_count: enabled.length }
+  const metricsPayload = metricRows.map((metric) => ({ profile_run_id: profilingRunId, ...metric }))
+  const findingsPayload = findings.map((finding) => ({ profile_run_id: profilingRunId, ...finding }))
+  const { error: persistenceError } = await supabase.rpc('persist_profiling_results', { p_profile_run_id: profilingRunId, p_dataset_version_id: datasetVersionId, p_metrics: metricsPayload, p_findings: findingsPayload, p_score: scorePayload, p_summary: baseSummary, p_status: 'COMPLETED' })
   if (persistenceError) throw new Error(`Unable to atomically persist profiling results: ${persistenceError.message}`)
-
-  return {
-    tool: 'execute_metrics',
-    status: 'COMPLETED',
-    dataset_version_id: datasetVersionId,
-    profiling_run_id: profilingRunId,
-    row_count: loaded.rowCount,
-    column_count: columnNames.length,
-    metrics_persisted: allMetricRows.length,
-    findings_persisted: findings.length,
-    score: scorePayload,
-    source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
-    columns: results,
-  }
+  return { tool: 'execute_metrics', status: 'COMPLETED', dataset_version_id: datasetVersionId, profiling_run_id: profilingRunId, row_count: loaded.rowCount, column_count: columnNames.length, metrics_persisted: metricRows.length, findings_persisted: findings.length, score: scorePayload, source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' }, columns: results, registry_metrics_enabled: enabled.length }
 }
