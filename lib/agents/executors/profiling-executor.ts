@@ -28,8 +28,9 @@ export async function executeProfilingExecutor(
   if (agentVersion !== PRODUCTION_AGENT_VERSION) throw new Error(`Profiling Agent ${agentVersion} is disabled for execution; production version is ${PRODUCTION_AGENT_VERSION}`)
 
   const datasetVersionId = input?.datasetVersionId ?? input?.dataset_version_id
-  if (!datasetVersionId) throw new Error('datasetVersionId is required for profiling execution')
   const profilingRunId = input?.profilingRunId ?? input?.profiling_run_id
+  const requiresDatasetVersion = !['compare_profiles'].includes(operation)
+  if (requiresDatasetVersion && !datasetVersionId) throw new Error('datasetVersionId is required for profiling execution')
 
   await writeAgentRunLog({
     agentRunId,
@@ -72,18 +73,11 @@ export async function executeProfilingExecutor(
         result = await detectDuplicates(profilingRunId)
         break
       case 'compare_profiles':
-        result = await compareProfiles(
-          input?.baselineProfileRunId ?? input?.baseline_profile_run_id,
-          input?.targetProfileRunId ?? input?.target_profile_run_id,
-        )
+        result = await compareProfiles(input?.baselineProfileRunId ?? input?.baseline_profile_run_id, input?.targetProfileRunId ?? input?.target_profile_run_id)
         break
       default:
-        result = await executeProfilingTool({
-          toolKey: operation,
-          datasetVersionId,
-          profilingRunId,
-          input,
-        })
+        if (!datasetVersionId) throw new Error('datasetVersionId is required for profiling execution')
+        result = await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input })
     }
 
     await writeAgentRunLog({
