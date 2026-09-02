@@ -29,8 +29,8 @@ async function isRunCancelled(admin: ReturnType<typeof createAdminClient>, runId
 
 async function preserveCancellation(admin: ReturnType<typeof createAdminClient>, agentRunId: string, profilingRunId: string, stepId?: string) {
   const completedAt = new Date().toISOString()
-  if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'CANCELLED', error_code: TERMINATED_ERROR_CODE, error_message: 'Execution terminated by user.', completed_at: completedAt }).eq('id', stepId).neq('status', 'SUCCEEDED'), 'cancel current step')
-  await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'CANCELLED', error_code: TERMINATED_ERROR_CODE, error_message: 'Execution terminated by user.', completed_at: completedAt }).eq('id', agentRunId), 'cancel agent run')
+  if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'CANCELLED', error_code: TERMINATED_ERROR_CODE, error_message: 'Execution terminated by user.', completed_at: completedAt }).eq('id', stepId).eq('status', 'RUNNING'), 'cancel current step')
+  await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'CANCELLED', error_code: TERMINATED_ERROR_CODE, error_message: 'Execution terminated by user.', completed_at: completedAt }).eq('id', agentRunId).eq('status', 'RUNNING'), 'cancel agent run')
   await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'CANCELLED', error_code: TERMINATED_ERROR_CODE, error_message: 'Execution terminated by user.', completed_at: completedAt }).eq('id', profilingRunId).neq('status', 'SUCCEEDED'), 'cancel profiling run')
 }
 
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     const context = { agentRunId: activeAgentRunId, stepId: activeProfileStepId, projectId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version } satisfies ToolExecutionContext
     const profileResult = await executeProfilingExecutor('profile_dataset', { ...input, profilingRunId: activeProfilingRunId }, context)
     if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeProfileStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).neq('status', 'SKIPPED'), 'complete profile step')
+    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).eq('status', 'RUNNING'), 'complete profile step')
 
     const metricStep = await admin.schema('agent').from('agent_run_steps').insert({ agent_run_id: activeAgentRunId, step_name: metricTool.tool_key, step_order: 2, status: 'RUNNING', input: { ...input, profilingRunId: activeProfilingRunId, tool_definition_id: metricTool.id, tool_version: metricTool.version }, started_at: new Date().toISOString() }).select('id').single()
     if (metricStep.error || !metricStep.data) throw new Error(`Unable to create metric execution step: ${metricStep.error?.message ?? 'unknown error'}`)
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeMetricStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
     const metricResult = await executeProfilingExecutor('execute_metrics', { ...input, profilingRunId: activeProfilingRunId }, { ...context, stepId: activeMetricStepId })
     if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeMetricStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', activeMetricStepId).neq('status', 'SKIPPED'), 'complete metric step')
+    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', activeMetricStepId).eq('status', 'RUNNING'), 'complete metric step')
 
     const investigationStep = await admin.schema('agent').from('agent_run_steps').insert({ agent_run_id: activeAgentRunId, step_name: investigationTool.tool_key, step_order: 3, status: 'RUNNING', input: { ...input, profilingRunId: activeProfilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version }, started_at: new Date().toISOString() }).select('id').single()
     if (investigationStep.error || !investigationStep.data) throw new Error(`Unable to create profiling investigation step: ${investigationStep.error?.message ?? 'unknown error'}`)
@@ -113,9 +113,9 @@ export async function POST(request: Request) {
     if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeInvestigationStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
 
     const completedAt = new Date().toISOString()
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', activeInvestigationStepId).neq('status', 'SKIPPED'), 'complete investigation step')
+    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', activeInvestigationStepId).eq('status', 'RUNNING'), 'complete investigation step')
     const result = { execution_completed: true, agent_run_id: activeAgentRunId, profiling_run_id: activeProfilingRunId, project_id: projectId, dataset_version_id: datasetVersion.id, profile: profileResult, metrics: metricResult, investigation: investigationResult }
-    const { error: finalRunError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: completedAt }).eq('id', activeAgentRunId).neq('status', 'CANCELLED')
+    const { error: finalRunError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: completedAt }).eq('id', activeAgentRunId).eq('status', 'RUNNING')
     if (finalRunError) throw new Error(`Unable to finalize agent run: ${finalRunError.message}`)
     return NextResponse.json({ agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId, stepId: activeInvestigationStepId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version, result })
   } catch (error) {
@@ -128,9 +128,9 @@ export async function POST(request: Request) {
       if (agentRunId && profilingRunId) await preserveCancellation(admin, agentRunId, profilingRunId, stepId ?? undefined)
       return NextResponse.json({ execution_completed: false, terminated: true, agentRunId, profilingRunId }, { status: 409 })
     }
-    if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', stepId).neq('status', 'SKIPPED'), 'fail current step')
-    if (agentRunId) await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', agentRunId).neq('status', 'CANCELLED'), 'fail agent run')
-    if (profilingRunId) await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', profilingRunId).neq('status', 'CANCELLED'), 'fail profiling run')
+    if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', stepId).eq('status', 'RUNNING'), 'fail current step')
+    if (agentRunId) await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', agentRunId).eq('status', 'RUNNING'), 'fail agent run')
+    if (profilingRunId) await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', profilingRunId).neq('status', 'CANCELLED').neq('status', 'SUCCEEDED'), 'fail profiling run')
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
