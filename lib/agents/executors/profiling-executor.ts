@@ -9,6 +9,7 @@ import {
 import {
   executeProfilingMetrics,
 } from "@/lib/profiling/metric-engine"
+import { investigateProfilingRun } from "@/lib/profiling/investigation-engine"
 import { writeAgentRunLog } from "@/lib/agents/run-log"
 
 const PRODUCTION_AGENT_KEY = "profiling_agent"
@@ -80,6 +81,39 @@ export async function executeProfilingExecutor(
         level: 'METRIC',
         eventType: 'PROFILING_METRICS_COMPLETED',
         message: 'Profiling metrics execution completed.',
+        details: { operation, datasetVersionId, profilingRunId },
+      })
+
+      return {
+        output: {
+          execution_completed: true,
+          agent_run_id: agentRunId,
+          step_id: stepId,
+          project_id: projectId,
+          operation,
+          result,
+        },
+      }
+    }
+
+    if (operation === "investigate_profile") {
+      if (!profilingRunId) {
+        throw new Error(
+          "profilingRunId is required for investigate_profile",
+        )
+      }
+
+      const result = await investigateProfilingRun(
+        profilingRunId,
+        datasetVersionId,
+      )
+
+      await writeAgentRunLog({
+        agentRunId,
+        agentRunStepId: stepId,
+        level: 'AI',
+        eventType: 'PROFILING_INVESTIGATION_COMPLETED',
+        message: 'Profiling investigation completed from persisted evidence.',
         details: { operation, datasetVersionId, profilingRunId },
       })
 
