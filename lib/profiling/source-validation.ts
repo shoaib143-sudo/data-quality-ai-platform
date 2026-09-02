@@ -78,19 +78,21 @@ export async function validateDataSourceForProfiling(
 
     if (errors.length === 0) {
       try {
-        const response = url
-          ? await fetch(url, { method: 'HEAD', cache: 'no-store' })
-          : await supabase.storage.from(bucket!).list(path!.split('/').slice(0, -1).join('/'), {
-              search: path!.split('/').pop() ?? undefined,
-              limit: 1,
-            })
-
         if (url) {
+          const response = await fetch(url, { method: 'HEAD', cache: 'no-store' })
           if (!response.ok) errors.push(`FILE source connectivity check returned HTTP ${response.status}.`)
-        } else if (Array.isArray(response.data) && !response.data.some((item) => item.name === path!.split('/').pop())) {
-          errors.push(`Supabase Storage object ${bucket}/${path} was not found.`)
-        } else if (response.error) {
-          errors.push(`Unable to access Supabase Storage object: ${response.error.message}`)
+        } else {
+          const directory = path!.split('/').slice(0, -1).join('/')
+          const filename = path!.split('/').pop() ?? path!
+          const storageResult = await supabase.storage.from(bucket!).list(directory, {
+            search: filename,
+            limit: 1,
+          })
+          if (storageResult.error) {
+            errors.push(`Unable to access Supabase Storage object: ${storageResult.error.message}`)
+          } else if (!storageResult.data.some((item) => item.name === filename)) {
+            errors.push(`Supabase Storage object ${bucket}/${path} was not found.`)
+          }
         }
       } catch (error) {
         errors.push(error instanceof Error ? error.message : 'FILE source connectivity check failed.')
@@ -123,25 +125,26 @@ export async function validateDataSourceForProfiling(
   let schemaAvailable = false
   let connectivity = false
   let rowCount: number | null = null
+  const tableName = table
 
-  if (errors.length === 0) {
+  if (errors.length === 0 && tableName) {
     const { data: tableRow, error: tableError } = await supabase
       .from('information_schema.tables')
       .select('table_schema, table_name')
       .eq('table_schema', schema)
-      .eq('table_name', table)
+      .eq('table_name', tableName)
       .eq('table_type', 'BASE TABLE')
       .maybeSingle()
 
     if (tableError) {
       errors.push(`Unable to inspect source schema: ${tableError.message}`)
     } else if (!tableRow) {
-      errors.push(`Source table ${schema}.${table} was not found.`)
+      errors.push(`Source table ${schema}.${tableName} was not found.`)
     } else {
       schemaAvailable = true
       const { count, error: countError } = await supabase
         .schema(schema)
-        .from(table)
+        .from(tableName)
         .select('*', { count: 'exact', head: true })
       if (countError) errors.push(`Source connectivity check failed: ${countError.message}`)
       else {
@@ -156,13 +159,13 @@ export async function validateDataSourceForProfiling(
     valid: errors.length === 0,
     source_type: sourceType.toUpperCase(),
     execution_type: 'TABLE',
-    source_uri: `${schema}.${table ?? ''}`,
+    source_uri: `${schema}.${tableName ?? ''}`,
     checks: {
       configuration: !errors.some((error) => error.includes('require') || error.includes('invalid identifier')),
       connectivity,
       schema_available: schemaAvailable,
     },
-    details: { schema, table, row_count: rowCount },
+    details: { schema, table: tableName, row_count: rowCount },
     errors,
     warnings,
   }
