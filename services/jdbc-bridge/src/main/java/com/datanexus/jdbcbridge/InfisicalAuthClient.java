@@ -31,11 +31,20 @@ public class InfisicalAuthClient {
       @Value("${INFISICAL_AUTH_URL:https://app.infisical.com}") String authUrl,
       @Value("${INFISICAL_CLIENT_ID:}") String clientId,
       @Value("${INFISICAL_CLIENT_SECRET:}") String clientSecret) {
+    this(mapper, authUrl, clientId, clientSecret, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build());
+  }
+
+  InfisicalAuthClient(
+      ObjectMapper mapper,
+      String authUrl,
+      String clientId,
+      String clientSecret,
+      HttpClient http) {
     this.mapper = mapper;
     this.authUrl = trimTrailingSlash(authUrl);
     this.clientId = clientId;
     this.clientSecret = clientSecret;
-    this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    this.http = http;
   }
 
   public String getAccessToken() throws Exception {
