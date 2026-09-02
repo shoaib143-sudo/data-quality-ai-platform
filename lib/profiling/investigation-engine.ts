@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { enrichInvestigationWithModel } from '@/lib/ai/investigation-model'
 
 type Finding = {
   id: string
@@ -161,7 +162,7 @@ export async function investigateProfilingRun(
     ? Math.round((typedFindings.reduce((sum, finding) => sum + (finding.confidence ?? 0), 0) / typedFindings.length) * 100) / 100
     : 0.95
 
-  return {
+  const deterministic = {
     investigation_version: '1.0',
     investigation_mode: 'deterministic_evidence_first',
     profiling_run_id: profilingRunId,
@@ -197,5 +198,31 @@ export async function investigateProfilingRun(
       'Business impact is qualitative until business criticality, lineage, usage, and financial or operational impact data are available.',
       'No production data, schema, governance policy, or pipeline change is executed by this investigation step.',
     ],
+  }
+
+  let aiInterpretation: Record<string, unknown> | null = null
+  try {
+    const enriched = await enrichInvestigationWithModel({
+      deterministic_investigation: deterministic,
+      columns: columns ?? [],
+    })
+    aiInterpretation = enriched
+      ? {
+          provider: enriched.provider,
+          model: enriched.model,
+          ...enriched.result,
+        }
+      : null
+  } catch (error) {
+    aiInterpretation = {
+      status: 'UNAVAILABLE',
+      reason: error instanceof Error ? error.message : 'AI provider unavailable.',
+    }
+  }
+
+  return {
+    ...deterministic,
+    investigation_mode: aiInterpretation ? 'deterministic_plus_ai' : 'deterministic_evidence_first',
+    ai_interpretation: aiInterpretation,
   }
 }
