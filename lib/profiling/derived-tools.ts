@@ -105,7 +105,17 @@ export async function detectDuplicates(profilingRunId: string) {
   const metrics = await loadMetrics(supabase, profilingRunId, ['duplicate_row_count', 'duplicate_row_rate'])
   const result = Object.fromEntries(metrics.map((metric) => [metric.metric_key, metric.numeric_value]))
   const duplicateCount = Number(result.duplicate_row_count ?? run.summary?.duplicate_row_count ?? 0)
-  return { tool: 'detect_duplicates', status: 'COMPLETED', profiling_run_id: profilingRunId, duplicate_row_count: duplicateCount, duplicate_row_rate: result.duplicate_row_rate ?? null, basis: run.summary?.duplicate_metrics_basis ?? 'UNKNOWN' }
+  const duplicateMetricBasis = run.summary?.duplicate_metric_basis ?? 'UNKNOWN'
+  return {
+    tool: 'detect_duplicates',
+    status: 'COMPLETED',
+    profiling_run_id: profilingRunId,
+    duplicate_row_count: duplicateCount,
+    duplicate_row_rate: result.duplicate_row_rate ?? null,
+    basis: duplicateMetricBasis,
+    sample_size: run.summary?.duplicate_metric_sample_size ?? null,
+    denominator: run.summary?.duplicate_metric_denominator ?? null,
+  }
 }
 
 export async function compareProfiles(baselineProfileRunId: string, targetProfileRunId: string) {
