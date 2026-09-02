@@ -220,9 +220,28 @@ export async function investigateProfilingRun(
     }
   }
 
-  return {
+  const investigation = {
     ...deterministic,
     investigation_mode: aiInterpretation ? 'deterministic_plus_ai' : 'deterministic_evidence_first',
     ai_interpretation: aiInterpretation,
   }
+
+  const existingSummary = profileRun.summary && typeof profileRun.summary === 'object' && !Array.isArray(profileRun.summary)
+    ? profileRun.summary as Record<string, unknown>
+    : {}
+
+  const { error: persistError } = await supabase
+    .schema('profiling')
+    .from('profile_runs')
+    .update({
+      summary: {
+        ...existingSummary,
+        investigation,
+      },
+    })
+    .eq('id', profilingRunId)
+
+  if (persistError) throw new Error(`Unable to persist profiling investigation: ${persistError.message}`)
+
+  return investigation
 }
