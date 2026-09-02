@@ -22,10 +22,6 @@ function firstString(source: RecordValue, keys: string[]) {
   return null
 }
 
-function safeIdentifier(value: string) {
-  return /^[A-Za-z_][A-Za-z0-9_$]*$/.test(value)
-}
-
 function inferType(values: unknown[], declared?: string | null) {
   const type = declared?.toLowerCase() ?? ''
   if (/bool/.test(type)) return 'boolean'
@@ -58,9 +54,9 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
   const credentialRef = firstString(metadata, ['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
   const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? 'public'
   const table = firstString(metadata, ['table', 'table_name', 'tableName']) ?? parseJdbcTableReference(stringValue(dataset.source_identifier) ?? stringValue(datasetVersion.source_uri))?.table
-  if (!jdbcUrl || !credentialRef || !table || !safeIdentifier(schema) || !safeIdentifier(table)) throw new Error('JDBC dataset source configuration is incomplete or invalid.')
+  if (!jdbcUrl || !credentialRef || !table || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(schema) || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(table)) throw new Error('JDBC dataset source configuration is incomplete or invalid.')
 
-  const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table, bridgeUrl: firstString(metadata, ['bridge_url', 'bridgeUrl']) ?? undefined }, MAX_SAMPLE_ROWS)
+  const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, MAX_SAMPLE_ROWS)
   const metadataColumns = Array.isArray(versionMetadata.columns) ? versionMetadata.columns : []
   const declared = new Map(metadataColumns.map((column) => {
     const item = record(column)
