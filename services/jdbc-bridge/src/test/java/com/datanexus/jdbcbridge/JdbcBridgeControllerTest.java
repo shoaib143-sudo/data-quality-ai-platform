@@ -5,15 +5,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.sql.DriverManager;
-import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -30,7 +27,14 @@ class JdbcBridgeControllerTest {
       try (var statement = connection.createStatement()) {
         statement.execute("CREATE TABLE IF NOT EXISTS customers (id INT PRIMARY KEY, name VARCHAR(100))");
         statement.execute("DELETE FROM customers");
-        for (int i = 1; i <= 10001; i++) statement.execute("INSERT INTO customers VALUES (" + i + ", 'customer-' + " + i + ")");
+        try (var insert = connection.prepareStatement("INSERT INTO customers VALUES (?, ?)") ) {
+          for (int i = 1; i <= 10001; i++) {
+            insert.setInt(1, i);
+            insert.setString(2, "customer-" + i);
+            insert.addBatch();
+          }
+          insert.executeBatch();
+        }
       }
     }
     mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(new ObjectMapper(), credentials)).build();
