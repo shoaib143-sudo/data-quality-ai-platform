@@ -128,30 +128,18 @@ export async function validateDataSourceForProfiling(
   const tableName = table
 
   if (errors.length === 0 && tableName) {
-    const { data: tableRow, error: tableError } = await supabase
-      .from('information_schema.tables')
-      .select('table_schema, table_name')
-      .eq('table_schema', schema)
-      .eq('table_name', tableName)
-      .eq('table_type', 'BASE TABLE')
-      .maybeSingle()
+    const { count, error: countError } = await supabase
+      .schema(schema)
+      .from(tableName)
+      .select('*', { count: 'exact', head: true })
 
-    if (tableError) {
-      errors.push(`Unable to inspect source schema: ${tableError.message}`)
-    } else if (!tableRow) {
-      errors.push(`Source table ${schema}.${tableName} was not found.`)
+    if (countError) {
+      errors.push(`Source connectivity/schema check failed: ${countError.message}`)
     } else {
       schemaAvailable = true
-      const { count, error: countError } = await supabase
-        .schema(schema)
-        .from(tableName)
-        .select('*', { count: 'exact', head: true })
-      if (countError) errors.push(`Source connectivity check failed: ${countError.message}`)
-      else {
-        connectivity = true
-        rowCount = count ?? 0
-        if (rowCount === 0) warnings.push('Source table is reachable but currently contains no rows.')
-      }
+      connectivity = true
+      rowCount = count ?? 0
+      if (rowCount === 0) warnings.push('Source table is reachable but currently contains no rows.')
     }
   }
 
