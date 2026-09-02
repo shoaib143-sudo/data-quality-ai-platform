@@ -30,6 +30,9 @@ export default async function ProfilingPage() {
     .limit(10)
 
   const latestRun = runs?.[0]
+  const investigation = latestRun?.summary && typeof latestRun.summary === 'object' && !Array.isArray(latestRun.summary)
+    ? (latestRun.summary as Record<string, any>).investigation
+    : null
 
   const [{ data: scores }, { data: findings }, { data: profileColumns }, { data: metrics }] = latestRun
     ? await Promise.all([
@@ -63,7 +66,6 @@ export default async function ProfilingPage() {
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }]
 
   const score = scores?.[0]
-  const columnById = new Map((profileColumns ?? []).map((column) => [column.id, column]))
   const metricsByColumn = new Map<string, typeof metrics>()
 
   for (const metric of metrics ?? []) {
@@ -87,7 +89,7 @@ export default async function ProfilingPage() {
         <header>
           <h1 className="text-3xl font-semibold">Profiling Workspace</h1>
           <p className="mt-2 text-muted-foreground">
-            Understand what was measured, what changed, and which data quality or governance issues need attention.
+            Understand what was measured, what changed, why it matters, and what should happen next.
           </p>
         </header>
 
@@ -151,6 +153,69 @@ export default async function ProfilingPage() {
                 ))}
               </div>
             </section>
+
+            {investigation ? (
+              <section className="rounded-xl border p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h2 className="font-semibold">AI Investigation</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Evidence-first interpretation of the persisted profile. No production change is executed here.
+                    </p>
+                  </div>
+                  <span className="rounded-full border px-3 py-1 text-xs font-medium">
+                    Risk: {String(investigation.risk ?? 'UNKNOWN')}
+                  </span>
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-lg border p-4">
+                    <div className="text-xs text-muted-foreground">Technical issue</div>
+                    <p className="mt-2 text-sm">{String(investigation.technical_summary ?? 'N/A')}</p>
+                  </div>
+                  <div className="rounded-lg border p-4">
+                    <div className="text-xs text-muted-foreground">Business issue</div>
+                    <p className="mt-2 text-sm">{String(investigation.business_issue ?? 'N/A')}</p>
+                  </div>
+                  <div className="rounded-lg border p-4">
+                    <div className="text-xs text-muted-foreground">Business impact</div>
+                    <p className="mt-2 text-sm">{String(investigation.business_impact ?? 'N/A')}</p>
+                  </div>
+                  <div className="rounded-lg border p-4">
+                    <div className="text-xs text-muted-foreground">Confidence</div>
+                    <p className="mt-2 text-sm">{scorePercent(Number(investigation.confidence ?? 0))}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-lg border p-4">
+                  <div className="text-xs text-muted-foreground">Probable root causes</div>
+                  <div className="mt-3 space-y-2">
+                    {(investigation.probable_root_causes ?? []).map((cause: any, index: number) => (
+                      <div key={`${String(cause.cause)}-${index}`} className="rounded-md bg-muted/40 p-3 text-sm">
+                        <strong>{label(String(cause.cause ?? 'unknown'))}</strong>
+                        {cause.rationale ? <p className="mt-1 text-muted-foreground">{String(cause.rationale)}</p> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-lg border p-4">
+                  <div className="text-xs text-muted-foreground">Recommended actions</div>
+                  <div className="mt-3 space-y-2">
+                    {(investigation.recommendations ?? []).map((recommendation: any, index: number) => (
+                      <div key={`${String(recommendation.action)}-${index}`} className="rounded-md bg-muted/40 p-3 text-sm">
+                        <div className="flex flex-wrap gap-2">
+                          <strong>{label(String(recommendation.action ?? 'review'))}</strong>
+                          <span className="rounded-full border px-2 py-0.5 text-xs">{String(recommendation.priority ?? 'UNKNOWN')}</span>
+                          {recommendation.approval_required ? <span className="rounded-full border px-2 py-0.5 text-xs">Approval required</span> : null}
+                        </div>
+                        {recommendation.rationale ? <p className="mt-1 text-muted-foreground">{String(recommendation.rationale)}</p> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             <section className="rounded-xl border p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
