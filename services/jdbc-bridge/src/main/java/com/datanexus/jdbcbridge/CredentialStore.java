@@ -33,13 +33,24 @@ public class CredentialStore {
       @Value("${INFISICAL_PROJECT_ID:}") String projectId,
       @Value("${INFISICAL_ENVIRONMENT:dev}") String environment,
       @Value("${INFISICAL_SECRET_PATH:/}") String secretPath) {
+    this(mapper, authClient, apiUrl, projectId, environment, secretPath, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build());
+  }
+
+  CredentialStore(
+      ObjectMapper mapper,
+      InfisicalAuthClient authClient,
+      String apiUrl,
+      String projectId,
+      String environment,
+      String secretPath,
+      HttpClient http) {
     this.mapper = mapper;
     this.authClient = authClient;
     this.apiUrl = trimTrailingSlash(apiUrl);
     this.projectId = projectId;
     this.environment = environment;
     this.secretPath = secretPath;
-    this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    this.http = http;
   }
 
   public Credentials resolve(String credentialRef) throws Exception {
