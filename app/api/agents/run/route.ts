@@ -73,13 +73,21 @@ export async function POST(request: Request) {
     const executionProfilingRunId = profilingRun.id
     profilingRunId = executionProfilingRunId
 
-    const { data: profileTool, error: profileToolError } = await supabase.schema('agent').from('tool_definitions').select('id, tool_key, version').eq('agent_definition_id', productionAgentId).eq('tool_key', 'profile_dataset').eq('enabled', true).order('version', { ascending: false }).limit(1).single()
-    if (profileToolError || !profileTool) throw new Error('The selected Profiling Agent has no enabled profile_dataset tool.')
+    const { data: tools, error: toolsError } = await supabase.schema('agent').from('tool_definitions').select('id, tool_key, version').eq('agent_definition_id', productionAgentId).eq('enabled', true).in('tool_key', ['profile_dataset', 'execute_metrics', 'investigate_profile'])
+    if (toolsError) throw new Error(`Unable to load Profiling Agent tools: ${toolsError.message}`)
+    const latestTool = (toolKey: string) => {
+      const matches = (tools ?? []).filter((tool) => tool.tool_key === toolKey)
+      return matches.sort((a, b) => String(b.version).localeCompare(String(a.version), undefined, { numeric: true }))[0]
+    }
+    const profileTool = latestTool('profile_dataset')
+    const metricTool = latestTool('execute_metrics')
+    const investigationTool = latestTool('investigate_profile')
+    if (!profileTool) throw new Error('The selected Profiling Agent has no enabled profile_dataset tool.')
+    if (!metricTool) throw new Error('The selected Profiling Agent has no enabled execute_metrics tool.')
+    if (!investigationTool) throw new Error('The selected Profiling Agent has no enabled investigate_profile tool.')
     if (typeof profileTool.id !== 'string' || typeof profileTool.tool_key !== 'string' || typeof profileTool.version !== 'string') throw new Error('The selected Profiling Agent profile tool definition is invalid.')
-
-    const { data: metricTool, error: metricToolError } = await supabase.schema('agent').from('tool_definitions').select('id, tool_key, version').eq('agent_definition_id', productionAgentId).eq('tool_key', 'execute_metrics').eq('enabled', true).order('version', { ascending: false }).limit(1).single()
-    if (metricToolError || !metricTool) throw new Error('The selected Profiling Agent has no enabled execute_metrics tool.')
     if (typeof metricTool.id !== 'string' || typeof metricTool.tool_key !== 'string' || typeof metricTool.version !== 'string') throw new Error('The selected Profiling Agent metric tool definition is invalid.')
+    if (typeof investigationTool.id !== 'string' || typeof investigationTool.tool_key !== 'string' || typeof investigationTool.version !== 'string') throw new Error('The selected Profiling Agent investigation tool definition is invalid.')
 
     const profileStep = await admin.schema('agent').from('agent_run_steps').insert({ agent_run_id: executionAgentRunId, step_name: profileTool.tool_key, step_order: 1, status: 'RUNNING', input: { ...input, profilingRunId: executionProfilingRunId, tool_definition_id: profileTool.id, tool_version: profileTool.version }, started_at: new Date().toISOString() }).select('id').single()
     if (profileStep.error || !profileStep.data || typeof profileStep.data.id !== 'string') throw new Error(`Unable to create profiling step: ${profileStep.error?.message ?? 'unknown error'}`)
@@ -111,13 +119,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: executionAgentRunId, profilingRunId: executionProfilingRunId }, { status: 409 })
     }
 
+    await admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', executionMetricStepId).neq('status', 'SKIPPED')
+
+    const investigationStep = await admin.schema('agent').from('agent_run_steps').insert({ agent_run_id: executionAgentRunId, step_name: investigationTool.tool_key, step_order: 3, status: 'RUNNING', input: { ...input, profilingRunId: executionProfilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version }, started_at: new Date().toISOString() }).select('id').single()
+    if (investigationStep.error || !investigationStep.data || typeof investigationStep.data.id !== 'string') throw new Error(`Unable to create profiling investigation step: ${investigationStep.error?.message ?? 'unknown error'}`)
+    const executionInvestigationStepId = investigationStep.data.id
+    stepId = executionInvestigationStepId
+    if (await isRunCancelled(admin, executionAgentRunId)) {
+      await preserveCancellation(admin, executionAgentRunId, executionProfilingRunId, executionInvestigationStepId)
+      return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: executionAgentRunId, profilingRunId: executionProfilingRunId }, { status: 409 })
+    }
+
+    const investigationContext: ToolExecutionContext = { agentRunId: executionAgentRunId, stepId: executionInvestigationStepId, projectId, agentDefinitionId: productionAgentId, agentVersion: productionAgentVersion }
+    const investigationResult = await executeProfilingExecutor('investigate_profile', { ...input, profilingRunId: executionProfilingRunId }, investigationContext)
+    if (await isRunCancelled(admin, executionAgentRunId)) {
+      await preserveCancellation(admin, executionAgentRunId, executionProfilingRunId, executionInvestigationStepId)
+      return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: executionAgentRunId, profilingRunId: executionProfilingRunId }, { status: 409 })
+    }
+
     const completedAt = new Date().toISOString()
-    await admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: completedAt }).eq('id', executionMetricStepId).neq('status', 'SKIPPED')
-    const result = { execution_completed: true, agent_run_id: executionAgentRunId, profiling_run_id: executionProfilingRunId, project_id: projectId, dataset_version_id: datasetVersion.id, profile: profileResult, metrics: metricResult }
+    await admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', executionInvestigationStepId).neq('status', 'SKIPPED')
+    const result = { execution_completed: true, agent_run_id: executionAgentRunId, profiling_run_id: executionProfilingRunId, project_id: projectId, dataset_version_id: datasetVersion.id, profile: profileResult, metrics: metricResult, investigation: investigationResult }
     const { error: finalRunError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: completedAt }).eq('id', executionAgentRunId).neq('status', 'CANCELLED')
     if (finalRunError) throw new Error(`Unable to finalize agent run: ${finalRunError.message}`)
 
-    return NextResponse.json({ agentRunId: executionAgentRunId, profilingRunId: executionProfilingRunId, stepId: executionMetricStepId, agentDefinitionId: productionAgentId, agentVersion: productionAgentVersion, result })
+    return NextResponse.json({ agentRunId: executionAgentRunId, profilingRunId: executionProfilingRunId, stepId: executionInvestigationStepId, agentDefinitionId: productionAgentId, agentVersion: productionAgentVersion, result })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown execution error'
     const admin = createAdminClient()
