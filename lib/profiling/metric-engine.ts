@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
+import { investigateProfilingRun } from '@/lib/profiling/investigation-engine'
 
 type Row = Record<string, unknown>
 
@@ -322,16 +323,30 @@ export async function executeProfilingMetrics(
   }, { onConflict: 'profile_run_id' })
   if (scoreError) throw new Error(`Unable to persist quality score: ${scoreError.message}`)
 
+  const baseSummary = {
+    metric_engine: 'deterministic',
+    sample_size: rows.length,
+    score: scorePayload,
+    source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
+  }
+
   await supabase.schema('profiling').from('profile_runs').update({
     row_count: loaded.rowCount,
     column_count: columnNames.length,
+    summary: baseSummary,
+  }).eq('id', profilingRunId)
+
+  const investigation = await investigateProfilingRun(profilingRunId, datasetVersionId)
+
+  const { error: investigationPersistError } = await supabase.schema('profiling').from('profile_runs').update({
     summary: {
-      metric_engine: 'deterministic',
-      sample_size: rows.length,
-      score: scorePayload,
-      source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
+      ...baseSummary,
+      investigation,
     },
   }).eq('id', profilingRunId)
+  if (investigationPersistError) {
+    throw new Error(`Unable to persist profiling investigation: ${investigationPersistError.message}`)
+  }
 
   return {
     tool: 'execute_metrics',
@@ -343,6 +358,7 @@ export async function executeProfilingMetrics(
     metrics_persisted: metricRows.length,
     findings_persisted: findings.length,
     score: scorePayload,
+    investigation,
     source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
     columns: results,
   }
