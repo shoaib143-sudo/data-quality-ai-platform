@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
+import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -44,6 +45,14 @@ export async function POST(request: Request) {
       .eq('id', sourceId).eq('project_id', projectId).eq('status', 'ACTIVE').maybeSingle()
     if (sourceError || !source) return NextResponse.json({ error: 'The selected data source is unavailable.' }, { status: 404 })
 
+    const sourceValidation = await validateDataSourceForProfiling(admin, source, sourceIdentifier)
+    if (!sourceValidation.valid) {
+      return NextResponse.json({
+        error: 'The selected source is not profiling-ready.',
+        source_validation: sourceValidation,
+      }, { status: 422 })
+    }
+
     const { data: existingDataset, error: duplicateError } = await admin
       .schema('catalog').from('datasets').select('id').eq('project_id', projectId).eq('name', name).maybeSingle()
     if (duplicateError) throw new Error(`Unable to validate dataset name: ${duplicateError.message}`)
@@ -57,7 +66,11 @@ export async function POST(request: Request) {
       source_identifier: sourceIdentifier,
       owner_user_id: user.id,
       business_domain: businessDomain || null,
-      metadata: { registration: 'manual', registered_source_type: source.source_type },
+      metadata: {
+        registration: 'manual',
+        registered_source_type: source.source_type,
+        source_validation: sourceValidation,
+      },
     }).select('id, project_id, data_source_id, name, description, source_identifier, business_domain, status, created_at').single()
     if (datasetError || !dataset) throw new Error(`Unable to register dataset: ${datasetError?.message ?? 'unknown error'}`)
     datasetId = dataset.id
@@ -79,7 +92,11 @@ export async function POST(request: Request) {
       source_uri: sourceIdentifier,
       status: 'PROCESSING',
       observed_at: new Date().toISOString(),
-      metadata: { registration: 'manual', source_type: source.source_type },
+      metadata: {
+        registration: 'manual',
+        source_type: source.source_type,
+        source_validation: sourceValidation,
+      },
     }).select('id, dataset_id, version_number, source_uri, status, observed_at, created_at').single()
     if (versionError || !version) throw new Error(`Unable to create dataset version: ${versionError?.message ?? 'unknown error'}`)
     versionId = version.id
@@ -93,6 +110,7 @@ export async function POST(request: Request) {
         source_id: source.id,
         source_type: source.source_type,
         connection_metadata: connectionMetadata,
+        validation: sourceValidation,
       },
       active: true,
     })
@@ -106,6 +124,7 @@ export async function POST(request: Request) {
       dataset,
       version,
       profiling_ready: true,
+      source_validation: sourceValidation,
       execution_type: executionType,
       agentDefinitionId: agentDefinition.id,
       agent_key: agentDefinition.agent_key,
