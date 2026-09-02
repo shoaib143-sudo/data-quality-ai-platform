@@ -61,27 +61,10 @@ public class CredentialStore {
         + "&secretPath=" + encode(secretPath)
         + "&viewSecretValue=true";
 
-    String token = authClient.getAccessToken();
-    HttpRequest request = HttpRequest.newBuilder(
-            URI.create(apiUrl + "/api/v4/secrets/" + encoded + "?" + query))
-        .timeout(Duration.ofSeconds(8))
-        .header("Authorization", "Bearer " + token)
-        .GET()
-        .build();
-
-    HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-
-    // A token can expire between the cache check and the request. Refresh once,
-    // then retry rather than returning a credential-store failure to callers.
+    HttpResponse<String> response = fetchSecret(encoded, query, authClient.getAccessToken());
     if (response.statusCode() == 401) {
-      token = authClient.getAccessToken();
-      request = HttpRequest.newBuilder(
-              URI.create(apiUrl + "/api/v4/secrets/" + encoded + "?" + query))
-          .timeout(Duration.ofSeconds(8))
-          .header("Authorization", "Bearer " + token)
-          .GET()
-          .build();
-      response = http.send(request, HttpResponse.BodyHandlers.ofString());
+      authClient.invalidate();
+      response = fetchSecret(encoded, query, authClient.getAccessToken());
     }
 
     if (response.statusCode() / 100 != 2) {
@@ -104,6 +87,16 @@ public class CredentialStore {
     Credentials credentials = new Credentials(username, password);
     cache.put(credentialRef, new CachedCredential(credentials, System.currentTimeMillis() + 60_000L));
     return credentials;
+  }
+
+  private HttpResponse<String> fetchSecret(String encoded, String query, String token) throws Exception {
+    HttpRequest request = HttpRequest.newBuilder(
+            URI.create(apiUrl + "/api/v4/secrets/" + encoded + "?" + query))
+        .timeout(Duration.ofSeconds(8))
+        .header("Authorization", "Bearer " + token)
+        .GET()
+        .build();
+    return http.send(request, HttpResponse.BodyHandlers.ofString());
   }
 
   private static String encode(String value) {
