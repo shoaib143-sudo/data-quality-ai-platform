@@ -32,7 +32,9 @@ export function RunAgentForm({
 }) {
   const [agentDefinitionId, setAgentDefinitionId] = useState(agents[0]?.id ?? '')
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
-  const [datasetVersionId, setDatasetVersionId] = useState('')
+  const [datasetVersionId, setDatasetVersionId] = useState(
+    datasetVersions.find((version) => version.projectId === projects[0]?.id)?.id ?? '',
+  )
   const [status, setStatus] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
 
@@ -75,7 +77,11 @@ export function RunAgentForm({
         throw new Error(payload.error ?? 'Agent execution failed.')
       }
 
-      setStatus(`Run ${payload.agentRunId} completed successfully.`)
+      const runId = payload.agentRunId ?? payload.agent_run_id
+      if (!runId) {
+        throw new Error('Agent execution completed without returning a run identifier.')
+      }
+      setStatus(`Run ${runId} completed successfully.`)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Agent execution failed.')
     } finally {
