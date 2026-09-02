@@ -83,7 +83,8 @@ the same profiling connector contract without exposing credentials to agents.
 Persisted agent-run logging, project-scoped access, lifecycle guards, failure
 persistence, cooperative cancellation, source-resolution hardening, registry
 uniqueness, performance indexes, historical repair auditing, RLS protection for
-the repair audit table, and production smoke verification are implemented.
+the repair audit table, production smoke verification, and bounded production
+latency benchmarking are implemented.
 
 ## 4. Live Agent Registry
 
@@ -110,6 +111,8 @@ Applied migrations include:
 20260902195412_complete_profiling_performance_indexes
 20260902195726_secure_metric_repair_audit
 20260902195755_reclassify_incomplete_historical_profiling_runs
+20260903230000_restrict_security_definer_rpc_execute
+20260903230500_close_public_profiling_rpc_execute_grant
 ```
 
 The historical repair normalized the known legacy dataset-metric identity error:
@@ -125,9 +128,9 @@ zero invalid dataset metric rows carrying a profile-column identity. The remaini
 `COMPLETED` run validates successfully with 3 profile columns, 75 column metric
 rows, 5 dataset metric rows, and 9 distribution metric rows.
 
-Performance hardening removed the exact duplicate indexes previously reported
-by the Supabase advisor and added coverage for the anomaly metric foreign key.
-The new repair audit foreign keys are indexed and the audit table has RLS enabled.
+Performance hardening removed exact duplicate indexes previously reported by the
+Supabase advisor and added coverage for the anomaly metric foreign key. The new
+repair audit foreign keys are indexed and the audit table has RLS enabled.
 Remaining performance advisor output is limited to informational unused-index
 notices and the intentionally synthetic validation table without a primary key.
 
@@ -142,53 +145,51 @@ notices and the intentionally synthetic validation table without a primary key.
 - Cancellation cannot reactivate a terminal run.
 - Production data modification, deletion, schema changes, remediation execution,
 and governance-policy changes remain approval-gated.
+- SECURITY DEFINER authorization helpers and profiling metadata RPCs are no
+  longer executable by `anon` or `authenticated` through PostgREST.
 
-Supabase security-advisor warnings for SECURITY DEFINER functions and leaked
-password protection remain explicit security-review items because changing them
-requires confirming the intended authentication model.
+The remaining Supabase security-advisor warning is leaked-password protection.
+The RLS-without-policy notices are informational and intentionally preserve a
+default-deny posture on internal tables. Leaked-password protection requires
+Auth configuration access and should be enabled before password-based production
+onboarding.
 
 ## 7. Production Verification
 
 Latest GitHub `main` commits are automatically deployed through Vercel.
 
-The latest deployment for commit `5c4ed129014e2e630105bc81bc94727bcb0292ed`
-is `READY` in production. Its build completed successfully with no error/stderr
-build events, GitHub reports the Vercel check as successful, and no Vercel runtime
-errors were found in the verification window.
+The production smoke verifier checks `/login` plus protected POST-only API
+method/auth boundaries and supports authenticated profiling-contract verification
+when `VERIFY_COOKIE` and `VERIFY_PROFILE_RUN_ID` are supplied.
 
-Production endpoint smoke checks returned HTTP 200 for `/login` and HTTP 405 for
-protected POST-only API routes when called with GET, confirming route deployment
-and method boundaries without bypassing authentication.
-
-Production smoke verification is available through:
+A bounded production latency benchmark is available through:
 
 ```text
-pnpm verify:production
+pnpm benchmark:production
 ```
 
-The verifier checks the production login surface and protected API method/auth
-boundaries. It also supports authenticated profiling-contract verification when
-`VERIFY_COOKIE` and `VERIFY_PROFILE_RUN_ID` are supplied.
+It defaults to 25 requests with concurrency 5 against `/login` and fails on
+transport errors or unexpected status codes. It is deliberately bounded and
+must not be treated as a substitute for authenticated profiling load tests.
 
-## 8. Completion Policy
+## 8. Remaining Production Activation Work
 
-The six original implementation lanes plus the requested performance, historical
-data, JDBC connector, dependency-aware hardening, and production verification
-increment are implemented.
+The application implementation is complete. Remaining work is external or
+environment-dependent:
+
+- provision and operate a real JDBC bridge and credential store
+- provide real connector fixtures/credentials for authenticated E2E
+- enable Supabase leaked-password protection through the Auth configuration
+- run authenticated E2E across the complete profiling lifecycle
+- run connector-specific integration/load tests against PostgreSQL, MSSQL,
+  MySQL, Oracle, Databricks/JDBC fixtures as available
+- use measured benchmark results to tune production workloads and remove only
+  indexes proven unnecessary after representative traffic
 
 The generic JDBC code path is production-ready at the application boundary but
 requires an actual JDBC bridge deployment and credential-store configuration to
 connect to an external JDBC database. This is an infrastructure provisioning
 dependency, not an unimplemented application path.
-
-Future work should be treated as:
-
-- provisioning and operating the JDBC bridge/credential store
-- authenticated E2E execution against real source fixtures
-- security remediation after authentication-model confirmation
-- connector-specific optimizations
-- measured performance optimization
-- new product capability
 
 Do not rebuild completed modules. Any newly discovered defect must be fixed at
 the smallest affected layer and the full dependency chain re-checked.
