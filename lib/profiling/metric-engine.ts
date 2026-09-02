@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
-import { investigateProfilingRun } from '@/lib/profiling/investigation-engine'
 
 type Row = Record<string, unknown>
 
@@ -330,23 +329,12 @@ export async function executeProfilingMetrics(
     source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
   }
 
-  await supabase.schema('profiling').from('profile_runs').update({
+  const { error: runUpdateError } = await supabase.schema('profiling').from('profile_runs').update({
     row_count: loaded.rowCount,
     column_count: columnNames.length,
     summary: baseSummary,
   }).eq('id', profilingRunId)
-
-  const investigation = await investigateProfilingRun(profilingRunId, datasetVersionId)
-
-  const { error: investigationPersistError } = await supabase.schema('profiling').from('profile_runs').update({
-    summary: {
-      ...baseSummary,
-      investigation,
-    },
-  }).eq('id', profilingRunId)
-  if (investigationPersistError) {
-    throw new Error(`Unable to persist profiling investigation: ${investigationPersistError.message}`)
-  }
+  if (runUpdateError) throw new Error(`Unable to persist profiling run summary: ${runUpdateError.message}`)
 
   return {
     tool: 'execute_metrics',
@@ -358,7 +346,6 @@ export async function executeProfilingMetrics(
     metrics_persisted: metricRows.length,
     findings_persisted: findings.length,
     score: scorePayload,
-    investigation,
     source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
     columns: results,
   }
