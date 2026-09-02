@@ -13,11 +13,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
-/**
- * Exchanges an Infisical Machine Identity Universal Auth credential pair for
- * a short-lived access token and refreshes it automatically before expiry.
- * The client secret is never logged or returned by the bridge API.
- */
+/** Exchanges a Machine Identity Universal Auth credential pair for a short-lived token. */
 @Component
 public class InfisicalAuthClient {
   private static final long EXPIRY_SKEW_MILLIS = 60_000L;
@@ -58,14 +54,18 @@ public class InfisicalAuthClient {
     }
   }
 
+  /** Invalidates the cached token after a rejected API request. */
+  public synchronized void invalidate() {
+    cachedToken = null;
+  }
+
   private AccessToken login() throws Exception {
     if (clientId.isBlank() || clientSecret.isBlank()) {
       throw new IllegalStateException("Infisical Universal Auth is not configured. Set INFISICAL_CLIENT_ID and INFISICAL_CLIENT_SECRET.");
     }
 
     String form = "clientId=" + encode(clientId) + "&clientSecret=" + encode(clientSecret);
-    HttpRequest request = HttpRequest.newBuilder(
-            URI.create(authUrl + "/api/v1/auth/universal-auth/login"))
+    HttpRequest request = HttpRequest.newBuilder(URI.create(authUrl + "/api/v1/auth/universal-auth/login"))
         .timeout(Duration.ofSeconds(8))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .POST(HttpRequest.BodyPublishers.ofString(form))
@@ -83,8 +83,7 @@ public class InfisicalAuthClient {
       throw new IllegalStateException("Infisical authentication returned an invalid access token response.");
     }
 
-    long expiresAt = System.currentTimeMillis() + Math.max(1L, expiresInSeconds * 1000L);
-    return new AccessToken(token, expiresAt);
+    return new AccessToken(token, System.currentTimeMillis() + Math.max(1L, expiresInSeconds * 1000L));
   }
 
   private static String encode(String value) {
