@@ -232,6 +232,17 @@ export async function executeProfilingMetrics(
   input: Record<string, unknown> = {},
 ) {
   const supabase = createAdminClient()
+  const { data: activeRun, error: activeRunError } = await supabase
+    .schema('profiling')
+    .from('profile_runs')
+    .select('id, dataset_version_id, status, summary')
+    .eq('id', profilingRunId)
+    .maybeSingle()
+  if (activeRunError) throw new Error(`Unable to verify profiling run: ${activeRunError.message}`)
+  if (!activeRun) throw new Error(`Profiling run ${profilingRunId} was not found.`)
+  if (activeRun.dataset_version_id !== datasetVersionId) throw new Error(`Profiling run ${profilingRunId} does not belong to dataset version ${datasetVersionId}.`)
+  if (activeRun.status === 'CANCELLED') throw new Error(`Profiling run ${profilingRunId} has been cancelled.`)
+
   const inputRows = Array.isArray(input.rows) ? input.rows.filter((row): row is Row => !!row && typeof row === 'object' && !Array.isArray(row)) : null
   const loaded = inputRows ? { rowCount: inputRows.length, rows: inputRows } : await loadRowsFromTable(supabase, datasetVersionId, 1000)
   const rows = loaded.rows
@@ -260,8 +271,10 @@ export async function executeProfilingMetrics(
 
   const columnIdByName = new Map((profileColumns ?? []).map((column) => [column.column_name, column.id]))
 
-  await supabase.schema('profiling').from('profile_metrics').delete().eq('profile_run_id', profilingRunId)
-  await supabase.schema('profiling').from('profile_findings').delete().eq('profile_run_id', profilingRunId)
+  const { error: metricDeleteError } = await supabase.schema('profiling').from('profile_metrics').delete().eq('profile_run_id', profilingRunId)
+  if (metricDeleteError) throw new Error(`Unable to clear previous profile metrics: ${metricDeleteError.message}`)
+  const { error: findingDeleteError } = await supabase.schema('profiling').from('profile_findings').delete().eq('profile_run_id', profilingRunId)
+  if (findingDeleteError) throw new Error(`Unable to clear previous profile findings: ${findingDeleteError.message}`)
 
   const metricRows = results.flatMap((result) => result.metrics.flatMap((metric) => {
     const definitionId = definitionByKey.get(metric.metric_key)
@@ -322,19 +335,24 @@ export async function executeProfilingMetrics(
   }, { onConflict: 'profile_run_id' })
   if (scoreError) throw new Error(`Unable to persist quality score: ${scoreError.message}`)
 
+  const existingSummary = activeRun.summary && typeof activeRun.summary === 'object' && !Array.isArray(activeRun.summary)
+    ? activeRun.summary as Record<string, unknown>
+    : {}
   const baseSummary = {
+    ...existingSummary,
     metric_engine: 'deterministic',
     sample_size: rows.length,
     score: scorePayload,
     source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' },
   }
 
-  const { error: runUpdateError } = await supabase.schema('profiling').from('profile_runs').update({
+  const { data: updatedRun, error: runUpdateError } = await supabase.schema('profiling').from('profile_runs').update({
     row_count: loaded.rowCount,
     column_count: columnNames.length,
     summary: baseSummary,
-  }).eq('id', profilingRunId)
+  }).eq('id', profilingRunId).eq('dataset_version_id', datasetVersionId).neq('status', 'CANCELLED').select('id').maybeSingle()
   if (runUpdateError) throw new Error(`Unable to persist profiling run summary: ${runUpdateError.message}`)
+  if (!updatedRun) throw new Error(`Profiling run ${profilingRunId} was cancelled or changed while metrics were executing.`)
 
   return {
     tool: 'execute_metrics',
