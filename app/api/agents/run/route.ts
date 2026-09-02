@@ -36,15 +36,26 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: project, error: projectError } = await supabase
+    const { data: project, error: projectError } = await admin
       .schema('app')
       .from('projects')
-      .select('id, organization_id, organization_members!inner(user_id)')
+      .select('id, organization_id')
       .eq('id', projectId)
-      .eq('organization_members.user_id', user.id)
       .maybeSingle()
 
     if (projectError || !project) {
+      return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
+    }
+
+    const { data: membership, error: membershipError } = await admin
+      .schema('app')
+      .from('organization_members')
+      .select('organization_id, user_id')
+      .eq('organization_id', project.organization_id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (membershipError || !membership) {
       return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
     }
 
@@ -86,7 +97,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: datasetVersion, error: datasetError } = await supabase
+    const { data: datasetVersion, error: datasetError } = await admin
       .schema('catalog')
       .from('dataset_versions')
       .select('id, dataset_id, datasets!inner(id, project_id, name)')
@@ -159,10 +170,10 @@ export async function POST(request: Request) {
     const executionProfilingRunId = profilingRun.id
     profilingRunId = executionProfilingRunId
 
-    const { data: toolDefinition, error: toolError } = await supabase
+    const { data: profileTool, error: profileToolError } = await supabase
       .schema('agent')
       .from('tool_definitions')
-      .select('id, tool_key, version, execution_config')
+      .select('id, tool_key, version')
       .eq('agent_definition_id', productionAgentId)
       .eq('tool_key', 'profile_dataset')
       .eq('enabled', true)
@@ -170,76 +181,158 @@ export async function POST(request: Request) {
       .limit(1)
       .single()
 
-    if (toolError || !toolDefinition) {
+    if (profileToolError || !profileTool) {
       throw new Error('The selected Profiling Agent has no enabled profile_dataset tool.')
     }
 
     if (
-      typeof toolDefinition.id !== 'string' ||
-      typeof toolDefinition.tool_key !== 'string' ||
-      typeof toolDefinition.version !== 'string'
+      typeof profileTool.id !== 'string' ||
+      typeof profileTool.tool_key !== 'string' ||
+      typeof profileTool.version !== 'string'
     ) {
-      throw new Error('The selected Profiling Agent tool definition is invalid.')
+      throw new Error('The selected Profiling Agent profile tool definition is invalid.')
     }
 
-    const toolDefinitionId: string = toolDefinition.id
-    const toolKey: string = toolDefinition.tool_key
-    const toolVersion: string = toolDefinition.version
+    const { data: metricTool, error: metricToolError } = await supabase
+      .schema('agent')
+      .from('tool_definitions')
+      .select('id, tool_key, version')
+      .eq('agent_definition_id', productionAgentId)
+      .eq('tool_key', 'execute_metrics')
+      .eq('enabled', true)
+      .order('version', { ascending: false })
+      .limit(1)
+      .single()
 
-    const { data: step, error: stepError } = await admin
+    if (metricToolError || !metricTool) {
+      throw new Error('The selected Profiling Agent has no enabled execute_metrics tool.')
+    }
+
+    if (
+      typeof metricTool.id !== 'string' ||
+      typeof metricTool.tool_key !== 'string' ||
+      typeof metricTool.version !== 'string'
+    ) {
+      throw new Error('The selected Profiling Agent metric tool definition is invalid.')
+    }
+
+    const profileStep = await admin
       .schema('agent')
       .from('agent_run_steps')
       .insert({
         agent_run_id: executionAgentRunId,
-        step_name: toolKey,
+        step_name: profileTool.tool_key,
         step_order: 1,
         status: 'RUNNING',
         input: {
           ...input,
           profilingRunId: executionProfilingRunId,
-          tool_definition_id: toolDefinitionId,
-          tool_version: toolVersion,
+          tool_definition_id: profileTool.id,
+          tool_version: profileTool.version,
         },
         started_at: new Date().toISOString(),
       })
       .select('id')
       .single()
 
-    if (stepError || !step || typeof step.id !== 'string') {
-      throw new Error(`Unable to create agent run step: ${stepError?.message ?? 'unknown error'}`)
+    if (profileStep.error || !profileStep.data || typeof profileStep.data.id !== 'string') {
+      throw new Error(`Unable to create profiling step: ${profileStep.error?.message ?? 'unknown error'}`)
     }
 
-    const executionStepId = step.id
-    stepId = executionStepId
+    const executionProfileStepId = profileStep.data.id
+    stepId = executionProfileStepId
 
-    const context: ToolExecutionContext = {
+    const profileContext: ToolExecutionContext = {
       agentRunId: executionAgentRunId,
-      stepId: executionStepId,
+      stepId: executionProfileStepId,
       projectId,
       agentDefinitionId: productionAgentId,
       agentVersion: productionAgentVersion,
     }
 
-    const result = await executeProfilingExecutor(
+    const profileResult = await executeProfilingExecutor(
       'profile_dataset',
       {
         ...input,
         profilingRunId: executionProfilingRunId,
       },
-      context,
+      profileContext,
     )
 
-    const completedAt = new Date().toISOString()
-
+    const profileCompletedAt = new Date().toISOString()
     await admin
       .schema('agent')
       .from('agent_run_steps')
       .update({
         status: 'SUCCEEDED',
-        output: result,
+        output: profileResult,
+        completed_at: profileCompletedAt,
+      })
+      .eq('id', executionProfileStepId)
+
+    const metricStep = await admin
+      .schema('agent')
+      .from('agent_run_steps')
+      .insert({
+        agent_run_id: executionAgentRunId,
+        step_name: metricTool.tool_key,
+        step_order: 2,
+        status: 'RUNNING',
+        input: {
+          ...input,
+          profilingRunId: executionProfilingRunId,
+          tool_definition_id: metricTool.id,
+          tool_version: metricTool.version,
+        },
+        started_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single()
+
+    if (metricStep.error || !metricStep.data || typeof metricStep.data.id !== 'string') {
+      throw new Error(`Unable to create metric execution step: ${metricStep.error?.message ?? 'unknown error'}`)
+    }
+
+    const executionMetricStepId = metricStep.data.id
+    stepId = executionMetricStepId
+
+    const metricContext: ToolExecutionContext = {
+      agentRunId: executionAgentRunId,
+      stepId: executionMetricStepId,
+      projectId,
+      agentDefinitionId: productionAgentId,
+      agentVersion: productionAgentVersion,
+    }
+
+    const metricResult = await executeProfilingExecutor(
+      'execute_metrics',
+      {
+        ...input,
+        profilingRunId: executionProfilingRunId,
+      },
+      metricContext,
+    )
+
+    const completedAt = new Date().toISOString()
+    await admin
+      .schema('agent')
+      .from('agent_run_steps')
+      .update({
+        status: 'SUCCEEDED',
+        output: metricResult,
         completed_at: completedAt,
       })
-      .eq('id', executionStepId)
+      .eq('id', executionMetricStepId)
+
+    const result = {
+      execution_completed: true,
+      agent_run_id: executionAgentRunId,
+      profiling_run_id: executionProfilingRunId,
+      project_id: projectId,
+      dataset_version_id: datasetVersion.id,
+      profile: profileResult,
+      metrics: metricResult,
+    }
 
     await admin
       .schema('agent')
@@ -254,7 +347,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       agentRunId: executionAgentRunId,
       profilingRunId: executionProfilingRunId,
-      stepId: executionStepId,
+      stepId: executionMetricStepId,
       agentDefinitionId: productionAgentId,
       agentVersion: productionAgentVersion,
       result,
