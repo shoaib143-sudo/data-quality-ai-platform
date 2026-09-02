@@ -197,7 +197,11 @@ export default async function AgentsPage() {
                     const dataset = version ? datasetsById.get(version.dataset_id) : undefined
                     return (
                       <tr key={run.id} className="border-b last:border-0">
-                        <td className="px-3 py-3">{agent ? `${agent.name} v${agent.version}` : 'Registered agent'}</td>
+                        <td className="px-3 py-3">
+                          <Link href={`/agents/runs/${run.id}`} className="font-medium underline underline-offset-2">
+                            {agent ? `${agent.name} v${agent.version}` : 'Registered agent'}
+                          </Link>
+                        </td>
                         <td className="px-3 py-3">{dataset ? `${dataset.name} v${version?.version_number}` : 'Unknown dataset version'}</td>
                         <td className="px-3 py-3">{run.status}{run.error_code ? ` (${run.error_code})` : ''}</td>
                         <td className="px-3 py-3 text-muted-foreground">{new Date(run.created_at).toLocaleString()}</td>
