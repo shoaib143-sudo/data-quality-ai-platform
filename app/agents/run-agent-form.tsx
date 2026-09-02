@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export type AgentOption = {
   id: string
@@ -30,6 +31,7 @@ export function RunAgentForm({
   projects: ProjectOption[]
   datasetVersions: DatasetVersionOption[]
 }) {
+  const router = useRouter()
   const [agentDefinitionId, setAgentDefinitionId] = useState(agents[0]?.id ?? '')
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [datasetVersionId, setDatasetVersionId] = useState(
@@ -78,10 +80,12 @@ export function RunAgentForm({
       }
 
       const runId = payload.agentRunId ?? payload.agent_run_id
-      if (!runId) {
+      if (typeof runId !== 'string' || runId.length === 0) {
         throw new Error('Agent execution completed without returning a run identifier.')
       }
-      setStatus(`Run ${runId} completed successfully.`)
+
+      router.push(`/agents/runs/${runId}`)
+      router.refresh()
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Agent execution failed.')
     } finally {
