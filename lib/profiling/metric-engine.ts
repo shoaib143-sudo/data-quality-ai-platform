@@ -39,7 +39,11 @@ function isMissing(value: unknown) { return value === null || value === undefine
 function normalized(value: unknown) { return typeof value === 'string' ? value.trim() : value }
 function stableKey(value: unknown) {
   const v = normalized(value)
-  return v === null || v === undefined ? '__NULL__' : typeof v === 'string' ? v : JSON.stringify(v)
+  if (v === null || v === undefined) return '__NULL__'
+  if (typeof v === 'string') return v
+  if (typeof v !== 'object') return JSON.stringify(v)
+  if (Array.isArray(v)) return JSON.stringify(v.map((item) => stableKey(item)))
+  return JSON.stringify(Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, stableKey(item)])))
 }
 function emailMatch(value: unknown) { return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) }
 function sensitiveMatch(columnName: string, value: unknown) {
@@ -226,7 +230,16 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   const inputRows = Array.isArray(input.rows) ? input.rows.filter((row): row is Row => !!row && typeof row === 'object' && !Array.isArray(row)) : null
   const loaded = inputRows ? { rowCount: inputRows.length, rows: inputRows } : await loadRowsFromTable(supabase, datasetVersionId, 1000)
   const rows = loaded.rows
-  const columnNames = Array.from(new Set(rows.flatMap((row) => Object.keys(row))))
+
+  const { data: profileColumns, error: columnsError } = await supabase.schema('profiling').from('profile_columns').select('id, column_name').eq('profile_run_id', profilingRunId).order('column_name')
+  if (columnsError) throw new Error(`Unable to load profile columns: ${columnsError.message}`)
+  const registeredColumnNames = (profileColumns ?? []).map((column) => column.column_name)
+  const sourceColumnNames = Array.from(new Set(rows.flatMap((row) => Object.keys(row))))
+  const missingRegisteredColumns = registeredColumnNames.filter((name) => !sourceColumnNames.includes(name))
+  const unregisteredSourceColumns = sourceColumnNames.filter((name) => !registeredColumnNames.includes(name))
+  if (unregisteredSourceColumns.length) throw new Error(`Profile column contract violation for run ${profilingRunId}: source columns are not fully registered.`)
+  const columnNames = Array.from(new Set([...registeredColumnNames, ...sourceColumnNames]))
+
   const { data: definitions, error: definitionError } = await supabase.schema('profiling').from('metric_definitions').select('id, metric_key, scope, enabled').eq('enabled', true)
   if (definitionError) throw new Error(`Unable to load metric definitions: ${definitionError.message}`)
   const enabledDefinitions = (definitions ?? []) as Definition[]
@@ -237,10 +250,8 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   if (!enabled.length) throw new Error('No enabled deterministic metric definitions are available for execution.')
 
   const results = columnNames.map((columnName) => calculateColumnMetrics(columnName, rows))
-  const { data: profileColumns, error: columnsError } = await supabase.schema('profiling').from('profile_columns').select('id, column_name').eq('profile_run_id', profilingRunId)
-  if (columnsError) throw new Error(`Unable to load profile columns: ${columnsError.message}`)
   const columnIdByName = new Map((profileColumns ?? []).map((column) => [column.column_name, column.id]))
-  if (columnNames.some((name) => !columnIdByName.has(name))) throw new Error(`Profile column contract violation for run ${profilingRunId}: source columns are not fully registered.`)
+  if (missingRegisteredColumns.length === 0 && columnNames.some((name) => !columnIdByName.has(name))) throw new Error(`Profile column contract violation for run ${profilingRunId}: source columns are not fully registered.`)
 
   const metricRows: Record<string, unknown>[] = []
   for (const result of results) {
@@ -250,11 +261,12 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
       metricRows.push({ metric_definition_id: definition.id, profile_column_id: columnIdByName.get(result.column_name), metric_key: metric.metric_key, numeric_value: metric.numeric_value ?? null, text_value: metric.text_value ?? null, json_value: metric.json_value ?? null })
     }
   }
+  const duplicateRows = duplicateRowCount(rows)
   const datasetMetricValues: Record<string, number | string> = {
     column_count: columnNames.length,
     row_count: loaded.rowCount,
-    duplicate_row_count: duplicateRowCount(rows),
-    duplicate_row_rate: loaded.rowCount ? round(duplicateRowCount(rows) / loaded.rowCount) : 0,
+    duplicate_row_count: duplicateRows,
+    duplicate_row_rate: rows.length ? round(duplicateRows / rows.length) : 0,
     schema_hash: schemaHash(columnNames),
   }
   for (const metric of enabled.filter((m) => m.scope === 'DATASET')) {
@@ -292,7 +304,7 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   const validity = validityCandidates.length ? validityCandidates.reduce((sum, value) => sum + value, 0) / validityCandidates.length : 1
   const scorePayload = { completeness_score: round(completeness), uniqueness_score: round(uniqueness), validity_score: round(validity), accuracy_score: null, overall_score: round((completeness + uniqueness + validity) / 3), scoring_basis: 'deterministic_metrics' }
   const existingSummary = activeRun.summary && typeof activeRun.summary === 'object' && !Array.isArray(activeRun.summary) ? activeRun.summary as Record<string, unknown> : {}
-  const baseSummary = { ...existingSummary, metric_engine: 'deterministic_registry', metric_registry_version: '1.1', sample_size: rows.length, score: scorePayload, source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' }, enabled_metric_count: enabled.length }
+  const baseSummary = { ...existingSummary, metric_engine: 'deterministic_registry', metric_registry_version: '1.1', sample_size: rows.length, score: scorePayload, source_access: 'sourceAccess' in loaded ? loaded.sourceAccess : { source_type: 'TABLE' }, enabled_metric_count: enabled.length, schema_columns: columnNames, profiling_warnings: missingRegisteredColumns.length ? [`${missingRegisteredColumns.length} registered schema columns had no observed rows in the sample.`] : [] }
   const metricsPayload = metricRows.map((metric) => ({ profile_run_id: profilingRunId, ...metric }))
   const findingsPayload = findings.map((finding) => ({ profile_run_id: profilingRunId, ...finding }))
   const { error: persistenceError } = await supabase.rpc('persist_profiling_results', { p_profile_run_id: profilingRunId, p_dataset_version_id: datasetVersionId, p_metrics: metricsPayload, p_findings: findingsPayload, p_score: scorePayload, p_summary: baseSummary, p_status: 'COMPLETED' })
