@@ -27,6 +27,54 @@ async function isRunCancelled(admin: ReturnType<typeof createAdminClient>, agent
   return data?.status === 'CANCELLED'
 }
 
+async function preserveCancellation(
+  admin: ReturnType<typeof createAdminClient>,
+  agentRunId: string,
+  profilingRunId: string,
+  stepId?: string,
+) {
+  const now = new Date().toISOString()
+  const message = 'Execution completion raced with a manual termination request. Cancellation state was preserved.'
+
+  if (stepId) {
+    await admin
+      .schema('agent')
+      .from('agent_run_steps')
+      .update({
+        status: 'SKIPPED',
+        error_code: TERMINATED_ERROR_CODE,
+        error_message: message,
+        completed_at: now,
+      })
+      .eq('id', stepId)
+      .in('status', ['PENDING', 'RUNNING', 'RETRYING', 'SUCCEEDED', 'COMPLETED'])
+  }
+
+  await admin
+    .schema('profiling')
+    .from('profile_runs')
+    .update({
+      status: 'CANCELLED',
+      error_code: TERMINATED_ERROR_CODE,
+      error_message: message,
+      completed_at: now,
+    })
+    .eq('id', profilingRunId)
+    .neq('status', 'CANCELLED')
+
+  await admin
+    .schema('agent')
+    .from('agent_runs')
+    .update({
+      status: 'CANCELLED',
+      error_code: TERMINATED_ERROR_CODE,
+      error_message: message,
+      completed_at: now,
+    })
+    .eq('id', agentRunId)
+    .neq('status', 'CANCELLED')
+}
+
 export async function POST(request: Request) {
   let agentRunId: string | null = null
   let profilingRunId: string | null = null
@@ -273,6 +321,7 @@ export async function POST(request: Request) {
     )
 
     if (await isRunCancelled(admin, executionAgentRunId)) {
+      await preserveCancellation(admin, executionAgentRunId, executionProfilingRunId, executionProfileStepId)
       return NextResponse.json({
         execution_completed: false,
         terminated: true,
@@ -320,6 +369,7 @@ export async function POST(request: Request) {
     stepId = executionMetricStepId
 
     if (await isRunCancelled(admin, executionAgentRunId)) {
+      await preserveCancellation(admin, executionAgentRunId, executionProfilingRunId, executionMetricStepId)
       return NextResponse.json({
         execution_completed: false,
         terminated: true,
@@ -346,6 +396,7 @@ export async function POST(request: Request) {
     )
 
     if (await isRunCancelled(admin, executionAgentRunId)) {
+      await preserveCancellation(admin, executionAgentRunId, executionProfilingRunId, executionMetricStepId)
       return NextResponse.json({
         execution_completed: false,
         terminated: true,
@@ -412,6 +463,9 @@ export async function POST(request: Request) {
     }
 
     if (cancelled) {
+      if (profilingRunId) {
+        await preserveCancellation(admin, agentRunId, profilingRunId, stepId ?? undefined)
+      }
       return NextResponse.json({
         execution_completed: false,
         terminated: true,
