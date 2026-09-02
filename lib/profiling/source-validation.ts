@@ -31,25 +31,26 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
     const table = firstString(metadata, ['table', 'table_name', 'tableName'])
     const jdbcUrl = firstString(metadata, ['jdbc_url', 'jdbcUrl', 'url'])
     const credentialRef = firstString(metadata, ['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
-    const bridgeUrl = firstString(metadata, ['bridge_url', 'bridgeUrl'])
     const rawCredentialKeys = ['password', 'passwd', 'secret', 'client_secret', 'private_key']
+    const suppliedBridgeKeys = ['bridge_url', 'bridgeUrl']
     if (rawCredentialKeys.some((key) => Object.prototype.hasOwnProperty.call(metadata, key))) errors.push('JDBC source configuration cannot contain raw credentials; use credential_ref.')
+    if (suppliedBridgeKeys.some((key) => Object.prototype.hasOwnProperty.call(metadata, key))) errors.push('JDBC source configuration cannot override the server-managed bridge destination.')
     if (!jdbcUrl) errors.push('JDBC sources require jdbc_url in connection metadata.')
     if (!credentialRef) errors.push('JDBC sources require credential_ref; raw database passwords are not accepted.')
     if (!table) errors.push('JDBC sources require a table name in connection metadata.')
     if (!validIdentifier(schema)) errors.push('JDBC source schema contains invalid identifier characters.')
     if (table && !validIdentifier(table)) errors.push('JDBC source table contains invalid identifier characters.')
     if (errors.length === 0) {
-      const validation = await validateJdbcConnection({ jdbcUrl: jdbcUrl!, credentialRef: credentialRef!, schema, table: table!, bridgeUrl: bridgeUrl ?? undefined })
+      const validation = await validateJdbcConnection({ jdbcUrl: jdbcUrl!, credentialRef: credentialRef!, schema, table: table! })
       errors.push(...validation.errors); warnings.push(...validation.warnings)
       if (validation.rowCount === 0) warnings.push('JDBC source table is reachable but currently contains no rows.')
       return {
         valid: errors.length === 0, source_type: 'JDBC', execution_type: 'JDBC', source_uri: `jdbc-table://${schema}.${table}`,
         checks: { configuration: true, connectivity: validation.valid, schema_available: validation.valid && validation.columns.length > 0 },
-        details: { jdbc_url: jdbcUrl, credential_ref: credentialRef, bridge_url: bridgeUrl, schema, table, row_count: validation.rowCount, columns: validation.columns, bridge: validation.details }, errors, warnings,
+        details: { jdbc_url: jdbcUrl, credential_ref: credentialRef, schema, table, row_count: validation.rowCount, columns: validation.columns, bridge: validation.details }, errors, warnings,
       }
     }
-    return { valid: false, source_type: 'JDBC', execution_type: 'JDBC', source_uri: `jdbc-table://${schema}.${table ?? ''}`, checks: { configuration: false, connectivity: false, schema_available: false }, details: { jdbc_url: jdbcUrl, credential_ref: credentialRef, bridge_url: bridgeUrl, schema, table }, errors, warnings }
+    return { valid: false, source_type: 'JDBC', execution_type: 'JDBC', source_uri: `jdbc-table://${schema}.${table ?? ''}`, checks: { configuration: false, connectivity: false, schema_available: false }, details: { jdbc_url: jdbcUrl, credential_ref: credentialRef, schema, table }, errors, warnings }
   }
 
   if (['file', 'csv'].includes(sourceType)) {
