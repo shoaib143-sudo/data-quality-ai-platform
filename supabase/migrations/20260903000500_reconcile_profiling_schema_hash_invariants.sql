@@ -8,11 +8,11 @@ SECURITY DEFINER
 SET search_path = pg_catalog, profiling
 AS $$
 DECLARE
-  run_id uuid;
-  schema_payload text;
-  schema_hash text;
+  v_run_id uuid;
+  v_schema_payload text;
+  v_schema_hash text;
 BEGIN
-  run_id := COALESCE(NEW.profile_run_id, OLD.profile_run_id);
+  v_run_id := COALESCE(NEW.profile_run_id, OLD.profile_run_id);
 
   SELECT COALESCE(
     json_agg(
@@ -26,29 +26,29 @@ BEGIN
     )::text,
     '[]'
   )
-  INTO schema_payload
+  INTO v_schema_payload
   FROM profiling.profile_columns AS pc
-  WHERE pc.profile_run_id = run_id;
+  WHERE pc.profile_run_id = v_run_id;
 
-  schema_hash := encode(extensions.digest(schema_payload, 'sha256'), 'hex');
+  v_schema_hash := encode(extensions.digest(v_schema_payload, 'sha256'), 'hex');
 
-  UPDATE profiling.profile_runs
-  SET schema_hash = schema_hash
-  WHERE id = run_id;
+  UPDATE profiling.profile_runs AS pr
+  SET schema_hash = v_schema_hash
+  WHERE pr.id = v_run_id;
 
-  UPDATE profiling.schema_snapshots
-  SET schema_hash = schema_hash
-  WHERE profile_run_id = run_id;
+  UPDATE profiling.schema_snapshots AS ss
+  SET schema_hash = v_schema_hash
+  WHERE ss.profile_run_id = v_run_id;
 
-  UPDATE profiling.profile_metrics
+  UPDATE profiling.profile_metrics AS pm
   SET
     numeric_value = NULL,
-    text_value = schema_hash,
+    text_value = v_schema_hash,
     boolean_value = NULL,
     json_value = NULL
-  WHERE profile_run_id = run_id
-    AND metric_key = 'schema_hash'
-    AND profile_column_id IS NULL;
+  WHERE pm.profile_run_id = v_run_id
+    AND pm.metric_key = 'schema_hash'
+    AND pm.profile_column_id IS NULL;
 
   RETURN COALESCE(NEW, OLD);
 END;
