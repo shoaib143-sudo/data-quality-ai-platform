@@ -73,6 +73,8 @@ export async function executeProfilingExecutor(
         result = await detectDuplicates(profilingRunId)
         break
       case 'compare_profiles':
+        if (!input?.baselineProfileRunId && !input?.baseline_profile_run_id) throw new Error('baselineProfileRunId is required for compare_profiles')
+        if (!input?.targetProfileRunId && !input?.target_profile_run_id) throw new Error('targetProfileRunId is required for compare_profiles')
         result = await compareProfiles(input?.baselineProfileRunId ?? input?.baseline_profile_run_id, input?.targetProfileRunId ?? input?.target_profile_run_id)
         break
       default:
