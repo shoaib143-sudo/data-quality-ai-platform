@@ -67,6 +67,12 @@ export async function investigateProfilingRun(
   if (findingsError) throw new Error(`Unable to load profiling findings for investigation: ${findingsError.message}`)
   if (columnsError) throw new Error(`Unable to load profiling columns for investigation: ${columnsError.message}`)
   if (!profileRun) throw new Error(`Profiling run ${profilingRunId} was not found.`)
+  if (profileRun.dataset_version_id !== datasetVersionId) {
+    throw new Error(`Profiling run ${profilingRunId} does not belong to dataset version ${datasetVersionId}.`)
+  }
+  if (profileRun.status === 'CANCELLED') {
+    throw new Error(`Profiling run ${profilingRunId} was cancelled before investigation completed.`)
+  }
 
   const typedFindings = (findings ?? []) as Finding[]
   const typedScore = (score ?? null) as Score | null
@@ -230,7 +236,7 @@ export async function investigateProfilingRun(
     ? profileRun.summary as Record<string, unknown>
     : {}
 
-  const { error: persistError } = await supabase
+  const { data: persistedRun, error: persistError } = await supabase
     .schema('profiling')
     .from('profile_runs')
     .update({
@@ -240,8 +246,15 @@ export async function investigateProfilingRun(
       },
     })
     .eq('id', profilingRunId)
+    .eq('dataset_version_id', datasetVersionId)
+    .neq('status', 'CANCELLED')
+    .select('id')
+    .maybeSingle()
 
   if (persistError) throw new Error(`Unable to persist profiling investigation: ${persistError.message}`)
+  if (!persistedRun) {
+    throw new Error(`Profiling run ${profilingRunId} was cancelled or changed before investigation persistence completed.`)
+  }
 
   return investigation
 }
