@@ -69,6 +69,9 @@ export async function POST(request: Request) {
     const versionNumber = Number(latestVersion?.version_number ?? 0) + 1
     const sourceType = String(source.source_type ?? '').trim().toLowerCase()
     const executionType = ['file', 'csv'].includes(sourceType) ? 'FILE' : 'TABLE'
+    const connectionMetadata = source.connection_metadata && typeof source.connection_metadata === 'object'
+      ? source.connection_metadata as Record<string, unknown>
+      : {}
 
     const { data: version, error: versionError } = await admin.schema('catalog').from('dataset_versions').insert({
       dataset_id: dataset.id,
@@ -85,7 +88,12 @@ export async function POST(request: Request) {
       dataset_version_id: version.id,
       source_type: executionType,
       source_uri: sourceIdentifier,
-      execution_config: { source_id: source.id, source_type: source.source_type, connection_metadata: source.connection_metadata ?? {} },
+      execution_config: {
+        ...connectionMetadata,
+        source_id: source.id,
+        source_type: source.source_type,
+        connection_metadata: connectionMetadata,
+      },
       active: true,
     })
     if (executionSourceError) throw new Error(`Unable to configure profiling source: ${executionSourceError.message}`)
