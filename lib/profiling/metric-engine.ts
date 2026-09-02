@@ -116,6 +116,7 @@ function calculateColumnMetrics(columnName: string, rows: Row[]): ColumnResult {
   const nullCount = values.filter(isMissing).length
   const nonNullValues = values.filter((value) => !isMissing(value))
   const distinctCount = new Set(nonNullValues.map(stableKey)).size
+  const distinctRate = nonNullValues.length ? distinctCount / nonNullValues.length : 0
   const frequencies = new Map<string, number>()
   for (const value of nonNullValues) frequencies.set(stableKey(value), (frequencies.get(stableKey(value)) ?? 0) + 1)
   const uniqueCount = Array.from(frequencies.values()).filter((count) => count === 1).length
