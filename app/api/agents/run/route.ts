@@ -82,34 +82,42 @@ export async function POST(request: Request) {
     const profileStep = await admin.schema('agent').from('agent_run_steps').insert({ agent_run_id: agentRunId, step_name: profileTool.tool_key, step_order: 1, status: 'RUNNING', input: { ...input, profilingRunId, tool_definition_id: profileTool.id, tool_version: profileTool.version }, started_at: now }).select('id').single()
     if (profileStep.error || !profileStep.data) throw new Error(`Unable to create profiling step: ${profileStep.error?.message ?? 'unknown error'}`)
     stepId = profileStep.data.id
-    if (await isRunCancelled(admin, agentRunId)) { await preserveCancellation(admin, agentRunId, profilingRunId, stepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId, profilingRunId }, { status: 409 }) }
+    if (!agentRunId || !profilingRunId || !stepId) throw new Error('Profiling run state was not initialized correctly')
+    const activeAgentRunId = agentRunId
+    const activeProfilingRunId = profilingRunId
+    const activeProfileStepId = stepId
+    if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeProfileStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
 
-    const context = { agentRunId, stepId, projectId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version } satisfies ToolExecutionContext
-    const profileResult = await executeProfilingExecutor('profile_dataset', { ...input, profilingRunId }, context)
-    if (await isRunCancelled(admin, agentRunId)) { await preserveCancellation(admin, agentRunId, profilingRunId, stepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId, profilingRunId }, { status: 409 }) }
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', stepId).neq('status', 'SKIPPED'), 'complete profile step')
+    const context = { agentRunId: activeAgentRunId, stepId: activeProfileStepId, projectId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version } satisfies ToolExecutionContext
+    const profileResult = await executeProfilingExecutor('profile_dataset', { ...input, profilingRunId: activeProfilingRunId }, context)
+    if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeProfileStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
+    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).neq('status', 'SKIPPED'), 'complete profile step')
 
-    const metricStep = await admin.schema('agent').from('agent_run_steps').insert({ agent_run_id: agentRunId, step_name: metricTool.tool_key, step_order: 2, status: 'RUNNING', input: { ...input, profilingRunId, tool_definition_id: metricTool.id, tool_version: metricTool.version }, started_at: new Date().toISOString() }).select('id').single()
+    const metricStep = await admin.schema('agent').from('agent_run_steps').insert({ agent_run_id: activeAgentRunId, step_name: metricTool.tool_key, step_order: 2, status: 'RUNNING', input: { ...input, profilingRunId: activeProfilingRunId, tool_definition_id: metricTool.id, tool_version: metricTool.version }, started_at: new Date().toISOString() }).select('id').single()
     if (metricStep.error || !metricStep.data) throw new Error(`Unable to create metric execution step: ${metricStep.error?.message ?? 'unknown error'}`)
     stepId = metricStep.data.id
-    if (await isRunCancelled(admin, agentRunId)) { await preserveCancellation(admin, agentRunId, profilingRunId, stepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId, profilingRunId }, { status: 409 }) }
-    const metricResult = await executeProfilingExecutor('execute_metrics', { ...input, profilingRunId }, { ...context, stepId })
-    if (await isRunCancelled(admin, agentRunId)) { await preserveCancellation(admin, agentRunId, profilingRunId, stepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId, profilingRunId }, { status: 409 }) }
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', stepId).neq('status', 'SKIPPED'), 'complete metric step')
+    if (!stepId) throw new Error('Metric execution step was not initialized correctly')
+    const activeMetricStepId = stepId
+    if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeMetricStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
+    const metricResult = await executeProfilingExecutor('execute_metrics', { ...input, profilingRunId: activeProfilingRunId }, { ...context, stepId: activeMetricStepId })
+    if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeMetricStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
+    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', activeMetricStepId).neq('status', 'SKIPPED'), 'complete metric step')
 
-    const investigationStep = await admin.schema('agent').from('agent_run_steps').insert({ agent_run_id: agentRunId, step_name: investigationTool.tool_key, step_order: 3, status: 'RUNNING', input: { ...input, profilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version }, started_at: new Date().toISOString() }).select('id').single()
+    const investigationStep = await admin.schema('agent').from('agent_run_steps').insert({ agent_run_id: activeAgentRunId, step_name: investigationTool.tool_key, step_order: 3, status: 'RUNNING', input: { ...input, profilingRunId: activeProfilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version }, started_at: new Date().toISOString() }).select('id').single()
     if (investigationStep.error || !investigationStep.data) throw new Error(`Unable to create profiling investigation step: ${investigationStep.error?.message ?? 'unknown error'}`)
     stepId = investigationStep.data.id
-    if (await isRunCancelled(admin, agentRunId)) { await preserveCancellation(admin, agentRunId, profilingRunId, stepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId, profilingRunId }, { status: 409 }) }
-    const investigationResult = await executeProfilingExecutor('investigate_profile', { ...input, profilingRunId }, { ...context, stepId })
-    if (await isRunCancelled(admin, agentRunId)) { await preserveCancellation(admin, agentRunId, profilingRunId, stepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId, profilingRunId }, { status: 409 }) }
+    if (!stepId) throw new Error('Profiling investigation step was not initialized correctly')
+    const activeInvestigationStepId = stepId
+    if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeInvestigationStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
+    const investigationResult = await executeProfilingExecutor('investigate_profile', { ...input, profilingRunId: activeProfilingRunId }, { ...context, stepId: activeInvestigationStepId })
+    if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeInvestigationStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
 
     const completedAt = new Date().toISOString()
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', stepId).neq('status', 'SKIPPED'), 'complete investigation step')
-    const result = { execution_completed: true, agent_run_id: agentRunId, profiling_run_id: profilingRunId, project_id: projectId, dataset_version_id: datasetVersion.id, profile: profileResult, metrics: metricResult, investigation: investigationResult }
-    const { error: finalRunError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: completedAt }).eq('id', agentRunId).neq('status', 'CANCELLED')
+    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', activeInvestigationStepId).neq('status', 'SKIPPED'), 'complete investigation step')
+    const result = { execution_completed: true, agent_run_id: activeAgentRunId, profiling_run_id: activeProfilingRunId, project_id: projectId, dataset_version_id: datasetVersion.id, profile: profileResult, metrics: metricResult, investigation: investigationResult }
+    const { error: finalRunError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: completedAt }).eq('id', activeAgentRunId).neq('status', 'CANCELLED')
     if (finalRunError) throw new Error(`Unable to finalize agent run: ${finalRunError.message}`)
-    return NextResponse.json({ agentRunId, profilingRunId, stepId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version, result })
+    return NextResponse.json({ agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId, stepId: activeInvestigationStepId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version, result })
   } catch (error) {
     const message = errorMessage(error, 'Unknown execution error')
     const admin = createAdminClient()
