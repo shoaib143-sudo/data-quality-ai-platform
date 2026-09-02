@@ -37,13 +37,15 @@ function round(value: number, places = RATE_SCALE) {
 }
 function isMissing(value: unknown) { return value === null || value === undefined }
 function normalized(value: unknown) { return typeof value === 'string' ? value.trim() : value }
-function stableKey(value: unknown) {
+function stableKey(value: unknown): string {
   const v = normalized(value)
   if (v === null || v === undefined) return '__NULL__'
   if (typeof v === 'string') return v
+  if (Array.isArray(v)) return JSON.stringify(v)
   if (typeof v !== 'object') return JSON.stringify(v)
-  if (Array.isArray(v)) return JSON.stringify(v.map((item) => stableKey(item)))
-  return JSON.stringify(Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, stableKey(item)])))
+  const ordered: Record<string, unknown> = {}
+  for (const key of Object.keys(v as Record<string, unknown>).sort()) ordered[key] = (v as Record<string, unknown>)[key]
+  return JSON.stringify(ordered)
 }
 function emailMatch(value: unknown) { return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) }
 function sensitiveMatch(columnName: string, value: unknown) {
