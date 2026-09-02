@@ -31,7 +31,7 @@ export default async function ProfilingPage() {
         .from('profile_findings')
         .select('finding_type,severity,title,description')
         .eq('profile_run_id', latestRun.id)
-        .order('started_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(10)
     : { data: [] }
 
