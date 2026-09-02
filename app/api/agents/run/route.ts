@@ -31,7 +31,7 @@ async function preserveCancellation(admin: ReturnType<typeof createAdminClient>,
   const completedAt = new Date().toISOString()
   if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'CANCELLED', error_code: TERMINATED_ERROR_CODE, error_message: 'Execution terminated by user.', completed_at: completedAt }).eq('id', stepId).eq('status', 'RUNNING'), 'cancel current step')
   await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'CANCELLED', error_code: TERMINATED_ERROR_CODE, error_message: 'Execution terminated by user.', completed_at: completedAt }).eq('id', agentRunId).eq('status', 'RUNNING'), 'cancel agent run')
-  await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'CANCELLED', error_code: TERMINATED_ERROR_CODE, error_message: 'Execution terminated by user.', completed_at: completedAt }).eq('id', profilingRunId).neq('status', 'SUCCEEDED'), 'cancel profiling run')
+  await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'CANCELLED', error_code: TERMINATED_ERROR_CODE, error_message: 'Execution terminated by user.', completed_at: completedAt }).eq('id', profilingRunId).eq('status', 'RUNNING'), 'cancel profiling run')
 }
 
 export async function POST(request: Request) {
@@ -57,8 +57,12 @@ export async function POST(request: Request) {
     if (agentError || !agentDefinition) return NextResponse.json({ error: 'Agent definition not found or disabled' }, { status: 404 })
     if (agentDefinition.agent_key !== PRODUCTION_AGENT_KEY || agentDefinition.version !== PRODUCTION_AGENT_VERSION) return NextResponse.json({ error: `Only ${PRODUCTION_AGENT_KEY} v${PRODUCTION_AGENT_VERSION} is enabled for execution` }, { status: 400 })
 
-    const { data: datasetVersion } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id,datasets!inner(id,project_id)').eq('id', datasetVersionId).eq('datasets.project_id', projectId).maybeSingle()
-    if (!datasetVersion) return NextResponse.json({ error: 'Dataset version not found for project' }, { status: 404 })
+    const { data: datasetVersion, error: datasetVersionError } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id').eq('id', datasetVersionId).maybeSingle()
+    if (datasetVersionError) throw new Error(`Unable to resolve dataset version: ${datasetVersionError.message}`)
+    if (!datasetVersion) return NextResponse.json({ error: 'Dataset version not found' }, { status: 404 })
+    const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets').select('id,project_id').eq('id', datasetVersion.dataset_id).eq('project_id', projectId).maybeSingle()
+    if (datasetError) throw new Error(`Unable to verify dataset ownership: ${datasetError.message}`)
+    if (!dataset) return NextResponse.json({ error: 'Dataset version not found for project' }, { status: 404 })
 
     const now = new Date().toISOString()
     const runInsert = await admin.schema('agent').from('agent_runs').insert({ agent_definition_id: agentDefinition.id, project_id: projectId, dataset_version_id: datasetVersionId, status: 'RUNNING', input, started_at: now }).select('id').single()
@@ -130,7 +134,7 @@ export async function POST(request: Request) {
     }
     if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', stepId).eq('status', 'RUNNING'), 'fail current step')
     if (agentRunId) await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', agentRunId).eq('status', 'RUNNING'), 'fail agent run')
-    if (profilingRunId) await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', profilingRunId).neq('status', 'CANCELLED').neq('status', 'SUCCEEDED'), 'fail profiling run')
+    if (profilingRunId) await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', profilingRunId).eq('status', 'RUNNING'), 'fail profiling run')
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
