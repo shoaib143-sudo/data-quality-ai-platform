@@ -52,3 +52,11 @@ export function isDeterministicMetric(metricKey: string, scope: MetricScope) {
     (metric) => metric.metric_key === metricKey && metric.scope === scope,
   )
 }
+
+export function unsupportedMetricDefinitions(
+  definitions: readonly DeterministicMetricDefinition[],
+) {
+  return definitions.filter(
+    (definition) => !isDeterministicMetric(definition.metric_key, definition.scope),
+  )
+}
