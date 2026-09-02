@@ -111,7 +111,7 @@ export async function executeProfilingExecutor(
       await writeAgentRunLog({
         agentRunId,
         agentRunStepId: stepId,
-        level: 'AI',
+        level: 'TOOL',
         eventType: 'PROFILING_INVESTIGATION_COMPLETED',
         message: 'Profiling investigation completed from persisted evidence.',
         details: { operation, datasetVersionId, profilingRunId },
