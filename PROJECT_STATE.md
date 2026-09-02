@@ -71,20 +71,23 @@ resolution, FILE/CSV validation, Storage validation, PostgreSQL/Supabase table
 validation, and profiling-ready handoff are implemented.
 
 Generic JDBC is integrated through a governed bridge abstraction. JDBC sources
-require `jdbc_url`, `credential_ref`, schema/table identifiers, and a
-server-side `JDBC_BRIDGE_URL` plus `JDBC_BRIDGE_TOKEN` unless a bridge URL is
-provided in server-side source configuration. Raw JDBC credentials are rejected.
-The bridge contract exposes `/v1/validate` and `/v1/query`, allowing PostgreSQL,
-MSSQL, MySQL, Oracle, Databricks, and other JDBC-compatible databases to share
-the same profiling connector contract without exposing credentials to agents.
+require `jdbc_url`, `credential_ref`, schema/table identifiers, and the
+server-managed `JDBC_BRIDGE_URL` plus `JDBC_BRIDGE_TOKEN`. Source configuration
+cannot override the bridge destination, preventing a database-backed record from
+turning the server into an arbitrary outbound HTTP proxy. Raw JDBC credentials
+are rejected.
+
+The bridge contract exposes `/v1/validate` and `/v1/query`. The initial bridge
+image includes PostgreSQL, MSSQL, and MySQL JDBC drivers; additional JDBC drivers
+can be added without changing the DataNexus application contract.
 
 ### Lane 6 --- Hardening / Observability: COMPLETE
 
 Persisted agent-run logging, project-scoped access, lifecycle guards, failure
 persistence, cooperative cancellation, source-resolution hardening, registry
 uniqueness, performance indexes, historical repair auditing, RLS protection for
-the repair audit table, production smoke verification, and bounded production
-latency benchmarking are implemented.
+the repair audit table, production smoke verification, bounded production
+latency benchmarking, and JDBC security/test coverage are implemented.
 
 ## 4. Live Agent Registry
 
@@ -142,6 +145,10 @@ notices and the intentionally synthetic validation table without a primary key.
 - Tool execution is server-side and tied to an enabled registered agent.
 - JDBC raw passwords/secrets are rejected from source configuration.
 - JDBC credentials are referenced by `credential_ref` and resolved by the bridge.
+- The JDBC bridge destination is server-managed and cannot be supplied by source metadata.
+- JDBC bridge requests require a constant-time bearer-token comparison.
+- Infisical Machine Identity tokens are short-lived, cached in memory, refreshed before expiry, and explicitly invalidated after HTTP 401.
+- Infisical authentication and credential-store failures do not echo response bodies or secret values.
 - Cancellation cannot reactivate a terminal run.
 - Production data modification, deletion, schema changes, remediation execution,
 and governance-policy changes remain approval-gated.
@@ -156,11 +163,14 @@ onboarding.
 
 ## 7. Production Verification
 
-Latest GitHub `main` commits are automatically deployed through Vercel.
+Latest GitHub `main` commits are automatically deployed through Vercel when the
+Vercel build quota permits deployment.
 
 The production smoke verifier checks `/login` plus protected POST-only API
-method/auth boundaries and supports authenticated profiling-contract verification
-when `VERIFY_COOKIE` and `VERIFY_PROFILE_RUN_ID` are supplied.
+method/auth boundaries. When `JDBC_BRIDGE_URL` is supplied to the verifier, it
+also checks bridge health and confirms the unauthenticated `/v1/query` boundary
+returns 401. Authenticated profiling-contract verification remains optional and
+uses `VERIFY_COOKIE` and `VERIFY_PROFILE_RUN_ID` without logging either value.
 
 A bounded production latency benchmark is available through:
 
@@ -172,24 +182,45 @@ It defaults to 25 requests with concurrency 5 against `/login` and fails on
 transport errors or unexpected status codes. It is deliberately bounded and
 must not be treated as a substitute for authenticated profiling load tests.
 
-## 8. Remaining Production Activation Work
+## 8. JDBC Bridge Automated Test Coverage
 
-The application implementation is complete. Remaining work is external or
-environment-dependent:
+The Java bridge has automated coverage for:
 
-- provision and operate a real JDBC bridge and credential store
+- Infisical Universal Auth success and token caching
+- short-lived token refresh
+- explicit token invalidation
+- concurrency-safe single-flight token refresh
+- HTTP 401 credential-store retry with fresh Machine Identity authentication
+- missing Infisical project/auth configuration
+- invalid credential references
+- secret-safe authentication failures
+- JDBC URL and embedded-credential rejection
+- unsafe schema/table identifier rejection
+- bridge bearer authentication
+- public health endpoint
+- 10,000-row query ceiling
+
+The bridge test suite uses an H2 test-only dependency and local HTTP fixtures, so
+it does not require real Infisical or database credentials in CI.
+
+## 9. Remaining Production Activation Work
+
+The application implementation and automated bridge coverage are complete.
+Remaining work is external or environment-dependent:
+
+- provision and operate the JDBC bridge and credential store
 - provide real connector fixtures/credentials for authenticated E2E
 - enable Supabase leaked-password protection through the Auth configuration
 - run authenticated E2E across the complete profiling lifecycle
 - run connector-specific integration/load tests against PostgreSQL, MSSQL,
-  MySQL, Oracle, Databricks/JDBC fixtures as available
-- use measured benchmark results to tune production workloads and remove only
-  indexes proven unnecessary after representative traffic
+  MySQL and later Oracle/Databricks JDBC drivers as they are provisioned
+- execute measured production benchmark runs and tune workloads from evidence
 
-The generic JDBC code path is production-ready at the application boundary but
-requires an actual JDBC bridge deployment and credential-store configuration to
-connect to an external JDBC database. This is an infrastructure provisioning
-dependency, not an unimplemented application path.
+The generic JDBC code path is complete at the application boundary and is
+security-pinned to the deployment-managed bridge. A real bridge deployment and
+credential-store configuration are still required to connect to an external
+JDBC database. This is an infrastructure provisioning dependency, not an
+unimplemented application path.
 
 Do not rebuild completed modules. Any newly discovered defect must be fixed at
 the smallest affected layer and the full dependency chain re-checked.
