@@ -24,12 +24,37 @@ function requiredString(value: unknown, field: string) {
   return value.trim()
 }
 
+function validateBridgeUrl(value: string) {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error('JDBC bridge URL must be a valid absolute URL.')
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('JDBC bridge URL must use HTTPS.')
+  }
+  const hostname = parsed.hostname.toLowerCase()
+  const blockedHosts = new Set([
+    'localhost',
+    'localhost.localdomain',
+    '127.0.0.1',
+    '::1',
+    '0.0.0.0',
+    '169.254.169.254',
+  ])
+  if (blockedHosts.has(hostname)) {
+    throw new Error('JDBC bridge URL cannot target a local or cloud metadata host.')
+  }
+  return value.replace(/\/$/, '')
+}
+
 function bridgeBaseUrl(config: JdbcConnectionConfig) {
   const value = config.bridgeUrl?.trim() || process.env.JDBC_BRIDGE_URL?.trim()
   if (!value) {
     throw new Error('JDBC connector requires JDBC_BRIDGE_URL or a bridgeUrl in server-side configuration.')
   }
-  return value.replace(/\/$/, '')
+  return validateBridgeUrl(value)
 }
 
 function bridgeHeaders() {
@@ -50,11 +75,20 @@ function safeIdentifier(value: string, field: string) {
   return value
 }
 
+function rejectEmbeddedCredentials(jdbcUrl: string) {
+  // JDBC URLs can embed user/password material in URI-style authority sections.
+  // Credentials must always be resolved from credential_ref by the bridge.
+  if (/jdbc:[^:]+:\/\/[^/\s:@]+:[^/\s@]+@/i.test(jdbcUrl) || /jdbc:[^:]+:\/\/[^/\s@]+@/i.test(jdbcUrl)) {
+    throw new Error('JDBC URL must not contain embedded credentials; use credentialRef.')
+  }
+}
+
 function normalizeConfig(input: JdbcConnectionConfig): JdbcConnectionConfig {
   const jdbcUrl = requiredString(input.jdbcUrl, 'jdbcUrl')
   const credentialRef = requiredString(input.credentialRef, 'credentialRef')
   const schema = safeIdentifier(requiredString(input.schema, 'schema'), 'schema')
   const table = safeIdentifier(requiredString(input.table, 'table'), 'table')
+  rejectEmbeddedCredentials(jdbcUrl)
   return { ...input, jdbcUrl, credentialRef, schema, table }
 }
 
