@@ -155,6 +155,7 @@ async function loadRowsFromTable(supabase: ReturnType<typeof createAdminClient>,
     const executionConfig = source.execution_config && typeof source.execution_config === 'object' ? source.execution_config as Record<string, unknown> : {}
     if (sourceType === 'file') { const loaded = await loadFileSource(supabase, { sourceUri: source.source_uri, executionConfig }, { maxRows }); return { rowCount: loaded.rowCount, rows: loaded.rows as Row[], sourceAccess: { source_type: 'FILE', source_uri: loaded.sourceUri, content_hash: loaded.contentHash, sampled_rows: loaded.rows.length, warnings: loaded.warnings } }
   }
+  }
   const { data: version, error: versionError } = await supabase.rpc('get_dataset_version_for_profiling', { dataset_version_id: datasetVersionId })
   if (versionError) throw new Error(`Unable to resolve dataset version: ${versionError.message}`)
   const dataset = Array.isArray(version?.datasets) ? version.datasets[0] : version?.datasets
