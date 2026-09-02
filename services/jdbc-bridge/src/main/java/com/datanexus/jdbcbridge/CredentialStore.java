@@ -54,7 +54,7 @@ public class CredentialStore {
   }
 
   public Credentials resolve(String credentialRef) throws Exception {
-    if (credentialRef == null || !credentialRef.matches("[A-Za-z0-9._/-]{1,200}")) {
+    if (credentialRef == null || !credentialRef.matches("[A-Za-z0-9._-]{1,200}")) {
       throw new IllegalArgumentException("credentialRef contains invalid characters.");
     }
     if (projectId.isBlank()) {
