@@ -31,9 +31,7 @@ class InfisicalAuthClientTest {
       logins.incrementAndGet();
       respond(exchange, 200, "{\"accessToken\":\"token-one\",\"expiresIn\":3600}");
     }, "/api/v1/auth/universal-auth/login");
-
     InfisicalAuthClient client = client();
-
     assertEquals("token-one", client.getAccessToken());
     assertEquals("token-one", client.getAccessToken());
     assertEquals(1, logins.get());
@@ -46,9 +44,7 @@ class InfisicalAuthClientTest {
       int call = logins.incrementAndGet();
       respond(exchange, 200, "{\"accessToken\":\"token-" + call + "\",\"expiresIn\":1}");
     }, "/api/v1/auth/universal-auth/login");
-
     InfisicalAuthClient client = client();
-
     assertEquals("token-1", client.getAccessToken());
     assertEquals("token-2", client.getAccessToken());
     assertEquals(2, logins.get());
@@ -61,13 +57,24 @@ class InfisicalAuthClientTest {
       int call = logins.incrementAndGet();
       respond(exchange, 200, "{\"accessToken\":\"token-" + call + "\",\"expiresIn\":3600}");
     }, "/api/v1/auth/universal-auth/login");
-
     InfisicalAuthClient client = client();
-
     assertEquals("token-1", client.getAccessToken());
     client.invalidate();
     assertEquals("token-2", client.getAccessToken());
     assertEquals(2, logins.get());
+  }
+
+  @Test
+  void staleRejectionCannotInvalidateNewerConcurrentToken() throws Exception {
+    server = server(exchange -> respond(exchange, 200, "{\"accessToken\":\"token-one\",\"expiresIn\":3600}"), "/api/v1/auth/universal-auth/login");
+    InfisicalAuthClient client = client();
+    assertEquals("token-one", client.getAccessToken());
+    client.invalidate();
+    server.removeContext("/api/v1/auth/universal-auth/login");
+    server.createContext("/api/v1/auth/universal-auth/login", exchange -> respond(exchange, 200, "{\"accessToken\":\"token-two\",\"expiresIn\":3600}"));
+    assertEquals("token-two", client.getAccessToken());
+    client.invalidateIfCurrent("token-one");
+    assertEquals("token-two", client.getAccessToken());
   }
 
   @Test
@@ -77,7 +84,6 @@ class InfisicalAuthClientTest {
       logins.incrementAndGet();
       respond(exchange, 200, "{\"accessToken\":\"token\",\"expiresIn\":3600}");
     }, "/api/v1/auth/universal-auth/login");
-
     InfisicalAuthClient client = client();
     client.invalidate();
     CountDownLatch ready = new CountDownLatch(8);
@@ -101,9 +107,7 @@ class InfisicalAuthClientTest {
   @Test
   void rejectsMissingUniversalAuthConfiguration() throws Exception {
     server = server(exchange -> respond(exchange, 200, "{}"), "/api/v1/auth/universal-auth/login");
-    InfisicalAuthClient client = new InfisicalAuthClient(
-        new ObjectMapper(), serverUrl(), "", "", HttpClient.newHttpClient());
-
+    InfisicalAuthClient client = new InfisicalAuthClient(new ObjectMapper(), serverUrl(), "", "", HttpClient.newHttpClient());
     IllegalStateException error = assertThrows(IllegalStateException.class, client::getAccessToken);
     assertTrue(error.getMessage().contains("INFISICAL_CLIENT_ID"));
   }
