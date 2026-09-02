@@ -36,15 +36,15 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: membership, error: membershipError } = await supabase
-      .schema('catalog')
-      .from('project_members')
-      .select('project_id')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
+    const { data: project, error: projectError } = await supabase
+      .schema('app')
+      .from('projects')
+      .select('id, organization_id, organization_members!inner(user_id)')
+      .eq('id', projectId)
+      .eq('organization_members.user_id', user.id)
       .maybeSingle()
 
-    if (membershipError || !membership) {
+    if (projectError || !project) {
       return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
     }
 
