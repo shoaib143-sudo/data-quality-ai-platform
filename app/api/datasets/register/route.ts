@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     if (versionLookupError) throw new Error(`Unable to determine dataset version: ${versionLookupError.message}`)
 
     const versionNumber = Number(latestVersion?.version_number ?? 0) + 1
-    const sourceType = String(source.source_type ?? '').toLowerCase()
+    const sourceType = String(source.source_type ?? '').trim().toLowerCase()
     const executionType = ['file', 'csv'].includes(sourceType) ? 'FILE' : 'TABLE'
 
     const { data: version, error: versionError } = await admin.schema('catalog').from('dataset_versions').insert({
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
     const { error: executionSourceError } = await admin.schema('profiling').from('dataset_execution_sources').insert({
       dataset_version_id: version.id,
-      source_type: sourceType || executionType,
+      source_type: executionType,
       source_uri: sourceIdentifier,
       execution_config: { source_id: source.id, source_type: source.source_type, connection_metadata: source.connection_metadata ?? {} },
       active: true,
