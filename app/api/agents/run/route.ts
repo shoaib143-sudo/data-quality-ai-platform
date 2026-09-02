@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-executor'
+import { validateProfilingRun } from '@/lib/profiling/run-validation'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 
 const PRODUCTION_AGENT_KEY = 'profiling_agent'
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
     if (runInsert.error || !runInsert.data) throw new Error(`Unable to create agent run: ${runInsert.error?.message ?? 'unknown error'}`)
     agentRunId = runInsert.data.id
 
-    const profileInsert = await admin.schema('profiling').from('profile_runs').insert({ dataset_version_id: datasetVersionId, status: 'RUNNING', started_at: now }).select('id').single()
+    const profileInsert = await admin.schema('profiling').from('profile_runs').insert({ dataset_version_id: datasetVersionId, status: 'RUNNING', agent_run_id: agentRunId, started_at: now }).select('id').single()
     if (profileInsert.error || !profileInsert.data) throw new Error(`Unable to create profiling run: ${profileInsert.error?.message ?? 'unknown error'}`)
     profilingRunId = profileInsert.data.id
 
@@ -116,9 +117,14 @@ export async function POST(request: Request) {
     const investigationResult = await executeProfilingExecutor('investigate_profile', { ...input, profilingRunId: activeProfilingRunId }, { ...context, stepId: activeInvestigationStepId })
     if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeInvestigationStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
 
+    const validation = await validateProfilingRun(activeProfilingRunId, user.id)
+    if (!validation.valid) {
+      throw new Error(`Profiling contract validation failed: ${validation.warnings.join(' ') || 'persisted results are incomplete.'}`)
+    }
+
     const completedAt = new Date().toISOString()
     await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', activeInvestigationStepId).eq('status', 'RUNNING'), 'complete investigation step')
-    const result = { execution_completed: true, agent_run_id: activeAgentRunId, profiling_run_id: activeProfilingRunId, project_id: projectId, dataset_version_id: datasetVersion.id, profile: profileResult, metrics: metricResult, investigation: investigationResult }
+    const result = { execution_completed: true, agent_run_id: activeAgentRunId, profiling_run_id: activeProfilingRunId, project_id: projectId, dataset_version_id: datasetVersion.id, profile: profileResult, metrics: metricResult, investigation: investigationResult, validation }
     const { error: finalRunError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: completedAt }).eq('id', activeAgentRunId).eq('status', 'RUNNING')
     if (finalRunError) throw new Error(`Unable to finalize agent run: ${finalRunError.message}`)
     return NextResponse.json({ agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId, stepId: activeInvestigationStepId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version, result })
