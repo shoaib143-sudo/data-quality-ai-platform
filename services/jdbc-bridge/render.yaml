@@ -8,12 +8,16 @@ services:
     envVars:
       - key: JDBC_BRIDGE_TOKEN
         sync: false
+      - key: INFISICAL_AUTH_URL
+        value: https://app.infisical.com
       - key: INFISICAL_API_URL
         value: https://us.infisical.com
-      - key: INFISICAL_TOKEN
+      - key: INFISICAL_CLIENT_ID
+        sync: false
+      - key: INFISICAL_CLIENT_SECRET
         sync: false
       - key: INFISICAL_PROJECT_ID
-        sync: false
+        value: 72b315a2-a9a1-424a-9c73-f7e3054e9d6a
       - key: INFISICAL_ENVIRONMENT
         value: dev
       - key: INFISICAL_SECRET_PATH
