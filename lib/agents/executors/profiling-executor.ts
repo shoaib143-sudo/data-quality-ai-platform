@@ -14,6 +14,7 @@ import {
 import { executeProfilingMetrics } from '@/lib/profiling/metric-engine'
 import { investigateProfilingRun } from '@/lib/profiling/investigation-engine'
 import { executeProfilingTool } from '@/lib/profiling/executor'
+import { executeJdbcProfileDataset } from '@/lib/profiling/jdbc-profile'
 import { writeAgentRunLog } from '@/lib/agents/run-log'
 
 const PRODUCTION_AGENT_VERSION = '2.0'
@@ -32,18 +33,24 @@ export async function executeProfilingExecutor(
   const requiresDatasetVersion = !['compare_profiles'].includes(operation)
   if (requiresDatasetVersion && !datasetVersionId) throw new Error('datasetVersionId is required for profiling execution')
 
-  await writeAgentRunLog({
-    agentRunId,
-    agentRunStepId: stepId,
-    level: 'LIFECYCLE',
-    eventType: 'PROFILING_EXECUTION_STARTED',
-    message: `Profiling Agent ${PRODUCTION_AGENT_VERSION} started ${operation}.`,
-    details: { operation, projectId, datasetVersionId, profilingRunId, agentDefinitionId, agentVersion },
-  })
+  await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: 'LIFECYCLE', eventType: 'PROFILING_EXECUTION_STARTED', message: `Profiling Agent ${PRODUCTION_AGENT_VERSION} started ${operation}.`, details: { operation, projectId, datasetVersionId, profilingRunId, agentDefinitionId, agentVersion } })
 
   try {
     let result: unknown
     switch (operation) {
+      case 'profile_dataset': {
+        if (!profilingRunId) throw new Error('profilingRunId is required for profile_dataset')
+        const admin = (await import('@/lib/supabase/admin')).createAdminClient()
+        const { data: version, error: versionError } = await admin.schema('catalog').from('dataset_versions').select('id, datasets(source_identifier, data_sources(source_type))').eq('id', datasetVersionId).single()
+        if (versionError || !version) throw new Error(`Unable to resolve dataset version for profile execution: ${versionError?.message ?? 'not found'}`)
+        const dataset = Array.isArray(version.datasets) ? version.datasets[0] : version.datasets
+        const source = dataset && Array.isArray(dataset.data_sources) ? dataset.data_sources[0] : dataset?.data_sources
+        const sourceType = String(source?.source_type ?? '').trim().toLowerCase()
+        result = sourceType === 'jdbc'
+          ? await executeJdbcProfileDataset(datasetVersionId, profilingRunId)
+          : await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input })
+        break
+      }
       case 'execute_metrics':
         if (!profilingRunId) throw new Error('profilingRunId is required for execute_metrics')
         result = await executeProfilingMetrics(datasetVersionId, profilingRunId, input)
@@ -82,34 +89,10 @@ export async function executeProfilingExecutor(
         result = await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input })
     }
 
-    await writeAgentRunLog({
-      agentRunId,
-      agentRunStepId: stepId,
-      level: operation === 'execute_metrics' ? 'METRIC' : 'TOOL',
-      eventType: operation === 'execute_metrics' ? 'PROFILING_METRICS_COMPLETED' : 'PROFILING_TOOL_COMPLETED',
-      message: `Profiling operation ${operation} completed.`,
-      details: { operation, datasetVersionId, profilingRunId },
-    })
-
-    return {
-      output: {
-        execution_completed: true,
-        agent_run_id: agentRunId,
-        step_id: stepId,
-        project_id: projectId,
-        operation,
-        result: result as Record<string, unknown>,
-      },
-    }
+    await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: operation === 'execute_metrics' ? 'METRIC' : 'TOOL', eventType: operation === 'execute_metrics' ? 'PROFILING_METRICS_COMPLETED' : 'PROFILING_TOOL_COMPLETED', message: `Profiling operation ${operation} completed.`, details: { operation, datasetVersionId, profilingRunId } })
+    return { output: { execution_completed: true, agent_run_id: agentRunId, step_id: stepId, project_id: projectId, operation, result: result as Record<string, unknown> } }
   } catch (error) {
-    await writeAgentRunLog({
-      agentRunId,
-      agentRunStepId: stepId,
-      level: 'ERROR',
-      eventType: 'PROFILING_EXECUTION_FAILED',
-      message: error instanceof Error ? error.message : 'Profiling execution failed.',
-      details: { operation, datasetVersionId, profilingRunId },
-    })
+    await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: 'ERROR', eventType: 'PROFILING_EXECUTION_FAILED', message: error instanceof Error ? error.message : 'Profiling execution failed.', details: { operation, datasetVersionId, profilingRunId } })
     throw error
   }
 }
