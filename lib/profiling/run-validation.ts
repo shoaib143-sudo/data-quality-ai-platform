@@ -9,7 +9,9 @@ export type ProfilingRunValidation = {
     enabled_metric_definitions: number
     persisted_metric_definitions: number
     missing_metric_definitions: string[]
+    unknown_metric_definition_ids: string[]
     duplicate_metric_keys: string[]
+    metric_key_mismatches: string[]
     complete: boolean
   }
   persistence: {
@@ -108,18 +110,26 @@ export async function validateProfilingRun(
   const missingMetricDefinitions = definitionRows
     .filter((definition) => !persistedDefinitionIds.has(definition.id))
     .map((definition) => `${definition.scope}:${definition.metric_key}`)
+  const unknownMetricDefinitionIds = Array.from(persistedDefinitionIds)
+    .filter((definitionId) => !definitionById.has(definitionId))
+    .sort()
   const counts = new Map<string, number>()
+  const metricKeyMismatches: string[] = []
   for (const metric of metricRows) {
     const definition = definitionById.get(metric.metric_definition_id)
     const key = definition
       ? `${definition.scope}:${definition.metric_key}`
       : `UNKNOWN:${metric.metric_key}`
     counts.set(key, (counts.get(key) ?? 0) + 1)
+    if (definition && definition.metric_key !== metric.metric_key) {
+      metricKeyMismatches.push(`${definition.scope}:${definition.metric_key} persisted_as:${metric.metric_key}`)
+    }
   }
   const duplicateMetricKeys = Array.from(counts.entries())
     .filter(([, count]) => count > 1)
     .map(([key]) => key)
     .sort()
+  metricKeyMismatches.sort()
 
   const { count: findingRows, error: findingsError } = await supabase
     .schema('profiling')
@@ -139,11 +149,17 @@ export async function validateProfilingRun(
   const summary = asRecord(run.summary)
   const investigation = asRecord(summary.investigation)
   const investigationPresent = Object.keys(investigation).length > 0
-  const contractComplete = missingMetricDefinitions.length === 0 && duplicateMetricKeys.length === 0
+  const contractComplete = missingMetricDefinitions.length === 0
+    && unknownMetricDefinitionIds.length === 0
+    && duplicateMetricKeys.length === 0
+    && metricKeyMismatches.length === 0
+    && metricRows.length === definitionRows.length
   const atomicResultStateComplete = metricRows.length > 0 && Boolean(score) && run.status === 'COMPLETED'
   const warnings: string[] = []
 
   if (!contractComplete) warnings.push('Persisted metrics do not exactly match the currently enabled metric contract.')
+  if (unknownMetricDefinitionIds.length) warnings.push(`Persisted metrics reference ${unknownMetricDefinitionIds.length} definition ID(s) that are not currently enabled.`)
+  if (metricKeyMismatches.length) warnings.push('One or more persisted metric keys do not match their metric definitions.')
   if (run.status === 'COMPLETED' && !atomicResultStateComplete) warnings.push('Run is marked COMPLETED but its persisted metric or score state is incomplete.')
   if (run.status === 'COMPLETED' && !investigationPresent) warnings.push('Run is completed without a persisted investigation outcome.')
   if (metricRows.length !== definitionRows.length) warnings.push(`Persisted metric row count is ${metricRows.length}; enabled definition count is ${definitionRows.length}.`)
@@ -157,7 +173,9 @@ export async function validateProfilingRun(
       enabled_metric_definitions: definitionRows.length,
       persisted_metric_definitions: persistedDefinitionIds.size,
       missing_metric_definitions: missingMetricDefinitions,
+      unknown_metric_definition_ids: unknownMetricDefinitionIds,
       duplicate_metric_keys: duplicateMetricKeys,
+      metric_key_mismatches: metricKeyMismatches,
       complete: contractComplete,
     },
     persistence: {
