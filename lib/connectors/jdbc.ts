@@ -5,7 +5,6 @@ export type JdbcConnectionConfig = {
   credentialRef: string
   schema: string
   table: string
-  bridgeUrl?: string
 }
 
 export type JdbcValidationResult = {
@@ -46,13 +45,16 @@ function validateBridgeUrl(value: string) {
   if (blockedHosts.has(hostname)) {
     throw new Error('JDBC bridge URL cannot target a local or cloud metadata host.')
   }
+  if (parsed.username || parsed.password) {
+    throw new Error('JDBC bridge URL must not contain embedded credentials.')
+  }
   return value.replace(/\/$/, '')
 }
 
-function bridgeBaseUrl(config: JdbcConnectionConfig) {
-  const value = config.bridgeUrl?.trim() || process.env.JDBC_BRIDGE_URL?.trim()
+function bridgeBaseUrl() {
+  const value = process.env.JDBC_BRIDGE_URL?.trim()
   if (!value) {
-    throw new Error('JDBC connector requires JDBC_BRIDGE_URL or a bridgeUrl in server-side configuration.')
+    throw new Error('JDBC connector requires JDBC_BRIDGE_URL in server-side configuration.')
   }
   return validateBridgeUrl(value)
 }
@@ -96,7 +98,7 @@ async function bridgeRequest<T>(path: string, config: JdbcConnectionConfig, body
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
   try {
-    const response = await fetch(`${bridgeBaseUrl(config)}${path}`, {
+    const response = await fetch(`${bridgeBaseUrl()}${path}`, {
       method: 'POST',
       headers: bridgeHeaders(),
       body: JSON.stringify(body),
