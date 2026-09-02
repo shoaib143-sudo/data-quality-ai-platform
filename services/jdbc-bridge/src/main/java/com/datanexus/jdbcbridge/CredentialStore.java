@@ -72,9 +72,10 @@ public class CredentialStore {
         + "&secretPath=" + encode(secretPath)
         + "&viewSecretValue=true";
 
-    HttpResponse<String> response = fetchSecret(encoded, query, authClient.getAccessToken());
+    String token = authClient.getAccessToken();
+    HttpResponse<String> response = fetchSecret(encoded, query, token);
     if (response.statusCode() == 401) {
-      authClient.invalidate();
+      authClient.invalidateIfCurrent(token);
       response = fetchSecret(encoded, query, authClient.getAccessToken());
     }
 
