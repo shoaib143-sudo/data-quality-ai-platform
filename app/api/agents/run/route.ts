@@ -48,16 +48,16 @@ export async function POST(request: Request) {
     const agentDefinitionId = input?.agentDefinitionId ?? input?.agent_definition_id
     if (!projectId || !datasetVersionId || !agentDefinitionId) return NextResponse.json({ error: 'projectId, datasetVersionId and agentDefinitionId are required' }, { status: 400 })
 
-    const { data: project } = await admin.from('projects').select('id,organization_id').eq('id', projectId).maybeSingle()
+    const { data: project } = await admin.schema('app').from('projects').select('id,organization_id').eq('id', projectId).maybeSingle()
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-    const { data: membership } = await admin.from('organization_members').select('id').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
+    const { data: membership } = await admin.schema('app').from('organization_members').select('id').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
     if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const { data: agentDefinition, error: agentError } = await supabase.schema('agent').from('agent_definitions').select('*').eq('id', agentDefinitionId).eq('enabled', true).maybeSingle()
     if (agentError || !agentDefinition) return NextResponse.json({ error: 'Agent definition not found or disabled' }, { status: 404 })
     if (agentDefinition.agent_key !== PRODUCTION_AGENT_KEY || agentDefinition.version !== PRODUCTION_AGENT_VERSION) return NextResponse.json({ error: `Only ${PRODUCTION_AGENT_KEY} v${PRODUCTION_AGENT_VERSION} is enabled for execution` }, { status: 400 })
 
-    const { data: datasetVersion } = await admin.from('dataset_versions').select('id,dataset_id,datasets!inner(id,project_id)').eq('id', datasetVersionId).eq('datasets.project_id', projectId).maybeSingle()
+    const { data: datasetVersion } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id,datasets!inner(id,project_id)').eq('id', datasetVersionId).eq('datasets.project_id', projectId).maybeSingle()
     if (!datasetVersion) return NextResponse.json({ error: 'Dataset version not found for project' }, { status: 404 })
 
     const now = new Date().toISOString()
