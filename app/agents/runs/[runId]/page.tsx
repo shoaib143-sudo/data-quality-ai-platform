@@ -35,6 +35,16 @@ type AgentRunStep = {
   created_at: string
 }
 
+type AgentRunLog = {
+  id: string
+  agent_run_step_id: string | null
+  level: string
+  event_type: string
+  message: string
+  details: unknown
+  created_at: string
+}
+
 type AgentMessage = {
   id: string
   source_agent_run_id: string | null
@@ -85,20 +95,23 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
   if (runError) throw new Error(`Unable to load agent run: ${runError.message}`)
   if (!run) return <main className="min-h-screen p-8"><div className="mx-auto max-w-5xl"><Link href="/agents" className="text-sm underline">← Back to AI Agents</Link><section className="mt-8 rounded-xl border p-6"><h1 className="text-xl font-semibold">Agent run not found</h1><p className="mt-2 text-sm text-muted-foreground">The run does not exist or is not accessible in your current project scope.</p></section></div></main>
 
-  const [stepsResult, messagesResult, artifactsResult, agentResult] = await Promise.all([
+  const [stepsResult, logsResult, messagesResult, artifactsResult, agentResult] = await Promise.all([
     supabase.schema('agent').from('agent_run_steps').select('id, step_name, step_order, status, attempt, input, output, started_at, completed_at, error_code, error_message, created_at').eq('agent_run_id', runId).order('step_order'),
+    supabase.schema('agent').from('agent_run_logs').select('id, agent_run_step_id, level, event_type, message, details, created_at').eq('agent_run_id', runId).order('created_at'),
     supabase.schema('agent').from('agent_messages').select('id, source_agent_run_id, target_agent_run_id, message_type, correlation_id, payload, status, created_at, delivered_at, processed_at').or(`source_agent_run_id.eq.${runId},target_agent_run_id.eq.${runId}`).order('created_at'),
     supabase.schema('agent').from('agent_artifacts').select('id, artifact_type, artifact_version, name, payload, storage_uri, content_hash, created_at').eq('agent_run_id', runId).order('created_at'),
     supabase.schema('agent').from('agent_definitions').select('name, agent_key, version').eq('id', run.agent_definition_id).maybeSingle(),
   ])
 
   if (stepsResult.error) throw new Error(`Unable to load run steps: ${stepsResult.error.message}`)
+  if (logsResult.error) throw new Error(`Unable to load run logs: ${logsResult.error.message}`)
   if (messagesResult.error) throw new Error(`Unable to load run messages: ${messagesResult.error.message}`)
   if (artifactsResult.error) throw new Error(`Unable to load run artifacts: ${artifactsResult.error.message}`)
   if (agentResult.error) throw new Error(`Unable to load agent definition: ${agentResult.error.message}`)
 
   const typedRun = run as AgentRun
   const steps = (stepsResult.data ?? []) as AgentRunStep[]
+  const logs = (logsResult.data ?? []) as AgentRunLog[]
   const messages = (messagesResult.data ?? []) as AgentMessage[]
   const artifacts = (artifactsResult.data ?? []) as AgentArtifact[]
   const agent = agentResult.data
@@ -145,6 +158,28 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
                   {step.error_message && <p className="mt-2 text-sm text-muted-foreground">{step.error_message}</p>}
                   <details className="mt-3"><summary className="cursor-pointer text-sm font-medium">Input</summary><div className="mt-2"><JsonBlock value={step.input} /></div></details>
                   <details className="mt-3"><summary className="cursor-pointer text-sm font-medium">Output</summary><div className="mt-2"><JsonBlock value={step.output} /></div></details>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-xl border p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Run logs</h2>
+            <span className="text-xs text-muted-foreground">{logs.length} events</span>
+          </div>
+          {logs.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No persisted log events were recorded.</p> : (
+            <div className="mt-4 space-y-3">
+              {logs.map((log) => (
+                <article key={log.id} className="rounded-lg border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div><span className="mr-2 rounded-full border px-2 py-1 text-[11px] font-medium">{log.level}</span><span className="font-medium">{log.event_type}</span></div>
+                    <span className="text-xs text-muted-foreground">{formatDate(log.created_at)}</span>
+                  </div>
+                  <p className="mt-2 text-sm">{log.message}</p>
+                  {log.agent_run_step_id && <p className="mt-1 break-all text-xs text-muted-foreground">Step: {log.agent_run_step_id}</p>}
+                  <details className="mt-3"><summary className="cursor-pointer text-sm font-medium">Details</summary><div className="mt-2"><JsonBlock value={log.details} /></div></details>
                 </article>
               ))}
             </div>
