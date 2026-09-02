@@ -19,6 +19,10 @@ begin
   end if;
 
   if metric_scope = 'DATASET' then
+    if new.metric_key not in ('column_count', 'row_count') then
+      raise exception 'Metric contract violation: unsupported DATASET metric % for deterministic execution', new.metric_key;
+    end if;
+
     new.profile_column_id := null;
     select id into existing_dataset_metric_id
     from profiling.profile_metrics
@@ -31,6 +35,14 @@ begin
       return null;
     end if;
   elsif metric_scope = 'COLUMN' then
+    if new.metric_key not in (
+      'non_null_count', 'null_count', 'null_rate', 'distinct_count', 'distinct_rate',
+      'unique_count', 'unique_rate', 'pattern_match_rate', 'sensitive_match_rate',
+      'candidate_key_confidence'
+    ) then
+      raise exception 'Metric contract violation: unsupported COLUMN metric % for deterministic execution', new.metric_key;
+    end if;
+
     if new.profile_column_id is null then
       raise exception 'Metric contract violation: COLUMN metric % requires profile_column_id', new.metric_key;
     end if;
@@ -63,22 +75,14 @@ security invoker
 set search_path = pg_catalog, profiling
 as $$
 declare
-  expected_column_metric_count integer;
+  expected_column_metric_count integer := 10;
   actual_column_metric_count integer;
-  expected_dataset_metric_count integer;
+  expected_dataset_metric_count integer := 2;
   actual_dataset_metric_count integer;
   profile_column_count integer;
   actual_column_count integer;
   missing_keys jsonb;
 begin
-  select count(*) into expected_column_metric_count
-  from profiling.metric_definitions
-  where enabled = true and scope = 'COLUMN';
-
-  select count(*) into expected_dataset_metric_count
-  from profiling.metric_definitions
-  where enabled = true and scope = 'DATASET';
-
   select count(*) into profile_column_count
   from profiling.profile_columns
   where profile_run_id = p_profile_run_id;
@@ -94,7 +98,12 @@ begin
   where pm.profile_run_id = p_profile_run_id
     and pm.profile_column_id is not null
     and md.enabled = true
-    and md.scope = 'COLUMN';
+    and md.scope = 'COLUMN'
+    and md.metric_key in (
+      'non_null_count', 'null_count', 'null_rate', 'distinct_count', 'distinct_rate',
+      'unique_count', 'unique_rate', 'pattern_match_rate', 'sensitive_match_rate',
+      'candidate_key_confidence'
+    );
 
   select count(*) into actual_dataset_metric_count
   from profiling.profile_metrics pm
@@ -102,13 +111,16 @@ begin
   where pm.profile_run_id = p_profile_run_id
     and pm.profile_column_id is null
     and md.enabled = true
-    and md.scope = 'DATASET';
+    and md.scope = 'DATASET'
+    and md.metric_key in ('column_count', 'row_count');
 
   select coalesce(jsonb_agg(key), '[]'::jsonb) into missing_keys
   from (
     select md.metric_key as key
     from profiling.metric_definitions md
-    where md.enabled = true and md.scope = 'DATASET'
+    where md.enabled = true
+      and md.scope = 'DATASET'
+      and md.metric_key in ('column_count', 'row_count')
       and not exists (
         select 1 from profiling.profile_metrics pm
         where pm.profile_run_id = p_profile_run_id
@@ -119,7 +131,13 @@ begin
     select md.metric_key || ':column' as key
     from profiling.metric_definitions md
     cross join profiling.profile_columns pc
-    where md.enabled = true and md.scope = 'COLUMN'
+    where md.enabled = true
+      and md.scope = 'COLUMN'
+      and md.metric_key in (
+        'non_null_count', 'null_count', 'null_rate', 'distinct_count', 'distinct_rate',
+        'unique_count', 'unique_rate', 'pattern_match_rate', 'sensitive_match_rate',
+        'candidate_key_confidence'
+      )
       and pc.profile_run_id = p_profile_run_id
       and not exists (
         select 1 from profiling.profile_metrics pm
