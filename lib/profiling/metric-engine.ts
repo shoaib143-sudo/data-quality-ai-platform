@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
-import { DETERMINISTIC_METRICS, type MetricScope } from '@/lib/profiling/metric-registry'
+import { DETERMINISTIC_METRICS, isDeterministicMetric, type MetricScope } from '@/lib/profiling/metric-registry'
 
 type Row = Record<string, unknown>
 type MetricValue = {
@@ -91,11 +91,6 @@ function numericStats(values: unknown[]) {
     zero: nums.filter((v) => v === 0).length,
     outlier: nums.filter((v) => v < lower || v > upper).length,
   }
-}
-function numericValue(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value)
-  return null
 }
 function histogram(values: number[]) {
   if (!values.length) return []
@@ -232,12 +227,12 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   const loaded = inputRows ? { rowCount: inputRows.length, rows: inputRows } : await loadRowsFromTable(supabase, datasetVersionId, 1000)
   const rows = loaded.rows
   const columnNames = Array.from(new Set(rows.flatMap((row) => Object.keys(row))))
-  const registryKeys = DETERMINISTIC_METRICS.map((metric) => metric.metric_key)
-  const { data: definitions, error: definitionError } = await supabase.schema('profiling').from('metric_definitions').select('id, metric_key, scope, enabled').in('metric_key', registryKeys)
+  const { data: definitions, error: definitionError } = await supabase.schema('profiling').from('metric_definitions').select('id, metric_key, scope, enabled').eq('enabled', true)
   if (definitionError) throw new Error(`Unable to load metric definitions: ${definitionError.message}`)
-  const definitionMap = metricDefinitionMap((definitions ?? []) as Definition[])
-  const missingEnabled = (definitions ?? []).filter((d) => d.enabled && !DETERMINISTIC_METRICS.some((m) => m.metric_key === d.metric_key && m.scope === d.scope))
-  if (missingEnabled.length) throw new Error(`Metric registry does not implement enabled definitions: ${missingEnabled.map((d) => `${d.scope}:${d.metric_key}`).join(', ')}`)
+  const enabledDefinitions = (definitions ?? []) as Definition[]
+  const unsupportedDefinitions = enabledDefinitions.filter((definition) => !isDeterministicMetric(definition.metric_key, definition.scope))
+  if (unsupportedDefinitions.length) throw new Error(`Metric registry does not implement enabled definitions: ${unsupportedDefinitions.map((d) => `${d.scope}:${d.metric_key}`).join(', ')}`)
+  const definitionMap = metricDefinitionMap(enabledDefinitions)
   const enabled = DETERMINISTIC_METRICS.filter((metric) => definitionMap.get(`${metric.scope}:${metric.metric_key}`)?.enabled)
   if (!enabled.length) throw new Error('No enabled deterministic metric definitions are available for execution.')
 
