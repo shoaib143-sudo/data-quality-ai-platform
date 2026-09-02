@@ -12,16 +12,19 @@ The bridge contract is intentionally database-neutral so additional JDBC drivers
 
 ## Security model
 
-- DataNexus sends `credential_ref`, never a password.
+- DataNexus sends `credential_ref`, never a database password.
 - JDBC URLs containing embedded credentials are rejected.
 - The bridge requires `Authorization: Bearer <JDBC_BRIDGE_TOKEN>` for all API routes except `/health`.
-- Credentials are resolved from Infisical at runtime.
+- Database credentials are resolved from Infisical at runtime.
+- The bridge authenticates to Infisical with a Machine Identity using Universal Auth.
+- The Machine Identity Client ID and Client Secret are used only to obtain a short-lived Infisical access token.
+- Access tokens are cached in memory and refreshed automatically before expiry; a 401 response also forces one immediate token renewal and retry.
 - Credential values are cached for 60 seconds in memory and are never returned by the API.
 - Schema and table identifiers are restricted to safe identifier characters.
 - Query requests are capped at 10,000 rows.
 - The bridge container runs as a non-root user.
 
-## Infisical credential format
+## Infisical configuration
 
 Create one Infisical secret per `credential_ref`. The secret value must be JSON:
 
@@ -31,13 +34,17 @@ Create one Infisical secret per `credential_ref`. The secret value must be JSON:
 
 Configure the bridge with:
 
-- `INFISICAL_API_URL`
-- `INFISICAL_TOKEN`
+- `INFISICAL_AUTH_URL` (default `https://app.infisical.com`)
+- `INFISICAL_API_URL` (default `https://us.infisical.com`)
+- `INFISICAL_CLIENT_ID`
+- `INFISICAL_CLIENT_SECRET`
 - `INFISICAL_PROJECT_ID`
 - `INFISICAL_ENVIRONMENT`
 - `INFISICAL_SECRET_PATH`
 
-Use a dedicated Infisical machine identity or appropriately scoped service token. Infisical documents machine identities as the recommended approach for application authentication. See the official documentation: https://infisical.com/docs/documentation/platform/identities/machine-identities
+`INFISICAL_CLIENT_SECRET` is a secret and must only be configured in the deployment secret store. Never commit it to Git or place it in DataNexus configuration.
+
+Infisical Machine Identities use Universal Auth to exchange a Client ID and Client Secret for a short-lived access token. The bridge implements that exchange directly and renews the token automatically. This follows Infisical's documented Machine Identity model.
 
 ## Local run
 
@@ -69,10 +76,16 @@ This directory includes a `render.yaml` blueprint. Create a Render Web Service f
 Set these secrets in Render:
 
 - `JDBC_BRIDGE_TOKEN`
-- `INFISICAL_TOKEN`
-- `INFISICAL_PROJECT_ID`
+- `INFISICAL_CLIENT_ID`
+- `INFISICAL_CLIENT_SECRET`
 
-The other Infisical settings are already defined by the blueprint for the default US Infisical service and `dev` environment.
+The blueprint already supplies the non-secret Infisical settings for the current project and `dev` environment:
+
+- `INFISICAL_AUTH_URL=https://app.infisical.com`
+- `INFISICAL_API_URL=https://us.infisical.com`
+- `INFISICAL_PROJECT_ID=72b315a2-a9a1-424a-9c73-f7e3054e9d6a`
+- `INFISICAL_ENVIRONMENT=dev`
+- `INFISICAL_SECRET_PATH=/`
 
 Render free services are suitable for development and testing only. They can spin down after inactivity and have other free-tier limitations. Do not treat the free bridge as production infrastructure.
 
