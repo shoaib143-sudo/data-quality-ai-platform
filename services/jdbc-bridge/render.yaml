@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: datanexus-jdbc-bridge
+    runtime: docker
+    rootDir: services/jdbc-bridge
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: JDBC_BRIDGE_TOKEN
+        sync: false
+      - key: INFISICAL_API_URL
+        value: https://us.infisical.com
+      - key: INFISICAL_TOKEN
+        sync: false
+      - key: INFISICAL_PROJECT_ID
+        sync: false
+      - key: INFISICAL_ENVIRONMENT
+        value: dev
+      - key: INFISICAL_SECRET_PATH
+        value: /
