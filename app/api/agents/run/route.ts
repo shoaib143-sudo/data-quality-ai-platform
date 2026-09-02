@@ -7,11 +7,24 @@ import type { ToolExecutionContext } from '@/lib/agents/types'
 
 const PRODUCTION_AGENT_KEY = 'profiling_agent'
 const PRODUCTION_AGENT_VERSION = '2.0'
+const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {}
+}
+
+async function isRunCancelled(admin: ReturnType<typeof createAdminClient>, agentRunId: string) {
+  const { data, error } = await admin
+    .schema('agent')
+    .from('agent_runs')
+    .select('status')
+    .eq('id', agentRunId)
+    .maybeSingle()
+
+  if (error) throw new Error(`Unable to verify agent run status: ${error.message}`)
+  return data?.status === 'CANCELLED'
 }
 
 export async function POST(request: Request) {
@@ -259,6 +272,15 @@ export async function POST(request: Request) {
       profileContext,
     )
 
+    if (await isRunCancelled(admin, executionAgentRunId)) {
+      return NextResponse.json({
+        execution_completed: false,
+        terminated: true,
+        agentRunId: executionAgentRunId,
+        profilingRunId: executionProfilingRunId,
+      }, { status: 409 })
+    }
+
     const profileCompletedAt = new Date().toISOString()
     await admin
       .schema('agent')
@@ -269,6 +291,7 @@ export async function POST(request: Request) {
         completed_at: profileCompletedAt,
       })
       .eq('id', executionProfileStepId)
+      .neq('status', 'SKIPPED')
 
     const metricStep = await admin
       .schema('agent')
@@ -296,6 +319,15 @@ export async function POST(request: Request) {
     const executionMetricStepId = metricStep.data.id
     stepId = executionMetricStepId
 
+    if (await isRunCancelled(admin, executionAgentRunId)) {
+      return NextResponse.json({
+        execution_completed: false,
+        terminated: true,
+        agentRunId: executionAgentRunId,
+        profilingRunId: executionProfilingRunId,
+      }, { status: 409 })
+    }
+
     const metricContext: ToolExecutionContext = {
       agentRunId: executionAgentRunId,
       stepId: executionMetricStepId,
@@ -313,6 +345,15 @@ export async function POST(request: Request) {
       metricContext,
     )
 
+    if (await isRunCancelled(admin, executionAgentRunId)) {
+      return NextResponse.json({
+        execution_completed: false,
+        terminated: true,
+        agentRunId: executionAgentRunId,
+        profilingRunId: executionProfilingRunId,
+      }, { status: 409 })
+    }
+
     const completedAt = new Date().toISOString()
     await admin
       .schema('agent')
@@ -323,6 +364,7 @@ export async function POST(request: Request) {
         completed_at: completedAt,
       })
       .eq('id', executionMetricStepId)
+      .neq('status', 'SKIPPED')
 
     const result = {
       execution_completed: true,
@@ -334,7 +376,7 @@ export async function POST(request: Request) {
       metrics: metricResult,
     }
 
-    await admin
+    const { error: finalRunError } = await admin
       .schema('agent')
       .from('agent_runs')
       .update({
@@ -343,6 +385,9 @@ export async function POST(request: Request) {
         completed_at: completedAt,
       })
       .eq('id', executionAgentRunId)
+      .neq('status', 'CANCELLED')
+
+    if (finalRunError) throw new Error(`Unable to finalize agent run: ${finalRunError.message}`)
 
     return NextResponse.json({
       agentRunId: executionAgentRunId,
@@ -356,6 +401,24 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : 'Unknown execution error'
     const admin = createAdminClient()
     const completedAt = new Date().toISOString()
+    let cancelled = false
+
+    if (agentRunId) {
+      try {
+        cancelled = await isRunCancelled(admin, agentRunId)
+      } catch {
+        cancelled = false
+      }
+    }
+
+    if (cancelled) {
+      return NextResponse.json({
+        execution_completed: false,
+        terminated: true,
+        agentRunId,
+        profilingRunId,
+      }, { status: 409 })
+    }
 
     if (stepId) {
       await admin
@@ -363,10 +426,12 @@ export async function POST(request: Request) {
         .from('agent_run_steps')
         .update({
           status: 'FAILED',
+          error_code: 'PROFILING_EXECUTION_FAILED',
           error_message: message,
           completed_at: completedAt,
         })
         .eq('id', stepId)
+        .neq('status', 'SKIPPED')
     }
 
     if (agentRunId) {
@@ -375,10 +440,12 @@ export async function POST(request: Request) {
         .from('agent_runs')
         .update({
           status: 'FAILED',
+          error_code: 'PROFILING_EXECUTION_FAILED',
           error_message: message,
           completed_at: completedAt,
         })
         .eq('id', agentRunId)
+        .neq('status', 'CANCELLED')
     }
 
     if (profilingRunId) {
@@ -387,10 +454,12 @@ export async function POST(request: Request) {
         .from('profile_runs')
         .update({
           status: 'FAILED',
+          error_code: 'PROFILING_EXECUTION_FAILED',
           error_message: message,
           completed_at: completedAt,
         })
         .eq('id', profilingRunId)
+        .neq('status', 'CANCELLED')
     }
 
     return NextResponse.json({ error: message }, { status: 500 })
