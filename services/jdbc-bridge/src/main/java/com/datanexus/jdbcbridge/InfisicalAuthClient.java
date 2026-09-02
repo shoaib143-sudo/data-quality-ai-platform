@@ -68,6 +68,13 @@ public class InfisicalAuthClient {
     cachedToken = null;
   }
 
+  /** Invalidates only the token that caused the rejection, preserving a newer concurrent refresh. */
+  public synchronized void invalidateIfCurrent(String rejectedToken) {
+    if (rejectedToken != null && cachedToken != null && MessageDigestHolder.constantTimeEquals(cachedToken.value(), rejectedToken)) {
+      cachedToken = null;
+    }
+  }
+
   private AccessToken login() throws Exception {
     if (clientId.isBlank() || clientSecret.isBlank()) {
       throw new IllegalStateException("Infisical Universal Auth is not configured. Set INFISICAL_CLIENT_ID and INFISICAL_CLIENT_SECRET.");
@@ -106,4 +113,10 @@ public class InfisicalAuthClient {
   }
 
   private record AccessToken(String value, long expiresAtMillis) {}
+
+  private static final class MessageDigestHolder {
+    private static boolean constantTimeEquals(String left, String right) {
+      return java.security.MessageDigest.isEqual(left.getBytes(StandardCharsets.UTF_8), right.getBytes(StandardCharsets.UTF_8));
+    }
+  }
 }
