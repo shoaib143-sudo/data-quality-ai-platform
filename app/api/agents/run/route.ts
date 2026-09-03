@@ -91,6 +91,7 @@ export async function POST(request: Request) {
     }).select('id').single()
     if (runInsert.error || !runInsert.data) throw new Error(`Unable to create agent run: ${runInsert.error?.message ?? 'unknown error'}`)
     agentRunId = runInsert.data.id
+    const activeAgentRunId = runInsert.data.id
 
     const profileInsert = await admin.schema('profiling').from('profile_runs').insert({
       dataset_version_id: datasetVersionId,
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
         error_code: 'PROFILE_RUN_CREATION_FAILED',
         error_message: profileInsert.error?.message ?? 'Unable to create profiling run.',
         completed_at: new Date().toISOString(),
-      }).eq('id', agentRunId)
+      }).eq('id', activeAgentRunId)
       throw new Error(`Unable to create profiling run: ${profileInsert.error?.message ?? 'unknown error'}`)
     }
     const profilingRunId = profileInsert.data.id
@@ -125,7 +126,7 @@ export async function POST(request: Request) {
         datasetVersionId,
         agentDefinitionId: agentDefinition.id,
         agentVersion: agentDefinition.version,
-        agentRunId: agentRunId!,
+        agentRunId: activeAgentRunId,
         profilingRunId,
         requestInput: input,
       })
@@ -134,11 +135,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       accepted: true,
       execution_completed: false,
-      agentRunId,
+      agentRunId: activeAgentRunId,
       profilingRunId,
       agentDefinitionId: agentDefinition.id,
       agentVersion: agentDefinition.version,
-      monitorUrl: `/monitoring?run=${encodeURIComponent(agentRunId)}`,
+      monitorUrl: `/monitoring?run=${encodeURIComponent(activeAgentRunId)}`,
     }, { status: 202 })
   } catch (error) {
     const message = errorMessage(error, 'Unable to start profiling job.')
@@ -149,7 +150,7 @@ export async function POST(request: Request) {
         error_code: 'PROFILING_START_FAILED',
         error_message: message,
         completed_at: new Date().toISOString(),
-      }).eq('id', agentRunId).in('status', ['CREATED','QUEUED'])
+      }).eq('id', activeAgentRunId).in('status', ['CREATED','QUEUED'])
     }
     return NextResponse.json({ error: message }, { status: 500 })
   }
