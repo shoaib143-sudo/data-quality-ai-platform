@@ -9,11 +9,14 @@ export type SourceOption = { id: string; projectId: string; name: string; source
 
 const CREATE_PROJECT = '__create_project__'
 
+type ProjectMode = 'existing' | 'create'
+
 export function RegisterDatasetForm({ projects, organizations, sources }: { projects: ProjectOption[]; organizations: OrganizationOption[]; sources: SourceOption[] }) {
   const router = useRouter()
   const [availableProjects, setAvailableProjects] = useState(projects)
   const [availableSources, setAvailableSources] = useState(sources)
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
+  const [projectMode, setProjectMode] = useState<ProjectMode>('existing')
   const [sourceId, setSourceId] = useState('')
   const [name, setName] = useState('')
   const [sourceIdentifier, setSourceIdentifier] = useState('')
@@ -28,7 +31,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
   const [profiling, setProfiling] = useState(false)
   const [profilingTarget, setProfilingTarget] = useState<{ projectId: string; datasetVersionId: string; agentDefinitionId: string } | null>(null)
 
-  const projectSources = useMemo(() => availableSources.filter((source) => source.projectId === projectId && source.status === 'ACTIVE'), [availableSources, projectId])
+  const projectSources = useMemo(() => availableSources.filter((source) => projectMode === 'existing' && source.projectId === projectId && source.status === 'ACTIVE'), [availableSources, projectId, projectMode])
   const canCreateProject = organizations.length > 0
 
   useEffect(() => {
@@ -51,10 +54,16 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
   }, [projects, sources])
 
   useEffect(() => {
-    if (projectId && !availableProjects.some(project => project.id === projectId)) {
-      setProjectId(availableProjects[0]?.id ?? '')
+    if (!availableProjects.length) {
+      setProjectId('')
+      setProjectMode('create')
       setSourceId('')
+      return
     }
+    if (projectId && availableProjects.some(project => project.id === projectId)) return
+    setProjectId(availableProjects[0].id)
+    setProjectMode('existing')
+    setSourceId('')
   }, [availableProjects, projectId])
 
   useEffect(() => {
@@ -63,6 +72,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       if (!project?.id || !project?.name) return
       setAvailableProjects(current => current.some(item => item.id === project.id) ? current : [...current, project].sort((a, b) => a.name.localeCompare(b.name)))
       setProjectId(project.id)
+      setProjectMode('existing')
       setSourceId('')
     }
     function onSourceCreated(event: Event) {
@@ -70,6 +80,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       if (!source?.id || !source?.projectId || !source?.name || source.status !== 'ACTIVE') return
       setAvailableSources(current => [...current.filter(item => item.id !== source.id), source].sort((a, b) => a.name.localeCompare(b.name)))
       setProjectId(source.projectId)
+      setProjectMode('existing')
       setSourceId(source.id)
       setStatus(`Source ${source.name} is active and selected for dataset registration.`)
       router.refresh()
@@ -84,11 +95,13 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
 
   function changeProject(value: string) {
     if (value === CREATE_PROJECT) {
-      setProjectId('')
+      setProjectMode('create')
       setSourceId('')
       setStatus(null)
       return
     }
+    if (!value) return
+    setProjectMode('existing')
     setProjectId(value)
     setSourceId(availableSources.find((source) => source.projectId === value && source.status === 'ACTIVE')?.id ?? '')
     setStatus(null)
@@ -108,6 +121,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       const project: ProjectOption = { id: payload.project.id, name: payload.project.name }
       setAvailableProjects(current => [...current.filter(item => item.id !== project.id), project].sort((a, b) => a.name.localeCompare(b.name)))
       setProjectId(project.id)
+      setProjectMode('existing')
       setSourceId('')
       setNewProjectName('')
       setNewProjectDescription('')
@@ -164,15 +178,15 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       <div className="mb-5"><h2 className="text-lg font-semibold">Register a profiling dataset</h2><p className="mt-1 text-sm text-muted-foreground">Create the dataset, its first version, the executable profiling source, then start the existing Profiling Agent 2.0.</p></div>
       {availableProjects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available for dataset registration.</p> :
         <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2 text-sm"><label className="space-y-2 block"><span className="font-medium">Project</span><select value={projectId || CREATE_PROJECT} onChange={e => changeProject(e.target.value)} disabled={running || profiling || creatingProject} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select an existing project</option>{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{canCreateProject && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
-            {projectId === '' && canCreateProject && <div className="rounded-lg border p-3 space-y-3"><p className="text-xs text-muted-foreground">You can switch back to any existing project using the Project dropdown above.</p><label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" className="w-full rounded-md border bg-background px-3 py-2" autoFocus /></label><label className="space-y-1 block"><span className="text-xs font-medium">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setProjectId(availableProjects[0]?.id ?? ''); setSourceId(''); setNewProjectName(''); setNewProjectDescription(''); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div></div>}
+          <div className="space-y-2 text-sm"><label className="space-y-2 block"><span className="font-medium">Project</span><select value={projectMode === 'create' ? CREATE_PROJECT : projectId} onChange={e => changeProject(e.target.value)} disabled={running || profiling || creatingProject} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select an existing project</option>{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{canCreateProject && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
+            {projectMode === 'create' && canCreateProject && <div className="rounded-lg border p-3 space-y-3"><p className="text-xs text-muted-foreground">Creating a project does not change your selected existing project. You can switch back to it at any time from the dropdown.</p><label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" className="w-full rounded-md border bg-background px-3 py-2" autoFocus /></label><label className="space-y-1 block"><span className="text-xs font-medium">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setProjectMode('existing'); setSourceId(''); setNewProjectName(''); setNewProjectDescription(''); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div></div>}
           </div>
           <label className="space-y-2 text-sm"><span className="font-medium">Data source</span><select value={sourceId} onChange={e => setSourceId(e.target.value)} disabled={running || profiling || projectSources.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">{projectSources.length ? 'Select a source' : 'Connect a source first'}</option>{projectSources.map(s => <option key={s.id} value={s.id}>{s.name} · {s.sourceType}</option>)}</select><span className="text-xs text-muted-foreground">Only active sources for the selected project are listed here.</span></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Dataset name</span><input value={name} onChange={e => setName(e.target.value)} disabled={running || profiling} placeholder="Customer master" /></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Source identifier</span><input value={sourceIdentifier} onChange={e => setSourceIdentifier(e.target.value)} disabled={running || profiling} placeholder="public.customers or file URI" /></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Business domain</span><input value={businessDomain} onChange={e => setBusinessDomain(e.target.value)} disabled={running || profiling} placeholder="Customer" /></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Description</span><input value={description} onChange={e => setDescription(e.target.value)} disabled={running || profiling} placeholder="Purpose and business context" /></label>
-          <div className="md:col-span-2"><button type="submit" disabled={running || profiling || !sourceId || !projectId} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{running ? 'Registering…' : 'Register dataset'}</button></div>
+          <div className="md:col-span-2"><button type="submit" disabled={running || profiling || !sourceId || !projectId || projectMode !== 'existing'} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{running ? 'Registering…' : 'Register dataset'}</button></div>
         </form>}
       {profilingTarget && <div className="mt-5 rounded-lg border p-4"><p className="text-sm font-medium">Dataset is profiling-ready</p><p className="mt-1 text-sm text-muted-foreground">Start the production Profiling Agent 2.0 to execute schema discovery, metrics, findings, and quality scoring.</p><button type="button" onClick={runProfiling} disabled={profiling} className="mt-3 rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{profiling ? 'Profiling…' : 'Run profiling'}</button></div>}
       {status && <p className="mt-4 rounded-md border p-3 text-sm" role="status">{status}</p>}
