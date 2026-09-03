@@ -31,25 +31,27 @@ export async function POST(request: Request) {
     const { data: source, error: sourceError } = await admin.schema('catalog').from('data_sources').select('id, project_id, name, source_type, connection_metadata, status').eq('id', sourceId).eq('project_id', projectId).in('status', ['ACTIVE', 'CONFIGURED']).maybeSingle()
     if (sourceError || !source) return NextResponse.json({ error: 'The selected data source is unavailable.' }, { status: 404 })
 
-    const sourceMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? { ...(source.connection_metadata as Record<string, unknown>) } : {}
     const sourceType = String(source.source_type ?? '').trim().toLowerCase()
     const wasConfigured = String(source.status ?? '').toUpperCase() === 'CONFIGURED'
+    const connectionMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? { ...(source.connection_metadata as Record<string, unknown>) } : {}
     if (wasConfigured && sourceType === 'jdbc') {
       const jdbcParts = jdbcTableParts(sourceIdentifier)
       if (!jdbcParts) return NextResponse.json({ error: 'Configured JDBC connections require a schema.table source identifier.' }, { status: 400 })
-      sourceMetadata.schema = jdbcParts.schema
-      sourceMetadata.table = jdbcParts.table
-      const { data: activatedSource, error: activationError } = await admin.schema('catalog').from('data_sources').update({ connection_metadata: sourceMetadata, status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', source.id).eq('project_id', projectId).select('id, project_id, name, source_type, connection_metadata, status').single()
-      if (activationError || !activatedSource) throw new Error(`Unable to activate configured data source: ${activationError?.message ?? 'unknown error'}`)
-      source.connection_metadata = activatedSource.connection_metadata
-      source.status = activatedSource.status
+      connectionMetadata.schema = jdbcParts.schema
+      connectionMetadata.table = jdbcParts.table
     }
 
-    const sourceValidation = await validateDataSourceForProfiling(admin, source, sourceIdentifier)
-    if (!sourceValidation.valid) {
-      if (wasConfigured) await admin.schema('catalog').from('data_sources').update({ status: 'CONFIGURED', connection_metadata: source.connection_metadata, updated_at: new Date().toISOString() }).eq('id', source.id)
-      return NextResponse.json({ error: 'The selected source is not profiling-ready.', source_validation: sourceValidation }, { status: 422 })
+    const validationSource = { ...source, connection_metadata: connectionMetadata }
+    const sourceValidation = await validateDataSourceForProfiling(admin, validationSource, sourceIdentifier)
+    if (!sourceValidation.valid) return NextResponse.json({ error: 'The selected source is not profiling-ready.', source_validation: sourceValidation }, { status: 422 })
+
+    if (wasConfigured) {
+      const { error: activationError } = await admin.schema('catalog').from('data_sources').update({ connection_metadata: connectionMetadata, status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', source.id).eq('project_id', projectId)
+      if (activationError) throw new Error(`Unable to activate configured data source: ${activationError.message}`)
+      source.connection_metadata = connectionMetadata
+      source.status = 'ACTIVE'
     }
+
     const { data: existingDataset, error: duplicateError } = await admin.schema('catalog').from('datasets').select('id').eq('project_id', projectId).eq('name', name).maybeSingle()
     if (duplicateError) throw new Error(`Unable to validate dataset name: ${duplicateError.message}`)
     if (existingDataset) return NextResponse.json({ error: 'A dataset with this name already exists in the project.' }, { status: 409 })
@@ -60,7 +62,6 @@ export async function POST(request: Request) {
     if (versionLookupError) throw new Error(`Unable to determine dataset version: ${versionLookupError.message}`)
     const versionNumber = Number(latestVersion?.version_number ?? 0) + 1
     const executionType = ['file', 'csv'].includes(sourceType) ? 'FILE' : sourceType === 'jdbc' ? 'JDBC' : 'TABLE'
-    const connectionMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? source.connection_metadata as Record<string, unknown> : {}
     const { data: version, error: versionError } = await admin.schema('catalog').from('dataset_versions').insert({ dataset_id: dataset.id, version_number: versionNumber, source_uri: sourceIdentifier, status: 'PROCESSING', observed_at: new Date().toISOString(), metadata: { registration: 'manual', source_type: source.source_type, source_validation: sourceValidation } }).select('id, dataset_id, version_number, source_uri, status, observed_at, created_at').single()
     if (versionError || !version) throw new Error(`Unable to create dataset version: ${versionError?.message ?? 'unknown error'}`)
     versionId = version.id
