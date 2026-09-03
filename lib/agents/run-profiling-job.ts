@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-executor'
 import { validateProfilingRun } from '@/lib/profiling/run-validation'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
-import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
+import { evaluateObservabilitySignals, recordProfileFailureAlert } from '@/lib/observability/evaluate'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
@@ -170,5 +170,10 @@ export async function executePreparedProfilingJob(input: {
     if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', stepId).eq('status', 'RUNNING'), 'fail current step')
     await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', agentRunId).in('status', ['QUEUED','RUNNING']), 'fail agent run')
     await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', profilingRunId).eq('status', 'RUNNING'), 'fail profiling run')
+    try {
+      await recordProfileFailureAlert(datasetVersionId, profilingRunId, message)
+    } catch (alertError) {
+      console.error(`[profiling-job] unable to persist profiling failure alert: ${errorMessage(alertError, 'unknown error')}`)
+    }
   }
 }
