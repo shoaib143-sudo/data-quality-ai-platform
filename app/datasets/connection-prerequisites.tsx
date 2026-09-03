@@ -1,62 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CheckCircle2, CircleAlert, Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 
-type Requirement = { key: string; label: string; description: string; source: 'user' | 'server' }
+type Requirement = { label: string; description: string }
 type Props = { connectionKind: string }
-
-type Payload = {
-  label: string
-  requirements: Requirement[]
-  checks: { bridgeConfigured: boolean; credentialConfigured: boolean }
-  fetchedAt: string
+const DEFINITIONS: Record<string, { label: string; requirements: Requirement[] }> = {
+  csv: { label: 'CSV File', requirements: [{ label: 'CSV URL or storage path', description: 'Provide an HTTPS CSV URL or a Supabase Storage bucket and object path.' }, { label: 'Accessible file', description: 'The platform will validate that the file can be reached and read.' }] },
+  postgresql: { label: 'PostgreSQL', requirements: [{ label: 'Host and port', description: 'Database host and port, normally 5432.' }, { label: 'Database', description: 'The PostgreSQL database name.' }, { label: 'Username and password', description: 'Credentials are entered here and securely provisioned, never embedded in the URL.' }, { label: 'SSL mode', description: 'Choose the SSL requirement for the target database.' }, { label: 'Schema', description: 'Select a discovered schema.' }, { label: 'Table or view', description: 'Select the table or view to profile.' }] },
+  mssql: { label: 'Microsoft SQL Server', requirements: [{ label: 'Host and port', description: 'SQL Server host and port, normally 1433.' }, { label: 'Database', description: 'The SQL Server or Azure SQL database name.' }, { label: 'Username and password', description: 'Database credentials are entered securely in this form.' }, { label: 'Encryption', description: 'Choose the SQL Server encryption requirement.' }, { label: 'Schema', description: 'Select a discovered schema.' }, { label: 'Table or view', description: 'Select the table or view to profile.' }] },
+  mysql: { label: 'MySQL', requirements: [{ label: 'Host and port', description: 'MySQL host and port, normally 3306.' }, { label: 'Database', description: 'The MySQL database name.' }, { label: 'Username and password', description: 'Database credentials are entered securely in this form.' }, { label: 'SSL mode', description: 'Choose the SSL requirement for the target database.' }, { label: 'Schema', description: 'Select a discovered schema.' }, { label: 'Table or view', description: 'Select the table or view to profile.' }] },
+  databricks: { label: 'Databricks Unity Catalog', requirements: [{ label: 'Server hostname', description: 'Databricks workspace or SQL endpoint hostname.' }, { label: 'HTTP path', description: 'SQL warehouse HTTP path.' }, { label: 'Access token', description: 'Token is entered securely and stored through the governed credential flow.' }, { label: 'Catalog', description: 'Unity Catalog catalog.' }, { label: 'Schema', description: 'Unity Catalog schema.' }, { label: 'Table', description: 'Unity Catalog table or view.' }] },
+  jdbc: { label: 'Generic JDBC', requirements: [{ label: 'JDBC driver', description: 'Select or identify a driver supported by the deployed connector runtime.' }, { label: 'JDBC URL', description: 'Provide the JDBC connection string without embedded credentials.' }, { label: 'Username and password', description: 'Credentials are entered securely in this form.' }, { label: 'Schema', description: 'Target schema.' }, { label: 'Table or view', description: 'Target table or view.' }] },
 }
 
 export function ConnectionPrerequisites({ connectionKind }: Props) {
-  const [payload, setPayload] = useState<Payload | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    fetch(`/api/datasets/source/prerequisites?connectionKind=${encodeURIComponent(connectionKind)}`, { cache: 'no-store' })
-      .then(async response => {
-        const body = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(body.error ?? 'Unable to load prerequisites.')
-        return body as Payload
-      })
-      .then(next => { if (!cancelled) setPayload(next) })
-      .catch(nextError => { if (!cancelled) setError(nextError instanceof Error ? nextError.message : 'Unable to load prerequisites.') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [connectionKind])
-
-  if (loading) return <div className="md:col-span-2 rounded-2xl border border-blue-100 bg-blue-50/50 p-4 text-sm text-slate-600"><div className="flex items-center gap-2 font-medium"><Loader2 className="h-4 w-4 animate-spin text-blue-600" />Loading prerequisites for this connection type…</div></div>
-  if (error) return <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><div className="flex items-center gap-2 font-semibold"><CircleAlert className="h-4 w-4" />Prerequisites unavailable</div><p className="mt-1 text-xs">{error}</p></div>
-  if (!payload) return null
-
-  const serverChecks = payload.requirements.filter(item => item.source === 'server')
-  const userChecks = payload.requirements.filter(item => item.source === 'user')
-  const serverReady = serverChecks.every(item => item.key === 'bridge' ? payload.checks.bridgeConfigured : item.key === 'credential_ref' ? payload.checks.credentialConfigured : true)
-
-  return <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-      <div><h3 className="text-sm font-semibold text-slate-900">Prerequisites for {payload.label}</h3><p className="mt-1 text-xs text-slate-500">These requirements update automatically when the connection type changes. Server checks are read live and never expose credentials.</p></div>
-      <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${serverReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>{serverReady ? 'Server setup ready' : 'Server setup required'}</span>
-    </div>
-    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-      {[...serverChecks, ...userChecks].map(item => {
-        const configured = item.key === 'bridge' ? payload.checks.bridgeConfigured : item.key === 'credential_ref' ? payload.checks.credentialConfigured : false
-        return <div key={item.key} className="flex gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-          <span className={`mt-0.5 shrink-0 ${item.source === 'server' && configured ? 'text-emerald-600' : item.source === 'server' ? 'text-amber-600' : 'text-blue-600'}`}>
-            {item.source === 'server' && configured ? <CheckCircle2 className="h-4 w-4" /> : item.source === 'server' ? <CircleAlert className="h-4 w-4" /> : <span className="grid h-4 w-4 place-items-center rounded-full border border-blue-300 text-[9px] font-bold">•</span>}
-          </span>
-          <div className="min-w-0"><div className="text-xs font-semibold text-slate-800">{item.label} <span className="ml-1 font-normal text-slate-400">{item.source === 'server' ? 'server' : 'you'}</span></div><p className="mt-0.5 text-[11px] leading-5 text-slate-500">{item.description}</p></div>
-        </div>
-      })}
-    </div>
-  </div>
+  const [definition, setDefinition] = useState(DEFINITIONS[connectionKind] ?? DEFINITIONS.jdbc)
+  const [loading, setLoading] = useState(false)
+  useEffect(() => { setLoading(true); const timer = window.setTimeout(() => { setDefinition(DEFINITIONS[connectionKind] ?? DEFINITIONS.jdbc); setLoading(false) }, 0); return () => window.clearTimeout(timer) }, [connectionKind])
+  if (loading) return <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50/50 p-4 text-sm text-slate-600"><span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-blue-600" />Updating prerequisites…</span></div>
+  return <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-4"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">Required setup for {definition.label}</h3><p className="mt-1 text-xs text-slate-500">Everything required to make this connection ready is collected in this screen. No administrator setup is required per connection.</p></div><span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />UI managed</span></div><div className="mt-3 grid gap-2 sm:grid-cols-2">{definition.requirements.map(item => <div key={item.label} className="rounded-lg border border-white bg-white/80 p-3"><div className="text-xs font-semibold text-slate-800">{item.label}</div><p className="mt-1 text-[11px] leading-5 text-slate-500">{item.description}</p></div>)}</div></div>
 }
