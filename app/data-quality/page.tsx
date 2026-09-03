@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { AlertTriangle, ArrowRight, CheckCircle2, CircleAlert, Gauge, Layers3, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { QualityRunButton } from './quality-run-button'
 
 type ProfileRun = {
   id: string
@@ -18,6 +19,8 @@ type DatasetVersion = { id: string; dataset_id: string; version_number: number }
 type Dataset = { id: string; project_id: string; name: string }
 type Score = { profile_run_id: string; completeness_score: number | null; uniqueness_score: number | null; validity_score: number | null; accuracy_score: number | null; overall_score: number | null }
 type Finding = { id: string; profile_run_id: string; finding_type: string; severity: string; title: string; description: string; confidence: number | null; recommendation: Record<string, unknown> | null }
+type QualityRule = { id: string; dataset_id: string; dataset_version_id: string | null; column_name: string | null; rule_key: string; name: string; dimension: string; severity: string; metric_key: string; operator: string; threshold: number | null; enabled: boolean }
+type QualityRuleRun = { id: string; rule_definition_id: string; profile_run_id: string | null; status: string; passed: boolean | null; observed_value: number | null; threshold: number | null; completed_at: string | null }
 
 function asRecord(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 function formatScore(value: number | null | undefined) { return typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : 'Not available' }
@@ -67,6 +70,18 @@ export default async function DataQualityPage() {
   const { data: datasetRows, error: datasetsError } = datasetIds.length ? await supabase.schema('catalog').from('datasets').select('id, project_id, name').in('id', datasetIds) : { data: [], error: null }
   if (datasetsError) throw new Error(`Unable to load datasets: ${datasetsError.message}`)
 
+  const { data: qualityRuleRows, error: qualityRulesError } = datasetIds.length
+    ? await supabase.schema('profiling').from('quality_rule_definitions').select('id,dataset_id,dataset_version_id,column_name,rule_key,name,dimension,severity,metric_key,operator,threshold,enabled').in('dataset_id', datasetIds).order('severity').limit(200)
+    : { data: [], error: null }
+  if (qualityRulesError) throw new Error(`Unable to load quality rules: ${qualityRulesError.message}`)
+  const qualityRules = (qualityRuleRows ?? []) as QualityRule[]
+  const qualityRuleIds = qualityRules.map(rule => rule.id)
+  const { data: qualityRunRows, error: qualityRunsError } = qualityRuleIds.length
+    ? await supabase.schema('profiling').from('quality_rule_runs').select('id,rule_definition_id,profile_run_id,status,passed,observed_value,threshold,completed_at').in('rule_definition_id', qualityRuleIds).order('started_at', { ascending: false }).limit(500)
+    : { data: [], error: null }
+  if (qualityRunsError) throw new Error(`Unable to load quality rule executions: ${qualityRunsError.message}`)
+  const qualityRuleRuns = (qualityRunRows ?? []) as QualityRuleRun[]
+
   const scores = (scoresResult.data ?? []) as Score[]
   const findings = (findingsResult.data ?? []) as Finding[]
   const versionsById = new Map(versions.map(version => [version.id, version]))
@@ -80,6 +95,12 @@ export default async function DataQualityPage() {
   const averageScore = scoredRuns.length ? scoredRuns.reduce((sum, run) => sum + (scoresByRunId.get(run.id)?.overall_score ?? 0), 0) / scoredRuns.length : null
   const criticalCount = findings.filter(finding => ['CRITICAL', 'HIGH'].includes(String(finding.severity).toUpperCase())).length
   const mediumCount = findings.filter(finding => String(finding.severity).toUpperCase() === 'MEDIUM').length
+  const latestQualityRunByRule = new Map<string, QualityRuleRun>()
+  for (const result of qualityRuleRuns) if (!latestQualityRunByRule.has(result.rule_definition_id)) latestQualityRunByRule.set(result.rule_definition_id, result)
+  const enabledQualityRules = qualityRules.filter(rule => rule.enabled)
+  const failedQualityRules = enabledQualityRules.filter(rule => latestQualityRunByRule.get(rule.id)?.status === 'FAILED')
+  const latestCompletedRunByVersion = new Map<string, ProfileRun>()
+  for (const run of completedRuns) if (!latestCompletedRunByVersion.has(run.dataset_version_id)) latestCompletedRunByVersion.set(run.dataset_version_id, run)
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_4%_0%,_rgba(219,234,254,0.82),_transparent_30%),radial-gradient(circle_at_96%_3%,_rgba(243,232,255,0.78),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_48%,_#f8fafc_100%)] text-slate-950">
@@ -111,6 +132,31 @@ export default async function DataQualityPage() {
             <div className="rounded-2xl border border-pink-100 bg-pink-50/70 p-5"><div className="flex items-center gap-2 font-bold text-slate-800"><CircleAlert className="h-5 w-5 text-pink-600" /> Customer outcomes</div><p className="mt-2 text-sm leading-6 text-slate-600">Duplicates and missing information can create service friction, inaccurate customer views and repeat work.</p></div>
             <div className="rounded-2xl border border-purple-100 bg-purple-50/70 p-5"><div className="flex items-center gap-2 font-bold text-slate-800"><TrendingUp className="h-5 w-5 text-purple-600" /> Operational confidence</div><p className="mt-2 text-sm leading-6 text-slate-600">Unreliable data can slow processes, weaken controls and increase the cost of manual reconciliation.</p></div>
           </div>
+        </section>
+
+        <section className="mt-6 rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-7">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div><div className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" /><h2 className="text-xl font-bold">Automated quality controls</h2></div><p className="mt-1 text-sm text-slate-500">Suggested controls are generated from persisted profiling evidence, executed deterministically, and recorded as auditable jobs.</p></div>
+            <Link href="/monitoring" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:border-blue-200 hover:bg-blue-50">Open Job Monitor <ArrowRight className="h-4 w-4" /></Link>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl bg-emerald-50 p-4"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Enabled controls</p><p className="mt-1 text-3xl font-black text-emerald-700">{enabledQualityRules.length}</p></div>
+            <div className="rounded-2xl bg-red-50 p-4"><p className="text-xs font-bold uppercase tracking-wider text-red-700">Current failures</p><p className="mt-1 text-3xl font-black text-red-700">{failedQualityRules.length}</p></div>
+            <div className="rounded-2xl bg-blue-50 p-4"><p className="text-xs font-bold uppercase tracking-wider text-blue-700">Executions persisted</p><p className="mt-1 text-3xl font-black text-blue-700">{qualityRuleRuns.length}</p></div>
+          </div>
+          <div className="mt-5 grid gap-3">
+            {versions.slice(0, 10).map(version => {
+              const dataset = datasetsById.get(version.dataset_id)
+              const latestProfile = latestCompletedRunByVersion.get(version.id)
+              const datasetRules = enabledQualityRules.filter(rule => rule.dataset_id === version.dataset_id)
+              if (!dataset || !latestProfile) return null
+              return <div key={version.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div><div className="font-bold text-slate-800">{dataset.name} <span className="text-xs font-semibold text-slate-400">v{version.version_number}</span></div><p className="mt-1 text-xs text-slate-500">{datasetRules.length} enabled controls · latest evidence {latestProfile.id.slice(0,8)}</p></div>
+                <QualityRunButton datasetVersionId={version.id} profileRunId={latestProfile.id} />
+              </div>
+            })}
+          </div>
+          {enabledQualityRules.length > 0 && <div className="mt-6 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b text-xs uppercase tracking-wider text-slate-400"><th className="px-3 py-2">Rule</th><th className="px-3 py-2">Column</th><th className="px-3 py-2">Dimension</th><th className="px-3 py-2">Control</th><th className="px-3 py-2">Latest</th></tr></thead><tbody>{enabledQualityRules.slice(0, 30).map(rule => { const latest = latestQualityRunByRule.get(rule.id); return <tr key={rule.id} className="border-b border-slate-100"><td className="px-3 py-3 font-semibold">{rule.name}</td><td className="px-3 py-3 text-slate-500">{rule.column_name ?? 'Dataset'}</td><td className="px-3 py-3 text-slate-500">{rule.dimension}</td><td className="px-3 py-3 font-mono text-xs">{rule.metric_key} {rule.operator} {rule.threshold ?? 'N/A'}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${latest?.status === 'PASSED' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : latest?.status === 'FAILED' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-500'}`}>{latest?.status ?? 'NOT RUN'}</span></td></tr> })}</tbody></table></div>}
         </section>
 
         {runs.length === 0 ? <section className="mt-6 rounded-3xl border border-blue-100 bg-white p-10 text-center shadow-sm"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Gauge className="h-7 w-7" /></div><h2 className="mt-4 text-xl font-bold">No quality evidence yet</h2><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Register a dataset, make it ready and run profiling to establish the evidence base for data quality decisions.</p><Link href="/datasets" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">Prepare a dataset <ArrowRight className="h-4 w-4" /></Link></section> : (
