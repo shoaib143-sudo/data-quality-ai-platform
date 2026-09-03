@@ -1,31 +1,41 @@
 package com.datanexus.jdbcbridge;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import javax.sql.DataSource;
 import java.sql.*;
 import java.util.*;
 
 @RestController
 public class JdbcBridgeController {
   private static final int MAX_ROWS = 10_000;
-  private final ObjectMapper mapper;
   private final CredentialStore credentials;
 
-  public JdbcBridgeController(ObjectMapper mapper, CredentialStore credentials) {
-    this.mapper = mapper;
+  public JdbcBridgeController(CredentialStore credentials) {
     this.credentials = credentials;
   }
 
   @GetMapping("/health")
   public Map<String, Object> health() {
     return Map.of("status", "ok", "service", "datanexus-jdbc-bridge");
+  }
+
+  @PostMapping("/v1/catalog")
+  public CatalogResponse catalog(@Valid @RequestBody JdbcCatalogRequest request) throws Exception {
+    validateJdbcUrl(request.jdbcUrl());
+    String requestedSchema = request.schema();
+    if (requestedSchema != null && !requestedSchema.isBlank()) validateIdentifier(requestedSchema, "schema");
+    Credentials c = credentials.resolve(request.credentialRef());
+    try (Connection connection = DriverManager.getConnection(request.jdbcUrl(), c.username(), c.password())) {
+      DatabaseMetaData md = connection.getMetaData();
+      List<String> schemas = readSchemas(md);
+      String schema = requestedSchema == null || requestedSchema.isBlank() ? null : requestedSchema;
+      List<TableInfo> tables = schema == null ? List.of() : readTables(md, schema);
+      return new CatalogResponse(schemas, tables, Map.of("database_product", md.getDatabaseProductName(), "driver_version", md.getDriverVersion()));
+    }
   }
 
   @PostMapping("/v1/validate")
@@ -72,6 +82,36 @@ public class JdbcBridgeController {
     }
   }
 
+  private static List<String> readSchemas(DatabaseMetaData md) throws SQLException {
+    List<String> schemas = new ArrayList<>();
+    try (ResultSet rs = md.getSchemas()) {
+      while (rs.next()) {
+        String schema = rs.getString("TABLE_SCHEM");
+        if (schema != null && !schema.isBlank() && !isSystemSchema(schema)) schemas.add(schema);
+      }
+    }
+    schemas.sort(String.CASE_INSENSITIVE_ORDER);
+    return schemas;
+  }
+
+  private static List<TableInfo> readTables(DatabaseMetaData md, String schema) throws SQLException {
+    List<TableInfo> tables = new ArrayList<>();
+    try (ResultSet rs = md.getTables(null, schema, "%", new String[]{"TABLE", "VIEW"})) {
+      while (rs.next()) {
+        String name = rs.getString("TABLE_NAME");
+        String type = rs.getString("TABLE_TYPE");
+        if (name != null && !name.isBlank()) tables.add(new TableInfo(name, type));
+      }
+    }
+    tables.sort(Comparator.comparing(TableInfo::name, String.CASE_INSENSITIVE_ORDER));
+    return tables;
+  }
+
+  private static boolean isSystemSchema(String schema) {
+    String normalized = schema.toLowerCase(Locale.ROOT);
+    return normalized.equals("information_schema") || normalized.equals("pg_catalog") || normalized.startsWith("pg_toast");
+  }
+
   private static List<ColumnInfo> readColumns(DatabaseMetaData md, String schema, String table) throws SQLException {
     List<ColumnInfo> columns = new ArrayList<>();
     try (ResultSet rs = md.getColumns(null, schema, table, null)) {
@@ -103,9 +143,12 @@ public class JdbcBridgeController {
     if (url.matches("(?i).*jdbc:[^:]+://[^/\\s:@]+:[^/\\s@]+@.*") || url.matches("(?i).*jdbc:[^:]+://[^/\\s@]+@.*")) throw new IllegalArgumentException("jdbcUrl must not contain embedded credentials.");
   }
 
+  public record JdbcCatalogRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String schema) {}
   public record JdbcRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String schema, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String table) {}
   public record JdbcQueryRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String schema, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String table, Integer limit) {}
   public record ColumnInfo(String name, String type) {}
+  public record TableInfo(String name, String type) {}
+  public record CatalogResponse(List<String> schemas, List<TableInfo> tables, Map<String,Object> details) {}
   public record ValidateResponse(boolean valid, List<ColumnInfo> columns, Long rowCount, Map<String,Object> details, List<String> warnings) {}
   public record QueryResponse(List<Map<String,Object>> rows, Long rowCount, List<ColumnInfo> columns) {}
 
