@@ -89,6 +89,7 @@ export default async function AgentsPage() {
 
   const agentOptions: AgentOption[] = enabledAgents.map((agent) => ({
     id: agent.id,
+    agentKey: agent.agent_key,
     name: agent.name,
     version: agent.version,
   }))
