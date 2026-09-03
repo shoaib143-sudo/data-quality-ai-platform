@@ -42,22 +42,26 @@ function stableHash(value: unknown) {
 
 export async function executeJdbcProfileDataset(datasetVersionId: string, profilingRunId: string) {
   const supabase = createAdminClient()
-  const { data: datasetVersion, error: versionError } = await supabase
+  const { data: datasetVersionRows, error: versionError } = await supabase
     .schema('catalog')
     .from('dataset_versions')
     .select('id, metadata, source_uri, dataset_id')
     .eq('id', datasetVersionId)
-    .maybeSingle()
-  if (versionError || !datasetVersion) throw new Error(`Unable to load JDBC dataset version: ${versionError?.message ?? 'not found'}`)
+    .limit(1)
+  if (versionError) throw new Error(`Unable to load JDBC dataset version: ${versionError.message}`)
+  const datasetVersion = datasetVersionRows?.[0]
+  if (!datasetVersion) throw new Error(`Unable to load JDBC dataset version: ${datasetVersionId} was not found.`)
 
-  const { data: executionSource, error: executionSourceError } = await supabase
+  const { data: executionSourceRows, error: executionSourceError } = await supabase
     .schema('profiling')
     .from('dataset_execution_sources')
-    .select('source_type, source_uri, execution_config, active')
+    .select('source_type, source_uri, execution_config, active, updated_at')
     .eq('dataset_version_id', datasetVersionId)
     .eq('active', true)
-    .maybeSingle()
+    .order('updated_at', { ascending: false })
+    .limit(1)
   if (executionSourceError) throw new Error(`Unable to load JDBC execution source: ${executionSourceError.message}`)
+  const executionSource = executionSourceRows?.[0]
   if (!executionSource || String(executionSource.source_type).toUpperCase() !== 'JDBC') throw new Error('JDBC dataset execution source is not active.')
 
   const executionConfig = record(executionSource.execution_config)
