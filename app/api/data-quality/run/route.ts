@@ -2,6 +2,7 @@ import { after, NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
+import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 
 export const maxDuration = 300
 
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
           userId: user.id,
           existingAgentRunId: agentRunId,
         })
+        await evaluateObservabilitySignals(datasetVersionId, resolvedProfileRunId)
       } catch (error) {
         console.error('[data-quality-job] background execution failed', error)
       }
