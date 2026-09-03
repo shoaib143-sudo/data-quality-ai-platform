@@ -15,15 +15,15 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
     if (!ready || !agentDefinitionId || busy) return
     setBusy(true)
     setHasError(false)
-    setMessage('Running profiling, metrics, findings, and quality scoring…')
+    setMessage('Starting profiling job…')
     try {
       const response = await fetch('/api/agents/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, datasetVersionId, agentDefinitionId }) })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error ?? 'Profiling execution failed.')
-      const score = payload.result?.metrics?.score?.overall_score
+      if (!payload.agentRunId) throw new Error('Profiling job was accepted without a run identifier.')
       setHasError(false)
-      setMessage(`Profiling completed${typeof score === 'number' ? ` · quality score ${(score * 100).toFixed(1)}%` : ''}.`)
-      router.refresh()
+      setMessage('Profiling job queued. Opening live monitor…')
+      router.push(payload.monitorUrl ?? `/monitoring?run=${encodeURIComponent(payload.agentRunId)}`)
     } catch (error) {
       setHasError(true)
       setMessage(error instanceof Error ? error.message : 'Profiling execution failed.')
