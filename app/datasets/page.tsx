@@ -8,7 +8,6 @@ type DatasetRow = { id: string; project_id: string; data_source_id: string | nul
 type VersionRow = { id: string; dataset_id: string; version_number: number; source_uri: string | null; status: string; created_at: string }
 type SourceRow = { id: string; project_id: string; name: string; source_type: string; status: string }
 type MembershipRow = { organization_id: string; role: string }
-type OrganizationRow = { id: string; name: string }
 
 export default async function DatasetsPage() {
   const user = await requireUser()
@@ -52,7 +51,7 @@ export default async function DatasetsPage() {
         </div>
         <header><h1 className="text-3xl font-semibold">Datasets</h1><p className="mt-2 text-muted-foreground">Register governed datasets and establish the profiling-ready execution handoff.</p></header>
 
-        <JdbcSourceForm projects={projects} />
+        <JdbcSourceForm projects={projects} organizations={organizations} />
         <RegisterDatasetForm projects={projects} organizations={organizations} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} />
 
         <section className="rounded-xl border p-6">
