@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadJdbcRows, parseJdbcTableReference } from '@/lib/connectors/jdbc'
-
-const MAX_SAMPLE_ROWS = 1000
+import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
 
 type RecordValue = Record<string, unknown>
 
@@ -75,15 +74,18 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
   const table = firstString(metadata, ['table', 'table_name', 'tableName']) ?? parsedReference?.table
   if (!jdbcUrl || !credentialRef || !table || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(schema) || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(table)) throw new Error('JDBC dataset source configuration is incomplete or invalid.')
 
-  const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, MAX_SAMPLE_ROWS)
+  const sampling = await resolveSamplingPolicy(supabase, datasetVersionId, 1000)
+  const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, sampling.loadLimit)
+  const sampled = applySamplingPolicy(loaded.rows as Record<string, unknown>[], loaded.rowCount ?? sampledRows.length, sampling)
+  const sampledRows = sampled.rows
   const metadataColumns = Array.isArray(versionMetadata.columns) ? versionMetadata.columns : []
   const declared = new Map(metadataColumns.map((column) => {
     const item = record(column)
     return [firstString(item, ['name', 'column_name', 'columnName']), firstString(item, ['data_type', 'physical_type', 'logical_type', 'type'])] as const
   }).filter(([name]) => Boolean(name)))
-  const names = Array.from(new Set([...metadataColumns.map((column) => firstString(record(column), ['name', 'column_name', 'columnName'])).filter((name): name is string => Boolean(name)), ...loaded.columns.map((column) => column.name), ...loaded.rows.flatMap((row) => Object.keys(row))]))
+  const names = Array.from(new Set([...metadataColumns.map((column) => firstString(record(column), ['name', 'column_name', 'columnName'])).filter((name): name is string => Boolean(name)), ...loaded.columns.map((column) => column.name), ...sampledRows.flatMap((row) => Object.keys(row))]))
   const columns = names.map((name, index) => {
-    const values = loaded.rows.map((row) => row[name])
+    const values = sampledRows.map((row) => row[name])
     const nullCount = values.filter((value) => value === null || value === undefined).length
     const distinct = new Set(values.filter((value) => value !== null && value !== undefined).map((value) => typeof value === 'string' ? value.trim() : JSON.stringify(value)))
     return {
@@ -98,10 +100,10 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
       zero_count: values.filter((value) => value === 0 || value === '0').length,
       distinct_count: distinct.size,
       distinct_percentage: values.length ? distinct.size / values.length * 100 : 0,
-      metadata: { profiling_sampled: true, profiling_sample_size: loaded.rows.length, profiling_row_count: loaded.rowCount },
+      metadata: { profiling_sampled: true, profiling_sample_size: sampledRows.length, profiling_row_count: sampled.sourceRowCount },
     }
   })
-  const schemaSnapshot = { row_count: loaded.rowCount, column_count: columns.length, source_access: { mode: 'source_rows', connector: { kind: 'jdbc', schema, table }, sampled_rows: loaded.rows.length, warnings: loaded.rows.length === MAX_SAMPLE_ROWS ? [`Profile statistics are based on the first ${MAX_SAMPLE_ROWS} rows.`] : [] }, columns }
+  const schemaSnapshot = { row_count: sampled.sourceRowCount, column_count: columns.length, source_access: { mode: 'source_rows', connector: { kind: 'jdbc', schema, table }, sampled_rows: sampled.sampledRows, sampling_policy: sampled.policy, warnings: sampled.warnings }, columns }
   const schemaHash = stableHash(columns.map((column) => ({ name: column.name, ordinal_position: column.ordinal_position, source_type: column.source_type, inferred_type: column.inferred_type })))
 
   const { error: deleteColumnsError } = await supabase.schema('profiling').from('profile_columns').delete().eq('profile_run_id', profilingRunId)
@@ -112,7 +114,7 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
   }
   const { data: snapshot, error: snapshotError } = await supabase.schema('profiling').from('schema_snapshots').upsert({ profile_run_id: profilingRunId, dataset_version_id: datasetVersionId, schema_hash: schemaHash, schema: schemaSnapshot }, { onConflict: 'profile_run_id' }).select().single()
   if (snapshotError) throw new Error(`Unable to persist JDBC schema snapshot: ${snapshotError.message}`)
-  const { data: run, error: runError } = await supabase.schema('profiling').from('profile_runs').update({ row_count: loaded.rowCount, column_count: columns.length, schema_hash: schemaHash, summary: { row_count: loaded.rowCount, column_count: columns.length, schema_hash: schemaHash, source_access: schemaSnapshot.source_access, columns: columns.map((column) => ({ name: column.name, type: column.inferred_type })) } }).eq('id', profilingRunId).select().single()
+  const { data: run, error: runError } = await supabase.schema('profiling').from('profile_runs').update({ row_count: sampled.sourceRowCount, column_count: columns.length, schema_hash: schemaHash, summary: { row_count: sampled.sourceRowCount, column_count: columns.length, schema_hash: schemaHash, source_access: schemaSnapshot.source_access, columns: columns.map((column) => ({ name: column.name, type: column.inferred_type })) } }).eq('id', profilingRunId).select().single()
   if (runError) throw new Error(`Unable to update JDBC profile run summary: ${runError.message}`)
-  return { tool: 'profile_dataset', connector: 'jdbc', profiling_run_id: profilingRunId, dataset_version_id: datasetVersionId, status: 'COMPLETED', row_count: loaded.rowCount, column_count: columns.length, schema_hash: schemaHash, source_access: schemaSnapshot.source_access, snapshot, profile_run: run }
+  return { tool: 'profile_dataset', connector: 'jdbc', profiling_run_id: profilingRunId, dataset_version_id: datasetVersionId, status: 'COMPLETED', row_count: sampled.sourceRowCount, column_count: columns.length, schema_hash: schemaHash, source_access: schemaSnapshot.source_access, snapshot, profile_run: run }
 }
