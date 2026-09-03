@@ -13,6 +13,7 @@ export async function POST(request: Request) {
     const user = await requireUser()
     const body = await request.json()
     const datasetVersionId = text(body.datasetVersionId)
+    const rawIdempotencyKey = text(request.headers.get('idempotency-key') ?? body.idempotencyKey ?? body.idempotency_key)
     let profileRunId = text(body.profileRunId)
     if (!datasetVersionId) return NextResponse.json({ error: 'datasetVersionId is required.' }, { status: 400 })
 
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
       profileRunId,
       userId: user.id,
       requestedByUser: true,
+      idempotencyKey: rawIdempotencyKey ? `data-quality:manual:${rawIdempotencyKey}` : null,
     })
 
     return NextResponse.json({
