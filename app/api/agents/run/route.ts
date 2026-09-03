@@ -10,17 +10,11 @@ const PRODUCTION_AGENT_KEY = 'profiling_agent'
 const PRODUCTION_AGENT_VERSION = '2.0'
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback
-}
+function errorMessage(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback }
 
 async function safeUpdate(query: PromiseLike<{ error: { message: string } | null }>, label: string) {
-  try {
-    const { error } = await query
-    if (error) console.error(`[agent-run] ${label}: ${error.message}`)
-  } catch (error) {
-    console.error(`[agent-run] ${label}: ${errorMessage(error, 'unknown persistence error')}`)
-  }
+  try { const { error } = await query; if (error) console.error(`[agent-run] ${label}: ${error.message}`) }
+  catch (error) { console.error(`[agent-run] ${label}: ${errorMessage(error, 'unknown persistence error')}`) }
 }
 
 async function isRunCancelled(admin: ReturnType<typeof createAdminClient>, runId: string) {
@@ -58,12 +52,21 @@ export async function POST(request: Request) {
     if (agentError || !agentDefinition) return NextResponse.json({ error: 'Agent definition not found or disabled' }, { status: 404 })
     if (agentDefinition.agent_key !== PRODUCTION_AGENT_KEY || agentDefinition.version !== PRODUCTION_AGENT_VERSION) return NextResponse.json({ error: `Only ${PRODUCTION_AGENT_KEY} v${PRODUCTION_AGENT_VERSION} is enabled for execution` }, { status: 400 })
 
-    const { data: datasetVersion, error: datasetVersionError } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id').eq('id', datasetVersionId).maybeSingle()
+    const { data: datasetVersion, error: datasetVersionError } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id,status').eq('id', datasetVersionId).maybeSingle()
     if (datasetVersionError) throw new Error(`Unable to resolve dataset version: ${datasetVersionError.message}`)
     if (!datasetVersion) return NextResponse.json({ error: 'Dataset version not found' }, { status: 404 })
-    const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets').select('id,project_id').eq('id', datasetVersion.dataset_id).eq('project_id', projectId).maybeSingle()
+    const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets').select('id,project_id,data_source_id').eq('id', datasetVersion.dataset_id).eq('project_id', projectId).maybeSingle()
     if (datasetError) throw new Error(`Unable to verify dataset ownership: ${datasetError.message}`)
     if (!dataset) return NextResponse.json({ error: 'Dataset version not found for project' }, { status: 404 })
+    if (String(datasetVersion.status).toUpperCase() !== 'AVAILABLE') return NextResponse.json({ error: 'Dataset version is not profiling-ready. Validate the source and wait for the version to become AVAILABLE.' }, { status: 409 })
+
+    const { data: source } = dataset.data_source_id
+      ? await admin.schema('catalog').from('data_sources').select('id,status').eq('id', dataset.data_source_id).eq('project_id', projectId).maybeSingle()
+      : { data: null }
+    if (!source || String(source.status).toUpperCase() !== 'ACTIVE') return NextResponse.json({ error: 'The dataset data source is not ACTIVE. Validate or activate the source before profiling.' }, { status: 409 })
+    const { data: executionSource, error: executionSourceError } = await admin.schema('profiling').from('dataset_execution_sources').select('id,active').eq('dataset_version_id', datasetVersionId).maybeSingle()
+    if (executionSourceError) throw new Error(`Unable to resolve profiling execution source: ${executionSourceError.message}`)
+    if (!executionSource?.active) return NextResponse.json({ error: 'The dataset execution source is not active. Validate the source binding before profiling.' }, { status: 409 })
 
     const now = new Date().toISOString()
     const runInsert = await admin.schema('agent').from('agent_runs').insert({ agent_definition_id: agentDefinition.id, project_id: projectId, dataset_version_id: datasetVersionId, status: 'RUNNING', input, started_at: now }).select('id').single()
@@ -118,9 +121,7 @@ export async function POST(request: Request) {
     if (await isRunCancelled(admin, activeAgentRunId)) { await preserveCancellation(admin, activeAgentRunId, activeProfilingRunId, activeInvestigationStepId); return NextResponse.json({ execution_completed: false, terminated: true, agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId }, { status: 409 }) }
 
     const validation = await validateProfilingRun(activeProfilingRunId, user.id)
-    if (!validation.valid) {
-      throw new Error(`Profiling contract validation failed: ${validation.warnings.join(' ') || 'persisted results are incomplete.'}`)
-    }
+    if (!validation.valid) throw new Error(`Profiling contract validation failed: ${validation.warnings.join(' ') || 'persisted results are incomplete.'}`)
 
     const completedAt = new Date().toISOString()
     await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', activeInvestigationStepId).eq('status', 'RUNNING'), 'complete investigation step')
