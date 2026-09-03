@@ -119,8 +119,12 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
     try {
       const response = await fetch('/api/datasets/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: submittedProjectId, sourceId: submittedSourceId, name: submittedName, sourceIdentifier: submittedSourceIdentifier, description: submittedDescription, businessDomain: submittedBusinessDomain }) })
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? payload.source_validation?.errors?.join(' ') ?? 'Dataset registration failed.')
-      setStatus(`Registered ${payload.dataset.name} v${payload.version.version_number}. Profiling source is ready.`)
-      setProfilingTarget({ projectId: submittedProjectId, datasetVersionId: payload.version.id, agentDefinitionId: payload.agentDefinitionId })
+      const profilingReady = payload.profiling_ready === true
+      setStatus(profilingReady
+        ? `Registered ${payload.dataset.name} v${payload.version.version_number}. Profiling source is ready.`
+        : `Registered ${payload.dataset.name} v${payload.version.version_number}. Dataset is saved, but profiling is not ready yet: ${payload.source_validation?.warnings?.at(-1) ?? 'validate the source before profiling.'}`)
+      if (profilingReady && payload.agentDefinitionId) setProfilingTarget({ projectId: submittedProjectId, datasetVersionId: payload.version.id, agentDefinitionId: payload.agentDefinitionId })
+      else setProfilingTarget(null)
       setName(''); setSourceIdentifier(''); setDescription(''); setBusinessDomain(''); router.refresh()
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Dataset registration failed.') } finally { setRunning(false) }
   }
