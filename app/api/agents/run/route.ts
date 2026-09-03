@@ -6,6 +6,7 @@ import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-execu
 import { validateProfilingRun } from '@/lib/profiling/run-validation'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
+import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 
 const PRODUCTION_AGENT_KEY = 'profiling_agent'
@@ -167,7 +168,17 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId, stepId: activeInvestigationStepId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version, qualityAutomation, result })
+    let observability: Record<string, unknown> | null = null
+    try {
+      observability = await evaluateObservabilitySignals(datasetVersion.id, activeProfilingRunId)
+    } catch (observabilityError) {
+      observability = {
+        evaluation_completed: false,
+        error: errorMessage(observabilityError, 'Observability evaluation failed after profiling.'),
+      }
+    }
+
+    return NextResponse.json({ agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId, stepId: activeInvestigationStepId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version, qualityAutomation, observability, result })
   } catch (error) {
     const message = errorMessage(error, 'Unknown execution error')
     const admin = createAdminClient()
