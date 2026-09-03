@@ -1,0 +1,46 @@
+import { createClient } from '@supabase/supabase-js'
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+if (!url || !serviceRoleKey) {
+  console.log('SKIP governance database verification: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.')
+  process.exit(0)
+}
+
+const supabase = createClient(url, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+const { data: projects, error: projectsError } = await supabase.schema('app').from('projects').select('id,name').order('created_at')
+if (projectsError) throw new Error(`Unable to enumerate projects: ${projectsError.message}`)
+
+const { data: agents, error: agentsError } = await supabase.schema('agent').from('agent_definitions').select('agent_key,version,enabled').eq('enabled', true)
+if (agentsError) throw new Error(`Unable to validate production agents: ${agentsError.message}`)
+const enabledAgents = new Set((agents ?? []).map((agent) => `${agent.agent_key}:${agent.version}`))
+for (const required of ['profiling_agent:2.0', 'data_quality_agent:1.0']) {
+  if (!enabledAgents.has(required)) throw new Error(`Required production agent is not enabled: ${required}`)
+  console.log(`PASS production agent ${required}`)
+}
+
+for (const project of projects ?? []) {
+  const { data: contractResult, error: contractError } = await supabase.schema('governance').rpc('run_platform_contract_checks', { p_project_id: project.id })
+  if (contractError) throw new Error(`Platform contract checks failed to execute for ${project.name}: ${contractError.message}`)
+  const contractStatus = contractResult && typeof contractResult === 'object' ? contractResult.status : null
+  if (contractStatus !== 'PASSED') throw new Error(`Platform contract checks returned ${String(contractStatus)} for ${project.name}: ${JSON.stringify(contractResult)}`)
+  console.log(`PASS platform contract checks ${project.name}`)
+
+  const { data: scorecard, error: scorecardError } = await supabase.schema('governance').rpc('refresh_project_scorecard', { p_project_id: project.id })
+  if (scorecardError) throw new Error(`Governance scorecard refresh failed for ${project.name}: ${scorecardError.message}`)
+  const overall = Number(scorecard?.overall_score)
+  if (!Number.isFinite(overall) || overall < 0 || overall > 1) throw new Error(`Governance scorecard is invalid for ${project.name}.`)
+  console.log(`PASS evidence scorecard ${project.name} -> ${Math.round(overall * 100)}%`)
+}
+
+const [{ count: duplicateActiveSources, error: sourceError }, { count: deadEvents, error: eventError }] = await Promise.all([
+  supabase.schema('profiling').from('dataset_execution_sources').select('dataset_version_id', { count: 'exact', head: true }).eq('active', true),
+  supabase.schema('orchestration').from('event_outbox').select('id', { count: 'exact', head: true }).eq('status', 'DEAD').gte('created_at', new Date(Date.now() - 24 * 60 * 60_000).toISOString()),
+])
+if (sourceError) throw new Error(`Unable to inspect execution sources: ${sourceError.message}`)
+if (eventError) throw new Error(`Unable to inspect governance outbox: ${eventError.message}`)
+console.log(`PASS active execution source inventory -> ${duplicateActiveSources ?? 0} active bindings`)
+if ((deadEvents ?? 0) > 0) throw new Error(`${deadEvents} governance outbox events reached DEAD state in the previous 24 hours.`)
+console.log('PASS governance outbox has no recent DEAD events')
+
+console.log('Governance database verification completed.')
