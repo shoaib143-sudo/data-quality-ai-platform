@@ -1,33 +1,44 @@
 import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
-import { RegisterDatasetForm, type ProjectOption, type SourceOption } from './register-dataset-form'
+import { RegisterDatasetForm, type OrganizationOption, type ProjectOption } from './register-dataset-form'
 import { JdbcSourceForm } from './jdbc-source-form'
 
 type DatasetRow = { id: string; project_id: string; data_source_id: string | null; name: string; description: string | null; source_identifier: string | null; business_domain: string | null; status: string; created_at: string }
 type VersionRow = { id: string; dataset_id: string; version_number: number; source_uri: string | null; status: string; created_at: string }
 type SourceRow = { id: string; project_id: string; name: string; source_type: string; status: string }
+type MembershipRow = { organization_id: string; role: string }
+type OrganizationRow = { id: string; name: string }
 
 export default async function DatasetsPage() {
-  await requireUser()
+  const user = await requireUser()
   const supabase = await createClient()
 
-  const [projectsResult, sourcesResult, datasetsResult, versionsResult] = await Promise.all([
+  const [projectsResult, sourcesResult, datasetsResult, versionsResult, membershipsResult] = await Promise.all([
     supabase.schema('app').from('projects').select('id, name').order('name'),
     supabase.schema('catalog').from('data_sources').select('id, project_id, name, source_type, status').eq('status', 'ACTIVE').order('name'),
     supabase.schema('catalog').from('datasets').select('id, project_id, data_source_id, name, description, source_identifier, business_domain, status, created_at').order('created_at', { ascending: false }),
     supabase.schema('catalog').from('dataset_versions').select('id, dataset_id, version_number, source_uri, status, created_at').order('version_number', { ascending: false }),
+    supabase.schema('app').from('organization_members').select('organization_id, role').eq('user_id', user.id),
   ])
 
   if (projectsResult.error) throw new Error(`Unable to load projects: ${projectsResult.error.message}`)
   if (sourcesResult.error) throw new Error(`Unable to load data sources: ${sourcesResult.error.message}`)
   if (datasetsResult.error) throw new Error(`Unable to load datasets: ${datasetsResult.error.message}`)
   if (versionsResult.error) throw new Error(`Unable to load dataset versions: ${versionsResult.error.message}`)
+  if (membershipsResult.error) throw new Error(`Unable to load organizations: ${membershipsResult.error.message}`)
 
   const projects = (projectsResult.data ?? []) as ProjectOption[]
   const sources = (sourcesResult.data ?? []) as SourceRow[]
   const datasets = (datasetsResult.data ?? []) as DatasetRow[]
   const versions = (versionsResult.data ?? []) as VersionRow[]
+  const memberships = (membershipsResult.data ?? []) as MembershipRow[]
+  const adminOrganizationIds = memberships.filter(m => ['OWNER', 'ADMIN'].includes(String(m.role))).map(m => m.organization_id)
+  const organizationsResult = adminOrganizationIds.length > 0
+    ? await supabase.schema('app').from('organizations').select('id, name').in('id', adminOrganizationIds).order('name')
+    : { data: [], error: null }
+  if (organizationsResult.error) throw new Error(`Unable to load organizations: ${organizationsResult.error.message}`)
+  const organizations = (organizationsResult.data ?? []) as OrganizationOption[]
   const sourceById = new Map(sources.map(source => [source.id, source]))
   const versionsByDataset = new Map<string, VersionRow[]>()
   for (const version of versions) versionsByDataset.set(version.dataset_id, [...(versionsByDataset.get(version.dataset_id) ?? []), version])
@@ -42,7 +53,7 @@ export default async function DatasetsPage() {
         <header><h1 className="text-3xl font-semibold">Datasets</h1><p className="mt-2 text-muted-foreground">Register governed datasets and establish the profiling-ready execution handoff.</p></header>
 
         <JdbcSourceForm projects={projects} />
-        <RegisterDatasetForm projects={projects} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} />
+        <RegisterDatasetForm projects={projects} organizations={organizations} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} />
 
         <section className="rounded-xl border p-6">
           <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered datasets</h2><p className="mt-1 text-sm text-muted-foreground">Dataset identity, source binding, and version readiness.</p></div><span className="rounded-full border px-3 py-1 text-xs">{datasets.length} datasets</span></div>
