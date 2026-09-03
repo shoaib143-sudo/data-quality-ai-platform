@@ -5,8 +5,9 @@ import { validateDataSourceForProfiling } from '@/lib/profiling/source-validatio
 type ScheduleRow = {
   id: string
   project_id: string
-  dataset_version_id: string
-  job_type: 'PROFILING' | 'DATA_QUALITY'
+  dataset_version_id: string | null
+  data_source_id: string | null
+  job_type: 'PROFILING' | 'DATA_QUALITY' | 'DISCOVERY'
   name: string
   enabled: boolean
   timezone: string
@@ -19,6 +20,28 @@ type ScheduleRow = {
   misfire_policy: 'RUN_ONCE' | 'SKIP' | 'CATCH_UP'
   retry_policy: Record<string, unknown>
   created_by: string | null
+}
+
+function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
+
+function scheduleOccurrenceKey(schedule: ScheduleRow) {
+  return `schedule:${schedule.id}:${schedule.next_run_at}:${schedule.job_type}`
+}
+
+async function findScheduledOccurrence(schedule: ScheduleRow) {
+  const admin = createAdminClient()
+  const key = scheduleOccurrenceKey(schedule)
+  const { data, error } = await admin.schema('orchestration').from('job_queue')
+    .select('id,status,agent_run_id,payload')
+    .eq('project_id', schedule.project_id)
+    .eq('idempotency_key', key)
+    .maybeSingle()
+  if (error) throw new Error(`Unable to resolve scheduled job idempotency: ${error.message}`)
+  if (!data) return null
+  const payload = data.payload && typeof data.payload === 'object' && !Array.isArray(data.payload)
+    ? data.payload as Record<string, unknown>
+    : {}
+  return { ...data, payload, idempotencyKey: key }
 }
 
 function computeNext(schedule: ScheduleRow, from: Date) {
@@ -64,6 +87,17 @@ async function resolveScheduleActor(projectId: string, createdBy: string | null)
 }
 
 async function enqueueProfilingSchedule(schedule: ScheduleRow) {
+  if (!schedule.dataset_version_id) throw new Error('Scheduled profiling target is missing a dataset version.')
+  const existing = await findScheduledOccurrence(schedule)
+  if (existing) {
+    return {
+      agentRunId: existing.agent_run_id,
+      profileRunId: text(existing.payload.profilingRunId) || null,
+      durableJobId: existing.id,
+      reused: true,
+    }
+  }
+
   const admin = createAdminClient()
   const [{ data: version, error: versionError }, { data: agentDefinition, error: agentError }] = await Promise.all([
     admin.schema('catalog').from('dataset_versions').select('id,dataset_id,status').eq('id', schedule.dataset_version_id).maybeSingle(),
@@ -85,7 +119,7 @@ async function enqueueProfilingSchedule(schedule: ScheduleRow) {
   if (executionError || !executionSourceRows?.[0]) throw new Error('Scheduled profiling execution source is not active.')
 
   const userId = await resolveScheduleActor(schedule.project_id, schedule.created_by)
-  const requestInput = { projectId: schedule.project_id, datasetVersionId: version.id, agentDefinitionId: agentDefinition.id, scheduled: true, scheduleId: schedule.id }
+  const requestInput = { projectId: schedule.project_id, datasetVersionId: version.id, agentDefinitionId: agentDefinition.id, scheduled: true, scheduleId: schedule.id, scheduledAt: schedule.next_run_at }
   const { data: agentRun, error: runError } = await admin.schema('agent').from('agent_runs').insert({
     agent_definition_id: agentDefinition.id,
     project_id: schedule.project_id,
@@ -102,7 +136,7 @@ async function enqueueProfilingSchedule(schedule: ScheduleRow) {
     agent_run_id: agentRun.id,
     engine_name: 'profiling-engine',
     engine_version: '1.1',
-    configuration: { execution_mode: 'durable_schedule', schedule_id: schedule.id, source_validation: sourceValidation },
+    configuration: { execution_mode: 'durable_schedule', schedule_id: schedule.id, scheduled_at: schedule.next_run_at, source_validation: sourceValidation },
     started_at: new Date().toISOString(),
   }).select('id').single()
   if (profileError || !profileRun) {
@@ -111,28 +145,51 @@ async function enqueueProfilingSchedule(schedule: ScheduleRow) {
   }
 
   const maxAttempts = numericSetting(schedule.retry_policy?.max_attempts,3)
-  const durable = await enqueueDurableJob({
-    projectId: schedule.project_id,
-    jobType: 'PROFILING',
-    entityId: version.id,
-    agentRunId: agentRun.id,
-    payload: {
-      userId,
+  try {
+    const durable = await enqueueDurableJob({
       projectId: schedule.project_id,
-      datasetVersionId: version.id,
-      agentDefinitionId: agentDefinition.id,
-      agentVersion: agentDefinition.version,
+      jobType: 'PROFILING',
+      entityId: version.id,
       agentRunId: agentRun.id,
-      profilingRunId: profileRun.id,
-      requestInput,
-      scheduleId: schedule.id,
-    },
-    maxAttempts,
-  })
-  return { agentRunId: agentRun.id, profileRunId: profileRun.id, durableJobId: durable.id }
+      idempotencyKey: scheduleOccurrenceKey(schedule),
+      payload: {
+        userId,
+        projectId: schedule.project_id,
+        datasetVersionId: version.id,
+        agentDefinitionId: agentDefinition.id,
+        agentVersion: agentDefinition.version,
+        agentRunId: agentRun.id,
+        profilingRunId: profileRun.id,
+        requestInput,
+        scheduleId: schedule.id,
+      },
+      maxAttempts,
+    })
+    if (durable.agent_run_id && durable.agent_run_id !== agentRun.id) {
+      await admin.schema('profiling').from('profile_runs').delete().eq('id', profileRun.id).eq('status','RUNNING')
+      await admin.schema('agent').from('agent_runs').delete().eq('id', agentRun.id).eq('status','QUEUED')
+      return { agentRunId: durable.agent_run_id, profileRunId: null, durableJobId: durable.id, reused: true }
+    }
+    return { agentRunId: agentRun.id, profileRunId: profileRun.id, durableJobId: durable.id, reused: false }
+  } catch (error) {
+    await admin.schema('profiling').from('profile_runs').update({status:'FAILED',error_code:'SCHEDULE_QUEUE_FAILED',error_message:error instanceof Error?error.message:'Unable to enqueue scheduled profiling job.',completed_at:new Date().toISOString()}).eq('id',profileRun.id).eq('status','RUNNING')
+    await admin.schema('agent').from('agent_runs').update({status:'FAILED',error_code:'SCHEDULE_QUEUE_FAILED',error_message:error instanceof Error?error.message:'Unable to enqueue scheduled profiling job.',completed_at:new Date().toISOString()}).eq('id',agentRun.id).eq('status','QUEUED')
+    throw error
+  }
 }
 
 async function enqueueDataQualitySchedule(schedule: ScheduleRow) {
+  if (!schedule.dataset_version_id) throw new Error('Scheduled data quality target is missing a dataset version.')
+  const existing = await findScheduledOccurrence(schedule)
+  if (existing) {
+    return {
+      agentRunId: existing.agent_run_id,
+      profileRunId: text(existing.payload.profileRunId) || null,
+      durableJobId: existing.id,
+      reused: true,
+    }
+  }
+
   const admin = createAdminClient()
   const { data: version, error: versionError } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id').eq('id',schedule.dataset_version_id).maybeSingle()
   if (versionError || !version) throw new Error('Scheduled data quality dataset version was not found.')
@@ -152,19 +209,57 @@ async function enqueueDataQualitySchedule(schedule: ScheduleRow) {
     dataset_id: dataset.id,
     dataset_version_id: version.id,
     status: 'QUEUED',
-    input: { datasetVersionId:version.id,profileRunId:profileRun.id,scheduled:true,scheduleId:schedule.id },
+    input: { datasetVersionId:version.id,profileRunId:profileRun.id,scheduled:true,scheduleId:schedule.id,scheduledAt:schedule.next_run_at },
   }).select('id').single()
   if (runError || !agentRun) throw new Error(`Unable to create scheduled data quality run: ${runError?.message ?? 'unknown error'}`)
+
+  const maxAttempts = numericSetting(schedule.retry_policy?.max_attempts,3)
+  try {
+    const durable = await enqueueDurableJob({
+      projectId: schedule.project_id,
+      jobType: 'DATA_QUALITY',
+      entityId: version.id,
+      agentRunId: agentRun.id,
+      idempotencyKey: scheduleOccurrenceKey(schedule),
+      payload: { datasetVersionId:version.id,profileRunId:profileRun.id,userId,agentRunId:agentRun.id,scheduleId:schedule.id },
+      maxAttempts,
+    })
+    if (durable.agent_run_id && durable.agent_run_id !== agentRun.id) {
+      await admin.schema('agent').from('agent_runs').delete().eq('id',agentRun.id).eq('status','QUEUED')
+      return { agentRunId:durable.agent_run_id,profileRunId:profileRun.id,durableJobId:durable.id,reused:true }
+    }
+    return { agentRunId:agentRun.id,profileRunId:profileRun.id,durableJobId:durable.id,reused:false }
+  } catch (error) {
+    await admin.schema('agent').from('agent_runs').update({status:'FAILED',error_code:'SCHEDULE_QUEUE_FAILED',error_message:error instanceof Error?error.message:'Unable to enqueue scheduled data quality job.',completed_at:new Date().toISOString()}).eq('id',agentRun.id).eq('status','QUEUED')
+    throw error
+  }
+}
+
+async function enqueueDiscoverySchedule(schedule: ScheduleRow) {
+  if (!schedule.data_source_id) throw new Error('Scheduled discovery target is missing a data source.')
+  const existing = await findScheduledOccurrence(schedule)
+  if (existing) return { durableJobId: existing.id, sourceId: schedule.data_source_id, reused: true }
+
+  const admin = createAdminClient()
+  const { data: source, error } = await admin.schema('catalog').from('data_sources')
+    .select('id,project_id,status,source_type,name')
+    .eq('id',schedule.data_source_id)
+    .eq('project_id',schedule.project_id)
+    .maybeSingle()
+  if (error || !source) throw new Error(`Scheduled discovery source is unavailable: ${error?.message ?? 'not found'}`)
+  if (String(source.status).toUpperCase() !== 'ACTIVE') throw new Error('Scheduled discovery source is not ACTIVE.')
+
   const maxAttempts = numericSetting(schedule.retry_policy?.max_attempts,3)
   const durable = await enqueueDurableJob({
-    projectId: schedule.project_id,
-    jobType: 'DATA_QUALITY',
-    entityId: version.id,
-    agentRunId: agentRun.id,
-    payload: { datasetVersionId:version.id,profileRunId:profileRun.id,userId,agentRunId:agentRun.id,scheduleId:schedule.id },
+    projectId:schedule.project_id,
+    jobType:'DISCOVERY',
+    entityId:source.id,
+    idempotencyKey:scheduleOccurrenceKey(schedule),
+    payload:{sourceId:source.id,scheduleId:schedule.id,scheduledAt:schedule.next_run_at,sourceType:source.source_type},
     maxAttempts,
+    priority:80,
   })
-  return { agentRunId:agentRun.id,profileRunId:profileRun.id,durableJobId:durable.id }
+  return {durableJobId:durable.id,sourceId:source.id,reused:Boolean(existing)}
 }
 
 export async function enqueueDueSchedules(limit = 20) {
@@ -185,7 +280,9 @@ export async function enqueueDueSchedules(limit = 20) {
       if (shouldRun) {
         execution = schedule.job_type === 'PROFILING'
           ? await enqueueProfilingSchedule(schedule)
-          : await enqueueDataQualitySchedule(schedule)
+          : schedule.job_type === 'DATA_QUALITY'
+            ? await enqueueDataQualitySchedule(schedule)
+            : await enqueueDiscoverySchedule(schedule)
       }
       let next = computeNext(schedule, scheduledAt)
       while (next <= now) next = computeNext(schedule,next)
