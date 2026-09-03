@@ -301,7 +301,6 @@ export async function executeQualityAutomation(input: {
       metricValues.set(metricIdentity(columnName, metric.metric_key), metric.numeric_value)
     }
 
-    await admin.schema('profiling').from('quality_rule_runs').delete().eq('profile_run_id', profileRunId)
     const results = (rules ?? []).map((rule) => {
       const typedRule = rule as QualityRule
       const observedValue = metricValues.get(metricIdentity(typedRule.column_name, typedRule.metric_key))
