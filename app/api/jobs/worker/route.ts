@@ -6,6 +6,7 @@ import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
 import { deliverNotificationJob } from '@/lib/observability/notifications'
+import { claimOutboxEvents, processOutboxEvents } from '@/lib/orchestration/outbox'
 import {
   claimDurableJobByAgentRun,
   claimDurableJobs,
@@ -77,7 +78,7 @@ async function processJobs(jobs: DurableJob[]) {
   for (const job of jobs) {
     try {
       await executeJob(job)
-      await markDurableJobSucceeded(job.id)
+      await markDurableJobSucceeded(job)
       results.push({ jobId: job.id, agentRunId: job.agent_run_id, status: 'SUCCEEDED' })
     } catch (error) {
       await markDurableJobFailed(job, error)
@@ -100,7 +101,9 @@ export async function GET(request: Request) {
   const scheduled = await enqueueDueSchedules(20)
   const jobs = await claimDurableJobs(workerId, 2)
   const results = await processJobs(jobs)
-  return NextResponse.json({ workerId, scheduled, claimed: jobs.length, results })
+  const events = await claimOutboxEvents(workerId, 30)
+  const eventResults = await processOutboxEvents(events)
+  return NextResponse.json({ workerId, scheduled, claimed: jobs.length, results, eventsClaimed: events.length, eventResults })
 }
 
 export async function POST(request: Request) {
