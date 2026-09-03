@@ -4,6 +4,7 @@ import { validateProfilingRun } from '@/lib/profiling/run-validation'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { evaluateObservabilitySignals, recordProfileFailureAlert } from '@/lib/observability/evaluate'
 import type { ToolExecutionContext } from '@/lib/agents/types'
+import { syncProfileClassifications } from '@/lib/governance/classification'
 
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
@@ -132,6 +133,12 @@ export async function executePreparedProfilingJob(input: {
 
     const completedAt = new Date().toISOString()
     await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', activeInvestigationStepId).eq('status', 'RUNNING'), 'complete investigation step')
+
+    try {
+      await syncProfileClassifications(datasetVersionId, profilingRunId)
+    } catch (error) {
+      console.error(`[profiling-job] classification sync failed: ${errorMessage(error, 'unknown error')}`)
+    }
 
     const result = {
       execution_completed: true,
