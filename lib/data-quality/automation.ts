@@ -406,8 +406,40 @@ export async function executeQualityAutomation(input: {
       metricValues.set(metricIdentity(columnName, metric.metric_key), metric.numeric_value)
     }
 
+    const loadedRows = await loadProfilingRows(admin, datasetVersionId, 1000)
+    const sourceRows = loadedRows.rows as Record<string, unknown>[]
+
     const results = (rules ?? []).map((rule) => {
       const typedRule = rule as QualityRule
+      const ruleType = String(typedRule.rule_type ?? 'METRIC_THRESHOLD').toUpperCase()
+
+      if (ruleType !== 'METRIC_THRESHOLD') {
+        const failures = rowFailures(typedRule, sourceRows)
+        const observedFailureRate = sourceRows.length ? failures.length / sourceRows.length : 0
+        const passed = failures.length === 0
+        return {
+          rule_definition_id: typedRule.id,
+          agent_run_id: agentRunId,
+          dataset_version_id: datasetVersionId,
+          profile_run_id: profileRunId,
+          status: passed ? 'PASSED' : 'FAILED',
+          passed,
+          observed_value: observedFailureRate,
+          threshold: 0,
+          evidence: {
+            rule_type: ruleType,
+            column_name: typedRule.column_name,
+            sampled_rows: sourceRows.length,
+            source_row_count: loadedRows.rowCount,
+            row_failure_count: failures.length,
+            sampled_failure_rate: observedFailureRate,
+            source_access: loadedRows.sourceAccess ?? null,
+          },
+          error_message: null,
+          completed_at: new Date().toISOString(),
+        }
+      }
+
       const observedValue = metricValues.get(metricIdentity(typedRule.column_name, typedRule.metric_key))
       if (observedValue === undefined || typedRule.threshold === null || typedRule.threshold === undefined) {
         return {
@@ -454,7 +486,6 @@ export async function executeQualityAutomation(input: {
     let exceptionCount = 0
     let quarantinedCount = 0
     if (failedCount > 0) {
-      const loaded = await loadProfilingRows(admin, datasetVersionId, 1000)
       const persistedRunByRule = new Map(persistedResults.map((result) => [result.rule_definition_id, result.id]))
       const ruleById = new Map((rules ?? []).map((rule) => [rule.id, rule as QualityRule]))
       const exceptionRows: Record<string, unknown>[] = []
@@ -463,7 +494,7 @@ export async function executeQualityAutomation(input: {
         const rule = ruleById.get(String(failedResult.rule_definition_id))
         const qualityRuleRunId = persistedRunByRule.get(String(failedResult.rule_definition_id))
         if (!rule || !qualityRuleRunId) continue
-        const failures = rowFailures(rule, loaded.rows as Record<string, unknown>[]).slice(0, 250)
+        const failures = rowFailures(rule, sourceRows).slice(0, 250)
         for (const failure of failures) {
           const recordHash = hashRecord(failure.row)
           const key = recordKey(failure.row)
