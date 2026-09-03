@@ -26,7 +26,7 @@ export default async function DatasetsPage() {
     supabase.schema('catalog').from('datasets').select('id, project_id, data_source_id, name, description, source_identifier, business_domain, status, created_at').order('created_at', { ascending: false }),
     supabase.schema('catalog').from('dataset_versions').select('id, dataset_id, version_number, source_uri, status, created_at').order('version_number', { ascending: false }),
     supabase.schema('app').from('organization_members').select('organization_id, role').eq('user_id', user.id),
-    supabase.schema('profiling').from('dataset_execution_sources').select('dataset_version_id, source_type, source_uri, active').eq('active', true),
+    supabase.schema('profiling').from('dataset_execution_sources').select('dataset_version_id, source_type, source_uri, active'),
     supabase.schema('profiling').from('profile_runs').select('id, dataset_version_id, status, row_count, column_count, started_at, completed_at').order('started_at', { ascending: false }),
   ])
 
@@ -88,6 +88,7 @@ export default async function DatasetsPage() {
               const latest = datasetVersions.reduce<VersionRow | undefined>((current, version) => !current || version.version_number > current.version_number ? version : current, undefined)
               const source = dataset.data_source_id ? sourceById.get(dataset.data_source_id) : undefined
               const executionSource = latest ? executionSourceByVersion.get(latest.id) : undefined
+              const latestRun = latest ? latestRunByVersion.get(latest.id) : undefined
               const profilingReady = Boolean(latest && latest.status === 'AVAILABLE' && executionSource?.active)
               return <div key={dataset.id} className="rounded-lg border p-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between"><div><h3 className="font-medium">{dataset.name}</h3><p className="mt-1 text-sm text-muted-foreground">{dataset.description || 'No description provided.'}</p></div><span className="rounded-full border px-2 py-1 text-xs">{statusLabel(dataset.status)}</span></div>
