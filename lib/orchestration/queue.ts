@@ -74,14 +74,14 @@ export async function enqueueDurableJob(input: {
 
   const capacity = await resolveCapacity(input.projectId)
   const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString()
-  const [{ count: activeCount, error: activeError }, { count: hourlyCount, error: hourlyError }] = await Promise.all([
-    admin.schema('orchestration').from('job_queue').select('id', { count: 'exact', head: true }).eq('project_id', input.projectId).in('status', ['QUEUED', 'RUNNING']),
+  const [{ count: runningCount, error: activeError }, { count: hourlyCount, error: hourlyError }] = await Promise.all([
+    admin.schema('orchestration').from('job_queue').select('id', { count: 'exact', head: true }).eq('project_id', input.projectId).eq('status', 'RUNNING'),
     admin.schema('orchestration').from('job_queue').select('id', { count: 'exact', head: true }).eq('project_id', input.projectId).gte('created_at', oneHourAgo),
   ])
   if (activeError) throw new Error(`Unable to evaluate active job capacity: ${activeError.message}`)
   if (hourlyError) throw new Error(`Unable to evaluate hourly job capacity: ${hourlyError.message}`)
 
-  const capacityDelayMinutes = (activeCount ?? 0) >= capacity.maxConcurrentJobs || (hourlyCount ?? 0) >= capacity.maxJobsPerHour ? 5 : 0
+  const capacityDelayMinutes = (runningCount ?? 0) >= capacity.maxConcurrentJobs || (hourlyCount ?? 0) >= capacity.maxJobsPerHour ? 5 : 0
   const requestedAvailableAt = input.availableAt ? new Date(input.availableAt) : new Date()
   const capacityAvailableAt = new Date(Date.now() + capacityDelayMinutes * 60_000)
   const availableAt = requestedAvailableAt > capacityAvailableAt ? requestedAvailableAt.toISOString() : capacityAvailableAt.toISOString()
