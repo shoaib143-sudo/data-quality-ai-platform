@@ -43,7 +43,7 @@ function passes(operator: QualityRule['operator'], observed: number, threshold: 
   return observed !== threshold
 }
 
-function canonical(value: unknown) {
+function canonical(value: unknown): string {
   if (value === null || value === undefined) return ''
   if (typeof value === 'object') {
     if (Array.isArray(value)) return JSON.stringify(value.map(canonical))
