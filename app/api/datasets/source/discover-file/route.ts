@@ -1,37 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
+import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
-function parseCsvHeader(textValue: string) {
-  const firstLine = textValue.split(/\r?\n/, 1)[0] ?? ''
-  const columns: string[] = []
-  let current = '', quoted = false
-  for (let index = 0; index < firstLine.length; index += 1) {
-    const char = firstLine[index]
-    if (char === '"') {
-      if (quoted && firstLine[index + 1] === '"') { current += '"'; index += 1 }
-      else quoted = !quoted
-    } else if (char === ',' && !quoted) { columns.push(current.trim()); current = '' }
-    else current += char
-  }
-  columns.push(current.trim())
-  return columns.map((column, index) => column || `column_${index + 1}`)
-}
-
-async function loadCsv(sourceUri: string, admin: ReturnType<typeof createAdminClient>) {
-  if (/^https?:\/\//i.test(sourceUri)) {
-    const response = await fetch(sourceUri, { cache: 'no-store' })
-    if (!response.ok) throw new Error(`CSV source returned HTTP ${response.status}.`)
-    return response.text()
-  }
-  const [bucket, ...pathParts] = sourceUri.split('/')
-  const path = pathParts.join('/')
-  if (!bucket || !path) throw new Error('CSV source must be an HTTPS URL or storage bucket/path.')
-  const { data, error } = await admin.storage.from(bucket).download(path)
-  if (error || !data) throw new Error(`Unable to read CSV from Supabase Storage: ${error?.message ?? 'object not found'}`)
-  return data.text()
-}
 
 export async function POST(request: Request) {
   try {
@@ -40,18 +12,42 @@ export async function POST(request: Request) {
     const projectId = text(body.projectId)
     const sourceUri = text(body.sourceUri)
     if (!projectId || !sourceUri) return NextResponse.json({ error: 'projectId and sourceUri are required.' }, { status: 400 })
+
     const admin = createAdminClient()
     const { data: project } = await admin.schema('app').from('projects').select('id, organization_id').eq('id', projectId).maybeSingle()
     if (!project) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
     const { data: membership } = await admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
     if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
-    const csv = await loadCsv(sourceUri, admin)
-    const lines = csv.split(/\r?\n/).filter(line => line.trim().length > 0)
-    if (lines.length === 0) return NextResponse.json({ error: 'CSV file is empty.' }, { status: 422 })
-    const columns = parseCsvHeader(csv)
-    if (columns.length === 0) return NextResponse.json({ error: 'CSV header could not be discovered.' }, { status: 422 })
-    return NextResponse.json({ sourceUri, columns: columns.map(name => ({ name, type: 'text' })), tables: [{ name: sourceUri.split('/').pop() || 'csv', type: 'FILE' }], rowCount: Math.max(lines.length - 1, 0) })
+
+    const executionConfig = /^https?:\/\//i.test(sourceUri)
+      ? { url: sourceUri }
+      : { bucket: sourceUri.split('/')[0], path: sourceUri.split('/').slice(1).join('/') }
+
+    const loaded = await loadFileSource(admin, { sourceUri, executionConfig }, { maxRows: 1000 })
+    const firstRow = loaded.rows[0] ?? {}
+    const columns = Array.from(
+      loaded.rows.reduce<Set<string>>((names, row) => {
+        Object.keys(row).forEach((name) => names.add(name))
+        return names
+      }, new Set(Object.keys(firstRow))),
+    ).map((name) => {
+      const sample = loaded.rows.find((row) => row[name] !== null && row[name] !== undefined)?.[name]
+      const type = Array.isArray(sample) ? 'array' : sample === null || sample === undefined ? 'unknown' : typeof sample
+      return { name, type }
+    })
+
+    return NextResponse.json({
+      sourceUri: loaded.sourceUri,
+      format: loaded.format,
+      contentType: loaded.contentType,
+      metadata: loaded.metadata,
+      columns,
+      tables: [{ name: String(loaded.metadata.file_name ?? sourceUri.split('/').pop() ?? 'file'), type: loaded.format === 'binary' ? 'FILE_METADATA' : 'FILE' }],
+      rowCount: loaded.rowCount,
+      sampledRows: loaded.rows.length,
+      warnings: loaded.warnings,
+    })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'CSV discovery failed.' }, { status: 400 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'FILE discovery failed.' }, { status: 400 })
   }
 }
