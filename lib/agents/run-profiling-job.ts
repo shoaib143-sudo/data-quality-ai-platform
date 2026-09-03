@@ -89,11 +89,12 @@ export async function executePreparedProfilingJob(input: {
     }).select('id').single()
     if (profileStepError || !profileStep) throw new Error(`Unable to create profiling step: ${profileStepError?.message ?? 'unknown error'}`)
     stepId = profileStep.id
+    const activeProfileStepId = profileStep.id
 
-    const context = { agentRunId, stepId, projectId, agentDefinitionId, agentVersion } satisfies ToolExecutionContext
+    const context = { agentRunId, stepId: activeProfileStepId, projectId, agentDefinitionId, agentVersion } satisfies ToolExecutionContext
     const profileResult = await executeProfilingExecutor('profile_dataset', { ...requestInput, datasetVersionId, profilingRunId }, context)
-    if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, stepId); return }
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', stepId).eq('status', 'RUNNING'), 'complete profile step')
+    if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeProfileStepId); return }
+    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).eq('status', 'RUNNING'), 'complete profile step')
 
     const { data: metricStep, error: metricStepError } = await admin.schema('agent').from('agent_run_steps').insert({
       agent_run_id: agentRunId,
@@ -105,10 +106,11 @@ export async function executePreparedProfilingJob(input: {
     }).select('id').single()
     if (metricStepError || !metricStep) throw new Error(`Unable to create metric execution step: ${metricStepError?.message ?? 'unknown error'}`)
     stepId = metricStep.id
+    const activeMetricStepId = metricStep.id
 
-    const metricResult = await executeProfilingExecutor('execute_metrics', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId })
-    if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, stepId); return }
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', stepId).eq('status', 'RUNNING'), 'complete metric step')
+    const metricResult = await executeProfilingExecutor('execute_metrics', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId: activeMetricStepId })
+    if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeMetricStepId); return }
+    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', activeMetricStepId).eq('status', 'RUNNING'), 'complete metric step')
 
     const { data: investigationStep, error: investigationStepError } = await admin.schema('agent').from('agent_run_steps').insert({
       agent_run_id: agentRunId,
@@ -120,15 +122,16 @@ export async function executePreparedProfilingJob(input: {
     }).select('id').single()
     if (investigationStepError || !investigationStep) throw new Error(`Unable to create profiling investigation step: ${investigationStepError?.message ?? 'unknown error'}`)
     stepId = investigationStep.id
+    const activeInvestigationStepId = investigationStep.id
 
-    const investigationResult = await executeProfilingExecutor('investigate_profile', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId })
-    if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, stepId); return }
+    const investigationResult = await executeProfilingExecutor('investigate_profile', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId: activeInvestigationStepId })
+    if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeInvestigationStepId); return }
 
     const validation = await validateProfilingRun(profilingRunId, userId)
     if (!validation.valid) throw new Error(`Profiling contract validation failed: ${validation.warnings.join(' ') || 'persisted results are incomplete.'}`)
 
     const completedAt = new Date().toISOString()
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', stepId).eq('status', 'RUNNING'), 'complete investigation step')
+    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', activeInvestigationStepId).eq('status', 'RUNNING'), 'complete investigation step')
 
     const result = {
       execution_completed: true,
