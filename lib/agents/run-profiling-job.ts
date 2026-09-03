@@ -1,8 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-executor'
 import { validateProfilingRun } from '@/lib/profiling/run-validation'
-import { executeQualityAutomation } from '@/lib/data-quality/automation'
-import { evaluateObservabilitySignals, recordProfileFailureAlert } from '@/lib/observability/evaluate'
+import { recordProfileFailureAlert } from '@/lib/observability/evaluate'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 import { syncProfileClassifications } from '@/lib/governance/classification'
 
@@ -154,17 +153,6 @@ export async function executePreparedProfilingJob(input: {
     const { error: finalRunError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: completedAt }).eq('id', agentRunId).eq('status', 'RUNNING')
     if (finalRunError) throw new Error(`Unable to finalize agent run: ${finalRunError.message}`)
 
-    try {
-      await executeQualityAutomation({ datasetVersionId, profileRunId: profilingRunId, userId, parentRunId: agentRunId })
-    } catch (error) {
-      console.error(`[profiling-job] post-profile data quality automation failed: ${errorMessage(error, 'unknown error')}`)
-    }
-
-    try {
-      await evaluateObservabilitySignals(datasetVersionId, profilingRunId)
-    } catch (error) {
-      console.error(`[profiling-job] post-profile observability evaluation failed: ${errorMessage(error, 'unknown error')}`)
-    }
   } catch (error) {
     const message = errorMessage(error, 'Unknown profiling execution error')
     const completedAt = new Date().toISOString()
