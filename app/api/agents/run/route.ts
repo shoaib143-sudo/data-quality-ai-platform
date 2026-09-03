@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
+import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 import { enqueueDurableJob } from '@/lib/orchestration/queue'
 
@@ -12,6 +13,7 @@ const PROFILING_ENGINE_NAME = 'profiling-engine'
 const PROFILING_ENGINE_VERSION = '1.1'
 
 function errorMessage(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback }
+function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
 export async function POST(request: Request) {
   let agentRunId: string | null = null
@@ -19,35 +21,57 @@ export async function POST(request: Request) {
     const user = await requireUser()
     const admin = createAdminClient()
     const input = await request.json() as Record<string, unknown>
-    const projectId = typeof (input.projectId ?? input.project_id) === 'string' ? String(input.projectId ?? input.project_id) : ''
-    const datasetVersionId = typeof (input.datasetVersionId ?? input.dataset_version_id) === 'string' ? String(input.datasetVersionId ?? input.dataset_version_id) : ''
-    const agentDefinitionId = typeof (input.agentDefinitionId ?? input.agent_definition_id) === 'string' ? String(input.agentDefinitionId ?? input.agent_definition_id) : ''
-    if (!projectId || !datasetVersionId || !agentDefinitionId) {
+    const requestedProjectId = text(input.projectId ?? input.project_id)
+    const datasetVersionId = text(input.datasetVersionId ?? input.dataset_version_id)
+    const agentDefinitionId = text(input.agentDefinitionId ?? input.agent_definition_id)
+    const rawIdempotencyKey = text(request.headers.get('idempotency-key') ?? input.idempotencyKey ?? input.idempotency_key)
+    const idempotencyKey = rawIdempotencyKey ? `profiling:${rawIdempotencyKey}` : null
+
+    if (!requestedProjectId || !datasetVersionId || !agentDefinitionId) {
       return NextResponse.json({ error: 'projectId, datasetVersionId and agentDefinitionId are required' }, { status: 400 })
     }
 
-    const { data: project, error: projectError } = await admin.schema('app').from('projects').select('id,organization_id').eq('id', projectId).maybeSingle()
-    if (projectError) throw new Error(`Unable to resolve project: ${projectError.message}`)
-    if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    const { dataset, version: datasetVersion } = await authorizeDatasetVersion(user.id, datasetVersionId, 'profiling.execute')
+    if (dataset.project_id !== requestedProjectId) return NextResponse.json({ error: 'Dataset version does not belong to the requested project.' }, { status: 400 })
+    const projectId = dataset.project_id
 
-    const { data: membership, error: membershipError } = await admin.schema('app').from('organization_members').select('organization_id,user_id,role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-    if (membershipError) throw new Error(`Unable to verify project membership: ${membershipError.message}`)
-    if (!membership) return NextResponse.json({ error: 'You do not have access to run profiling for this project.' }, { status: 403 })
+    if (idempotencyKey) {
+      const { data: existingJob, error: existingError } = await admin
+        .schema('orchestration')
+        .from('job_queue')
+        .select('id,status,agent_run_id,payload')
+        .eq('project_id', projectId)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle()
+      if (existingError) throw new Error(`Unable to resolve prior profiling request: ${existingError.message}`)
+      if (existingJob?.agent_run_id) {
+        const payload = existingJob.payload && typeof existingJob.payload === 'object' ? existingJob.payload as Record<string, unknown> : {}
+        const profilingRunId = text(payload.profilingRunId)
+        return NextResponse.json({
+          accepted: true,
+          reused: true,
+          execution_completed: existingJob.status === 'SUCCEEDED',
+          agentRunId: existingJob.agent_run_id,
+          profilingRunId: profilingRunId || null,
+          durableJobId: existingJob.id,
+          monitorUrl: `/monitoring?run=${encodeURIComponent(existingJob.agent_run_id)}`,
+        }, { status: 202 })
+      }
+    }
 
-    const { data: agentDefinition, error: agentError } = await admin.schema('agent').from('agent_definitions').select('id,agent_key,version,enabled').eq('id', agentDefinitionId).eq('enabled', true).maybeSingle()
+    const { data: agentDefinition, error: agentError } = await admin
+      .schema('agent')
+      .from('agent_definitions')
+      .select('id,agent_key,version,enabled')
+      .eq('id', agentDefinitionId)
+      .eq('enabled', true)
+      .maybeSingle()
     if (agentError) throw new Error(`Unable to resolve agent definition: ${agentError.message}`)
     if (!agentDefinition) return NextResponse.json({ error: 'Agent definition not found or disabled' }, { status: 404 })
     if (agentDefinition.agent_key !== PRODUCTION_AGENT_KEY || agentDefinition.version !== PRODUCTION_AGENT_VERSION) {
       return NextResponse.json({ error: `Only ${PRODUCTION_AGENT_KEY} v${PRODUCTION_AGENT_VERSION} is enabled for execution` }, { status: 400 })
     }
 
-    const { data: datasetVersion, error: datasetVersionError } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id,status').eq('id', datasetVersionId).maybeSingle()
-    if (datasetVersionError) throw new Error(`Unable to resolve dataset version: ${datasetVersionError.message}`)
-    if (!datasetVersion) return NextResponse.json({ error: 'Dataset version not found' }, { status: 404 })
-
-    const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets').select('id,project_id,data_source_id,source_identifier').eq('id', datasetVersion.dataset_id).eq('project_id', projectId).maybeSingle()
-    if (datasetError) throw new Error(`Unable to verify dataset ownership: ${datasetError.message}`)
-    if (!dataset) return NextResponse.json({ error: 'Dataset version not found for project' }, { status: 404 })
     if (String(datasetVersion.status).toUpperCase() !== 'AVAILABLE') {
       return NextResponse.json({ error: 'Dataset version is not profiling-ready. Validate the source and wait for the version to become AVAILABLE.' }, { status: 409 })
     }
@@ -89,7 +113,7 @@ export async function POST(request: Request) {
       dataset_id: dataset.id,
       dataset_version_id: datasetVersionId,
       status: 'QUEUED',
-      input,
+      input: { ...input, idempotencyKey: rawIdempotencyKey || null },
     }).select('id').single()
     if (runInsert.error || !runInsert.data) throw new Error(`Unable to create agent run: ${runInsert.error?.message ?? 'unknown error'}`)
     agentRunId = runInsert.data.id
@@ -98,15 +122,16 @@ export async function POST(request: Request) {
     const profileInsert = await admin.schema('profiling').from('profile_runs').insert({
       dataset_version_id: datasetVersionId,
       status: 'RUNNING',
-      agent_run_id: agentRunId,
+      agent_run_id: activeAgentRunId,
       engine_name: PROFILING_ENGINE_NAME,
       engine_version: PROFILING_ENGINE_VERSION,
       configuration: {
         agent_definition_id: agentDefinition.id,
         agent_key: agentDefinition.agent_key,
         agent_version: agentDefinition.version,
-        execution_mode: 'durable_queue',
+        execution_mode: 'durable_queue_outbox',
         source_validation: sourceValidation,
+        idempotency_key: rawIdempotencyKey || null,
       },
       started_at: now,
     }).select('id').single()
@@ -121,35 +146,48 @@ export async function POST(request: Request) {
     }
     const profilingRunId = profileInsert.data.id
 
-    const durableJob = await enqueueDurableJob({
-      projectId,
-      jobType: 'PROFILING',
-      entityId: datasetVersionId,
-      agentRunId: activeAgentRunId,
-      payload: {
-        userId: user.id,
+    try {
+      const durableJob = await enqueueDurableJob({
         projectId,
-        datasetVersionId,
-        agentDefinitionId: agentDefinition.id,
-        agentVersion: agentDefinition.version,
+        jobType: 'PROFILING',
+        entityId: datasetVersionId,
+        agentRunId: activeAgentRunId,
+        idempotencyKey,
+        payload: {
+          userId: user.id,
+          projectId,
+          datasetVersionId,
+          agentDefinitionId: agentDefinition.id,
+          agentVersion: agentDefinition.version,
+          agentRunId: activeAgentRunId,
+          profilingRunId,
+          requestInput: input,
+        },
+        maxAttempts: 3,
+      })
+
+      return NextResponse.json({
+        accepted: true,
+        reused: false,
+        execution_completed: false,
         agentRunId: activeAgentRunId,
         profilingRunId,
-        requestInput: input,
-      },
-      maxAttempts: 3,
-    })
-
-    return NextResponse.json({
-      accepted: true,
-      execution_completed: false,
-      agentRunId: activeAgentRunId,
-      profilingRunId,
-      agentDefinitionId: agentDefinition.id,
-      agentVersion: agentDefinition.version,
-      durableJobId: durableJob.id,
-      monitorUrl: `/monitoring?run=${encodeURIComponent(activeAgentRunId)}`,
-    }, { status: 202 })
+        agentDefinitionId: agentDefinition.id,
+        agentVersion: agentDefinition.version,
+        durableJobId: durableJob.id,
+        monitorUrl: `/monitoring?run=${encodeURIComponent(activeAgentRunId)}`,
+      }, { status: 202 })
+    } catch (queueError) {
+      await admin.schema('profiling').from('profile_runs').update({
+        status: 'FAILED',
+        error_code: 'PROFILING_QUEUE_FAILED',
+        error_message: errorMessage(queueError, 'Unable to queue profiling job.'),
+        completed_at: new Date().toISOString(),
+      }).eq('id', profilingRunId).eq('status', 'RUNNING')
+      throw queueError
+    }
   } catch (error) {
+    if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
     const message = errorMessage(error, 'Unable to start profiling job.')
     if (agentRunId) {
       const admin = createAdminClient()
