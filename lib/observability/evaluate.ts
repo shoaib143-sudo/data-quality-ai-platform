@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { queueAlertNotifications } from '@/lib/observability/notifications'
 
 type Severity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type Category = 'QUALITY_SCORE_DROP' | 'SCHEMA_DRIFT' | 'VOLUME_CHANGE' | 'QUALITY_RULE_FAILURE' | 'PROFILE_FAILURE'
@@ -48,12 +49,13 @@ async function upsertAlert(input: {
   }
 
   if (existing) {
-    const { error } = await admin.schema('profiling').from('observability_alerts').update(payload).eq('id', existing.id)
-    if (error) throw new Error(`Unable to update observability alert: ${error.message}`)
-    return
+    const { data, error } = await admin.schema('profiling').from('observability_alerts').update(payload).eq('id', existing.id).select('id').single()
+    if (error || !data) throw new Error(`Unable to update observability alert: ${error?.message ?? 'unknown error'}`)
+    return data.id as string
   }
-  const { error } = await admin.schema('profiling').from('observability_alerts').insert(payload)
-  if (error) throw new Error(`Unable to create observability alert: ${error.message}`)
+  const { data, error } = await admin.schema('profiling').from('observability_alerts').insert(payload).select('id').single()
+  if (error || !data) throw new Error(`Unable to create observability alert: ${error?.message ?? 'unknown error'}`)
+  return data.id as string
 }
 
 async function resolveMissingCategories(projectId: string, datasetId: string, activeCategories: Set<Category>) {
@@ -76,6 +78,11 @@ export async function evaluateObservabilitySignals(datasetVersionId: string, pro
   if (versionError || !version) throw new Error(`Unable to resolve observability dataset version: ${versionError?.message ?? 'not found'}`)
   const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets').select('id,project_id,name').eq('id', version.dataset_id).maybeSingle()
   if (datasetError || !dataset) throw new Error(`Unable to resolve observability dataset: ${datasetError?.message ?? 'not found'}`)
+  const { data: policy, error: policyError } = await admin.schema('profiling').from('observability_policies').select('freshness_sla_hours,max_volume_change_ratio,max_score_drop,schema_change_policy,enabled').eq('dataset_id', dataset.id).maybeSingle()
+  if (policyError) throw new Error(`Unable to load observability policy: ${policyError.message}`)
+  const maxScoreDrop = policy?.enabled === false ? Number.POSITIVE_INFINITY : Number(policy?.max_score_drop ?? 0.1)
+  const maxVolumeChange = policy?.enabled === false ? Number.POSITIVE_INFINITY : Number(policy?.max_volume_change_ratio ?? 0.5)
+  const schemaPolicy = policy?.enabled === false ? 'IGNORE' : String(policy?.schema_change_policy ?? 'ALERT').toUpperCase()
 
   const { data: versions, error: versionsError } = await admin.schema('catalog').from('dataset_versions').select('id').eq('dataset_id', dataset.id)
   if (versionsError) throw new Error(`Unable to load dataset versions for observability: ${versionsError.message}`)
@@ -108,10 +115,10 @@ export async function evaluateObservabilitySignals(datasetVersionId: string, pro
     const previousScore = scoreByRun.get(previous.id)
     if (typeof currentScore === 'number' && typeof previousScore === 'number') {
       const drop = previousScore - currentScore
-      if (drop >= 0.1) {
+      if (drop >= maxScoreDrop) {
         candidates.push({
           category: 'QUALITY_SCORE_DROP',
-          severity: drop >= 0.2 ? 'HIGH' : 'MEDIUM',
+          severity: drop >= Math.max(0.2, maxScoreDrop * 2) ? 'HIGH' : 'MEDIUM',
           title: `${dataset.name} quality score declined materially`,
           description: `Overall quality declined by ${Math.round(drop * 100)} percentage points compared with the previous completed profile.`,
           fingerprint: `quality-score-drop:${dataset.id}`,
@@ -120,10 +127,10 @@ export async function evaluateObservabilitySignals(datasetVersionId: string, pro
       }
     }
 
-    if (current.schema_hash && previous.schema_hash && current.schema_hash !== previous.schema_hash) {
+    if (schemaPolicy !== 'IGNORE' && current.schema_hash && previous.schema_hash && current.schema_hash !== previous.schema_hash) {
       candidates.push({
         category: 'SCHEMA_DRIFT',
-        severity: 'HIGH',
+        severity: schemaPolicy === 'BLOCK' ? 'CRITICAL' : 'HIGH',
         title: `${dataset.name} schema changed`,
         description: 'The persisted schema fingerprint differs from the previous completed profile and should be reviewed for downstream compatibility.',
         fingerprint: `schema-drift:${dataset.id}`,
@@ -133,10 +140,10 @@ export async function evaluateObservabilitySignals(datasetVersionId: string, pro
 
     if (typeof current.row_count === 'number' && typeof previous.row_count === 'number' && previous.row_count > 0) {
       const change = (current.row_count - previous.row_count) / previous.row_count
-      if (Math.abs(change) >= 0.5) {
+      if (Math.abs(change) >= maxVolumeChange) {
         candidates.push({
           category: 'VOLUME_CHANGE',
-          severity: Math.abs(change) >= 0.8 ? 'HIGH' : 'MEDIUM',
+          severity: Math.abs(change) >= Math.max(0.8, maxVolumeChange * 1.6) ? 'HIGH' : 'MEDIUM',
           title: `${dataset.name} row volume changed materially`,
           description: `Row volume changed by ${Math.round(change * 100)}% compared with the previous completed profile.`,
           fingerprint: `volume-change:${dataset.id}`,
@@ -171,7 +178,12 @@ export async function evaluateObservabilitySignals(datasetVersionId: string, pro
   }
 
   for (const candidate of candidates) {
-    await upsertAlert({ projectId: dataset.project_id, datasetId: dataset.id, datasetVersionId, profileRunId, candidate })
+    const alertId = await upsertAlert({ projectId: dataset.project_id, datasetId: dataset.id, datasetVersionId, profileRunId, candidate })
+    try {
+      await queueAlertNotifications(alertId)
+    } catch (notificationError) {
+      console.error('[observability] unable to queue alert notifications', notificationError)
+    }
   }
   await resolveMissingCategories(dataset.project_id, dataset.id, new Set(candidates.map((candidate) => candidate.category)))
 
