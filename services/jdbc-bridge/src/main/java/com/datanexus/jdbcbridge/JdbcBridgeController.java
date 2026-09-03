@@ -14,13 +14,15 @@ public class JdbcBridgeController {
   private static final int MAX_ROWS = 10_000;
   private final CredentialStore credentials;
 
-  public JdbcBridgeController(CredentialStore credentials) {
-    this.credentials = credentials;
-  }
+  public JdbcBridgeController(CredentialStore credentials) { this.credentials = credentials; }
 
   @GetMapping("/health")
-  public Map<String, Object> health() {
-    return Map.of("status", "ok", "service", "datanexus-jdbc-bridge");
+  public Map<String, Object> health() { return Map.of("status", "ok", "service", "datanexus-jdbc-bridge"); }
+
+  @PostMapping("/v1/credentials")
+  public CredentialResponse saveCredential(@Valid @RequestBody CredentialRequest request) throws Exception {
+    credentials.upsert(request.credentialRef(), request.username(), request.password());
+    return new CredentialResponse(true, request.credentialRef());
   }
 
   @PostMapping("/v1/catalog")
@@ -143,6 +145,8 @@ public class JdbcBridgeController {
     if (url.matches("(?i).*jdbc:[^:]+://[^/\\s:@]+:[^/\\s@]+@.*") || url.matches("(?i).*jdbc:[^:]+://[^/\\s@]+@.*")) throw new IllegalArgumentException("jdbcUrl must not contain embedded credentials.");
   }
 
+  public record CredentialRequest(@NotBlank @Pattern(regexp="[A-Za-z0-9._-]{1,200}") String credentialRef, @NotBlank String username, @NotBlank String password) {}
+  public record CredentialResponse(boolean saved, String credentialRef) {}
   public record JdbcCatalogRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String schema) {}
   public record JdbcRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String schema, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String table) {}
   public record JdbcQueryRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String schema, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$]*") String table, Integer limit) {}
