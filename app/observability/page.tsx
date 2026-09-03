@@ -117,13 +117,13 @@ export default async function ObservabilityPage() {
 
         <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
           {[
-            ['Ready sources', `${readySources}/${sources.length}`, Database, 'text-blue-600', 'bg-blue-50'],
-            ['Profile evidence stale', staleEvidence, TimerReset, staleEvidence ? 'text-amber-600' : 'text-emerald-600', staleEvidence ? 'bg-amber-50' : 'bg-emerald-50'],
-            ['Schema drift', schemaDriftCount, GitCompareArrows, schemaDriftCount ? 'text-red-600' : 'text-emerald-600', schemaDriftCount ? 'bg-red-50' : 'bg-emerald-50'],
-            ['Quality pass rate', percent(rulePassRate), ShieldCheck, 'text-emerald-600', 'bg-emerald-50'],
-            ['Active jobs', activeJobs, Activity, 'text-violet-600', 'bg-violet-50'],
-            ['Failed jobs', failedJobs, AlertTriangle, failedJobs ? 'text-red-600' : 'text-emerald-600', failedJobs ? 'bg-red-50' : 'bg-emerald-50'],
-          ].map(([label, value, Icon, tone, bg]) => <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><span className={`grid h-10 w-10 place-items-center rounded-xl ${bg} ${tone}`}><Icon className="h-5 w-5" /></span><p className="mt-4 text-2xl font-black">{String(value)}</p><p className="text-xs font-semibold text-slate-500">{String(label)}</p></div>)}
+            { label: 'Ready sources', value: `${readySources}/${sources.length}`, Icon: Database, tone: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Profile evidence stale', value: staleEvidence, Icon: TimerReset, tone: staleEvidence ? 'text-amber-600' : 'text-emerald-600', bg: staleEvidence ? 'bg-amber-50' : 'bg-emerald-50' },
+            { label: 'Schema drift', value: schemaDriftCount, Icon: GitCompareArrows, tone: schemaDriftCount ? 'text-red-600' : 'text-emerald-600', bg: schemaDriftCount ? 'bg-red-50' : 'bg-emerald-50' },
+            { label: 'Quality pass rate', value: percent(rulePassRate), Icon: ShieldCheck, tone: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { label: 'Active jobs', value: activeJobs, Icon: Activity, tone: 'text-violet-600', bg: 'bg-violet-50' },
+            { label: 'Failed jobs', value: failedJobs, Icon: AlertTriangle, tone: failedJobs ? 'text-red-600' : 'text-emerald-600', bg: failedJobs ? 'bg-red-50' : 'bg-emerald-50' },
+          ].map(({ label, value, Icon, tone, bg }) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><span className={`grid h-10 w-10 place-items-center rounded-xl ${bg} ${tone}`}><Icon className="h-5 w-5" /></span><p className="mt-4 text-2xl font-black">{String(value)}</p><p className="text-xs font-semibold text-slate-500">{label}</p></div>)}
         </section>
 
         <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
