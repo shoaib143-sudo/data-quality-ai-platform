@@ -46,7 +46,7 @@ export default async function DatasetsPage() {
     supabase.schema('catalog').from('datasets').select('id, project_id, data_source_id, name, description, source_identifier, business_domain, status, created_at').order('created_at', { ascending: false }),
     supabase.schema('catalog').from('dataset_versions').select('id, dataset_id, version_number, source_uri, status, created_at').order('version_number', { ascending: false }),
     supabase.schema('app').from('organization_members').select('organization_id, role').eq('user_id', user.id),
-    supabase.schema('profiling').from('dataset_execution_sources').select('dataset_version_id, source_type, source_uri, active'),
+    supabase.schema('profiling').from('dataset_execution_sources').select('dataset_version_id, source_type, source_uri, active').eq('active', true),
     supabase.schema('profiling').from('profile_runs').select('id, dataset_version_id, status, row_count, column_count, started_at, completed_at').order('started_at', { ascending: false }),
     supabase.schema('agent').from('agent_definitions').select('id, agent_key, version, enabled').eq('agent_key', 'profiling_agent').eq('version', '2.0').eq('enabled', true).maybeSingle(),
   ])
