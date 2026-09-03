@@ -45,12 +45,36 @@ export async function GET() {
   }
 
   try {
+    const cutoff = new Date(Date.now() - 30 * 60_000).toISOString()
+    const [{ count: deadEvents, error: deadError }, { count: staleEvents, error: staleError }] = await Promise.all([
+      admin.schema('orchestration').from('event_outbox').select('id', { count: 'exact', head: true }).eq('status', 'DEAD').gte('processed_at', cutoff),
+      admin.schema('orchestration').from('event_outbox').select('id', { count: 'exact', head: true }).eq('status', 'PROCESSING').lt('lease_expires_at', new Date().toISOString()),
+    ])
+    if (deadError || staleError) throw deadError ?? staleError
+    const degraded = (deadEvents ?? 0) > 0 || (staleEvents ?? 0) > 0
+    components.outbox = degraded ? { status: 'DEGRADED', detail: 'Recent dead or stale governance events require attention.' } : { status: 'READY' }
+  } catch {
+    components.outbox = { status: 'DEGRADED', detail: 'Governance event outbox health could not be fully evaluated.' }
+  }
+
+  try {
     const { data, error } = await admin.schema('governance').from('platform_contract_check_runs').select('status,completed_at').order('completed_at', { ascending: false }).limit(1).maybeSingle()
     if (error) throw error
     if (!data) components.governance_contracts = { status: 'DEGRADED', detail: 'No platform contract check has completed yet.' }
     else components.governance_contracts = data.status === 'PASSED' ? { status: 'READY' } : { status: 'DEGRADED', detail: 'Latest platform contract check has failures.' }
   } catch {
     components.governance_contracts = { status: 'DEGRADED', detail: 'Platform contract state could not be evaluated.' }
+  }
+
+  try {
+    const { data, error } = await admin.schema('governance').rpc('verify_database_api_security_posture')
+    if (error) throw error
+    const valid = Boolean(data && typeof data === 'object' && data.valid === true)
+    components.security = valid ? { status: 'READY' } : { status: 'UNAVAILABLE', detail: 'Database API security posture validation failed.' }
+    if (!valid) criticalFailure = true
+  } catch {
+    components.security = { status: 'UNAVAILABLE', detail: 'Database API security posture could not be validated.' }
+    criticalFailure = true
   }
 
   const degraded = Object.values(components).some((component) => component.status === 'DEGRADED')
