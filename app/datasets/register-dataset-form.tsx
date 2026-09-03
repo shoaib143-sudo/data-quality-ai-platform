@@ -39,7 +39,9 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       const source = (event as CustomEvent<SourceOption>).detail
       if (!source?.id || !source?.projectId || !source?.name || source.status !== 'ACTIVE') return
       setAvailableSources(current => [...current.filter(item => item.id !== source.id), source].sort((a, b) => a.name.localeCompare(b.name)))
-      if (source.projectId === projectId) setSourceId(source.id)
+      setProjectId(source.projectId)
+      setSourceId(source.id)
+      setStatus(`Source ${source.name} is active and selected for dataset registration.`)
     }
     window.addEventListener('dgp:project-created', onProjectCreated)
     window.addEventListener('dgp:source-created', onSourceCreated)
@@ -47,7 +49,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       window.removeEventListener('dgp:project-created', onProjectCreated)
       window.removeEventListener('dgp:source-created', onSourceCreated)
     }
-  }, [projectId])
+  }, [])
 
   function changeProject(value: string) {
     if (value === CREATE_PROJECT) {
