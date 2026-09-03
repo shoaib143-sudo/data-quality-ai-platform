@@ -6,6 +6,11 @@ import { validateJdbcConnection } from '@/lib/connectors/jdbc'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
+function serverCredentialRef(kind: string) {
+  const normalized = kind.toLowerCase().replace(/[^a-z0-9]+/g, '_').toUpperCase()
+  return process.env[`JDBC_${normalized}_CREDENTIAL_REF`]?.trim() || process.env.JDBC_CREDENTIAL_REF?.trim() || ''
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
@@ -15,12 +20,13 @@ export async function POST(request: Request) {
     const sourceType = text(body.sourceType).toUpperCase() || 'JDBC'
     const sourceUri = text(body.sourceUri) || text(body.jdbcUrl)
     const jdbcUrl = text(body.jdbcUrl)
-    const credentialRef = text(body.credentialRef)
+    const connectionKind = text(body.connectionKind) || 'jdbc'
     const schema = text(body.schema)
     const table = text(body.table)
+    const credentialRef = sourceType === 'JDBC' ? serverCredentialRef(connectionKind) : ''
     if (!projectId || !name || !sourceUri) return NextResponse.json({ error: 'projectId, name, and source URI are required.' }, { status: 400 })
     if (!['JDBC', 'CSV', 'FILE'].includes(sourceType)) return NextResponse.json({ error: 'Unsupported source type.' }, { status: 400 })
-    if (sourceType === 'JDBC' && (!jdbcUrl || !credentialRef || !schema || !table)) return NextResponse.json({ error: 'JDBC sources require connection string, credential reference, schema, and table.' }, { status: 400 })
+    if (sourceType === 'JDBC' && (!jdbcUrl || !credentialRef || !schema || !table)) return NextResponse.json({ error: !credentialRef ? 'No server-managed JDBC credentials are configured for this connection type.' : 'JDBC sources require connection string, schema, and table.' }, { status: !credentialRef ? 503 : 400 })
 
     const admin = createAdminClient()
     const { data: project } = await admin.schema('app').from('projects').select('id, organization_id').eq('id', projectId).maybeSingle()
@@ -32,11 +38,9 @@ export async function POST(request: Request) {
     if (sourceType === 'JDBC') {
       const validation = await validateJdbcConnection({ jdbcUrl, credentialRef, schema, table })
       if (!validation.valid) return NextResponse.json({ error: 'JDBC source validation failed.', validation }, { status: 422 })
-      connectionMetadata = { jdbc_url: jdbcUrl, credential_ref: credentialRef, schema, table }
+      connectionMetadata = { jdbc_url: jdbcUrl, credential_ref: credentialRef, schema, table, connection_kind: connectionKind }
     } else {
-      const metadata: Record<string, unknown> = /^https?:\/\//i.test(sourceUri)
-        ? { url: sourceUri }
-        : { bucket: sourceUri.split('/')[0], path: sourceUri.split('/').slice(1).join('/') }
+      const metadata: Record<string, unknown> = /^https?:\/\//i.test(sourceUri) ? { url: sourceUri } : { bucket: sourceUri.split('/')[0], path: sourceUri.split('/').slice(1).join('/') }
       const validation = await validateDataSourceForProfiling(admin, { id: crypto.randomUUID(), project_id: projectId, source_type: sourceType, connection_metadata: metadata }, sourceUri)
       if (!validation.valid) return NextResponse.json({ error: 'CSV source validation failed.', validation }, { status: 422 })
       connectionMetadata = metadata
