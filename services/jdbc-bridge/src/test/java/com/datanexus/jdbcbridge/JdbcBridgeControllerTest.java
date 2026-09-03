@@ -1,6 +1,5 @@
 package com.datanexus.jdbcbridge;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +36,7 @@ class JdbcBridgeControllerTest {
         }
       }
     }
-    mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(new ObjectMapper(), credentials)).build();
+    mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(credentials)).build();
   }
 
   @AfterEach
@@ -75,6 +74,20 @@ class JdbcBridgeControllerTest {
   }
 
   @Test
+  void discoversSchemasAndTablesWithoutReturningSystemSchemas() throws Exception {
+    String body = mvc.perform(post("/v1/catalog")
+        .contentType("application/json")
+        .content("{\"jdbcUrl\":\"" + JDBC_URL + "\",\"credentialRef\":\"test-ref\",\"schema\":\"PUBLIC\"}"))
+        .andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsString();
+
+    var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
+    assertEquals(1, json.path("tables").size());
+    assertEquals("CUSTOMERS", json.path("tables").get(0).path("name").asText());
+    for (var schema : json.path("schemas")) assertEquals(false, schema.asText().toLowerCase().startsWith("pg_"));
+  }
+
+  @Test
   void capsQueryAtTenThousandRows() throws Exception {
     String body = mvc.perform(post("/v1/query")
         .contentType("application/json")
@@ -82,7 +95,7 @@ class JdbcBridgeControllerTest {
         .andExpect(status().isOk())
         .andReturn().getResponse().getContentAsString();
 
-    var json = new ObjectMapper().readTree(body);
+    var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
     assertEquals(10000, json.path("rows").size());
     assertEquals(2, json.path("columns").size());
   }
