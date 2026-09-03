@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { RegisterDatasetForm, type ProjectOption, type SourceOption } from './register-dataset-form'
+import { JdbcSourceForm } from './jdbc-source-form'
 
 type DatasetRow = { id: string; project_id: string; data_source_id: string | null; name: string; description: string | null; source_identifier: string | null; business_domain: string | null; status: string; created_at: string }
 type VersionRow = { id: string; dataset_id: string; version_number: number; source_uri: string | null; status: string; created_at: string }
@@ -39,6 +40,8 @@ export default async function DatasetsPage() {
           <div className="flex gap-2"><Link href="/profiling" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Profiling Workspace</Link><Link href="/agents" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">AI Agents</Link></div>
         </div>
         <header><h1 className="text-3xl font-semibold">Datasets</h1><p className="mt-2 text-muted-foreground">Register governed datasets and establish the profiling-ready execution handoff.</p></header>
+
+        <JdbcSourceForm projects={projects} />
         <RegisterDatasetForm projects={projects} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} />
 
         <section className="rounded-xl border p-6">
