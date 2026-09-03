@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/auth/require-user'
 import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-executor'
 import { validateProfilingRun } from '@/lib/profiling/run-validation'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
+import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 
 const PRODUCTION_AGENT_KEY = 'profiling_agent'
@@ -150,7 +151,23 @@ export async function POST(request: Request) {
     const result = { execution_completed: true, agent_run_id: activeAgentRunId, profiling_run_id: activeProfilingRunId, project_id: projectId, dataset_version_id: datasetVersion.id, profile: profileResult, metrics: metricResult, investigation: investigationResult, validation }
     const { error: finalRunError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: completedAt }).eq('id', activeAgentRunId).eq('status', 'RUNNING')
     if (finalRunError) throw new Error(`Unable to finalize agent run: ${finalRunError.message}`)
-    return NextResponse.json({ agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId, stepId: activeInvestigationStepId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version, result })
+
+    let qualityAutomation: Record<string, unknown> | null = null
+    try {
+      qualityAutomation = await executeQualityAutomation({
+        datasetVersionId: datasetVersion.id,
+        profileRunId: activeProfilingRunId,
+        userId: user.id,
+        parentRunId: activeAgentRunId,
+      })
+    } catch (qualityError) {
+      qualityAutomation = {
+        execution_completed: false,
+        error: errorMessage(qualityError, 'Data quality automation failed after profiling.'),
+      }
+    }
+
+    return NextResponse.json({ agentRunId: activeAgentRunId, profilingRunId: activeProfilingRunId, stepId: activeInvestigationStepId, agentDefinitionId: agentDefinition.id, agentVersion: agentDefinition.version, qualityAutomation, result })
   } catch (error) {
     const message = errorMessage(error, 'Unknown execution error')
     const admin = createAdminClient()
