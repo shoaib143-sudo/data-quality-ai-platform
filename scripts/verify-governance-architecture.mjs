@@ -33,6 +33,9 @@ const requiredFiles = [
   'supabase/migrations/20260904055600_fix_synthetic_governance_integration_profile_contract.sql',
   'supabase/migrations/20260904055800_preserve_immutable_audit_references.sql',
   'supabase/migrations/20260904055900_preserve_immutable_revision_references.sql',
+  'supabase/migrations/20260904060000_expose_governance_orchestration_api_schemas.sql',
+  'supabase/migrations/20260904060100_verify_database_api_security_posture.sql',
+  'supabase/migrations/20260904060200_normalize_database_api_security_posture_schema_list.sql',
 ]
 
 for (const path of requiredFiles) {
@@ -58,6 +61,8 @@ const checks = [
   ['supabase/migrations/20260904055500_synthetic_governance_integration_suite.sql', /run_synthetic_governance_integration_suite[\s\S]*integration_test_runs/, 'synthetic cross-module governance integration suite'],
   ['supabase/migrations/20260904055800_preserve_immutable_audit_references.sql', /drop constraint[\s\S]*audit_events_project_id_fkey[\s\S]*historical project identifier/i, 'immutable audit reference preservation'],
   ['supabase/migrations/20260904055900_preserve_immutable_revision_references.sql', /drop constraint[\s\S]*object_revisions_project_id_fkey[\s\S]*revision history/i, 'immutable revision reference preservation'],
+  ['supabase/migrations/20260904060000_expose_governance_orchestration_api_schemas.sql', /governance, orchestration[\s\S]*reload config/, 'PostgREST governance and orchestration exposure'],
+  ['supabase/migrations/20260904060200_normalize_database_api_security_posture_schema_list.sql', /app_private_exposed[\s\S]*exposed_privileged_function_count/, 'database API security posture verification'],
 ]
 
 for (const [path, pattern, label] of checks) {
@@ -72,5 +77,6 @@ const qualityRoute = await readFile('app/api/data-quality/run/route.ts', 'utf8')
 if (!/authorizeDatasetVersion/.test(qualityRoute) || !/idempotency/i.test(qualityRoute)) throw new Error('Data quality start route must remain centrally authorized and idempotent.')
 const databaseVerification = await readFile('scripts/verify-governance-database.mjs', 'utf8')
 if (!/run_synthetic_governance_integration_suite/.test(databaseVerification)) throw new Error('Database quality gate must execute the synthetic governance integration suite.')
+if (!/verify_database_api_security_posture/.test(databaseVerification)) throw new Error('Database quality gate must verify the PostgREST and RLS helper security posture.')
 
 console.log('Governance architecture verification completed.')
