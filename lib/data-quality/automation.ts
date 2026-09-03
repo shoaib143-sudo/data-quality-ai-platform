@@ -214,8 +214,9 @@ export async function executeQualityAutomation(input: {
   profileRunId: string
   userId?: string | null
   parentRunId?: string | null
+  existingAgentRunId?: string | null
 }) {
-  const { datasetVersionId, profileRunId, userId = null, parentRunId = null } = input
+  const { datasetVersionId, profileRunId, userId = null, parentRunId = null, existingAgentRunId = null } = input
   const { admin, version, dataset } = await resolveDatasetContext(datasetVersionId)
 
   const { data: agentDefinition, error: agentError } = await admin
@@ -229,19 +230,28 @@ export async function executeQualityAutomation(input: {
   if (agentError || !agentDefinition) throw new Error(`Data Quality Agent 1.0 is unavailable: ${agentError?.message ?? 'not registered'}`)
 
   const now = new Date().toISOString()
-  const { data: agentRun, error: runError } = await admin.schema('agent').from('agent_runs').insert({
-    agent_definition_id: agentDefinition.id,
-    project_id: dataset.project_id,
-    dataset_id: dataset.id,
-    dataset_version_id: version.id,
-    parent_run_id: parentRunId,
-    status: 'RUNNING',
-    input: { datasetVersionId, profileRunId, automation: true },
-    started_at: now,
-  }).select('id').single()
-  if (runError || !agentRun) throw new Error(`Unable to create data quality job: ${runError?.message ?? 'unknown error'}`)
-
-  const agentRunId = agentRun.id
+  let agentRunId: string
+  if (existingAgentRunId) {
+    const { data: existingRun, error: existingRunError } = await admin.schema('agent').from('agent_runs').select('id,agent_definition_id,project_id,dataset_id,dataset_version_id,status').eq('id', existingAgentRunId).maybeSingle()
+    if (existingRunError || !existingRun) throw new Error(`Unable to resolve queued data quality job: ${existingRunError?.message ?? 'not found'}`)
+    if (existingRun.agent_definition_id !== agentDefinition.id || existingRun.project_id !== dataset.project_id || existingRun.dataset_version_id !== version.id) throw new Error('Queued data quality job does not match the requested dataset and agent.')
+    const { error: startError } = await admin.schema('agent').from('agent_runs').update({ status: 'RUNNING', started_at: now }).eq('id', existingAgentRunId).eq('status', 'QUEUED')
+    if (startError) throw new Error(`Unable to start queued data quality job: ${startError.message}`)
+    agentRunId = existingAgentRunId
+  } else {
+    const { data: agentRun, error: runError } = await admin.schema('agent').from('agent_runs').insert({
+      agent_definition_id: agentDefinition.id,
+      project_id: dataset.project_id,
+      dataset_id: dataset.id,
+      dataset_version_id: version.id,
+      parent_run_id: parentRunId,
+      status: 'RUNNING',
+      input: { datasetVersionId, profileRunId, automation: true },
+      started_at: now,
+    }).select('id').single()
+    if (runError || !agentRun) throw new Error(`Unable to create data quality job: ${runError?.message ?? 'unknown error'}`)
+    agentRunId = agentRun.id
+  }
   let currentStepId: string | null = null
   try {
     const { data: syncStep, error: syncStepError } = await admin.schema('agent').from('agent_run_steps').insert({
