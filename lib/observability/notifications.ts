@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { enqueueDurableJob } from '@/lib/orchestration/queue'
+import { enqueueDurableJob, getProjectCapacityPolicy } from '@/lib/orchestration/queue'
 
 const severityRank:Record<string,number>={INFO:1,LOW:2,MEDIUM:3,HIGH:4,CRITICAL:5}
 
@@ -9,6 +9,14 @@ export async function queueAlertNotifications(alertId:string){
   if(alertError||!alert)throw new Error(`Unable to load observability alert for notification: ${alertError?.message??'not found'}`)
   const {data:routes,error:routesError}=await admin.schema('profiling').from('notification_routes').select('*,notification_channels(*)').eq('project_id',alert.project_id).eq('enabled',true)
   if(routesError)throw new Error(`Unable to load notification routes: ${routesError.message}`)
+
+  const capacity=await getProjectCapacityPolicy(alert.project_id)
+  const oneHourAgo=new Date(Date.now()-60*60_000).toISOString()
+  const {count:recentNotificationJobs,error:quotaError}=await admin.schema('orchestration').from('job_queue').select('id',{count:'exact',head:true})
+    .eq('project_id',alert.project_id).eq('job_type','NOTIFICATION').gte('created_at',oneHourAgo)
+  if(quotaError)throw new Error(`Unable to evaluate notification capacity: ${quotaError.message}`)
+  let remainingCapacity=Math.max(0,capacity.maxNotificationsPerHour-(recentNotificationJobs??0))
+
   const queued:Array<Record<string,unknown>>=[]
   for(const route of routes??[]){
     const channel=Array.isArray(route.notification_channels)?route.notification_channels[0]:route.notification_channels
@@ -16,6 +24,16 @@ export async function queueAlertNotifications(alertId:string){
     if(route.dataset_id&&route.dataset_id!==alert.dataset_id)continue
     if(route.alert_category&&route.alert_category!==alert.category)continue
     if((severityRank[String(alert.severity).toUpperCase()]??0)<(severityRank[String(route.min_severity).toUpperCase()]??3))continue
+
+    if(remainingCapacity<=0){
+      await admin.schema('profiling').from('notification_deliveries').insert({
+        alert_id:alert.id,route_id:route.id,channel_id:channel.id,status:'SUPPRESSED',
+        error_message:`Suppressed because the project reached its ${capacity.maxNotificationsPerHour} notification jobs per hour capacity.`,
+      })
+      queued.push({routeId:route.id,channelId:channel.id,status:'SUPPRESSED',reason:'PROJECT_NOTIFICATION_CAPACITY'})
+      continue
+    }
+
     const suppressionMinutes=Number(channel.suppression_minutes??60)
     const since=new Date(Date.now()-suppressionMinutes*60_000).toISOString()
     const {count}=await admin.schema('profiling').from('notification_deliveries').select('id',{count:'exact',head:true}).eq('channel_id',channel.id).eq('status','SENT').gte('created_at',since)
@@ -28,7 +46,17 @@ export async function queueAlertNotifications(alertId:string){
     if(deliveryError||!delivery)throw new Error(`Unable to create notification delivery: ${deliveryError?.message??'unknown error'}`)
     const delay=Number(route.escalation_after_minutes??0)
     const availableAt=new Date(Date.now()+Math.max(0,delay)*60_000).toISOString()
-    const job=await enqueueDurableJob({projectId:alert.project_id,jobType:'NOTIFICATION',entityId:alert.id,payload:{deliveryId:delivery.id},availableAt,maxAttempts:3,priority:50})
+    const job=await enqueueDurableJob({
+      projectId:alert.project_id,
+      jobType:'NOTIFICATION',
+      entityId:alert.id,
+      idempotencyKey:`notification:${delivery.id}`,
+      payload:{deliveryId:delivery.id},
+      availableAt,
+      maxAttempts:3,
+      priority:50,
+    })
+    remainingCapacity-=1
     queued.push({routeId:route.id,channelId:channel.id,deliveryId:delivery.id,jobId:job.id,availableAt})
   }
   return queued
