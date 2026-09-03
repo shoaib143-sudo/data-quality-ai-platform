@@ -17,7 +17,12 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
     setHasError(false)
     setMessage('Starting profiling job…')
     try {
-      const response = await fetch('/api/agents/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, datasetVersionId, agentDefinitionId }) })
+      const idempotencyKey = crypto.randomUUID()
+      const response = await fetch('/api/agents/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ projectId, datasetVersionId, agentDefinitionId, idempotencyKey }),
+      })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error ?? 'Profiling execution failed.')
       if (!payload.agentRunId) throw new Error('Profiling job was accepted without a run identifier.')
