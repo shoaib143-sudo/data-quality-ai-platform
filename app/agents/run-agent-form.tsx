@@ -81,10 +81,10 @@ export function RunAgentForm({
 
       const runId = payload.agentRunId ?? payload.agent_run_id
       if (typeof runId !== 'string' || runId.length === 0) {
-        throw new Error('Agent execution completed without returning a run identifier.')
+        throw new Error('Agent job was accepted without returning a run identifier.')
       }
 
-      router.push(`/agents/runs/${runId}`)
+      router.push(payload.monitorUrl ?? `/monitoring?run=${encodeURIComponent(runId)}`)
       router.refresh()
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Agent execution failed.')
