@@ -1,4 +1,7 @@
+import { createAdminClient } from '@/lib/supabase/admin'
+
 const DEFAULT_TIMEOUT_MS = 10_000
+const POSTGRES_EDGE_FUNCTION = 'dgp-postgres-connector'
 
 export type JdbcConnectionConfig = {
   jdbcUrl: string
@@ -50,6 +53,14 @@ function bridgeHeaders() {
   return { 'content-type': 'application/json', authorization: `Bearer ${token}` }
 }
 
+function bridgeConfigured() {
+  return Boolean(process.env.JDBC_BRIDGE_URL?.trim() && process.env.JDBC_BRIDGE_TOKEN?.trim())
+}
+
+function isPostgresJdbcUrl(value: unknown) {
+  return typeof value === 'string' && value.trim().toLowerCase().startsWith('jdbc:postgresql://')
+}
+
 function safeIdentifier(value: string, field: string) {
   if (!/^[A-Za-z_][A-Za-z0-9_$]*$/.test(value)) throw new Error(`${field} contains invalid identifier characters.`)
   return value
@@ -96,9 +107,40 @@ async function bridgeRequest<T>(path: string, body: Record<string, unknown>) {
   } finally { clearTimeout(timeout) }
 }
 
+function edgeAction(path: string) {
+  if (path === '/v1/catalog') return 'catalog'
+  if (path === '/v1/validate') return 'validate'
+  if (path === '/v1/query') return 'query'
+  throw new Error('Unsupported PostgreSQL connector operation.')
+}
+
+async function postgresEdgeRequest<T>(path: string, body: Record<string, unknown>) {
+  if (!isPostgresJdbcUrl(body.jdbc_url)) throw new Error('The built-in temporary connector currently supports PostgreSQL JDBC URLs only.')
+  const admin = createAdminClient()
+  const { data, error } = await admin.functions.invoke(POSTGRES_EDGE_FUNCTION, {
+    body: { action: edgeAction(path), ...body },
+  })
+  if (error) throw new Error(error.message || 'PostgreSQL connector request failed.')
+  const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {}
+  if (typeof payload.error === 'string') throw new Error(payload.error)
+  return payload as T
+}
+
+async function connectorRequest<T>(path: string, body: Record<string, unknown>) {
+  if (bridgeConfigured()) {
+    try {
+      return await bridgeRequest<T>(path, body)
+    } catch (error) {
+      if (!isPostgresJdbcUrl(body.jdbc_url)) throw error
+    }
+  }
+  if (isPostgresJdbcUrl(body.jdbc_url)) return postgresEdgeRequest<T>(path, body)
+  throw new Error('The connector service is not available for this JDBC driver.')
+}
+
 export async function discoverJdbcCatalog(input: { jdbcUrl: string; credentialRef: string; schema?: string }): Promise<JdbcCatalogResult> {
   const config = normalizeDiscoveryConfig(input)
-  const result = await bridgeRequest<{ schemas?: string[]; tables?: Array<{ name: string; type?: string | null }>; details?: Record<string, unknown> }>('/v1/catalog', {
+  const result = await connectorRequest<{ schemas?: string[]; tables?: Array<{ name: string; type?: string | null }>; details?: Record<string, unknown> }>('/v1/catalog', {
     jdbc_url: config.jdbcUrl, credential_ref: config.credentialRef, ...(config.schema ? { schema: config.schema } : {}),
   })
   return { schemas: Array.isArray(result.schemas) ? result.schemas : [], tables: Array.isArray(result.tables) ? result.tables : [], details: result.details ?? {} }
@@ -107,7 +149,7 @@ export async function discoverJdbcCatalog(input: { jdbcUrl: string; credentialRe
 export async function validateJdbcConnection(input: JdbcConnectionConfig): Promise<JdbcValidationResult> {
   const config = normalizeConfig(input)
   try {
-    const result = await bridgeRequest<{ columns?: Array<{ name: string; type?: string | null }>; row_count?: number | null; warnings?: string[]; details?: Record<string, unknown> }>('/v1/validate', {
+    const result = await connectorRequest<{ columns?: Array<{ name: string; type?: string | null }>; row_count?: number | null; warnings?: string[]; details?: Record<string, unknown> }>('/v1/validate', {
       jdbc_url: config.jdbcUrl, credential_ref: config.credentialRef, schema: config.schema, table: config.table,
     })
     return { valid: true, columns: Array.isArray(result.columns) ? result.columns : [], rowCount: typeof result.row_count === 'number' ? result.row_count : null, details: result.details ?? {}, errors: [], warnings: Array.isArray(result.warnings) ? result.warnings : [] }
@@ -119,7 +161,7 @@ export async function validateJdbcConnection(input: JdbcConnectionConfig): Promi
 export async function loadJdbcRows(input: JdbcConnectionConfig, limit: number) {
   const config = normalizeConfig(input)
   if (!Number.isInteger(limit) || limit < 1 || limit > 10_000) throw new Error('JDBC row limit must be between 1 and 10000.')
-  const result = await bridgeRequest<{ rows?: Record<string, unknown>[]; row_count?: number | null; columns?: Array<{ name: string; type?: string | null }> }>('/v1/query', {
+  const result = await connectorRequest<{ rows?: Record<string, unknown>[]; row_count?: number | null; columns?: Array<{ name: string; type?: string | null }> }>('/v1/query', {
     jdbc_url: config.jdbcUrl, credential_ref: config.credentialRef, schema: config.schema, table: config.table, limit,
   })
   return { rows: Array.isArray(result.rows) ? result.rows : [], rowCount: typeof result.row_count === 'number' ? result.row_count : null, columns: Array.isArray(result.columns) ? result.columns : [] }
