@@ -28,7 +28,8 @@ export async function POST(request: Request) {
 
     if (!projectId || !name || !sourceUri) return NextResponse.json({ error: 'projectId, name, and source URI are required.' }, { status: 400 })
     if (!['JDBC', 'CSV', 'FILE'].includes(sourceType)) return NextResponse.json({ error: 'Unsupported source type.' }, { status: 400 })
-    if (sourceType === 'JDBC' && (!jdbcUrl || !credentialRef)) return NextResponse.json({ error: !credentialRef ? 'No server-managed JDBC credentials are configured for this connection type.' : 'JDBC connection string is required.' }, { status: !credentialRef ? 503 : 400 })
+    if (sourceType === 'JDBC' && !jdbcUrl) return NextResponse.json({ error: 'JDBC connection string is required.' }, { status: 400 })
+    if (sourceType === 'JDBC' && !connectionOnly && !credentialRef) return NextResponse.json({ error: 'JDBC credentials are not configured on the server. Save the connection as configured, then configure server credentials before testing or activating it.' }, { status: 503 })
     if (sourceType === 'JDBC' && !connectionOnly && (!schema || !table)) return NextResponse.json({ error: 'JDBC sources require connection string, schema, and table.' }, { status: 400 })
 
     const admin = createAdminClient()
@@ -38,7 +39,8 @@ export async function POST(request: Request) {
     if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Your role cannot register data sources.' }, { status: 403 })
 
     if (sourceType === 'JDBC' && connectionOnly) {
-      const connectionMetadata = { jdbc_url: jdbcUrl, credential_ref: credentialRef, connection_kind: connectionKind }
+      const connectionMetadata: Record<string, unknown> = { jdbc_url: jdbcUrl, connection_kind: connectionKind }
+      if (credentialRef) connectionMetadata.credential_ref = credentialRef
       const { data: existing } = await admin.schema('catalog').from('data_sources').select('id').eq('project_id', projectId).eq('name', name).maybeSingle()
       if (existing) {
         const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: 'JDBC', connection_metadata: connectionMetadata, status: 'CONFIGURED', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
