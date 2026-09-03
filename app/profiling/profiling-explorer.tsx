@@ -15,7 +15,8 @@ export type ExplorerFinding = {
 export type ExplorerColumn = {
   id: string
   column_name: string
-  data_type: string | null
+  source_type: string | null
+  inferred_type: string | null
 }
 
 export type ExplorerMetric = {
@@ -130,7 +131,7 @@ export default function ProfilingExplorer({
           <h3 className="font-medium">Column Evidence</h3>
           {selectedColumn ? (
             <>
-              <div className="mt-1 text-xs text-muted-foreground">{selectedColumn.column_name} · {selectedColumn.data_type ?? 'unknown type'}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{selectedColumn.column_name} · {selectedColumn.inferred_type ?? selectedColumn.source_type ?? 'unknown type'}</div>
               <div className="mt-3 max-h-96 space-y-2 overflow-auto">
                 {selectedMetrics.length ? selectedMetrics.map((metric) => (
                   <div key={`${metric.profile_column_id}:${metric.metric_key}`} className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
