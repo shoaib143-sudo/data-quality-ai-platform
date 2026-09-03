@@ -19,6 +19,16 @@ for (const required of ['profiling_agent:2.0', 'data_quality_agent:1.0']) {
   console.log(`PASS production agent ${required}`)
 }
 
+const { data: securityPosture, error: securityPostureError } = await supabase.schema('governance').rpc('verify_database_api_security_posture')
+if (securityPostureError) throw new Error(`Unable to verify database API security posture: ${securityPostureError.message}`)
+if (!securityPosture || typeof securityPosture !== 'object' || securityPosture.valid !== true) {
+  throw new Error(`Database API security posture is invalid: ${JSON.stringify(securityPosture)}`)
+}
+if (securityPosture.app_private_exposed === true || Number(securityPosture.anonymous_rls_helper_execute_count ?? -1) !== 0) {
+  throw new Error(`Private RLS helpers are exposed beyond the intended boundary: ${JSON.stringify(securityPosture)}`)
+}
+console.log('PASS PostgREST exposure and RLS helper security posture')
+
 for (const project of projects ?? []) {
   const { data: contractResult, error: contractError } = await supabase.schema('governance').rpc('run_platform_contract_checks', { p_project_id: project.id })
   if (contractError) throw new Error(`Platform contract checks failed to execute for ${project.name}: ${contractError.message}`)
