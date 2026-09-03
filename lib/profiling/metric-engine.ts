@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
+import { loadJdbcRows, parseJdbcTableReference } from '@/lib/connectors/jdbc'
 import { DETERMINISTIC_METRICS, isDeterministicMetric, type MetricScope } from '@/lib/profiling/metric-registry'
 
 type Row = Record<string, unknown>
@@ -149,22 +150,115 @@ function calculateColumnMetrics(columnName: string, rows: Row[]): ColumnResult {
 }
 
 async function loadRowsFromTable(supabase: ReturnType<typeof createAdminClient>, datasetVersionId: string, maxRows: number) {
-  const { data: source, error: sourceError } = await supabase.rpc('get_dataset_execution_source', { p_dataset_version_id: datasetVersionId })
-  if (!sourceError && source) {
-    const sourceType = String(source.source_type ?? '').trim().toLowerCase()
-    const executionConfig = source.execution_config && typeof source.execution_config === 'object' ? source.execution_config as Record<string, unknown> : {}
-    if (sourceType === 'file') { const loaded = await loadFileSource(supabase, { sourceUri: source.source_uri, executionConfig }, { maxRows }); return { rowCount: loaded.rowCount, rows: loaded.rows as Row[], sourceAccess: { source_type: 'FILE', source_uri: loaded.sourceUri, content_hash: loaded.contentHash, sampled_rows: loaded.rows.length, warnings: loaded.warnings } }
+  const { data: executionRows, error: executionError } = await supabase
+    .schema('profiling')
+    .from('dataset_execution_sources')
+    .select('source_type, source_uri, execution_config, active, updated_at')
+    .eq('dataset_version_id', datasetVersionId)
+    .eq('active', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  if (executionError) throw new Error(`Unable to resolve execution source for dataset version ${datasetVersionId}: ${executionError.message}`)
+
+  const executionSource = executionRows?.[0]
+  if (executionSource) {
+    const sourceType = String(executionSource.source_type ?? '').trim().toLowerCase()
+    const executionConfig = executionSource.execution_config && typeof executionSource.execution_config === 'object'
+      ? executionSource.execution_config as Record<string, unknown>
+      : {}
+
+    if (sourceType === 'file') {
+      const loaded = await loadFileSource(supabase, { sourceUri: executionSource.source_uri, executionConfig }, { maxRows })
+      return {
+        rowCount: loaded.rowCount,
+        rows: loaded.rows as Row[],
+        sourceAccess: { source_type: 'FILE', source_uri: loaded.sourceUri, content_hash: loaded.contentHash, sampled_rows: loaded.rows.length, warnings: loaded.warnings },
+      }
+    }
+
+    if (sourceType === 'jdbc') {
+      const nested = executionConfig.connection_metadata && typeof executionConfig.connection_metadata === 'object' && !Array.isArray(executionConfig.connection_metadata)
+        ? executionConfig.connection_metadata as Record<string, unknown>
+        : {}
+      const metadata = { ...nested, ...executionConfig }
+      const stringField = (keys: string[]) => {
+        for (const key of keys) {
+          const value = metadata[key]
+          if (typeof value === 'string' && value.trim()) return value.trim()
+        }
+        return null
+      }
+      const parsed = parseJdbcTableReference(typeof executionSource.source_uri === 'string' ? executionSource.source_uri : null)
+      const jdbcUrl = stringField(['jdbc_url', 'jdbcUrl', 'url'])
+      const credentialRef = stringField(['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
+      const schema = stringField(['schema', 'schema_name', 'schemaName']) ?? parsed?.schema ?? 'public'
+      const table = stringField(['table', 'table_name', 'tableName']) ?? parsed?.table
+      if (!jdbcUrl || !credentialRef || !table) throw new Error('JDBC execution source configuration is incomplete.')
+      const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, maxRows)
+      return {
+        rowCount: loaded.rowCount ?? loaded.rows.length,
+        rows: loaded.rows as Row[],
+        sourceAccess: {
+          source_type: 'JDBC',
+          source_uri: executionSource.source_uri,
+          sampled_rows: loaded.rows.length,
+          connector: { schema, table },
+          warnings: loaded.rows.length === maxRows ? [`Metric calculations are based on the first ${maxRows} rows.`] : [],
+        },
+      }
+    }
+
+    if (['supabase', 'supabase_table', 'postgres', 'postgres_table', 'table'].includes(sourceType)) {
+      const schema = typeof executionConfig.schema === 'string' && executionConfig.schema.trim() ? executionConfig.schema.trim() : 'public'
+      const table = typeof executionConfig.table === 'string' && executionConfig.table.trim()
+        ? executionConfig.table.trim()
+        : typeof executionSource.source_uri === 'string'
+          ? executionSource.source_uri.replace(/^\w+:\/\//, '').split('.').filter(Boolean).at(-1)
+          : null
+      if (!table) throw new Error('Table execution source configuration is incomplete.')
+      const { count, error: countError } = await supabase.schema(schema).from(table).select('*', { count: 'exact', head: true })
+      if (countError) throw new Error(`Unable to count source rows: ${countError.message}`)
+      const { data, error } = await supabase.schema(schema).from(table).select('*').range(0, maxRows - 1)
+      if (error) throw new Error(`Unable to load source rows: ${error.message}`)
+      return { rowCount: count ?? 0, rows: (data ?? []) as Row[], sourceAccess: { source_type: 'TABLE', schema, table, sampled_rows: data?.length ?? 0, warnings: (data?.length ?? 0) === maxRows ? [`Metric calculations are based on the first ${maxRows} rows.`] : [] } }
+    }
   }
-  }
-  const { data: version, error: versionError } = await supabase.rpc('get_dataset_version_for_profiling', { dataset_version_id: datasetVersionId })
+
+  const { data: versionRows, error: versionError } = await supabase
+    .schema('catalog')
+    .from('dataset_versions')
+    .select('id, dataset_id, source_uri')
+    .eq('id', datasetVersionId)
+    .limit(1)
   if (versionError) throw new Error(`Unable to resolve dataset version: ${versionError.message}`)
-  const dataset = Array.isArray(version?.datasets) ? version.datasets[0] : version?.datasets
-  const dataSource = Array.isArray(dataset?.data_sources) ? dataset.data_sources[0] : dataset?.data_sources
+  const version = versionRows?.[0]
+  if (!version) throw new Error(`Dataset version ${datasetVersionId} was not found.`)
+
+  const { data: datasetRows, error: datasetError } = await supabase
+    .schema('catalog')
+    .from('datasets')
+    .select('id, data_source_id, source_identifier')
+    .eq('id', version.dataset_id)
+    .limit(1)
+  if (datasetError) throw new Error(`Unable to resolve dataset: ${datasetError.message}`)
+  const dataset = datasetRows?.[0]
+  if (!dataset?.data_source_id) throw new Error(`No executable source is configured for dataset version ${datasetVersionId}.`)
+
+  const { data: sourceRows, error: sourceError } = await supabase
+    .schema('catalog')
+    .from('data_sources')
+    .select('source_type, connection_metadata')
+    .eq('id', dataset.data_source_id)
+    .limit(1)
+  if (sourceError) throw new Error(`Unable to resolve data source: ${sourceError.message}`)
+  const dataSource = sourceRows?.[0]
   const sourceType = String(dataSource?.source_type ?? '').toLowerCase()
-  const metadata = dataSource?.connection_metadata ?? {}
-  const table = metadata.table ?? metadata.table_name ?? metadata.tableName
-  const schema = metadata.schema ?? metadata.schema_name ?? metadata.schemaName ?? 'public'
-  if (!['supabase', 'supabase_table', 'postgres', 'postgres_table', 'table'].includes(sourceType) || !table) { if (sourceError) throw new Error(`Unable to resolve execution source for dataset version ${datasetVersionId}: ${sourceError.message}`); throw new Error(`No executable source is configured for dataset version ${datasetVersionId}.`) }
+  const metadata = dataSource?.connection_metadata && typeof dataSource.connection_metadata === 'object'
+    ? dataSource.connection_metadata as Record<string, unknown>
+    : {}
+  const table = typeof metadata.table === 'string' ? metadata.table : typeof metadata.table_name === 'string' ? metadata.table_name : typeof metadata.tableName === 'string' ? metadata.tableName : null
+  const schema = typeof metadata.schema === 'string' && metadata.schema.trim() ? metadata.schema.trim() : typeof metadata.schema_name === 'string' && metadata.schema_name.trim() ? metadata.schema_name.trim() : typeof metadata.schemaName === 'string' && metadata.schemaName.trim() ? metadata.schemaName.trim() : 'public'
+  if (!['supabase', 'supabase_table', 'postgres', 'postgres_table', 'table'].includes(sourceType) || !table) throw new Error(`No executable source is configured for dataset version ${datasetVersionId}.`)
   const { count, error: countError } = await supabase.schema(schema).from(table).select('*', { count: 'exact', head: true })
   if (countError) throw new Error(`Unable to count source rows: ${countError.message}`)
   const { data, error } = await supabase.schema(schema).from(table).select('*').range(0, maxRows - 1)
