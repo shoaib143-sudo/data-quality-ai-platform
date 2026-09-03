@@ -440,18 +440,75 @@ export async function executeQualityAutomation(input: {
       }
     })
 
+    let persistedResults: Array<{id:string;rule_definition_id:string;status:string}> = []
     if (results.length) {
-      const { error: resultError } = await admin.schema('profiling').from('quality_rule_runs').insert(results)
+      const { data: insertedResults, error: resultError } = await admin.schema('profiling').from('quality_rule_runs').insert(results).select('id,rule_definition_id,status')
       if (resultError) throw new Error(`Unable to persist quality rule outcomes: ${resultError.message}`)
+      persistedResults = (insertedResults ?? []) as Array<{id:string;rule_definition_id:string;status:string}>
     }
 
     const passedCount = results.filter((result) => result.status === 'PASSED').length
     const failedCount = results.filter((result) => result.status === 'FAILED').length
     const errorCount = results.filter((result) => result.status === 'ERROR').length
 
+    let exceptionCount = 0
+    let quarantinedCount = 0
+    if (failedCount > 0) {
+      const loaded = await loadProfilingRows(admin, datasetVersionId, 1000)
+      const persistedRunByRule = new Map(persistedResults.map((result) => [result.rule_definition_id, result.id]))
+      const ruleById = new Map((rules ?? []).map((rule) => [rule.id, rule as QualityRule]))
+      const exceptionRows: Record<string, unknown>[] = []
+      const quarantineRows: Record<string, unknown>[] = []
+      for (const failedResult of results.filter((result) => result.status === 'FAILED')) {
+        const rule = ruleById.get(String(failedResult.rule_definition_id))
+        const qualityRuleRunId = persistedRunByRule.get(String(failedResult.rule_definition_id))
+        if (!rule || !qualityRuleRunId) continue
+        const failures = rowFailures(rule, loaded.rows as Record<string, unknown>[]).slice(0, 250)
+        for (const failure of failures) {
+          const recordHash = hashRecord(failure.row)
+          const key = recordKey(failure.row)
+          const sample = safeSample(failure.row)
+          exceptionRows.push({
+            quality_rule_run_id: qualityRuleRunId,
+            rule_definition_id: rule.id,
+            dataset_version_id: datasetVersionId,
+            profile_run_id: profileRunId,
+            record_key: key,
+            record_hash: recordHash,
+            column_name: rule.column_name,
+            observed_value: failure.observed.slice(0, 500),
+            reason: failure.reason,
+            sample,
+          })
+          quarantineRows.push({
+            project_id: dataset.project_id,
+            dataset_id: dataset.id,
+            dataset_version_id: datasetVersionId,
+            rule_definition_id: rule.id,
+            quality_rule_run_id: qualityRuleRunId,
+            record_hash: recordHash,
+            record_key: key,
+            reason: failure.reason,
+            sample,
+            status: 'QUARANTINED',
+          })
+        }
+      }
+      if (exceptionRows.length) {
+        const { error: exceptionError } = await admin.schema('profiling').from('quality_rule_exceptions').insert(exceptionRows)
+        if (exceptionError) throw new Error(`Unable to persist row-level quality exceptions: ${exceptionError.message}`)
+        exceptionCount = exceptionRows.length
+      }
+      if (quarantineRows.length) {
+        const { error: quarantineError } = await admin.schema('profiling').from('quality_quarantine_records').insert(quarantineRows)
+        if (quarantineError) throw new Error(`Unable to persist quarantine records: ${quarantineError.message}`)
+        quarantinedCount = quarantineRows.length
+      }
+    }
+
     await admin.schema('agent').from('agent_run_steps').update({
       status: errorCount ? 'FAILED' : 'SUCCEEDED',
-      output: { total: results.length, passed: passedCount, failed: failedCount, errors: errorCount },
+      output: { total: results.length, passed: passedCount, failed: failedCount, errors: errorCount, row_exceptions: exceptionCount, quarantined_records: quarantinedCount },
       error_code: errorCount ? 'QUALITY_METRIC_MISSING' : null,
       error_message: errorCount ? `${errorCount} rules could not be evaluated because required metrics were missing.` : null,
       completed_at: new Date().toISOString(),
@@ -479,6 +536,8 @@ export async function executeQualityAutomation(input: {
       rules_passed: passedCount,
       rules_failed: failedCount,
       pass_rate: results.length ? passedCount / results.length : 1,
+      row_exceptions: exceptionCount,
+      quarantined_records: quarantinedCount,
       governance_status: failedCount ? 'ATTENTION_REQUIRED' : 'CONTROLLED',
     }
     const completedAt = new Date().toISOString()
