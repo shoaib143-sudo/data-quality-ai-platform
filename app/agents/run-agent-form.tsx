@@ -63,14 +63,15 @@ export function RunAgentForm({
     setRunning(true)
 
     try {
-      const response = await fetch('/api/agents/run', {
+      const selectedAgent = agents.find((agent) => agent.id === agentDefinitionId)
+      if (!selectedAgent) throw new Error('Selected agent is unavailable.')
+      const endpoint = selectedAgent.agentKey === 'data_quality_agent' ? '/api/data-quality/run' : '/api/agents/run'
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentDefinitionId,
-          projectId,
-          datasetVersionId,
-        }),
+        body: JSON.stringify(selectedAgent.agentKey === 'data_quality_agent'
+          ? { datasetVersionId }
+          : { agentDefinitionId, projectId, datasetVersionId }),
       })
 
       const payload = await response.json()
@@ -96,9 +97,9 @@ export function RunAgentForm({
   return (
     <section className="rounded-xl border p-6">
       <div className="mb-5">
-        <h2 className="text-lg font-semibold">Run Profiling Agent</h2>
+        <h2 className="text-lg font-semibold">Run an operational agent</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Select the exact registered agent version and a project dataset version.
+          Select an enabled production agent and the governed dataset version it should execute against.
         </p>
       </div>
 
