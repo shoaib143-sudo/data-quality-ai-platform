@@ -150,7 +150,7 @@ export async function POST(request: Request) {
         error_code: 'PROFILING_START_FAILED',
         error_message: message,
         completed_at: new Date().toISOString(),
-      }).eq('id', activeAgentRunId).in('status', ['CREATED','QUEUED'])
+      }).eq('id', agentRunId).in('status', ['CREATED','QUEUED'])
     }
     return NextResponse.json({ error: message }, { status: 500 })
   }
