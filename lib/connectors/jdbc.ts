@@ -120,21 +120,30 @@ async function postgresEdgeRequest<T>(path: string, body: Record<string, unknown
   const { data, error } = await admin.functions.invoke(POSTGRES_EDGE_FUNCTION, {
     body: { action: edgeAction(path), ...body },
   })
-  if (error) throw new Error(error.message || 'PostgreSQL connector request failed.')
+  if (error) {
+    let message = error.message || 'PostgreSQL connector request failed.'
+    const context = (error as { context?: unknown }).context
+    if (context instanceof Response) {
+      try {
+        const payload = await context.clone().json() as { error?: unknown }
+        if (typeof payload.error === 'string' && payload.error.trim()) message = payload.error.trim()
+      } catch {
+        try {
+          const detail = await context.clone().text()
+          if (detail.trim()) message = detail.trim()
+        } catch {}
+      }
+    }
+    throw new Error(message)
+  }
   const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {}
   if (typeof payload.error === 'string') throw new Error(payload.error)
   return payload as T
 }
 
 async function connectorRequest<T>(path: string, body: Record<string, unknown>) {
-  if (bridgeConfigured()) {
-    try {
-      return await bridgeRequest<T>(path, body)
-    } catch (error) {
-      if (!isPostgresJdbcUrl(body.jdbc_url)) throw error
-    }
-  }
   if (isPostgresJdbcUrl(body.jdbc_url)) return postgresEdgeRequest<T>(path, body)
+  if (bridgeConfigured()) return bridgeRequest<T>(path, body)
   throw new Error('The connector service is not available for this JDBC driver.')
 }
 
