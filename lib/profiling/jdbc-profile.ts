@@ -42,18 +42,33 @@ function stableHash(value: unknown) {
 
 export async function executeJdbcProfileDataset(datasetVersionId: string, profilingRunId: string) {
   const supabase = createAdminClient()
-  const { data, error } = await supabase.rpc('get_dataset_version_for_profiling', { dataset_version_id: datasetVersionId })
-  if (error) throw new Error(`Unable to load JDBC dataset version: ${error.message}`)
+  const { data: datasetVersion, error: versionError } = await supabase
+    .schema('catalog')
+    .from('dataset_versions')
+    .select('id, metadata, source_uri, dataset_id')
+    .eq('id', datasetVersionId)
+    .maybeSingle()
+  if (versionError || !datasetVersion) throw new Error(`Unable to load JDBC dataset version: ${versionError?.message ?? 'not found'}`)
 
-  const datasetVersion = record(data)
-  const dataset = Array.isArray(datasetVersion.datasets) ? record(datasetVersion.datasets[0]) : record(datasetVersion.datasets)
-  const source = Array.isArray(dataset.data_sources) ? record(dataset.data_sources[0]) : record(dataset.data_sources)
-  const metadata = record(source.connection_metadata)
+  const { data: executionSource, error: executionSourceError } = await supabase
+    .schema('profiling')
+    .from('dataset_execution_sources')
+    .select('source_type, source_uri, execution_config, active')
+    .eq('dataset_version_id', datasetVersionId)
+    .eq('active', true)
+    .maybeSingle()
+  if (executionSourceError) throw new Error(`Unable to load JDBC execution source: ${executionSourceError.message}`)
+  if (!executionSource || String(executionSource.source_type).toUpperCase() !== 'JDBC') throw new Error('JDBC dataset execution source is not active.')
+
+  const executionConfig = record(executionSource.execution_config)
+  const nestedConnectionMetadata = record(executionConfig.connection_metadata)
+  const metadata = { ...nestedConnectionMetadata, ...executionConfig }
   const versionMetadata = record(datasetVersion.metadata)
   const jdbcUrl = firstString(metadata, ['jdbc_url', 'jdbcUrl', 'url'])
   const credentialRef = firstString(metadata, ['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
-  const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? 'public'
-  const table = firstString(metadata, ['table', 'table_name', 'tableName']) ?? parseJdbcTableReference(stringValue(dataset.source_identifier) ?? stringValue(datasetVersion.source_uri))?.table
+  const parsedReference = parseJdbcTableReference(stringValue(executionSource.source_uri) ?? stringValue(datasetVersion.source_uri))
+  const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? parsedReference?.schema ?? 'public'
+  const table = firstString(metadata, ['table', 'table_name', 'tableName']) ?? parsedReference?.table
   if (!jdbcUrl || !credentialRef || !table || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(schema) || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(table)) throw new Error('JDBC dataset source configuration is incomplete or invalid.')
 
   const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, MAX_SAMPLE_ROWS)
