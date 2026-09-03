@@ -71,24 +71,18 @@ export async function POST(request: Request) {
     }
 
     const credentialRef = connectionRef(projectId, sourceId || undefined)
-    const bridge = bridgeConfig()
-    let bridgeError: Error | null = null
-
-    if (bridge) {
-      try {
-        await storeViaBridge(bridge, credentialRef, username, password, connectionKind)
-        return NextResponse.json({ credentialRef, configured: true, connector: 'jdbc-bridge' })
-      } catch (error) {
-        bridgeError = error instanceof Error ? error : new Error('JDBC bridge credential setup failed.')
-      }
-    }
 
     if (isPostgres(connectionKind, jdbcUrl)) {
       await storeViaPostgresEdge(admin, credentialRef, username, password)
       return NextResponse.json({ credentialRef, configured: true, connector: 'supabase-edge-postgres' })
     }
 
-    if (bridgeError) throw bridgeError
+    const bridge = bridgeConfig()
+    if (bridge) {
+      await storeViaBridge(bridge, credentialRef, username, password, connectionKind)
+      return NextResponse.json({ credentialRef, configured: true, connector: 'jdbc-bridge' })
+    }
+
     return NextResponse.json({
       error: 'The connector service is not available for this database type. PostgreSQL can use the built-in temporary connector; other JDBC drivers still require the JDBC bridge.',
       code: 'CONNECTOR_UNAVAILABLE',
