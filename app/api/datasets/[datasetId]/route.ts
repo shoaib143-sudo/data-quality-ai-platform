@@ -86,7 +86,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ da
 
     const executionType = ['file', 'csv'].includes(sourceType) ? 'FILE' : sourceType === 'jdbc' ? 'JDBC' : 'TABLE'
     const executionConfig = { ...connectionMetadata, source_id: source.id, source_type: source.source_type, connection_metadata: connectionMetadata, validation: sourceValidation }
-    const { data: existingExecution } = await admin.schema('profiling').from('dataset_execution_sources').select('id').eq('dataset_version_id', latestVersion.id).maybeSingle()
+    const { data: existingExecutionRows, error: existingExecutionError } = await admin
+      .schema('profiling')
+      .from('dataset_execution_sources')
+      .select('id,active,updated_at')
+      .eq('dataset_version_id', latestVersion.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+    if (existingExecutionError) throw new Error(`Unable to resolve profiling source: ${existingExecutionError.message}`)
+    const existingExecution = existingExecutionRows?.[0]
     if (existingExecution) {
       const { error } = await admin.schema('profiling').from('dataset_execution_sources').update({ source_type: executionType, source_uri: sourceValidation.source_uri || sourceIdentifier, execution_config: executionConfig, active: true, updated_at: now }).eq('id', existingExecution.id)
       if (error) throw new Error(`Unable to update profiling source: ${error.message}`)
