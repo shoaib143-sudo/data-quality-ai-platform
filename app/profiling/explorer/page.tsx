@@ -20,7 +20,7 @@ export default async function ProfilingExplorerPage() {
 
   const [{ data: findings }, { data: columns }, { data: metrics }] = await Promise.all([
     supabase.schema('profiling').from('profile_findings').select('id,profile_column_id,finding_type,severity,title,description,confidence').eq('profile_run_id', latestRun.id).order('created_at', { ascending: false }).limit(500),
-    supabase.schema('profiling').from('profile_columns').select('id,column_name,data_type').eq('profile_run_id', latestRun.id).order('ordinal_position'),
+    supabase.schema('profiling').from('profile_columns').select('id,column_name,source_type,inferred_type').eq('profile_run_id', latestRun.id).order('ordinal_position'),
     supabase.schema('profiling').from('profile_metrics').select('profile_column_id,metric_key,numeric_value,text_value,boolean_value,json_value').eq('profile_run_id', latestRun.id).order('metric_key').limit(2000),
   ])
 
