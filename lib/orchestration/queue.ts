@@ -91,3 +91,15 @@ export async function markDurableJobFailed(job: DurableJob, error: unknown) {
 export function numericSetting(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
+
+
+export async function claimDurableJobByAgentRun(workerId: string, agentRunId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('orchestration').rpc('claim_job_by_agent_run', {
+    p_worker: workerId,
+    p_agent_run_id: agentRunId,
+  })
+  if (error) throw new Error(`Unable to claim durable job for run ${agentRunId}: ${error.message}`)
+  if (!data) return null
+  return data as DurableJob
+}
