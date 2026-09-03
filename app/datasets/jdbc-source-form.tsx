@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 
 export type JdbcProjectOption = { id: string; name: string }
-type ConnectionKind = 'postgresql' | 'mssql' | 'mysql' | 'databricks' | 'jdbc'
+type ConnectionKind = 'csv' | 'postgresql' | 'mssql' | 'mysql' | 'databricks' | 'jdbc'
 
 type ConnectionOption = {
   id: ConnectionKind
@@ -13,6 +13,7 @@ type ConnectionOption = {
 }
 
 const CONNECTIONS: ConnectionOption[] = [
+  { id: 'csv', label: 'CSV File', description: 'CSV file from an HTTPS URL or Supabase Storage object', placeholder: 'https://host/path/data.csv or bucket/path/data.csv' },
   { id: 'postgresql', label: 'PostgreSQL', description: 'PostgreSQL / Supabase databases', placeholder: 'jdbc:postgresql://host:5432/database' },
   { id: 'mssql', label: 'Microsoft SQL Server', description: 'SQL Server / Azure SQL', placeholder: 'jdbc:sqlserver://host:1433;databaseName=database' },
   { id: 'mysql', label: 'MySQL', description: 'MySQL-compatible databases', placeholder: 'jdbc:mysql://host:3306/database' },
@@ -35,12 +36,14 @@ export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) 
   const [status, setStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const selectedConnection = useMemo(() => CONNECTIONS.find(item => item.id === connectionKind) ?? CONNECTIONS[0], [connectionKind])
+  const selectedConnection = useMemo(() => CONNECTIONS.find(item => item.id === connectionKind) ?? CONNECTIONS[1], [connectionKind])
+  const isCsv = connectionKind === 'csv'
   const selectedTable = useMemo(() => tables.find(item => item.name === table), [tables, table])
 
   function selectConnection(value: ConnectionKind) {
     setConnectionKind(value)
     setJdbcUrl('')
+    setCredentialRef('')
     setSchema('')
     setTable('')
     setSchemas([])
@@ -51,8 +54,26 @@ export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) 
   }
 
   async function discover() {
-    setStatus(null); setColumns([]); setRowCount(null); setBusy(true)
+    setStatus(null); setColumns([]); setRowCount(null)
+    if (!projectId || !jdbcUrl.trim() || (!isCsv && !credentialRef.trim())) {
+      setStatus(isCsv ? 'Enter a CSV URL or storage path first.' : 'Enter the connection string and credential reference first.')
+      return
+    }
+    setBusy(true)
     try {
+      if (isCsv) {
+        const response = await fetch('/api/datasets/source/discover-file', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, sourceUri: jdbcUrl.trim() }),
+        })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error ?? 'CSV discovery failed.')
+        setSchemas(['CSV'])
+        setSchema('CSV')
+        setTables(payload.tables ?? [])
+        setStatus(`CSV source available. Found ${payload.columns?.length ?? 0} columns${typeof payload.rowCount === 'number' ? ` and ${payload.rowCount} rows` : ''}.`)
+        return
+      }
       const response = await fetch('/api/datasets/source/discover', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId, jdbcUrl, credentialRef, schema: schema || undefined }),
@@ -69,7 +90,7 @@ export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) 
 
   async function inspectTable(value: string) {
     setTable(value); setColumns([]); setRowCount(null); setStatus(null)
-    if (!schema || !value) return
+    if (isCsv || !schema || !value) return
     setBusy(true)
     try {
       const response = await fetch('/api/datasets/source/discover', {
@@ -86,17 +107,22 @@ export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) 
   }
 
   async function register() {
-    setStatus(null); setBusy(true)
+    setStatus(null)
+    if (!projectId || !name.trim() || !jdbcUrl.trim() || (!isCsv && (!credentialRef.trim() || !schema || !table))) {
+      setStatus(isCsv ? 'Project, connection name, and CSV URL/storage path are required.' : 'Project, connection name, connection string, credential reference, schema, and table are required.')
+      return
+    }
+    setBusy(true)
     try {
       const response = await fetch('/api/datasets/source/register', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, name, jdbcUrl, credentialRef, schema, table }),
+        body: JSON.stringify({ projectId, name, sourceType: isCsv ? 'CSV' : 'JDBC', jdbcUrl: isCsv ? undefined : jdbcUrl, sourceUri: isCsv ? jdbcUrl : undefined, credentialRef, schema: isCsv ? 'CSV' : schema, table: isCsv ? undefined : table }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.validation?.errors?.join(' ') || payload.error || 'Source registration failed.')
       setColumns(payload.validation?.details?.columns ?? payload.validation?.columns ?? [])
       setRowCount(typeof payload.validation?.rowCount === 'number' ? payload.validation.rowCount : null)
-      setStatus(`Connection saved and source is profiling-ready: ${schema}.${table}${typeof payload.validation?.rowCount === 'number' ? ` · ${payload.validation.rowCount} rows` : ''}.`)
+      setStatus(isCsv ? `CSV source saved and is profiling-ready: ${jdbcUrl}.` : `Connection saved and source is profiling-ready: ${schema}.${table}${typeof payload.validation?.rowCount === 'number' ? ` · ${payload.validation.rowCount} rows` : ''}.`)
       setName('')
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Source registration failed.') }
     finally { setBusy(false) }
@@ -105,19 +131,19 @@ export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) 
   return <section className="rounded-xl border p-6">
     <div className="mb-6">
       <h2 className="text-lg font-semibold">Connect a data source</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Choose a connection type from the dropdown, enter its connection details, test it, discover its schema and table, then save it as a profiling-ready source.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Choose the source type from one dropdown. Database sources can test connectivity and discover schemas and tables. CSV sources can be validated directly.</p>
     </div>
 
     {projects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available.</p> : <div className="grid gap-4 md:grid-cols-2">
       <label className="space-y-2 text-sm"><span className="font-medium">Project</span><select value={projectId} onChange={e => setProjectId(e.target.value)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label className="space-y-2 text-sm"><span className="font-medium">Connection type</span><select value={connectionKind} onChange={e => selectConnection(e.target.value as ConnectionKind)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{CONNECTIONS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="text-xs text-muted-foreground">{selectedConnection.description}</span></label>
       <label className="space-y-2 text-sm"><span className="font-medium">Connection name</span><input value={name} onChange={e => setName(e.target.value)} disabled={busy} placeholder={`${selectedConnection.label} connection`} className="w-full rounded-md border bg-background px-3 py-2" /></label>
-      <label className="space-y-2 text-sm"><span className="font-medium">Credential reference</span><input value={credentialRef} onChange={e => setCredentialRef(e.target.value)} disabled={busy} placeholder="Infisical secret reference" className="w-full rounded-md border bg-background px-3 py-2" /><span className="text-xs text-muted-foreground">Credentials are resolved server-side. Never enter a database password here.</span></label>
-      <label className="space-y-2 text-sm md:col-span-2"><span className="font-medium">Connection string</span><input value={jdbcUrl} onChange={e => setJdbcUrl(e.target.value)} disabled={busy} placeholder={selectedConnection.placeholder} className="w-full rounded-md border bg-background px-3 py-2" /><span className="text-xs text-muted-foreground">Do not embed username, password, tokens, or secrets in the URL.</span></label>
-      <label className="space-y-2 text-sm"><span className="font-medium">Schema</span><select value={schema} onChange={e => { setSchema(e.target.value); setTable(''); setTables([]) }} disabled={busy || schemas.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Discover schemas first</option>{schemas.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
-      <div className="flex items-end"><button type="button" onClick={discover} disabled={busy || !projectId || !jdbcUrl || !credentialRef} className="w-full rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50">{busy ? 'Connecting…' : 'Test connection & discover'}</button></div>
-      {schema && <label className="space-y-2 text-sm md:col-span-2"><span className="font-medium">Table / view</span><select value={table} onChange={e => inspectTable(e.target.value)} disabled={busy || tables.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select a table or view</option>{tables.map(item => <option key={item.name} value={item.name}>{item.name} · {item.type}</option>)}</select>{selectedTable && <span className="text-xs text-muted-foreground">Selected {selectedTable.type?.toLowerCase() ?? 'object'}.</span>}</label>}
-      {table && <div className="md:col-span-2"><button type="button" onClick={register} disabled={busy || !name || !schema || !table} className="rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50">{busy ? 'Validating…' : 'Save connection & register source'}</button></div>}
+      {!isCsv && <label className="space-y-2 text-sm"><span className="font-medium">Credential reference</span><input value={credentialRef} onChange={e => setCredentialRef(e.target.value)} disabled={busy} placeholder="Infisical secret reference" className="w-full rounded-md border bg-background px-3 py-2" /><span className="text-xs text-muted-foreground">Credentials are resolved server-side. Never enter a database password here.</span></label>}
+      <label className="space-y-2 text-sm md:col-span-2"><span className="font-medium">{isCsv ? 'CSV file URL / storage path' : 'Connection string'}</span><input value={jdbcUrl} onChange={e => setJdbcUrl(e.target.value)} disabled={busy} placeholder={selectedConnection.placeholder} className="w-full rounded-md border bg-background px-3 py-2" /><span className="text-xs text-muted-foreground">{isCsv ? 'Use an HTTPS CSV URL or a Supabase Storage bucket/path.' : 'Do not embed username, password, tokens, or secrets in the URL.'}</span></label>
+      <label className="space-y-2 text-sm"><span className="font-medium">Schema</span><select value={schema} onChange={e => { setSchema(e.target.value); setTable(''); setTables([]) }} disabled={busy || isCsv || schemas.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">{isCsv ? 'CSV file (no database schema)' : 'Discover schemas first'}</option>{schemas.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
+      <div className="flex items-end"><button type="button" onClick={discover} disabled={busy} className="w-full rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50">{busy ? 'Connecting…' : isCsv ? 'Validate CSV' : 'Test connection & discover'}</button></div>
+      {!isCsv && schema && <label className="space-y-2 text-sm md:col-span-2"><span className="font-medium">Table / view</span><select value={table} onChange={e => inspectTable(e.target.value)} disabled={busy || tables.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select a table or view</option>{tables.map(item => <option key={item.name} value={item.name}>{item.name} · {item.type}</option>)}</select>{selectedTable && <span className="text-xs text-muted-foreground">Selected {selectedTable.type?.toLowerCase() ?? 'object'}.</span>}</label>}
+      {((isCsv && schema === 'CSV') || table) && <div className="md:col-span-2"><button type="button" onClick={register} disabled={busy} className="rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50">{busy ? 'Validating…' : isCsv ? 'Save CSV source' : 'Save connection & register source'}</button></div>}
     </div>}
 
     {status && <p className="mt-4 rounded-md border p-3 text-sm" role="status">{status}</p>}
