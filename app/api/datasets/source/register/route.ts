@@ -7,7 +7,7 @@ import { validateJdbcConnection } from '@/lib/connectors/jdbc'
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function serverCredentialRef(kind: string) { const normalized = kind.toLowerCase().replace(/[^a-z0-9]+/g, '_').toUpperCase(); return process.env[`JDBC_${normalized}_CREDENTIAL_REF`]?.trim() || process.env.JDBC_CREDENTIAL_REF?.trim() || '' }
 function uiCredentialRef(value: string, projectId: string) { return /^DGP_[A-Za-z0-9_]+$/.test(value) && value.startsWith(`DGP_${projectId.replace(/[^A-Za-z0-9]/g, '_')}_`) }
-function jdbcTableParts(sourceIdentifier: string) { const parts = sourceIdentifier.trim().replace(/^jdbc-table:\/\//i, '').split('.').map(p => p.trim()).filter(Boolean); if (parts.length >= 2) return { schema: parts.at(-2)!, table: parts.at(-1)! }; if (parts.length === 1) return { schema: 'public', table: parts[0] }; return null }
+function jdbcTableParts(sourceIdentifier: string, defaultSchema = 'public') { const parts = sourceIdentifier.trim().replace(/^jdbc-table:\/\//i, '').split('.').map(p => p.trim()).filter(Boolean); if (parts.length >= 2) return { schema: parts.at(-2)!, table: parts.at(-1)! }; if (parts.length === 1) return { schema: defaultSchema, table: parts[0] }; return null }
 
 type DatasetVersionForReconciliation = { id: string; dataset_id: string; version_number: number; metadata: unknown }
 
@@ -26,7 +26,7 @@ async function reconcileSourceBoundDatasets(admin: ReturnType<typeof createAdmin
     const version = latestByDataset.get(dataset.id); const executionSource = version ? executionByVersion.get(version.id) : undefined
     if (!version || !dataset.source_identifier || !executionSource) continue
     const connectionMetadata = { ...baseMetadata }
-    if (sourceType === 'jdbc') { const parts = jdbcTableParts(dataset.source_identifier); if (!parts) continue; connectionMetadata.schema = parts.schema; connectionMetadata.table = parts.table }
+    if (sourceType === 'jdbc') { const defaultSchema = typeof connectionMetadata.schema === 'string' && connectionMetadata.schema.trim() ? connectionMetadata.schema.trim() : 'public'; const parts = jdbcTableParts(dataset.source_identifier, defaultSchema); if (!parts) continue; connectionMetadata.schema = parts.schema; connectionMetadata.table = parts.table }
     const validation = await validateDataSourceForProfiling(admin, { ...source, connection_metadata: connectionMetadata }, dataset.source_identifier)
     if (!validation.valid) continue
     const now = new Date().toISOString(); const versionMetadata = version.metadata && typeof version.metadata === 'object' ? { ...(version.metadata as Record<string, unknown>) } : {}; const datasetMetadata = dataset.metadata && typeof dataset.metadata === 'object' ? { ...(dataset.metadata as Record<string, unknown>) } : {}; const executionConfig = executionSource.execution_config && typeof executionSource.execution_config === 'object' ? { ...(executionSource.execution_config as Record<string, unknown>) } : {}
