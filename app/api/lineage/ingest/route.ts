@@ -41,8 +41,15 @@ async function resolveAsset(admin: ReturnType<typeof createAdminClient>, project
     if (!dataset) datasetId = null
   }
   if (!datasetId) {
-    const { data: candidates } = await admin.schema('catalog').from('datasets').select('id,name,source_identifier').eq('project_id', projectId).or(`name.eq.${name.replaceAll(',', '')},source_identifier.eq.${name.replaceAll(',', '')}`).limit(2)
-    if (candidates?.length === 1) datasetId = candidates[0].id
+    const [{ data: byName, error: byNameError }, { data: byIdentifier, error: byIdentifierError }] = await Promise.all([
+      admin.schema('catalog').from('datasets').select('id').eq('project_id', projectId).eq('name', name).limit(2),
+      admin.schema('catalog').from('datasets').select('id').eq('project_id', projectId).eq('source_identifier', name).limit(2),
+    ])
+    if (byNameError) throw new Error(`Unable to resolve lineage dataset name: ${byNameError.message}`)
+    if (byIdentifierError) throw new Error(`Unable to resolve lineage source identifier: ${byIdentifierError.message}`)
+    const matches = new Map<string, string>()
+    for (const row of [...(byName ?? []), ...(byIdentifier ?? [])]) matches.set(row.id, row.id)
+    if (matches.size === 1) datasetId = [...matches.keys()][0]
   }
 
   const metadata = { ...cleanObject(input.metadata), facets: cleanObject(input.facets), integration_source: 'lineage_ingest' }
