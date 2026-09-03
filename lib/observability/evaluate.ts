@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type Severity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-type Category = 'QUALITY_SCORE_DROP' | 'SCHEMA_DRIFT' | 'VOLUME_CHANGE' | 'QUALITY_RULE_FAILURE'
+type Category = 'QUALITY_SCORE_DROP' | 'SCHEMA_DRIFT' | 'VOLUME_CHANGE' | 'QUALITY_RULE_FAILURE' | 'PROFILE_FAILURE'
 
 type AlertCandidate = {
   category: Category
@@ -58,7 +58,7 @@ async function upsertAlert(input: {
 
 async function resolveMissingCategories(projectId: string, datasetId: string, activeCategories: Set<Category>) {
   const admin = createAdminClient()
-  const categories: Category[] = ['QUALITY_SCORE_DROP','SCHEMA_DRIFT','VOLUME_CHANGE','QUALITY_RULE_FAILURE']
+  const categories: Category[] = ['QUALITY_SCORE_DROP','SCHEMA_DRIFT','VOLUME_CHANGE','QUALITY_RULE_FAILURE','PROFILE_FAILURE']
   const now = new Date().toISOString()
   for (const category of categories) {
     if (activeCategories.has(category)) continue
@@ -176,4 +176,28 @@ export async function evaluateObservabilitySignals(datasetVersionId: string, pro
   await resolveMissingCategories(dataset.project_id, dataset.id, new Set(candidates.map((candidate) => candidate.category)))
 
   return { datasetId: dataset.id, profileRunId, alerts: candidates }
+}
+
+
+export async function recordProfileFailureAlert(datasetVersionId: string, profileRunId: string, message: string) {
+  const admin = createAdminClient()
+  const { data: version, error: versionError } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id').eq('id', datasetVersionId).maybeSingle()
+  if (versionError || !version) throw new Error(`Unable to resolve failed profiling dataset version: ${versionError?.message ?? 'not found'}`)
+  const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets').select('id,project_id,name').eq('id', version.dataset_id).maybeSingle()
+  if (datasetError || !dataset) throw new Error(`Unable to resolve failed profiling dataset: ${datasetError?.message ?? 'not found'}`)
+
+  await upsertAlert({
+    projectId: dataset.project_id,
+    datasetId: dataset.id,
+    datasetVersionId,
+    profileRunId,
+    candidate: {
+      category: 'PROFILE_FAILURE' as Category,
+      severity: 'HIGH',
+      title: `${dataset.name} profiling execution failed`,
+      description: 'The latest profiling execution failed before producing a fully validated governance evidence set.',
+      fingerprint: `profile-failure:${dataset.id}`,
+      evidence: { profile_run_id: profileRunId, dataset_version_id: datasetVersionId, error_message: message },
+    },
+  })
 }
