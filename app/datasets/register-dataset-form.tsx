@@ -61,7 +61,8 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       setSourceId('')
       setNewProjectName('')
       setNewProjectDescription('')
-      setStatus(`Project ${project.name} created. Connect a data source for this project above before registering a dataset.`)
+      window.dispatchEvent(new CustomEvent('dgp:project-created', { detail: project }))
+      setStatus(`Project ${project.name} created. It is now selected. Connect a data source for this project above before registering a dataset.`)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Project creation failed.')
     } finally { setCreatingProject(false) }
