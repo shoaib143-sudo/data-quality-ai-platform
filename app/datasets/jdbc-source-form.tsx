@@ -105,21 +105,12 @@ export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) 
   return <section className="rounded-xl border p-6">
     <div className="mb-6">
       <h2 className="text-lg font-semibold">Connect a data source</h2>
-      <p className="mt-1 text-sm text-muted-foreground">The Datasets tab is the connection center. Choose a source type, enter its connection details, test it, discover its schema and table, then save it as a profiling-ready source.</p>
-    </div>
-
-    <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      {CONNECTIONS.map(connection => (
-        <button key={connection.id} type="button" onClick={() => selectConnection(connection.id)} disabled={busy} aria-pressed={connectionKind === connection.id} className={`rounded-lg border p-4 text-left transition ${connectionKind === connection.id ? 'ring-2 ring-offset-1' : 'hover:bg-muted/50'}`}>
-          <span className="block text-sm font-semibold">{connection.label}</span>
-          <span className="mt-1 block text-xs text-muted-foreground">{connection.description}</span>
-        </button>
-      ))}
+      <p className="mt-1 text-sm text-muted-foreground">Choose a connection type from the dropdown, enter its connection details, test it, discover its schema and table, then save it as a profiling-ready source.</p>
     </div>
 
     {projects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available.</p> : <div className="grid gap-4 md:grid-cols-2">
       <label className="space-y-2 text-sm"><span className="font-medium">Project</span><select value={projectId} onChange={e => setProjectId(e.target.value)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-      <label className="space-y-2 text-sm"><span className="font-medium">Connection type</span><select value={connectionKind} onChange={e => selectConnection(e.target.value as ConnectionKind)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{CONNECTIONS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+      <label className="space-y-2 text-sm"><span className="font-medium">Connection type</span><select value={connectionKind} onChange={e => selectConnection(e.target.value as ConnectionKind)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{CONNECTIONS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="text-xs text-muted-foreground">{selectedConnection.description}</span></label>
       <label className="space-y-2 text-sm"><span className="font-medium">Connection name</span><input value={name} onChange={e => setName(e.target.value)} disabled={busy} placeholder={`${selectedConnection.label} connection`} className="w-full rounded-md border bg-background px-3 py-2" /></label>
       <label className="space-y-2 text-sm"><span className="font-medium">Credential reference</span><input value={credentialRef} onChange={e => setCredentialRef(e.target.value)} disabled={busy} placeholder="Infisical secret reference" className="w-full rounded-md border bg-background px-3 py-2" /><span className="text-xs text-muted-foreground">Credentials are resolved server-side. Never enter a database password here.</span></label>
       <label className="space-y-2 text-sm md:col-span-2"><span className="font-medium">Connection string</span><input value={jdbcUrl} onChange={e => setJdbcUrl(e.target.value)} disabled={busy} placeholder={selectedConnection.placeholder} className="w-full rounded-md border bg-background px-3 py-2" /><span className="text-xs text-muted-foreground">Do not embed username, password, tokens, or secrets in the URL.</span></label>
@@ -128,11 +119,6 @@ export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) 
       {schema && <label className="space-y-2 text-sm md:col-span-2"><span className="font-medium">Table / view</span><select value={table} onChange={e => inspectTable(e.target.value)} disabled={busy || tables.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select a table or view</option>{tables.map(item => <option key={item.name} value={item.name}>{item.name} · {item.type}</option>)}</select>{selectedTable && <span className="text-xs text-muted-foreground">Selected {selectedTable.type?.toLowerCase() ?? 'object'}.</span>}</label>}
       {table && <div className="md:col-span-2"><button type="button" onClick={register} disabled={busy || !name || !schema || !table} className="rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50">{busy ? 'Validating…' : 'Save connection & register source'}</button></div>}
     </div>}
-
-    <div className="mt-5 rounded-lg border p-4">
-      <p className="text-sm font-medium">Connection coverage</p>
-      <p className="mt-1 text-xs text-muted-foreground">PostgreSQL, SQL Server and MySQL are available through the current JDBC bridge. Databricks Unity Catalog and other JDBC drivers are represented here as connection placeholders and require the corresponding bridge driver before live validation.</p>
-    </div>
 
     {status && <p className="mt-4 rounded-md border p-3 text-sm" role="status">{status}</p>}
     {columns.length > 0 && <div className="mt-4 rounded-lg border p-4"><p className="text-sm font-medium">Schema validation passed</p><p className="mt-1 text-xs text-muted-foreground">{columns.length} columns{rowCount !== null ? ` · ${rowCount} rows` : ''}</p></div>}
