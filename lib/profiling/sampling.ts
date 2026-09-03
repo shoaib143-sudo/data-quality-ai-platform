@@ -11,6 +11,7 @@ export type ResolvedSamplingPolicy = {
   samplePercent: number
   deterministicSeed: number
   capacityMaxRows: number
+  capacityMaxFileBytes: number
 }
 
 function finiteInt(value: unknown, fallback: number) {
@@ -41,12 +42,13 @@ export async function resolveSamplingPolicy(
 
   const [{ data: policy, error: policyError }, { data: capacity, error: capacityError }] = await Promise.all([
     supabase.schema('profiling').from('sampling_policies').select('mode,max_rows,sample_percent,deterministic_seed').eq('dataset_id', dataset.id).maybeSingle(),
-    supabase.schema('orchestration').from('capacity_policies').select('max_profile_rows').eq('project_id', dataset.project_id).maybeSingle(),
+    supabase.schema('orchestration').from('capacity_policies').select('max_profile_rows,max_file_bytes').eq('project_id', dataset.project_id).maybeSingle(),
   ])
   if (policyError) throw new Error(`Unable to resolve sampling policy: ${policyError.message}`)
   if (capacityError) throw new Error(`Unable to resolve profiling capacity: ${capacityError.message}`)
 
   const capacityMaxRows = finiteInt(capacity?.max_profile_rows, 10_000)
+  const capacityMaxFileBytes = finiteInt(capacity?.max_file_bytes, 52_428_800)
   const configuredMaxRows = finiteInt(policy?.max_rows, 1000)
   const mode = ['FULL','FIXED','PERCENT'].includes(String(policy?.mode).toUpperCase())
     ? String(policy?.mode).toUpperCase() as SamplingMode
@@ -68,6 +70,7 @@ export async function resolveSamplingPolicy(
     samplePercent,
     deterministicSeed,
     capacityMaxRows,
+    capacityMaxFileBytes,
   }
 }
 
@@ -132,6 +135,7 @@ export function applySamplingPolicy<T extends Record<string, unknown>>(
       sample_percent: policy.samplePercent,
       deterministic_seed: policy.deterministicSeed,
       capacity_max_rows: policy.capacityMaxRows,
+      capacity_max_file_bytes: policy.capacityMaxFileBytes,
     },
   }
 }
