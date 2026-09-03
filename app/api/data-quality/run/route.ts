@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
@@ -33,8 +33,41 @@ export async function POST(request: Request) {
       if (!run || run.status !== 'COMPLETED') return NextResponse.json({ error: 'The selected profiling run is unavailable or incomplete.' }, { status: 409 })
     }
 
-    const result = await executeQualityAutomation({ datasetVersionId, profileRunId, userId: user.id })
-    return NextResponse.json(result)
+    const { data: agentDefinition, error: agentError } = await admin.schema('agent').from('agent_definitions').select('id,version').eq('agent_key','data_quality_agent').eq('version','1.0').eq('enabled',true).maybeSingle()
+    if (agentError || !agentDefinition) return NextResponse.json({ error: 'Data Quality Agent 1.0 is not enabled.' }, { status: 503 })
+
+    const { data: run, error: runError } = await admin.schema('agent').from('agent_runs').insert({
+      agent_definition_id: agentDefinition.id,
+      project_id: dataset.project_id,
+      dataset_id: dataset.id,
+      dataset_version_id: datasetVersionId,
+      status: 'QUEUED',
+      input: { datasetVersionId, profileRunId, automation: true, requested_by_user: true },
+    }).select('id').single()
+    if (runError || !run) throw new Error(`Unable to queue data quality job: ${runError?.message ?? 'unknown error'}`)
+
+    const agentRunId = run.id
+    const resolvedProfileRunId = profileRunId
+    after(async () => {
+      try {
+        await executeQualityAutomation({
+          datasetVersionId,
+          profileRunId: resolvedProfileRunId,
+          userId: user.id,
+          existingAgentRunId: agentRunId,
+        })
+      } catch (error) {
+        console.error('[data-quality-job] background execution failed', error)
+      }
+    })
+
+    return NextResponse.json({
+      accepted: true,
+      execution_completed: false,
+      agentRunId,
+      profileRunId: resolvedProfileRunId,
+      monitorUrl: `/monitoring?run=${encodeURIComponent(agentRunId)}`,
+    }, { status: 202 })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Data quality automation failed.' }, { status: 500 })
   }
