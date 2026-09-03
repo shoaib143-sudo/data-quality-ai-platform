@@ -7,6 +7,7 @@ import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
 import { deliverNotificationJob } from '@/lib/observability/notifications'
 import { claimOutboxEvents, processOutboxEvents } from '@/lib/orchestration/outbox'
+import { executeMetadataDiscovery } from '@/lib/catalog/discovery'
 import {
   claimDurableJobByAgentRun,
   claimDurableJobs,
@@ -67,6 +68,13 @@ async function executeJob(job: DurableJob) {
     const deliveryId = text(payload.deliveryId)
     if (!deliveryId) throw new Error('Durable notification job payload is incomplete.')
     await deliverNotificationJob(deliveryId)
+    return
+  }
+
+  if (job.job_type === 'DISCOVERY') {
+    const sourceId = text(payload.sourceId) || text(job.entity_id)
+    if (!sourceId) throw new Error('Durable metadata discovery job payload is incomplete.')
+    await executeMetadataDiscovery(sourceId)
     return
   }
 
