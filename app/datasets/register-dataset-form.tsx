@@ -3,25 +3,69 @@
 import { FormEvent, useMemo, useState } from 'react'
 
 export type ProjectOption = { id: string; name: string }
+export type OrganizationOption = { id: string; name: string }
 export type SourceOption = { id: string; projectId: string; name: string; sourceType: string; status: string }
 
-export function RegisterDatasetForm({ projects, sources }: { projects: ProjectOption[]; sources: SourceOption[] }) {
+const CREATE_PROJECT = '__create_project__'
+
+export function RegisterDatasetForm({ projects, organizations, sources }: { projects: ProjectOption[]; organizations: OrganizationOption[]; sources: SourceOption[] }) {
+  const [availableProjects, setAvailableProjects] = useState(projects)
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [sourceId, setSourceId] = useState('')
   const [name, setName] = useState('')
   const [sourceIdentifier, setSourceIdentifier] = useState('')
   const [description, setDescription] = useState('')
   const [businessDomain, setBusinessDomain] = useState('')
+  const [newProjectName, setNewProjectName] = useState('')
+  const [newProjectDescription, setNewProjectDescription] = useState('')
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState(organizations[0]?.id ?? '')
   const [status, setStatus] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const [creatingProject, setCreatingProject] = useState(false)
   const [profiling, setProfiling] = useState(false)
   const [profilingTarget, setProfilingTarget] = useState<{ projectId: string; datasetVersionId: string; agentDefinitionId: string } | null>(null)
 
   const projectSources = useMemo(() => sources.filter((source) => source.projectId === projectId), [sources, projectId])
+  const canCreateProject = organizations.length > 0
 
   function changeProject(value: string) {
+    if (value === CREATE_PROJECT) {
+      setProjectId('')
+      setSourceId('')
+      setStatus(null)
+      return
+    }
     setProjectId(value)
     setSourceId(sources.find((source) => source.projectId === value)?.id ?? '')
+    setStatus(null)
+  }
+
+  async function createProject(event: FormEvent) {
+    event.preventDefault()
+    setStatus(null)
+    if (!selectedOrganizationId || !newProjectName.trim()) {
+      setStatus('Organization and project name are required.')
+      return
+    }
+    setCreatingProject(true)
+    try {
+      const response = await fetch('/api/datasets/create-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: selectedOrganizationId, name: newProjectName, description: newProjectDescription }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error ?? 'Project creation failed.')
+      const project: ProjectOption = { id: payload.project.id, name: payload.project.name }
+      setAvailableProjects((current) => [...current, project].sort((a, b) => a.name.localeCompare(b.name)))
+      setProjectId(project.id)
+      setSourceId('')
+      setNewProjectName('')
+      setNewProjectDescription('')
+      setStatus(`Project ${project.name} created. Connect a data source for this project above before registering a dataset.`)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Project creation failed.')
+    } finally { setCreatingProject(false) }
   }
 
   async function submit(event: FormEvent) {
@@ -73,15 +117,23 @@ export function RegisterDatasetForm({ projects, sources }: { projects: ProjectOp
         <h2 className="text-lg font-semibold">Register a profiling dataset</h2>
         <p className="mt-1 text-sm text-muted-foreground">Create the dataset, its first version, the executable profiling source, then start the existing Profiling Agent 2.0.</p>
       </div>
-      {projects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available for dataset registration.</p> :
+      {availableProjects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available for dataset registration.</p> :
         <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-2 text-sm"><span className="font-medium">Project</span><select value={projectId} onChange={e => changeProject(e.target.value)} disabled={running || profiling} className="w-full rounded-md border bg-background px-3 py-2">{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+          <div className="space-y-2 text-sm">
+            <label className="space-y-2"><span className="font-medium">Project</span><select value={projectId || CREATE_PROJECT} onChange={e => changeProject(e.target.value)} disabled={running || profiling || creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{canCreateProject && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
+            {projectId === '' && canCreateProject && <form onSubmit={createProject} className="rounded-lg border p-3 space-y-3">
+              <label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>
+              <label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" className="w-full rounded-md border bg-background px-3 py-2" autoFocus /></label>
+              <label className="space-y-1 block"><span className="text-xs font-medium">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label>
+              <div className="flex gap-2"><button type="submit" disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setProjectId(availableProjects[0]?.id ?? ''); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div>
+            </form>}
+          </div>
           <label className="space-y-2 text-sm"><span className="font-medium">Data source</span><select value={sourceId} onChange={e => setSourceId(e.target.value)} disabled={running || profiling || projectSources.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select a source</option>{projectSources.map(s => <option key={s.id} value={s.id}>{s.name} · {s.sourceType}</option>)}</select><span className="text-xs text-muted-foreground">Only active sources already connected above are listed here. To use PostgreSQL, SQL Server, MySQL, Databricks, Generic JDBC, or another CSV source, connect and save it in the source section above first.</span></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Dataset name</span><input value={name} onChange={e => setName(e.target.value)} disabled={running || profiling} placeholder="Customer master" className="w-full rounded-md border bg-background px-3 py-2" /></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Source identifier</span><input value={sourceIdentifier} onChange={e => setSourceIdentifier(e.target.value)} disabled={running || profiling} placeholder="public.customers or file URI" className="w-full rounded-md border bg-background px-3 py-2" /></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Business domain</span><input value={businessDomain} onChange={e => setBusinessDomain(e.target.value)} disabled={running || profiling} placeholder="Customer" className="w-full rounded-md border bg-background px-3 py-2" /></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Description</span><input value={description} onChange={e => setDescription(e.target.value)} disabled={running || profiling} placeholder="Purpose and business context" className="w-full rounded-md border bg-background px-3 py-2" /></label>
-          <div className="md:col-span-2"><button type="submit" disabled={running || profiling || !sourceId} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{running ? 'Registering…' : 'Register dataset'}</button></div>
+          <div className="md:col-span-2"><button type="submit" disabled={running || profiling || !sourceId || !projectId} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{running ? 'Registering…' : 'Register dataset'}</button></div>
         </form>}
       {profilingTarget && (
         <div className="mt-5 rounded-lg border p-4">
