@@ -45,8 +45,9 @@ export async function POST(request: Request) {
 
     const { data: project } = await admin.schema('app').from('projects').select('id,organization_id').eq('id', projectId).maybeSingle()
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-    const { data: membership } = await admin.schema('app').from('organization_members').select('id').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-    if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const { data: membership, error: membershipError } = await admin.schema('app').from('organization_members').select('organization_id,user_id,role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
+    if (membershipError) throw new Error(`Unable to verify project membership: ${membershipError.message}`)
+    if (!membership) return NextResponse.json({ error: 'You do not have access to run profiling for this project.' }, { status: 403 })
 
     const { data: agentDefinition, error: agentError } = await supabase.schema('agent').from('agent_definitions').select('*').eq('id', agentDefinitionId).eq('enabled', true).maybeSingle()
     if (agentError || !agentDefinition) return NextResponse.json({ error: 'Agent definition not found or disabled' }, { status: 404 })
