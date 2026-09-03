@@ -68,7 +68,7 @@ export default async function ProfilingPage() {
   }, {})
   const criticalCount = (findings ?? []).filter((finding) => String(finding.severity).toUpperCase() === 'CRITICAL').length
   const priorityCount = (findings ?? []).filter((finding) => ['HIGH', 'CRITICAL'].includes(String(finding.severity).toUpperCase())).length
-  const completed = latestRun.status === 'COMPLETED'
+  const completed = latestRun?.status === 'COMPLETED'
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_5%_0%,_rgba(219,234,254,0.9),_transparent_30%),radial-gradient(circle_at_95%_5%,_rgba(243,232,255,0.8),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_55%,_#f8fafc_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
