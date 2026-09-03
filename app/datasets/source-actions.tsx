@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Pencil, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -14,12 +14,8 @@ function readinessMessage(payload: { error?: string; validation?: ValidationPayl
   if (payload.code === 'JDBC_CREDENTIAL_REF_MISSING' || errors.some(error => error.includes('credential_ref'))) {
     return 'This saved connection needs its credentials configured. Reopen the connection setup, enter the credentials for this connection type, test the connection, and save it again.'
   }
-  if (errors.some(error => error.includes('table name'))) {
-    return 'Choose a schema and table for this connection, then check the connection again.'
-  }
-  if (errors.some(error => error.includes('source identifier'))) {
-    return 'Choose a source target before making this connection ready.'
-  }
+  if (errors.some(error => error.includes('table name'))) return 'Choose a schema and table for this connection, then check the connection again.'
+  if (errors.some(error => error.includes('source identifier'))) return 'Choose a source target before making this connection ready.'
   return errors.join(' ') || payload.error || 'Connection needs setup.'
 }
 
@@ -58,6 +54,10 @@ export function SourceActions({ projectId, sourceId, status }: { projectId: stri
   const ready = String(status).toUpperCase() === 'ACTIVE'
   return <div className="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
     <div className="flex max-w-xl flex-wrap items-center justify-end gap-2">
+      <a href={`/datasets/edit/${encodeURIComponent(sourceId)}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50">
+        <Pencil className="h-3.5 w-3.5" />
+        Edit connection
+      </a>
       <button type="button" onClick={() => void validate()} disabled={busy} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${ready ? 'border border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
         {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
         {busy ? 'Checking…' : ready ? 'Check connection' : 'Make ready'}
