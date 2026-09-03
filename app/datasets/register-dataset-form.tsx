@@ -32,10 +32,38 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
   const canCreateProject = organizations.length > 0
 
   useEffect(() => {
+    setAvailableProjects(current => {
+      const merged = [...current]
+      for (const project of projects) {
+        if (!merged.some(item => item.id === project.id)) merged.push(project)
+      }
+      return merged.sort((a, b) => a.name.localeCompare(b.name))
+    })
+    setAvailableSources(current => {
+      const merged = [...current]
+      for (const source of sources) {
+        const index = merged.findIndex(item => item.id === source.id)
+        if (index >= 0) merged[index] = source
+        else merged.push(source)
+      }
+      return merged.sort((a, b) => a.name.localeCompare(b.name))
+    })
+  }, [projects, sources])
+
+  useEffect(() => {
+    if (projectId && !availableProjects.some(project => project.id === projectId)) {
+      setProjectId(availableProjects[0]?.id ?? '')
+      setSourceId('')
+    }
+  }, [availableProjects, projectId])
+
+  useEffect(() => {
     function onProjectCreated(event: Event) {
       const project = (event as CustomEvent<ProjectOption>).detail
       if (!project?.id || !project?.name) return
       setAvailableProjects(current => current.some(item => item.id === project.id) ? current : [...current, project].sort((a, b) => a.name.localeCompare(b.name)))
+      setProjectId(project.id)
+      setSourceId('')
     }
     function onSourceCreated(event: Event) {
       const source = (event as CustomEvent<SourceOption>).detail
@@ -136,8 +164,8 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       <div className="mb-5"><h2 className="text-lg font-semibold">Register a profiling dataset</h2><p className="mt-1 text-sm text-muted-foreground">Create the dataset, its first version, the executable profiling source, then start the existing Profiling Agent 2.0.</p></div>
       {availableProjects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available for dataset registration.</p> :
         <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2 text-sm"><label className="space-y-2 block"><span className="font-medium">Project</span><select value={projectId || CREATE_PROJECT} onChange={e => changeProject(e.target.value)} disabled={running || profiling || creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{canCreateProject && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
-            {projectId === '' && canCreateProject && <div className="rounded-lg border p-3 space-y-3"><label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" className="w-full rounded-md border bg-background px-3 py-2" autoFocus /></label><label className="space-y-1 block"><span className="text-xs font-medium">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setProjectId(availableProjects[0]?.id ?? ''); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div></div>}
+          <div className="space-y-2 text-sm"><label className="space-y-2 block"><span className="font-medium">Project</span><select value={projectId || CREATE_PROJECT} onChange={e => changeProject(e.target.value)} disabled={running || profiling || creatingProject} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select an existing project</option>{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{canCreateProject && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
+            {projectId === '' && canCreateProject && <div className="rounded-lg border p-3 space-y-3"><p className="text-xs text-muted-foreground">You can switch back to any existing project using the Project dropdown above.</p><label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" className="w-full rounded-md border bg-background px-3 py-2" autoFocus /></label><label className="space-y-1 block"><span className="text-xs font-medium">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setProjectId(availableProjects[0]?.id ?? ''); setSourceId(''); setNewProjectName(''); setNewProjectDescription(''); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div></div>}
           </div>
           <label className="space-y-2 text-sm"><span className="font-medium">Data source</span><select value={sourceId} onChange={e => setSourceId(e.target.value)} disabled={running || profiling || projectSources.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">{projectSources.length ? 'Select a source' : 'Connect a source first'}</option>{projectSources.map(s => <option key={s.id} value={s.id}>{s.name} · {s.sourceType}</option>)}</select><span className="text-xs text-muted-foreground">Only active sources for the selected project are listed here.</span></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Dataset name</span><input value={name} onChange={e => setName(e.target.value)} disabled={running || profiling} placeholder="Customer master" /></label>
