@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 import { loadJdbcRows, parseJdbcTableReference } from '@/lib/connectors/jdbc'
 import { DETERMINISTIC_METRICS, isDeterministicMetric, type MetricScope } from '@/lib/profiling/metric-registry'
+import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
 
 type Row = Record<string, unknown>
 type MetricValue = {
@@ -149,7 +150,25 @@ function calculateColumnMetrics(columnName: string, rows: Row[]): ColumnResult {
   return { column_name: columnName, metrics, candidate_key_confidence: candidateKeyConfidence, sensitive_match_rate: round(sensitiveMatchRate), pattern_match_rate: patternMatchRate === null ? null : round(patternMatchRate), finding }
 }
 
-export async function loadProfilingRows(supabase: ReturnType<typeof createAdminClient>, datasetVersionId: string, maxRows: number) {
+export async function loadProfilingRows(supabase: ReturnType<typeof createAdminClient>, datasetVersionId: string, requestedMaxRows: number) {
+  const sampling = await resolveSamplingPolicy(supabase, datasetVersionId, requestedMaxRows)
+  const maxRows = sampling.loadLimit
+
+  const sampledResult = (rows: Row[], rowCount: number | null, sourceAccess: Record<string, unknown>) => {
+    const sampled = applySamplingPolicy(rows, rowCount, sampling)
+    const existingWarnings = Array.isArray(sourceAccess.warnings) ? sourceAccess.warnings.filter((item): item is string => typeof item === 'string') : []
+    return {
+      rowCount: sampled.sourceRowCount,
+      rows: sampled.rows,
+      sourceAccess: {
+        ...sourceAccess,
+        sampled_rows: sampled.sampledRows,
+        sampling_policy: sampled.policy,
+        warnings: [...existingWarnings, ...sampled.warnings],
+      },
+    }
+  }
+
   const { data: executionRows, error: executionError } = await supabase
     .schema('profiling')
     .from('dataset_execution_sources')
@@ -167,13 +186,14 @@ export async function loadProfilingRows(supabase: ReturnType<typeof createAdminC
       ? executionSource.execution_config as Record<string, unknown>
       : {}
 
-    if (sourceType === 'file') {
+    if (sourceType === 'file' || sourceType === 'csv') {
       const loaded = await loadFileSource(supabase, { sourceUri: executionSource.source_uri, executionConfig }, { maxRows })
-      return {
-        rowCount: loaded.rowCount,
-        rows: loaded.rows as Row[],
-        sourceAccess: { source_type: 'FILE', source_uri: loaded.sourceUri, content_hash: loaded.contentHash, sampled_rows: loaded.rows.length, warnings: loaded.warnings },
-      }
+      return sampledResult(loaded.rows as Row[], loaded.rowCount, {
+        source_type: sourceType === 'csv' ? 'CSV' : 'FILE',
+        source_uri: loaded.sourceUri,
+        content_hash: loaded.contentHash,
+        warnings: loaded.warnings,
+      })
     }
 
     if (sourceType === 'jdbc') {
@@ -195,17 +215,12 @@ export async function loadProfilingRows(supabase: ReturnType<typeof createAdminC
       const table = stringField(['table', 'table_name', 'tableName']) ?? parsed?.table
       if (!jdbcUrl || !credentialRef || !table) throw new Error('JDBC execution source configuration is incomplete.')
       const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, maxRows)
-      return {
-        rowCount: loaded.rowCount ?? loaded.rows.length,
-        rows: loaded.rows as Row[],
-        sourceAccess: {
-          source_type: 'JDBC',
-          source_uri: executionSource.source_uri,
-          sampled_rows: loaded.rows.length,
-          connector: { schema, table },
-          warnings: loaded.rows.length === maxRows ? [`Metric calculations are based on the first ${maxRows} rows.`] : [],
-        },
-      }
+      return sampledResult(loaded.rows as Row[], loaded.rowCount ?? loaded.rows.length, {
+        source_type: 'JDBC',
+        source_uri: executionSource.source_uri,
+        connector: { schema, table },
+        warnings: loaded.rows.length === maxRows ? [`Connector load was capped at ${maxRows} rows before sampling policy application.`] : [],
+      })
     }
 
     if (['supabase', 'supabase_table', 'postgres', 'postgres_table', 'table'].includes(sourceType)) {
@@ -220,7 +235,7 @@ export async function loadProfilingRows(supabase: ReturnType<typeof createAdminC
       if (countError) throw new Error(`Unable to count source rows: ${countError.message}`)
       const { data, error } = await supabase.schema(schema).from(table).select('*').range(0, maxRows - 1)
       if (error) throw new Error(`Unable to load source rows: ${error.message}`)
-      return { rowCount: count ?? 0, rows: (data ?? []) as Row[], sourceAccess: { source_type: 'TABLE', schema, table, sampled_rows: data?.length ?? 0, warnings: (data?.length ?? 0) === maxRows ? [`Metric calculations are based on the first ${maxRows} rows.`] : [] } }
+      return sampledResult((data ?? []) as Row[], count ?? 0, { source_type: 'TABLE', schema, table, warnings: [] })
     }
   }
 
@@ -263,7 +278,7 @@ export async function loadProfilingRows(supabase: ReturnType<typeof createAdminC
   if (countError) throw new Error(`Unable to count source rows: ${countError.message}`)
   const { data, error } = await supabase.schema(schema).from(table).select('*').range(0, maxRows - 1)
   if (error) throw new Error(`Unable to load source rows: ${error.message}`)
-  return { rowCount: count ?? 0, rows: (data ?? []) as Row[] }
+  return sampledResult((data ?? []) as Row[], count ?? 0, { source_type: 'TABLE', schema, table, warnings: [] })
 }
 
 export async function executeProfilingMetrics(datasetVersionId: string, profilingRunId: string, input: Record<string, unknown> = {}) {
