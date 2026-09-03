@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createHash } from 'node:crypto'
 import { writeAgentRunLog } from '@/lib/agents/run-log'
+import { loadProfilingRows } from '@/lib/profiling/metric-engine'
 
 type RuleSuggestion = {
   rule_key: string
@@ -20,6 +22,8 @@ type QualityRule = RuleSuggestion & {
   dataset_id: string
   dataset_version_id: string | null
   enabled: boolean
+  rule_type?: string
+  rule_config?: Record<string, unknown>
 }
 
 type MetricRow = {
@@ -37,6 +41,107 @@ function passes(operator: QualityRule['operator'], observed: number, threshold: 
   if (operator === 'GTE') return observed >= threshold
   if (operator === 'EQ') return observed === threshold
   return observed !== threshold
+}
+
+function canonical(value: unknown) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'object') {
+    if (Array.isArray(value)) return JSON.stringify(value.map(canonical))
+    return JSON.stringify(Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a],[b]) => a.localeCompare(b)).map(([key,item]) => [key, canonical(item)])))
+  }
+  return String(value)
+}
+
+function hashRecord(row: Record<string, unknown>) {
+  return createHash('sha256').update(canonical(row)).digest('hex')
+}
+
+function recordKey(row: Record<string, unknown>) {
+  const preferred = Object.keys(row).find((key) => key.toLowerCase() === 'id')
+    ?? Object.keys(row).find((key) => key.toLowerCase().endsWith('_id'))
+    ?? Object.keys(row)[0]
+  return preferred ? canonical(row[preferred]) || null : null
+}
+
+function safeSample(row: Record<string, unknown>) {
+  const sensitive = /(password|secret|token|ssn|social_security|credit_card|card_number|cvv)/i
+  const contact = /(email|phone|mobile)/i
+  return Object.fromEntries(Object.entries(row).slice(0, 20).map(([key,value]) => {
+    if (sensitive.test(key)) return [key, '[REDACTED]']
+    if (contact.test(key) && typeof value === 'string') {
+      const prefix = value.slice(0, 2)
+      return [key, value.length > 4 ? `${prefix}***${value.slice(-2)}` : '***']
+    }
+    return [key, value]
+  }))
+}
+
+function numericQuartiles(values: number[]) {
+  const sorted=[...values].sort((a,b)=>a-b)
+  const percentile=(p:number)=>{
+    if(!sorted.length) return null
+    const index=(sorted.length-1)*p
+    const lo=Math.floor(index),hi=Math.ceil(index)
+    if(lo===hi) return sorted[lo]
+    return sorted[lo]+(sorted[hi]-sorted[lo])*(index-lo)
+  }
+  return {q1:percentile(0.25),q3:percentile(0.75)}
+}
+
+function rowFailures(rule: QualityRule, rows: Record<string, unknown>[]) {
+  const column=rule.column_name
+  const config=rule.rule_config ?? {}
+  const type=String(rule.rule_type ?? 'METRIC_THRESHOLD').toUpperCase()
+  const failures: Array<{row:Record<string,unknown>;observed:string;reason:string}> = []
+
+  if (rule.metric_key === 'duplicate_row_rate' || type === 'ROW_UNIQUE') {
+    const counts=new Map<string,number>()
+    for(const row of rows){const key=canonical(row);counts.set(key,(counts.get(key)??0)+1)}
+    for(const row of rows){if((counts.get(canonical(row))??0)>1) failures.push({row,observed:'duplicate row',reason:'Duplicate record detected.'})}
+    return failures
+  }
+  if(!column) return failures
+
+  if(rule.metric_key==='null_rate' || type==='REQUIRED'){
+    for(const row of rows){const value=row[column];if(value===null||value===undefined||(typeof value==='string'&&value.trim()==='')) failures.push({row,observed:canonical(value),reason:`${column} is required but missing.`})}
+    return failures
+  }
+
+  if(rule.metric_key==='unique_rate' || type==='UNIQUE'){
+    const groups=new Map<string,Record<string,unknown>[]>()
+    for(const row of rows){const value=canonical(row[column]);if(!value) continue;groups.set(value,[...(groups.get(value)??[]),row])}
+    for(const [value,group] of groups) if(group.length>1) for(const row of group) failures.push({row,observed:value,reason:`${column} is not unique.`})
+    return failures
+  }
+
+  if(rule.metric_key==='pattern_match_rate' || type==='REGEX'){
+    const configured=typeof config.pattern==='string' ? config.pattern : ''
+    let pattern:RegExp|null=null
+    try{
+      pattern=configured?new RegExp(configured):column.toLowerCase().includes('email')?/^[^\s@]+@[^\s@]+\.[^\s@]+$/:/(phone|mobile)/i.test(column)?/^\+?[0-9][0-9\s().-]{6,}$/:null
+    }catch{}
+    if(pattern) for(const row of rows){const value=canonical(row[column]);if(value&&!pattern.test(value)) failures.push({row,observed:value,reason:`${column} does not match the required pattern.`})}
+    return failures
+  }
+
+  if(rule.metric_key==='outlier_rate' || type==='RANGE'){
+    const configuredMin=typeof config.min==='number'?config.min:null
+    const configuredMax=typeof config.max==='number'?config.max:null
+    const pairs=rows.map(row=>({row,value:Number(row[column])})).filter(item=>Number.isFinite(item.value))
+    let min=configuredMin,max=configuredMax
+    if(min===null||max===null){
+      const {q1,q3}=numericQuartiles(pairs.map(item=>item.value))
+      if(q1!==null&&q3!==null){const iqr=q3-q1;min=min??q1-1.5*iqr;max=max??q3+1.5*iqr}
+    }
+    if(min!==null||max!==null) for(const item of pairs) if((min!==null&&item.value<min)||(max!==null&&item.value>max)) failures.push({row:item.row,observed:String(item.value),reason:`${column} is outside the governed range.`})
+    return failures
+  }
+
+  if(type==='IN_SET' && Array.isArray(config.allowed)){
+    const allowed=new Set(config.allowed.map(canonical))
+    for(const row of rows){const value=canonical(row[column]);if(!allowed.has(value)) failures.push({row,observed:value,reason:`${column} is outside the allowed value set.`})}
+  }
+  return failures
 }
 
 async function resolveDatasetContext(datasetVersionId: string) {
