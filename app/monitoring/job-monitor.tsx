@@ -39,6 +39,7 @@ type Props = {
   initialDatasets: MonitoringDataset[]
   initialSteps: MonitoringStep[]
   initialNow: string
+  initialRunId?: string | null
   userId: string
 }
 
@@ -106,11 +107,11 @@ function MetricCard({ label, value, detail, tone, icon }: { label: string; value
   </div>
 }
 
-export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initialSteps, initialNow, userId: _userId }: Props) {
+export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initialSteps, initialNow, initialRunId = null, userId: _userId }: Props) {
   const [runs, setRuns] = useState(initialRuns)
   const [steps, setSteps] = useState(initialSteps)
   const [filter, setFilter] = useState('ALL')
-  const [selectedId, setSelectedId] = useState<string | null>(initialRuns[0]?.id ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialRuns[0]?.id ?? null)
   const [lastUpdated, setLastUpdated] = useState(() => new Date(initialNow))
   const [refreshing, setRefreshing] = useState(false)
   const [copied, setCopied] = useState(false)
