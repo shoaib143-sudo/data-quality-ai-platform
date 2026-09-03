@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth/require-user'
 import { executePreparedProfilingJob } from '@/lib/agents/run-profiling-job'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
+import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
 import {
   claimDurableJobByAgentRun,
   claimDurableJobs,
@@ -88,9 +89,10 @@ export async function GET(request: Request) {
   if (!authorized) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
 
   const workerId = `vercel-cron:${crypto.randomUUID()}`
+  const scheduled = await enqueueDueSchedules(20)
   const jobs = await claimDurableJobs(workerId, 2)
   const results = await processJobs(jobs)
-  return NextResponse.json({ workerId, claimed: jobs.length, results })
+  return NextResponse.json({ workerId, scheduled, claimed: jobs.length, results })
 }
 
 export async function POST(request: Request) {
