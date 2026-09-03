@@ -5,11 +5,11 @@ import { validateDataSourceForProfiling } from '@/lib/profiling/source-validatio
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
-function jdbcTableParts(sourceIdentifier: string) {
+function jdbcTableParts(sourceIdentifier: string, defaultSchema = 'public') {
   const normalized = sourceIdentifier.trim().replace(/^jdbc-table:\/\//i, '')
   const parts = normalized.split('.').map(part => part.trim()).filter(Boolean)
   if (parts.length >= 2) return { schema: parts[parts.length - 2], table: parts[parts.length - 1] }
-  if (parts.length === 1) return { schema: 'public', table: parts[0] }
+  if (parts.length === 1) return { schema: defaultSchema, table: parts[0] }
   return null
 }
 
@@ -37,7 +37,8 @@ export async function POST(request: Request) {
     const wasConfigured = String(source.status ?? '').toUpperCase() === 'CONFIGURED'
     const connectionMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? { ...(source.connection_metadata as Record<string, unknown>) } : {}
     if (wasConfigured && sourceType === 'jdbc') {
-      const jdbcParts = jdbcTableParts(sourceIdentifier)
+      const defaultSchema = typeof connectionMetadata.schema === 'string' && connectionMetadata.schema.trim() ? connectionMetadata.schema.trim() : 'public'
+      const jdbcParts = jdbcTableParts(sourceIdentifier, defaultSchema)
       if (!jdbcParts) return NextResponse.json({ error: 'Configured JDBC connections require a schema.table source identifier.' }, { status: 400 })
       connectionMetadata.schema = jdbcParts.schema
       connectionMetadata.table = jdbcParts.table
