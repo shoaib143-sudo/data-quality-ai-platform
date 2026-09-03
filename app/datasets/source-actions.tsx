@@ -1,5 +1,6 @@
 'use client'
 
+import { CheckCircle2, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -11,7 +12,7 @@ export function SourceActions({ projectId, sourceId, status }: { projectId: stri
   async function validate() {
     if (busy) return
     setBusy(true)
-    setMessage('Checking connection and source availability…')
+    setMessage('Checking connection…')
     try {
       const response = await fetch('/api/datasets/source/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, sourceId }) })
       const payload = await response.json().catch(() => ({}))
@@ -21,12 +22,17 @@ export function SourceActions({ projectId, sourceId, status }: { projectId: stri
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Connection check failed.')
       router.refresh()
-    } finally { setBusy(false) }
+    } finally {
+      setBusy(false)
+    }
   }
 
   const ready = String(status).toUpperCase() === 'ACTIVE'
-  return <div className="flex flex-wrap items-center gap-3">
-    <button type="button" onClick={() => void validate()} disabled={busy} className="rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Checking…' : ready ? 'Check' : 'Make ready'}</button>
-    {message ? <span className="text-xs text-muted-foreground" role="status">{message}</span> : null}
+  return <div className="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+    <button type="button" onClick={() => void validate()} disabled={busy} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${ready ? 'border border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+      {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+      {busy ? 'Checking…' : ready ? 'Check connection' : 'Make ready'}
+    </button>
+    {message ? <span className="text-xs text-slate-500" role="status">{message}</span> : null}
   </div>
 }
