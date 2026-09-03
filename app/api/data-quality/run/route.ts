@@ -3,6 +3,8 @@ import { requireUser } from '@/lib/auth/require-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
 
+export const maxDuration = 300
+
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
 export async function POST(request: Request) {
