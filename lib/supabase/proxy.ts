@@ -31,20 +31,20 @@ export async function updateSession(request: NextRequest) {
         return request.cookies.getAll()
       },
       setAll(cookiesToSet, headers) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+        cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value, options))
         response = NextResponse.next({ request })
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options)
-        })
-        Object.entries(headers).forEach(([key, value]) => {
-          response.headers.set(key, value)
-        })
+        cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
+        Object.entries(headers).forEach(([key, value]) => response.headers.set(key, value))
       },
     },
   })
 
-  const { data, error } = await supabase.auth.getClaims()
-  const authenticated = !error && Boolean(data?.claims?.sub)
+  // getUser() validates the session against Supabase Auth and refreshes the
+  // session when necessary. This keeps the SSR client and its RLS role aligned
+  // with the authenticated browser session instead of relying only on a local
+  // claims check.
+  const { data, error } = await supabase.auth.getUser()
+  const authenticated = !error && Boolean(data?.user?.id)
   const { pathname, search } = request.nextUrl
 
   if (isProtectedPath(pathname) && !authenticated) {
