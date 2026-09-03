@@ -1,8 +1,8 @@
-import { after, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
-import { executePreparedProfilingJob } from '@/lib/agents/run-profiling-job'
+import { enqueueDurableJob } from '@/lib/orchestration/queue'
 
 export const maxDuration = 300
 
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
         agent_definition_id: agentDefinition.id,
         agent_key: agentDefinition.agent_key,
         agent_version: agentDefinition.version,
-        execution_mode: 'background_after_response',
+        execution_mode: 'durable_queue',
         source_validation: sourceValidation,
       },
       started_at: now,
@@ -121,8 +121,12 @@ export async function POST(request: Request) {
     }
     const profilingRunId = profileInsert.data.id
 
-    after(async () => {
-      await executePreparedProfilingJob({
+    const durableJob = await enqueueDurableJob({
+      projectId,
+      jobType: 'PROFILING',
+      entityId: datasetVersionId,
+      agentRunId: activeAgentRunId,
+      payload: {
         userId: user.id,
         projectId,
         datasetVersionId,
@@ -131,7 +135,8 @@ export async function POST(request: Request) {
         agentRunId: activeAgentRunId,
         profilingRunId,
         requestInput: input,
-      })
+      },
+      maxAttempts: 3,
     })
 
     return NextResponse.json({
@@ -141,6 +146,7 @@ export async function POST(request: Request) {
       profilingRunId,
       agentDefinitionId: agentDefinition.id,
       agentVersion: agentDefinition.version,
+      durableJobId: durableJob.id,
       monitorUrl: `/monitoring?run=${encodeURIComponent(activeAgentRunId)}`,
     }, { status: 202 })
   } catch (error) {
