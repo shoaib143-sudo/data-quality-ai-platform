@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,3 +29,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Production build
         run: pnpm run build
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Validate JDBC bridge
+        working-directory: services/jdbc-bridge
+        run: mvn -B test package
