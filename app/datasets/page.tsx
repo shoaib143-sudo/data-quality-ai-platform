@@ -72,16 +72,16 @@ export default async function DatasetsPage() {
         <RegisterDatasetForm projects={projects} organizations={organizations} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} />
 
         <section className="rounded-xl border p-6">
-          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered data sources</h2><p className="mt-1 text-sm text-muted-foreground">Saved source connections are listed here independently from governed datasets.</p></div><span className="rounded-full border px-3 py-1 text-xs">{sources.length} sources</span></div>
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered data sources</h2><p className="mt-1 text-sm text-muted-foreground">Connection inventory and operational status. Dataset cards below show only the source binding needed for governance context.</p></div><span className="rounded-full border px-3 py-1 text-xs">{sources.length} sources</span></div>
           {sources.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">No data sources are registered yet.</p> :
             <div className="mt-5 space-y-3">{sources.map(source => <div key={source.id} className="rounded-lg border p-4">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between"><div><h3 className="font-medium">{source.name}</h3><p className="mt-1 text-sm text-muted-foreground">Project: {projectById.get(source.project_id)?.name ?? 'Unknown project'}</p></div><span className="rounded-full border px-2 py-1 text-xs">{statusLabel(source.status)}</span></div>
-              <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-2"><span>Type: {source.source_type}</span><span>Source ID: {source.id}</span></div>
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground"><span>Type: {source.source_type}</span><span>Source ID: {source.id}</span></div>
             </div>)}</div>}
         </section>
 
         <section className="rounded-xl border p-6">
-          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered datasets</h2><p className="mt-1 text-sm text-muted-foreground">Dataset identity, source binding, version readiness, execution source, and latest profiling state.</p></div><span className="rounded-full border px-3 py-1 text-xs">{datasets.length} datasets</span></div>
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered datasets</h2><p className="mt-1 text-sm text-muted-foreground">Dataset identity, source binding, version readiness, execution state, and latest profiling result.</p></div><span className="rounded-full border px-3 py-1 text-xs">{datasets.length} datasets</span></div>
           {datasets.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">No datasets are registered yet.</p> :
             <div className="mt-5 space-y-3">{datasets.map(dataset => {
               const datasetVersions = versionsByDataset.get(dataset.id) ?? []
@@ -92,8 +92,8 @@ export default async function DatasetsPage() {
               const profilingReady = Boolean(latest && latest.status === 'AVAILABLE' && executionSource?.active)
               return <div key={dataset.id} className="rounded-lg border p-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between"><div><h3 className="font-medium">{dataset.name}</h3><p className="mt-1 text-sm text-muted-foreground">{dataset.description || 'No description provided.'}</p></div><span className="rounded-full border px-2 py-1 text-xs">{statusLabel(dataset.status)}</span></div>
-                <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-4"><span>Source: {source?.name ?? 'Unbound'}</span><span>Type: {source?.source_type ?? executionSource?.source_type ?? 'N/A'}</span><span>Version: {latest ? `v${latest.version_number}` : 'None'}</span><span>Version status: {statusLabel(latest?.status)}</span></div>
-                <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-3"><span>Execution source: {executionSource?.active ? `${executionSource.source_type} · active` : executionSource ? `${executionSource.source_type} · configured, inactive` : 'Not configured'}</span><span>Profiling readiness: {profilingReady ? 'READY' : 'NOT READY'}</span><span>Latest profiling: {latestRun ? `${statusLabel(latestRun.status)}${latestRun.row_count !== null ? ` · ${latestRun.row_count} rows` : ''}` : 'Not run'}</span></div>
+                <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-3"><span>Source: {source?.name ?? 'Unbound'}</span><span>Version: {latest ? `v${latest.version_number}` : 'None'}</span><span>Version status: {statusLabel(latest?.status)}</span></div>
+                <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-3"><span>Execution: {executionSource?.active ? 'READY · active' : executionSource ? 'CONFIGURED · inactive' : 'Not configured'}</span><span>Profiling readiness: {profilingReady ? 'READY' : 'NOT READY'}</span><span>Latest profiling: {latestRun ? `${statusLabel(latestRun.status)}${latestRun.row_count !== null ? ` · ${latestRun.row_count} rows` : ''}` : 'Not run'}</span></div>
                 <div className="mt-2 text-xs text-muted-foreground">Identifier: {dataset.source_identifier || 'N/A'}{dataset.business_domain ? ` · Domain: ${dataset.business_domain}` : ''}</div>
               </div>
             })}</div>}
