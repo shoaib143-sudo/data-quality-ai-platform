@@ -149,7 +149,7 @@ function calculateColumnMetrics(columnName: string, rows: Row[]): ColumnResult {
   return { column_name: columnName, metrics, candidate_key_confidence: candidateKeyConfidence, sensitive_match_rate: round(sensitiveMatchRate), pattern_match_rate: patternMatchRate === null ? null : round(patternMatchRate), finding }
 }
 
-async function loadRowsFromTable(supabase: ReturnType<typeof createAdminClient>, datasetVersionId: string, maxRows: number) {
+export async function loadProfilingRows(supabase: ReturnType<typeof createAdminClient>, datasetVersionId: string, maxRows: number) {
   const { data: executionRows, error: executionError } = await supabase
     .schema('profiling')
     .from('dataset_execution_sources')
@@ -275,7 +275,7 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   if (activeRun.status === 'CANCELLED') throw new Error(`Profiling run ${profilingRunId} has been cancelled.`)
 
   const inputRows = Array.isArray(input.rows) ? input.rows.filter((row): row is Row => !!row && typeof row === 'object' && !Array.isArray(row)) : null
-  const loaded = inputRows ? { rowCount: inputRows.length, rows: inputRows } : await loadRowsFromTable(supabase, datasetVersionId, 1000)
+  const loaded = inputRows ? { rowCount: inputRows.length, rows: inputRows } : await loadProfilingRows(supabase, datasetVersionId, 1000)
   const rows = loaded.rows
 
   const { data: profileColumns, error: columnsError } = await supabase.schema('profiling').from('profile_columns').select('id, column_name').eq('profile_run_id', profilingRunId).order('column_name')
