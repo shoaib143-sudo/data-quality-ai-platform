@@ -88,12 +88,11 @@ export default async function DatasetsPage() {
               const latest = datasetVersions.reduce<VersionRow | undefined>((current, version) => !current || version.version_number > current.version_number ? version : current, undefined)
               const source = dataset.data_source_id ? sourceById.get(dataset.data_source_id) : undefined
               const executionSource = latest ? executionSourceByVersion.get(latest.id) : undefined
-              const latestRun = latest ? latestRunByVersion.get(latest.id) : undefined
               const profilingReady = Boolean(latest && latest.status === 'AVAILABLE' && executionSource?.active)
               return <div key={dataset.id} className="rounded-lg border p-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between"><div><h3 className="font-medium">{dataset.name}</h3><p className="mt-1 text-sm text-muted-foreground">{dataset.description || 'No description provided.'}</p></div><span className="rounded-full border px-2 py-1 text-xs">{statusLabel(dataset.status)}</span></div>
                 <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-4"><span>Source: {source?.name ?? 'Unbound'}</span><span>Type: {source?.source_type ?? executionSource?.source_type ?? 'N/A'}</span><span>Version: {latest ? `v${latest.version_number}` : 'None'}</span><span>Version status: {statusLabel(latest?.status)}</span></div>
-                <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-3"><span>Execution source: {executionSource?.active ? `${executionSource.source_type} · active` : 'Not configured'}</span><span>Profiling readiness: {profilingReady ? 'READY' : 'NOT READY'}</span><span>Latest profiling: {latestRun ? `${statusLabel(latestRun.status)}${latestRun.row_count !== null ? ` · ${latestRun.row_count} rows` : ''}` : 'Not run'}</span></div>
+                <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-3"><span>Execution source: {executionSource?.active ? `${executionSource.source_type} · active` : executionSource ? `${executionSource.source_type} · configured, inactive` : 'Not configured'}</span><span>Profiling readiness: {profilingReady ? 'READY' : 'NOT READY'}</span><span>Latest profiling: {latestRun ? `${statusLabel(latestRun.status)}${latestRun.row_count !== null ? ` · ${latestRun.row_count} rows` : ''}` : 'Not run'}</span></div>
                 <div className="mt-2 text-xs text-muted-foreground">Identifier: {dataset.source_identifier || 'N/A'}{dataset.business_domain ? ` · Domain: ${dataset.business_domain}` : ''}</div>
               </div>
             })}</div>}
