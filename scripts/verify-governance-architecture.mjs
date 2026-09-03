@@ -29,6 +29,10 @@ const requiredFiles = [
   'supabase/migrations/20260904051000_automated_platform_contract_checks.sql',
   'supabase/migrations/20260904052000_operational_recovery_targets_and_drill_gates.sql',
   'supabase/migrations/20260904053000_enterprise_identity_lineage_scorecards_and_indexes.sql',
+  'supabase/migrations/20260904055500_synthetic_governance_integration_suite.sql',
+  'supabase/migrations/20260904055600_fix_synthetic_governance_integration_profile_contract.sql',
+  'supabase/migrations/20260904055800_preserve_immutable_audit_references.sql',
+  'supabase/migrations/20260904055900_preserve_immutable_revision_references.sql',
 ]
 
 for (const path of requiredFiles) {
@@ -51,6 +55,9 @@ const checks = [
   ['supabase/migrations/20260904051000_automated_platform_contract_checks.sql', /run_platform_contract_checks/, 'database integration contract checks'],
   ['supabase/migrations/20260904052000_operational_recovery_targets_and_drill_gates.sql', /recovery_policies[\s\S]*backup_restore_drills/, 'recovery targets and drill gates'],
   ['supabase/migrations/20260904053000_enterprise_identity_lineage_scorecards_and_indexes.sql', /project_scorecard_snapshots[\s\S]*refresh_project_scorecard/, 'evidence governance scorecards'],
+  ['supabase/migrations/20260904055500_synthetic_governance_integration_suite.sql', /run_synthetic_governance_integration_suite[\s\S]*integration_test_runs/, 'synthetic cross-module governance integration suite'],
+  ['supabase/migrations/20260904055800_preserve_immutable_audit_references.sql', /drop constraint[\s\S]*audit_events_project_id_fkey[\s\S]*historical project identifier/i, 'immutable audit reference preservation'],
+  ['supabase/migrations/20260904055900_preserve_immutable_revision_references.sql', /drop constraint[\s\S]*object_revisions_project_id_fkey[\s\S]*revision history/i, 'immutable revision reference preservation'],
 ]
 
 for (const [path, pattern, label] of checks) {
@@ -63,5 +70,7 @@ const profilingRoute = await readFile('app/api/agents/run/route.ts', 'utf8')
 if (!/Idempotency-Key|idempotencyKey/.test(profilingRoute) || !/authorizeDatasetVersion/.test(profilingRoute)) throw new Error('Profiling start route must remain centrally authorized and idempotent.')
 const qualityRoute = await readFile('app/api/data-quality/run/route.ts', 'utf8')
 if (!/authorizeDatasetVersion/.test(qualityRoute) || !/idempotency/i.test(qualityRoute)) throw new Error('Data quality start route must remain centrally authorized and idempotent.')
+const databaseVerification = await readFile('scripts/verify-governance-database.mjs', 'utf8')
+if (!/run_synthetic_governance_integration_suite/.test(databaseVerification)) throw new Error('Database quality gate must execute the synthetic governance integration suite.')
 
 console.log('Governance architecture verification completed.')
