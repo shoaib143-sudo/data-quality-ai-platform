@@ -130,5 +130,63 @@ export async function compareProfiles(baselineProfileRunId: string, targetProfil
   for (const metric of baselineMetrics) map.set(key(metric, baselineNames), { metric_key: metric.metric_key, column_name: metric.profile_column_id ? baselineNames.get(metric.profile_column_id) ?? null : null, baseline_value: metric.numeric_value, target_value: null })
   for (const metric of targetMetrics) { const k = key(metric, targetNames); const row = map.get(k) ?? { metric_key: metric.metric_key, column_name: metric.profile_column_id ? targetNames.get(metric.profile_column_id) ?? null : null, baseline_value: null, target_value: null }; row.target_value = metric.numeric_value; map.set(k, row) }
   const changes = Array.from(map.values()).map((row) => ({ ...row, absolute_change: row.baseline_value !== null && row.target_value !== null ? row.target_value - row.baseline_value : null, relative_change: row.baseline_value !== null && row.target_value !== null && row.baseline_value !== 0 ? (row.target_value - row.baseline_value) / Math.abs(row.baseline_value) : null }))
-  return { tool: 'compare_profiles', status: 'COMPLETED', baseline_profile_run_id: baseline.id, target_profile_run_id: target.id, baseline_dataset_version_id: baseline.dataset_version_id, target_dataset_version_id: target.dataset_version_id, changes }
+  const materialChanges = changes.filter((row) => {
+    if (typeof row.relative_change === 'number') return Math.abs(row.relative_change) >= 0.2
+    if (row.baseline_value === null && row.target_value !== null) return true
+    if (row.baseline_value !== null && row.target_value === null) return true
+    return false
+  })
+
+  const { data: comparison, error: comparisonError } = await supabase.schema('profiling').from('profile_comparisons').insert({
+    current_profile_run_id: targetProfileRunId,
+    baseline_profile_run_id: baselineProfileRunId,
+    comparison_type: 'BASELINE',
+    status: 'COMPLETED',
+    summary: materialChanges.length ? `${materialChanges.length} material metric changes detected.` : 'No material metric changes detected.',
+    changes: { changes, material_changes: materialChanges },
+    metrics_changed: materialChanges.length,
+    anomalies_found: materialChanges.length,
+  }).select('id').single()
+  if (comparisonError) throw new Error(`Unable to persist profile comparison: ${comparisonError.message}`)
+
+  if (materialChanges.length) {
+    const targetColumnIdByName = new Map(targetColumns.map((column) => [column.column_name, column.id]))
+    const anomalyRows = materialChanges.slice(0, 200).map((row) => {
+      const magnitude = typeof row.relative_change === 'number' ? Math.abs(row.relative_change) : 1
+      const direction = typeof row.absolute_change === 'number' ? row.absolute_change > 0 ? 'INCREASE' : row.absolute_change < 0 ? 'DECREASE' : 'UNCHANGED' : 'CHANGED'
+      return {
+        profile_run_id: targetProfileRunId,
+        profile_column_id: row.column_name ? targetColumnIdByName.get(row.column_name) ?? null : null,
+        anomaly_type: 'PROFILE_CHANGE',
+        severity: magnitude >= 0.5 ? 'HIGH' : 'MEDIUM',
+        metric_key: row.metric_key,
+        current_value: row.target_value,
+        baseline_value: row.baseline_value,
+        absolute_change: row.absolute_change,
+        relative_change: row.relative_change,
+        direction,
+        title: `${row.column_name ?? 'Dataset'} ${row.metric_key} changed materially`,
+        description: typeof row.relative_change === 'number'
+          ? `${row.metric_key} changed by ${Math.round(row.relative_change * 100)}% relative to the baseline profile.`
+          : `${row.metric_key} is present in only one side of the profile comparison.`,
+        evidence: { baseline_profile_run_id: baselineProfileRunId, target_profile_run_id: targetProfileRunId, comparison_id: comparison.id },
+        detected_by: 'profiling_agent_2.0',
+      }
+    })
+    const { error: anomalyError } = await supabase.schema('profiling').from('profile_anomalies').insert(anomalyRows)
+    if (anomalyError) throw new Error(`Unable to persist profile comparison anomalies: ${anomalyError.message}`)
+  }
+
+  return {
+    tool: 'compare_profiles',
+    status: 'COMPLETED',
+    comparison_id: comparison.id,
+    baseline_profile_run_id: baseline.id,
+    target_profile_run_id: target.id,
+    baseline_dataset_version_id: baseline.dataset_version_id,
+    target_dataset_version_id: target.dataset_version_id,
+    metrics_changed: materialChanges.length,
+    anomalies_found: materialChanges.length,
+    changes,
+  }
 }
