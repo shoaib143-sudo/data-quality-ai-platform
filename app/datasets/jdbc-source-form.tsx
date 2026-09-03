@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { ConnectionPrerequisites } from './connection-prerequisites'
 
 export type JdbcProjectOption = { id: string; name: string }
 export type JdbcOrganizationOption = { id: string; name: string }
@@ -108,10 +109,10 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
     if (!projectId || !name.trim() || !jdbcUrl.trim()) { setStatus('Project, connection name, and connection string are required.'); return }
     setBusy(true)
     try {
-      const response = await fetch('/api/datasets/source/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, name, sourceType: 'JDBC', jdbcUrl, connectionKind, connectionOnly: true }) })
+      const response = await fetch('/api/datasets/source/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, name, sourceType: 'JDBC', jdbcUrl, connectionKind, connectionOnly: true, schema: schema || undefined, table: table || undefined }) })
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? 'Connection save failed.')
       dispatchSource(payload.source)
-      setStatus('Connection saved as configured and added to the dataset source selector. Select it there, then provide schema.table when registering the dataset.')
+      setStatus('Connection saved. Its readiness will be based on the prerequisites shown above and a successful validation.')
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Connection save failed.') } finally { setBusy(false) }
   }
   async function register() {
@@ -130,12 +131,13 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
   const canActivate = isCsv ? connectionTested : connectionTested && !!schema && !!table
 
   return <section className="rounded-xl border p-6">
-    <div className="mb-6"><h2 className="text-lg font-semibold">Connect a data source</h2><p className="mt-1 text-sm text-muted-foreground">Choose the source type from one dropdown. Database credentials are managed securely by the server. CSV sources can be validated directly.</p></div>
+    <div className="mb-6"><h2 className="text-lg font-semibold">Connect a data source</h2><p className="mt-1 text-sm text-muted-foreground">Choose a connection type. The prerequisites below update in real time for the selected type. Database credentials are managed securely by the server.</p></div>
     {availableProjects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available.</p> : <div className="grid gap-4 md:grid-cols-2">
       <div className="space-y-2 text-sm"><label className="space-y-2 block"><span className="font-medium">Project</span><select value={createProjectOpen ? CREATE_PROJECT : projectId} onChange={e => selectProject(e.target.value)} disabled={busy || creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{organizations.length > 0 && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
         {createProjectOpen && organizations.length > 0 && <div className="rounded-lg border p-3 space-y-3"><label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" className="w-full rounded-md border bg-background px-3 py-2" /></label><label className="space-y-1 block"><span className="text-xs font-medium">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setCreateProjectOpen(false); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div></div>}
       </div>
       <label className="space-y-2 text-sm"><span className="font-medium">Connection type</span><select value={connectionKind} onChange={e => selectConnection(e.target.value as ConnectionKind)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{CONNECTIONS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="text-xs text-muted-foreground">{selectedConnection.description}</span></label>
+      <ConnectionPrerequisites connectionKind={connectionKind} />
       <label className="space-y-2 text-sm"><span className="font-medium">Connection name</span><input value={name} onChange={e => setName(e.target.value)} disabled={busy} placeholder={`${selectedConnection.label} connection`} className="w-full rounded-md border bg-background px-3 py-2" /></label>
       <label className="space-y-2 text-sm md:col-span-2"><span className="font-medium">{isCsv ? 'CSV file URL / storage path' : 'Connection string'}</span><input value={jdbcUrl} onChange={e => setJdbcUrl(e.target.value)} disabled={busy} placeholder={selectedConnection.placeholder} className="w-full rounded-md border bg-background px-3 py-2" /><span className="text-xs text-muted-foreground">{isCsv ? 'Use an HTTPS CSV URL or a Supabase Storage bucket/path.' : 'Credentials are managed securely by the server. Do not embed usernames, passwords, tokens, or secrets in the URL.'}</span></label>
       <label className="space-y-2 text-sm"><span className="font-medium">Schema</span><select value={schema} onChange={e => { setSchema(e.target.value); setTable(''); setTables([]) }} disabled={busy || isCsv || schemas.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">{isCsv ? 'CSV file (no database schema)' : 'Discover schemas first'}</option>{schemas.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
