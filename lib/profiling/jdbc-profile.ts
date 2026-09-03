@@ -76,7 +76,7 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
 
   const sampling = await resolveSamplingPolicy(supabase, datasetVersionId, 1000)
   const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, sampling.loadLimit)
-  const sampled = applySamplingPolicy(loaded.rows as Record<string, unknown>[], loaded.rowCount ?? sampledRows.length, sampling)
+  const sampled = applySamplingPolicy(loaded.rows as Record<string, unknown>[], loaded.rowCount ?? loaded.rows.length, sampling)
   const sampledRows = sampled.rows
   const metadataColumns = Array.isArray(versionMetadata.columns) ? versionMetadata.columns : []
   const declared = new Map(metadataColumns.map((column) => {
