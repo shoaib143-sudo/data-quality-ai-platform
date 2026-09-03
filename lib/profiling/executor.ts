@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { compareProfiles, detectDuplicates, detectOutliers, detectPatterns, detectSensitiveColumns, inferCandidateKeys } from '@/lib/profiling/derived-tools'
 
 const ALLOWED_TOOLS = new Set([
   'inspect_dataset',
@@ -83,20 +84,39 @@ export async function executeProfilingTool(
       )
 
     case 'detect_patterns':
+      if (!profilingRunId) throw new Error('profilingRunId is required for detect_patterns')
+      return detectPatterns(profilingRunId)
+
     case 'infer_candidate_keys':
-    case 'compare_profiles':
+      if (!profilingRunId) throw new Error('profilingRunId is required for infer_candidate_keys')
+      return inferCandidateKeys(profilingRunId)
+
     case 'detect_outliers':
+      if (!profilingRunId) throw new Error('profilingRunId is required for detect_outliers')
+      return detectOutliers(profilingRunId)
+
     case 'detect_sensitive_columns':
+      if (!profilingRunId) throw new Error('profilingRunId is required for detect_sensitive_columns')
+      return detectSensitiveColumns(profilingRunId)
+
     case 'detect_duplicates':
-      return {
-        tool: toolKey,
-        status: 'accepted',
-        dataset_version_id: datasetVersionId,
-        profiling_run_id: profilingRunId ?? null,
-        input,
-        message:
-          'Tool execution contract registered. Implementation pending.',
-      }
+      if (!profilingRunId) throw new Error('profilingRunId is required for detect_duplicates')
+      return detectDuplicates(profilingRunId)
+
+    case 'compare_profiles': {
+      const baselineProfileRunId = typeof input.baselineProfileRunId === 'string'
+        ? input.baselineProfileRunId
+        : typeof input.baseline_profile_run_id === 'string'
+          ? input.baseline_profile_run_id
+          : ''
+      const targetProfileRunId = typeof input.targetProfileRunId === 'string'
+        ? input.targetProfileRunId
+        : typeof input.target_profile_run_id === 'string'
+          ? input.target_profile_run_id
+          : ''
+      if (!baselineProfileRunId || !targetProfileRunId) throw new Error('baselineProfileRunId and targetProfileRunId are required for compare_profiles')
+      return compareProfiles(baselineProfileRunId, targetProfileRunId)
+    }
 
     default:
       throw new Error(
