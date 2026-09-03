@@ -40,8 +40,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
     setStatus(null)
   }
 
-  async function createProject(event: FormEvent) {
-    event.preventDefault()
+  async function createProject() {
     setStatus(null)
     if (!selectedOrganizationId || !newProjectName.trim()) {
       setStatus('Organization and project name are required.')
@@ -121,12 +120,12 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
         <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2 text-sm">
             <label className="space-y-2"><span className="font-medium">Project</span><select value={projectId || CREATE_PROJECT} onChange={e => changeProject(e.target.value)} disabled={running || profiling || creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{canCreateProject && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
-            {projectId === '' && canCreateProject && <form onSubmit={createProject} className="rounded-lg border p-3 space-y-3">
+            {projectId === '' && canCreateProject && <div className="rounded-lg border p-3 space-y-3">
               <label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>
               <label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" className="w-full rounded-md border bg-background px-3 py-2" autoFocus /></label>
               <label className="space-y-1 block"><span className="text-xs font-medium">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label>
-              <div className="flex gap-2"><button type="submit" disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setProjectId(availableProjects[0]?.id ?? ''); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div>
-            </form>}
+              <div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setProjectId(availableProjects[0]?.id ?? ''); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div>
+            </div>}
           </div>
           <label className="space-y-2 text-sm"><span className="font-medium">Data source</span><select value={sourceId} onChange={e => setSourceId(e.target.value)} disabled={running || profiling || projectSources.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select a source</option>{projectSources.map(s => <option key={s.id} value={s.id}>{s.name} · {s.sourceType}</option>)}</select><span className="text-xs text-muted-foreground">Only active sources already connected above are listed here. To use PostgreSQL, SQL Server, MySQL, Databricks, Generic JDBC, or another CSV source, connect and save it in the source section above first.</span></label>
           <label className="space-y-2 text-sm"><span className="font-medium">Dataset name</span><input value={name} onChange={e => setName(e.target.value)} disabled={running || profiling} placeholder="Customer master" className="w-full rounded-md border bg-background px-3 py-2" /></label>
