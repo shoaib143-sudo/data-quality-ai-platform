@@ -5,6 +5,7 @@ import { executePreparedProfilingJob } from '@/lib/agents/run-profiling-job'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
+import { deliverNotificationJob } from '@/lib/observability/notifications'
 import {
   claimDurableJobByAgentRun,
   claimDurableJobs,
@@ -58,6 +59,13 @@ async function executeJob(job: DurableJob) {
     const profileRunId = text(payload.profileRunId)
     if (!datasetVersionId || !profileRunId) throw new Error('Durable observability job payload is incomplete.')
     await evaluateObservabilitySignals(datasetVersionId, profileRunId)
+    return
+  }
+
+  if (job.job_type === 'NOTIFICATION') {
+    const deliveryId = text(payload.deliveryId)
+    if (!deliveryId) throw new Error('Durable notification job payload is incomplete.')
+    await deliverNotificationJob(deliveryId)
     return
   }
 
