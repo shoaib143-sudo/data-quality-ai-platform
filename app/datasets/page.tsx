@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Activity, ArrowRight, BarChart3, CheckCircle2, Clock3, Database, Layers3, Play, ShieldCheck, Sparkles } from 'lucide-react'
+import { Activity, ArrowRight, BarChart3, CheckCircle2, Clock3, Database, Layers3, ShieldCheck, Sparkles } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { RegisterDatasetForm, type OrganizationOption, type ProjectOption } from './register-dataset-form'
