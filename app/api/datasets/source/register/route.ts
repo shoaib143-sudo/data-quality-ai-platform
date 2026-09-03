@@ -19,6 +19,8 @@ function jdbcTableParts(sourceIdentifier: string) {
   return null
 }
 
+type DatasetVersionForReconciliation = { id: string; dataset_id: string; version_number: number; metadata: unknown }
+
 async function reconcileSourceBoundDatasets(admin: ReturnType<typeof createAdminClient>, source: { id: string; project_id: string; source_type: string; connection_metadata: unknown }) {
   const sourceType = String(source.source_type).trim().toLowerCase()
   const { data: datasets } = await admin.schema('catalog').from('datasets').select('id, source_identifier, metadata').eq('project_id', source.project_id).eq('data_source_id', source.id)
@@ -26,9 +28,10 @@ async function reconcileSourceBoundDatasets(admin: ReturnType<typeof createAdmin
 
   const datasetIds = datasets.map(dataset => dataset.id)
   const { data: versions } = await admin.schema('catalog').from('dataset_versions').select('id, dataset_id, version_number, metadata').in('dataset_id', datasetIds).order('version_number', { ascending: false })
-  const { data: executionSources } = await admin.schema('profiling').from('dataset_execution_sources').select('id, dataset_version_id, execution_config, active').in('dataset_version_id', versions?.map(version => version.id) ?? [])
-  const latestByDataset = new Map<string, typeof versions extends Array<infer T> ? T : never>()
-  for (const version of versions ?? []) if (!latestByDataset.has(version.dataset_id)) latestByDataset.set(version.dataset_id, version)
+  const typedVersions = (versions ?? []) as DatasetVersionForReconciliation[]
+  const { data: executionSources } = await admin.schema('profiling').from('dataset_execution_sources').select('id, dataset_version_id, execution_config, active').in('dataset_version_id', typedVersions.map(version => version.id))
+  const latestByDataset = new Map<string, DatasetVersionForReconciliation>()
+  for (const version of typedVersions) if (!latestByDataset.has(version.dataset_id)) latestByDataset.set(version.dataset_id, version)
   const executionByVersion = new Map((executionSources ?? []).map(item => [item.dataset_version_id, item]))
   const baseMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? { ...(source.connection_metadata as Record<string, unknown>) } : {}
 
