@@ -3,6 +3,8 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { RegisterDatasetForm, type OrganizationOption, type ProjectOption } from './register-dataset-form'
 import { JdbcSourceForm } from './jdbc-source-form'
+import { SourceActions } from './source-actions'
+import { DatasetActions } from './dataset-actions'
 
 type DatasetRow = { id: string; project_id: string; data_source_id: string | null; name: string; description: string | null; source_identifier: string | null; business_domain: string | null; status: string; created_at: string }
 type VersionRow = { id: string; dataset_id: string; version_number: number; source_uri: string | null; status: string; created_at: string }
@@ -10,6 +12,7 @@ type SourceRow = { id: string; project_id: string; name: string; source_type: st
 type ExecutionSourceRow = { dataset_version_id: string; source_type: string; source_uri: string | null; active: boolean }
 type ProfileRunRow = { id: string; dataset_version_id: string; status: string; row_count: number | null; column_count: number | null; started_at: string | null; completed_at: string | null }
 type MembershipRow = { organization_id: string; role: string }
+type AgentDefinitionRow = { id: string; agent_key: string; version: string; enabled: boolean }
 
 function statusLabel(status: string | null | undefined) {
   if (!status) return 'N/A'
@@ -20,7 +23,7 @@ export default async function DatasetsPage() {
   const user = await requireUser()
   const supabase = await createClient()
 
-  const [projectsResult, sourcesResult, datasetsResult, versionsResult, membershipsResult, executionSourcesResult, profileRunsResult] = await Promise.all([
+  const [projectsResult, sourcesResult, datasetsResult, versionsResult, membershipsResult, executionSourcesResult, profileRunsResult, agentDefinitionResult] = await Promise.all([
     supabase.schema('app').from('projects').select('id, name').order('name'),
     supabase.schema('catalog').from('data_sources').select('id, project_id, name, source_type, status').order('name'),
     supabase.schema('catalog').from('datasets').select('id, project_id, data_source_id, name, description, source_identifier, business_domain, status, created_at').order('created_at', { ascending: false }),
@@ -28,6 +31,7 @@ export default async function DatasetsPage() {
     supabase.schema('app').from('organization_members').select('organization_id, role').eq('user_id', user.id),
     supabase.schema('profiling').from('dataset_execution_sources').select('dataset_version_id, source_type, source_uri, active'),
     supabase.schema('profiling').from('profile_runs').select('id, dataset_version_id, status, row_count, column_count, started_at, completed_at').order('started_at', { ascending: false }),
+    supabase.schema('agent').from('agent_definitions').select('id, agent_key, version, enabled').eq('agent_key', 'profiling_agent').eq('version', '2.0').eq('enabled', true).maybeSingle(),
   ])
 
   if (projectsResult.error) throw new Error(`Unable to load projects: ${projectsResult.error.message}`)
@@ -45,6 +49,7 @@ export default async function DatasetsPage() {
   const executionSources = (executionSourcesResult.data ?? []) as ExecutionSourceRow[]
   const profileRuns = (profileRunsResult.data ?? []) as ProfileRunRow[]
   const memberships = (membershipsResult.data ?? []) as MembershipRow[]
+  const agentDefinition = agentDefinitionResult.data as AgentDefinitionRow | null
   const adminOrganizationIds = memberships.filter(m => ['OWNER', 'ADMIN'].includes(String(m.role))).map(m => m.organization_id)
   const organizationsResult = adminOrganizationIds.length > 0
     ? await supabase.schema('app').from('organizations').select('id, name').in('id', adminOrganizationIds).order('name')
@@ -72,16 +77,15 @@ export default async function DatasetsPage() {
         <RegisterDatasetForm projects={projects} organizations={organizations} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} />
 
         <section className="rounded-xl border p-6">
-          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered data sources</h2><p className="mt-1 text-sm text-muted-foreground">Connection inventory and operational status. Dataset cards below show only the source binding needed for governance context.</p></div><span className="rounded-full border px-3 py-1 text-xs">{sources.length} sources</span></div>
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered data sources</h2><p className="mt-1 text-sm text-muted-foreground">Connection inventory. Actions here validate the saved source instead of duplicating its details.</p></div><span className="rounded-full border px-3 py-1 text-xs">{sources.length} sources</span></div>
           {sources.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">No data sources are registered yet.</p> :
-            <div className="mt-5 space-y-3">{sources.map(source => <div key={source.id} className="rounded-lg border p-4">
-              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between"><div><h3 className="font-medium">{source.name}</h3><p className="mt-1 text-sm text-muted-foreground">Project: {projectById.get(source.project_id)?.name ?? 'Unknown project'}</p></div><span className="rounded-full border px-2 py-1 text-xs">{statusLabel(source.status)}</span></div>
-              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground"><span>Type: {source.source_type}</span><span>Source ID: {source.id}</span></div>
+            <div className="mt-5 divide-y">{sources.map(source => <div key={source.id} className="py-4 first:pt-0 last:pb-0">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-medium">{source.name}</h3><span className="rounded-full border px-2 py-0.5 text-xs">{source.source_type}</span><span className="rounded-full border px-2 py-0.5 text-xs">{statusLabel(source.status)}</span></div><p className="mt-1 text-xs text-muted-foreground">{projectById.get(source.project_id)?.name ?? 'Unknown project'}</p></div><SourceActions projectId={source.project_id} sourceId={source.id} status={source.status} /></div>
             </div>)}</div>}
         </section>
 
         <section className="rounded-xl border p-6">
-          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered datasets</h2><p className="mt-1 text-sm text-muted-foreground">Dataset identity, source binding, version readiness, execution state, and latest profiling result.</p></div><span className="rounded-full border px-3 py-1 text-xs">{datasets.length} datasets</span></div>
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered datasets</h2><p className="mt-1 text-sm text-muted-foreground">Readiness, execution state, and latest profiling result. Source configuration is shown once in the source inventory above.</p></div><span className="rounded-full border px-3 py-1 text-xs">{datasets.length} datasets</span></div>
           {datasets.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">No datasets are registered yet.</p> :
             <div className="mt-5 space-y-3">{datasets.map(dataset => {
               const datasetVersions = versionsByDataset.get(dataset.id) ?? []
@@ -92,9 +96,10 @@ export default async function DatasetsPage() {
               const profilingReady = Boolean(latest && latest.status === 'AVAILABLE' && executionSource?.active)
               return <div key={dataset.id} className="rounded-lg border p-4">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between"><div><h3 className="font-medium">{dataset.name}</h3><p className="mt-1 text-sm text-muted-foreground">{dataset.description || 'No description provided.'}</p></div><span className="rounded-full border px-2 py-1 text-xs">{statusLabel(dataset.status)}</span></div>
-                <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-3"><span>Source: {source?.name ?? 'Unbound'}</span><span>Version: {latest ? `v${latest.version_number}` : 'None'}</span><span>Version status: {statusLabel(latest?.status)}</span></div>
-                <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-3"><span>Execution: {executionSource?.active ? 'READY · active' : executionSource ? 'CONFIGURED · inactive' : 'Not configured'}</span><span>Profiling readiness: {profilingReady ? 'READY' : 'NOT READY'}</span><span>Latest profiling: {latestRun ? `${statusLabel(latestRun.status)}${latestRun.row_count !== null ? ` · ${latestRun.row_count} rows` : ''}` : 'Not run'}</span></div>
-                <div className="mt-2 text-xs text-muted-foreground">Identifier: {dataset.source_identifier || 'N/A'}{dataset.business_domain ? ` · Domain: ${dataset.business_domain}` : ''}</div>
+                <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-3"><span>Source: {source?.name ?? 'Unbound'}</span><span>Version: {latest ? `v${latest.version_number}` : 'None'}</span><span>Version: {statusLabel(latest?.status)}</span></div>
+                <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-3"><span>Execution: {executionSource?.active ? 'READY' : executionSource ? 'CONFIGURED · inactive' : 'Not configured'}</span><span>Profiling: {profilingReady ? 'READY' : 'NOT READY'}</span><span>Latest run: {latestRun ? `${statusLabel(latestRun.status)}${latestRun.row_count !== null ? ` · ${latestRun.row_count} rows` : ''}` : 'Not run'}</span></div>
+                <div className="mt-2 text-xs text-muted-foreground">Identifier: {dataset.source_identifier || 'N/A'}{dataset.business_domain ? ` · ${dataset.business_domain}` : ''}</div>
+                {latest ? <DatasetActions projectId={dataset.project_id} datasetVersionId={latest.id} agentDefinitionId={agentDefinition?.id ?? null} ready={profilingReady} /> : null}
               </div>
             })}</div>}
         </section>
