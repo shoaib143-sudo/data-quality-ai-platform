@@ -17,6 +17,7 @@ export type AuthorizationCapability =
   | 'glossary.read'
   | 'glossary.manage'
   | 'lineage.read'
+  | 'lineage.manage'
   | 'quality.read'
   | 'quality.manage'
   | 'quality.execute'
