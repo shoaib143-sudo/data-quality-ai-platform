@@ -76,7 +76,7 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
     const effectiveUsername = connectionKind === 'databricks' ? 'token' : username.trim()
     const effectivePassword = connectionKind === 'databricks' ? token : password
     if (!effectiveUsername || !effectivePassword) throw new Error(connectionKind === 'databricks' ? 'Databricks access token is required.' : 'Username and password are required.')
-    const response = await fetch('/api/datasets/source/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, connectionKind, username: effectiveUsername, password: effectivePassword }) })
+    const response = await fetch('/api/datasets/source/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, connectionKind, jdbcUrl: buildJdbcUrl(), username: effectiveUsername, password: effectivePassword }) })
     const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? 'Unable to securely configure credentials.')
     setCredentialRef(payload.credentialRef); return payload.credentialRef as string
   }
