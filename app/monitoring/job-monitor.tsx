@@ -142,6 +142,16 @@ export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initia
   }, [])
   useEffect(() => { const timer = window.setInterval(refresh, 3000); return () => window.clearInterval(timer) }, [refresh])
   useEffect(() => { if (!selectedId || !runs.some((r) => r.id === selectedId)) setSelectedId(runs[0]?.id ?? null) }, [runs, selectedId])
+  useEffect(() => {
+    if (!selectedId) return
+    const run = runs.find((item) => item.id === selectedId)
+    if (!run || run.status !== 'QUEUED') return
+    void fetch('/api/jobs/worker', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentRunId: selectedId }),
+    }).then(() => refresh()).catch(() => undefined)
+  }, [selectedId, runs, refresh])
 
   const filtered = useMemo(() => filter === 'ALL' ? runs : runs.filter((r) => r.status === filter), [runs, filter])
   const selected = runs.find((r) => r.id === selectedId) ?? null
