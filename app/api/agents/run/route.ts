@@ -8,6 +8,8 @@ import type { ToolExecutionContext } from '@/lib/agents/types'
 
 const PRODUCTION_AGENT_KEY = 'profiling_agent'
 const PRODUCTION_AGENT_VERSION = '2.0'
+const PROFILING_ENGINE_NAME = 'profiling-engine'
+const PROFILING_ENGINE_VERSION = '1.1'
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
 function errorMessage(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback }
@@ -74,7 +76,7 @@ export async function POST(request: Request) {
     if (runInsert.error || !runInsert.data) throw new Error(`Unable to create agent run: ${runInsert.error?.message ?? 'unknown error'}`)
     agentRunId = runInsert.data.id
 
-    const profileInsert = await admin.schema('profiling').from('profile_runs').insert({ dataset_version_id: datasetVersionId, status: 'RUNNING', agent_run_id: agentRunId, started_at: now }).select('id').single()
+    const profileInsert = await admin.schema('profiling').from('profile_runs').insert({ dataset_version_id: datasetVersionId, status: 'RUNNING', agent_run_id: agentRunId, engine_name: PROFILING_ENGINE_NAME, engine_version: PROFILING_ENGINE_VERSION, configuration: { agent_definition_id: agentDefinition.id, agent_key: agentDefinition.agent_key, agent_version: agentDefinition.version }, started_at: now }).select('id').single()
     if (profileInsert.error || !profileInsert.data) throw new Error(`Unable to create profiling run: ${profileInsert.error?.message ?? 'unknown error'}`)
     profilingRunId = profileInsert.data.id
 
