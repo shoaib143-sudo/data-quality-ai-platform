@@ -104,6 +104,8 @@ export async function POST(request: Request) {
     if (sourceType === 'JDBC' && connectionOnly) {
       const connectionMetadata: Record<string, unknown> = { jdbc_url: jdbcUrl, connection_kind: connectionKind }
       if (credentialRef) connectionMetadata.credential_ref = credentialRef
+      if (schema) connectionMetadata.schema = schema
+      if (table) connectionMetadata.table = table
       const { data: existing } = await admin.schema('catalog').from('data_sources').select('id').eq('project_id', projectId).eq('name', name).maybeSingle()
       if (existing) {
         const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: 'JDBC', connection_metadata: connectionMetadata, status: 'CONFIGURED', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
