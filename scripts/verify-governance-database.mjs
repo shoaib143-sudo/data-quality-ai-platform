@@ -33,14 +33,24 @@ for (const project of projects ?? []) {
   console.log(`PASS evidence scorecard ${project.name} -> ${Math.round(overall * 100)}%`)
 }
 
-const [{ count: duplicateActiveSources, error: sourceError }, { count: deadEvents, error: eventError }] = await Promise.all([
+const [{ count: activeSources, error: sourceError }, { count: deadEvents, error: eventError }] = await Promise.all([
   supabase.schema('profiling').from('dataset_execution_sources').select('dataset_version_id', { count: 'exact', head: true }).eq('active', true),
   supabase.schema('orchestration').from('event_outbox').select('id', { count: 'exact', head: true }).eq('status', 'DEAD').gte('created_at', new Date(Date.now() - 24 * 60 * 60_000).toISOString()),
 ])
 if (sourceError) throw new Error(`Unable to inspect execution sources: ${sourceError.message}`)
 if (eventError) throw new Error(`Unable to inspect governance outbox: ${eventError.message}`)
-console.log(`PASS active execution source inventory -> ${duplicateActiveSources ?? 0} active bindings`)
+console.log(`PASS active execution source inventory -> ${activeSources ?? 0} active bindings`)
 if ((deadEvents ?? 0) > 0) throw new Error(`${deadEvents} governance outbox events reached DEAD state in the previous 24 hours.`)
 console.log('PASS governance outbox has no recent DEAD events')
+
+const { data: syntheticResult, error: syntheticError } = await supabase.schema('governance').rpc('run_synthetic_governance_integration_suite')
+if (syntheticError) throw new Error(`Synthetic governance integration suite failed to execute: ${syntheticError.message}`)
+if (!syntheticResult || typeof syntheticResult !== 'object' || syntheticResult.status !== 'PASSED') {
+  throw new Error(`Synthetic governance integration suite returned ${String(syntheticResult?.status ?? 'UNKNOWN')}: ${JSON.stringify(syntheticResult)}`)
+}
+const syntheticChecks = syntheticResult.checks && typeof syntheticResult.checks === 'object' ? Object.entries(syntheticResult.checks) : []
+const failedSyntheticChecks = syntheticChecks.filter(([, passed]) => passed !== true).map(([key]) => key)
+if (failedSyntheticChecks.length) throw new Error(`Synthetic governance integration checks failed: ${failedSyntheticChecks.join(', ')}`)
+console.log(`PASS synthetic governance integration suite -> ${syntheticChecks.length} cross-module checks`)
 
 console.log('Governance database verification completed.')
