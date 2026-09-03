@@ -16,13 +16,27 @@ async function check(path, expected) {
   const response = await request(`${baseUrl}${path}`)
   if (!expected(response)) throw new Error(`${path} returned unexpected HTTP ${response.status}`)
   console.log(`PASS ${path} -> ${response.status}`)
+  return response
 }
 
 await check('/login', (response) => response.status >= 200 && response.status < 400)
+const liveResponse = await check('/api/health/live', (response) => response.status === 200)
+const live = await liveResponse.json()
+if (live.status !== 'ALIVE') throw new Error(`Production liveness returned ${String(live.status)}`)
+console.log('PASS production liveness payload')
+
+const readyResponse = await check('/api/health/ready', (response) => response.status === 200)
+const ready = await readyResponse.json()
+if (!['READY','DEGRADED'].includes(ready.status)) throw new Error(`Production readiness returned ${String(ready.status)}`)
+if (ready.components?.database?.status !== 'READY') throw new Error('Production database readiness is not READY.')
+if (ready.components?.agents?.status !== 'READY') throw new Error('Production agent readiness is not READY.')
+console.log(`PASS production readiness payload -> ${ready.status}`)
+
 await check('/api/profiling/run', (response) => [401, 403, 405].includes(response.status))
 await check('/api/profiling/validate', (response) => [401, 403, 405].includes(response.status))
 await check('/api/datasets/register', (response) => [401, 403, 405].includes(response.status))
 await check('/api/agents/run', (response) => [401, 403, 405].includes(response.status))
+await check('/api/lineage/ingest', (response) => [401, 403, 405].includes(response.status))
 
 if (bridgeUrl) {
   const response = await request(`${bridgeUrl}/health`)
