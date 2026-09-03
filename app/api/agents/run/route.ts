@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-executor'
 import { validateProfilingRun } from '@/lib/profiling/run-validation'
+import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 
 const PRODUCTION_AGENT_KEY = 'profiling_agent'
@@ -58,18 +59,36 @@ export async function POST(request: Request) {
     const { data: datasetVersion, error: datasetVersionError } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id,status').eq('id', datasetVersionId).maybeSingle()
     if (datasetVersionError) throw new Error(`Unable to resolve dataset version: ${datasetVersionError.message}`)
     if (!datasetVersion) return NextResponse.json({ error: 'Dataset version not found' }, { status: 404 })
-    const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets').select('id,project_id,data_source_id').eq('id', datasetVersion.dataset_id).eq('project_id', projectId).maybeSingle()
+    const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets').select('id,project_id,data_source_id,source_identifier').eq('id', datasetVersion.dataset_id).eq('project_id', projectId).maybeSingle()
     if (datasetError) throw new Error(`Unable to verify dataset ownership: ${datasetError.message}`)
     if (!dataset) return NextResponse.json({ error: 'Dataset version not found for project' }, { status: 404 })
     if (String(datasetVersion.status).toUpperCase() !== 'AVAILABLE') return NextResponse.json({ error: 'Dataset version is not profiling-ready. Validate the source and wait for the version to become AVAILABLE.' }, { status: 409 })
 
     const { data: source } = dataset.data_source_id
-      ? await admin.schema('catalog').from('data_sources').select('id,status').eq('id', dataset.data_source_id).eq('project_id', projectId).maybeSingle()
+      ? await admin.schema('catalog').from('data_sources').select('id,project_id,status,source_type,connection_metadata').eq('id', dataset.data_source_id).eq('project_id', projectId).maybeSingle()
       : { data: null }
     if (!source || String(source.status).toUpperCase() !== 'ACTIVE') return NextResponse.json({ error: 'The dataset data source is not ACTIVE. Validate or activate the source before profiling.' }, { status: 409 })
-    const { data: executionSource, error: executionSourceError } = await admin.schema('profiling').from('dataset_execution_sources').select('id,active').eq('dataset_version_id', datasetVersionId).maybeSingle()
+
+    const sourceIdentifier = typeof dataset.source_identifier === 'string' ? dataset.source_identifier.trim() : ''
+    const sourceValidation = await validateDataSourceForProfiling(admin, source, sourceIdentifier)
+    if (!sourceValidation.valid) {
+      return NextResponse.json({
+        error: `Profiling preflight failed: ${sourceValidation.errors.join(' ') || 'source validation failed.'}`,
+        source_validation: sourceValidation,
+      }, { status: 409 })
+    }
+
+    const { data: executionSourceRows, error: executionSourceError } = await admin
+      .schema('profiling')
+      .from('dataset_execution_sources')
+      .select('id,active,source_type,source_uri,execution_config,updated_at')
+      .eq('dataset_version_id', datasetVersionId)
+      .eq('active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
     if (executionSourceError) throw new Error(`Unable to resolve profiling execution source: ${executionSourceError.message}`)
-    if (!executionSource?.active) return NextResponse.json({ error: 'The dataset execution source is not active. Validate the source binding before profiling.' }, { status: 409 })
+    const executionSource = executionSourceRows?.[0]
+    if (!executionSource) return NextResponse.json({ error: 'The dataset execution source is not active. Validate the source binding before profiling.' }, { status: 409 })
 
     const now = new Date().toISOString()
     const runInsert = await admin.schema('agent').from('agent_runs').insert({ agent_definition_id: agentDefinition.id, project_id: projectId, dataset_version_id: datasetVersionId, status: 'RUNNING', input, started_at: now }).select('id').single()
