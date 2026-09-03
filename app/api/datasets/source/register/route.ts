@@ -11,6 +11,66 @@ function serverCredentialRef(kind: string) {
   return process.env[`JDBC_${normalized}_CREDENTIAL_REF`]?.trim() || process.env.JDBC_CREDENTIAL_REF?.trim() || ''
 }
 
+function jdbcTableParts(sourceIdentifier: string) {
+  const normalized = sourceIdentifier.trim().replace(/^jdbc-table:\/\//i, '')
+  const parts = normalized.split('.').map(part => part.trim()).filter(Boolean)
+  if (parts.length >= 2) return { schema: parts[parts.length - 2], table: parts[parts.length - 1] }
+  if (parts.length === 1) return { schema: 'public', table: parts[0] }
+  return null
+}
+
+async function reconcileSourceBoundDatasets(admin: ReturnType<typeof createAdminClient>, source: { id: string; project_id: string; source_type: string; connection_metadata: unknown }) {
+  const sourceType = String(source.source_type).trim().toLowerCase()
+  const { data: datasets } = await admin.schema('catalog').from('datasets').select('id, source_identifier, metadata').eq('project_id', source.project_id).eq('data_source_id', source.id)
+  if (!datasets?.length) return
+
+  const datasetIds = datasets.map(dataset => dataset.id)
+  const { data: versions } = await admin.schema('catalog').from('dataset_versions').select('id, dataset_id, version_number, metadata').in('dataset_id', datasetIds).order('version_number', { ascending: false })
+  const { data: executionSources } = await admin.schema('profiling').from('dataset_execution_sources').select('id, dataset_version_id, execution_config, active').in('dataset_version_id', versions?.map(version => version.id) ?? [])
+  const latestByDataset = new Map<string, typeof versions extends Array<infer T> ? T : never>()
+  for (const version of versions ?? []) if (!latestByDataset.has(version.dataset_id)) latestByDataset.set(version.dataset_id, version)
+  const executionByVersion = new Map((executionSources ?? []).map(item => [item.dataset_version_id, item]))
+  const baseMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? { ...(source.connection_metadata as Record<string, unknown>) } : {}
+
+  for (const dataset of datasets) {
+    const version = latestByDataset.get(dataset.id)
+    if (!version || !dataset.source_identifier) continue
+    const executionSource = executionByVersion.get(version.id)
+    if (!executionSource) continue
+
+    const connectionMetadata = { ...baseMetadata }
+    if (sourceType === 'jdbc') {
+      const parts = jdbcTableParts(dataset.source_identifier)
+      if (!parts) continue
+      connectionMetadata.schema = parts.schema
+      connectionMetadata.table = parts.table
+    }
+
+    const validation = await validateDataSourceForProfiling(admin, { ...source, connection_metadata: connectionMetadata }, dataset.source_identifier)
+    if (!validation.valid) continue
+
+    const now = new Date().toISOString()
+    const versionMetadata = version.metadata && typeof version.metadata === 'object' ? { ...(version.metadata as Record<string, unknown>) } : {}
+    const datasetMetadata = dataset.metadata && typeof dataset.metadata === 'object' ? { ...(dataset.metadata as Record<string, unknown>) } : {}
+    const executionConfig = executionSource.execution_config && typeof executionSource.execution_config === 'object' ? { ...(executionSource.execution_config as Record<string, unknown>) } : {}
+
+    await admin.schema('catalog').from('dataset_versions').update({
+      status: 'AVAILABLE',
+      metadata: { ...versionMetadata, profiling_ready: true, source_validation: validation },
+      observed_at: now,
+    }).eq('id', version.id)
+    await admin.schema('catalog').from('datasets').update({
+      metadata: { ...datasetMetadata, profiling_ready: true, source_validation: validation },
+      updated_at: now,
+    }).eq('id', dataset.id)
+    await admin.schema('profiling').from('dataset_execution_sources').update({
+      execution_config: { ...executionConfig, ...connectionMetadata, source_id: source.id, source_type: source.source_type, connection_metadata: connectionMetadata, validation },
+      active: true,
+      updated_at: now,
+    }).eq('id', executionSource.id)
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
@@ -70,11 +130,13 @@ export async function POST(request: Request) {
     if (existing) {
       const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: sourceType, connection_metadata: connectionMetadata, status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
       if (error || !source) return NextResponse.json({ error: `Unable to activate source: ${error?.message ?? 'unknown error'}` }, { status: 500 })
+      await reconcileSourceBoundDatasets(admin, source)
       return NextResponse.json({ source, profiling_ready: true }, { status: 200 })
     }
 
     const { data: source, error } = await admin.schema('catalog').from('data_sources').insert({ project_id: projectId, name, source_type: sourceType, connection_metadata: connectionMetadata, status: 'ACTIVE' }).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
     if (error || !source) return NextResponse.json({ error: `Unable to register source: ${error?.message ?? 'unknown error'}` }, { status: 500 })
+    await reconcileSourceBoundDatasets(admin, source)
     return NextResponse.json({ source, profiling_ready: true }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Source registration failed.' }, { status: 500 })
