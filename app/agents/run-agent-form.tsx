@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 export type AgentOption = {
   id: string
+  agentKey: string
   name: string
   version: string
 }
