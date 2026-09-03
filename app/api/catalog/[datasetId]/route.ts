@@ -25,7 +25,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{datasetId:
     lifecycle_status:String(body.lifecycleStatus||'ACTIVE').toUpperCase(),
     certification_status:String(body.certificationStatus||'UNCERTIFIED').toUpperCase(),
     criticality:String(body.criticality||'MEDIUM').toUpperCase(),
-    tags:Array.isArray(body.tags)?body.tags.map(String).map(v=>v.trim()).filter(Boolean):[],
+    tags:Array.isArray(body.tags)?body.tags.map(String).map((v:string)=>v.trim()).filter(Boolean):[],
     business_description:typeof body.businessDescription==='string'?body.businessDescription.trim()||null:null,
     retention_days:Number.isFinite(Number(body.retentionDays))?Number(body.retentionDays):null,
     metadata:body.metadata&&typeof body.metadata==='object'?body.metadata:{},
