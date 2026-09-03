@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
-
-const MAX_SAMPLE_ROWS = 1000
+import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
 
 type RecordValue = Record<string, unknown>
 
@@ -52,22 +51,26 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
 
   const executionConfig = record(executionSource.execution_config)
   const connectionMetadata = record(executionConfig.connection_metadata)
+  const sampling = await resolveSamplingPolicy(supabase, datasetVersionId, 1000)
   const loaded = await loadFileSource(
     supabase,
     {
       sourceUri: typeof executionSource.source_uri === 'string' ? executionSource.source_uri : version.source_uri,
       executionConfig: { ...connectionMetadata, ...executionConfig },
     },
-    { maxRows: MAX_SAMPLE_ROWS },
+    { maxRows: sampling.loadLimit },
   )
 
-  const names = Array.from(loaded.rows.reduce<Set<string>>((set, row) => {
+  const sampled = applySamplingPolicy(loaded.rows as Record<string, unknown>[], loaded.rowCount, sampling)
+  const sampledRows = sampled.rows
+
+  const names = Array.from(sampledRows.reduce<Set<string>>((set, row) => {
     Object.keys(row).forEach((name) => set.add(name))
     return set
   }, new Set()))
 
   const columns = names.map((name, index) => {
-    const values = loaded.rows.map((row) => row[name])
+    const values = sampledRows.map((row) => row[name])
     const nullCount = values.filter((value) => value === null || value === undefined).length
     const distinct = new Set(values.filter((value) => value !== null && value !== undefined).map((value) => typeof value === 'string' ? value.trim() : JSON.stringify(value)))
     return {
@@ -84,8 +87,8 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
       distinct_percentage: values.length ? distinct.size / values.length * 100 : 0,
       metadata: {
         profiling_sampled: true,
-        profiling_sample_size: loaded.rows.length,
-        profiling_row_count: loaded.rowCount,
+        profiling_sample_size: sampledRows.length,
+        profiling_row_count: sampled.sourceRowCount,
         file_format: loaded.format,
         file_metadata: loaded.metadata,
       },
@@ -95,11 +98,12 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
   const sourceAccess = {
     mode: loaded.format === 'binary' ? 'metadata_only' : 'source_rows',
     connector: { kind: 'file', format: loaded.format, source_uri: loaded.sourceUri },
-    sampled_rows: loaded.rows.length,
-    warnings: loaded.warnings,
+    sampled_rows: sampled.sampledRows,
+    sampling_policy: sampled.policy,
+    warnings: [...loaded.warnings, ...sampled.warnings],
     metadata: loaded.metadata,
   }
-  const schemaSnapshot = { row_count: loaded.rowCount, column_count: columns.length, source_access: sourceAccess, columns }
+  const schemaSnapshot = { row_count: sampled.sourceRowCount, column_count: columns.length, source_access: sourceAccess, columns }
   const schemaHash = stableHash(columns.map((column) => ({ name: column.name, ordinal_position: column.ordinal_position, source_type: column.source_type, inferred_type: column.inferred_type })))
 
   const { error: deleteError } = await supabase.schema('profiling').from('profile_columns').delete().eq('profile_run_id', profilingRunId)
@@ -132,11 +136,11 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
   if (snapshotError) throw new Error(`Unable to persist FILE schema snapshot: ${snapshotError.message}`)
 
   const { data: run, error: runError } = await supabase.schema('profiling').from('profile_runs').update({
-    row_count: loaded.rowCount,
+    row_count: sampled.sourceRowCount,
     column_count: columns.length,
     schema_hash: schemaHash,
     summary: {
-      row_count: loaded.rowCount,
+      row_count: sampled.sourceRowCount,
       column_count: columns.length,
       schema_hash: schemaHash,
       source_access: sourceAccess,
@@ -152,7 +156,7 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
     profiling_run_id: profilingRunId,
     dataset_version_id: datasetVersionId,
     status: 'COMPLETED',
-    row_count: loaded.rowCount,
+    row_count: sampled.sourceRowCount,
     column_count: columns.length,
     schema_hash: schemaHash,
     source_access: sourceAccess,
