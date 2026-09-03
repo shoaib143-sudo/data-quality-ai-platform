@@ -52,6 +52,7 @@ export default async function DatasetsPage() {
   if (organizationsResult.error) throw new Error(`Unable to load organizations: ${organizationsResult.error.message}`)
   const organizations = (organizationsResult.data ?? []) as OrganizationOption[]
   const sourceById = new Map(sources.map(source => [source.id, source]))
+  const projectById = new Map(projects.map(project => [project.id, project]))
   const versionsByDataset = new Map<string, VersionRow[]>()
   for (const version of versions) versionsByDataset.set(version.dataset_id, [...(versionsByDataset.get(version.dataset_id) ?? []), version])
   const executionSourceByVersion = new Map(executionSources.map(source => [source.dataset_version_id, source]))
@@ -69,6 +70,15 @@ export default async function DatasetsPage() {
 
         <JdbcSourceForm projects={projects} organizations={organizations} />
         <RegisterDatasetForm projects={projects} organizations={organizations} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} />
+
+        <section className="rounded-xl border p-6">
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered data sources</h2><p className="mt-1 text-sm text-muted-foreground">Saved source connections are listed here independently from governed datasets.</p></div><span className="rounded-full border px-3 py-1 text-xs">{sources.length} sources</span></div>
+          {sources.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">No data sources are registered yet.</p> :
+            <div className="mt-5 space-y-3">{sources.map(source => <div key={source.id} className="rounded-lg border p-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between"><div><h3 className="font-medium">{source.name}</h3><p className="mt-1 text-sm text-muted-foreground">Project: {projectById.get(source.project_id)?.name ?? 'Unknown project'}</p></div><span className="rounded-full border px-2 py-1 text-xs">{statusLabel(source.status)}</span></div>
+              <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-2"><span>Type: {source.source_type}</span><span>Source ID: {source.id}</span></div>
+            </div>)}</div>}
+        </section>
 
         <section className="rounded-xl border p-6">
           <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Registered datasets</h2><p className="mt-1 text-sm text-muted-foreground">Dataset identity, source binding, version readiness, execution source, and latest profiling state.</p></div><span className="rounded-full border px-3 py-1 text-xs">{datasets.length} datasets</span></div>
