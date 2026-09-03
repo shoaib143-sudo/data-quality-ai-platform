@@ -122,7 +122,7 @@
   .min-h-screen.p-8 > div > section.rounded-lg.border,
   .min-h-screen.p-8 > div > div > section.rounded-xl.border {
     border-color: rgb(226 232 240);
-    background: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.94);
     box-shadow: 0 12px 35px rgba(37, 99, 235, 0.06);
   }
 
@@ -144,5 +144,11 @@
   .min-h-screen.p-8 .rounded-lg.border.p-4 {
     border-color: rgb(226 232 240);
     background: rgba(248, 250, 252, 0.72);
+  }
+
+  .min-h-screen.p-8 .rounded-xl.border.p-4:hover,
+  .min-h-screen.p-8 .rounded-lg.border.p-4:hover {
+    border-color: rgb(191 219 254);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
   }
 }
