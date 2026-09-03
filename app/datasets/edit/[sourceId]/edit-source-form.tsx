@@ -23,7 +23,7 @@ export function EditSourceForm({ source }: Props) {
     try {
       if (!jdbcUrl.trim() || !schema.trim() || !table.trim()) throw new Error('JDBC URL, schema, and table/view are required.')
       if (!username.trim() || !password) throw new Error('Enter the credentials for this connection type before testing.')
-      const credentialResponse = await fetch('/api/datasets/source/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: source.projectId, connectionKind: source.connectionKind, username: username.trim(), password }) })
+      const credentialResponse = await fetch('/api/datasets/source/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: source.projectId, sourceId: source.id, jdbcUrl: jdbcUrl.trim(), connectionKind: source.connectionKind, username: username.trim(), password }) })
       const credentialPayload = await credentialResponse.json().catch(() => ({}))
       if (!credentialResponse.ok) throw new Error(credentialPayload.error ?? 'Unable to securely configure credentials.')
       const credentialRef = credentialPayload.credentialRef
