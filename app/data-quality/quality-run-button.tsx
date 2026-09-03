@@ -13,10 +13,11 @@ export function QualityRunButton({ datasetVersionId, profileRunId }: { datasetVe
     setRunning(true)
     setMessage('')
     try {
+      const idempotencyKey = crypto.randomUUID()
       const response = await fetch('/api/data-quality/run', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ datasetVersionId, profileRunId }),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ datasetVersionId, profileRunId, idempotencyKey }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error ?? 'Data quality automation failed.')
