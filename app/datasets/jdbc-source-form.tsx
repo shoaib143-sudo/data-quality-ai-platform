@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export type JdbcProjectOption = { id: string; name: string }
 type ConnectionKind = 'csv' | 'postgresql' | 'mssql' | 'mysql' | 'databricks' | 'jdbc'
@@ -16,6 +16,7 @@ const CONNECTIONS: ConnectionOption[] = [
 ]
 
 export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) {
+  const [availableProjects, setAvailableProjects] = useState(projects)
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [connectionKind, setConnectionKind] = useState<ConnectionKind>('postgresql')
   const [name, setName] = useState('')
@@ -31,6 +32,16 @@ export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) 
   const selectedConnection = useMemo(() => CONNECTIONS.find(item => item.id === connectionKind) ?? CONNECTIONS[1], [connectionKind])
   const isCsv = connectionKind === 'csv'
   const selectedTable = useMemo(() => tables.find(item => item.name === table), [tables, table])
+
+  useEffect(() => {
+    function onProjectCreated(event: Event) {
+      const project = (event as CustomEvent<JdbcProjectOption>).detail
+      if (!project?.id || !project?.name) return
+      setAvailableProjects(current => current.some(item => item.id === project.id) ? current : [...current, project].sort((a, b) => a.name.localeCompare(b.name)))
+    }
+    window.addEventListener('dgp:project-created', onProjectCreated)
+    return () => window.removeEventListener('dgp:project-created', onProjectCreated)
+  }, [])
 
   function selectConnection(value: ConnectionKind) {
     setConnectionKind(value); setJdbcUrl(''); setSchema(''); setTable(''); setSchemas([]); setTables([]); setColumns([]); setRowCount(null); setStatus(null)
@@ -79,8 +90,8 @@ export function JdbcSourceForm({ projects }: { projects: JdbcProjectOption[] }) 
 
   return <section className="rounded-xl border p-6">
     <div className="mb-6"><h2 className="text-lg font-semibold">Connect a data source</h2><p className="mt-1 text-sm text-muted-foreground">Choose the source type from one dropdown. Database credentials are managed securely by the server. CSV sources can be validated directly.</p></div>
-    {projects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available.</p> : <div className="grid gap-4 md:grid-cols-2">
-      <label className="space-y-2 text-sm"><span className="font-medium">Project</span><select value={projectId} onChange={e => setProjectId(e.target.value)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+    {availableProjects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available.</p> : <div className="grid gap-4 md:grid-cols-2">
+      <label className="space-y-2 text-sm"><span className="font-medium">Project</span><select value={projectId} onChange={e => { setProjectId(e.target.value); setStatus(null) }} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label className="space-y-2 text-sm"><span className="font-medium">Connection type</span><select value={connectionKind} onChange={e => selectConnection(e.target.value as ConnectionKind)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{CONNECTIONS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="text-xs text-muted-foreground">{selectedConnection.description}</span></label>
       <label className="space-y-2 text-sm"><span className="font-medium">Connection name</span><input value={name} onChange={e => setName(e.target.value)} disabled={busy} placeholder={`${selectedConnection.label} connection`} className="w-full rounded-md border bg-background px-3 py-2" /></label>
       <label className="space-y-2 text-sm md:col-span-2"><span className="font-medium">{isCsv ? 'CSV file URL / storage path' : 'Connection string'}</span><input value={jdbcUrl} onChange={e => setJdbcUrl(e.target.value)} disabled={busy} placeholder={selectedConnection.placeholder} className="w-full rounded-md border bg-background px-3 py-2" /><span className="text-xs text-muted-foreground">{isCsv ? 'Use an HTTPS CSV URL or a Supabase Storage bucket/path.' : 'Credentials are managed securely by the server. Do not embed usernames, passwords, tokens, or secrets in the URL.'}</span></label>
