@@ -4,6 +4,7 @@ import { executeProfilingMetrics } from '@/lib/profiling/metric-engine'
 import { investigateProfilingRun } from '@/lib/profiling/investigation-engine'
 import { executeProfilingTool } from '@/lib/profiling/executor'
 import { executeJdbcProfileDataset } from '@/lib/profiling/jdbc-profile'
+import { executeFileProfileDataset } from '@/lib/profiling/file-profile'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeAgentRunLog } from '@/lib/agents/run-log'
 
@@ -30,7 +31,9 @@ export async function executeProfilingExecutor(operation: string, input: any, co
         const sources = dataset?.data_sources
         const source = Array.isArray(sources) ? sources[0] : sources
         const sourceType = String(source?.source_type ?? '').trim().toLowerCase()
-        result = sourceType === 'jdbc' ? await executeJdbcProfileDataset(datasetVersionId, profilingRunId) : await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input })
+        if (sourceType === 'jdbc') result = await executeJdbcProfileDataset(datasetVersionId, profilingRunId)
+        else if (sourceType === 'file' || sourceType === 'csv') result = await executeFileProfileDataset(datasetVersionId, profilingRunId)
+        else result = await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input })
         break
       }
       case 'execute_metrics':
