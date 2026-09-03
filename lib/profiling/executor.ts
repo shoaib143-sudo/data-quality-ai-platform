@@ -245,27 +245,53 @@ async function inferColumnTypes(
   supabase: ReturnType<typeof createAdminClient>,
   datasetVersionId: string,
 ) {
-  const { data, error } = await supabase.rpc(
-    'get_dataset_version_for_profiling',
-    {
-      dataset_version_id: datasetVersionId,
-    }
-  )
+  const { data: latestRun, error: runError } = await supabase
+    .schema('profiling')
+    .from('profile_runs')
+    .select('id,status')
+    .eq('dataset_version_id', datasetVersionId)
+    .in('status', ['COMPLETED','PARTIAL'])
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (runError) throw new Error(`Unable to resolve latest profile for type inference: ${runError.message}`)
 
-  if (error) {
-    throw new Error(
-      `Unable to infer column types: ${error.message}`,
-    )
+  if (latestRun) {
+    const { data: profileColumns, error: columnsError } = await supabase
+      .schema('profiling')
+      .from('profile_columns')
+      .select('column_name,ordinal_position,source_type,inferred_type')
+      .eq('profile_run_id', latestRun.id)
+      .order('ordinal_position')
+    if (columnsError) throw new Error(`Unable to load inferred profile columns: ${columnsError.message}`)
+    return {
+      tool: 'infer_column_types',
+      dataset_version_id: datasetVersionId,
+      profiling_run_id: latestRun.id,
+      source: 'persisted_profile',
+      columns: (profileColumns ?? []).map((column) => ({
+        name: column.column_name,
+        type: column.inferred_type,
+        source_type: column.source_type,
+        ordinal_position: column.ordinal_position,
+      })),
+    }
   }
 
-  const metadata = asRecord(data.metadata)
-  const columns = Array.isArray(metadata?.columns)
-    ? metadata.columns
-    : []
-
+  const { data: version, error: versionError } = await supabase
+    .schema('catalog')
+    .from('dataset_versions')
+    .select('id,metadata')
+    .eq('id', datasetVersionId)
+    .maybeSingle()
+  if (versionError || !version) throw new Error(`Unable to infer column types: ${versionError?.message ?? 'dataset version not found'}`)
+  const metadata = asRecord(version.metadata) ?? {}
+  const columns = Array.isArray(metadata.columns) ? metadata.columns : []
   return {
     tool: 'infer_column_types',
     dataset_version_id: datasetVersionId,
+    profiling_run_id: null,
+    source: 'dataset_metadata',
     columns: columns.map((column, index) => ({
       name: getColumnName(column),
       type: inferColumnType(column),
@@ -1296,23 +1322,39 @@ async function inspectDataset(
   supabase: ReturnType<typeof createAdminClient>,
   datasetVersionId: string,
 ) {
-  const { data, error } = await supabase.rpc(
-    'get_dataset_version_for_profiling',
-    {
-      dataset_version_id: datasetVersionId,
-    }
-  )
+  const { data: version, error: versionError } = await supabase
+    .schema('catalog')
+    .from('dataset_versions')
+    .select('id,dataset_id,version_number,status,source_uri,row_count,column_count,metadata,observed_at,created_at')
+    .eq('id', datasetVersionId)
+    .maybeSingle()
+  if (versionError || !version) throw new Error(`Unable to inspect dataset version: ${versionError?.message ?? 'not found'}`)
 
-  if (error) {
-    throw new Error(
-      `Unable to inspect dataset version: ${error.message}`,
-    )
+  const [{ data: dataset, error: datasetError }, { data: executionRows, error: executionError }, { data: latestRun, error: runError }] = await Promise.all([
+    supabase.schema('catalog').from('datasets').select('id,project_id,name,description,business_domain,data_source_id,source_identifier,metadata').eq('id', version.dataset_id).maybeSingle(),
+    supabase.schema('profiling').from('dataset_execution_sources').select('id,source_type,source_uri,execution_config,active,updated_at').eq('dataset_version_id', datasetVersionId).order('updated_at', { ascending: false }).limit(1),
+    supabase.schema('profiling').from('profile_runs').select('id,status,row_count,column_count,schema_hash,started_at,completed_at').eq('dataset_version_id', datasetVersionId).order('started_at', { ascending: false }).limit(1).maybeSingle(),
+  ])
+  if (datasetError) throw new Error(`Unable to inspect dataset ownership: ${datasetError.message}`)
+  if (executionError) throw new Error(`Unable to inspect execution source: ${executionError.message}`)
+  if (runError) throw new Error(`Unable to inspect profiling history: ${runError.message}`)
+
+  let dataSource: Record<string, unknown> | null = null
+  if (dataset?.data_source_id) {
+    const { data, error } = await supabase.schema('catalog').from('data_sources').select('id,name,source_type,status,connection_metadata').eq('id', dataset.data_source_id).maybeSingle()
+    if (error) throw new Error(`Unable to inspect data source: ${error.message}`)
+    dataSource = data as Record<string, unknown> | null
   }
 
   return {
     tool: 'inspect_dataset',
     dataset_version_id: datasetVersionId,
-    dataset_version: data,
+    dataset_version: version,
+    dataset,
+    data_source: dataSource,
+    execution_source: executionRows?.[0] ?? null,
+    latest_profile_run: latestRun ?? null,
+    profiling_ready: String(version.status).toUpperCase() === 'AVAILABLE' && Boolean(executionRows?.[0]?.active),
   }
 }
 
