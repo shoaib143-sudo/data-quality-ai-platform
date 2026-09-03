@@ -88,11 +88,7 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
     }
     setCreatingProject(true)
     try {
-      const response = await fetch('/api/datasets/create-project', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ organizationId: selectedOrganizationId, name: newProjectName, description: newProjectDescription }),
-      })
+      const response = await fetch('/api/datasets/create-project', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ organizationId: selectedOrganizationId, name: newProjectName, description: newProjectDescription }) })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error ?? 'Project creation failed.')
       const project: JdbcProjectOption = { id: payload.project.id, name: payload.project.name }
@@ -109,107 +105,67 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
   }
 
   async function discover() {
-    setStatus(null)
-    setColumns([])
-    setRowCount(null)
-    setConnectionTested(false)
-    if (!projectId || !jdbcUrl.trim()) {
-      setStatus(isCsv ? 'Enter a CSV URL or storage path first.' : 'Enter the connection string first. Database credentials are managed server-side.')
-      return
-    }
+    setStatus(null); setColumns([]); setRowCount(null); setConnectionTested(false)
+    if (!projectId || !jdbcUrl.trim()) { setStatus(isCsv ? 'Enter a CSV URL or storage path first.' : 'Enter the connection string first. Database credentials are managed server-side.'); return }
     setBusy(true)
     try {
       if (isCsv) {
         const response = await fetch('/api/datasets/source/discover-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, sourceUri: jdbcUrl.trim() }) })
-        const payload = await response.json()
-        if (!response.ok) throw new Error(payload.error ?? 'CSV discovery failed.')
-        setSchemas(['CSV'])
-        setSchema('CSV')
-        setTables(payload.tables ?? [])
-        setConnectionTested(true)
-        setStatus(`CSV source validated. Found ${payload.columns?.length ?? 0} columns${typeof payload.rowCount === 'number' ? ` and ${payload.rowCount} rows` : ''}.`)
-        return
+        const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? 'CSV discovery failed.')
+        setSchemas(['CSV']); setSchema('CSV'); setTables(payload.tables ?? []); setConnectionTested(true); setStatus(`CSV source validated. Found ${payload.columns?.length ?? 0} columns${typeof payload.rowCount === 'number' ? ` and ${payload.rowCount} rows` : ''}.`); return
       }
       const response = await fetch('/api/datasets/source/discover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, jdbcUrl, connectionKind, schema: schema || undefined }) })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Connection discovery failed.')
-      setSchemas(payload.schemas ?? [])
-      setTables(payload.tables ?? [])
-      setConnectionTested(true)
+      const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? 'Connection discovery failed.')
+      setSchemas(payload.schemas ?? []); setTables(payload.tables ?? []); setConnectionTested(true)
       if (schema && !(payload.schemas ?? []).includes(schema)) setStatus(`Connected, but schema ${schema} was not returned by the source.`)
       else setStatus(`Connection successful. Found ${(payload.schemas ?? []).length} schemas${schema ? ` and ${(payload.tables ?? []).length} tables/views in ${schema}` : ''}.`)
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Connection discovery failed.')
-    } finally { setBusy(false) }
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Connection discovery failed.') } finally { setBusy(false) }
   }
 
   async function inspectTable(value: string) {
-    setTable(value)
-    setColumns([])
-    setRowCount(null)
-    setStatus(null)
+    setTable(value); setColumns([]); setRowCount(null); setStatus(null)
     if (isCsv || !schema || !value) return
     setBusy(true)
     try {
       const response = await fetch('/api/datasets/source/discover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, jdbcUrl, connectionKind, schema }) })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Table discovery failed.')
-      const match = (payload.tables ?? []).find((item: { name: string }) => item.name === value)
-      if (!match) throw new Error('Selected table is no longer available.')
-      setConnectionTested(true)
-      setStatus(`Selected ${schema}.${value}. You can save the connection now or save and activate it after validation.`)
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Table discovery failed.')
-    } finally { setBusy(false) }
+      const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? 'Table discovery failed.')
+      const match = (payload.tables ?? []).find((item: { name: string }) => item.name === value); if (!match) throw new Error('Selected table is no longer available.')
+      setConnectionTested(true); setStatus(`Selected ${schema}.${value}. Save the connection or activate it after validation.`)
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Table discovery failed.') } finally { setBusy(false) }
   }
 
   async function saveConnection() {
     setStatus(null)
-    if (!projectId || !name.trim() || !jdbcUrl.trim()) {
-      setStatus('Project, connection name, and connection string are required.')
-      return
-    }
+    if (!projectId || !name.trim() || !jdbcUrl.trim()) { setStatus('Project, connection name, and connection string are required.'); return }
     setBusy(true)
     try {
       const response = await fetch('/api/datasets/source/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, name, sourceType: 'JDBC', jdbcUrl, connectionKind, connectionOnly: true }) })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Connection save failed.')
-      setStatus(`Connection saved as configured. Select a schema and table, then save and activate the source for profiling.`)
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Connection save failed.')
-    } finally { setBusy(false) }
+      const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? 'Connection save failed.')
+      setStatus('Connection saved as configured. Select a schema and table, then save and activate the source for profiling.')
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Connection save failed.') } finally { setBusy(false) }
   }
 
   async function register() {
     setStatus(null)
-    if (!projectId || !name.trim() || !jdbcUrl.trim() || (!isCsv && (!schema || !table))) {
-      setStatus(isCsv ? 'Project, connection name, and CSV URL/storage path are required.' : 'Project, connection name, connection string, schema, and table are required.')
-      return
-    }
+    if (!projectId || !name.trim() || !jdbcUrl.trim() || (!isCsv && (!schema || !table))) { setStatus(isCsv ? 'Project, connection name, and CSV URL/storage path are required.' : 'Project, connection name, connection string, schema, and table are required.'); return }
     setBusy(true)
     try {
       const response = await fetch('/api/datasets/source/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, name, sourceType: isCsv ? 'CSV' : 'JDBC', jdbcUrl: isCsv ? undefined : jdbcUrl, sourceUri: isCsv ? jdbcUrl : undefined, connectionKind, schema: isCsv ? 'CSV' : schema, table: isCsv ? undefined : table }) })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.validation?.errors?.join(' ') || payload.error || 'Source registration failed.')
-      setColumns(payload.validation?.details?.columns ?? payload.validation?.columns ?? [])
-      setRowCount(typeof payload.validation?.rowCount === 'number' ? payload.validation.rowCount : null)
-      setConnectionTested(true)
+      const payload = await response.json(); if (!response.ok) throw new Error(payload.validation?.errors?.join(' ') || payload.error || 'Source registration failed.')
+      setColumns(payload.validation?.details?.columns ?? payload.validation?.columns ?? []); setRowCount(typeof payload.validation?.rowCount === 'number' ? payload.validation.rowCount : null); setConnectionTested(true)
       setStatus(isCsv ? `CSV source saved and is profiling-ready: ${jdbcUrl}.` : `Connection saved and source is profiling-ready: ${schema}.${table}${typeof payload.validation?.rowCount === 'number' ? ` · ${payload.validation.rowCount} rows` : ''}.`)
       window.dispatchEvent(new CustomEvent('dgp:source-created', { detail: { id: payload.source.id, projectId: payload.source.project_id, name: payload.source.name, sourceType: payload.source.source_type, status: payload.source.status } }))
       setName('')
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Source registration failed.')
-    } finally { setBusy(false) }
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'Source registration failed.') } finally { setBusy(false) }
   }
 
-  const canSaveConnection = !isCsv && connectionTested && !!projectId && !!name.trim() && !!jdbcUrl.trim()
   const canActivate = isCsv ? connectionTested : connectionTested && !!schema && !!table
 
   return <section className="rounded-xl border p-6">
     <div className="mb-6"><h2 className="text-lg font-semibold">Connect a data source</h2><p className="mt-1 text-sm text-muted-foreground">Choose the source type from one dropdown. Database credentials are managed securely by the server. CSV sources can be validated directly.</p></div>
     {availableProjects.length === 0 ? <p className="text-sm text-muted-foreground">No projects are available.</p> : <div className="grid gap-4 md:grid-cols-2">
       <div className="space-y-2 text-sm"><label className="space-y-2 block"><span className="font-medium">Project</span><select value={createProjectOpen ? CREATE_PROJECT : projectId} onChange={e => selectProject(e.target.value)} disabled={busy || creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{organizations.length > 0 && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
-        {createProjectOpen && organizations.length > 0 && <div className="rounded-lg border p-3 space-y-3"><label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" className="w-full rounded-md border bg-background px-3 py-2" autoFocus /></label><label className="space-y-1 block"><span className="text-xs font-medium">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setCreateProjectOpen(false); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div></div>}
+        {createProjectOpen && organizations.length > 0 && <div className="rounded-lg border p-3 space-y-3"><label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" autoFocus className="w-full rounded-md border bg-background px-3 py-2" /></label><label className="space-y-1 block"><span className="text-xs font-medium">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setCreateProjectOpen(false); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div></div>}
       </div>
       <label className="space-y-2 text-sm"><span className="font-medium">Connection type</span><select value={connectionKind} onChange={e => selectConnection(e.target.value as ConnectionKind)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2">{CONNECTIONS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="text-xs text-muted-foreground">{selectedConnection.description}</span></label>
       <label className="space-y-2 text-sm"><span className="font-medium">Connection name</span><input value={name} onChange={e => setName(e.target.value)} disabled={busy} placeholder={`${selectedConnection.label} connection`} className="w-full rounded-md border bg-background px-3 py-2" /></label>
@@ -217,10 +173,7 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
       <label className="space-y-2 text-sm"><span className="font-medium">Schema</span><select value={schema} onChange={e => { setSchema(e.target.value); setTable(''); setTables([]) }} disabled={busy || isCsv || schemas.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">{isCsv ? 'CSV file (no database schema)' : 'Discover schemas first'}</option>{schemas.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
       <div className="flex items-end"><button type="button" onClick={discover} disabled={busy || !projectId || !jdbcUrl.trim()} className="w-full rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50">{busy ? 'Connecting…' : isCsv ? 'Validate CSV' : 'Test connection & discover'}</button></div>
       {!isCsv && schema && <label className="space-y-2 text-sm md:col-span-2"><span className="font-medium">Table / view</span><select value={table} onChange={e => inspectTable(e.target.value)} disabled={busy || tables.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select a table or view</option>{tables.map(item => <option key={item.name} value={item.name}>{item.name} · {item.type}</option>)}</select>{selectedTable && <span className="text-xs text-muted-foreground">Selected {selectedTable.type?.toLowerCase() ?? 'object'}.</span>}</label>}
-      <div className="md:col-span-2 flex flex-wrap gap-2">
-        {!isCsv && <button type="button" onClick={saveConnection} disabled={busy || !canSaveConnection} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving…' : 'Save connection'}</button>}
-        <button type="button" onClick={register} disabled={busy || !canActivate || !name.trim()} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving…' : isCsv ? 'Save CSV source' : 'Save connection & activate source'}</button>
-      </div>
+      <div className="md:col-span-2 flex flex-wrap gap-2"><button type="button" onClick={saveConnection} disabled={busy || isCsv || !projectId || !name.trim() || !jdbcUrl.trim()} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving…' : 'Save connection'}</button><button type="button" onClick={register} disabled={busy || !canActivate || !name.trim()} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Saving…' : isCsv ? 'Save CSV source' : 'Save connection & activate source'}</button></div>
     </div>}
     {status && <p className="mt-4 rounded-md border p-3 text-sm" role="status">{status}</p>}
     {columns.length > 0 && <div className="mt-4 rounded-lg border p-4"><p className="text-sm font-medium">Schema validation passed</p><p className="mt-1 text-xs text-muted-foreground">{columns.length} columns{rowCount !== null ? ` · ${rowCount} rows` : ''}</p></div>}
