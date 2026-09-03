@@ -1,21 +1,28 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CheckCircle2, CircleAlert, Loader2 } from 'lucide-react'
+import { CheckCircle2, CircleAlert, Loader2, Lightbulb } from 'lucide-react'
+import { ConnectionPrerequisites } from './connection-prerequisites'
 
 export type JdbcProjectOption = { id: string; name: string }
 export type JdbcOrganizationOption = { id: string; name: string }
 type ConnectionKind = 'csv' | 'postgresql' | 'mssql' | 'mysql' | 'databricks' | 'jdbc'
-type ConnectionOption = { id: ConnectionKind; label: string; description: string; placeholder: string; fields: string[] }
+type ConnectionOption = { id: ConnectionKind; label: string; description: string; placeholder: string; fields: string[]; tips: string[] }
 const CREATE_PROJECT = '__create_project__'
 const CONNECTIONS: ConnectionOption[] = [
-  { id: 'csv', label: 'CSV File', description: 'HTTPS CSV or Supabase Storage object', placeholder: 'https://host/path/data.csv or bucket/path/data.csv', fields: ['source'] },
-  { id: 'postgresql', label: 'PostgreSQL', description: 'PostgreSQL or Supabase database', placeholder: 'jdbc:postgresql://host:5432/database', fields: ['host','port','database','username','password','ssl','schema','table'] },
-  { id: 'mssql', label: 'Microsoft SQL Server', description: 'SQL Server or Azure SQL', placeholder: 'jdbc:sqlserver://host:1433;databaseName=database', fields: ['host','port','database','username','password','encryption','schema','table'] },
-  { id: 'mysql', label: 'MySQL', description: 'MySQL compatible database', placeholder: 'jdbc:mysql://host:3306/database', fields: ['host','port','database','username','password','ssl','schema','table'] },
-  { id: 'databricks', label: 'Databricks Unity Catalog', description: 'Databricks SQL warehouse and Unity Catalog', placeholder: 'jdbc:databricks://host:443/default', fields: ['host','httpPath','token','catalog','schema','table'] },
-  { id: 'jdbc', label: 'Generic JDBC', description: 'Supported JDBC driver endpoint', placeholder: 'jdbc:<driver>://host:port/database', fields: ['driver','jdbcUrl','username','password','schema','table'] },
+  { id: 'csv', label: 'CSV File', description: 'HTTPS CSV or Supabase Storage object', placeholder: 'https://host/path/data.csv or bucket/path/data.csv', fields: ['source'], tips: ['Use a reachable HTTPS CSV URL or Supabase Storage bucket/path.', 'The file is checked immediately and its columns are discovered before registration.', 'No database username, password, or JDBC setup is needed for CSV.'] },
+  { id: 'postgresql', label: 'PostgreSQL', description: 'PostgreSQL or Supabase database', placeholder: 'jdbc:postgresql://host:5432/database', fields: ['host','port','database','username','password','ssl','schema','table'], tips: ['Enter the database host, port, database name, username, and password.', 'Keep SSL at Require for normal encrypted connections. Use certificate verification when your database trust configuration supports it.', 'Test the connection first, then choose the discovered schema and table or view.'] },
+  { id: 'mssql', label: 'Microsoft SQL Server', description: 'SQL Server or Azure SQL', placeholder: 'jdbc:sqlserver://host:1433;databaseName=database', fields: ['host','port','database','username','password','encryption','schema','table'], tips: ['Enter the SQL Server or Azure SQL host, port, database, username, and password.', 'Encryption is applied to the JDBC connection from the selected setting. Production connections should use encrypted transport with certificate validation.', 'Test the connection first, then select the schema and table or view discovered from the server.'] },
+  { id: 'mysql', label: 'MySQL', description: 'MySQL compatible database', placeholder: 'jdbc:mysql://host:3306/database', fields: ['host','port','database','username','password','ssl','schema','table'], tips: ['Enter the MySQL host, port, database, username, and password.', 'SSL mode is translated to the MySQL JDBC driver setting. Use certificate and identity verification where your environment supports it.', 'Test the connection first, then select the discovered schema and table or view.'] },
+  { id: 'databricks', label: 'Databricks Unity Catalog', description: 'Databricks SQL warehouse and Unity Catalog', placeholder: 'jdbc:databricks://host:443;httpPath=/sql/1.0/warehouses/...', fields: ['host','httpPath','token','catalog','schema','table'], tips: ['Enter the SQL warehouse server hostname and HTTP path from Databricks.', 'Enter a Databricks personal access token for testing, or use an approved token supported by your workspace policy.', 'Select the Unity Catalog catalog, then discover and select its schema and table or view. The token is stored through the secure credential flow and is never embedded in the saved source.'] },
+  { id: 'jdbc', label: 'Generic JDBC', description: 'Supported JDBC driver endpoint', placeholder: 'jdbc:<driver>://host:port/database', fields: ['driver','jdbcUrl','username','password','schema','table'], tips: ['Use a JDBC URL without embedded username or password.', 'Select a driver supported by the deployed connector runtime. The current bridge bundles PostgreSQL, SQL Server, MySQL, and Databricks drivers.', 'Test discovery before choosing the schema and table or view. Unsupported driver protocols must be added to the connector runtime before they can connect.'] },
 ]
+
+function mysqlSslMode(value: string) {
+  if (value === 'verify-full') return 'VERIFY_IDENTITY'
+  if (value === 'verify-ca') return 'VERIFY_CA'
+  return 'REQUIRED'
+}
 
 export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProjectOption[]; organizations: JdbcOrganizationOption[] }) {
   const [availableProjects, setAvailableProjects] = useState(projects)
@@ -58,8 +65,10 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
   }
   function buildJdbcUrl() {
     if (isCsv) return jdbcUrl.trim()
-    if (connectionKind === 'databricks') return jdbcUrl.trim() || `jdbc:databricks://${host.trim()}:443/default${httpPath.trim() ? `;httpPath=${httpPath.trim()}` : ''}`
-    if (connectionKind === 'jdbc' || connectionKind === 'postgresql' || connectionKind === 'mssql' || connectionKind === 'mysql') return jdbcUrl.trim() || (() => { if (!host.trim()) return ''; if (connectionKind === 'postgresql') return `jdbc:postgresql://${host.trim()}:${port.trim() || '5432'}/${database.trim()}`; if (connectionKind === 'mssql') return `jdbc:sqlserver://${host.trim()}:${port.trim() || '1433'};databaseName=${database.trim()}`; if (connectionKind === 'mysql') return `jdbc:mysql://${host.trim()}:${port.trim() || '3306'}/${database.trim()}`; return '' })()
+    if (connectionKind === 'databricks') return jdbcUrl.trim() || `jdbc:databricks://${host.trim()}:443;httpPath=${httpPath.trim()}${catalog.trim() ? `;ConnCatalog=${catalog.trim()}` : ''}`
+    if (connectionKind === 'postgresql') return jdbcUrl.trim() || (() => { if (!host.trim() || !database.trim()) return ''; return `jdbc:postgresql://${host.trim()}:${port.trim() || '5432'}/${database.trim()}?sslmode=${encodeURIComponent(ssl)}` })()
+    if (connectionKind === 'mssql') return jdbcUrl.trim() || (() => { if (!host.trim() || !database.trim()) return ''; const encryption = ssl === 'require' ? 'true' : 'true'; const trustServerCertificate = ssl === 'verify-full' || ssl === 'verify-ca' ? 'false' : 'true'; return `jdbc:sqlserver://${host.trim()}:${port.trim() || '1433'};databaseName=${database.trim()};encrypt=${encryption};trustServerCertificate=${trustServerCertificate}` })()
+    if (connectionKind === 'mysql') return jdbcUrl.trim() || (() => { if (!host.trim() || !database.trim()) return ''; return `jdbc:mysql://${host.trim()}:${port.trim() || '3306'}/${database.trim()}?sslMode=${mysqlSslMode(ssl)}` })()
     return jdbcUrl.trim()
   }
   async function provisionCredentials() {
@@ -96,10 +105,12 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
     <div className="grid gap-4 md:grid-cols-2">
       <label className="space-y-1.5 text-sm"><span className="font-medium">Project <span className="text-rose-500">*</span></span><select value={createProjectOpen ? CREATE_PROJECT : projectId} onChange={e => e.target.value === CREATE_PROJECT ? setCreateProjectOpen(true) : setProjectId(e.target.value)} disabled={busy} className="w-full rounded-lg border bg-white px-3 py-2.5">{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{organizations.length > 0 && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
       <label className="space-y-1.5 text-sm"><span className="font-medium">Connection type <span className="text-rose-500">*</span></span><select value={connectionKind} onChange={e => resetConnection(e.target.value as ConnectionKind)} disabled={busy} className="w-full rounded-lg border bg-white px-3 py-2.5">{CONNECTIONS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="text-xs text-slate-500">{selected.description}</span></label>
+      <ConnectionPrerequisites connectionKind={connectionKind} />
+      <div className="md:col-span-2 rounded-xl border border-violet-100 bg-violet-50/60 p-4"><div className="flex items-start gap-3"><Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" /><div><div className="text-xs font-semibold text-violet-900">Tips for {selected.label}</div><ul className="mt-2 grid gap-1.5 text-xs leading-5 text-violet-900/80 sm:grid-cols-3">{selected.tips.map(tip => <li key={tip}>• {tip}</li>)}</ul></div></div></div>
       {createProjectOpen && organizations.length > 0 && <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50/50 p-4"><div className="grid gap-3 md:grid-cols-3"><select value={organizationId} onChange={e => setOrganizationId(e.target.value)} className="rounded-lg border bg-white px-3 py-2 text-sm">{organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="New project name" className="rounded-lg border bg-white px-3 py-2 text-sm" /><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={busy || !newProjectName.trim()} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Create</button><button type="button" onClick={() => setCreateProjectOpen(false)} className="rounded-lg border px-3 py-2 text-xs">Cancel</button></div></div></div>}
       {field('Connection name', name, setName, `${selected.label} connection`)}
       {isCsv ? field('CSV URL / storage path', jdbcUrl, setJdbcUrl, selected.placeholder) : <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4"><div className="mb-3 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /><span className="text-sm font-semibold">{selected.label} connection details</span></div><div className="grid gap-3 md:grid-cols-2">
-        {connectionKind === 'jdbc' && field('JDBC driver', driver, setDriver, 'PostgreSQL / SQL Server / MySQL')}
+        {connectionKind === 'jdbc' && field('JDBC driver', driver, setDriver, 'PostgreSQL / SQL Server / MySQL / Databricks')}
         {connectionKind !== 'jdbc' && connectionKind !== 'databricks' && field('Host', host, setHost, 'database.example.com')}
         {connectionKind !== 'jdbc' && connectionKind !== 'databricks' && field('Port', port, setPort, connectionKind === 'mssql' ? '1433' : connectionKind === 'mysql' ? '3306' : '5432')}
         {connectionKind === 'databricks' && field('Server hostname', host, setHost, 'dbc-xxxx.cloud.databricks.com')}
