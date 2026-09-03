@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle2, Pencil, Play, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Pencil, Play, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -9,19 +9,23 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [hasError, setHasError] = useState(false)
 
   async function runProfiling() {
     if (!ready || !agentDefinitionId || busy) return
     setBusy(true)
+    setHasError(false)
     setMessage('Running profiling, metrics, findings, and quality scoring…')
     try {
       const response = await fetch('/api/agents/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, datasetVersionId, agentDefinitionId }) })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error ?? 'Profiling execution failed.')
       const score = payload.result?.metrics?.score?.overall_score
+      setHasError(false)
       setMessage(`Profiling completed${typeof score === 'number' ? ` · quality score ${(score * 100).toFixed(1)}%` : ''}.`)
       router.refresh()
     } catch (error) {
+      setHasError(true)
       setMessage(error instanceof Error ? error.message : 'Profiling execution failed.')
       router.refresh()
     } finally {
@@ -37,6 +41,6 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
       {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
       {busy ? 'Profiling…' : 'Run profiling'}
     </button> : null}
-    {message ? <span className="flex items-center gap-1 text-xs text-slate-500" role="status"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />{message}</span> : null}
+    {message ? <span className={`flex items-center gap-1 text-xs ${hasError ? 'text-rose-600' : 'text-slate-500'}`} role="status">{hasError ? <AlertCircle className="h-3.5 w-3.5 text-rose-500" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}{message}</span> : null}
   </div>
 }
