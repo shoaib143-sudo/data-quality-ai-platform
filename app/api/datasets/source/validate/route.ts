@@ -21,22 +21,31 @@ function sourceIdentifier(source: { source_type: string | null; connection_metad
   return table ? `${schema}.${table}` : ''
 }
 
+function validationCode(errors: string[]) {
+  if (errors.some(error => error.includes('credential_ref'))) return 'JDBC_CREDENTIAL_REF_MISSING'
+  if (errors.some(error => error.includes('table name'))) return 'SOURCE_TABLE_MISSING'
+  if (errors.some(error => error.includes('source identifier'))) return 'SOURCE_IDENTIFIER_MISSING'
+  if (errors.some(error => error.includes('jdbc_url'))) return 'JDBC_URL_MISSING'
+  if (errors.some(error => error.includes('connectivity') || error.includes('bridge'))) return 'SOURCE_CONNECTIVITY_FAILED'
+  return errors.length ? 'SOURCE_VALIDATION_FAILED' : null
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
     const body = await request.json()
     const projectId = text(body.projectId)
     const sourceId = text(body.sourceId)
-    if (!projectId || !sourceId) return NextResponse.json({ error: 'projectId and sourceId are required.' }, { status: 400 })
+    if (!projectId || !sourceId) return NextResponse.json({ error: 'projectId and sourceId are required.', code: 'INVALID_VALIDATION_REQUEST' }, { status: 400 })
 
     const admin = createAdminClient()
     const { data: project } = await admin.schema('app').from('projects').select('id, organization_id').eq('id', projectId).maybeSingle()
-    if (!project) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
+    if (!project) return NextResponse.json({ error: 'Project access denied.', code: 'PROJECT_ACCESS_DENIED' }, { status: 403 })
     const { data: membership } = await admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-    if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
+    if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Project access denied.', code: 'PROJECT_ACCESS_DENIED' }, { status: 403 })
 
     const { data: source, error: sourceError } = await admin.schema('catalog').from('data_sources').select('id, project_id, name, source_type, connection_metadata, status').eq('id', sourceId).eq('project_id', projectId).maybeSingle()
-    if (sourceError || !source) return NextResponse.json({ error: 'Data source not found.' }, { status: 404 })
+    if (sourceError || !source) return NextResponse.json({ error: 'Data source not found.', code: 'SOURCE_NOT_FOUND' }, { status: 404 })
 
     const identifier = sourceIdentifier(source)
     const validation = await validateDataSourceForProfiling(admin, source, identifier)
@@ -55,8 +64,8 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ source: { ...source, status: nextStatus }, validation, operational: validation.valid })
+    return NextResponse.json({ source: { ...source, status: nextStatus }, validation, operational: validation.valid, code: validationCode(validation.errors) })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Source validation failed.' }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Source validation failed.', code: 'SOURCE_VALIDATION_REQUEST_FAILED' }, { status: 500 })
   }
 }
