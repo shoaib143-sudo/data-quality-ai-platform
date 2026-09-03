@@ -4,6 +4,8 @@ import { requireUser } from '@/lib/auth/require-user'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 import { executePreparedProfilingJob } from '@/lib/agents/run-profiling-job'
 
+export const maxDuration = 300
+
 const PRODUCTION_AGENT_KEY = 'profiling_agent'
 const PRODUCTION_AGENT_VERSION = '2.0'
 const PROFILING_ENGINE_NAME = 'profiling-engine'
