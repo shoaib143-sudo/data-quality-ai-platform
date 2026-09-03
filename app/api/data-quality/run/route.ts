@@ -1,8 +1,7 @@
-import { after, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { executeQualityAutomation } from '@/lib/data-quality/automation'
-import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
+import { enqueueDurableJob } from '@/lib/orchestration/queue'
 
 export const maxDuration = 300
 
@@ -51,18 +50,18 @@ export async function POST(request: Request) {
 
     const agentRunId = run.id
     const resolvedProfileRunId = profileRunId
-    after(async () => {
-      try {
-        await executeQualityAutomation({
-          datasetVersionId,
-          profileRunId: resolvedProfileRunId,
-          userId: user.id,
-          existingAgentRunId: agentRunId,
-        })
-        await evaluateObservabilitySignals(datasetVersionId, resolvedProfileRunId)
-      } catch (error) {
-        console.error('[data-quality-job] background execution failed', error)
-      }
+    const durableJob = await enqueueDurableJob({
+      projectId: dataset.project_id,
+      jobType: 'DATA_QUALITY',
+      entityId: datasetVersionId,
+      agentRunId,
+      payload: {
+        datasetVersionId,
+        profileRunId: resolvedProfileRunId,
+        userId: user.id,
+        agentRunId,
+      },
+      maxAttempts: 3,
     })
 
     return NextResponse.json({
@@ -70,6 +69,7 @@ export async function POST(request: Request) {
       execution_completed: false,
       agentRunId,
       profileRunId: resolvedProfileRunId,
+      durableJobId: durableJob.id,
       monitorUrl: `/monitoring?run=${encodeURIComponent(agentRunId)}`,
     }, { status: 202 })
   } catch (error) {
