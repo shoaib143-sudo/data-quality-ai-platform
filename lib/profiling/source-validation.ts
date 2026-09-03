@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { validateJdbcConnection } from '@/lib/connectors/jdbc'
+import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 
 export type SourceValidationResult = {
   valid: boolean
@@ -58,9 +59,59 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
     const bucket = firstString(metadata, ['bucket', 'bucket_id', 'bucketId', 'storage_bucket', 'storageBucket'])
     const path = firstString(metadata, ['path', 'storage_path', 'storagePath', 'object_path', 'objectPath']) ?? sourceUri
     if (!url && (!bucket || !path)) errors.push('FILE sources require an HTTPS URL or a Supabase Storage bucket and object path.')
-    if (url) { try { const parsed = new URL(url); if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') errors.push('FILE source URL must use HTTP or HTTPS.') } catch { errors.push('FILE source URL is not valid.') } }
-    if (errors.length === 0) { try { if (url) { const response = await fetch(url, { method: 'HEAD', cache: 'no-store' }); if (!response.ok) errors.push(`FILE source connectivity check returned HTTP ${response.status}.`) } else { const directory = path!.split('/').slice(0, -1).join('/'); const filename = path!.split('/').pop() ?? path!; const storageResult = await supabase.storage.from(bucket!).list(directory, { search: filename, limit: 1 }); if (storageResult.error) errors.push(`Unable to access Supabase Storage object: ${storageResult.error.message}`); else if (!storageResult.data.some((item) => item.name === filename)) errors.push(`Supabase Storage object ${bucket}/${path} was not found.`) } } catch (error) { errors.push(error instanceof Error ? error.message : 'FILE source connectivity check failed.') } }
-    return { valid: errors.length === 0, source_type: sourceType.toUpperCase(), execution_type: 'FILE', source_uri: url ?? `storage://${bucket}/${path}`, checks: { configuration: !errors.some((error) => error.includes('require') || error.includes('valid')), connectivity: errors.length === 0, schema_available: false }, details: { url, bucket, path }, errors, warnings }
+    if (url) {
+      try {
+        const parsed = new URL(url)
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') errors.push('FILE source URL must use HTTP or HTTPS.')
+      } catch {
+        errors.push('FILE source URL is not valid.')
+      }
+    }
+
+    if (errors.length === 0) {
+      try {
+        const executionConfig = url ? { ...metadata, url } : { ...metadata, bucket, path }
+        const loaded = await loadFileSource(supabase, { sourceUri, executionConfig }, { maxRows: 25 })
+        warnings.push(...loaded.warnings)
+        if (loaded.rowCount === 0) warnings.push('FILE source is reachable but contains no profileable records.')
+        return {
+          valid: true,
+          source_type: sourceType.toUpperCase(),
+          execution_type: 'FILE',
+          source_uri: loaded.sourceUri,
+          checks: { configuration: true, connectivity: true, schema_available: loaded.rows.length > 0 },
+          details: {
+            url,
+            bucket,
+            path,
+            format: loaded.format,
+            content_type: loaded.contentType,
+            row_count: loaded.rowCount,
+            sampled_rows: loaded.rows.length,
+            columns: Array.from(loaded.rows.reduce<Set<string>>((names, row) => {
+              Object.keys(row).forEach((name) => names.add(name))
+              return names
+            }, new Set())),
+            metadata: loaded.metadata,
+          },
+          errors,
+          warnings,
+        }
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : 'FILE source connectivity/content scan failed.')
+      }
+    }
+
+    return {
+      valid: false,
+      source_type: sourceType.toUpperCase(),
+      execution_type: 'FILE',
+      source_uri: url ?? `storage://${bucket ?? ''}/${path ?? ''}`,
+      checks: { configuration: !errors.some((error) => error.includes('require') || error.includes('valid')), connectivity: false, schema_available: false },
+      details: { url, bucket, path },
+      errors,
+      warnings,
+    }
   }
 
   const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? 'public'
