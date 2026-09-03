@@ -12,7 +12,7 @@ type ValidationPayload = {
 function readinessMessage(payload: { error?: string; validation?: ValidationPayload; code?: string }) {
   const errors = payload.validation?.errors ?? []
   if (payload.code === 'JDBC_CREDENTIAL_REF_MISSING' || errors.some(error => error.includes('credential_ref'))) {
-    return 'Administrator setup required: configure the server managed PostgreSQL credential reference and JDBC bridge, then check the connection again. No database password is entered here.'
+    return 'This saved connection needs its credentials configured. Reopen the connection setup, enter the credentials for this connection type, test the connection, and save it again.'
   }
   if (errors.some(error => error.includes('table name'))) {
     return 'Choose a schema and table for this connection, then check the connection again.'
