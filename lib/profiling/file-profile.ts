@@ -58,7 +58,7 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
       sourceUri: typeof executionSource.source_uri === 'string' ? executionSource.source_uri : version.source_uri,
       executionConfig: { ...connectionMetadata, ...executionConfig },
     },
-    { maxRows: sampling.loadLimit },
+    { maxRows: sampling.loadLimit, maxBytes: sampling.capacityMaxFileBytes },
   )
 
   const sampled = applySamplingPolicy(loaded.rows as Record<string, unknown>[], loaded.rowCount, sampling)
