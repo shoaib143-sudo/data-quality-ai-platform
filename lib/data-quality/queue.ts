@@ -9,9 +9,10 @@ export async function queueDataQualityAutomation(input: {
   userId?: string | null
   parentRunId?: string | null
   requestedByUser?: boolean
+  idempotencyKey?: string | null
 }) {
   const admin = createAdminClient()
-  const idempotencyKey = `data-quality:profile:${input.profileRunId}`
+  const idempotencyKey = input.idempotencyKey?.trim() || `data-quality:profile:${input.profileRunId}`
 
   const { data: existingJob, error: existingJobError } = await admin
     .schema('orchestration')
