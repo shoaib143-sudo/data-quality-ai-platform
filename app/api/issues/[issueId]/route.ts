@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { scheduleRemediationVerificationFromIssue } from '@/lib/profiling/remediation-reprofile'
 import { scheduleFreshDataQualityVerificationFromIssue } from '@/lib/data-quality/remediation-reprofile'
+import { verifyObservabilityIncidentResponseFromIssue } from '@/lib/observability/incident-response-verification'
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ issueId: string }> }) {
   try {
@@ -30,6 +31,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
 
     let isProfilingRemediation = false
     let isDataQualityRemediation = false
+    let isObservabilityResponse = false
     if (resolvingNow) {
       if (issue.profile_run_id) {
         const { data: profilingOutcome, error: profilingOutcomeError } = await admin
@@ -55,9 +57,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
         .maybeSingle()
       if (dqOutcomeError) throw new Error(`Unable to validate data quality remediation issue: ${dqOutcomeError.message}`)
       isDataQualityRemediation = Boolean(dqOutcome)
+
+      const { data: observabilityIncident, error: observabilityIncidentError } = await admin
+        .schema('governance')
+        .from('observability_incidents')
+        .select('id')
+        .eq('project_id', issue.project_id)
+        .contains('evidence', { remediation_issue_ids: [issueId] })
+        .limit(1)
+        .maybeSingle()
+      if (observabilityIncidentError) throw new Error(`Unable to validate observability response issue: ${observabilityIncidentError.message}`)
+      isObservabilityResponse = Boolean(observabilityIncident)
     }
 
-    const governedRemediation = isProfilingRemediation || isDataQualityRemediation
+    const governedRemediation = isProfilingRemediation || isDataQualityRemediation || isObservabilityResponse
     const resolutionSummary = typeof body.resolutionSummary === 'string' ? body.resolutionSummary.trim() : ''
     if (governedRemediation && !resolutionSummary) {
       return NextResponse.json({
@@ -98,6 +111,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
         status,
         profiling_remediation: isProfilingRemediation,
         data_quality_remediation: isDataQualityRemediation,
+        observability_response: isObservabilityResponse,
         resolution_summary_present: Boolean(data.resolution_summary),
       },
     })
@@ -122,6 +136,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
               userId: user.id,
             })),
             mode: 'PROFILING',
+          }
+        } else {
+          const observabilityVerification = await verifyObservabilityIncidentResponseFromIssue({
+            issueId,
+            projectId: issue.project_id,
+            actorUserId: user.id,
+          })
+          if (observabilityVerification.status !== 'NOT_OBSERVABILITY_RESPONSE') {
+            verificationScheduling = { ...observabilityVerification, mode: 'OBSERVABILITY_RESPONSE' }
           }
         }
       } catch (verificationError) {
