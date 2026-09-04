@@ -8,6 +8,7 @@
     "start": "next start",
     "bootstrap:opensearch": "node scripts/bootstrap-opensearch.mjs",
     "verify:data-plane-config": "node scripts/verify-data-plane-config.mjs",
+    "verify:data-plane-operations": "node scripts/verify-data-plane-operations.mjs",
     "verify:file-onboarding": "node scripts/verify-file-onboarding.mjs",
     "verify:profiling-explorer": "node scripts/verify-profiling-explorer.mjs",
     "verify:governance": "node scripts/verify-governance-architecture.mjs",
