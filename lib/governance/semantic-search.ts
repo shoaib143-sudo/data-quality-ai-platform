@@ -159,10 +159,39 @@ export async function indexSemanticObject(input: SemanticIndexInput) {
 
   const model = embeddingModel(input.embeddingModel)
   const version = input.embeddingVersion?.trim() || '1'
-  const vector = await embedGovernanceText(content, model)
   const contentHash = createHash('sha256').update(content).digest('hex')
   const admin = createAdminClient()
+  const existing = await admin
+    .schema('governance')
+    .from('semantic_embeddings')
+    .select('id,project_id,object_type,object_key,object_id,content_hash,embedding_model,embedding_version,updated_at')
+    .eq('project_id', input.projectId)
+    .eq('object_type', input.objectType)
+    .eq('object_key', input.objectKey)
+    .eq('embedding_model', model)
+    .eq('embedding_version', version)
+    .maybeSingle()
 
+  if (existing.error) throw new Error(`Unable to inspect semantic object: ${existing.error.message}`)
+
+  if (existing.data?.content_hash === contentHash) {
+    const { data, error } = await admin
+      .schema('governance')
+      .from('semantic_embeddings')
+      .update({
+        object_id: input.objectId ?? null,
+        content,
+        metadata: input.metadata ?? {},
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.data.id)
+      .select('id,project_id,object_type,object_key,object_id,content_hash,embedding_model,embedding_version,updated_at')
+      .single()
+    if (error) throw new Error(`Unable to refresh unchanged semantic object: ${error.message}`)
+    return { ...data, unchanged: true as const }
+  }
+
+  const vector = await embedGovernanceText(content, model)
   const { data, error } = await admin
     .schema('governance')
     .from('semantic_embeddings')
@@ -186,7 +215,7 @@ export async function indexSemanticObject(input: SemanticIndexInput) {
     .single()
 
   if (error) throw new Error(`Unable to index semantic object: ${error.message}`)
-  return data
+  return { ...data, unchanged: false as const }
 }
 
 export async function deleteSemanticObject(input: {
