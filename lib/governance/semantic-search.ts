@@ -6,7 +6,7 @@ export const EMBEDDING_DIMENSIONS = 384
 
 type SupabaseLike = {
   schema(name: string): {
-    rpc(name: string, args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }>
+    rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message: string } | null }>
   }
 }
 
