@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "bootstrap:opensearch": "node scripts/bootstrap-opensearch.mjs",
     "verify:governance": "node scripts/verify-governance-architecture.mjs",
     "verify:semantic": "node scripts/verify-semantic-governance.mjs",
     "verify:remediation": "node scripts/verify-profiling-remediation.mjs",
