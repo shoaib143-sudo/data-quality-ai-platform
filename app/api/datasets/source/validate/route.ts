@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
+import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
@@ -30,6 +31,72 @@ function validationCode(errors: string[]) {
   return errors.length ? 'SOURCE_VALIDATION_FAILED' : null
 }
 
+async function reconcileBoundDatasets(
+  admin: ReturnType<typeof createAdminClient>,
+  source: { id: string; project_id: string; source_type: string | null; connection_metadata: unknown },
+  validation: Awaited<ReturnType<typeof validateDataSourceForProfiling>>,
+  now: string,
+) {
+  const { data: datasets } = await admin.schema('catalog').from('datasets').select('id, metadata').eq('project_id', source.project_id).eq('data_source_id', source.id)
+  const datasetIds = (datasets ?? []).map(item => item.id)
+  if (!datasetIds.length) return
+
+  const { data: versions } = await admin.schema('catalog').from('dataset_versions').select('id,dataset_id,version_number,metadata').in('dataset_id', datasetIds).order('version_number', { ascending: false })
+  const latestByDataset = new Map<string, { id: string; dataset_id: string; metadata: unknown }>()
+  for (const version of versions ?? []) if (!latestByDataset.has(version.dataset_id)) latestByDataset.set(version.dataset_id, version)
+  const versionIds = [...latestByDataset.values()].map(version => version.id)
+  if (!versionIds.length) return
+
+  if (!validation.valid) {
+    await admin.schema('profiling').from('dataset_execution_sources').update({ active: false, updated_at: now }).in('dataset_version_id', versionIds)
+    return
+  }
+
+  const sourceMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' && !Array.isArray(source.connection_metadata)
+    ? source.connection_metadata as Record<string, unknown>
+    : {}
+  const { data: executionSources } = await admin.schema('profiling').from('dataset_execution_sources').select('id,dataset_version_id,execution_config').in('dataset_version_id', versionIds)
+  const executionByVersion = new Map((executionSources ?? []).map(item => [item.dataset_version_id, item]))
+  const datasetById = new Map((datasets ?? []).map(dataset => [dataset.id, dataset]))
+
+  for (const version of latestByDataset.values()) {
+    const execution = executionByVersion.get(version.id)
+    if (!execution) continue
+    const executionConfig = execution.execution_config && typeof execution.execution_config === 'object' && !Array.isArray(execution.execution_config)
+      ? execution.execution_config as Record<string, unknown>
+      : {}
+    const versionMetadata = version.metadata && typeof version.metadata === 'object' && !Array.isArray(version.metadata)
+      ? version.metadata as Record<string, unknown>
+      : {}
+    const dataset = datasetById.get(version.dataset_id)
+    const datasetMetadata = dataset?.metadata && typeof dataset.metadata === 'object' && !Array.isArray(dataset.metadata)
+      ? dataset.metadata as Record<string, unknown>
+      : {}
+
+    await admin.schema('catalog').from('dataset_versions').update({
+      status: 'AVAILABLE',
+      observed_at: now,
+      metadata: { ...versionMetadata, profiling_ready: true, source_validation: validation },
+    }).eq('id', version.id)
+    await admin.schema('catalog').from('datasets').update({
+      updated_at: now,
+      metadata: { ...datasetMetadata, profiling_ready: true, source_validation: validation },
+    }).eq('id', version.dataset_id)
+    await admin.schema('profiling').from('dataset_execution_sources').update({
+      active: true,
+      updated_at: now,
+      execution_config: {
+        ...executionConfig,
+        ...sourceMetadata,
+        source_id: source.id,
+        source_type: source.source_type,
+        connection_metadata: sourceMetadata,
+        validation,
+      },
+    }).eq('id', execution.id)
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
@@ -38,11 +105,8 @@ export async function POST(request: Request) {
     const sourceId = text(body.sourceId)
     if (!projectId || !sourceId) return NextResponse.json({ error: 'projectId and sourceId are required.', code: 'INVALID_VALIDATION_REQUEST' }, { status: 400 })
 
+    await authorizeProject(user.id, projectId, 'catalog.read')
     const admin = createAdminClient()
-    const { data: project } = await admin.schema('app').from('projects').select('id, organization_id').eq('id', projectId).maybeSingle()
-    if (!project) return NextResponse.json({ error: 'Project access denied.', code: 'PROJECT_ACCESS_DENIED' }, { status: 403 })
-    const { data: membership } = await admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-    if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Project access denied.', code: 'PROJECT_ACCESS_DENIED' }, { status: 403 })
 
     const { data: source, error: sourceError } = await admin.schema('catalog').from('data_sources').select('id, project_id, name, source_type, connection_metadata, status').eq('id', sourceId).eq('project_id', projectId).maybeSingle()
     if (sourceError || !source) return NextResponse.json({ error: 'Data source not found.', code: 'SOURCE_NOT_FOUND' }, { status: 404 })
@@ -54,18 +118,11 @@ export async function POST(request: Request) {
     const { error: updateError } = await admin.schema('catalog').from('data_sources').update({ status: nextStatus, updated_at: now }).eq('id', source.id).eq('project_id', projectId)
     if (updateError) throw new Error(`Unable to update source status: ${updateError.message}`)
 
-    if (!validation.valid) {
-      const { data: datasets } = await admin.schema('catalog').from('datasets').select('id').eq('project_id', projectId).eq('data_source_id', source.id)
-      const datasetIds = (datasets ?? []).map(item => item.id)
-      if (datasetIds.length) {
-        const { data: versions } = await admin.schema('catalog').from('dataset_versions').select('id').in('dataset_id', datasetIds)
-        const versionIds = (versions ?? []).map(item => item.id)
-        if (versionIds.length) await admin.schema('profiling').from('dataset_execution_sources').update({ active: false, updated_at: now }).in('dataset_version_id', versionIds)
-      }
-    }
+    await reconcileBoundDatasets(admin, source, validation, now)
 
     return NextResponse.json({ source: { ...source, status: nextStatus }, validation, operational: validation.valid, code: validationCode(validation.errors) })
   } catch (error) {
+    if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message, code: 'PROJECT_ACCESS_DENIED' }, { status: error.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Source validation failed.', code: 'SOURCE_VALIDATION_REQUEST_FAILED' }, { status: 500 })
   }
 }
