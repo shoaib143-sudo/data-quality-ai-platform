@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
+import { getProjectionPublisher } from '@/lib/data-plane/projection-publisher'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
@@ -109,6 +110,73 @@ export async function POST(request: Request) {
 
     const { data: agentDefinition, error: agentError } = await admin.schema('agent').from('agent_definitions').select('id, agent_key, version, enabled').eq('agent_key', 'profiling_agent').eq('version', '2.0').eq('enabled', true).maybeSingle()
     if (agentError || !agentDefinition) throw new Error('Production Profiling Agent 2.0 is not available.')
+
+    const occurredAt = new Date().toISOString()
+    const correlationId = crypto.randomUUID()
+    await getProjectionPublisher().publishMany([
+      {
+        projectId,
+        organizationId: project.organization_id,
+        eventId: crypto.randomUUID(),
+        schemaVersion: 1,
+        operation: 'UPSERT',
+        eventType: 'CATALOG.DATASET_REGISTERED',
+        occurredAt,
+        aggregateType: 'DATASET',
+        aggregateId: dataset.id,
+        aggregateVersion: version.version_number,
+        correlationId,
+        actorType: 'USER',
+        actorId: user.id,
+        payload: {
+          dataSourceId: source.id,
+          datasetVersionId: version.id,
+          sourceType: source.source_type,
+          sourceIdentifier: dataset.source_identifier,
+          businessDomain: dataset.business_domain,
+          status: dataset.status,
+          profilingReady: sourceReady,
+          knowledgeDocument: {
+            objectType: 'DATASET',
+            objectId: dataset.id,
+            label: dataset.name,
+            description: dataset.description,
+            content: [dataset.name, dataset.description, dataset.business_domain, dataset.source_identifier, source.name, source.source_type].filter(Boolean).join(' '),
+            href: `/datasets/${dataset.id}`,
+            metadata: {
+              businessDomain: dataset.business_domain,
+              status: dataset.status,
+              sourceType: source.source_type,
+              profilingReady: sourceReady,
+            },
+            updatedAt: occurredAt,
+          },
+        },
+      },
+      {
+        projectId,
+        organizationId: project.organization_id,
+        eventId: crypto.randomUUID(),
+        schemaVersion: 1,
+        operation: 'APPEND',
+        eventType: 'CATALOG.DATASET_VERSION_CREATED',
+        occurredAt,
+        aggregateType: 'DATASET_VERSION',
+        aggregateId: version.id,
+        aggregateVersion: version.version_number,
+        correlationId,
+        causationId: dataset.id,
+        actorType: 'USER',
+        actorId: user.id,
+        payload: {
+          datasetId: dataset.id,
+          versionNumber: version.version_number,
+          status: version.status,
+          sourceUri: version.source_uri,
+          profilingReady: sourceReady,
+        },
+      },
+    ])
 
     return NextResponse.json({
       dataset,
