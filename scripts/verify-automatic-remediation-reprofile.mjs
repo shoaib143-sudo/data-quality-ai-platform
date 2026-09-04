@@ -7,6 +7,8 @@ const requiredFiles = [
   'lib/orchestration/worker.ts',
   'app/api/issues/[issueId]/route.ts',
   'app/api/profiling/remediation/verify/route.ts',
+  'app/workflows/page.tsx',
+  'app/workflows/workflow-manager.tsx',
   'supabase/migrations/20260904170400_automatic_remediation_reprofile.sql',
   'supabase/migrations/20260904170500_resume_automatic_remediation_reprofile_claim.sql',
 ]
@@ -26,11 +28,14 @@ const checks = [
   ['lib/profiling/remediation-reprofile.ts', /verification_profile_run_id:\s*profilingRunId[\s\S]*verification_agent_run_id:\s*agentRunId[\s\S]*PROFILE_PREPARED[\s\S]*enqueueDurableJob/, 'profile and agent linkage persisted before queue handoff'],
   ['lib/profiling/remediation-reprofile.ts', /profiling:remediation-verification:[\s\S]*verification_job_id:\s*durableJob\.id[\s\S]*JOB_ENQUEUED/, 'idempotent durable job linkage'],
   ['lib/profiling/remediation-reprofile.ts', /jobEnqueued[\s\S]*JOB_ENQUEUED_LINKAGE_PENDING[\s\S]*REPROFILE_LINKAGE_FAILED/, 'enqueued job survives linkage persistence failure'],
-  ['app/api/issues/[issueId]/route.ts', /issues\.manage[\s\S]*scheduleRemediationVerificationFromIssue/, 'issue resolution triggers governed verification scheduling'],
+  ['app/api/issues/[issueId]/route.ts', /REMEDIATION_RESOLUTION_EVIDENCE_REQUIRED[\s\S]*scheduleRemediationVerificationFromIssue/, 'server-side remediation evidence requirement before scheduling'],
+  ['app/api/issues/[issueId]/route.ts', /issues\.manage[\s\S]*profiling_remediation_outcomes[\s\S]*remediation_issue_ids/, 'issue resolution verifies persisted remediation membership'],
   ['lib/orchestration/worker.ts', /PROFILING_REMEDIATION_VERIFICATION[\s\S]*verifyRemediationOutcome[\s\S]*AUTOMATIC_WORKER/, 'durable worker automatically finalizes verification'],
   ['lib/orchestration/worker.ts', /recordAutomaticVerificationError[\s\S]*VERIFICATION_FAILED/, 'automatic verification technical failure persistence'],
   ['lib/profiling/remediation-verification.ts', /remediation_issue_ids[\s\S]*trackedIssueIds[\s\S]*missingTrackedIssues/, 'verification evaluates exact persisted remediation issues'],
   ['app/api/profiling/remediation/verify/route.ts', /REMEDIATION_IN_PROGRESS[\s\S]*VERIFICATION_QUEUE_PENDING[\s\S]*verification_profile_run_id[\s\S]*API_LINKED[\s\S]*VERIFICATION_PROFILE_RUNNING/, 'API prevents premature fallback and prefers linked automatic verification evidence'],
+  ['app/workflows/page.tsx', /from\('issues'\)[\s\S]*Profiling remediation:%[\s\S]*issues=/, 'workflow page loads remediation issue state'],
+  ['app/workflows/workflow-manager.tsx', /resolutionSummary[\s\S]*resolutionEvidence[\s\S]*Resolve with evidence[\s\S]*Automatic verification queued/, 'workflow UI records evidence and surfaces automatic verification'],
 ]
 
 for (const [path, pattern, label] of checks) {
