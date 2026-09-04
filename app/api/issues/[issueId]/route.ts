@@ -5,10 +5,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { scheduleRemediationVerificationFromIssue } from '@/lib/profiling/remediation-reprofile'
 
-function text(value: unknown) {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
 export async function PATCH(request: Request, { params }: { params: Promise<{ issueId: string }> }) {
   try {
     const user = await requireUser()
@@ -60,11 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
     })
 
     let verificationScheduling: Record<string, unknown> | null = null
-    const isProfilingRemediation = ['RESOLVED', 'CLOSED'].includes(status)
-      && text(data.title).startsWith('Profiling remediation:')
-      && Boolean(data.profile_run_id)
-
-    if (isProfilingRemediation) {
+    if (['RESOLVED', 'CLOSED'].includes(status) && data.profile_run_id) {
       try {
         verificationScheduling = await scheduleRemediationVerificationFromIssue({
           issueId,
