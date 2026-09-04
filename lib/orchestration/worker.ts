@@ -3,6 +3,7 @@ import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { investigateDataQualityRun } from '@/lib/data-quality/autonomous-operations'
 import { verifyDataQualityRemediation } from '@/lib/data-quality/remediation-verification'
 import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
+import { investigateObservabilityIncident } from '@/lib/observability/incident-intelligence'
 import { deliverNotificationJob } from '@/lib/observability/notifications'
 import { executeMetadataDiscovery } from '@/lib/catalog/discovery'
 import { verifyRemediationOutcome } from '@/lib/profiling/remediation-verification'
@@ -270,14 +271,17 @@ export async function executeDurableJob(job: DurableJob) {
     }
 
     await evaluateObservabilitySignals(datasetVersionId, profileRunId)
+    await investigateObservabilityIncident({ datasetVersionId, profileRunId, userId: userId || null })
     return
   }
 
   if (job.job_type === 'OBSERVABILITY') {
     const datasetVersionId = text(payload.datasetVersionId)
     const profileRunId = text(payload.profileRunId)
+    const userId = text(payload.userId)
     if (!datasetVersionId || !profileRunId) throw new Error('Durable observability job payload is incomplete.')
     await evaluateObservabilitySignals(datasetVersionId, profileRunId)
+    await investigateObservabilityIncident({ datasetVersionId, profileRunId, userId: userId || null })
     return
   }
 
