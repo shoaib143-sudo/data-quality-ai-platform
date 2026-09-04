@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enrichInvestigationWithModel } from '@/lib/ai/investigation-model'
+import { loadRecommendationEffectiveness } from '@/lib/profiling/recommendation-learning'
 
 type Finding = {
   id: string
@@ -35,7 +36,7 @@ export async function investigateProfilingRun(
 ) {
   const supabase = createAdminClient()
 
-  const [{ data: profileRun, error: runError }, { data: score, error: scoreError }, { data: findings, error: findingsError }, { data: columns, error: columnsError }] = await Promise.all([
+  const [{ data: profileRun, error: runError }, { data: score, error: scoreError }, { data: findings, error: findingsError }, { data: columns, error: columnsError }, { data: datasetVersion, error: datasetVersionError }] = await Promise.all([
     supabase
       .schema('profiling')
       .from('profile_runs')
@@ -60,18 +61,38 @@ export async function investigateProfilingRun(
       .select('id, column_name, semantic_type, inferred_type, confidence')
       .eq('profile_run_id', profilingRunId)
       .order('ordinal_position', { ascending: true }),
+    supabase
+      .schema('catalog')
+      .from('dataset_versions')
+      .select('id,dataset_id')
+      .eq('id', datasetVersionId)
+      .maybeSingle(),
   ])
 
   if (runError) throw new Error(`Unable to load profiling run for investigation: ${runError.message}`)
   if (scoreError) throw new Error(`Unable to load quality score for investigation: ${scoreError.message}`)
   if (findingsError) throw new Error(`Unable to load profiling findings for investigation: ${findingsError.message}`)
   if (columnsError) throw new Error(`Unable to load profiling columns for investigation: ${columnsError.message}`)
+  if (datasetVersionError) throw new Error(`Unable to resolve dataset version for investigation learning: ${datasetVersionError.message}`)
   if (!profileRun) throw new Error(`Profiling run ${profilingRunId} was not found.`)
   if (profileRun.dataset_version_id !== datasetVersionId) {
     throw new Error(`Profiling run ${profilingRunId} does not belong to dataset version ${datasetVersionId}.`)
   }
   if (profileRun.status === 'CANCELLED') {
     throw new Error(`Profiling run ${profilingRunId} was cancelled before investigation completed.`)
+  }
+
+  let projectId: string | null = null
+  if (datasetVersion?.dataset_id) {
+    const { data: dataset, error: datasetError } = await supabase
+      .schema('catalog')
+      .from('datasets')
+      .select('id,project_id')
+      .eq('id', datasetVersion.dataset_id)
+      .maybeSingle()
+
+    if (datasetError) throw new Error(`Unable to resolve project for investigation learning: ${datasetError.message}`)
+    projectId = dataset?.project_id ?? null
   }
 
   const typedFindings = (findings ?? []) as Finding[]
@@ -152,6 +173,28 @@ export async function investigateProfilingRun(
     })
   }
 
+  let learningStatus: 'AVAILABLE' | 'NO_HISTORY' | 'UNAVAILABLE' = projectId ? 'NO_HISTORY' : 'UNAVAILABLE'
+  let historicalActions = 0
+  let recommendationsWithLearning = recommendations
+
+  if (projectId) {
+    try {
+      const effectiveness = await loadRecommendationEffectiveness(
+        projectId,
+        recommendations.map((recommendation) => String(recommendation.action ?? '')),
+      )
+      const effectivenessByAction = new Map(effectiveness.map((row) => [row.action, row]))
+      historicalActions = effectiveness.length
+      learningStatus = effectiveness.length ? 'AVAILABLE' : 'NO_HISTORY'
+      recommendationsWithLearning = recommendations.map((recommendation) => {
+        const historical = effectivenessByAction.get(String(recommendation.action ?? ''))
+        return historical ? { ...recommendation, historical_effectiveness: historical } : recommendation
+      })
+    } catch {
+      learningStatus = 'UNAVAILABLE'
+    }
+  }
+
   const evidence = typedFindings.map((finding) => ({
     finding_id: finding.id,
     type: finding.finding_type,
@@ -169,7 +212,7 @@ export async function investigateProfilingRun(
     : 0.95
 
   const deterministic = {
-    investigation_version: '1.0',
+    investigation_version: '1.1',
     investigation_mode: 'deterministic_evidence_first',
     profiling_run_id: profilingRunId,
     dataset_version_id: datasetVersionId,
@@ -195,13 +238,20 @@ export async function investigateProfilingRun(
     business_issue: businessIssue,
     business_impact: businessImpact,
     risk: highSeverity.length ? 'HIGH' : typedFindings.length ? 'MEDIUM' : 'LOW',
-    recommendations,
+    recommendations: recommendationsWithLearning,
+    recommendation_learning: {
+      status: learningStatus,
+      project_id: projectId,
+      historical_actions_found: historicalActions,
+      policy: 'Historical effectiveness is advisory evidence only and never bypasses approval requirements.',
+    },
     approval_required: recommendations.some((recommendation) => recommendation.approval_required === true),
     confidence: investigationConfidence,
     evidence,
     limitations: [
       'Root cause attribution is evidence based and does not claim upstream causality without lineage or operational evidence.',
       'Business impact is qualitative until business criticality, lineage, usage, and financial or operational impact data are available.',
+      'Historical recommendation effectiveness is observational evidence and does not prove causality or automatically authorize a future action.',
       'No production data, schema, governance policy, or pipeline change is executed by this investigation step.',
     ],
   }
