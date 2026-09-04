@@ -1,0 +1,26 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "index.mapping.total_fields.limit": 2000
+  },
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "projectId": { "type": "keyword" },
+      "objectType": { "type": "keyword" },
+      "objectId": { "type": "keyword" },
+      "label": {
+        "type": "text",
+        "fields": {
+          "keyword": { "type": "keyword", "ignore_above": 512 }
+        }
+      },
+      "description": { "type": "text" },
+      "content": { "type": "text" },
+      "href": { "type": "keyword", "index": false, "doc_values": false },
+      "metadata": { "type": "flat_object" },
+      "updatedAt": { "type": "date" }
+    }
+  }
+}
