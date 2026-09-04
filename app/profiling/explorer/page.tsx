@@ -2,17 +2,36 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import ProfilingExplorer from '@/app/profiling/profiling-explorer'
 
-export default async function ProfilingExplorerPage() {
+type ExplorerSearchParams = Promise<{
+  runId?: string
+  columnId?: string
+  findingId?: string
+}>
+
+export default async function ProfilingExplorerPage({ searchParams }: { searchParams: ExplorerSearchParams }) {
   await requireUser()
   const supabase = await createClient()
+  const requested = await searchParams
+  const requestedRunId = requested.runId?.trim() || null
 
-  const { data: latestRun } = await supabase
+  const requestedRun = requestedRunId
+    ? await supabase
+        .schema('profiling')
+        .from('profile_runs')
+        .select('id,status')
+        .eq('id', requestedRunId)
+        .maybeSingle()
+    : { data: null, error: null }
+
+  if (requestedRun.error) throw new Error(`Unable to load requested profiling run: ${requestedRun.error.message}`)
+
+  const latestRun = requestedRun.data ?? (await supabase
     .schema('profiling')
     .from('profile_runs')
-    .select('id, status')
+    .select('id,status')
     .order('started_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
+    .maybeSingle()).data
 
   if (!latestRun) {
     return <main className="min-h-screen p-8"><div className="mx-auto max-w-5xl rounded-xl border p-8"><h1 className="text-2xl font-semibold">Profiling Explorer</h1><p className="mt-2 text-sm text-muted-foreground">No profiling runs are available.</p></div></main>
@@ -31,7 +50,13 @@ export default async function ProfilingExplorerPage() {
           <h1 className="text-3xl font-semibold">Profiling Explorer</h1>
           <p className="mt-2 text-sm text-muted-foreground">Run {latestRun.id} · {latestRun.status}</p>
         </div>
-        <ProfilingExplorer findings={(findings ?? []) as any} columns={(columns ?? []) as any} metrics={(metrics ?? []) as any} />
+        <ProfilingExplorer
+          findings={(findings ?? []) as any}
+          columns={(columns ?? []) as any}
+          metrics={(metrics ?? []) as any}
+          initialColumnId={requested.columnId ?? null}
+          initialFindingId={requested.findingId ?? null}
+        />
       </div>
     </main>
   )
