@@ -115,7 +115,7 @@ requireText('app/api/agents/runs/[runId]/evaluation/route.ts', [
   "score must be between 0 and 1",
 ])
 requireText('app/agents/run-agent-form.tsx', [
-  'GOVERNANCE_READ_AGENT_KEYS',
+  'GOVERNED_READ_AGENT_KEYS',
   "endpoint = '/api/agents/governance/run'",
   'Not required for this agent',
   'Question or objective',
