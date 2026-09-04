@@ -92,9 +92,33 @@ requireText('lib/governance/lineage-impact.ts', [
   'riskScore',
   'confidence',
 ])
+const changeImpact = requireText('lib/governance/lineage-change-impact.ts', [
+  'analyzeColumnLineageImpact',
+  'lineage_column_mappings',
+  'assessProposedLineageChange',
+  'PROPOSED_CHANGE',
+  'APPROVAL_REQUIRED',
+  'REVIEW_REQUIRED',
+  'SAFE_TO_PROCEED',
+  'production_mutation_performed: false',
+  'COLUMN_LINEAGE_IMPACT_ANALYZED',
+  'LINEAGE_PROPOSED_CHANGE_ASSESSED',
+])
+forbidText('lib/governance/lineage-change-impact.ts', ['production_mutation_performed: true'])
 requireText('app/api/lineage/impact/route.ts', [
   "authorizeProject(user.id, projectId, 'lineage.read')",
   'analyzeLineageImpact',
+])
+requireText('app/api/lineage/impact/change/route.ts', [
+  "authorizeProject(user.id, projectId, 'lineage.read')",
+  'assessProposedLineageChange',
+  'affectedColumns',
+])
+requireText('app/lineage/impact/change-impact-manager.tsx', [
+  'Pre-change impact gate',
+  'Assess proposed change',
+  'APPROVAL_REQUIRED',
+  'productionMutationPerformed',
 ])
 
 const worker = requireText('lib/orchestration/worker.ts', [
@@ -123,6 +147,6 @@ requireText('app/api/issues/[issueId]/route.ts', [
 ])
 requireText('app/data-quality/autonomous/page.tsx', ['Autonomous quality operations'])
 requireText('app/observability/incidents/page.tsx', ['AI Operations Center'])
-requireText('app/lineage/impact/page.tsx', ['Lineage Impact Intelligence'])
+requireText('app/lineage/impact/page.tsx', ['Lineage Impact Intelligence', 'ChangeImpactManager'])
 
 console.log('Autonomous governance operations contracts verified.')
