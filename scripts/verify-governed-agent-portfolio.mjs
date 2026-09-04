@@ -97,5 +97,17 @@ requireText('app/api/agents/governance/handoff/route.ts', [
   'target_agent_run_id',
   'GOVERNED_AGENT_HANDOFF_COMPLETED',
 ])
+requireText('app/api/agents/runs/[runId]/evaluation/route.ts', [
+  "authorizeProject(user.id, run.project_id, 'agent.execute')",
+  'USER_FEEDBACK:',
+  'AGENT_RUN_USER_EVALUATED',
+  "score must be between 0 and 1",
+])
+requireText('app/agents/run-agent-form.tsx', [
+  'GOVERNED_READ_AGENT_KEYS',
+  "endpoint = '/api/agents/governance/run'",
+  'Not required for this agent',
+  'Question or objective',
+])
 
 console.log('Governed agent portfolio contracts verified.')
