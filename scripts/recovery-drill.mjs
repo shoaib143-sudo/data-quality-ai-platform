@@ -15,9 +15,7 @@ function required(name) {
 
 function safeUrl(raw, label) {
   const url = new URL(raw)
-  if (!['postgres:', 'postgresql:'].includes(url.protocol)) {
-    throw new Error(`${label} must be a PostgreSQL URL`)
-  }
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error(`${label} must be a PostgreSQL URL`)
   return url
 }
 
@@ -26,9 +24,7 @@ function fingerprint(url) {
 }
 
 function assertUuid(value, label) {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
-    throw new Error(`${label} must be a UUID`)
-  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) throw new Error(`${label} must be a UUID`)
   return value
 }
 
@@ -41,32 +37,18 @@ function optionalNonNegativeInteger(name) {
 }
 
 function assertIsolated(source, recovery) {
-  if (fingerprint(source) === fingerprint(recovery)) {
-    throw new Error('Recovery database must be different from the source database')
+  if (fingerprint(source) === fingerprint(recovery)) throw new Error('Recovery database must be different from the source database')
+  if (process.env.ALLOW_RECOVERY_TARGET?.trim() !== 'YES_I_UNDERSTAND_THIS_REPLACES_RECOVERY_DATA') {
+    throw new Error('Set ALLOW_RECOVERY_TARGET=YES_I_UNDERSTAND_THIS_REPLACES_RECOVERY_DATA to confirm the isolated recovery target')
   }
-
-  const allow = process.env.ALLOW_RECOVERY_TARGET?.trim()
-  if (allow !== 'YES_I_UNDERSTAND_THIS_REPLACES_RECOVERY_DATA') {
-    throw new Error(
-      'Set ALLOW_RECOVERY_TARGET=YES_I_UNDERSTAND_THIS_REPLACES_RECOVERY_DATA to confirm the isolated recovery target',
-    )
-  }
-
   const sourceLabel = `${source.hostname}${source.pathname}`.toLowerCase()
   const recoveryLabel = `${recovery.hostname}${recovery.pathname}`.toLowerCase()
-  if (recoveryLabel.includes('prod') || recoveryLabel.includes('production')) {
-    throw new Error('Recovery target appears to be a production environment')
-  }
-  if (sourceLabel === recoveryLabel) {
-    throw new Error('Recovery target resolves to the same labelled environment as source')
-  }
+  if (recoveryLabel.includes('prod') || recoveryLabel.includes('production')) throw new Error('Recovery target appears to be a production environment')
+  if (sourceLabel === recoveryLabel) throw new Error('Recovery target resolves to the same labelled environment as source')
 }
 
 async function command(binary, args, options = {}) {
-  const result = await execFileAsync(binary, args, {
-    maxBuffer: 20 * 1024 * 1024,
-    ...options,
-  })
+  const result = await execFileAsync(binary, args, { maxBuffer: 20 * 1024 * 1024, ...options })
   return { stdout: result.stdout?.trim() ?? '', stderr: result.stderr?.trim() ?? '' }
 }
 
@@ -75,35 +57,39 @@ async function scalar(databaseUrl, sql) {
   return stdout.trim()
 }
 
-async function validateRecovery(recoveryUrl) {
+async function collectSnapshot(databaseUrl) {
+  return {
+    catalogDatasets: Number(await scalar(databaseUrl, 'select count(*) from catalog.datasets;')),
+    datasetVersions: Number(await scalar(databaseUrl, 'select count(*) from catalog.dataset_versions;')),
+    profileRuns: Number(await scalar(databaseUrl, 'select count(*) from profiling.profile_runs;')),
+    profileMetrics: Number(await scalar(databaseUrl, 'select count(*) from profiling.profile_metrics;')),
+    profileFindings: Number(await scalar(databaseUrl, 'select count(*) from profiling.profile_findings;')),
+    governanceTables: Number(await scalar(databaseUrl, "select count(*) from information_schema.tables where table_schema='governance' and table_type='BASE TABLE';")),
+    semanticEmbeddings: Number(await scalar(databaseUrl, 'select count(*) from governance.semantic_embeddings;')),
+    auditEvents: Number(await scalar(databaseUrl, 'select count(*) from governance.audit_events;')),
+    storageBuckets: Number(await scalar(databaseUrl, 'select count(*) from storage.buckets;')),
+    storageObjects: Number(await scalar(databaseUrl, 'select count(*) from storage.objects;')),
+  }
+}
+
+function assertSnapshotParity(sourceSnapshot, recoveredSnapshot) {
+  for (const key of Object.keys(sourceSnapshot)) {
+    const sourceValue = sourceSnapshot[key]
+    const recoveredValue = recoveredSnapshot[key]
+    if (!Number.isFinite(sourceValue) || !Number.isFinite(recoveredValue)) throw new Error(`Recovery parity check returned an invalid count for ${key}`)
+    if (sourceValue !== recoveredValue) throw new Error(`Recovery parity mismatch for ${key}: source=${sourceValue} recovery=${recoveredValue}`)
+  }
+}
+
+async function validateRecovery(recoveryUrl, sourceSnapshot) {
+  const recoveredSnapshot = await collectSnapshot(recoveryUrl)
+  assertSnapshotParity(sourceSnapshot, recoveredSnapshot)
   const checks = {
     database: await scalar(recoveryUrl, 'select current_database();'),
-    catalogDatasets: Number(await scalar(recoveryUrl, 'select count(*) from catalog.datasets;')),
-    profileRuns: Number(await scalar(recoveryUrl, 'select count(*) from profiling.profile_runs;')),
-    governanceTables: Number(
-      await scalar(
-        recoveryUrl,
-        "select count(*) from information_schema.tables where table_schema='governance' and table_type='BASE TABLE';",
-      ),
-    ),
-    vectorExtension: await scalar(
-      recoveryUrl,
-      "select case when exists(select 1 from pg_extension where extname='vector') then 'present' else 'absent' end;",
-    ),
-    semanticRegistry: Number(
-      await scalar(
-        recoveryUrl,
-        "select count(*) from information_schema.tables where table_schema='governance' and table_name='semantic_embeddings';",
-      ),
-    ),
-    auditChainValid: await scalar(
-      recoveryUrl,
-      "select coalesce((governance.verify_audit_chain()->>'valid')::text,'false');",
-    ),
-  }
-
-  if (!Number.isFinite(checks.catalogDatasets) || !Number.isFinite(checks.profileRuns)) {
-    throw new Error('Recovery validation returned invalid record counts')
+    ...recoveredSnapshot,
+    vectorExtension: await scalar(recoveryUrl, "select case when exists(select 1 from pg_extension where extname='vector') then 'present' else 'absent' end;"),
+    semanticRegistry: Number(await scalar(recoveryUrl, "select count(*) from information_schema.tables where table_schema='governance' and table_name='semantic_embeddings';")),
+    auditChainValid: await scalar(recoveryUrl, "select coalesce((governance.verify_audit_chain()->>'valid')::text,'false');"),
   }
   if (checks.governanceTables <= 0) throw new Error('Governance schema was not restored')
   if (checks.vectorExtension !== 'present') throw new Error('pgvector extension was not restored')
@@ -122,17 +108,7 @@ async function toolVersion(binary) {
   return stdout
 }
 
-async function persistDrillEvidence({
-  sourceRaw,
-  projectId,
-  status,
-  startedAt,
-  completedAt,
-  measuredRpoMinutes,
-  measuredRtoMinutes,
-  evidence,
-  notes,
-}) {
+async function persistDrillEvidence({ sourceRaw, projectId, status, startedAt, completedAt, measuredRpoMinutes, measuredRtoMinutes, evidence, notes }) {
   const sql = `
     insert into governance.backup_restore_drills(
       project_id,drill_type,status,environment,evidence,notes,started_at,completed_at,
@@ -144,30 +120,11 @@ async function persistDrillEvidence({
     ) returning id::text || ':' || policy_result;
   `
   const { stdout } = await command('psql', [
-    sourceRaw,
-    '-X',
-    '-A',
-    '-t',
-    '-v',
-    'ON_ERROR_STOP=1',
-    '-v',
-    `project_id=${projectId}`,
-    '-v',
-    `status=${status}`,
-    '-v',
-    `evidence=${JSON.stringify(evidence)}`,
-    '-v',
-    `notes=${notes ?? ''}`,
-    '-v',
-    `started_at=${startedAt}`,
-    '-v',
-    `completed_at=${completedAt}`,
-    '-v',
-    `measured_rpo_minutes=${measuredRpoMinutes ?? ''}`,
-    '-v',
-    `measured_rto_minutes=${measuredRtoMinutes}`,
-    '-c',
-    sql,
+    sourceRaw,'-X','-A','-t','-v','ON_ERROR_STOP=1',
+    '-v',`project_id=${projectId}`,'-v',`status=${status}`,'-v',`evidence=${JSON.stringify(evidence)}`,
+    '-v',`notes=${notes ?? ''}`,'-v',`started_at=${startedAt}`,'-v',`completed_at=${completedAt}`,
+    '-v',`measured_rpo_minutes=${measuredRpoMinutes ?? ''}`,'-v',`measured_rto_minutes=${measuredRtoMinutes}`,
+    '-c',sql,
   ])
   return stdout.trim()
 }
@@ -185,115 +142,53 @@ async function main() {
   const startedAt = new Date(startedAtMs).toISOString()
   const workdir = await mkdtemp(join(tmpdir(), 'dgp-recovery-'))
   const dumpPath = join(workdir, 'database.dump')
-  let evidence = {
-    source: fingerprint(source),
-    recovery: fingerprint(recovery),
-    projectId,
-    scope: 'database',
-  }
+  let evidence = { source: fingerprint(source), recovery: fingerprint(recovery), projectId, scope: 'database' }
 
   try {
-    const [pgDumpVersion, pgRestoreVersion, psqlVersion] = await Promise.all([
-      toolVersion('pg_dump'),
-      toolVersion('pg_restore'),
-      toolVersion('psql'),
+    const [pgDumpVersion, pgRestoreVersion, psqlVersion, sourceSnapshot] = await Promise.all([
+      toolVersion('pg_dump'), toolVersion('pg_restore'), toolVersion('psql'), collectSnapshot(sourceRaw),
     ])
-    evidence = { ...evidence, tools: { pgDumpVersion, pgRestoreVersion, psqlVersion } }
+    evidence = { ...evidence, tools: { pgDumpVersion, pgRestoreVersion, psqlVersion }, sourceSnapshot }
 
     console.log('Creating logical backup from source database')
-    await command('pg_dump', [
-      sourceRaw,
-      '--format=custom',
-      '--no-owner',
-      '--no-privileges',
-      '--file',
-      dumpPath,
-    ])
-
+    await command('pg_dump', [sourceRaw,'--format=custom','--no-owner','--no-privileges','--file',dumpPath])
     const dumpStat = await stat(dumpPath)
-    evidence = {
-      ...evidence,
-      backup: {
-        format: 'custom',
-        bytes: dumpStat.size,
-        sha256: await sha256File(dumpPath),
-      },
-    }
+    evidence = { ...evidence, backup: { format: 'custom', bytes: dumpStat.size, sha256: await sha256File(dumpPath) } }
 
     console.log('Resetting isolated recovery database schema')
-    await command('psql', [
-      recoveryRaw,
-      '-X',
-      '-v',
-      'ON_ERROR_STOP=1',
-      '-c',
-      'drop schema if exists public cascade; create schema public;',
-    ])
+    await command('psql', [recoveryRaw,'-X','-v','ON_ERROR_STOP=1','-c','drop schema if exists public cascade; create schema public;'])
 
     console.log('Restoring backup into isolated recovery database')
-    await command('pg_restore', [
-      '--dbname',
-      recoveryRaw,
-      '--no-owner',
-      '--no-privileges',
-      '--clean',
-      '--if-exists',
-      dumpPath,
-    ])
+    await command('pg_restore', ['--dbname',recoveryRaw,'--no-owner','--no-privileges','--clean','--if-exists',dumpPath])
 
-    console.log('Running recovery integrity checks')
-    const checks = await validateRecovery(recoveryRaw)
+    console.log('Running recovery integrity and parity checks')
+    const checks = await validateRecovery(recoveryRaw, sourceSnapshot)
     const completedAt = new Date().toISOString()
     const measuredRtoMinutes = Math.max(0, Math.ceil((Date.now() - startedAtMs) / 60_000))
-    evidence = { ...evidence, checks }
+    evidence = { ...evidence, checks, parity: { status: 'PASSED', compared: Object.keys(sourceSnapshot) } }
 
     const registryResult = await persistDrillEvidence({
-      sourceRaw,
-      projectId,
-      status: 'PASSED',
-      startedAt,
-      completedAt,
-      measuredRpoMinutes,
-      measuredRtoMinutes,
-      evidence,
-      notes: 'Automated isolated database restore rehearsal completed successfully.',
+      sourceRaw, projectId, status: 'PASSED', startedAt, completedAt, measuredRpoMinutes, measuredRtoMinutes, evidence,
+      notes: 'Automated isolated database restore rehearsal completed successfully with source/recovery parity validation.',
     })
 
-    const result = {
-      status: 'PASSED',
-      durationSeconds: Math.round((Date.now() - startedAtMs) / 1000),
-      measuredRpoMinutes,
-      measuredRtoMinutes,
-      source: fingerprint(source),
-      recovery: fingerprint(recovery),
-      checks,
-      registryResult,
-      note: 'Database recovery only. Supabase Storage object bytes and external configuration require separate recovery validation.',
-    }
-    console.log(JSON.stringify(result, null, 2))
+    console.log(JSON.stringify({
+      status: 'PASSED', durationSeconds: Math.round((Date.now() - startedAtMs) / 1000), measuredRpoMinutes, measuredRtoMinutes,
+      source: fingerprint(source), recovery: fingerprint(recovery), sourceSnapshot, checks, registryResult,
+      note: 'Database and Supabase Storage metadata recovery validated. Storage object bytes, Edge Functions, and external configuration require separate recovery validation.',
+    }, null, 2))
   } catch (error) {
     const completedAt = new Date().toISOString()
     const measuredRtoMinutes = Math.max(0, Math.ceil((Date.now() - startedAtMs) / 60_000))
     const message = error instanceof Error ? error.message : String(error)
     try {
       await persistDrillEvidence({
-        sourceRaw,
-        projectId,
-        status: 'FAILED',
-        startedAt,
-        completedAt,
-        measuredRpoMinutes,
-        measuredRtoMinutes,
+        sourceRaw, projectId, status: 'FAILED', startedAt, completedAt, measuredRpoMinutes, measuredRtoMinutes,
         evidence: { ...evidence, failure: { message } },
         notes: 'Automated isolated database restore rehearsal failed. Review evidence before retrying.',
       })
     } catch (registryError) {
-      console.error(
-        JSON.stringify({
-          status: 'EVIDENCE_PERSISTENCE_FAILED',
-          error: registryError instanceof Error ? registryError.message : String(registryError),
-        }),
-      )
+      console.error(JSON.stringify({ status: 'EVIDENCE_PERSISTENCE_FAILED', error: registryError instanceof Error ? registryError.message : String(registryError) }))
     }
     throw error
   } finally {
