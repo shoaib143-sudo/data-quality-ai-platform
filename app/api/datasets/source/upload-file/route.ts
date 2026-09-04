@@ -30,30 +30,31 @@ function safeFileName(name: string) {
 }
 
 function extension(name: string) {
-  const value = name.includes('.') ? name.split('.').pop()?.toLowerCase() ?? '' : ''
-  return value
+  return name.includes('.') ? name.split('.').pop()?.toLowerCase() ?? '' : ''
 }
 
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
-    const form = await request.formData()
-    const projectId = String(form.get('projectId') ?? '').trim()
-    const file = form.get('file')
+    const body = await request.json()
+    const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : ''
+    const originalName = typeof body.fileName === 'string' ? body.fileName.trim() : ''
+    const contentType = typeof body.contentType === 'string' && body.contentType.trim() ? body.contentType.trim() : 'application/octet-stream'
+    const size = Number(body.size)
 
-    if (!projectId || !(file instanceof File)) {
-      return NextResponse.json({ error: 'projectId and file are required.' }, { status: 400 })
+    if (!projectId || !originalName || !Number.isFinite(size)) {
+      return NextResponse.json({ error: 'projectId, fileName, and size are required.' }, { status: 400 })
     }
 
     await authorizeProject(user.id, projectId, 'source.manage')
 
     const maxBytes = boundedMaxBytes()
-    if (file.size <= 0) return NextResponse.json({ error: 'Uploaded file is empty.' }, { status: 400 })
-    if (file.size > maxBytes) {
+    if (size <= 0) return NextResponse.json({ error: 'Uploaded file is empty.' }, { status: 400 })
+    if (size > maxBytes) {
       return NextResponse.json({ error: `Uploaded file exceeds the technical safety ceiling of ${maxBytes} bytes.` }, { status: 413 })
     }
 
-    const fileName = safeFileName(file.name)
+    const fileName = safeFileName(originalName)
     const ext = extension(fileName)
     if (!ext || !ALLOWED_EXTENSIONS.has(ext)) {
       return NextResponse.json({ error: `Unsupported dataset file type: ${ext || 'unknown'}.` }, { status: 415 })
@@ -61,22 +62,18 @@ export async function POST(request: Request) {
 
     const objectPath = `projects/${projectId}/uploads/${Date.now()}-${crypto.randomUUID()}-${fileName}`
     const admin = createAdminClient()
-    const bytes = new Uint8Array(await file.arrayBuffer())
-    const { error } = await admin.storage.from(DATASET_BUCKET).upload(objectPath, bytes, {
-      contentType: file.type || 'application/octet-stream',
-      cacheControl: '3600',
-      upsert: false,
-    })
-    if (error) throw new Error(`Unable to upload dataset file: ${error.message}`)
+    const { data, error } = await admin.storage.from(DATASET_BUCKET).createSignedUploadUrl(objectPath, { upsert: false })
+    if (error || !data?.token) throw new Error(`Unable to authorize dataset upload: ${error?.message ?? 'missing signed upload token'}`)
 
     return NextResponse.json({
       bucket: DATASET_BUCKET,
       path: objectPath,
+      token: data.token,
       sourceUri: `${DATASET_BUCKET}/${objectPath}`,
-      file: { name: fileName, size: file.size, contentType: file.type || null, extension: ext },
-    }, { status: 201 })
+      file: { name: fileName, size, contentType, extension: ext },
+    })
   } catch (error) {
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Dataset file upload failed.' }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Dataset file upload authorization failed.' }, { status: 500 })
   }
 }
