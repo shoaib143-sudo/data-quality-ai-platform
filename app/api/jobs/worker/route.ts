@@ -14,6 +14,7 @@ import { runProjectionWorker } from '@/lib/data-plane/run-projection-worker'
 import { cleanupExpiredObjectArtifacts } from '@/lib/data-plane/object-lifecycle'
 import { enqueueDailySemanticIndexJobs } from '@/lib/governance/semantic-jobs'
 import { processSemanticIndexJobs } from '@/lib/governance/semantic-job-worker'
+import { refreshAllPredictiveRisk } from '@/lib/governance/predictive-risk'
 
 export const maxDuration = 300
 
@@ -50,11 +51,12 @@ export async function GET(request: Request) {
   ])
   const events = await claimOutboxEvents(workerId, 30)
   const eventResults = await processOutboxEvents(events)
-  const [incidentEscalations, projections, semanticIndexScheduling, objectRetention] = await Promise.all([
+  const [incidentEscalations, projections, semanticIndexScheduling, objectRetention, predictiveRisk] = await Promise.all([
     evaluateIncidentSlaEscalations(50),
     runProjectionWorker({ projectLimit: 10, batchSize: 200 }),
     enqueueDailySemanticIndexJobs(100),
     cleanupExpiredObjectArtifacts(25),
+    refreshAllPredictiveRisk(),
   ])
   return NextResponse.json({
     workerId,
@@ -64,6 +66,7 @@ export async function GET(request: Request) {
     semanticResults,
     semanticIndexScheduling,
     objectRetention,
+    predictiveRisk,
     eventsClaimed: events.length,
     eventResults,
     incidentEscalations,
