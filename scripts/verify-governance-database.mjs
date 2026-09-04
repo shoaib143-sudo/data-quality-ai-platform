@@ -86,6 +86,37 @@ console.log(`PASS active execution source inventory -> ${activeSources ?? 0} act
 if ((deadEvents ?? 0) > 0) throw new Error(`${deadEvents} governance outbox events reached DEAD state in the previous 24 hours.`)
 console.log('PASS governance outbox has no recent DEAD events')
 
+const { data: completedProfiles, error: completedProfilesError } = await supabase
+  .schema('profiling')
+  .from('profile_runs')
+  .select('id,dataset_version_id,completed_at,started_at')
+  .eq('status', 'COMPLETED')
+  .order('completed_at', { ascending: false, nullsFirst: false })
+  .order('started_at', { ascending: false, nullsFirst: false })
+  .limit(500)
+if (completedProfilesError) throw new Error(`Unable to inspect completed profiling runs: ${completedProfilesError.message}`)
+
+const latestProfileByDatasetVersion = new Map()
+for (const run of completedProfiles ?? []) {
+  if (!run.dataset_version_id || latestProfileByDatasetVersion.has(run.dataset_version_id)) continue
+  latestProfileByDatasetVersion.set(run.dataset_version_id, run)
+}
+
+for (const run of latestProfileByDatasetVersion.values()) {
+  const { data: profileContract, error: profileContractError } = await supabase
+    .schema('profiling')
+    .rpc('validate_metric_execution_contract', { p_profile_run_id: run.id })
+  if (profileContractError) throw new Error(`Profiling execution contract failed to execute for run ${run.id}: ${profileContractError.message}`)
+  if (!profileContract || typeof profileContract !== 'object' || profileContract.valid !== true) {
+    throw new Error(`Latest profiling execution contract is invalid for dataset version ${run.dataset_version_id}: ${JSON.stringify(profileContract)}`)
+  }
+  for (const key of ['metric_contract_valid', 'score_present', 'score_values_valid', 'score_consistent', 'completed_facts_present']) {
+    if (profileContract[key] !== true) throw new Error(`Latest profiling execution contract failed ${key} for run ${run.id}: ${JSON.stringify(profileContract)}`)
+  }
+  console.log(`PASS latest profiling lifecycle contract ${run.dataset_version_id} -> ${run.id}`)
+}
+console.log(`PASS latest profiling lifecycle estate -> ${latestProfileByDatasetVersion.size} dataset versions checked`)
+
 const { data: syntheticResult, error: syntheticError } = await supabase.schema('governance').rpc('run_synthetic_governance_integration_suite')
 if (syntheticError) throw new Error(`Synthetic governance integration suite failed to execute: ${syntheticError.message}`)
 if (!syntheticResult || typeof syntheticResult !== 'object' || syntheticResult.status !== 'PASSED') {
