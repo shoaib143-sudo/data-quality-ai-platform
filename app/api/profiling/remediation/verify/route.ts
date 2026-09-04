@@ -172,6 +172,7 @@ export async function POST(request: Request) {
     const verificationPassed = qualityNotWorse && severeFindingsNotWorse && allTrackedIssuesResolved
     const qualityDelta = sourceScore === null ? null : verificationScore - sourceScore
     const severeFindingsDelta = verificationHighSeverityFindings - sourceHighSeverityFindings
+    const recommendationEffective = verificationPassed && (qualityDelta === null || qualityDelta >= 0) && severeFindingsDelta <= 0
 
     const checks = {
       quality_not_worse: { passed: qualityNotWorse, before: sourceScore, after: verificationScore, delta: qualityDelta },
@@ -206,7 +207,7 @@ export async function POST(request: Request) {
         checks,
         outcome: {
           verification_passed: verificationPassed,
-          recommendation_effective: verificationPassed && (qualityDelta === null || qualityDelta >= 0) && severeFindingsDelta <= 0,
+          recommendation_effective: recommendationEffective,
         },
         created_by: user.id,
         updated_at: new Date().toISOString(),
@@ -219,16 +220,46 @@ export async function POST(request: Request) {
       throw new Error(`Unable to persist verification outcome: ${outcomeError?.message ?? 'unknown error'}`)
     }
 
+    const observedAt = new Date().toISOString()
+    const { data: recommendationLearning, error: learningError } = await admin
+      .schema('governance')
+      .from('profiling_recommendation_learning')
+      .update({
+        remediation_outcome_id: outcome.id,
+        status: recommendationEffective ? 'EFFECTIVE' : 'INEFFECTIVE',
+        effective: recommendationEffective,
+        quality_score_delta: qualityDelta,
+        high_severity_findings_delta: severeFindingsDelta,
+        updated_at: observedAt,
+        observed_at: observedAt,
+      })
+      .eq('workflow_instance_id', workflowInstanceId)
+      .select('id,recommendation_action,status,effective,quality_score_delta,high_severity_findings_delta')
+
+    if (learningError) {
+      throw new Error(`Unable to persist recommendation effectiveness: ${learningError.message}`)
+    }
+
     await writeGovernanceAudit({
       projectId: instance.project_id,
       actorUserId: user.id,
       eventType: verificationPassed ? 'PROFILING_REMEDIATION_VERIFIED' : 'PROFILING_REMEDIATION_VERIFICATION_FAILED',
       entityType: 'PROFILE_RUN',
       entityId: verificationProfileRunId,
-      metadata: { ...result, remediation_outcome_id: outcome.id },
+      metadata: {
+        ...result,
+        remediation_outcome_id: outcome.id,
+        recommendation_effective: recommendationEffective,
+        recommendation_learning_ids: (recommendationLearning ?? []).map((row) => row.id),
+      },
     })
 
-    return NextResponse.json({ ...result, remediationOutcome: outcome }, { status: verificationPassed ? 200 : 409 })
+    return NextResponse.json({
+      ...result,
+      remediationOutcome: outcome,
+      recommendationEffective,
+      recommendationLearning: recommendationLearning ?? [],
+    }, { status: verificationPassed ? 200 : 409 })
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return NextResponse.json({ error: error.message }, { status: error.status })
