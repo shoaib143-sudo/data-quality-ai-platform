@@ -15,6 +15,7 @@ type MetricValue = {
 }
 type ColumnResult = {
   column_name: string
+  completeness_rate: number
   metrics: MetricValue[]
   candidate_key_confidence: number
   sensitive_match_rate: number
@@ -38,6 +39,7 @@ function round(value: number, places = RATE_SCALE) {
   return Math.round((value + Number.EPSILON) * factor) / factor
 }
 function isMissing(value: unknown) { return value === null || value === undefined }
+function isBlank(value: unknown) { return typeof value === 'string' && value.trim() === '' }
 function normalized(value: unknown) { return typeof value === 'string' ? value.trim() : value }
 function stableKey(value: unknown): string {
   const v = normalized(value)
@@ -116,6 +118,7 @@ function calculateColumnMetrics(columnName: string, rows: Row[]): ColumnResult {
   const values = rows.map((row) => row[columnName])
   const rowCount = values.length
   const nullCount = values.filter(isMissing).length
+  const blankCount = values.filter(isBlank).length
   const nonNullValues = values.filter((value) => !isMissing(value))
   const distinctCount = new Set(nonNullValues.map(stableKey)).size
   const distinctRate = nonNullValues.length ? distinctCount / nonNullValues.length : 0
@@ -124,6 +127,9 @@ function calculateColumnMetrics(columnName: string, rows: Row[]): ColumnResult {
   const uniqueCount = Array.from(frequencies.values()).filter((count) => count === 1).length
   const uniqueRate = nonNullValues.length ? uniqueCount / nonNullValues.length : 0
   const nullRate = rowCount ? nullCount / rowCount : 0
+  const completenessMissingCount = nullCount + blankCount
+  const completenessMissingRate = rowCount ? completenessMissingCount / rowCount : 0
+  const completenessRate = rowCount ? 1 - completenessMissingRate : 0
   const patternEligible = values.filter((value) => !isMissing(value))
   const patternCount = patternEligible.filter((value) => patternMatch(columnName, value)).length
   const patternMatchRate = patternEligible.length ? patternCount / patternEligible.length : null
@@ -131,10 +137,10 @@ function calculateColumnMetrics(columnName: string, rows: Row[]): ColumnResult {
   const sensitiveMatchRate = patternEligible.length ? sensitiveCount / patternEligible.length : 0
   const strings = nonNullValues.filter((value): value is string => typeof value === 'string')
   const lengths = strings.map((value) => value.length)
-  const whitespaceOnlyCount = strings.filter((value) => value.trim() === '').length
+  const whitespaceOnlyCount = blankCount
   const emptyStringCount = strings.filter((value) => value === '').length
   const stats = numericStats(values)
-  const candidateKeyConfidence = rowCount ? round(uniqueRate * (1 - nullRate)) : 0
+  const candidateKeyConfidence = rowCount ? round(uniqueRate * (1 - completenessMissingRate)) : 0
   const metrics: MetricValue[] = [
     { metric_key: 'non_null_count', numeric_value: nonNullValues.length }, { metric_key: 'null_count', numeric_value: nullCount }, { metric_key: 'null_rate', numeric_value: round(nullRate) },
     { metric_key: 'distinct_count', numeric_value: distinctCount }, { metric_key: 'distinct_rate', numeric_value: round(distinctRate) }, { metric_key: 'unique_count', numeric_value: uniqueCount }, { metric_key: 'unique_rate', numeric_value: round(uniqueRate) },
@@ -145,9 +151,9 @@ function calculateColumnMetrics(columnName: string, rows: Row[]): ColumnResult {
     { metric_key: 'negative_count', numeric_value: stats.negative }, { metric_key: 'zero_count', numeric_value: stats.zero }, { metric_key: 'outlier_count', numeric_value: stats.outlier }, { metric_key: 'outlier_rate', numeric_value: stats.nums.length ? round(stats.outlier / stats.nums.length) : null },
   ]
   let finding: ColumnResult['finding']
-  if (nullRate > 0.2) finding = { finding_type: 'COMPLETENESS', severity: nullRate >= 0.5 ? 'HIGH' : 'MEDIUM', title: `${columnName} has missing values`, description: `${round(nullRate * 100)}% of observed rows are null or missing.`, confidence: 1, evidence: { null_count: nullCount, row_count: rowCount, null_rate: round(nullRate) }, recommendation: { action: 'review_source_completeness', threshold: 0.2 } }
+  if (completenessMissingRate > 0.2) finding = { finding_type: 'COMPLETENESS', severity: completenessMissingRate >= 0.5 ? 'HIGH' : 'MEDIUM', title: `${columnName} has missing values`, description: `${round(completenessMissingRate * 100)}% of observed rows are null, empty, or whitespace-only.`, confidence: 1, evidence: { null_count: nullCount, blank_count: blankCount, missing_count: completenessMissingCount, row_count: rowCount, missing_rate: round(completenessMissingRate) }, recommendation: { action: 'review_source_completeness', threshold: 0.2 } }
   else if (sensitiveMatchRate > 0.8) finding = { finding_type: 'SENSITIVITY', severity: 'INFO', title: `${columnName} appears sensitive`, description: 'Observed values match a known sensitive data pattern.', confidence: round(sensitiveMatchRate), evidence: { sensitive_match_rate: round(sensitiveMatchRate) }, recommendation: { action: 'apply_data_classification_and_access_controls' } }
-  return { column_name: columnName, metrics, candidate_key_confidence: candidateKeyConfidence, sensitive_match_rate: round(sensitiveMatchRate), pattern_match_rate: patternMatchRate === null ? null : round(patternMatchRate), finding }
+  return { column_name: columnName, completeness_rate: round(completenessRate), metrics, candidate_key_confidence: candidateKeyConfidence, sensitive_match_rate: round(sensitiveMatchRate), pattern_match_rate: patternMatchRate === null ? null : round(patternMatchRate), finding }
 }
 
 export async function loadProfilingRows(supabase: ReturnType<typeof createAdminClient>, datasetVersionId: string, requestedMaxRows: number) {
@@ -328,7 +334,7 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   }
 
   const findings = results.filter((result) => result.finding).map((result) => ({ profile_column_id: columnIdByName.get(result.column_name), ...result.finding }))
-  const completeness = results.length ? results.reduce((sum, result) => sum + (1 - (result.metrics.find((m) => m.metric_key === 'null_rate')?.numeric_value ?? 1)), 0) / results.length : 0
+  const completeness = results.length ? results.reduce((sum, result) => sum + result.completeness_rate, 0) / results.length : 0
   const uniqueness = results.length ? results.reduce((sum, result) => sum + (result.metrics.find((m) => m.metric_key === 'unique_rate')?.numeric_value ?? 0), 0) / results.length : 0
   const validityCandidates = results.map((result) => result.pattern_match_rate).filter((value): value is number => value !== null)
   const validity = validityCandidates.length ? validityCandidates.reduce((sum, value) => sum + value, 0) / validityCandidates.length : 1
