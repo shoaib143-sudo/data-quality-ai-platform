@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { FormEvent, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Loader2, ShieldAlert, Workflow } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, ShieldAlert, Workflow } from 'lucide-react'
 
 type Project = { id: string; name: string }
 type Dataset = { id: string; project_id: string; name: string }
@@ -25,7 +25,17 @@ type ChangeResult = {
   certifiedAffectedCount: number
   businessImpact: string
 }
-type ApprovalResult = { instanceId: string; status: string; reused: boolean; autoProvisioned: boolean }
+type ApprovalResult = {
+  instanceId: string
+  status: string
+  reused?: boolean
+  autoProvisioned?: boolean
+  currentStep?: number
+  workflowVersion?: number | null
+  startedAt?: string | null
+  completedAt?: string | null
+  productionMutationPerformed?: boolean
+}
 
 const CHANGE_TYPES = [
   ['ADD_COLUMN', 'Add column'],
@@ -98,11 +108,33 @@ export function ChangeImpactManager({ projects, datasets }: { projects: Project[
     }
   }
 
+  async function refreshApproval() {
+    if (!result?.analysisId) return
+    setApprovalBusy(true)
+    setApprovalMessage('')
+    try {
+      const response = await fetch(`/api/lineage/impact/change/approval/status?analysisId=${encodeURIComponent(result.analysisId)}`, { cache: 'no-store' })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error ?? 'Unable to load governed change approval status.')
+      setApproval((payload.approval ?? null) as ApprovalResult | null)
+      if (!payload.approval) setApprovalMessage('No governed approval workflow has been started for this analysis yet.')
+    } catch (error) {
+      setApprovalMessage(error instanceof Error ? error.message : 'Unable to load governed change approval status.')
+    } finally {
+      setApprovalBusy(false)
+    }
+  }
+
   const decisionStyle = result?.decision === 'APPROVAL_REQUIRED'
     ? 'border-red-200 bg-red-50 text-red-800'
     : result?.decision === 'REVIEW_REQUIRED'
       ? 'border-amber-200 bg-amber-50 text-amber-800'
       : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  const approvalStyle = approval?.status === 'APPROVED'
+    ? 'border-emerald-200 text-emerald-700'
+    : approval?.status === 'REJECTED' || approval?.status === 'CANCELLED'
+      ? 'border-red-200 text-red-700'
+      : 'border-amber-200 text-amber-700'
 
   return <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -129,7 +161,7 @@ export function ChangeImpactManager({ projects, datasets }: { projects: Project[
           <div className={`rounded-2xl border p-4 ${decisionStyle}`}><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2">{result.decision === 'SAFE_TO_PROCEED' ? <CheckCircle2 className="h-5 w-5"/> : <ShieldAlert className="h-5 w-5"/>}<div><p className="text-xs font-bold uppercase tracking-wider">Decision</p><p className="text-xl font-black">{result.decision.replaceAll('_', ' ')}</p></div></div><div className="text-right"><p className="text-2xl font-black">{Math.round(result.riskScore * 100)}% risk</p><p className="text-xs">{Math.round(result.confidence * 100)}% evidence confidence</p></div></div></div>
           <p className="mt-4 text-sm leading-6 text-slate-700">{result.businessImpact}</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">Affected assets</p><p className="mt-1 text-2xl font-black">{result.affectedCount}</p></div><div className="rounded-2xl bg-indigo-50 p-4"><p className="text-xs font-bold uppercase text-indigo-600">Mapped columns</p><p className="mt-1 text-2xl font-black text-indigo-700">{result.columnAffectedCount}</p></div><div className="rounded-2xl bg-red-50 p-4"><p className="text-xs font-bold uppercase text-red-600">High / critical</p><p className="mt-1 text-2xl font-black text-red-700">{result.criticalAffectedCount}</p></div><div className="rounded-2xl bg-blue-50 p-4"><p className="text-xs font-bold uppercase text-blue-600">Certified</p><p className="mt-1 text-2xl font-black text-blue-700">{result.certifiedAffectedCount}</p></div></div>
-          {result.approvalRequired ? <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="font-bold text-amber-900">Governed approval is required before this change proceeds.</p><p className="mt-1 text-sm text-amber-800">Approval is tied to this exact impact analysis, including risk, downstream critical/certified dependencies, affected columns and evidence confidence.</p><div className="mt-3 flex flex-wrap items-center gap-3">{approval ? <><span className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700">Workflow {approval.status}</span><Link href="/workflows" className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white">Open approval workflow</Link></> : <button type="button" onClick={startApproval} disabled={approvalBusy} className="inline-flex items-center gap-2 rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{approvalBusy ? <Loader2 className="h-4 w-4 animate-spin"/> : <Workflow className="h-4 w-4"/>}Start governed approval</button>}</div>{approvalMessage ? <p className="mt-2 text-sm text-red-700">{approvalMessage}</p> : null}</div> : null}
+          {result.approvalRequired ? <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="font-bold text-amber-900">Governed approval is required before this change proceeds.</p><p className="mt-1 text-sm text-amber-800">Approval is tied to this exact impact analysis, including risk, downstream critical/certified dependencies, affected columns and evidence confidence.</p><div className="mt-3 flex flex-wrap items-center gap-3">{approval ? <><span className={`rounded-full border bg-white px-3 py-1.5 text-xs font-bold ${approvalStyle}`}>Workflow {approval.status}</span><Link href="/workflows" className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white">Open approval workflow</Link><button type="button" onClick={refreshApproval} disabled={approvalBusy} className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-bold text-amber-800 disabled:opacity-50">{approvalBusy ? <Loader2 className="h-4 w-4 animate-spin"/> : <RefreshCw className="h-4 w-4"/>}Refresh status</button></> : <><button type="button" onClick={startApproval} disabled={approvalBusy} className="inline-flex items-center gap-2 rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{approvalBusy ? <Loader2 className="h-4 w-4 animate-spin"/> : <Workflow className="h-4 w-4"/>}Start governed approval</button><button type="button" onClick={refreshApproval} disabled={approvalBusy} className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-bold text-amber-800 disabled:opacity-50"><RefreshCw className="h-4 w-4"/>Check existing approval</button></>}</div>{approval ? <p className="mt-2 text-xs text-amber-800">Instance {approval.instanceId}{approval.workflowVersion ? ` · workflow v${approval.workflowVersion}` : ''}{typeof approval.currentStep === 'number' ? ` · step ${approval.currentStep + 1}` : ''}{approval.completedAt ? ` · completed ${new Date(approval.completedAt).toLocaleString()}` : ''}</p> : null}{approvalMessage ? <p className="mt-2 text-sm text-red-700">{approvalMessage}</p> : null}</div> : null}
           <div className="mt-5 rounded-2xl border bg-slate-50 p-4 text-sm"><p><span className="font-bold">Change:</span> {result.changeType.replaceAll('_', ' ')}</p>{result.affectedColumns.length ? <p className="mt-2"><span className="font-bold">Columns:</span> {result.affectedColumns.join(', ')}</p> : null}<p className="mt-2"><span className="font-bold">Production mutation:</span> {result.productionMutationPerformed ? 'performed' : 'not performed'}</p><p className="mt-2 font-mono text-xs text-slate-500">Analysis {result.analysisId}{result.columnAnalysisId ? ` · Column analysis ${result.columnAnalysisId}` : ''}</p></div>
         </>}
       </div>
