@@ -9,14 +9,20 @@ function text(value: unknown) { return typeof value === 'string' ? value.trim() 
 function serverCredentialRef(kind: string) { const normalized = kind.toLowerCase().replace(/[^a-z0-9]+/g, '_').toUpperCase(); return process.env[`JDBC_${normalized}_CREDENTIAL_REF`]?.trim() || process.env.JDBC_CREDENTIAL_REF?.trim() || '' }
 function uiCredentialRef(value: string, projectId: string) { return /^DGP_[A-Za-z0-9_]+$/.test(value) && value.startsWith(`DGP_${projectId.replace(/[^A-Za-z0-9]/g, '_')}_`) }
 function jdbcTableParts(sourceIdentifier: string, defaultSchema = 'public') { const parts = sourceIdentifier.trim().replace(/^jdbc-table:\/\//i, '').split('.').map(p => p.trim()).filter(Boolean); if (parts.length >= 2) return { schema: parts.at(-2)!, table: parts.at(-1)! }; if (parts.length === 1) return { schema: defaultSchema, table: parts[0] }; return null }
-function fileConnectionMetadata(sourceUri: string) {
+function fileConnectionMetadata(sourceUri: string, projectId: string) {
   if (/^https?:\/\//i.test(sourceUri)) return { url: sourceUri }
   const normalized = sourceUri.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '')
   const parts = normalized.split('/')
   if (parts.length < 2 || parts.some((part) => !part || part === '.' || part === '..')) {
     throw new Error('FILE/CSV source URI must use bucket/path syntax with a normalized object path.')
   }
-  return { bucket: parts[0], path: parts.slice(1).join('/') }
+  const bucket = parts[0]
+  const path = parts.slice(1).join('/')
+  const requiredPrefix = `projects/${projectId}/`
+  if (bucket !== 'dataset-files' || !path.startsWith(requiredPrefix) || path.length <= requiredPrefix.length) {
+    throw new Error(`FILE/CSV sources must be stored under dataset-files/${requiredPrefix}...`)
+  }
+  return { bucket, path }
 }
 
 type DatasetVersionForReconciliation = { id: string; dataset_id: string; version_number: number; metadata: unknown }
@@ -70,7 +76,7 @@ export async function POST(request: Request) {
     if (sourceType === 'JDBC') {
       const validation = await validateJdbcConnection({ jdbcUrl, credentialRef, schema, table }); if (!validation.valid) return NextResponse.json({ error: 'JDBC source validation failed.', validation }, { status: 422 }); connectionMetadata = { jdbc_url: jdbcUrl, credential_ref: credentialRef, schema, table, connection_kind: connectionKind }
     } else {
-      const metadata: Record<string, unknown> = fileConnectionMetadata(sourceUri); const validation = await validateDataSourceForProfiling(admin, { id: crypto.randomUUID(), project_id: projectId, source_type: sourceType, connection_metadata: metadata }, sourceUri); if (!validation.valid) return NextResponse.json({ error: 'CSV/FILE source validation failed.', validation }, { status: 422 }); connectionMetadata = metadata
+      const metadata: Record<string, unknown> = fileConnectionMetadata(sourceUri, projectId); const validation = await validateDataSourceForProfiling(admin, { id: crypto.randomUUID(), project_id: projectId, source_type: sourceType, connection_metadata: metadata }, sourceUri); if (!validation.valid) return NextResponse.json({ error: 'CSV/FILE source validation failed.', validation }, { status: 422 }); connectionMetadata = metadata
     }
     const { data: existing } = await admin.schema('catalog').from('data_sources').select('id, status').eq('project_id', projectId).eq('name', name).maybeSingle(); if (existing && String(existing.status) !== 'CONFIGURED') return NextResponse.json({ error: 'A data source with this name already exists in the project.' }, { status: 409 })
     if (existing) { const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: sourceType, connection_metadata: connectionMetadata, status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single(); if (error || !source) return NextResponse.json({ error: `Unable to activate source: ${error?.message ?? 'unknown error'}` }, { status: 500 }); await reconcileSourceBoundDatasets(admin, source); return NextResponse.json({ source, profiling_ready: true }) }
