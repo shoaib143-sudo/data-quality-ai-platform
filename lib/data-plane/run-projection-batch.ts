@@ -1,6 +1,7 @@
 import type { ProjectionEventEnvelope, TenantScope } from '@/lib/data-plane/contracts'
 import { getProjectionCheckpointStore } from '@/lib/data-plane/projection-checkpoint-store'
 import { getProjectionEventSource } from '@/lib/data-plane/projection-event-source'
+import { recordProjectionDeadLetter, resolveProjectionDeadLetter } from '@/lib/data-plane/projection-dead-letter-store'
 
 type ProjectionBatchOptions = TenantScope & {
   consumerKey: string
@@ -15,6 +16,12 @@ function lagSeconds(occurredAt: string | undefined) {
   const timestamp = Date.parse(occurredAt)
   if (!Number.isFinite(timestamp)) return null
   return Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
+}
+
+function maxFailureAttempts() {
+  const parsed = Number.parseInt(process.env.PROJECTION_MAX_FAILURE_ATTEMPTS ?? '', 10)
+  if (!Number.isFinite(parsed)) return 5
+  return Math.max(2, Math.min(20, parsed))
 }
 
 export async function runProjectionBatch(options: ProjectionBatchOptions) {
@@ -48,7 +55,9 @@ export async function runProjectionBatch(options: ProjectionBatchOptions) {
 
   try {
     await options.handle(events)
+    const first = events[0]!
     const last = events.at(-1)!
+    await resolveProjectionDeadLetter(scope, options.consumerKey, first.event.eventId)
     await checkpoints.write({
       ...scope,
       consumerKey: options.consumerKey,
@@ -63,10 +72,30 @@ export async function runProjectionBatch(options: ProjectionBatchOptions) {
       metadata: {
         ...(existing?.metadata ?? {}),
         lastBatchSize: events.length,
+        failureAttempts: 0,
+        deadLetterEventId: null,
       },
     })
     return { processed: events.length, checkpoint: last.sequence, paused: false }
   } catch (error) {
+    const message = error instanceof Error ? error.message.slice(0, 4000) : 'Projection batch failed'
+    const first = events[0]!
+    const last = events.at(-1)!
+    const deadLetter = await recordProjectionDeadLetter({
+      ...scope,
+      consumerKey: options.consumerKey,
+      providerKey: options.providerKey,
+      projectionName: options.projectionName,
+      envelope: first,
+      error: message,
+      metadata: {
+        batchSize: events.length,
+        firstSequence: first.sequence,
+        lastSequence: last.sequence,
+      },
+    })
+    const paused = deadLetter.attempts >= maxFailureAttempts()
+
     await checkpoints.write({
       ...scope,
       consumerKey: options.consumerKey,
@@ -75,10 +104,17 @@ export async function runProjectionBatch(options: ProjectionBatchOptions) {
       lastCheckpoint: existing?.lastCheckpoint ?? null,
       lastEventId: existing?.lastEventId ?? null,
       lastSuccessAt: existing?.lastSuccessAt ?? null,
-      lagSeconds: existing?.lagSeconds ?? null,
-      lastError: error instanceof Error ? error.message.slice(0, 4000) : 'Projection batch failed',
-      status: 'FAILED',
-      metadata: existing?.metadata ?? {},
+      lagSeconds: lagSeconds(first.event.occurredAt),
+      lastError: message,
+      status: paused ? 'PAUSED' : 'FAILED',
+      metadata: {
+        ...(existing?.metadata ?? {}),
+        failureAttempts: deadLetter.attempts,
+        deadLetterEventId: first.event.eventId,
+        failedBatchSize: events.length,
+        failedFirstSequence: first.sequence,
+        failedLastSequence: last.sequence,
+      },
     })
     throw error
   }
