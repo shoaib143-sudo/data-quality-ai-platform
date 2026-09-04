@@ -127,7 +127,9 @@ requireText('lib/governance/lineage-impact.ts', [
 ])
 requireText('lib/governance/lineage-change-impact.ts', [
   'analyzeColumnLineageImpact',
-  'lineage_column_mappings',
+  'getFieldGraphProvider',
+  'fieldNeighborhood',
+  'field_graph_provider',
   'assessProposedLineageChange',
   'PROPOSED_CHANGE',
   'APPROVAL_REQUIRED',
@@ -137,7 +139,17 @@ requireText('lib/governance/lineage-change-impact.ts', [
   'COLUMN_LINEAGE_IMPACT_ANALYZED',
   'LINEAGE_PROPOSED_CHANGE_ASSESSED',
 ])
-forbidText('lib/governance/lineage-change-impact.ts', ['production_mutation_performed: true'])
+requireText('lib/data-plane/providers/postgres-field-graph-provider.ts', [
+  "from('lineage_column_mappings')",
+  "from('lineage_transformations')",
+  "eq('project_id', projectId)",
+  'MAX_DEPTH',
+  'MAX_EDGES',
+])
+forbidText('lib/governance/lineage-change-impact.ts', [
+  "from('lineage_column_mappings')",
+  'production_mutation_performed: true',
+])
 requireText('app/api/lineage/impact/route.ts', [
   "authorizeProject(user.id, projectId, 'lineage.read')",
   'analyzeLineageImpact',
