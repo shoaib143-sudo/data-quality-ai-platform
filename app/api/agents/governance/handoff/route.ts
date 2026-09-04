@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
+import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 function text(value: unknown) {
@@ -56,12 +57,24 @@ export async function POST(request: Request) {
       actorUserId: user.id,
       question,
     })
+
+    let specialistOutput = target.output as Record<string, unknown>
+    if (target.output.agent.key === 'investigator_agent') {
+      const investigation = await persistInvestigatorRiskAssessment({
+        projectId,
+        agentRunId: target.runId,
+        actorUserId: user.id,
+        output: specialistOutput,
+      })
+      if (investigation) specialistOutput = { ...specialistOutput, investigation }
+    }
+
     const output = await enrichGovernedAgentWithMemory({
       projectId,
       agentDefinitionId: targetAgentDefinitionId,
       agentRunId: target.runId,
       question,
-      output: target.output as Record<string, unknown>,
+      output: specialistOutput,
     })
     const correlationId = sourceRun.correlation_id || randomUUID()
     const { error: targetLinkError } = await admin.schema('agent').from('agent_runs').update({
@@ -91,6 +104,7 @@ export async function POST(request: Request) {
         read_only: true,
         specialist: true,
         memory_informed: true,
+        predictive_investigation: target.output.agent.key === 'investigator_agent',
       },
       status: 'PROCESSED',
       delivered_at: new Date().toISOString(),
@@ -106,7 +120,7 @@ export async function POST(request: Request) {
       entityType: 'AGENT_RUN',
       entityId: target.runId,
       correlationId,
-      metadata: { source_agent_run_id: sourceAgentRunId, target_agent_run_id: target.runId, message_id: message.id, target_agent_key: target.output.agent.key, read_only: true, specialist: true, memory_informed: true },
+      metadata: { source_agent_run_id: sourceAgentRunId, target_agent_run_id: target.runId, message_id: message.id, target_agent_key: target.output.agent.key, read_only: true, specialist: true, memory_informed: true, predictive_investigation: target.output.agent.key === 'investigator_agent' },
     })
 
     return NextResponse.json({ accepted: true, sourceAgentRunId, targetRunId: target.runId, message, memory, output })
