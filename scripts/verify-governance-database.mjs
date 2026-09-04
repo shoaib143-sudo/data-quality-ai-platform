@@ -29,6 +29,16 @@ if (securityPosture.app_private_exposed === true || Number(securityPosture.anony
 }
 console.log('PASS PostgREST exposure and RLS helper security posture')
 
+const { data: semanticPosture, error: semanticPostureError } = await supabase.schema('governance').rpc('verify_semantic_search_posture')
+if (semanticPostureError) throw new Error(`Unable to verify semantic search posture: ${semanticPostureError.message}`)
+if (!semanticPosture || typeof semanticPosture !== 'object' || semanticPosture.valid !== true) {
+  throw new Error(`Semantic search posture is invalid: ${JSON.stringify(semanticPosture)}`)
+}
+if (semanticPosture.anonymous_execute === true || semanticPosture.match_security_invoker !== true) {
+  throw new Error(`Semantic search execution boundary is unsafe: ${JSON.stringify(semanticPosture)}`)
+}
+console.log('PASS semantic governance vector, index, RLS and RPC posture')
+
 for (const project of projects ?? []) {
   const { data: contractResult, error: contractError } = await supabase.schema('governance').rpc('run_platform_contract_checks', { p_project_id: project.id })
   if (contractError) throw new Error(`Platform contract checks failed to execute for ${project.name}: ${contractError.message}`)
