@@ -61,7 +61,6 @@ const checks = [
   ['lib/governance/semantic-search.ts', /EMBEDDING_DIMENSIONS\s*=\s*384[\s\S]*match_semantic_embeddings[\s\S]*indexSemanticObject/, 'provider-neutral semantic search and indexing'],
   ['lib/governance/semantic-indexer.ts', /DATASET[\s\S]*GLOSSARY_TERM[\s\S]*POLICY[\s\S]*LINEAGE_TRANSFORMATION/, 'governance semantic indexing coverage'],
   ['services/embedding-service/app.py', /all-MiniLM-L6-v2[\s\S]*normalize_embeddings=True[\s\S]*384/, 'free local 384-dimension embedding service'],
-  ['scripts/recovery-drill.mjs', /ALLOW_RECOVERY_TARGET[\s\S]*pg_dump[\s\S]*pg_restore[\s\S]*vectorExtension/, 'isolated destructive recovery drill safeguards'],
   ['app/login/page.tsx', /signInWithSSO/, 'SAML SSO client flow'],
   ['app/auth/callback/route.ts', /exchangeCodeForSession[\s\S]*sso_domains/, 'SSO callback and tenant mapping'],
   ['app/api/lineage/ingest/route.ts', /externalEventId[\s\S]*TRANSFORMS_TO/, 'idempotent external lineage ingestion'],
@@ -86,6 +85,21 @@ for (const [path, pattern, label] of checks) {
   console.log(`PASS ${label}`)
 }
 
+const recoveryDrill = await readFile('scripts/recovery-drill.mjs', 'utf8')
+const recoverySafeguards = [
+  [/ALLOW_RECOVERY_TARGET/, 'explicit destructive target confirmation'],
+  [/fingerprint\(source\)\s*===\s*fingerprint\(recovery\)/, 'source and recovery database separation'],
+  [/production.*environment|includes\('prod'\)|includes\('production'\)/i, 'production target rejection'],
+  [/pg_dump/, 'logical backup creation'],
+  [/pg_restore/, 'isolated restore execution'],
+  [/vectorExtension/, 'pgvector recovery validation'],
+  [/catalogDatasets[\s\S]*profileRuns[\s\S]*governanceTables/, 'critical restored data validation'],
+]
+for (const [pattern, label] of recoverySafeguards) {
+  if (!pattern.test(recoveryDrill)) throw new Error(`Recovery drill safeguard contract failed: ${label} is missing.`)
+  console.log(`PASS recovery safeguard ${label}`)
+}
+
 const profilingRoute = await readFile('app/api/agents/run/route.ts', 'utf8')
 if (!/Idempotency-Key|idempotencyKey/.test(profilingRoute) || !/authorizeDatasetVersion/.test(profilingRoute)) throw new Error('Profiling start route must remain centrally authorized and idempotent.')
 const qualityRoute = await readFile('app/api/data-quality/run/route.ts', 'utf8')
@@ -93,5 +107,6 @@ if (!/authorizeDatasetVersion/.test(qualityRoute) || !/idempotency/i.test(qualit
 const databaseVerification = await readFile('scripts/verify-governance-database.mjs', 'utf8')
 if (!/run_synthetic_governance_integration_suite/.test(databaseVerification)) throw new Error('Database quality gate must execute the synthetic governance integration suite.')
 if (!/verify_database_api_security_posture/.test(databaseVerification)) throw new Error('Database quality gate must verify the PostgREST and RLS helper security posture.')
+if (!/verify_semantic_search_posture/.test(databaseVerification)) throw new Error('Database quality gate must verify semantic search database posture.')
 
 console.log('Governance architecture verification completed.')
