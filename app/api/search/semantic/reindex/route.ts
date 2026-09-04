@@ -30,9 +30,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await reindexProjectSemanticObjects(projectId, {
-      concurrency: Number.isFinite(body?.concurrency) ? body?.concurrency : undefined,
-    })
+    const concurrency = typeof body?.concurrency === 'number' && Number.isFinite(body.concurrency)
+      ? body.concurrency
+      : undefined
+    const result = await reindexProjectSemanticObjects(projectId, { concurrency })
     return NextResponse.json(result, { status: result.failed ? 207 : 200 })
   } catch (error) {
     if (error instanceof Error && error.name === 'EmbeddingProviderNotConfiguredError') {
