@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { executeGovernanceReadAgent } from '@/lib/agents/governance-read-agent'
+import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       observations.length ? `Source observations: ${observations.join(' | ')}` : '',
     ].filter(Boolean).join(' ').slice(0, 1000)
 
-    const target = await executeGovernanceReadAgent({
+    const target = await executeGovernanceSpecialistAgent({
       projectId,
       agentDefinitionId: targetAgentDefinitionId,
       actorUserId: user.id,
@@ -80,6 +80,7 @@ export async function POST(request: Request) {
         source_observations: observations,
         target_agent_key: target.output.agent.key,
         read_only: true,
+        specialist: true,
       },
       status: 'PROCESSED',
       delivered_at: new Date().toISOString(),
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
       entityType: 'AGENT_RUN',
       entityId: target.runId,
       correlationId,
-      metadata: { source_agent_run_id: sourceAgentRunId, target_agent_run_id: target.runId, message_id: message.id, target_agent_key: target.output.agent.key, read_only: true },
+      metadata: { source_agent_run_id: sourceAgentRunId, target_agent_run_id: target.runId, message_id: message.id, target_agent_key: target.output.agent.key, read_only: true, specialist: true },
     })
 
     return NextResponse.json({ accepted: true, sourceAgentRunId, targetRunId: target.runId, message, memory, output: target.output })
