@@ -3,6 +3,7 @@ import type {
   AnalyticsQueryRequest,
   AnalyticsQueryRow,
 } from '@/lib/data-plane/contracts'
+import { providerFetch } from '@/lib/data-plane/provider-runtime'
 
 type MetricSpec = {
   table: string
@@ -93,7 +94,11 @@ export class ClickHouseAnalyticsQueryProvider implements AnalyticsQueryProvider 
     url.searchParams.set('query', sql)
     for (const [key, value] of parameters) url.searchParams.set(`param_${key}`, value)
 
-    const response = await fetch(url, { method: 'POST', headers: { 'x-clickhouse-user': user, 'x-clickhouse-key': password }, cache: 'no-store' })
+    const response = await providerFetch(url, {
+      method: 'POST',
+      headers: { 'x-clickhouse-user': user, 'x-clickhouse-key': password },
+      cache: 'no-store',
+    }, { providerKey: 'clickhouse' })
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 2000)
       throw new Error(`ClickHouse analytics query failed (${response.status}): ${detail || response.statusText}`)
