@@ -10,13 +10,22 @@ export type ResolvedSamplingPolicy = {
   configuredMaxRows: number
   samplePercent: number
   deterministicSeed: number
-  capacityMaxRows: number
-  capacityMaxFileBytes: number
+  technicalMaxRows: number
+  technicalMaxFileBytes: number
+  advisoryMaxRows: number | null
+  advisoryMaxFileBytes: number | null
 }
 
 function finiteInt(value: unknown, fallback: number) {
   const number = Number(value)
   return Number.isFinite(number) ? Math.max(1, Math.floor(number)) : fallback
+}
+
+function environmentInt(name: string, fallback: number, min: number, max: number) {
+  const value = typeof process !== 'undefined' ? process.env[name] : undefined
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, Math.floor(parsed)))
 }
 
 export async function resolveSamplingPolicy(
@@ -40,15 +49,13 @@ export async function resolveSamplingPolicy(
     .maybeSingle()
   if (datasetError || !dataset) throw new Error(`Unable to resolve sampling dataset: ${datasetError?.message ?? 'not found'}`)
 
-  const [{ data: policy, error: policyError }, { data: capacity, error: capacityError }] = await Promise.all([
+  const [{ data: policy, error: policyError }, { data: advisory, error: advisoryError }] = await Promise.all([
     supabase.schema('profiling').from('sampling_policies').select('mode,max_rows,sample_percent,deterministic_seed').eq('dataset_id', dataset.id).maybeSingle(),
     supabase.schema('orchestration').from('capacity_policies').select('max_profile_rows,max_file_bytes').eq('project_id', dataset.project_id).maybeSingle(),
   ])
   if (policyError) throw new Error(`Unable to resolve sampling policy: ${policyError.message}`)
-  if (capacityError) throw new Error(`Unable to resolve profiling capacity: ${capacityError.message}`)
+  if (advisoryError) throw new Error(`Unable to resolve advisory operating targets: ${advisoryError.message}`)
 
-  const capacityMaxRows = finiteInt(capacity?.max_profile_rows, 10_000)
-  const capacityMaxFileBytes = finiteInt(capacity?.max_file_bytes, 52_428_800)
   const configuredMaxRows = finiteInt(policy?.max_rows, 1000)
   const mode = ['FULL','FIXED','PERCENT'].includes(String(policy?.mode).toUpperCase())
     ? String(policy?.mode).toUpperCase() as SamplingMode
@@ -56,10 +63,17 @@ export async function resolveSamplingPolicy(
   const samplePercent = Math.min(100, Math.max(0.01, Number(policy?.sample_percent ?? 10)))
   const deterministicSeed = finiteInt(policy?.deterministic_seed, 17)
   const requested = finiteInt(requestedMaxRows, 1000)
-  const loadLimit = Math.max(1, Math.min(
-    capacityMaxRows,
-    mode === 'FULL' ? Math.max(requested, configuredMaxRows) : configuredMaxRows,
-  ))
+
+  // These are implementation safety ceilings for the current in-memory execution model,
+  // not tenant quotas. Business operating targets are recorded only for telemetry.
+  const technicalMaxRows = environmentInt('PROFILE_TECHNICAL_MAX_ROWS', 250_000, 1_000, 1_000_000)
+  const technicalMaxFileBytes = environmentInt('FILE_TECHNICAL_MAX_BYTES', 250 * 1024 * 1024, 1 * 1024 * 1024, 1024 * 1024 * 1024)
+
+  let desiredLoadRows: number
+  if (mode === 'FULL') desiredLoadRows = technicalMaxRows
+  else if (mode === 'PERCENT') desiredLoadRows = Math.max(requested, configuredMaxRows)
+  else desiredLoadRows = configuredMaxRows
+  const loadLimit = Math.min(technicalMaxRows, Math.max(1, desiredLoadRows))
 
   return {
     datasetId: dataset.id,
@@ -69,8 +83,10 @@ export async function resolveSamplingPolicy(
     configuredMaxRows,
     samplePercent,
     deterministicSeed,
-    capacityMaxRows,
-    capacityMaxFileBytes,
+    technicalMaxRows,
+    technicalMaxFileBytes,
+    advisoryMaxRows: advisory?.max_profile_rows == null ? null : Number(advisory.max_profile_rows),
+    advisoryMaxFileBytes: advisory?.max_file_bytes == null ? null : Number(advisory.max_file_bytes),
   }
 }
 
@@ -97,11 +113,11 @@ export function applySamplingPolicy<T extends Record<string, unknown>>(
   let targetRows = rows.length
   if (policy.mode === 'PERCENT') {
     targetRows = Math.max(1, Math.ceil(knownCount * policy.samplePercent / 100))
-    targetRows = Math.min(targetRows, policy.configuredMaxRows, policy.capacityMaxRows, rows.length)
+    targetRows = Math.min(targetRows, policy.configuredMaxRows, rows.length)
   } else if (policy.mode === 'FIXED') {
-    targetRows = Math.min(policy.configuredMaxRows, policy.capacityMaxRows, rows.length)
+    targetRows = Math.min(policy.configuredMaxRows, rows.length)
   } else {
-    targetRows = Math.min(policy.capacityMaxRows, rows.length)
+    targetRows = rows.length
   }
 
   let sampled = rows
@@ -117,11 +133,11 @@ export function applySamplingPolicy<T extends Record<string, unknown>>(
   if (knownCount > sampled.length) {
     warnings.push(`Profiling used ${sampled.length} deterministic sample rows from ${knownCount} source rows under ${policy.mode} sampling.`)
   }
-  if (policy.mode === 'FULL' && knownCount > policy.capacityMaxRows) {
-    warnings.push(`FULL sampling was capped at the project capacity limit of ${policy.capacityMaxRows} rows.`)
+  if (policy.mode === 'FULL' && rows.length >= policy.technicalMaxRows && knownCount >= policy.technicalMaxRows) {
+    warnings.push(`FULL profiling reached the current execution engine technical safety ceiling of ${policy.technicalMaxRows} in-memory rows. This is not a business quota; use a streaming/distributed executor for larger full scans.`)
   }
   if (policy.mode === 'PERCENT' && Math.ceil(knownCount * policy.samplePercent / 100) > policy.configuredMaxRows) {
-    warnings.push(`Percentage sampling was capped at ${policy.configuredMaxRows} configured rows.`)
+    warnings.push(`Percentage sampling selected at most ${policy.configuredMaxRows} rows because that is the dataset sampling strategy, not a platform quota.`)
   }
 
   return {
@@ -134,8 +150,11 @@ export function applySamplingPolicy<T extends Record<string, unknown>>(
       configured_max_rows: policy.configuredMaxRows,
       sample_percent: policy.samplePercent,
       deterministic_seed: policy.deterministicSeed,
-      capacity_max_rows: policy.capacityMaxRows,
-      capacity_max_file_bytes: policy.capacityMaxFileBytes,
+      technical_max_rows: policy.technicalMaxRows,
+      technical_max_file_bytes: policy.technicalMaxFileBytes,
+      advisory_max_rows: policy.advisoryMaxRows,
+      advisory_max_file_bytes: policy.advisoryMaxFileBytes,
+      quota_enforced: false,
     },
   }
 }
