@@ -46,6 +46,8 @@ function semanticResult(projectId: string, match: SemanticMatch): SearchResult {
   const columnName = textMetadata(metadata, 'column_name')
   const profileRunId = textMetadata(metadata, 'profile_run_id')
   const externalId = textMetadata(metadata, 'external_id')
+  const documentId = textMetadata(metadata, 'document_id')
+  const fileName = textMetadata(metadata, 'file_name')
   let label = firstLine(match.content)
   let href = '/dashboard'
 
@@ -67,6 +69,16 @@ function semanticResult(projectId: string, match: SemanticMatch): SearchResult {
       break
     case 'QUALITY_INCIDENT':
       href = `/issues?issue=${encodeURIComponent(objectId)}`
+      break
+    case 'DOCUMENT':
+      label = fileName ?? label
+      href = `/documents?document=${encodeURIComponent(objectId)}`
+      break
+    case 'DOCUMENT_CHUNK':
+      label = fileName ? `${fileName} · extracted content` : 'Document extracted content'
+      href = documentId
+        ? `/documents?document=${encodeURIComponent(documentId)}&chunk=${encodeURIComponent(objectId)}#chunk-${encodeURIComponent(objectId)}`
+        : '/documents'
       break
     case 'GLOSSARY_TERM':
       label = textMetadata(metadata, 'term') ?? label
@@ -138,13 +150,15 @@ export async function GET(request: Request) {
   const supabase = await createClient()
   const pattern = `%${query.replaceAll('%', '\\%').replaceAll('_', '\\_')}%`
 
-  const [datasets, terms, issues, labels, policies, contracts] = await Promise.all([
+  const [datasets, terms, issues, labels, policies, contracts, documents, documentChunks] = await Promise.all([
     supabase.schema('catalog').from('datasets').select('id,project_id,name,description,business_domain,source_identifier').or(`name.ilike.${pattern},description.ilike.${pattern},business_domain.ilike.${pattern},source_identifier.ilike.${pattern}`).limit(30),
     supabase.schema('governance').from('glossary_terms').select('id,project_id,term,definition,domain,status').or(`term.ilike.${pattern},definition.ilike.${pattern},domain.ilike.${pattern}`).limit(30),
     supabase.schema('governance').from('issues').select('id,project_id,dataset_id,title,description,status,severity').or(`title.ilike.${pattern},description.ilike.${pattern}`).limit(30),
     supabase.schema('governance').from('classification_labels').select('id,project_id,name,description,sensitivity_level').or(`name.ilike.${pattern},description.ilike.${pattern}`).limit(30),
     supabase.schema('governance').from('classification_policies').select('id,project_id,name,description,required_controls,retention_days,encryption_required,masking_required,approval_required').or(`name.ilike.${pattern},description.ilike.${pattern}`).limit(30),
     supabase.schema('governance').from('data_contracts').select('id,project_id,dataset_id,name,status,current_version').ilike('name', pattern).limit(30),
+    supabase.schema('governance').from('documents').select('id,project_id,dataset_id,file_name,file_type,source_uri,extraction_method,chunk_count').or(`file_name.ilike.${pattern},source_uri.ilike.${pattern}`).limit(30),
+    supabase.schema('governance').from('document_chunks').select('id,project_id,document_id,chunk_index,content').ilike('content', pattern).limit(30),
   ])
 
   for (const [label, result] of [
@@ -154,8 +168,22 @@ export async function GET(request: Request) {
     ['classification labels', labels],
     ['policies', policies],
     ['contracts', contracts],
+    ['documents', documents],
+    ['document chunks', documentChunks],
   ] as const) {
     if (result.error) throw new Error(`Unable to search ${label}: ${result.error.message}`)
+  }
+
+  const documentById = new Map((documents.data ?? []).map((document) => [document.id, document]))
+  const missingDocumentIds = Array.from(new Set((documentChunks.data ?? []).map((chunk) => chunk.document_id).filter((id) => !documentById.has(id))))
+  if (missingDocumentIds.length) {
+    const { data: chunkDocuments, error: chunkDocumentsError } = await supabase
+      .schema('governance')
+      .from('documents')
+      .select('id,project_id,dataset_id,file_name,file_type,source_uri,extraction_method,chunk_count')
+      .in('id', missingDocumentIds)
+    if (chunkDocumentsError) throw new Error(`Unable to resolve document chunk parents: ${chunkDocumentsError.message}`)
+    for (const document of chunkDocuments ?? []) documentById.set(document.id, document)
   }
 
   const lexical: SearchResult[] = [
@@ -165,6 +193,11 @@ export async function GET(request: Request) {
     ...(labels.data ?? []).map((item) => ({ kind: 'CLASSIFICATION', id: item.id, projectId: item.project_id, label: item.name, description: item.description, href: `/classification?label=${item.id}`, metadata: { sensitivity_level: item.sensitivity_level } })),
     ...(policies.data ?? []).map((item) => ({ kind: 'POLICY', id: item.id, projectId: item.project_id, label: item.name, description: item.description, href: `/classification?policy=${item.id}`, metadata: { required_controls: item.required_controls, retention_days: item.retention_days, encryption_required: item.encryption_required, masking_required: item.masking_required, approval_required: item.approval_required } })),
     ...(contracts.data ?? []).map((item) => ({ kind: 'DATA_CONTRACT', id: item.id, projectId: item.project_id, label: item.name, description: `Contract v${item.current_version} · ${item.status}`, href: `/contracts?dataset=${item.dataset_id}`, metadata: { status: item.status, dataset_id: item.dataset_id, current_version: item.current_version } })),
+    ...(documents.data ?? []).map((item) => ({ kind: 'DOCUMENT', id: item.id, projectId: item.project_id, label: item.file_name ?? item.source_uri, description: `${item.file_type.toUpperCase()} · ${item.chunk_count} extracted chunks`, href: `/documents?document=${item.id}`, metadata: { dataset_id: item.dataset_id, file_type: item.file_type, source_uri: item.source_uri, extraction_method: item.extraction_method } })),
+    ...(documentChunks.data ?? []).map((item) => {
+      const document = documentById.get(item.document_id)
+      return { kind: 'DOCUMENT_CHUNK', id: item.id, projectId: item.project_id, label: document?.file_name ? `${document.file_name} · chunk ${item.chunk_index}` : `Document chunk ${item.chunk_index}`, description: item.content, href: `/documents?document=${item.document_id}&chunk=${item.id}#chunk-${item.id}`, metadata: { document_id: item.document_id, dataset_id: document?.dataset_id ?? null, file_type: document?.file_type ?? null, chunk_index: item.chunk_index } }
+    }),
   ].map((item) => ({ ...item, score: lexicalScore(item.label, item.description, query, item.kind) }))
 
   let semantic: SearchResult[] = []
@@ -182,7 +215,7 @@ export async function GET(request: Request) {
       matches: await semanticSearchByEmbedding(supabase, {
         projectId,
         embedding,
-        objectTypes: ['DATASET', 'COLUMN', 'FINDING', 'QUALITY_INCIDENT', 'GLOSSARY_TERM', 'POLICY', 'LINEAGE_TRANSFORMATION'],
+        objectTypes: ['DATASET', 'COLUMN', 'FINDING', 'QUALITY_INCIDENT', 'DOCUMENT', 'DOCUMENT_CHUNK', 'GLOSSARY_TERM', 'POLICY', 'LINEAGE_TRANSFORMATION'],
         limit: perProjectLimit,
         threshold: 0.35,
       }),
