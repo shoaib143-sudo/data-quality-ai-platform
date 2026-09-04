@@ -9,6 +9,9 @@ const GOVERNED_DOCUMENT_EXTENSIONS = new Set([
 ])
 const MAX_SEMANTIC_CHUNK_CHARACTERS = 4000
 const CHUNK_INSERT_BATCH_SIZE = 200
+const URI_METADATA_FIELDS = new Set([
+  'source_uri','sourceUri','url','source_url','sourceUrl','download_url','downloadUrl',
+])
 
 type PersistDocumentInput = {
   projectId: string
@@ -31,6 +34,33 @@ function hash(value: string) {
 
 function text(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+export function sanitizePersistedDocumentUri(value: string) {
+  const trimmed = value.trim()
+  if (!/^https?:\/\//i.test(trimmed)) return trimmed
+
+  try {
+    const url = new URL(trimmed)
+    url.username = ''
+    url.password = ''
+    url.search = ''
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return trimmed.split('#', 1)[0].split('?', 1)[0]
+  }
+}
+
+function sanitizeMetadata(metadata: Record<string, unknown>, sourceUri: string) {
+  return Object.fromEntries(
+    Object.entries(metadata).map(([key, value]) => {
+      if (URI_METADATA_FIELDS.has(key) && typeof value === 'string') {
+        return [key, sanitizePersistedDocumentUri(value)]
+      }
+      return [key, value]
+    }),
+  ) as Record<string, unknown> & { source_uri: string }
 }
 
 function extensionOf(loaded: FileSourceResult) {
@@ -117,6 +147,9 @@ export async function persistGovernedDocumentContent(
   const extractionMethod = text(loaded.metadata.text_extraction_method)
   const characterCount = chunks.reduce((total, chunk) => total + chunk.characterCount, 0)
   const now = new Date().toISOString()
+  const sourceUri = sanitizePersistedDocumentUri(loaded.sourceUri)
+  const sanitizedMetadata = sanitizeMetadata(loaded.metadata, sourceUri)
+  sanitizedMetadata.source_uri = sourceUri
 
   const { data: document, error: documentError } = await supabase
     .schema('governance')
@@ -126,7 +159,7 @@ export async function persistGovernedDocumentContent(
       dataset_id: input.datasetId,
       dataset_version_id: input.datasetVersionId,
       profile_run_id: input.profileRunId,
-      source_uri: loaded.sourceUri,
+      source_uri: sourceUri,
       file_name: fileName,
       file_type: extension,
       content_type: loaded.contentType,
@@ -135,7 +168,7 @@ export async function persistGovernedDocumentContent(
       character_count: characterCount,
       chunk_count: chunks.length,
       metadata: {
-        ...loaded.metadata,
+        ...sanitizedMetadata,
         source_row_count: loaded.rowCount,
         persisted_source_rows: loaded.rows.length,
         content_truncated_by_execution_ceiling: loaded.rowCount > loaded.rows.length,
