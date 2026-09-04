@@ -4,6 +4,9 @@ export type OpenSearchConnection = {
   endpoint: string
   knowledgeIndex: string
   headers: Record<string, string>
+  semanticEnabled: boolean
+  embeddingModelId: string | null
+  hybridSearchPipeline: string | null
 }
 
 function requireEnv(name: string) {
@@ -28,12 +31,20 @@ export function getOpenSearchConnection(): OpenSearchConnection {
     throw new Error('OPENSEARCH_INDEX_PREFIX contains unsupported characters')
   }
   const authorization = basicAuthorization()
+  const semanticEnabled = process.env.OPENSEARCH_SEMANTIC_ENABLED?.trim().toLowerCase() === 'true'
+  const embeddingModelId = process.env.OPENSEARCH_EMBEDDING_MODEL_ID?.trim() || null
+  if (semanticEnabled && !embeddingModelId) {
+    throw new Error('OPENSEARCH_EMBEDDING_MODEL_ID is required when OPENSEARCH_SEMANTIC_ENABLED=true')
+  }
   return {
     endpoint: requireEnv('OPENSEARCH_ENDPOINT').replace(/\/$/, ''),
     knowledgeIndex: `${prefix}-knowledge`,
     headers: {
       ...(authorization ? { authorization } : {}),
     },
+    semanticEnabled,
+    embeddingModelId,
+    hybridSearchPipeline: semanticEnabled ? `${prefix}-knowledge-hybrid-search` : null,
   }
 }
 
