@@ -57,6 +57,8 @@ if (selection.analytics === 'clickhouse') {
   requireEnv('CLICKHOUSE_ENDPOINT')
   requireEnv('CLICKHOUSE_USER')
   requireEnv('CLICKHOUSE_PASSWORD')
+  boundedInt('CLICKHOUSE_QUERY_MAX_EXECUTION_SECONDS', 10, 1, 120)
+  boundedInt('CLICKHOUSE_QUERY_MAX_RESULT_ROWS', 1000, 500, 10000)
 }
 
 if (selection.graph !== 'postgres') {
