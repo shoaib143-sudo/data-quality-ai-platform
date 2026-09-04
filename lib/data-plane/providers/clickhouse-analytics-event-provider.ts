@@ -1,4 +1,5 @@
 import type { AnalyticsEvent, AnalyticsEventProvider } from '@/lib/data-plane/contracts'
+import { providerFetch } from '@/lib/data-plane/provider-runtime'
 
 type ClickHouseConfig = {
   endpoint: string
@@ -59,7 +60,7 @@ export class ClickHouseAnalyticsEventProvider implements AnalyticsEventProvider 
     url.searchParams.set('database', settings.database)
     url.searchParams.set('query', `INSERT INTO ${settings.table} FORMAT JSONEachRow`)
 
-    const response = await fetch(url, {
+    const response = await providerFetch(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/x-ndjson',
@@ -68,7 +69,7 @@ export class ClickHouseAnalyticsEventProvider implements AnalyticsEventProvider 
       },
       body: events.map((event) => JSON.stringify(row(event))).join('\n'),
       cache: 'no-store',
-    })
+    }, { providerKey: 'clickhouse' })
 
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 2000)
