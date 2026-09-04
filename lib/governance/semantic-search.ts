@@ -71,7 +71,7 @@ function parseEmbeddingPayload(payload: unknown): number[] {
   throw new Error('Embedding provider returned an unsupported response shape')
 }
 
-function validateEmbedding(values: number[]) {
+export function validateEmbedding(values: number[]) {
   if (values.length !== EMBEDDING_DIMENSIONS) {
     throw new Error(`Embedding provider returned ${values.length} dimensions; expected ${EMBEDDING_DIMENSIONS}`)
   }
@@ -115,6 +115,30 @@ export async function embedGovernanceText(text: string, model?: string) {
   return validateEmbedding(parseEmbeddingPayload(await response.json()))
 }
 
+export async function semanticSearchByEmbedding(
+  supabase: SupabaseLike,
+  input: {
+    projectId: string
+    embedding: number[]
+    objectTypes?: SemanticObjectType[] | null
+    threshold?: number
+    limit?: number
+  },
+): Promise<SemanticMatch[]> {
+  const threshold = Math.max(-1, Math.min(1, input.threshold ?? 0.35))
+  const limit = Math.max(1, Math.min(100, input.limit ?? 25))
+  const { data, error } = await supabase.schema('governance').rpc('match_semantic_embeddings', {
+    p_project_id: input.projectId,
+    p_query_embedding: toPgVectorLiteral(input.embedding),
+    p_object_types: input.objectTypes?.length ? input.objectTypes : null,
+    p_match_threshold: threshold,
+    p_match_count: limit,
+  })
+
+  if (error) throw new Error(`Semantic search failed: ${error.message}`)
+  return (Array.isArray(data) ? data : []) as SemanticMatch[]
+}
+
 export async function semanticSearch(
   supabase: SupabaseLike,
   input: {
@@ -125,20 +149,8 @@ export async function semanticSearch(
     limit?: number
   },
 ): Promise<SemanticMatch[]> {
-  const vector = await embedGovernanceText(input.query)
-  const threshold = Math.max(-1, Math.min(1, input.threshold ?? 0.35))
-  const limit = Math.max(1, Math.min(100, input.limit ?? 25))
-
-  const { data, error } = await supabase.schema('governance').rpc('match_semantic_embeddings', {
-    p_project_id: input.projectId,
-    p_query_embedding: toPgVectorLiteral(vector),
-    p_object_types: input.objectTypes?.length ? input.objectTypes : null,
-    p_match_threshold: threshold,
-    p_match_count: limit,
-  })
-
-  if (error) throw new Error(`Semantic search failed: ${error.message}`)
-  return (Array.isArray(data) ? data : []) as SemanticMatch[]
+  const embedding = await embedGovernanceText(input.query)
+  return semanticSearchByEmbedding(supabase, { ...input, embedding })
 }
 
 export async function indexSemanticObject(input: SemanticIndexInput) {
