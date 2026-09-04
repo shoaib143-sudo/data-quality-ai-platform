@@ -27,9 +27,14 @@ const checks = [
   ['app/api/profiling/remediation/verify/route.ts', /status:\s*recommendationEffective\s*\?\s*'EFFECTIVE'\s*:\s*'INEFFECTIVE'[\s\S]*observed_at/, 'effective and ineffective recommendation outcome states'],
   ['lib/profiling/recommendation-learning.ts', /success_rate[\s\S]*average_quality_score_delta[\s\S]*average_high_severity_findings_delta/, 'project recommendation effectiveness aggregation'],
   ['app/api/profiling/recommendations/effectiveness/route.ts', /authorizeProject[\s\S]*quality\.read[\s\S]*loadRecommendationEffectiveness/, 'authorized recommendation effectiveness API'],
-  ['lib/profiling/investigation-engine.ts', /investigation_version:\s*'1\.1'[\s\S]*historical_effectiveness[\s\S]*recommendation_learning[\s\S]*advisory evidence only/, 'historical effectiveness feedback into future investigations'],
+  ['lib/profiling/investigation-engine.ts', /investigation_version:\s*'1\.1'/, 'learning-aware investigation version'],
+  ['lib/profiling/investigation-engine.ts', /historical_effectiveness/, 'historical recommendation effectiveness annotation'],
+  ['lib/profiling/investigation-engine.ts', /recommendation_learning/, 'recommendation learning investigation context'],
+  ['lib/profiling/investigation-engine.ts', /advisory evidence only/, 'recommendation learning approval boundary'],
   ['app/workflows/page.tsx', /profiling_recommendation_learning[\s\S]*learning=/, 'workflow page loads recommendation learning evidence'],
-  ['app/workflows/workflow-manager.tsx', /Recommendation effectiveness[\s\S]*successRate[\s\S]*Average quality delta/, 'recommendation effectiveness workflow UI'],
+  ['app/workflows/workflow-manager.tsx', /Recommendation effectiveness/, 'recommendation effectiveness workflow section'],
+  ['app/workflows/workflow-manager.tsx', /successRate/, 'recommendation success rate display'],
+  ['app/workflows/workflow-manager.tsx', /Average quality delta/, 'recommendation quality delta display'],
 ]
 
 for (const [path, pattern, label] of checks) {
