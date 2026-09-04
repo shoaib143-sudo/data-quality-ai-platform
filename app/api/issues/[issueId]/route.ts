@@ -4,6 +4,7 @@ import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { scheduleRemediationVerificationFromIssue } from '@/lib/profiling/remediation-reprofile'
+import { scheduleDataQualityVerificationFromIssue } from '@/lib/data-quality/remediation-verification'
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ issueId: string }> }) {
   try {
@@ -28,24 +29,39 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
     const resolvingNow = !wasResolved && ['RESOLVED', 'CLOSED'].includes(status)
 
     let isProfilingRemediation = false
-    if (resolvingNow && issue.profile_run_id) {
-      const { data: remediationOutcome, error: remediationOutcomeError } = await admin
+    let isDataQualityRemediation = false
+    if (resolvingNow) {
+      if (issue.profile_run_id) {
+        const { data: profilingOutcome, error: profilingOutcomeError } = await admin
+          .schema('governance')
+          .from('profiling_remediation_outcomes')
+          .select('id')
+          .eq('project_id', issue.project_id)
+          .eq('source_profile_run_id', issue.profile_run_id)
+          .contains('remediation_issue_ids', [issueId])
+          .limit(1)
+          .maybeSingle()
+        if (profilingOutcomeError) throw new Error(`Unable to validate profiling remediation issue: ${profilingOutcomeError.message}`)
+        isProfilingRemediation = Boolean(profilingOutcome)
+      }
+
+      const { data: dqOutcome, error: dqOutcomeError } = await admin
         .schema('governance')
-        .from('profiling_remediation_outcomes')
+        .from('data_quality_remediation_outcomes')
         .select('id')
         .eq('project_id', issue.project_id)
-        .eq('source_profile_run_id', issue.profile_run_id)
         .contains('remediation_issue_ids', [issueId])
         .limit(1)
         .maybeSingle()
-      if (remediationOutcomeError) throw new Error(`Unable to validate profiling remediation issue: ${remediationOutcomeError.message}`)
-      isProfilingRemediation = Boolean(remediationOutcome)
+      if (dqOutcomeError) throw new Error(`Unable to validate data quality remediation issue: ${dqOutcomeError.message}`)
+      isDataQualityRemediation = Boolean(dqOutcome)
     }
 
+    const governedRemediation = isProfilingRemediation || isDataQualityRemediation
     const resolutionSummary = typeof body.resolutionSummary === 'string' ? body.resolutionSummary.trim() : ''
-    if (isProfilingRemediation && !resolutionSummary) {
+    if (governedRemediation && !resolutionSummary) {
       return NextResponse.json({
-        error: 'Resolution evidence is required before a profiling remediation issue can be resolved.',
+        error: 'Resolution evidence is required before a governed remediation issue can be resolved.',
         code: 'REMEDIATION_RESOLUTION_EVIDENCE_REQUIRED',
       }, { status: 400 })
     }
@@ -78,18 +94,36 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
       eventType: `ISSUE_${status}`,
       entityType: 'ISSUE',
       entityId: issueId,
-      metadata: { status, profiling_remediation: isProfilingRemediation, resolution_summary_present: Boolean(data.resolution_summary) },
+      metadata: {
+        status,
+        profiling_remediation: isProfilingRemediation,
+        data_quality_remediation: isDataQualityRemediation,
+        resolution_summary_present: Boolean(data.resolution_summary),
+      },
     })
 
     let verificationScheduling: Record<string, unknown> | null = null
-    if (['RESOLVED', 'CLOSED'].includes(status) && data.profile_run_id) {
+    if (['RESOLVED', 'CLOSED'].includes(status)) {
       try {
-        verificationScheduling = await scheduleRemediationVerificationFromIssue({
+        const dataQualityScheduling = await scheduleDataQualityVerificationFromIssue({
           issueId,
           projectId: issue.project_id,
-          sourceProfileRunId: data.profile_run_id,
           userId: user.id,
         })
+
+        if (dataQualityScheduling.status !== 'NOT_DATA_QUALITY_REMEDIATION') {
+          verificationScheduling = { ...dataQualityScheduling, mode: 'DATA_QUALITY' }
+        } else if (data.profile_run_id) {
+          verificationScheduling = {
+            ...(await scheduleRemediationVerificationFromIssue({
+              issueId,
+              projectId: issue.project_id,
+              sourceProfileRunId: data.profile_run_id,
+              userId: user.id,
+            })),
+            mode: 'PROFILING',
+          }
+        }
       } catch (verificationError) {
         verificationScheduling = {
           status: 'QUEUE_FAILED',
