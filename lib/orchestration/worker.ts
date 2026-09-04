@@ -1,6 +1,7 @@
 import { executePreparedProfilingJob } from '@/lib/agents/run-profiling-job'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { investigateDataQualityRun } from '@/lib/data-quality/autonomous-operations'
+import { verifyDataQualityRemediation } from '@/lib/data-quality/remediation-verification'
 import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { deliverNotificationJob } from '@/lib/observability/notifications'
 import { executeMetadataDiscovery } from '@/lib/catalog/discovery'
@@ -245,14 +246,29 @@ export async function executeDurableJob(job: DurableJob) {
     const profileRunId = text(payload.profileRunId)
     const userId = text(payload.userId)
     const agentRunId = text(payload.agentRunId)
+    const trigger = text(payload.trigger)
+    const workflowInstanceId = text(payload.workflowInstanceId)
     if (!datasetVersionId || !profileRunId || !agentRunId) throw new Error('Durable data quality job payload is incomplete.')
+    if (trigger === 'DATA_QUALITY_REMEDIATION_VERIFICATION' && !workflowInstanceId) throw new Error('Data quality verification payload is missing workflowInstanceId.')
+
     const result = await executeQualityAutomation({
       datasetVersionId,
       profileRunId,
       userId: userId || null,
       existingAgentRunId: agentRunId,
     })
-    await investigateDataQualityRun({ agentRunId: result.agentRunId, userId: userId || null })
+
+    if (trigger === 'DATA_QUALITY_REMEDIATION_VERIFICATION') {
+      await verifyDataQualityRemediation({
+        workflowInstanceId,
+        verificationAgentRunId: result.agentRunId,
+        actorUserId: userId || null,
+        verificationSource: 'AUTOMATIC_WORKER',
+      })
+    } else {
+      await investigateDataQualityRun({ agentRunId: result.agentRunId, userId: userId || null })
+    }
+
     await evaluateObservabilitySignals(datasetVersionId, profileRunId)
     return
   }
