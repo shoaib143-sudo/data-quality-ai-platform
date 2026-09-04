@@ -2,6 +2,7 @@ import type { KnowledgeSearchProvider, KnowledgeSearchRequest, KnowledgeSearchRe
 import { getDataPlaneProviderSelection } from '@/lib/data-plane/provider-selection'
 import { OpenSearchKnowledgeSearchProvider } from '@/lib/data-plane/providers/opensearch-knowledge-search-provider'
 import { PostgresKnowledgeSearchProvider } from '@/lib/data-plane/providers/postgres-knowledge-search-provider'
+import { executeWithReadFallback } from '@/lib/data-plane/read-fallback'
 
 let postgresProvider: KnowledgeSearchProvider | null = null
 let openSearchProvider: KnowledgeSearchProvider | null = null
@@ -20,16 +21,15 @@ class OpenSearchWithPostgresFallback implements KnowledgeSearchProvider {
   ) {}
 
   async search(request: KnowledgeSearchRequest): Promise<KnowledgeSearchResponse> {
-    try {
-      return await this.primary.search(request)
-    } catch (primaryError) {
-      if (!readFallbackEnabled()) throw primaryError
-      const response = await this.fallback.search(request)
-      return {
+    return executeWithReadFallback({
+      primary: () => this.primary.search(request),
+      fallback: () => this.fallback.search(request),
+      fallbackEnabled: readFallbackEnabled(),
+      transformFallback: (response) => ({
         ...response,
         semanticStatus: request.semantic ? 'UNAVAILABLE' : response.semanticStatus,
-      }
-    }
+      }),
+    })
   }
 }
 
