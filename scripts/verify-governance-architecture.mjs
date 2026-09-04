@@ -71,7 +71,6 @@ const checks = [
   ['app/api/search/route.ts', /classification_policies[\s\S]*required_controls[\s\S]*retention_days[\s\S]*approval_required/, 'classification policy search aligned to governance schema'],
   ['app/profiling/explorer/page.tsx', /searchParams[\s\S]*runId[\s\S]*columnId[\s\S]*findingId/, 'semantic profiling drill-down navigation'],
   ['app/profiling/profiling-explorer.tsx', /initialColumnId[\s\S]*initialFindingId[\s\S]*focusedFindingId/, 'semantic profiling result focus'],
-  ['app/search/global-search.tsx', /Hybrid semantic[\s\S]*NOT_CONFIGURED[\s\S]*UNAVAILABLE/, 'hybrid semantic search user state'],
   ['services/embedding-service/app.py', /all-MiniLM-L6-v2[\s\S]*normalize_embeddings=True[\s\S]*384/, 'free local 384-dimension embedding service'],
   ['app/login/page.tsx', /signInWithSSO/, 'SAML SSO client flow'],
   ['app/auth/callback/route.ts', /exchangeCodeForSession[\s\S]*sso_domains/, 'SSO callback and tenant mapping'],
@@ -94,6 +93,16 @@ const checks = [
 for (const [path, pattern, label] of checks) {
   const content = await readFile(path, 'utf8')
   if (!pattern.test(content)) throw new Error(`Governance architecture contract failed: ${label} is missing from ${path}`)
+  console.log(`PASS ${label}`)
+}
+
+const searchUi = await readFile('app/search/global-search.tsx', 'utf8')
+for (const [pattern, label] of [
+  [/Hybrid semantic/, 'hybrid semantic search badge'],
+  [/NOT_CONFIGURED/, 'semantic not-configured fallback state'],
+  [/UNAVAILABLE/, 'semantic unavailable fallback state'],
+]) {
+  if (!pattern.test(searchUi)) throw new Error(`Governance architecture contract failed: ${label} is missing from app/search/global-search.tsx`)
   console.log(`PASS ${label}`)
 }
 
