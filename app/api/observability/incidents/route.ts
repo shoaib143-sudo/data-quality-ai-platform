@@ -31,19 +31,26 @@ export async function GET(request: Request) {
     const incidentIds = (incidents ?? []).map((row) => row.id)
     const [links, impacts] = await Promise.all([
       incidentIds.length
-        ? admin.schema('governance').from('observability_incident_alerts').select('incident_id,alert_id,linked_at,observability_alerts(id,category,severity,title,description,status,evidence,last_observed_at)').in('incident_id', incidentIds)
+        ? admin.schema('governance').from('observability_incident_alerts').select('incident_id,alert_id,linked_at').in('incident_id', incidentIds)
         : Promise.resolve({ data: [], error: null }),
       incidentIds.length
         ? admin.schema('governance').from('observability_incident_impacts').select('id,incident_id,asset_type,asset_id,asset_name,impact_type,distance,risk_score,confidence,evidence,created_at').in('incident_id', incidentIds).order('risk_score', { ascending: false })
         : Promise.resolve({ data: [], error: null }),
     ])
-    if (links.error) throw new Error(`Unable to load incident alert evidence: ${links.error.message}`)
+    if (links.error) throw new Error(`Unable to load incident alert links: ${links.error.message}`)
     if (impacts.error) throw new Error(`Unable to load incident impact evidence: ${impacts.error.message}`)
+
+    const alertIds = [...new Set((links.data ?? []).map((row) => row.alert_id))]
+    const { data: alerts, error: alertsError } = alertIds.length
+      ? await admin.schema('profiling').from('observability_alerts').select('id,category,severity,title,description,status,evidence,last_observed_at').in('id', alertIds)
+      : { data: [], error: null }
+    if (alertsError) throw new Error(`Unable to load incident alert evidence: ${alertsError.message}`)
+    const alertById = new Map((alerts ?? []).map((alert) => [alert.id, alert]))
 
     const alertLinksByIncident = new Map<string, Array<Record<string, unknown>>>()
     for (const row of links.data ?? []) {
       const rows = alertLinksByIncident.get(row.incident_id) ?? []
-      rows.push(row as Record<string, unknown>)
+      rows.push({ incident_id: row.incident_id, alert_id: row.alert_id, linked_at: row.linked_at, alert: alertById.get(row.alert_id) ?? null })
       alertLinksByIncident.set(row.incident_id, rows)
     }
     const impactsByIncident = new Map<string, Array<Record<string, unknown>>>()
