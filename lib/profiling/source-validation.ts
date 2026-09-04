@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { validateJdbcConnection } from '@/lib/connectors/jdbc'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
+import { assertSafeRemoteFileUrl } from '@/lib/profiling/safe-remote-file'
 
 export type SourceValidationResult = {
   valid: boolean
@@ -61,10 +62,14 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
     if (!url && (!bucket || !path)) errors.push('FILE sources require an HTTPS URL or a Supabase Storage bucket and object path.')
     if (url) {
       try {
-        const parsed = new URL(url)
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') errors.push('FILE source URL must use HTTP or HTTPS.')
-      } catch {
-        errors.push('FILE source URL is not valid.')
+        await assertSafeRemoteFileUrl(url)
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : 'FILE source URL is not allowed.')
+      }
+    } else if (bucket && path) {
+      const requiredPrefix = `projects/${source.project_id}/`
+      if (bucket !== 'dataset-files' || !path.startsWith(requiredPrefix) || path.length <= requiredPrefix.length) {
+        errors.push(`FILE sources must be stored under dataset-files/${requiredPrefix}...`)
       }
     }
 
@@ -107,7 +112,7 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
       source_type: sourceType.toUpperCase(),
       execution_type: 'FILE',
       source_uri: url ?? `storage://${bucket ?? ''}/${path ?? ''}`,
-      checks: { configuration: !errors.some((error) => error.includes('require') || error.includes('valid')), connectivity: false, schema_available: false },
+      checks: { configuration: !errors.some((error) => error.includes('require') || error.includes('valid') || error.includes('must be stored') || error.includes('not allowed') || error.includes('private or local')), connectivity: false, schema_available: false },
       details: { url, bucket, path },
       errors,
       warnings,
