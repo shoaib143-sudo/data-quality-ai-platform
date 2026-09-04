@@ -42,6 +42,8 @@ jobs:
         run: pnpm run verify:provider-fallback
       - name: Verify governance knowledge model
         run: pnpm run verify:knowledge-model
+      - name: Verify quality intelligence
+        run: pnpm run verify:quality-intelligence
       - name: Verify FILE onboarding contracts
         run: pnpm run verify:file-onboarding
       - name: Verify profiling explorer evidence contracts
