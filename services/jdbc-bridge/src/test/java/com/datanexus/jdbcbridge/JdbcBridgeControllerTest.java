@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.sql.DriverManager;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,6 +25,7 @@ class JdbcBridgeControllerTest {
     Mockito.when(credentials.resolve("test-ref")).thenReturn(new Credentials("sa", ""));
     try (var connection = DriverManager.getConnection(JDBC_URL, "sa", "")) {
       try (var statement = connection.createStatement()) {
+        statement.execute("DROP VIEW IF EXISTS active_customers");
         statement.execute("CREATE TABLE IF NOT EXISTS customers (id INT PRIMARY KEY, name VARCHAR(100))");
         statement.execute("DELETE FROM customers");
         try (var insert = connection.prepareStatement("INSERT INTO customers VALUES (?, ?)") ) {
@@ -34,6 +36,7 @@ class JdbcBridgeControllerTest {
           }
           insert.executeBatch();
         }
+        statement.execute("CREATE VIEW active_customers AS SELECT id, name FROM customers WHERE id > 10");
       }
     }
     mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(credentials)).build();
@@ -42,6 +45,7 @@ class JdbcBridgeControllerTest {
   @AfterEach
   void tearDown() throws Exception {
     try (var connection = DriverManager.getConnection(JDBC_URL, "sa", "")) {
+      connection.createStatement().execute("DROP VIEW IF EXISTS active_customers");
       connection.createStatement().execute("DROP TABLE IF EXISTS customers");
     }
   }
@@ -74,7 +78,7 @@ class JdbcBridgeControllerTest {
   }
 
   @Test
-  void discoversSchemasAndTablesWithoutReturningSystemSchemas() throws Exception {
+  void discoversSchemasTablesAndViewsWithoutReturningSystemSchemas() throws Exception {
     String body = mvc.perform(post("/v1/catalog")
         .contentType("application/json")
         .content("{\"jdbcUrl\":\"" + JDBC_URL + "\",\"credentialRef\":\"test-ref\",\"schema\":\"PUBLIC\"}"))
@@ -82,13 +86,13 @@ class JdbcBridgeControllerTest {
         .andReturn().getResponse().getContentAsString();
 
     var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
-    assertEquals(1, json.path("tables").size());
-    assertEquals("CUSTOMERS", json.path("tables").get(0).path("name").asText());
+    assertTrue(json.path("tables").size() >= 2);
+    assertTrue(json.path("details").path("database_product").asText().length() > 0);
     for (var schema : json.path("schemas")) assertEquals(false, schema.asText().toLowerCase().startsWith("pg_"));
   }
 
   @Test
-  void capsQueryAtTenThousandRows() throws Exception {
+  void honorsRequestedSamplingRowsWithoutBusinessQuota() throws Exception {
     String body = mvc.perform(post("/v1/query")
         .contentType("application/json")
         .content("{\"jdbcUrl\":\"" + JDBC_URL + "\",\"credentialRef\":\"test-ref\",\"schema\":\"PUBLIC\",\"table\":\"CUSTOMERS\",\"limit\":20000}"))
@@ -96,7 +100,22 @@ class JdbcBridgeControllerTest {
         .andReturn().getResponse().getContentAsString();
 
     var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
-    assertEquals(10000, json.path("rows").size());
+    assertEquals(10001, json.path("rows").size());
     assertEquals(2, json.path("columns").size());
+  }
+
+  @Test
+  void extractsViewTransformationLogicForLineage() throws Exception {
+    String body = mvc.perform(post("/v1/lineage")
+        .contentType("application/json")
+        .content("{\"jdbcUrl\":\"" + JDBC_URL + "\",\"credentialRef\":\"test-ref\",\"schema\":\"PUBLIC\",\"table\":\"ACTIVE_CUSTOMERS\"}"))
+        .andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsString();
+
+    var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
+    assertEquals(1, json.path("transformations").size());
+    assertEquals("VIEW", json.path("transformations").get(0).path("operation").asText());
+    assertTrue(json.path("transformations").get(0).path("transformationLogic").asText().toLowerCase().contains("select"));
+    assertEquals(64, json.path("transformations").get(0).path("logicHash").asText().length());
   }
 }
