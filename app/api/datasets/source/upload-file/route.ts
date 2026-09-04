@@ -33,6 +33,15 @@ function extension(name: string) {
   return name.includes('.') ? name.split('.').pop()?.toLowerCase() ?? '' : ''
 }
 
+function canonicalUploadPath(projectId: string, path: string) {
+  const normalized = path.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '')
+  const prefix = `projects/${projectId}/uploads/`
+  if (!normalized.startsWith(prefix) || normalized.split('/').some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('Dataset upload path is outside the authorized project scope.')
+  }
+  return normalized
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
@@ -75,5 +84,25 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Dataset file upload authorization failed.' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const user = await requireUser()
+    const body = await request.json()
+    const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : ''
+    const path = typeof body.path === 'string' ? body.path.trim() : ''
+    if (!projectId || !path) return NextResponse.json({ error: 'projectId and path are required.' }, { status: 400 })
+
+    await authorizeProject(user.id, projectId, 'source.manage')
+    const objectPath = canonicalUploadPath(projectId, path)
+    const admin = createAdminClient()
+    const { error } = await admin.storage.from(DATASET_BUCKET).remove([objectPath])
+    if (error) throw new Error(`Unable to remove failed dataset upload: ${error.message}`)
+    return NextResponse.json({ removed: true })
+  } catch (error) {
+    if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Dataset upload cleanup failed.' }, { status: 500 })
   }
 }
