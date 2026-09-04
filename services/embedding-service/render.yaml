@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: data-governance-embedding-service
+    runtime: docker
+    dockerfilePath: ./services/embedding-service/Dockerfile
+    dockerContext: ./services/embedding-service
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
+      - key: EMBEDDING_SERVICE_API_KEY
+        generateValue: true
