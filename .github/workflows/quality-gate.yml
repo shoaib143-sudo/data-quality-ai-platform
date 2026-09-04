@@ -38,6 +38,8 @@ jobs:
         run: pnpm run verify:agent-portfolio
       - name: Verify governed agent specialization
         run: pnpm run verify:agent-specialization
+      - name: Verify agent memory and learning
+        run: pnpm run verify:agent-memory-learning
       - name: Verify production readiness contracts
         run: pnpm run verify:readiness
       - name: Verify provider read fallback behavior
