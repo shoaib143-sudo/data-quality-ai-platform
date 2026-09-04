@@ -13,50 +13,62 @@ const files = {
   explorerPage: await readFile('app/profiling/explorer/page.tsx', 'utf8'),
   explorer: await readFile('app/profiling/profiling-explorer.tsx', 'utf8'),
   documentMigration: await readFile('supabase/migrations/20260904150000_governed_document_content.sql', 'utf8'),
+  documentFkMigration: await readFile('supabase/migrations/20260904153000_governed_document_fk_indexes.sql', 'utf8'),
+}
+
+function containsAll(source, tokens) {
+  return tokens.every((token) => source.includes(token))
+}
+
+function appearsBefore(source, first, second) {
+  const firstIndex = source.indexOf(first)
+  const secondIndex = source.indexOf(second)
+  return firstIndex >= 0 && secondIndex >= 0 && firstIndex < secondIndex
 }
 
 const checks = [
-  [files.indexer, /QUALITY_INCIDENT/, 'quality incident semantic type'],
-  [files.indexer, /\.from\('issues'\)/, 'governance issue indexing source'],
-  [files.indexer, /resolution_summary[\s\S]*resolution_evidence/, 'quality incident resolution semantics'],
-  [files.indexer, /MANAGED_SEMANTIC_TYPES[\s\S]*QUALITY_INCIDENT/, 'quality incident stale-pruning ownership'],
-  [files.indexer, /FILTER_BATCH_SIZE[\s\S]*datasetBatch[\s\S]*versionBatch[\s\S]*runBatch/, 'bounded profiling semantic traversal'],
-  [files.indexer, /pruneStaleSemanticObjects[\s\S]*semantic_embeddings[\s\S]*delete/, 'stale embedding pruning'],
-  [files.search, /contentHash[\s\S]*maybeSingle[\s\S]*content_hash\s*===\s*contentHash/, 'unchanged content hash detection'],
-  [files.search, /content_hash\s*===\s*contentHash[\s\S]*metadata[\s\S]*unchanged:\s*true/, 'unchanged embedding reuse with metadata refresh'],
-  [files.search, /semanticSearchByEmbedding/, 'query embedding reuse API'],
-  [files.documentMigration, /create table if not exists governance\.documents[\s\S]*create table if not exists governance\.document_chunks/, 'durable governed document schema'],
-  [files.documentMigration, /unique\(project_id,dataset_version_id,source_uri\)[\s\S]*document_chunks_project_document_idx/, 'stable document identity and chunk indexing'],
-  [files.documentMigration, /enable row level security[\s\S]*is_project_member[\s\S]*catalog\.update/, 'governed document RLS'],
-  [files.documentMigration, /governance_documents_project_insert[\s\S]*governance_documents_project_update[\s\S]*governance_documents_project_delete/, 'non-overlapping document write RLS'],
-  [files.documentMigration, /governance_document_chunks_project_insert[\s\S]*governance_document_chunks_project_update[\s\S]*governance_document_chunks_project_delete/, 'non-overlapping chunk write RLS'],
-  [files.documentMigration, /\(select auth\.uid\(\)\)/, 'RLS auth initplan optimization'],
-  [files.documentContent, /GOVERNED_DOCUMENT_EXTENSIONS[\s\S]*MAX_SEMANTIC_CHUNK_CHARACTERS\s*=\s*4000/, 'document semantic eligibility and chunk ceiling'],
-  [files.documentContent, /sanitizePersistedDocumentUri[\s\S]*url\.username\s*=\s*''[\s\S]*url\.search\s*=\s*''[\s\S]*url\.hash\s*=\s*''/, 'signed URL credential and token sanitization'],
-  [files.documentContent, /sourceUri\s*=\s*sanitizePersistedDocumentUri\(loaded\.sourceUri\)[\s\S]*sanitizedMetadata\.source_uri\s*=\s*sourceUri/, 'sanitized document identity and metadata'],
-  [files.documentContent, /persistGovernedDocumentContent[\s\S]*documents[\s\S]*document_chunks/, 'document extraction persistence'],
-  [files.documentContent, /content_truncated_by_execution_ceiling/, 'document extraction truncation evidence'],
-  [files.fileProfile, /persistGovernedDocumentContent[\s\S]*loaded[\s\S]*applySamplingPolicy/, 'document persistence before profiling sampling'],
-  [files.documentIndexer, /DOCUMENT[\s\S]*DOCUMENT_CHUNK/, 'document and chunk semantic types'],
-  [files.documentIndexer, /\.from\('documents'\)[\s\S]*\.from\('document_chunks'\)/, 'document semantic indexing sources'],
-  [files.documentIndexer, /pruneStaleDocumentEmbeddings[\s\S]*semantic_embeddings/, 'stale document embedding pruning'],
-  [files.documentIndexer, /UNCHANGED[\s\S]*indexed\.unchanged/, 'unchanged document embedding reporting'],
-  [files.reindexRoute, /reindexProjectSemanticObjects[\s\S]*reindexProjectDocumentSemanticObjects[\s\S]*groups/, 'combined governance and document semantic reindex'],
-  [files.globalSearch, /SEMANTIC_PROJECT_CONCURRENCY\s*=\s*4/, 'bounded hybrid project concurrency'],
-  [files.globalSearch, /mapWithConcurrency[\s\S]*semanticSearchByEmbedding/, 'bounded semantic fan-out'],
-  [files.globalSearch, /QUALITY_INCIDENT[\s\S]*\/issues\?issue=/, 'quality incident semantic navigation'],
-  [files.globalSearch, /DOCUMENT[\s\S]*DOCUMENT_CHUNK[\s\S]*\/documents\?document=/, 'document semantic navigation'],
-  [files.globalSearch, /\.from\('documents'\)[\s\S]*\.from\('document_chunks'\)/, 'document lexical fallback retrieval'],
-  [files.globalSearch, /objectTypes:[\s\S]*DOCUMENT[\s\S]*DOCUMENT_CHUNK/, 'document hybrid retrieval'],
-  [files.globalSearch, /NOT_CONFIGURED[\s\S]*UNAVAILABLE/, 'lexical fallback when semantic provider is absent or unavailable'],
-  [files.documentsPage, /Governed Documents[\s\S]*document_chunks[\s\S]*focusedChunkId/, 'governed document viewer and chunk focus'],
-  [files.searchUi, /Hybrid semantic/, 'hybrid search user indicator'],
-  [files.explorerPage, /runId[\s\S]*columnId[\s\S]*findingId/, 'profile semantic deep-link parameters'],
-  [files.explorer, /initialColumnId[\s\S]*initialFindingId[\s\S]*focusedFindingId/, 'profile semantic deep-link focus'],
+  [/QUALITY_INCIDENT/.test(files.indexer), 'quality incident semantic type'],
+  [/\.from\('issues'\)/.test(files.indexer), 'governance issue indexing source'],
+  [/resolution_summary[\s\S]*resolution_evidence/.test(files.indexer), 'quality incident resolution semantics'],
+  [/MANAGED_SEMANTIC_TYPES[\s\S]*QUALITY_INCIDENT/.test(files.indexer), 'quality incident stale-pruning ownership'],
+  [/FILTER_BATCH_SIZE[\s\S]*datasetBatch[\s\S]*versionBatch[\s\S]*runBatch/.test(files.indexer), 'bounded profiling semantic traversal'],
+  [/pruneStaleSemanticObjects[\s\S]*semantic_embeddings[\s\S]*delete/.test(files.indexer), 'stale embedding pruning'],
+  [/contentHash[\s\S]*maybeSingle[\s\S]*content_hash\s*===\s*contentHash/.test(files.search), 'unchanged content hash detection'],
+  [/content_hash\s*===\s*contentHash[\s\S]*metadata[\s\S]*unchanged:\s*true/.test(files.search), 'unchanged embedding reuse with metadata refresh'],
+  [files.search.includes('semanticSearchByEmbedding'), 'query embedding reuse API'],
+  [containsAll(files.documentMigration, ['create table if not exists governance.documents', 'create table if not exists governance.document_chunks']), 'durable governed document schema'],
+  [containsAll(files.documentMigration, ['unique(project_id,dataset_version_id,source_uri)', 'document_chunks_project_document_idx']), 'stable document identity and chunk indexing'],
+  [containsAll(files.documentMigration, ['enable row level security', 'is_project_member', "'catalog.update'"]), 'governed document RLS'],
+  [containsAll(files.documentMigration, ['governance_documents_project_insert', 'governance_documents_project_update', 'governance_documents_project_delete']), 'non-overlapping document write RLS'],
+  [containsAll(files.documentMigration, ['governance_document_chunks_project_insert', 'governance_document_chunks_project_update', 'governance_document_chunks_project_delete']), 'non-overlapping chunk write RLS'],
+  [files.documentMigration.includes('(select auth.uid())'), 'RLS auth initplan optimization'],
+  [containsAll(files.documentFkMigration, ['governance_documents_dataset_idx', 'governance_documents_dataset_version_idx']), 'governed document foreign-key indexes'],
+  [containsAll(files.documentContent, ['GOVERNED_DOCUMENT_EXTENSIONS', 'MAX_SEMANTIC_CHUNK_CHARACTERS = 4000']), 'document semantic eligibility and chunk ceiling'],
+  [containsAll(files.documentContent, ["url.username = ''", "url.password = ''", "url.search = ''", "url.hash = ''"]), 'signed URL credential and token sanitization'],
+  [containsAll(files.documentContent, ['sanitizePersistedDocumentUri(loaded.sourceUri)', 'sanitizedMetadata.source_uri = sourceUri']), 'sanitized document identity and metadata'],
+  [containsAll(files.documentContent, ['persistGovernedDocumentContent', ".from('documents')", ".from('document_chunks')"]), 'document extraction persistence'],
+  [files.documentContent.includes('content_truncated_by_execution_ceiling'), 'document extraction truncation evidence'],
+  [appearsBefore(files.fileProfile, 'await persistGovernedDocumentContent', 'applySamplingPolicy(loaded.rows'), 'document persistence before profiling sampling'],
+  [containsAll(files.documentIndexer, ["objectType: 'DOCUMENT'", "objectType: 'DOCUMENT_CHUNK'"]), 'document and chunk semantic types'],
+  [containsAll(files.documentIndexer, [".from('documents')", ".from('document_chunks')"]), 'document semantic indexing sources'],
+  [containsAll(files.documentIndexer, ['pruneStaleDocumentEmbeddings', 'semantic_embeddings']), 'stale document embedding pruning'],
+  [containsAll(files.documentIndexer, ['UNCHANGED', 'indexed.unchanged']), 'unchanged document embedding reporting'],
+  [containsAll(files.reindexRoute, ['reindexProjectSemanticObjects', 'reindexProjectDocumentSemanticObjects', 'groups']), 'combined governance and document semantic reindex'],
+  [/SEMANTIC_PROJECT_CONCURRENCY\s*=\s*4/.test(files.globalSearch), 'bounded hybrid project concurrency'],
+  [containsAll(files.globalSearch, ['mapWithConcurrency', 'semanticSearchByEmbedding']), 'bounded semantic fan-out'],
+  [containsAll(files.globalSearch, ['QUALITY_INCIDENT', '/issues?issue=']), 'quality incident semantic navigation'],
+  [containsAll(files.globalSearch, ['DOCUMENT', 'DOCUMENT_CHUNK', '/documents?document=']), 'document semantic navigation'],
+  [containsAll(files.globalSearch, [".from('documents')", ".from('document_chunks')"]), 'document lexical fallback retrieval'],
+  [containsAll(files.globalSearch, ["'DOCUMENT'", "'DOCUMENT_CHUNK'", 'objectTypes:']), 'document hybrid retrieval'],
+  [containsAll(files.globalSearch, ['NOT_CONFIGURED', 'UNAVAILABLE']), 'lexical fallback when semantic provider is absent or unavailable'],
+  [containsAll(files.documentsPage, ['Governed Documents', 'document_chunks', 'focusedChunkId']), 'governed document viewer and chunk focus'],
+  [files.searchUi.includes('Hybrid semantic'), 'hybrid search user indicator'],
+  [containsAll(files.explorerPage, ['runId', 'columnId', 'findingId']), 'profile semantic deep-link parameters'],
+  [containsAll(files.explorer, ['initialColumnId', 'initialFindingId', 'focusedFindingId']), 'profile semantic deep-link focus'],
 ]
 
-for (const [source, pattern, label] of checks) {
-  if (!pattern.test(source)) throw new Error(`Semantic governance contract failed: ${label}`)
+for (const [passed, label] of checks) {
+  if (!passed) throw new Error(`Semantic governance contract failed: ${label}`)
   console.log(`PASS ${label}`)
 }
 
