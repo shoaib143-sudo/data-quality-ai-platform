@@ -16,13 +16,13 @@ export default async function WorkflowsPage(){
   ])
   for(const result of [projects,definitions,instances,outcomes,learning])if(result.error)throw new Error(result.error.message)
 
-  const remediationIssueIds=Array.from(new Set((outcomes.data??[]).flatMap((outcome)=>
+  const remediationIssueIds:string[]=Array.from(new Set<string>((outcomes.data??[]).flatMap((outcome)=>
     Array.isArray(outcome.remediation_issue_ids)
-      ? outcome.remediation_issue_ids.filter((id):id is string=>typeof id==='string'&&id.length>0)
+      ? outcome.remediation_issue_ids.filter((id:unknown):id is string=>typeof id==='string'&&id.length>0)
       : []
   )))
-  const issueChunks=Array.from({length:Math.ceil(remediationIssueIds.length/100)},(_,index)=>remediationIssueIds.slice(index*100,(index+1)*100))
-  const issueResults=await Promise.all(issueChunks.map((ids)=>
+  const issueChunks:string[][]=Array.from({length:Math.ceil(remediationIssueIds.length/100)},(_,index)=>remediationIssueIds.slice(index*100,(index+1)*100))
+  const issueResults=await Promise.all(issueChunks.map((ids:string[])=>
     supabase.schema('governance').from('issues')
       .select('id,project_id,profile_run_id,title,status,severity,resolution_summary,resolution_evidence,updated_at')
       .in('id',ids)
