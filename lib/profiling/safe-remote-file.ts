@@ -50,7 +50,7 @@ function allowedHost(hostname: string) {
     : host === entry)
 }
 
-async function assertSafeRemoteUrl(value: string) {
+export async function assertSafeRemoteFileUrl(value: string) {
   let url: URL
   try { url = new URL(value) } catch { throw new Error('Remote FILE source URL is invalid.') }
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Remote FILE source must use HTTP or HTTPS.')
@@ -76,7 +76,7 @@ export async function safeRemoteFileFetch(
   sourceUrl: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  let current = await assertSafeRemoteUrl(sourceUrl)
+  let current = await assertSafeRemoteFileUrl(sourceUrl)
 
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
     const response = await fetch(current, { ...init, redirect: 'manual' })
@@ -85,7 +85,7 @@ export async function safeRemoteFileFetch(
     await response.body?.cancel().catch(() => undefined)
     if (!location) throw new Error('Remote FILE source returned a redirect without a location.')
     if (redirect === MAX_REDIRECTS) throw new Error(`Remote FILE source exceeded ${MAX_REDIRECTS} redirects.`)
-    current = await assertSafeRemoteUrl(new URL(location, current).toString())
+    current = await assertSafeRemoteFileUrl(new URL(location, current).toString())
   }
 
   throw new Error('Remote FILE source redirect handling failed.')
