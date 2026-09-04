@@ -29,7 +29,7 @@ export async function collectProjectSemanticCandidates(projectId: string): Promi
     admin
       .schema('governance')
       .from('classification_policies')
-      .select('id,name,description,handling_requirements,required_controls,retention_days')
+      .select('id,name,description,required_controls,retention_days,encryption_required,masking_required,approval_required')
       .eq('project_id', projectId),
     admin
       .schema('governance')
@@ -83,10 +83,18 @@ export async function collectProjectSemanticCandidates(projectId: string): Promi
       content: compact([
         item.name,
         item.description,
-        item.handling_requirements ? `Handling requirements: ${JSON.stringify(item.handling_requirements)}` : null,
         item.required_controls ? `Required controls: ${JSON.stringify(item.required_controls)}` : null,
+        item.encryption_required ? 'Encryption required' : null,
+        item.masking_required ? 'Masking required' : null,
+        item.approval_required ? 'Approval required' : null,
       ]),
-      metadata: { name: item.name, retention_days: item.retention_days },
+      metadata: {
+        name: item.name,
+        retention_days: item.retention_days,
+        encryption_required: item.encryption_required,
+        masking_required: item.masking_required,
+        approval_required: item.approval_required,
+      },
     })),
     ...(transformations.data ?? []).map((item) => ({
       objectType: 'LINEAGE_TRANSFORMATION',
