@@ -11,6 +11,7 @@
     "verify:data-plane-operations": "node scripts/verify-data-plane-operations.mjs",
     "verify:agent-portfolio": "node scripts/verify-governed-agent-portfolio.mjs",
     "verify:agent-specialization": "node scripts/verify-agent-specialization.mjs",
+    "verify:agent-memory-learning": "node scripts/verify-agent-memory-learning.mjs",
     "verify:readiness": "node scripts/verify-production-readiness.mjs",
     "verify:provider-fallback": "node --experimental-strip-types scripts/test-provider-read-fallback.mjs",
     "verify:knowledge-model": "node scripts/verify-governance-knowledge-model.mjs",
