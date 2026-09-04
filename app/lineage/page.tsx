@@ -103,9 +103,9 @@ export default async function LineagePage(){
   const alertsByDataset=new Map<string,any[]>()
   for(const alert of alertsResult.data??[]){if(!alert.dataset_id)continue;const rows=alertsByDataset.get(alert.dataset_id)??[];rows.push(alert);alertsByDataset.set(alert.dataset_id,rows)}
 
-  function buildField(assetId:string,columnName:string):LineageField{
+  function buildField(assetId:string,columnName:string,datasetIdOverride:string|null=null,assetNameOverride:string|null=null):LineageField{
     const asset=assets.get(assetId)
-    const datasetId=asset?.dataset_id??null
+    const datasetId=datasetIdOverride??asset?.dataset_id??null
     const dataset=datasetId?datasets.get(datasetId):null
     const latestRun=datasetId?latestRunByDataset.get(datasetId):null
     const profileColumn=datasetId?profileColumnByDatasetField.get(`${datasetId}::${columnName.toLowerCase()}`):null
@@ -135,8 +135,8 @@ export default async function LineagePage(){
       key:fieldKey(datasetId,assetId,columnName),
       projectId:asset?.project_id??dataset?.project_id??null,
       datasetId,
-      datasetName:dataset?.name??asset?.name??'External asset',
-      assetName:asset?.namespace?`${asset.namespace} · ${asset.name}`:asset?.name??'External asset',
+      datasetName:dataset?.name??asset?.name??assetNameOverride??'External asset',
+      assetName:assetNameOverride??(asset?.namespace?`${asset.namespace} · ${asset.name}`:asset?.name??dataset?.name??'Profiled dataset'),
       columnName,
       dqScore,
       datasetDqScore,
@@ -173,6 +173,15 @@ export default async function LineagePage(){
     if(!fieldMap.has(targetKey))fieldMap.set(targetKey,buildField(mapping.target_asset_id,mapping.target_column))
     const transformation=transformations.get(mapping.transformation_id)
     fieldMappings.push({id:mapping.id,sourceFieldKey:sourceKey,targetFieldKey:targetKey,operation:mapping.operation??transformation?.operation??null,expression:mapping.expression??null,transformationName:transformation?.name??null,sourceSystem:transformation?.source_system??null,logicLanguage:transformation?.logic_language??null})
+  }
+
+  for(const column of profileColumns){
+    const datasetId=datasetByRun.get(column.profile_run_id)
+    if(!datasetId)continue
+    const columnName=String(column.column_name)
+    const syntheticAssetId=`profile:${datasetId}`
+    const key=fieldKey(datasetId,syntheticAssetId,columnName)
+    if(!fieldMap.has(key))fieldMap.set(key,buildField(syntheticAssetId,columnName,datasetId,datasets.get(datasetId)?.name??'Profiled dataset'))
   }
 
   const label=(type:string,id:string)=>{
