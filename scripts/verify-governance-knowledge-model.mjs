@@ -35,10 +35,74 @@ requireText('supabase/migrations/20260905051000_governance_knowledge_synthetic_b
   'human_approval_required',
 ])
 
+requireText('supabase/migrations/20260905052000_governance_knowledge_operational_domains.sql', [
+  'governance.regulatory_applicability',
+  'governance.accountability_assignments',
+  'governance.dataset_certifications',
+  'governance.remediation_knowledge',
+  'BUSINESS_OWNER',
+  'TECHNICAL_OWNER',
+  'DATA_STEWARD',
+])
+
+requireText('supabase/migrations/20260905053000_governance_knowledge_full_domain_documents.sql', [
+  'Business Glossary Operating Guide',
+  'GDPR Applicability Reference',
+  'Enterprise Data Classification Standard',
+  'Data Ownership and Stewardship Standard',
+  'Data Contract and SLA Standard',
+  'Dataset Certification Standard',
+  'Governance Issue and Incident Knowledge Playbook',
+  'Remediation Knowledge and Learning Guide',
+  'RESTRICTED',
+  'CONFIDENTIAL',
+])
+
+requireText('supabase/migrations/20260905054000_governance_knowledge_operational_records.sql', [
+  'CUSTOMER_EMAIL_VALIDITY',
+  'CUST_ID_COMPLETENESS',
+  'CUST_ID_UNIQUENESS',
+  'Customer Master Data Contract',
+  'SYN-CERT-CUSTOMER-MASTER',
+  'ROLE:CUSTOMER_DATA_OWNER',
+  'ROLE:CUSTOMER_DATA_STEWARD',
+])
+
+requireText('supabase/migrations/20260905055000_governance_knowledge_operational_history.sql', [
+  'Synthetic historical duplicate customer identifier issue',
+  'Synthetic customer freshness delay incident',
+  'REM-CUSTOMER-ID-DUPLICATES',
+  'REM-RELAX-COMPLETENESS-THRESHOLD',
+  "'WORKED'",
+  "'FAILED'",
+])
+
+requireText('supabase/migrations/20260905056000_governance_data_estate_knowledge_graph.sql', [
+  'REGULATION',
+  'DRIVES_POLICY',
+  'IMPLEMENTED_BY_CONTROL',
+  'GOVERNS_TERM',
+  'DEFINES_CDE',
+  'MAPPED_TO_DATASET',
+  'HAS_COLUMN',
+  'MONITORED_BY_RULE',
+  'ACCOUNTABLE_TO',
+  'STEWARDED_BY',
+  'traverse_knowledge_graph',
+  'p_max_depth',
+  'dedup',
+])
+
 requireText('lib/governance/semantic-knowledge-indexer.ts', [
   'KNOWLEDGE_DOCUMENT',
   'KNOWLEDGE_REQUIREMENT',
   'CRITICAL_DATA_ELEMENT',
+  'DATA_CONTRACT',
+  'CERTIFICATION',
+  'REMEDIATION_KNOWLEDGE',
+  'ACCOUNTABILITY_ASSIGNMENT',
+  'REGULATORY_APPLICABILITY',
+  'CLASSIFICATION',
   'reindexProjectKnowledgeSemanticObjects',
   'deleteSemanticObject',
 ])
@@ -59,10 +123,21 @@ requireText('app/api/governance/knowledge/search/route.ts', [
   'NOT_CONFIGURED',
 ])
 
+requireText('app/api/governance/knowledge/graph/route.ts', [
+  "authorizeProject(user.id, projectId, 'lineage.read')",
+  'traverse_knowledge_graph',
+  'anchorType',
+  'maxEdges',
+  'nodeCount',
+  'edgeCount',
+])
+
 requireText('docs/GOVERNANCE_KNOWLEDGE_BOOTSTRAP.md', [
   'synthetic_bootstrap=true',
-  'Public research basis',
-  'Customer 2nd Master',
+  'Operationalized knowledge domains',
+  'Data Estate Knowledge Graph',
+  'REGULATION:EXT-REG-GDPR',
+  'DQ_RULE:CUSTOMER_EMAIL_VALIDITY',
   'Human approval remains required',
 ])
 
