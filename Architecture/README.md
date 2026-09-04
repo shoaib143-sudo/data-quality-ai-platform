@@ -48,11 +48,17 @@ This folder is the source of truth for current architecture, architecture decisi
 
 ## Current implementation increment
 
-The latest approved architecture increment is documented in:
+The latest accepted implementation priority remains documented in:
 
 - `2026-08-29-ADR-001-initial-vertical-slice-and-investigation-agent.md`
 
-It narrows implementation priority to CSV and database tables, with PostgreSQL / Supabase first and Databricks next. It introduces the Data Profiling Investigation Agent as the first specialist agent and evolves the Monitor toward an issue centric AI Operations Center that includes business issue, impact, risk, recommendation, benefit, outcome, evidence, and verification.
+The latest long-term data-platform architecture recommendation is documented in:
+
+- `2026-09-04-ADR-002-polyglot-data-platform-and-knowledge-architecture.md`
+
+ADR-002 keeps PostgreSQL / Supabase authoritative and standardizes replaceable logical providers for knowledge search, graph traversal, analytics and object storage. OpenSearch, ClickHouse and any dedicated graph engine are introduced only when measured workload and scale justify them.
+
+ADR-001 narrows implementation priority to CSV and database tables, with PostgreSQL / Supabase first and Databricks next. It introduces the Data Profiling Investigation Agent as the first specialist agent and evolves the Monitor toward an issue centric AI Operations Center that includes business issue, impact, risk, recommendation, benefit, outcome, evidence, and verification.
 
 This is a prioritisation increment, not a rejection of the broader architecture. The long term architecture continues to include unstructured documents, logs, APIs, governance knowledge, lineage, policy evaluation, and progressive autonomy.
 
@@ -135,6 +141,9 @@ Policy / Risk Evaluation
 | Secrets | OpenBao | Later, if dedicated secrets management is required |
 | Eventing | NATS or Kafka compatible infrastructure | Later, when event scale requires it |
 | Search | PostgreSQL full text, then OpenSearch if needed | Start simple |
+| Historical analytics / telemetry | ClickHouse | Introduce when PostgreSQL historical/telemetry workloads justify a separate analytical plane |
+| Graph traversal | PostgreSQL indexed edges, optional AGE, distributed graph if benchmarked need | Keep GraphProvider replaceable; do not deploy a dedicated graph engine prematurely |
+| Object storage | Supabase Storage / S3-compatible storage | Originals, large artifacts, exports and cold archives |
 
 ## Infrastructure principle
 
@@ -143,6 +152,7 @@ Do not deploy the entire candidate stack at once. Introduce infrastructure only 
 ## Architecture change log
 
 - `2026-08-29-ADR-001-initial-vertical-slice-and-investigation-agent.md` accepted the first concrete architecture increment for CSV and database profiling, secure connection onboarding, the Data Profiling Investigation Agent, and the issue centric AI Operations Center.
+- `2026-09-04-ADR-002-polyglot-data-platform-and-knowledge-architecture.md` records the proposed polyglot data-plane architecture: PostgreSQL/Supabase as authoritative truth, OpenSearch as future knowledge/search projection, ClickHouse as future analytics/telemetry projection, a replaceable GraphProvider, object storage for originals/cold artifacts, and pgvector as embedded semantic capability. Physical infrastructure remains phased and workload-triggered.
 
 Significant architecture changes should be recorded as dated ADR style Markdown files in this folder. Each change should capture:
 
