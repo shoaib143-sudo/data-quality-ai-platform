@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 export type ProjectOption = { id: string; name: string }
 export type OrganizationOption = { id: string; name: string }
@@ -110,16 +111,28 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
   async function uploadDatasetFile(file: File | null) {
     if (!file) return
     if (projectMode !== 'existing' || !projectId) { setStatus('Select an existing project before uploading a dataset file.'); return }
-    setStatus(`Uploading ${file.name}…`)
+    setStatus(`Authorizing upload for ${file.name}…`)
     setUploadingFile(true)
     try {
-      const uploadForm = new FormData()
-      uploadForm.set('projectId', projectId)
-      uploadForm.set('file', file)
-      const uploadResponse = await fetch('/api/datasets/source/upload-file', { method: 'POST', body: uploadForm })
+      const uploadResponse = await fetch('/api/datasets/source/upload-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, fileName: file.name, size: file.size, contentType: file.type }),
+      })
       const uploadPayload = await uploadResponse.json()
-      if (!uploadResponse.ok) throw new Error(uploadPayload.error ?? 'Dataset file upload failed.')
+      if (!uploadResponse.ok) throw new Error(uploadPayload.error ?? 'Dataset file upload authorization failed.')
 
+      setStatus(`Uploading ${file.name} directly to private project storage…`)
+      const supabase = createClient()
+      const { error: storageError } = await supabase.storage.from(uploadPayload.bucket).uploadToSignedUrl(
+        uploadPayload.path,
+        uploadPayload.token,
+        file,
+        { contentType: file.type || 'application/octet-stream', cacheControl: '3600' },
+      )
+      if (storageError) throw new Error(`Dataset file upload failed: ${storageError.message}`)
+
+      setStatus(`Validating ${file.name} for profiling…`)
       const fileExtension = String(uploadPayload.file?.extension ?? '').toLowerCase()
       const sourceType = fileExtension === 'csv' ? 'CSV' : 'FILE'
       const sourceName = `${file.name} upload ${Date.now().toString(36)}`
@@ -199,7 +212,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
         <label className="space-y-2 text-sm"><span className="font-medium">Data source</span><select name="sourceId" value={sourceId} onChange={e => setSourceId(e.target.value)} disabled={busy || projectSources.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">{projectSources.length ? 'Select a source' : 'Connect a source first'}</option>{projectSources.map(s => <option key={s.id} value={s.id}>{s.name} · {s.sourceType}{String(s.status).toUpperCase() === 'CONFIGURED' ? ' · saved connection' : ''}</option>)}</select><span className="text-xs text-muted-foreground">Active sources and saved configured connections for the selected project are available. A configured JDBC connection is activated automatically when dataset registration validates its schema and table.</span></label>
         <div className="md:col-span-2 rounded-lg border p-4 text-sm">
           <div className="font-medium">Upload CSV or file</div>
-          <p className="mt-1 text-xs text-muted-foreground">The file is stored privately under this project, validated, and registered as the selected source automatically.</p>
+          <p className="mt-1 text-xs text-muted-foreground">The file uploads directly to private project storage, then is validated and registered as the selected source automatically.</p>
           <input type="file" accept=".csv,.json,.jsonl,.ndjson,.txt,.md,.xml,.yaml,.yml,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp" disabled={busy || projectMode !== 'existing' || !projectId} onChange={event => { const file = event.currentTarget.files?.[0] ?? null; event.currentTarget.value = ''; void uploadDatasetFile(file) }} className="mt-3 block w-full text-sm" />
           {uploadingFile && <p className="mt-2 text-xs text-muted-foreground">Uploading and validating file…</p>}
         </div>
