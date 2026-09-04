@@ -66,7 +66,8 @@ export async function POST(request: Request) {
       triggerType: text(body.triggerType) || 'USER_REQUEST',
       triggerId: text(body.triggerId) || null,
       direction,
-      maxDepth: integer(body.maxDepth, 5),
+      maxDepth: integer(body.maxDepth, 4),
+      maxEdges: integer(body.maxEdges, 400),
       rootRiskScore: number(body.rootRiskScore),
       actorUserId: user.id,
     })
