@@ -15,7 +15,12 @@ function object(value: unknown): Record<string, unknown> {
 }
 
 function number(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 }
 
 export async function POST(request: Request) {
@@ -23,12 +28,10 @@ export async function POST(request: Request) {
     const user = await requireUser()
     const body = await request.json()
     const workflowInstanceId = text(body.workflowInstanceId)
-    const verificationProfileRunId = text(body.verificationProfileRunId)
+    let verificationProfileRunId = text(body.verificationProfileRunId)
 
-    if (!workflowInstanceId || !verificationProfileRunId) {
-      return NextResponse.json({
-        error: 'workflowInstanceId and verificationProfileRunId are required.',
-      }, { status: 400 })
+    if (!workflowInstanceId) {
+      return NextResponse.json({ error: 'workflowInstanceId is required.' }, { status: 400 })
     }
 
     const admin = createAdminClient()
@@ -39,12 +42,8 @@ export async function POST(request: Request) {
       .eq('id', workflowInstanceId)
       .maybeSingle()
 
-    if (instanceError) {
-      throw new Error(`Unable to load workflow instance: ${instanceError.message}`)
-    }
-    if (!instance) {
-      return NextResponse.json({ error: 'Workflow instance not found.' }, { status: 404 })
-    }
+    if (instanceError) throw new Error(`Unable to load workflow instance: ${instanceError.message}`)
+    if (!instance) return NextResponse.json({ error: 'Workflow instance not found.' }, { status: 404 })
     if (instance.entity_type !== 'PROFILE_RUN' || instance.status !== 'APPROVED') {
       return NextResponse.json({ error: 'An approved profiling remediation workflow is required.' }, { status: 409 })
     }
@@ -62,21 +61,68 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Workflow is missing the source dataset identifier.' }, { status: 409 })
     }
 
+    const { data: sourceRun, error: sourceRunError } = await admin
+      .schema('profiling')
+      .from('profile_runs')
+      .select('id,completed_at')
+      .eq('id', sourceProfileRunId)
+      .maybeSingle()
+
+    if (sourceRunError) throw new Error(`Unable to load source profiling run: ${sourceRunError.message}`)
+    if (!sourceRun?.completed_at) {
+      return NextResponse.json({ error: 'Source profiling run is not complete.' }, { status: 409 })
+    }
+
+    if (!verificationProfileRunId) {
+      const { data: versions, error: versionsError } = await admin
+        .schema('catalog')
+        .from('dataset_versions')
+        .select('id')
+        .eq('dataset_id', sourceDatasetId)
+
+      if (versionsError) throw new Error(`Unable to resolve dataset versions: ${versionsError.message}`)
+      const versionIds = (versions ?? []).map((version) => version.id)
+      if (!versionIds.length) {
+        return NextResponse.json({ error: 'No dataset versions are available for verification.' }, { status: 409 })
+      }
+
+      const { data: latestRun, error: latestRunError } = await admin
+        .schema('profiling')
+        .from('profile_runs')
+        .select('id,dataset_version_id,status,completed_at')
+        .in('dataset_version_id', versionIds)
+        .eq('status', 'COMPLETED')
+        .neq('id', sourceProfileRunId)
+        .gt('completed_at', sourceRun.completed_at)
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (latestRunError) throw new Error(`Unable to locate verification profiling run: ${latestRunError.message}`)
+      if (!latestRun) {
+        return NextResponse.json({
+          error: 'No completed post-remediation profiling run is available yet.',
+          code: 'VERIFICATION_PROFILE_PENDING',
+          sourceProfileRunId,
+        }, { status: 409 })
+      }
+      verificationProfileRunId = latestRun.id
+    }
+
     const { data: verificationRun, error: verificationRunError } = await admin
       .schema('profiling')
       .from('profile_runs')
-      .select('id,dataset_version_id,status')
+      .select('id,dataset_version_id,status,completed_at')
       .eq('id', verificationProfileRunId)
       .maybeSingle()
 
-    if (verificationRunError) {
-      throw new Error(`Unable to load verification profiling run: ${verificationRunError.message}`)
-    }
-    if (!verificationRun) {
-      return NextResponse.json({ error: 'Verification profiling run not found.' }, { status: 404 })
-    }
+    if (verificationRunError) throw new Error(`Unable to load verification profiling run: ${verificationRunError.message}`)
+    if (!verificationRun) return NextResponse.json({ error: 'Verification profiling run not found.' }, { status: 404 })
     if (verificationRun.status !== 'COMPLETED') {
       return NextResponse.json({ error: 'Verification profiling run must be completed.' }, { status: 409 })
+    }
+    if (!verificationRun.completed_at || verificationRun.completed_at <= sourceRun.completed_at) {
+      return NextResponse.json({ error: 'Verification profiling run must complete after the source profiling run.' }, { status: 409 })
     }
 
     const { data: verificationVersion, error: verificationVersionError } = await admin
@@ -86,9 +132,7 @@ export async function POST(request: Request) {
       .eq('id', verificationRun.dataset_version_id)
       .maybeSingle()
 
-    if (verificationVersionError) {
-      throw new Error(`Unable to resolve verification dataset version: ${verificationVersionError.message}`)
-    }
+    if (verificationVersionError) throw new Error(`Unable to resolve verification dataset version: ${verificationVersionError.message}`)
     if (!verificationVersion || verificationVersion.dataset_id !== sourceDatasetId) {
       return NextResponse.json({
         error: 'Verification profiling run must belong to the same dataset as the approved remediation.',
@@ -126,29 +170,53 @@ export async function POST(request: Request) {
     const severeFindingsNotWorse = verificationHighSeverityFindings <= sourceHighSeverityFindings
     const allTrackedIssuesResolved = issues.length > 0 && unresolvedIssues.length === 0
     const verificationPassed = qualityNotWorse && severeFindingsNotWorse && allTrackedIssuesResolved
+    const qualityDelta = sourceScore === null ? null : verificationScore - sourceScore
+    const severeFindingsDelta = verificationHighSeverityFindings - sourceHighSeverityFindings
+
+    const checks = {
+      quality_not_worse: { passed: qualityNotWorse, before: sourceScore, after: verificationScore, delta: qualityDelta },
+      high_severity_findings_not_worse: { passed: severeFindingsNotWorse, before: sourceHighSeverityFindings, after: verificationHighSeverityFindings, delta: severeFindingsDelta },
+      tracked_remediation_issues_resolved: { passed: allTrackedIssuesResolved, total: issues.length, unresolved: unresolvedIssues.length },
+    }
 
     const result = {
       workflowInstanceId,
       sourceProfileRunId,
       verificationProfileRunId,
       verificationPassed,
-      checks: {
-        quality_not_worse: {
-          passed: qualityNotWorse,
-          before: sourceScore,
-          after: verificationScore,
+      checks,
+    }
+
+    const { data: outcome, error: outcomeError } = await admin
+      .schema('governance')
+      .from('profiling_remediation_outcomes')
+      .upsert({
+        project_id: instance.project_id,
+        workflow_instance_id: workflowInstanceId,
+        source_profile_run_id: sourceProfileRunId,
+        verification_profile_run_id: verificationProfileRunId,
+        status: verificationPassed ? 'VERIFIED' : 'VERIFICATION_FAILED',
+        source_quality_score: sourceScore,
+        verification_quality_score: verificationScore,
+        quality_score_delta: qualityDelta,
+        source_high_severity_findings: sourceHighSeverityFindings,
+        verification_high_severity_findings: verificationHighSeverityFindings,
+        high_severity_findings_delta: severeFindingsDelta,
+        remediation_issue_ids: issues.map((issue) => issue.id),
+        checks,
+        outcome: {
+          verification_passed: verificationPassed,
+          recommendation_effective: verificationPassed && (qualityDelta === null || qualityDelta >= 0) && severeFindingsDelta <= 0,
         },
-        high_severity_findings_not_worse: {
-          passed: severeFindingsNotWorse,
-          before: sourceHighSeverityFindings,
-          after: verificationHighSeverityFindings,
-        },
-        tracked_remediation_issues_resolved: {
-          passed: allTrackedIssuesResolved,
-          total: issues.length,
-          unresolved: unresolvedIssues.length,
-        },
-      },
+        created_by: user.id,
+        updated_at: new Date().toISOString(),
+        verified_at: new Date().toISOString(),
+      }, { onConflict: 'workflow_instance_id' })
+      .select('id,status,quality_score_delta,high_severity_findings_delta')
+      .single()
+
+    if (outcomeError || !outcome) {
+      throw new Error(`Unable to persist verification outcome: ${outcomeError?.message ?? 'unknown error'}`)
     }
 
     await writeGovernanceAudit({
@@ -157,10 +225,10 @@ export async function POST(request: Request) {
       eventType: verificationPassed ? 'PROFILING_REMEDIATION_VERIFIED' : 'PROFILING_REMEDIATION_VERIFICATION_FAILED',
       entityType: 'PROFILE_RUN',
       entityId: verificationProfileRunId,
-      metadata: result,
+      metadata: { ...result, remediation_outcome_id: outcome.id },
     })
 
-    return NextResponse.json(result, { status: verificationPassed ? 200 : 409 })
+    return NextResponse.json({ ...result, remediationOutcome: outcome }, { status: verificationPassed ? 200 : 409 })
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return NextResponse.json({ error: error.message }, { status: error.status })
