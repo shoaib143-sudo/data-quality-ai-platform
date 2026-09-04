@@ -131,11 +131,24 @@ function normalizeDiscoveryConfig(input: { jdbcUrl: string; credentialRef: strin
   return { jdbcUrl, credentialRef, schema, catalog }
 }
 
+function bridgeBody(body: Record<string, unknown>) {
+  const normalized: Record<string, unknown> = { ...body }
+  if ('jdbc_url' in normalized) { normalized.jdbcUrl = normalized.jdbc_url; delete normalized.jdbc_url }
+  if ('credential_ref' in normalized) { normalized.credentialRef = normalized.credential_ref; delete normalized.credential_ref }
+  return normalized
+}
+
 async function bridgeRequest<T>(path: string, body: Record<string, unknown>) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), connectorTimeoutMs())
   try {
-    const response = await fetch(`${bridgeBaseUrl()}${path}`, { method: 'POST', headers: bridgeHeaders(), body: JSON.stringify(body), cache: 'no-store', signal: controller.signal })
+    const response = await fetch(`${bridgeBaseUrl()}${path}`, {
+      method: 'POST',
+      headers: bridgeHeaders(),
+      body: JSON.stringify(bridgeBody(body)),
+      cache: 'no-store',
+      signal: controller.signal,
+    })
     const payload = await response.json().catch(() => null)
     if (!response.ok) {
       const message = payload && typeof payload.error === 'string' ? payload.error : `JDBC bridge returned HTTP ${response.status}.`
