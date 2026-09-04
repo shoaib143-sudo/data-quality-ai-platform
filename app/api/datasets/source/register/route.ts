@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
+import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 import { validateJdbcConnection } from '@/lib/connectors/jdbc'
 
@@ -8,6 +9,15 @@ function text(value: unknown) { return typeof value === 'string' ? value.trim() 
 function serverCredentialRef(kind: string) { const normalized = kind.toLowerCase().replace(/[^a-z0-9]+/g, '_').toUpperCase(); return process.env[`JDBC_${normalized}_CREDENTIAL_REF`]?.trim() || process.env.JDBC_CREDENTIAL_REF?.trim() || '' }
 function uiCredentialRef(value: string, projectId: string) { return /^DGP_[A-Za-z0-9_]+$/.test(value) && value.startsWith(`DGP_${projectId.replace(/[^A-Za-z0-9]/g, '_')}_`) }
 function jdbcTableParts(sourceIdentifier: string, defaultSchema = 'public') { const parts = sourceIdentifier.trim().replace(/^jdbc-table:\/\//i, '').split('.').map(p => p.trim()).filter(Boolean); if (parts.length >= 2) return { schema: parts.at(-2)!, table: parts.at(-1)! }; if (parts.length === 1) return { schema: defaultSchema, table: parts[0] }; return null }
+function fileConnectionMetadata(sourceUri: string) {
+  if (/^https?:\/\//i.test(sourceUri)) return { url: sourceUri }
+  const normalized = sourceUri.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '')
+  const parts = normalized.split('/')
+  if (parts.length < 2 || parts.some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('FILE/CSV source URI must use bucket/path syntax with a normalized object path.')
+  }
+  return { bucket: parts[0], path: parts.slice(1).join('/') }
+}
 
 type DatasetVersionForReconciliation = { id: string; dataset_id: string; version_number: number; metadata: unknown }
 
@@ -42,8 +52,9 @@ export async function POST(request: Request) {
     if (!projectId || !name || !sourceUri) return NextResponse.json({ error: 'projectId, name, and source URI are required.' }, { status: 400 })
     if (!['JDBC', 'CSV', 'FILE'].includes(sourceType)) return NextResponse.json({ error: 'Unsupported source type.' }, { status: 400 })
     if (sourceType === 'JDBC' && !jdbcUrl) return NextResponse.json({ error: 'JDBC connection string is required.' }, { status: 400 })
-    const admin = createAdminClient(); const { data: project } = await admin.schema('app').from('projects').select('id, organization_id').eq('id', projectId).maybeSingle(); if (!project) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
-    const { data: membership } = await admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle(); if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Your role cannot register data sources.' }, { status: 403 })
+
+    await authorizeProject(user.id, projectId, 'catalog.read')
+    const admin = createAdminClient()
 
     const credentialRef = sourceType === 'JDBC' ? (requestedCredentialRef && uiCredentialRef(requestedCredentialRef, projectId) ? requestedCredentialRef : serverCredentialRef(connectionKind)) : ''
     if (sourceType === 'JDBC' && !credentialRef) return NextResponse.json({ error: 'Database credentials are required. Enter them in the connection form and test the connection.' }, { status: 400 })
@@ -59,10 +70,13 @@ export async function POST(request: Request) {
     if (sourceType === 'JDBC') {
       const validation = await validateJdbcConnection({ jdbcUrl, credentialRef, schema, table }); if (!validation.valid) return NextResponse.json({ error: 'JDBC source validation failed.', validation }, { status: 422 }); connectionMetadata = { jdbc_url: jdbcUrl, credential_ref: credentialRef, schema, table, connection_kind: connectionKind }
     } else {
-      const metadata: Record<string, unknown> = /^https?:\/\//i.test(sourceUri) ? { url: sourceUri } : { bucket: sourceUri.split('/')[0], path: sourceUri.split('/').slice(1).join('/') }; const validation = await validateDataSourceForProfiling(admin, { id: crypto.randomUUID(), project_id: projectId, source_type: sourceType, connection_metadata: metadata }, sourceUri); if (!validation.valid) return NextResponse.json({ error: 'CSV source validation failed.', validation }, { status: 422 }); connectionMetadata = metadata
+      const metadata: Record<string, unknown> = fileConnectionMetadata(sourceUri); const validation = await validateDataSourceForProfiling(admin, { id: crypto.randomUUID(), project_id: projectId, source_type: sourceType, connection_metadata: metadata }, sourceUri); if (!validation.valid) return NextResponse.json({ error: 'CSV/FILE source validation failed.', validation }, { status: 422 }); connectionMetadata = metadata
     }
     const { data: existing } = await admin.schema('catalog').from('data_sources').select('id, status').eq('project_id', projectId).eq('name', name).maybeSingle(); if (existing && String(existing.status) !== 'CONFIGURED') return NextResponse.json({ error: 'A data source with this name already exists in the project.' }, { status: 409 })
     if (existing) { const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: sourceType, connection_metadata: connectionMetadata, status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single(); if (error || !source) return NextResponse.json({ error: `Unable to activate source: ${error?.message ?? 'unknown error'}` }, { status: 500 }); await reconcileSourceBoundDatasets(admin, source); return NextResponse.json({ source, profiling_ready: true }) }
     const { data: source, error } = await admin.schema('catalog').from('data_sources').insert({ project_id: projectId, name, source_type: sourceType, connection_metadata: connectionMetadata, status: 'ACTIVE' }).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single(); if (error || !source) return NextResponse.json({ error: `Unable to register source: ${error?.message ?? 'unknown error'}` }, { status: 500 }); await reconcileSourceBoundDatasets(admin, source); return NextResponse.json({ source, profiling_ready: true })
-  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Source registration failed.' }, { status: 500 }) }
+  } catch (error) {
+    if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Source registration failed.' }, { status: 500 })
+  }
 }
