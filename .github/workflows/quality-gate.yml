@@ -30,6 +30,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify data plane provider configuration
+        run: pnpm run verify:data-plane-config
       - name: Verify governance architecture contracts
         run: pnpm run verify:governance
       - name: Verify semantic governance contracts
