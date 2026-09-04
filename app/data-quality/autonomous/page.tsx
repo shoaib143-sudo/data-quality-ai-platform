@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BrainCircuit, CheckCircle2, CircleAlert, ExternalLink, ShieldCheck, Sparkles } from 'lucide-react'
+import { BrainCircuit, CheckCircle2, CircleAlert, ExternalLink, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -43,6 +43,7 @@ type Learning = {
   priority: string | null
   status: string
   effective: boolean | null
+  evidence: Record<string, unknown>
   updated_at: string
 }
 type Dataset = { id: string; name: string }
@@ -56,6 +57,7 @@ function tone(value: string) {
 }
 function text(value: unknown) { return typeof value === 'string' ? value : '' }
 function number(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0 }
+function nullableNumber(value: unknown) { const parsed=Number(value); return Number.isFinite(parsed)?parsed:null }
 
 export default async function AutonomousDataQualityPage() {
   await requireUser()
@@ -63,7 +65,7 @@ export default async function AutonomousDataQualityPage() {
   const [investigationsResult, outcomesResult, learningResult] = await Promise.all([
     supabase.schema('governance').from('data_quality_investigations').select('*').order('updated_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('data_quality_remediation_outcomes').select('*').order('updated_at', { ascending: false }).limit(100),
-    supabase.schema('governance').from('data_quality_recommendation_learning').select('id,workflow_instance_id,recommendation_action,priority,status,effective,updated_at').order('updated_at', { ascending: false }).limit(300),
+    supabase.schema('governance').from('data_quality_recommendation_learning').select('id,workflow_instance_id,recommendation_action,priority,status,effective,evidence,updated_at').order('updated_at', { ascending: false }).limit(500),
   ])
   const firstError = [investigationsResult.error, outcomesResult.error, learningResult.error].find(Boolean)
   if (firstError) throw new Error(firstError.message)
@@ -84,6 +86,12 @@ export default async function AutonomousDataQualityPage() {
   const pendingApproval = investigations.filter((row) => row.status === 'APPROVAL_REQUIRED').length
   const verified = outcomes.filter((row) => row.status === 'VERIFIED').length
 
+  const actionMap=new Map<string,{action:string;attempts:number;effective:number;ineffective:number;pending:number;sourceFailed:number;verificationFailed:number;measured:number}>()
+  for(const row of learning){const action=row.recommendation_action||'unknown_action';const entry=actionMap.get(action)??{action,attempts:0,effective:0,ineffective:0,pending:0,sourceFailed:0,verificationFailed:0,measured:0};entry.attempts+=1;if(row.effective===true)entry.effective+=1;else if(row.effective===false||row.status==='INEFFECTIVE')entry.ineffective+=1;else entry.pending+=1;const sourceFailed=nullableNumber(row.evidence?.source_failed_rule_count);const verificationFailed=nullableNumber(row.evidence?.verification_failed_rule_count);if(sourceFailed!==null&&verificationFailed!==null){entry.sourceFailed+=sourceFailed;entry.verificationFailed+=verificationFailed;entry.measured+=1}actionMap.set(action,entry)}
+  const actionStats=[...actionMap.values()].map(entry=>{const decided=entry.effective+entry.ineffective;return{...entry,effectivenessRate:decided?entry.effective/decided:null,averageFailureReduction:entry.measured?(entry.sourceFailed-entry.verificationFailed)/entry.measured:null}}).sort((a,b)=>(b.effectivenessRate??-1)-(a.effectivenessRate??-1)||b.attempts-a.attempts).slice(0,12)
+  const decidedLearning=effectiveLearning+ineffectiveLearning
+  const overallEffectiveness=decidedLearning?effectiveLearning/decidedLearning:null
+
   return <main className="min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm">
@@ -94,14 +102,20 @@ export default async function AutonomousDataQualityPage() {
       <section className="mt-6 rounded-3xl border border-violet-100 bg-white p-7 shadow-sm">
         <div className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700"><BrainCircuit className="h-4 w-4"/> Autonomous quality operations</div>
         <h1 className="mt-4 text-3xl font-black">Execute → Investigate → Recommend → Approve → Remediate → Verify → Learn</h1>
-        <p className="mt-3 max-w-4xl text-slate-600">Every successful Data Quality execution is investigated deterministically. High-risk remediation is approval-gated, production mutation remains blocked, and fresh rule execution verifies whether tracked remediation was effective.</p>
+        <p className="mt-3 max-w-4xl text-slate-600">Every successful Data Quality execution is investigated deterministically. High-risk remediation is approval-gated, production mutation remains blocked, fresh profiling plus fresh rule execution verify outcomes, and recommendation effectiveness is measured from verified evidence.</p>
       </section>
 
-      <section className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-2xl border bg-white p-5"><div className="flex items-center gap-2 text-sm font-bold text-amber-700"><ShieldCheck className="h-4 w-4"/>Pending approval</div><p className="mt-2 text-3xl font-black">{pendingApproval}</p></div>
         <div className="rounded-2xl border bg-white p-5"><div className="flex items-center gap-2 text-sm font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4"/>Verified outcomes</div><p className="mt-2 text-3xl font-black">{verified}</p></div>
         <div className="rounded-2xl border bg-white p-5"><div className="flex items-center gap-2 text-sm font-bold text-blue-700"><Sparkles className="h-4 w-4"/>Effective recommendations</div><p className="mt-2 text-3xl font-black">{effectiveLearning}</p></div>
         <div className="rounded-2xl border bg-white p-5"><div className="flex items-center gap-2 text-sm font-bold text-red-700"><CircleAlert className="h-4 w-4"/>Ineffective signals</div><p className="mt-2 text-3xl font-black">{ineffectiveLearning}</p></div>
+        <div className="rounded-2xl border bg-white p-5"><div className="flex items-center gap-2 text-sm font-bold text-violet-700"><TrendingUp className="h-4 w-4"/>Effectiveness rate</div><p className="mt-2 text-3xl font-black">{overallEffectiveness===null?'n/a':`${Math.round(overallEffectiveness*100)}%`}</p></div>
+      </section>
+
+      <section className="mt-6 rounded-3xl border bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-violet-600">Recommendation learning</p><h2 className="mt-1 text-xl font-black">Effectiveness by governed action</h2></div><p className="text-xs text-slate-500">Measured from persisted before/after Data Quality verification evidence.</p></div>
+        {actionStats.length?<div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="px-3 py-3">Action</th><th className="px-3 py-3">Attempts</th><th className="px-3 py-3">Effective</th><th className="px-3 py-3">Ineffective</th><th className="px-3 py-3">Rate</th><th className="px-3 py-3">Avg failed-control reduction</th></tr></thead><tbody>{actionStats.map(stat=><tr key={stat.action} className="border-b last:border-0"><td className="px-3 py-3 font-mono font-semibold">{stat.action}</td><td className="px-3 py-3">{stat.attempts}</td><td className="px-3 py-3 text-emerald-700">{stat.effective}</td><td className="px-3 py-3 text-red-700">{stat.ineffective}</td><td className="px-3 py-3 font-bold">{stat.effectivenessRate===null?'pending':`${Math.round(stat.effectivenessRate*100)}%`}</td><td className="px-3 py-3">{stat.averageFailureReduction===null?'n/a':stat.averageFailureReduction.toFixed(1)}</td></tr>)}</tbody></table></div>:<p className="mt-4 rounded-2xl border border-dashed p-6 text-center text-sm text-slate-500">Recommendation effectiveness will appear after governed remediation is verified.</p>}
       </section>
 
       <section className="mt-6 space-y-4">
