@@ -1,7 +1,46 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { enqueueDurableJob, getProjectCapacityPolicy } from '@/lib/orchestration/queue'
+import { enqueueDurableJob } from '@/lib/orchestration/queue'
 
 const severityRank:Record<string,number>={INFO:1,LOW:2,MEDIUM:3,HIGH:4,CRITICAL:5}
+
+type AlertRecord={
+  id:string;severity:string;title:string;description:string;category:string;dataset_id:string;profile_run_id:string|null;status:string;evidence:unknown;last_observed_at:string
+}
+
+function emailProvider(){
+  const configured=process.env.EMAIL_PROVIDER?.trim().toUpperCase()
+  if(configured==='BREVO'||configured==='RESEND')return configured
+  if(process.env.BREVO_API_KEY?.trim())return 'BREVO'
+  if(process.env.RESEND_API_KEY?.trim())return 'RESEND'
+  return 'BREVO'
+}
+
+async function sendEmail(target:string,alert:AlertRecord){
+  const fromEmail=process.env.GOVERNANCE_ALERT_FROM_EMAIL?.trim()
+  const fromName=process.env.GOVERNANCE_ALERT_FROM_NAME?.trim()||'Data Governance PowerHouse'
+  if(!fromEmail)throw new Error('Email notifications require GOVERNANCE_ALERT_FROM_EMAIL.')
+  const subject=`[${alert.severity}] ${alert.title}`
+  const body=`${alert.description}\n\nCategory: ${alert.category}\nDataset: ${alert.dataset_id}\nAlert: ${alert.id}`
+  const provider=emailProvider()
+
+  if(provider==='BREVO'){
+    const apiKey=process.env.BREVO_API_KEY?.trim()
+    if(!apiKey)throw new Error('Brevo email notifications require BREVO_API_KEY. The Brevo free plan can be used for initial deployment.')
+    return fetch('https://api.brevo.com/v3/smtp/email',{
+      method:'POST',
+      headers:{'api-key':apiKey,'Content-Type':'application/json','Accept':'application/json'},
+      body:JSON.stringify({sender:{name:fromName,email:fromEmail},to:[{email:target}],subject,textContent:body}),
+    })
+  }
+
+  const apiKey=process.env.RESEND_API_KEY?.trim()
+  if(!apiKey)throw new Error('Resend email notifications require RESEND_API_KEY.')
+  return fetch('https://api.resend.com/emails',{
+    method:'POST',
+    headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},
+    body:JSON.stringify({from:`${fromName} <${fromEmail}>`,to:[target],subject,text:body}),
+  })
+}
 
 export async function queueAlertNotifications(alertId:string){
   const admin=createAdminClient()
@@ -9,13 +48,6 @@ export async function queueAlertNotifications(alertId:string){
   if(alertError||!alert)throw new Error(`Unable to load observability alert for notification: ${alertError?.message??'not found'}`)
   const {data:routes,error:routesError}=await admin.schema('profiling').from('notification_routes').select('*,notification_channels(*)').eq('project_id',alert.project_id).eq('enabled',true)
   if(routesError)throw new Error(`Unable to load notification routes: ${routesError.message}`)
-
-  const capacity=await getProjectCapacityPolicy(alert.project_id)
-  const oneHourAgo=new Date(Date.now()-60*60_000).toISOString()
-  const {count:recentNotificationJobs,error:quotaError}=await admin.schema('orchestration').from('job_queue').select('id',{count:'exact',head:true})
-    .eq('project_id',alert.project_id).eq('job_type','NOTIFICATION').gte('created_at',oneHourAgo)
-  if(quotaError)throw new Error(`Unable to evaluate notification capacity: ${quotaError.message}`)
-  let remainingCapacity=Math.max(0,capacity.maxNotificationsPerHour-(recentNotificationJobs??0))
 
   const queued:Array<Record<string,unknown>>=[]
   for(const route of routes??[]){
@@ -25,23 +57,17 @@ export async function queueAlertNotifications(alertId:string){
     if(route.alert_category&&route.alert_category!==alert.category)continue
     if((severityRank[String(alert.severity).toUpperCase()]??0)<(severityRank[String(route.min_severity).toUpperCase()]??3))continue
 
-    if(remainingCapacity<=0){
-      await admin.schema('profiling').from('notification_deliveries').insert({
-        alert_id:alert.id,route_id:route.id,channel_id:channel.id,status:'SUPPRESSED',
-        error_message:`Suppressed because the project reached its ${capacity.maxNotificationsPerHour} notification jobs per hour capacity.`,
-      })
-      queued.push({routeId:route.id,channelId:channel.id,status:'SUPPRESSED',reason:'PROJECT_NOTIFICATION_CAPACITY'})
+    const suppressionMinutes=Number(channel.suppression_minutes??60)
+    const since=new Date(Date.now()-suppressionMinutes*60_000).toISOString()
+    const {count,error:suppressionError}=await admin.schema('profiling').from('notification_deliveries').select('id',{count:'exact',head:true})
+      .eq('channel_id',channel.id).eq('alert_id',alert.id).eq('status','SENT').gte('created_at',since)
+    if(suppressionError)throw new Error(`Unable to evaluate notification suppression: ${suppressionError.message}`)
+    if((count??0)>0){
+      await admin.schema('profiling').from('notification_deliveries').insert({alert_id:alert.id,route_id:route.id,channel_id:channel.id,status:'SUPPRESSED',error_message:`Suppressed duplicate delivery for the same alert within the ${suppressionMinutes} minute channel window.`})
+      queued.push({routeId:route.id,channelId:channel.id,status:'SUPPRESSED',reason:'DUPLICATE_ALERT_WINDOW'})
       continue
     }
 
-    const suppressionMinutes=Number(channel.suppression_minutes??60)
-    const since=new Date(Date.now()-suppressionMinutes*60_000).toISOString()
-    const {count}=await admin.schema('profiling').from('notification_deliveries').select('id',{count:'exact',head:true}).eq('channel_id',channel.id).eq('status','SENT').gte('created_at',since)
-    if((count??0)>0){
-      await admin.schema('profiling').from('notification_deliveries').insert({alert_id:alert.id,route_id:route.id,channel_id:channel.id,status:'SUPPRESSED',error_message:`Suppressed by ${suppressionMinutes} minute channel window.`})
-      queued.push({routeId:route.id,channelId:channel.id,status:'SUPPRESSED'})
-      continue
-    }
     const {data:delivery,error:deliveryError}=await admin.schema('profiling').from('notification_deliveries').insert({alert_id:alert.id,route_id:route.id,channel_id:channel.id,status:'PENDING'}).select('id').single()
     if(deliveryError||!delivery)throw new Error(`Unable to create notification delivery: ${deliveryError?.message??'unknown error'}`)
     const delay=Number(route.escalation_after_minutes??0)
@@ -56,7 +82,6 @@ export async function queueAlertNotifications(alertId:string){
       maxAttempts:3,
       priority:50,
     })
-    remainingCapacity-=1
     queued.push({routeId:route.id,channelId:channel.id,deliveryId:delivery.id,jobId:job.id,availableAt})
   }
   return queued
@@ -86,10 +111,7 @@ export async function deliverNotificationJob(deliveryId:string){
       : {event:'governance.alert',alert:{id:alert.id,category:alert.category,severity:alert.severity,title:alert.title,description:alert.description,status:alert.status,dataset_id:alert.dataset_id,profile_run_id:alert.profile_run_id,evidence:alert.evidence,last_observed_at:alert.last_observed_at}}
     response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
   }else if(type==='EMAIL'){
-    const apiKey=process.env.RESEND_API_KEY
-    const from=process.env.GOVERNANCE_ALERT_FROM_EMAIL
-    if(!apiKey||!from)throw new Error('Email notifications require RESEND_API_KEY and GOVERNANCE_ALERT_FROM_EMAIL.')
-    response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({from,to:[channel.target],subject:`[${alert.severity}] ${alert.title}`,text:`${alert.description}\n\nCategory: ${alert.category}\nDataset: ${alert.dataset_id}\nAlert: ${alert.id}`})})
+    response=await sendEmail(String(channel.target),alert as AlertRecord)
   }else throw new Error(`Unsupported notification channel type: ${type}`)
 
   const now=new Date().toISOString()
@@ -99,5 +121,5 @@ export async function deliverNotificationJob(deliveryId:string){
     throw new Error(`${type} notification returned HTTP ${response.status}: ${detail}`)
   }
   await admin.schema('profiling').from('notification_deliveries').update({status:'SENT',attempt:Number(delivery.attempt??0)+1,response_code:response.status,error_message:null,delivered_at:now}).eq('id',deliveryId)
-  return {deliveryId,status:'SENT',channelType:type,responseCode:response.status}
+  return {deliveryId,status:'SENT',channelType:type,responseCode:response.status,emailProvider:type==='EMAIL'?emailProvider():null}
 }
