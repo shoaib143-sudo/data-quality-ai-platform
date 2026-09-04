@@ -50,6 +50,22 @@ requireText('lib/governance/semantic-job-worker.ts', [
   'knowledge.pruned',
 ])
 
+requireText('app/api/governance/knowledge/search/route.ts', [
+  "authorizeProject(user.id, projectId, 'glossary.read')",
+  'search_governance_knowledge_lexical',
+  'KNOWLEDGE_DOCUMENT',
+  'KNOWLEDGE_REQUIREMENT',
+  'CRITICAL_DATA_ELEMENT',
+  'NOT_CONFIGURED',
+])
+
+requireText('docs/GOVERNANCE_KNOWLEDGE_BOOTSTRAP.md', [
+  'synthetic_bootstrap=true',
+  'Public research basis',
+  'Customer 2nd Master',
+  'Human approval remains required',
+])
+
 requireText('docs/AI_GOVERNANCE_INTELLIGENCE_ROADMAP.md', [
   'Governance Knowledge',
   'Critical Data Element',
