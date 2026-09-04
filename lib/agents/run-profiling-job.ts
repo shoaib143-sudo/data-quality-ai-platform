@@ -18,6 +18,61 @@ async function safeUpdate(query: PromiseLike<{ error: { message: string } | null
   }
 }
 
+async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, input: {
+  agentRunId: string
+  stepName: string
+  stepOrder: number
+  stepInput: Record<string, unknown>
+  startedAt: string
+}) {
+  const { data: existing, error: existingError } = await admin
+    .schema('agent')
+    .from('agent_run_steps')
+    .select('id,attempt')
+    .eq('agent_run_id', input.agentRunId)
+    .eq('step_order', input.stepOrder)
+    .maybeSingle()
+  if (existingError) throw new Error(`Unable to resolve profiling step ${input.stepOrder}: ${existingError.message}`)
+
+  if (existing) {
+    const { data, error } = await admin
+      .schema('agent')
+      .from('agent_run_steps')
+      .update({
+        step_name: input.stepName,
+        status: 'RUNNING',
+        attempt: Number(existing.attempt ?? 1) + 1,
+        input: input.stepInput,
+        output: null,
+        started_at: input.startedAt,
+        completed_at: null,
+        error_code: null,
+        error_message: null,
+      })
+      .eq('id', existing.id)
+      .select('id')
+      .single()
+    if (error || !data) throw new Error(`Unable to restart profiling step ${input.stepOrder}: ${error?.message ?? 'unknown error'}`)
+    return data
+  }
+
+  const { data, error } = await admin
+    .schema('agent')
+    .from('agent_run_steps')
+    .insert({
+      agent_run_id: input.agentRunId,
+      step_name: input.stepName,
+      step_order: input.stepOrder,
+      status: 'RUNNING',
+      input: input.stepInput,
+      started_at: input.startedAt,
+    })
+    .select('id')
+    .single()
+  if (error || !data) throw new Error(`Unable to create profiling step ${input.stepOrder}: ${error?.message ?? 'unknown error'}`)
+  return data
+}
+
 async function isRunCancelled(runId: string) {
   const admin = createAdminClient()
   const { data } = await admin.schema('agent').from('agent_runs').select('status').eq('id', runId).maybeSingle()
@@ -79,15 +134,13 @@ export async function executePreparedProfilingJob(input: {
     const metricTool = toolMap.get('execute_metrics')
     const investigationTool = toolMap.get('investigate_profile')
 
-    const { data: profileStep, error: profileStepError } = await admin.schema('agent').from('agent_run_steps').insert({
-      agent_run_id: agentRunId,
-      step_name: profileTool.tool_key,
-      step_order: 1,
-      status: 'RUNNING',
-      input: { ...requestInput, profilingRunId, tool_definition_id: profileTool.id, tool_version: profileTool.version },
-      started_at: startedAt,
-    }).select('id').single()
-    if (profileStepError || !profileStep) throw new Error(`Unable to create profiling step: ${profileStepError?.message ?? 'unknown error'}`)
+    const profileStep = await startOrRetryStep(admin, {
+      agentRunId,
+      stepName: profileTool.tool_key,
+      stepOrder: 1,
+      stepInput: { ...requestInput, profilingRunId, tool_definition_id: profileTool.id, tool_version: profileTool.version },
+      startedAt,
+    })
     stepId = profileStep.id
     const activeProfileStepId = profileStep.id
 
@@ -96,15 +149,14 @@ export async function executePreparedProfilingJob(input: {
     if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeProfileStepId); return }
     await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).eq('status', 'RUNNING'), 'complete profile step')
 
-    const { data: metricStep, error: metricStepError } = await admin.schema('agent').from('agent_run_steps').insert({
-      agent_run_id: agentRunId,
-      step_name: metricTool.tool_key,
-      step_order: 2,
-      status: 'RUNNING',
-      input: { ...requestInput, profilingRunId, tool_definition_id: metricTool.id, tool_version: metricTool.version },
-      started_at: new Date().toISOString(),
-    }).select('id').single()
-    if (metricStepError || !metricStep) throw new Error(`Unable to create metric execution step: ${metricStepError?.message ?? 'unknown error'}`)
+    const metricStartedAt = new Date().toISOString()
+    const metricStep = await startOrRetryStep(admin, {
+      agentRunId,
+      stepName: metricTool.tool_key,
+      stepOrder: 2,
+      stepInput: { ...requestInput, profilingRunId, tool_definition_id: metricTool.id, tool_version: metricTool.version },
+      startedAt: metricStartedAt,
+    })
     stepId = metricStep.id
     const activeMetricStepId = metricStep.id
 
@@ -112,15 +164,14 @@ export async function executePreparedProfilingJob(input: {
     if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeMetricStepId); return }
     await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', activeMetricStepId).eq('status', 'RUNNING'), 'complete metric step')
 
-    const { data: investigationStep, error: investigationStepError } = await admin.schema('agent').from('agent_run_steps').insert({
-      agent_run_id: agentRunId,
-      step_name: investigationTool.tool_key,
-      step_order: 3,
-      status: 'RUNNING',
-      input: { ...requestInput, profilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version },
-      started_at: new Date().toISOString(),
-    }).select('id').single()
-    if (investigationStepError || !investigationStep) throw new Error(`Unable to create profiling investigation step: ${investigationStepError?.message ?? 'unknown error'}`)
+    const investigationStartedAt = new Date().toISOString()
+    const investigationStep = await startOrRetryStep(admin, {
+      agentRunId,
+      stepName: investigationTool.tool_key,
+      stepOrder: 3,
+      stepInput: { ...requestInput, profilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version },
+      startedAt: investigationStartedAt,
+    })
     stepId = investigationStep.id
     const activeInvestigationStepId = investigationStep.id
 
