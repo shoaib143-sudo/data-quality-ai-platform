@@ -65,6 +65,16 @@ jobs:
         run: pnpm run verify:database
       - name: Production build
         run: pnpm run build
+      - name: Production HTTP SLO smoke benchmark
+        env:
+          BENCHMARK_REQUESTS: '25'
+          BENCHMARK_CONCURRENCY: '5'
+          BENCHMARK_PATH: '/login'
+          BENCHMARK_MAX_P95_MS: '2500'
+          BENCHMARK_MAX_P99_MS: '4000'
+          BENCHMARK_MAX_ERROR_RATE: '0'
+          BENCHMARK_MIN_SUCCESSFUL_REQUESTS: '25'
+        run: pnpm run benchmark:production
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
