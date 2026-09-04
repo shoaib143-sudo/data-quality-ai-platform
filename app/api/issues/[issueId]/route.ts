@@ -4,7 +4,7 @@ import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { scheduleRemediationVerificationFromIssue } from '@/lib/profiling/remediation-reprofile'
-import { scheduleDataQualityVerificationFromIssue } from '@/lib/data-quality/remediation-verification'
+import { scheduleFreshDataQualityVerificationFromIssue } from '@/lib/data-quality/remediation-reprofile'
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ issueId: string }> }) {
   try {
@@ -105,14 +105,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
     let verificationScheduling: Record<string, unknown> | null = null
     if (['RESOLVED', 'CLOSED'].includes(status)) {
       try {
-        const dataQualityScheduling = await scheduleDataQualityVerificationFromIssue({
+        const dataQualityScheduling = await scheduleFreshDataQualityVerificationFromIssue({
           issueId,
           projectId: issue.project_id,
           userId: user.id,
         })
 
         if (dataQualityScheduling.status !== 'NOT_DATA_QUALITY_REMEDIATION') {
-          verificationScheduling = { ...dataQualityScheduling, mode: 'DATA_QUALITY' }
+          verificationScheduling = { ...dataQualityScheduling, mode: 'DATA_QUALITY_FRESH_PROFILE' }
         } else if (data.profile_run_id) {
           verificationScheduling = {
             ...(await scheduleRemediationVerificationFromIssue({
