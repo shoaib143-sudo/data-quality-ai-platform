@@ -2,6 +2,7 @@ import type { AnalyticsQueryProvider, AnalyticsQueryRequest, AnalyticsQueryRow }
 import { getDataPlaneProviderSelection } from '@/lib/data-plane/provider-selection'
 import { ClickHouseAnalyticsQueryProvider } from '@/lib/data-plane/providers/clickhouse-analytics-query-provider'
 import { PostgresAnalyticsQueryProvider } from '@/lib/data-plane/providers/postgres-analytics-query-provider'
+import { executeWithReadFallback } from '@/lib/data-plane/read-fallback'
 
 let postgresProvider: AnalyticsQueryProvider | null = null
 let clickhouseProvider: AnalyticsQueryProvider | null = null
@@ -20,12 +21,11 @@ class ClickHouseWithPostgresFallback implements AnalyticsQueryProvider {
   ) {}
 
   async query(request: AnalyticsQueryRequest): Promise<AnalyticsQueryRow[]> {
-    try {
-      return await this.primary.query(request)
-    } catch (primaryError) {
-      if (!readFallbackEnabled()) throw primaryError
-      return this.fallback.query(request)
-    }
+    return executeWithReadFallback({
+      primary: () => this.primary.query(request),
+      fallback: () => this.fallback.query(request),
+      fallbackEnabled: readFallbackEnabled(),
+    })
   }
 }
 
