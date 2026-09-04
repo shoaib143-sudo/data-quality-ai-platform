@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { executeGovernanceReadAgent, GOVERNANCE_READ_AGENT_KEYS } from '@/lib/agents/governance-read-agent'
+import { GOVERNANCE_READ_AGENT_KEYS } from '@/lib/agents/governance-read-agent'
+import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 
 function text(value: unknown) {
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
     if (question.length > 1000) return NextResponse.json({ error: 'question must be 1000 characters or fewer.' }, { status: 400 })
 
     await authorizeProject(user.id, projectId, 'agent.execute')
-    const result = await executeGovernanceReadAgent({
+    const result = await executeGovernanceSpecialistAgent({
       projectId,
       agentDefinitionId,
       actorUserId: user.id,
