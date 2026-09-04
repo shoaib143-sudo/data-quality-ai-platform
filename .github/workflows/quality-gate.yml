@@ -44,6 +44,8 @@ jobs:
         run: pnpm run verify:autonomous
       - name: Verify lineage change governance contracts
         run: pnpm run verify:lineage-governance
+      - name: Verify lineage explorer overlay contracts
+        run: pnpm run verify:lineage-explorer
       - name: Verify live governance database contracts
         if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: pnpm run verify:database
