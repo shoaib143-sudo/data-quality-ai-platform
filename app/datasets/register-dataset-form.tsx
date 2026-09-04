@@ -113,6 +113,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
     if (projectMode !== 'existing' || !projectId) { setStatus('Select an existing project before uploading a dataset file.'); return }
     setStatus(`Authorizing upload for ${file.name}…`)
     setUploadingFile(true)
+    let uploadedPath: string | null = null
     try {
       const uploadResponse = await fetch('/api/datasets/source/upload-file', {
         method: 'POST',
@@ -131,6 +132,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
         { contentType: file.type || 'application/octet-stream', cacheControl: '3600' },
       )
       if (storageError) throw new Error(`Dataset file upload failed: ${storageError.message}`)
+      uploadedPath = String(uploadPayload.path)
 
       setStatus(`Validating ${file.name} for profiling…`)
       const fileExtension = String(uploadPayload.file?.extension ?? '').toLowerCase()
@@ -143,6 +145,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       })
       const sourcePayload = await sourceResponse.json()
       if (!sourceResponse.ok) throw new Error(sourcePayload.error ?? sourcePayload.validation?.errors?.join(' ') ?? 'Uploaded file source registration failed.')
+      uploadedPath = null
 
       const source: SourceOption = {
         id: sourcePayload.source.id,
@@ -158,6 +161,13 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       setStatus(`${file.name} uploaded and validated. The FILE source is selected and ready for dataset registration.`)
       router.refresh()
     } catch (error) {
+      if (uploadedPath) {
+        await fetch('/api/datasets/source/upload-file', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, path: uploadedPath }),
+        }).catch(() => undefined)
+      }
       setStatus(error instanceof Error ? error.message : 'Dataset file upload failed.')
     } finally {
       setUploadingFile(false)
