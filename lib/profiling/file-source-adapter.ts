@@ -161,11 +161,31 @@ function parseTextDocument(input:string,maxRows:number,metadata:Record<string,un
   return{rows:rows.slice(0,maxRows),rowCount:rows.length,warnings}
 }
 
+function csvTextIdentifierColumn(header:string){
+  const name=header.trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')
+  return name==='id'||name.endsWith('_id')||/(^|_)(code|phone|mobile|zip|postal|postcode|ssn|national_id|account|card|routing|iban|swift)(_|$)/.test(name)
+}
+function strictCsvNumber(value:string){
+  const normalized=value.trim()
+  if(!/^[+-]?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(normalized))return null
+  const parsed=Number(normalized)
+  return Number.isFinite(parsed)?parsed:null
+}
+function coerceCsvScalar(header:string,value:string|null):unknown{
+  if(value===null)return null
+  if(value===''||value.trim()==='')return value
+  if(csvTextIdentifierColumn(header))return value
+  const trimmed=value.trim()
+  if(/^(true|false)$/i.test(trimmed))return trimmed.toLowerCase()==='true'
+  const numeric=strictCsvNumber(trimmed)
+  return numeric===null?value:numeric
+}
+
 function parseCsv(input:string,maxRows:number):{rows:Record<string,unknown>[];rowCount:number;warnings:string[]}{
   const records=parseCsvRecords(input),warnings:string[]=[]
   if(!records.length)return{rows:[],rowCount:0,warnings}
   const headers=records[0].map((header,index)=>header.trim().replace(/^\uFEFF/,'')||`column_${index+1}`)
-  const rows=records.slice(1).map(record=>Object.fromEntries(headers.map((header,index)=>[header,record[index]??null])))
+  const rows=records.slice(1).map(record=>Object.fromEntries(headers.map((header,index)=>[header,coerceCsvScalar(header,record[index]??null)])))
   if(rows.length>maxRows)warnings.push(`FILE source contains ${rows.length} data rows; ${maxRows} were selected for profiling.`)
   return{rows:rows.slice(0,maxRows),rowCount:rows.length,warnings}
 }
