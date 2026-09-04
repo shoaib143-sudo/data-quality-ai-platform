@@ -4,64 +4,112 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { LineageExplorer, type FieldMapping, type LineageField } from './lineage-explorer'
 
+const RECENT_MAPPING_LIMIT=200
+const RECENT_RUN_LIMIT=300
+const GOVERNANCE_ROW_LIMIT=2000
+const PROFILE_ROW_LIMIT=20000
+const PROFILE_METRIC_LIMIT=50000
+
 const asNumber=(value:unknown)=>{const parsed=typeof value==='number'?value:Number(value);return Number.isFinite(parsed)?parsed:null}
 const normalizeUnit=(value:unknown)=>{const parsed=asNumber(value);if(parsed===null)return null;return parsed>1?parsed/100:parsed}
 const normalizeScore100=(value:unknown)=>{const parsed=asNumber(value);if(parsed===null)return null;return parsed<=1?parsed*100:parsed}
 const clamp=(value:number,min:number,max:number)=>Math.min(max,Math.max(min,value))
 const fieldKey=(datasetId:string|null,assetId:string,columnName:string)=>`${datasetId??`asset:${assetId}`}::${columnName.trim().toLowerCase()}`
 const findingPenalty=(severity:string)=>({CRITICAL:20,HIGH:12,MEDIUM:6,LOW:2}[severity.toUpperCase()]??1)
+const uniqueStrings=(values:Array<string|null|undefined>)=>[...new Set(values.filter((value):value is string=>Boolean(value)))]
 
 export default async function LineagePage(){
   await requireUser()
   const supabase=await createClient()
 
+  // Phase 1 is deliberately small: estate-wide counts plus recent explicit mappings and
+  // recent successful profiling runs. Every enrichment query below is scoped from this
+  // working set. Complete traversal remains anchor-driven via the GraphProvider navigators.
   const [
-    edgeCountResult,assetCountResult,transformationCountResult,mappingCountResult,
-    datasetsResult,versionsResult,runsResult,mappingsResult,
-    termsResult,glossaryMappingsResult,stewardshipResult,certificationsResult,classificationsResult,labelsResult,
-    contractsResult,contractVersionsResult,issuesResult,alertsResult,
+    edgeCountResult,datasetCountResult,assetCountResult,transformationCountResult,mappingCountResult,
+    mappingsResult,runsResult,
   ]=await Promise.all([
     supabase.schema('governance').from('lineage_edges').select('id',{count:'exact',head:true}),
+    supabase.schema('catalog').from('datasets').select('id',{count:'exact',head:true}),
     supabase.schema('governance').from('lineage_assets').select('id',{count:'exact',head:true}),
     supabase.schema('governance').from('lineage_transformations').select('id',{count:'exact',head:true}),
     supabase.schema('governance').from('lineage_column_mappings').select('id',{count:'exact',head:true}),
-    supabase.schema('catalog').from('datasets').select('id,name,project_id').order('name'),
-    supabase.schema('catalog').from('dataset_versions').select('id,dataset_id,version_number'),
-    supabase.schema('profiling').from('profile_runs').select('id,dataset_version_id,status,started_at,completed_at').in('status',['COMPLETED','PARTIAL']).order('started_at',{ascending:false}).limit(1000),
-    supabase.schema('governance').from('lineage_column_mappings').select('id,project_id,transformation_id,source_asset_id,source_column,target_asset_id,target_column,operation,expression').order('created_at',{ascending:false}).limit(200),
-    supabase.schema('governance').from('glossary_terms').select('id,project_id,term,definition,domain,status,owner_user_id').order('term'),
-    supabase.schema('governance').from('glossary_mappings').select('id,term_id,dataset_id,column_name,confidence,approved,approved_by'),
-    supabase.schema('governance').from('stewardship_assignments').select('id,project_id,dataset_id,user_id,role,accountability,active').eq('active',true),
-    supabase.schema('governance').from('certification_requests').select('id,project_id,dataset_id,status,requested_at,decided_at').order('requested_at',{ascending:false}),
-    supabase.schema('governance').from('dataset_classifications').select('id,project_id,dataset_id,column_name,label_id,status,confidence,source').order('updated_at',{ascending:false}),
-    supabase.schema('governance').from('classification_labels').select('id,project_id,code,name,category').eq('enabled',true),
-    supabase.schema('governance').from('data_contracts').select('id,project_id,dataset_id,name,status,current_version').order('updated_at',{ascending:false}),
-    supabase.schema('governance').from('data_contract_versions').select('id,contract_id,version_number,status,critical_columns,effective_at').order('created_at',{ascending:false}),
-    supabase.schema('governance').from('issues').select('id,project_id,dataset_id,profile_run_id,finding_id,title,severity,status').order('updated_at',{ascending:false}).limit(5000),
-    supabase.schema('profiling').from('observability_alerts').select('id,project_id,dataset_id,profile_run_id,category,severity,title,status').order('last_observed_at',{ascending:false}).limit(5000),
+    supabase.schema('governance').from('lineage_column_mappings').select('id,project_id,transformation_id,source_asset_id,source_column,target_asset_id,target_column,operation,expression').order('created_at',{ascending:false}).limit(RECENT_MAPPING_LIMIT),
+    supabase.schema('profiling').from('profile_runs').select('id,dataset_version_id,status,started_at,completed_at').in('status',['COMPLETED','PARTIAL']).order('started_at',{ascending:false}).limit(RECENT_RUN_LIMIT),
   ])
-
-  const baseResults=[edgeCountResult,assetCountResult,transformationCountResult,mappingCountResult,datasetsResult,versionsResult,runsResult,mappingsResult,termsResult,glossaryMappingsResult,stewardshipResult,certificationsResult,classificationsResult,labelsResult,contractsResult,contractVersionsResult,issuesResult,alertsResult]
-  for(const result of baseResults)if(result.error)throw new Error(result.error.message)
+  for(const result of [edgeCountResult,datasetCountResult,assetCountResult,transformationCountResult,mappingCountResult,mappingsResult,runsResult])if(result.error)throw new Error(result.error.message)
 
   const mappingRows=mappingsResult.data??[]
-  const assetIds=[...new Set(mappingRows.flatMap((row:any)=>[row.source_asset_id,row.target_asset_id]).filter(Boolean))] as string[]
-  const transformationIds=[...new Set(mappingRows.map((row:any)=>row.transformation_id).filter(Boolean))] as string[]
-  const [assetsResult,transformationsResult]=await Promise.all([
+  const assetIds=uniqueStrings(mappingRows.flatMap((row:any)=>[row.source_asset_id,row.target_asset_id]))
+  const transformationIds=uniqueStrings(mappingRows.map((row:any)=>row.transformation_id))
+  const runVersionIds=uniqueStrings((runsResult.data??[]).map((row:any)=>row.dataset_version_id))
+
+  const [assetsResult,transformationsResult,versionsResult]=await Promise.all([
     assetIds.length
       ? supabase.schema('governance').from('lineage_assets').select('id,project_id,namespace,name,asset_type,dataset_id').in('id',assetIds)
       : Promise.resolve({data:[],error:null}),
     transformationIds.length
       ? supabase.schema('governance').from('lineage_transformations').select('id,source_system,name,operation,logic_language').in('id',transformationIds)
       : Promise.resolve({data:[],error:null}),
+    runVersionIds.length
+      ? supabase.schema('catalog').from('dataset_versions').select('id,dataset_id,version_number').in('id',runVersionIds)
+      : Promise.resolve({data:[],error:null}),
   ])
-  if(assetsResult.error)throw new Error(assetsResult.error.message)
-  if(transformationsResult.error)throw new Error(transformationsResult.error.message)
+  for(const result of [assetsResult,transformationsResult,versionsResult])if(result.error)throw new Error(result.error.message)
 
-  const datasets=new Map((datasetsResult.data??[]).map((row:any)=>[row.id,row]))
-  const versions=new Map((versionsResult.data??[]).map((row:any)=>[row.id,row]))
   const assets=new Map((assetsResult.data??[]).map((row:any)=>[row.id,row]))
   const transformations=new Map((transformationsResult.data??[]).map((row:any)=>[row.id,row]))
+  const versions=new Map((versionsResult.data??[]).map((row:any)=>[row.id,row]))
+  const datasetIds=uniqueStrings([
+    ...(versionsResult.data??[]).map((row:any)=>row.dataset_id),
+    ...(assetsResult.data??[]).map((row:any)=>row.dataset_id),
+  ])
+
+  const [datasetsResult,glossaryMappingsResult,stewardshipResult,certificationsResult,classificationsResult,contractsResult,issuesResult,alertsResult]=await Promise.all([
+    datasetIds.length
+      ? supabase.schema('catalog').from('datasets').select('id,name,project_id').in('id',datasetIds).order('name')
+      : Promise.resolve({data:[],error:null}),
+    datasetIds.length
+      ? supabase.schema('governance').from('glossary_mappings').select('id,term_id,dataset_id,column_name,confidence,approved,approved_by').in('dataset_id',datasetIds).limit(GOVERNANCE_ROW_LIMIT)
+      : Promise.resolve({data:[],error:null}),
+    datasetIds.length
+      ? supabase.schema('governance').from('stewardship_assignments').select('id,project_id,dataset_id,user_id,role,accountability,active').in('dataset_id',datasetIds).eq('active',true).limit(GOVERNANCE_ROW_LIMIT)
+      : Promise.resolve({data:[],error:null}),
+    datasetIds.length
+      ? supabase.schema('governance').from('certification_requests').select('id,project_id,dataset_id,status,requested_at,decided_at').in('dataset_id',datasetIds).order('requested_at',{ascending:false}).limit(GOVERNANCE_ROW_LIMIT)
+      : Promise.resolve({data:[],error:null}),
+    datasetIds.length
+      ? supabase.schema('governance').from('dataset_classifications').select('id,project_id,dataset_id,column_name,label_id,status,confidence,source').in('dataset_id',datasetIds).order('updated_at',{ascending:false}).limit(GOVERNANCE_ROW_LIMIT)
+      : Promise.resolve({data:[],error:null}),
+    datasetIds.length
+      ? supabase.schema('governance').from('data_contracts').select('id,project_id,dataset_id,name,status,current_version').in('dataset_id',datasetIds).order('updated_at',{ascending:false}).limit(GOVERNANCE_ROW_LIMIT)
+      : Promise.resolve({data:[],error:null}),
+    datasetIds.length
+      ? supabase.schema('governance').from('issues').select('id,project_id,dataset_id,profile_run_id,finding_id,title,severity,status').in('dataset_id',datasetIds).order('updated_at',{ascending:false}).limit(GOVERNANCE_ROW_LIMIT)
+      : Promise.resolve({data:[],error:null}),
+    datasetIds.length
+      ? supabase.schema('profiling').from('observability_alerts').select('id,project_id,dataset_id,profile_run_id,category,severity,title,status').in('dataset_id',datasetIds).order('last_observed_at',{ascending:false}).limit(GOVERNANCE_ROW_LIMIT)
+      : Promise.resolve({data:[],error:null}),
+  ])
+  for(const result of [datasetsResult,glossaryMappingsResult,stewardshipResult,certificationsResult,classificationsResult,contractsResult,issuesResult,alertsResult])if(result.error)throw new Error(result.error.message)
+
+  const termIds=uniqueStrings((glossaryMappingsResult.data??[]).map((row:any)=>row.term_id))
+  const labelIds=uniqueStrings((classificationsResult.data??[]).map((row:any)=>row.label_id))
+  const contractIds=uniqueStrings((contractsResult.data??[]).map((row:any)=>row.id))
+  const [termsResult,labelsResult,contractVersionsResult]=await Promise.all([
+    termIds.length
+      ? supabase.schema('governance').from('glossary_terms').select('id,project_id,term,definition,domain,status,owner_user_id').in('id',termIds)
+      : Promise.resolve({data:[],error:null}),
+    labelIds.length
+      ? supabase.schema('governance').from('classification_labels').select('id,project_id,code,name,category').in('id',labelIds).eq('enabled',true)
+      : Promise.resolve({data:[],error:null}),
+    contractIds.length
+      ? supabase.schema('governance').from('data_contract_versions').select('id,contract_id,version_number,status,critical_columns,effective_at').in('contract_id',contractIds).order('created_at',{ascending:false}).limit(GOVERNANCE_ROW_LIMIT)
+      : Promise.resolve({data:[],error:null}),
+  ])
+  for(const result of [termsResult,labelsResult,contractVersionsResult])if(result.error)throw new Error(result.error.message)
+
+  const datasets=new Map((datasetsResult.data??[]).map((row:any)=>[row.id,row]))
   const terms=new Map((termsResult.data??[]).map((row:any)=>[row.id,row]))
   const labels=new Map((labelsResult.data??[]).map((row:any)=>[row.id,row]))
 
@@ -78,9 +126,9 @@ export default async function LineagePage(){
   let qualityScores:any[]=[]
   if(latestRunIds.length){
     const [columnsResult,findingsResult,metricsResult,scoresResult]=await Promise.all([
-      supabase.schema('profiling').from('profile_columns').select('id,profile_run_id,column_name,inferred_type,semantic_type,nullable,is_candidate_key,total_count,non_null_count,null_count,distinct_percentage').in('profile_run_id',latestRunIds).limit(20000),
-      supabase.schema('profiling').from('profile_findings').select('id,profile_run_id,profile_column_id,severity,title').in('profile_run_id',latestRunIds).limit(20000),
-      supabase.schema('profiling').from('profile_metrics').select('id,profile_run_id,profile_column_id,metric_key,numeric_value').in('profile_run_id',latestRunIds).in('metric_key',['null_rate','unique_rate','distinct_rate']).limit(50000),
+      supabase.schema('profiling').from('profile_columns').select('id,profile_run_id,column_name,inferred_type,semantic_type,nullable,is_candidate_key,total_count,non_null_count,null_count,distinct_percentage').in('profile_run_id',latestRunIds).limit(PROFILE_ROW_LIMIT),
+      supabase.schema('profiling').from('profile_findings').select('id,profile_run_id,profile_column_id,severity,title').in('profile_run_id',latestRunIds).limit(PROFILE_ROW_LIMIT),
+      supabase.schema('profiling').from('profile_metrics').select('id,profile_run_id,profile_column_id,metric_key,numeric_value').in('profile_run_id',latestRunIds).in('metric_key',['null_rate','unique_rate','distinct_rate']).limit(PROFILE_METRIC_LIMIT),
       supabase.schema('profiling').from('data_quality_scores').select('profile_run_id,overall_score').in('profile_run_id',latestRunIds),
     ])
     for(const result of [columnsResult,findingsResult,metricsResult,scoresResult])if(result.error)throw new Error(result.error.message)
@@ -200,7 +248,7 @@ export default async function LineagePage(){
 
   return <main className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
     <nav className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm"><Link href="/dashboard" className="flex items-center gap-3 font-bold"><span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5"/></span>Data Governance PowerHouse</Link><div className="flex flex-wrap gap-2 text-sm"><Link href="/catalog" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Catalog</Link><Link href="/glossary" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Glossary</Link><Link href="/data-quality" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Data Quality</Link><Link href="/lineage/impact" className="rounded-xl px-3 py-2 font-semibold text-violet-600 hover:bg-violet-50">Impact analysis</Link><Link href="/lineage/ingest" className="rounded-xl bg-violet-600 px-3 py-2 font-semibold text-white">Ingest lineage</Link></div></nav>
-    <header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600"><GitBranch className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Governance Intelligence Lineage Explorer</h1><p className="mt-1 max-w-4xl text-sm text-slate-500">Trace fields end to end and overlay Data Quality, business meaning, stakeholders, classifications, certifications, contracts, issues, observability and profiling evidence in one governed view. The page samples recent explicit mappings for context; complete dataset and field traversal is served through the bounded navigators.</p></div></div></header>
-    <LineageExplorer fields={[...fieldMap.values()]} mappings={fieldMappings} edges={[]} stats={{edges:edgeCountResult.count??0,datasets:datasets.size,assets:assetCountResult.count??0,transformations:transformationCountResult.count??0,mappedColumns:mappingCountResult.count??0}}/>
+    <header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600"><GitBranch className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Governance Intelligence Lineage Explorer</h1><p className="mt-1 max-w-4xl text-sm text-slate-500">Trace fields end to end and overlay Data Quality, business meaning, stakeholders, classifications, certifications, contracts, issues, observability and profiling evidence in one governed view. The overview is a bounded recent working set; complete dataset and field traversal is served through the anchor-driven GraphProvider navigators.</p></div></div></header>
+    <LineageExplorer fields={[...fieldMap.values()]} mappings={fieldMappings} edges={[]} stats={{edges:edgeCountResult.count??0,datasets:datasetCountResult.count??0,assets:assetCountResult.count??0,transformations:transformationCountResult.count??0,mappedColumns:mappingCountResult.count??0}}/>
   </div></main>
 }
