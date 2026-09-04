@@ -61,6 +61,8 @@ const checks = [
   ['lib/governance/semantic-search.ts', /EMBEDDING_DIMENSIONS\s*=\s*384[\s\S]*match_semantic_embeddings[\s\S]*indexSemanticObject/, 'provider-neutral semantic search and indexing'],
   ['lib/governance/semantic-indexer.ts', /DATASET[\s\S]*COLUMN[\s\S]*FINDING[\s\S]*GLOSSARY_TERM[\s\S]*POLICY[\s\S]*LINEAGE_TRANSFORMATION/, 'governance and profiling semantic indexing coverage'],
   ['lib/governance/semantic-indexer.ts', /dataset_versions[\s\S]*profile_runs[\s\S]*profile_columns[\s\S]*profile_findings/, 'project-scoped profiling semantic traversal'],
+  ['lib/governance/semantic-indexer.ts', /FILTER_BATCH_SIZE[\s\S]*batches\([\s\S]*datasetBatch[\s\S]*versionBatch[\s\S]*runBatch/, 'bounded semantic traversal filters'],
+  ['lib/governance/semantic-indexer.ts', /MANAGED_SEMANTIC_TYPES[\s\S]*pruneStaleSemanticObjects[\s\S]*semantic_embeddings[\s\S]*pruned/, 'stale semantic embedding pruning'],
   ['services/embedding-service/app.py', /all-MiniLM-L6-v2[\s\S]*normalize_embeddings=True[\s\S]*384/, 'free local 384-dimension embedding service'],
   ['app/login/page.tsx', /signInWithSSO/, 'SAML SSO client flow'],
   ['app/auth/callback/route.ts', /exchangeCodeForSession[\s\S]*sso_domains/, 'SSO callback and tenant mapping'],
