@@ -10,6 +10,9 @@ export async function queueDataQualityAutomation(input: {
   parentRunId?: string | null
   requestedByUser?: boolean
   idempotencyKey?: string | null
+  trigger?: string | null
+  workflowInstanceId?: string | null
+  verificationGeneration?: number | null
 }) {
   const admin = createAdminClient()
   const idempotencyKey = input.idempotencyKey?.trim() || `data-quality:profile:${input.profileRunId}`
@@ -41,6 +44,7 @@ export async function queueDataQualityAutomation(input: {
     .maybeSingle()
   if (agentError || !agentDefinition) throw new Error(`Data Quality Agent 1.0 is unavailable: ${agentError?.message ?? 'not registered'}`)
 
+  const trigger = input.trigger?.trim() || (input.requestedByUser ? 'USER_REQUEST' : 'PROFILE_COMPLETED')
   const { data: run, error: runError } = await admin.schema('agent').from('agent_runs').insert({
     agent_definition_id: agentDefinition.id,
     project_id: input.projectId,
@@ -53,7 +57,10 @@ export async function queueDataQualityAutomation(input: {
       profileRunId: input.profileRunId,
       automation: true,
       requested_by_user: input.requestedByUser ?? false,
-      source_event: input.requestedByUser ? 'USER_REQUEST' : 'PROFILE_COMPLETED',
+      source_event: trigger,
+      trigger,
+      workflowInstanceId: input.workflowInstanceId ?? null,
+      verificationGeneration: input.verificationGeneration ?? null,
     },
   }).select('id').single()
   if (runError || !run) throw new Error(`Unable to create data quality agent run: ${runError?.message ?? 'unknown error'}`)
@@ -70,6 +77,9 @@ export async function queueDataQualityAutomation(input: {
         profileRunId: input.profileRunId,
         userId: input.userId ?? '',
         agentRunId: run.id,
+        trigger,
+        workflowInstanceId: input.workflowInstanceId ?? '',
+        verificationGeneration: input.verificationGeneration ?? null,
       },
       maxAttempts: 3,
     })
