@@ -37,7 +37,7 @@ export async function scheduleRemediationVerificationFromIssue(input: {
   const { data: outcome, error: outcomeError } = await admin
     .schema('governance')
     .from('profiling_remediation_outcomes')
-    .select('id,project_id,workflow_instance_id,source_profile_run_id,verification_profile_run_id,verification_agent_run_id,verification_job_id,status,remediation_issue_ids,outcome')
+    .select('id,project_id,workflow_instance_id,source_profile_run_id,verification_profile_run_id,verification_agent_run_id,verification_job_id,verification_requested_at,status,remediation_issue_ids,outcome')
     .eq('project_id', input.projectId)
     .eq('source_profile_run_id', input.sourceProfileRunId)
     .contains('remediation_issue_ids', [input.issueId])
@@ -48,7 +48,7 @@ export async function scheduleRemediationVerificationFromIssue(input: {
   if (outcomeError) throw new Error(`Unable to resolve remediation verification outcome: ${outcomeError.message}`)
   if (!outcome) return { status: 'NOT_REMEDIATION' }
 
-  if (outcome.verification_profile_run_id) {
+  if (outcome.verification_job_id || ['VERIFIED', 'VERIFICATION_FAILED'].includes(outcome.status)) {
     return {
       status: 'ALREADY_QUEUED',
       workflowInstanceId: outcome.workflow_instance_id,
@@ -61,7 +61,6 @@ export async function scheduleRemediationVerificationFromIssue(input: {
   const issueIds = Array.isArray(outcome.remediation_issue_ids)
     ? outcome.remediation_issue_ids.map((value) => text(value)).filter(Boolean)
     : []
-
   if (!issueIds.length) return { status: 'NOT_REMEDIATION' }
 
   const { data: trackedIssues, error: trackedIssuesError } = await admin
@@ -69,18 +68,18 @@ export async function scheduleRemediationVerificationFromIssue(input: {
     .from('issues')
     .select('id,status')
     .in('id', issueIds)
-
   if (trackedIssuesError) throw new Error(`Unable to resolve tracked remediation issues: ${trackedIssuesError.message}`)
 
   const unresolvedIssueIds = (trackedIssues ?? [])
     .filter((issue) => !['RESOLVED', 'CLOSED'].includes(text(issue.status).toUpperCase()))
     .map((issue) => issue.id)
+  const missingIssueIds = issueIds.filter((issueId) => !(trackedIssues ?? []).some((issue) => issue.id === issueId))
 
-  if ((trackedIssues ?? []).length !== issueIds.length || unresolvedIssueIds.length) {
+  if (missingIssueIds.length || unresolvedIssueIds.length) {
     return {
       status: 'WAITING_FOR_REMEDIATION',
       workflowInstanceId: outcome.workflow_instance_id,
-      unresolvedIssueIds,
+      unresolvedIssueIds: [...unresolvedIssueIds, ...missingIssueIds],
     }
   }
 
@@ -108,8 +107,9 @@ export async function scheduleRemediationVerificationFromIssue(input: {
     }
   }
 
-  let agentRunId: string | null = null
-  let profilingRunId: string | null = null
+  let agentRunId: string | null = outcome.verification_agent_run_id ?? null
+  let profilingRunId: string | null = outcome.verification_profile_run_id ?? null
+  let jobEnqueued = false
 
   try {
     const { data: sourceRun, error: sourceRunError } = await admin
@@ -150,7 +150,7 @@ export async function scheduleRemediationVerificationFromIssue(input: {
     if (executionSourceError) throw new Error(`Unable to resolve verification execution source: ${executionSourceError.message}`)
 
     const executableIds = new Set((executionSources ?? []).map((source) => source.dataset_version_id))
-    const verificationVersion = (candidateVersions ?? []).find((version) => executableIds.has(version.id))
+    let verificationVersion = (candidateVersions ?? []).find((version) => executableIds.has(version.id))
     if (!verificationVersion) throw new Error('No AVAILABLE dataset version has an active profiling execution source for remediation verification.')
 
     const { data: agentDefinition, error: agentDefinitionError } = await admin
@@ -163,6 +163,29 @@ export async function scheduleRemediationVerificationFromIssue(input: {
       .maybeSingle()
     if (agentDefinitionError || !agentDefinition) throw new Error(`Unable to resolve profiling agent definition: ${agentDefinitionError?.message ?? 'not found'}`)
 
+    if (profilingRunId || agentRunId) {
+      if (!profilingRunId || !agentRunId) throw new Error('Automatic verification linkage is incomplete and cannot be resumed safely.')
+      const [{ data: linkedProfile, error: linkedProfileError }, { data: linkedAgent, error: linkedAgentError }] = await Promise.all([
+        admin.schema('profiling').from('profile_runs').select('id,dataset_version_id,agent_run_id,status').eq('id', profilingRunId).maybeSingle(),
+        admin.schema('agent').from('agent_runs').select('id,agent_definition_id,status').eq('id', agentRunId).maybeSingle(),
+      ])
+      if (linkedProfileError || !linkedProfile) throw new Error(`Unable to resume linked verification profile: ${linkedProfileError?.message ?? 'not found'}`)
+      if (linkedAgentError || !linkedAgent) throw new Error(`Unable to resume linked verification agent run: ${linkedAgentError?.message ?? 'not found'}`)
+      if (linkedProfile.agent_run_id !== agentRunId || linkedAgent.agent_definition_id !== agentDefinition.id) {
+        throw new Error('Automatic verification linkage does not match the active profiling agent contract.')
+      }
+      verificationVersion = (candidateVersions ?? []).find((version) => version.id === linkedProfile.dataset_version_id && executableIds.has(version.id))
+      if (!verificationVersion) throw new Error('Linked verification dataset version is no longer AVAILABLE with an active execution source.')
+      if (!['RUNNING', 'FAILED'].includes(linkedProfile.status)) throw new Error(`Linked verification profile is ${linkedProfile.status} and cannot be re-queued.`)
+      if (!['CREATED', 'QUEUED', 'FAILED'].includes(linkedAgent.status)) throw new Error(`Linked verification agent run is ${linkedAgent.status} and cannot be re-queued.`)
+      if (linkedProfile.status === 'FAILED') {
+        await admin.schema('profiling').from('profile_runs').update({ status: 'RUNNING', error_code: null, error_message: null, completed_at: null, started_at: new Date().toISOString() }).eq('id', profilingRunId)
+      }
+      if (linkedAgent.status === 'FAILED') {
+        await admin.schema('agent').from('agent_runs').update({ status: 'QUEUED', error_code: null, error_message: null, completed_at: null }).eq('id', agentRunId)
+      }
+    }
+
     const requestInput = {
       trigger: 'PROFILING_REMEDIATION_VERIFICATION',
       automaticVerification: true,
@@ -171,54 +194,74 @@ export async function scheduleRemediationVerificationFromIssue(input: {
       datasetVersionId: verificationVersion.id,
     }
 
-    const { data: agentRun, error: agentRunError } = await admin
-      .schema('agent')
-      .from('agent_runs')
-      .insert({
-        agent_definition_id: agentDefinition.id,
-        project_id: input.projectId,
-        dataset_id: sourceVersion.dataset_id,
-        dataset_version_id: verificationVersion.id,
-        status: 'QUEUED',
-        input: requestInput,
-      })
-      .select('id')
-      .single()
-    if (agentRunError || !agentRun) throw new Error(`Unable to create verification agent run: ${agentRunError?.message ?? 'unknown error'}`)
-    agentRunId = agentRun.id
-
-    const now = new Date().toISOString()
-    const { data: profileRun, error: profileRunError } = await admin
-      .schema('profiling')
-      .from('profile_runs')
-      .insert({
-        dataset_version_id: verificationVersion.id,
-        status: 'RUNNING',
-        agent_run_id: agentRun.id,
-        engine_name: PROFILING_ENGINE_NAME,
-        engine_version: PROFILING_ENGINE_VERSION,
-        configuration: {
+    if (!agentRunId || !profilingRunId) {
+      const { data: agentRun, error: agentRunError } = await admin
+        .schema('agent')
+        .from('agent_runs')
+        .insert({
           agent_definition_id: agentDefinition.id,
-          agent_key: agentDefinition.agent_key,
-          agent_version: agentDefinition.version,
-          execution_mode: 'durable_queue_outbox',
-          trigger: 'PROFILING_REMEDIATION_VERIFICATION',
-          workflow_instance_id: outcome.workflow_instance_id,
-          source_profile_run_id: outcome.source_profile_run_id,
-        },
-        started_at: now,
-      })
-      .select('id')
-      .single()
-    if (profileRunError || !profileRun) throw new Error(`Unable to create verification profiling run: ${profileRunError?.message ?? 'unknown error'}`)
-    profilingRunId = profileRun.id
+          project_id: input.projectId,
+          dataset_id: sourceVersion.dataset_id,
+          dataset_version_id: verificationVersion.id,
+          status: 'QUEUED',
+          input: requestInput,
+        })
+        .select('id')
+        .single()
+      if (agentRunError || !agentRun) throw new Error(`Unable to create verification agent run: ${agentRunError?.message ?? 'unknown error'}`)
+      agentRunId = agentRun.id
+
+      const { data: profileRun, error: profileRunError } = await admin
+        .schema('profiling')
+        .from('profile_runs')
+        .insert({
+          dataset_version_id: verificationVersion.id,
+          status: 'RUNNING',
+          agent_run_id: agentRun.id,
+          engine_name: PROFILING_ENGINE_NAME,
+          engine_version: PROFILING_ENGINE_VERSION,
+          configuration: {
+            agent_definition_id: agentDefinition.id,
+            agent_key: agentDefinition.agent_key,
+            agent_version: agentDefinition.version,
+            execution_mode: 'durable_queue_outbox',
+            trigger: 'PROFILING_REMEDIATION_VERIFICATION',
+            workflow_instance_id: outcome.workflow_instance_id,
+            source_profile_run_id: outcome.source_profile_run_id,
+          },
+          started_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single()
+      if (profileRunError || !profileRun) throw new Error(`Unable to create verification profiling run: ${profileRunError?.message ?? 'unknown error'}`)
+      profilingRunId = profileRun.id
+
+      const existingOutcome = object(outcome.outcome)
+      const { error: preQueuePersistError } = await admin
+        .schema('governance')
+        .from('profiling_remediation_outcomes')
+        .update({
+          verification_profile_run_id: profilingRunId,
+          verification_agent_run_id: agentRunId,
+          status: 'VERIFICATION_QUEUED',
+          updated_at: new Date().toISOString(),
+          outcome: {
+            ...existingOutcome,
+            verification_trigger: 'AUTOMATIC_ON_REMEDIATION_RESOLUTION',
+            verification_dataset_version_id: verificationVersion.id,
+            verification_queue_phase: 'PROFILE_PREPARED',
+          },
+        })
+        .eq('workflow_instance_id', outcome.workflow_instance_id)
+      if (preQueuePersistError) throw new Error(`Unable to persist prepared verification run linkage: ${preQueuePersistError.message}`)
+    }
 
     const idempotencyKey = `profiling:remediation-verification:${outcome.workflow_instance_id}`
     const durableJob = await enqueueDurableJob({
       projectId: input.projectId,
       jobType: 'PROFILING',
       entityId: verificationVersion.id,
-      agentRunId: agentRun.id,
+      agentRunId,
       idempotencyKey,
       payload: {
         userId: input.userId,
@@ -226,46 +269,55 @@ export async function scheduleRemediationVerificationFromIssue(input: {
         datasetVersionId: verificationVersion.id,
         agentDefinitionId: agentDefinition.id,
         agentVersion: agentDefinition.version,
-        agentRunId: agentRun.id,
-        profilingRunId: profileRun.id,
+        agentRunId,
+        profilingRunId,
         requestInput,
       },
       priority: 90,
       maxAttempts: 3,
     })
+    jobEnqueued = true
 
-    const existingOutcome = object(outcome.outcome)
+    const currentOutcome = await admin
+      .schema('governance')
+      .from('profiling_remediation_outcomes')
+      .select('outcome')
+      .eq('workflow_instance_id', outcome.workflow_instance_id)
+      .maybeSingle()
+    if (currentOutcome.error) throw new Error(`Unable to reload automatic verification outcome: ${currentOutcome.error.message}`)
+
     const { error: persistError } = await admin
       .schema('governance')
       .from('profiling_remediation_outcomes')
       .update({
-        verification_profile_run_id: profileRun.id,
-        verification_agent_run_id: agentRun.id,
+        verification_profile_run_id: profilingRunId,
+        verification_agent_run_id: agentRunId,
         verification_job_id: durableJob.id,
         status: 'VERIFICATION_QUEUED',
         updated_at: new Date().toISOString(),
         outcome: {
-          ...existingOutcome,
+          ...object(currentOutcome.data?.outcome),
           verification_trigger: 'AUTOMATIC_ON_REMEDIATION_RESOLUTION',
           verification_dataset_version_id: verificationVersion.id,
           verification_job_id: durableJob.id,
+          verification_queue_phase: 'JOB_ENQUEUED',
         },
       })
       .eq('workflow_instance_id', outcome.workflow_instance_id)
-    if (persistError) throw new Error(`Unable to persist automatic verification run linkage: ${persistError.message}`)
+    if (persistError) throw new Error(`Unable to persist automatic verification job linkage: ${persistError.message}`)
 
     await writeGovernanceAudit({
       projectId: input.projectId,
       actorUserId: input.userId,
       eventType: 'PROFILING_REMEDIATION_REPROFILE_QUEUED',
       entityType: 'PROFILE_RUN',
-      entityId: profileRun.id,
+      entityId: profilingRunId,
       correlationId: outcome.workflow_instance_id,
       metadata: {
         workflow_instance_id: outcome.workflow_instance_id,
         source_profile_run_id: outcome.source_profile_run_id,
-        verification_profile_run_id: profileRun.id,
-        verification_agent_run_id: agentRun.id,
+        verification_profile_run_id: profilingRunId,
+        verification_agent_run_id: agentRunId,
         verification_job_id: durableJob.id,
         verification_dataset_version_id: verificationVersion.id,
       },
@@ -274,46 +326,65 @@ export async function scheduleRemediationVerificationFromIssue(input: {
     return {
       status: 'QUEUED',
       workflowInstanceId: outcome.workflow_instance_id,
-      profilingRunId: profileRun.id,
-      agentRunId: agentRun.id,
+      profilingRunId,
+      agentRunId,
       durableJobId: durableJob.id,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Automatic remediation verification scheduling failed.'
-    if (profilingRunId) {
-      await admin.schema('profiling').from('profile_runs').update({
-        status: 'FAILED',
-        error_code: 'REMEDIATION_VERIFICATION_QUEUE_FAILED',
-        error_message: message,
-        completed_at: new Date().toISOString(),
-      }).eq('id', profilingRunId).eq('status', 'RUNNING')
+
+    if (!jobEnqueued) {
+      if (profilingRunId) {
+        await admin.schema('profiling').from('profile_runs').update({
+          status: 'FAILED',
+          error_code: 'REMEDIATION_VERIFICATION_QUEUE_FAILED',
+          error_message: message,
+          completed_at: new Date().toISOString(),
+        }).eq('id', profilingRunId).eq('status', 'RUNNING')
+      }
+      if (agentRunId) {
+        await admin.schema('agent').from('agent_runs').update({
+          status: 'FAILED',
+          error_code: 'REMEDIATION_VERIFICATION_QUEUE_FAILED',
+          error_message: message,
+          completed_at: new Date().toISOString(),
+        }).eq('id', agentRunId).in('status', ['CREATED', 'QUEUED'])
+      }
+      await admin.schema('governance').from('profiling_remediation_outcomes').update({
+        status: 'ACTION_TRACKED',
+        verification_profile_run_id: null,
+        verification_agent_run_id: null,
+        verification_job_id: null,
+        verification_requested_at: null,
+        verification_requested_by: null,
+        updated_at: new Date().toISOString(),
+      }).eq('workflow_instance_id', outcome.workflow_instance_id)
+    } else {
+      await admin.schema('governance').from('profiling_remediation_outcomes').update({
+        status: 'VERIFICATION_QUEUED',
+        updated_at: new Date().toISOString(),
+        outcome: {
+          ...object(outcome.outcome),
+          verification_queue_phase: 'JOB_ENQUEUED_LINKAGE_PENDING',
+          verification_linkage_error: message,
+        },
+      }).eq('workflow_instance_id', outcome.workflow_instance_id)
     }
-    if (agentRunId) {
-      await admin.schema('agent').from('agent_runs').update({
-        status: 'FAILED',
-        error_code: 'REMEDIATION_VERIFICATION_QUEUE_FAILED',
-        error_message: message,
-        completed_at: new Date().toISOString(),
-      }).eq('id', agentRunId).in('status', ['CREATED', 'QUEUED'])
-    }
-    await admin.schema('governance').from('profiling_remediation_outcomes').update({
-      status: 'ACTION_TRACKED',
-      verification_profile_run_id: null,
-      verification_agent_run_id: null,
-      verification_job_id: null,
-      verification_requested_at: null,
-      verification_requested_by: null,
-      updated_at: new Date().toISOString(),
-    }).eq('workflow_instance_id', outcome.workflow_instance_id)
 
     await writeGovernanceAudit({
       projectId: input.projectId,
       actorUserId: input.userId,
-      eventType: 'PROFILING_REMEDIATION_REPROFILE_QUEUE_FAILED',
+      eventType: jobEnqueued ? 'PROFILING_REMEDIATION_REPROFILE_LINKAGE_FAILED' : 'PROFILING_REMEDIATION_REPROFILE_QUEUE_FAILED',
       entityType: 'PROFILE_RUN',
-      entityId: outcome.source_profile_run_id,
+      entityId: profilingRunId ?? outcome.source_profile_run_id,
       correlationId: outcome.workflow_instance_id,
-      metadata: { workflow_instance_id: outcome.workflow_instance_id, error: message },
+      metadata: {
+        workflow_instance_id: outcome.workflow_instance_id,
+        verification_profile_run_id: profilingRunId,
+        verification_agent_run_id: agentRunId,
+        job_enqueued: jobEnqueued,
+        error: message,
+      },
     })
     throw error
   }
