@@ -6,13 +6,19 @@ import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
-function storageExecutionConfig(sourceUri: string) {
+function storageExecutionConfig(sourceUri: string, projectId: string) {
   const normalized = sourceUri.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '')
   const parts = normalized.split('/')
   if (parts.length < 2 || parts.some((part) => !part || part === '.' || part === '..')) {
     throw new Error('Storage FILE sourceUri must use bucket/path syntax with a normalized object path.')
   }
-  return { bucket: parts[0], path: parts.slice(1).join('/') }
+  const bucket = parts[0]
+  const path = parts.slice(1).join('/')
+  const requiredPrefix = `projects/${projectId}/`
+  if (bucket !== 'dataset-files' || !path.startsWith(requiredPrefix) || path.length <= requiredPrefix.length) {
+    throw new Error(`Storage FILE sources must be stored under dataset-files/${requiredPrefix}...`)
+  }
+  return { bucket, path }
 }
 
 export async function POST(request: Request) {
@@ -28,7 +34,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient()
     const executionConfig = /^https?:\/\//i.test(sourceUri)
       ? { url: sourceUri }
-      : storageExecutionConfig(sourceUri)
+      : storageExecutionConfig(sourceUri, projectId)
 
     const loaded = await loadFileSource(admin, { sourceUri, executionConfig }, { maxRows: 1000 })
     const firstRow = loaded.rows[0] ?? {}
