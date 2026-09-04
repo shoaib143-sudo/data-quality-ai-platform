@@ -54,9 +54,9 @@ function percent(value: number | null) {
   return `${Math.round(value * 100)}%`
 }
 
-async function postJson(url: string, body: Record<string, unknown>) {
+async function requestJson(url: string, method: 'POST' | 'PATCH', body: Record<string, unknown>) {
   const response = await fetch(url, {
-    method: 'POST',
+    method,
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
@@ -66,6 +66,10 @@ async function postJson(url: string, body: Record<string, unknown>) {
     throw new Error(message)
   }
   return payload
+}
+
+function postJson(url: string, body: Record<string, unknown>) {
+  return requestJson(url, 'POST', body)
 }
 
 export default function ProfilingGovernancePanel({
@@ -87,6 +91,7 @@ export default function ProfilingGovernancePanel({
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [resolutionDrafts, setResolutionDrafts] = useState<Record<string, string>>({})
 
   async function runAction(label: string, action: () => Promise<Record<string, unknown>>) {
     setBusy(label)
@@ -108,10 +113,49 @@ export default function ProfilingGovernancePanel({
     }
   }
 
+  async function resolveIssue(issue: IssueView) {
+    const resolutionSummary = (resolutionDrafts[issue.id] ?? '').trim()
+    if (!resolutionSummary) {
+      setError('Resolution evidence is required before a tracked remediation issue can be resolved.')
+      return
+    }
+    const busyKey = `resolve:${issue.id}`
+    setBusy(busyKey)
+    setMessage(null)
+    setError(null)
+    try {
+      const result = await requestJson(`/api/issues/${issue.id}`, 'PATCH', {
+        status: 'RESOLVED',
+        resolutionSummary,
+        resolutionEvidence: {
+          source: 'PROFILING_EXPLORER',
+          profile_run_id: profileRunId,
+          workflow_instance_id: workflow?.id ?? null,
+          recorded_at: new Date().toISOString(),
+        },
+      })
+      const scheduling = result.verificationScheduling && typeof result.verificationScheduling === 'object'
+        ? result.verificationScheduling as Record<string, unknown>
+        : null
+      const schedulingStatus = scheduling && typeof scheduling.status === 'string' ? scheduling.status : null
+      setMessage(schedulingStatus
+        ? `Remediation issue resolved. Verification: ${badge(schedulingStatus)}.`
+        : 'Remediation issue resolved with evidence.')
+      setResolutionDrafts((current) => ({ ...current, [issue.id]: '' }))
+      router.refresh()
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Unable to resolve remediation issue.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const openIssues = issues.filter((issue) => !['RESOLVED', 'CLOSED'].includes(issue.status))
+  const allTrackedIssuesResolved = issues.length > 0 && openIssues.length === 0
   const canStartApproval = profileRunStatus === 'COMPLETED' && investigation.approvalRequired && !workflow
   const canTrackRemediation = workflow?.status === 'APPROVED' && !outcome
-  const canCheckVerification = workflow?.status === 'APPROVED' && Boolean(outcome)
-  const canRetryVerification = workflow?.status === 'APPROVED' && outcome?.verificationRetryable === true
+  const canCheckVerification = workflow?.status === 'APPROVED' && Boolean(outcome) && allTrackedIssuesResolved
+  const canRetryVerification = workflow?.status === 'APPROVED' && outcome?.verificationRetryable === true && allTrackedIssuesResolved
 
   return (
     <section className="rounded-xl border p-6">
@@ -159,8 +203,8 @@ export default function ProfilingGovernancePanel({
         <div className="mt-4 rounded-lg border p-4">
           <div className="font-medium">Investigation recommendations</div>
           <div className="mt-3 space-y-2">
-            {investigation.recommendations.map((recommendation) => (
-              <div key={recommendation.action} className="rounded-md border p-3 text-sm">
+            {investigation.recommendations.map((recommendation, index) => (
+              <div key={`${recommendation.action}:${index}`} className="rounded-md border p-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <strong>{badge(recommendation.action)}</strong>
                   <div className="flex gap-2 text-xs">
@@ -224,6 +268,9 @@ export default function ProfilingGovernancePanel({
       {workflow && !['RUNNING', 'APPROVED'].includes(workflow.status) ? (
         <p className="mt-3 text-sm text-muted-foreground">This workflow is {badge(workflow.status)}. A rejected or cancelled approval will not execute remediation.</p>
       ) : null}
+      {outcome && openIssues.length > 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">Resolve all {openIssues.length} tracked remediation issue{openIssues.length === 1 ? '' : 's'} with evidence before verification is evaluated.</p>
+      ) : null}
 
       {outcome ? (
         <div className="mt-5 rounded-lg border p-4 text-sm">
@@ -246,16 +293,40 @@ export default function ProfilingGovernancePanel({
       {issues.length ? (
         <div className="mt-5 rounded-lg border p-4">
           <div className="font-medium">Tracked remediation issues</div>
-          <div className="mt-3 space-y-2">
-            {issues.map((issue) => (
-              <div key={issue.id} className="rounded-md border p-3 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <strong>{issue.title}</strong>
-                  <span className="rounded-full border px-2 py-0.5 text-xs">{badge(issue.status)} · {badge(issue.severity)}</span>
+          <p className="mt-1 text-xs text-muted-foreground">Resolution evidence is persisted through the governed issue API. Resolving the final issue triggers automatic re-profile scheduling.</p>
+          <div className="mt-3 space-y-3">
+            {issues.map((issue) => {
+              const resolved = ['RESOLVED', 'CLOSED'].includes(issue.status)
+              const busyKey = `resolve:${issue.id}`
+              return (
+                <div key={issue.id} className="rounded-md border p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong>{issue.title}</strong>
+                    <span className="rounded-full border px-2 py-0.5 text-xs">{badge(issue.status)} · {badge(issue.severity)}</span>
+                  </div>
+                  {issue.resolutionSummary ? <p className="mt-2 text-muted-foreground">Resolution: {issue.resolutionSummary}</p> : null}
+                  {!resolved ? (
+                    <div className="mt-3 space-y-2">
+                      <textarea
+                        value={resolutionDrafts[issue.id] ?? ''}
+                        onChange={(event) => setResolutionDrafts((current) => ({ ...current, [issue.id]: event.target.value }))}
+                        placeholder="Describe the remediation performed and the evidence that supports resolution."
+                        className="min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        aria-label={`Resolution evidence for ${issue.title}`}
+                      />
+                      <button
+                        type="button"
+                        disabled={busy !== null || !(resolutionDrafts[issue.id] ?? '').trim()}
+                        onClick={() => resolveIssue(issue)}
+                        className="rounded-md border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                      >
+                        {busy === busyKey ? 'Resolving…' : 'Resolve with evidence'}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-                {issue.resolutionSummary ? <p className="mt-2 text-muted-foreground">Resolution: {issue.resolutionSummary}</p> : null}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       ) : null}
