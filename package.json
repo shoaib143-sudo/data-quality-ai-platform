@@ -10,6 +10,7 @@
     "verify:semantic": "node scripts/verify-semantic-governance.mjs",
     "verify:remediation": "node scripts/verify-profiling-remediation.mjs",
     "verify:learning": "node scripts/verify-profiling-recommendation-learning.mjs",
+    "verify:reprofile": "node scripts/verify-automatic-remediation-reprofile.mjs",
     "verify:database": "node scripts/verify-governance-database.mjs",
     "verify:production": "node scripts/verify-production.mjs",
     "benchmark:production": "node scripts/benchmark-production.mjs",
