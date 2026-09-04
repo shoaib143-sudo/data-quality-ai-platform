@@ -1,5 +1,6 @@
 import { executePreparedProfilingJob } from '@/lib/agents/run-profiling-job'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
+import { investigateDataQualityRun } from '@/lib/data-quality/autonomous-operations'
 import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { deliverNotificationJob } from '@/lib/observability/notifications'
 import { executeMetadataDiscovery } from '@/lib/catalog/discovery'
@@ -245,12 +246,13 @@ export async function executeDurableJob(job: DurableJob) {
     const userId = text(payload.userId)
     const agentRunId = text(payload.agentRunId)
     if (!datasetVersionId || !profileRunId || !agentRunId) throw new Error('Durable data quality job payload is incomplete.')
-    await executeQualityAutomation({
+    const result = await executeQualityAutomation({
       datasetVersionId,
       profileRunId,
       userId: userId || null,
       existingAgentRunId: agentRunId,
     })
+    await investigateDataQualityRun({ agentRunId: result.agentRunId, userId: userId || null })
     await evaluateObservabilitySignals(datasetVersionId, profileRunId)
     return
   }
