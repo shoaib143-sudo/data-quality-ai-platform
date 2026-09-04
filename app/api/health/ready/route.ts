@@ -5,6 +5,49 @@ export const dynamic = 'force-dynamic'
 
 type ComponentStatus = 'READY' | 'DEGRADED' | 'UNAVAILABLE'
 
+async function checkSemanticEmbeddingProvider() {
+  const configuredUrl = process.env.GOVERNANCE_EMBEDDING_URL?.trim()
+  if (!configuredUrl) {
+    return {
+      status: 'DEGRADED' as const,
+      detail: 'Semantic embedding provider is not configured. Lexical governance search remains available.',
+    }
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
+  try {
+    const response = await fetch(`${configuredUrl.replace(/\/$/, '')}/health`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      return {
+        status: 'DEGRADED' as const,
+        detail: `Semantic embedding provider health returned HTTP ${response.status}.`,
+      }
+    }
+    const payload = await response.json().catch(() => null) as { status?: unknown; dimensions?: unknown; model?: unknown } | null
+    const healthy = payload?.status === 'ok' && Number(payload?.dimensions) === 384
+    return healthy
+      ? {
+          status: 'READY' as const,
+          detail: typeof payload?.model === 'string' ? `Embedding model ${payload.model} is ready.` : 'Embedding provider is ready.',
+        }
+      : {
+          status: 'DEGRADED' as const,
+          detail: 'Semantic embedding provider returned an incompatible health contract.',
+        }
+  } catch {
+    return {
+      status: 'DEGRADED' as const,
+      detail: 'Semantic embedding provider could not be reached.',
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export async function GET() {
   const admin = createAdminClient()
   const components: Record<string, { status: ComponentStatus; detail?: string }> = {}
@@ -30,6 +73,8 @@ export async function GET() {
     components.agents = { status: 'UNAVAILABLE', detail: 'Agent registry check failed.' }
     criticalFailure = true
   }
+
+  components.semantic_embeddings = await checkSemanticEmbeddingProvider()
 
   try {
     const cutoff = new Date(Date.now() - 30 * 60_000).toISOString()
