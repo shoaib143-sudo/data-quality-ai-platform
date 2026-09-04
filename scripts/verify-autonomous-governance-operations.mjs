@@ -55,11 +55,23 @@ requireText('supabase/migrations/20260904172000_observability_ai_operations_cent
   'governance.observability_incident_alerts',
   'governance.observability_incident_impacts',
 ])
+requireText('supabase/migrations/20260904174000_guard_observability_incident_resolution.sql', [
+  'guard_observability_incident_resolution',
+  'unresolved_response_issue_count',
+  'active_correlated_alert_count',
+])
 requireText('lib/observability/incident-intelligence.ts', [
   'investigateObservabilityIncident',
   'SCHEMA_CHANGE_AFFECTING_QUALITY_CONTROLS',
   'MATERIAL_DATA_QUALITY_DEGRADATION',
   'OBSERVABILITY_INCIDENT_RESPONSE_APPROVAL',
+])
+requireText('lib/observability/incident-response-verification.ts', [
+  'verifyObservabilityIncidentResponse',
+  'verifyObservabilityIncidentResponseFromIssue',
+  'tracked_response_issues_resolved',
+  'correlated_signals_cleared',
+  'OBSERVABILITY_INCIDENT_RESPONSE_VERIFIED',
 ])
 const incidentAction = requireText('app/api/observability/incidents/remediation/route.ts', [
   'TRACKED_GOVERNANCE_ISSUES_ONLY',
@@ -105,6 +117,9 @@ if (worker.indexOf('queueDataQualityVerificationAfterFreshProfile') > worker.ind
 requireText('app/api/issues/[issueId]/route.ts', [
   'scheduleFreshDataQualityVerificationFromIssue',
   "mode: 'DATA_QUALITY_FRESH_PROFILE'",
+  'verifyObservabilityIncidentResponseFromIssue',
+  'isObservabilityResponse',
+  "mode: 'OBSERVABILITY_RESPONSE'",
 ])
 requireText('app/data-quality/autonomous/page.tsx', ['Autonomous quality operations'])
 requireText('app/observability/incidents/page.tsx', ['AI Operations Center'])
