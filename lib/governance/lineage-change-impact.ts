@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { analyzeLineageImpact } from '@/lib/governance/lineage-impact'
+import { getFieldGraphProvider } from '@/lib/data-plane/field-graph-provider'
+import type { FieldGraphEdge, FieldGraphNode, FieldGraphNodeRef } from '@/lib/data-plane/field-graph-contracts'
 
 type ColumnMapping = {
   id: string
@@ -34,6 +36,13 @@ type ColumnImpactNode = {
   certificationStatus: string
   businessDescription: string | null
   riskScore: number
+  confidence: number
+}
+
+type TraversedColumn = {
+  mapping: ColumnMapping
+  distance: number
+  path: Array<Record<string, unknown>>
   confidence: number
 }
 
@@ -77,58 +86,46 @@ function changeRisk(changeType: string) {
   return risks[changeType] ?? 0.65
 }
 
-export async function analyzeColumnLineageImpact(input: {
-  projectId: string
-  datasetId: string
-  datasetName?: string | null
-  affectedColumns: string[]
-  maxDepth?: number
-  rootRiskScore?: number | null
-  triggerType?: string | null
-  actorUserId?: string | null
-}) {
-  const admin = createAdminClient()
-  const maxDepth = Math.max(1, Math.min(20, Math.trunc(input.maxDepth ?? 5)))
-  const rootRisk = clamp(input.rootRiskScore ?? 0.7)
-  const requestedColumns = [...new Set(input.affectedColumns.map((column) => column.trim()).filter(Boolean))]
+function toColumnMapping(edge: FieldGraphEdge): ColumnMapping {
+  return {
+    id: edge.id,
+    transformation_id: edge.transformationId,
+    source_asset_id: edge.source.assetId,
+    source_column: edge.source.columnName,
+    target_asset_id: edge.target.assetId,
+    target_column: edge.target.columnName,
+    operation: edge.operation,
+    expression: edge.expression,
+    metadata: {
+      ...object(edge.metadata),
+      field_graph_depth: edge.depth,
+      ...(edge.transformation ? { transformation: edge.transformation } : {}),
+    },
+  }
+}
 
-  const { data: rootAssets, error: rootAssetError } = await admin.schema('governance').from('lineage_assets')
-    .select('id,namespace,name,asset_type,dataset_id,metadata')
-    .eq('project_id', input.projectId)
-    .eq('dataset_id', input.datasetId)
-  if (rootAssetError) throw new Error(`Unable to resolve lineage assets for column impact: ${rootAssetError.message}`)
-
-  const { data: mappings, error: mappingError } = await admin.schema('governance').from('lineage_column_mappings')
-    .select('id,transformation_id,source_asset_id,source_column,target_asset_id,target_column,operation,expression,metadata')
-    .eq('project_id', input.projectId)
-    .limit(20000)
-  if (mappingError) throw new Error(`Unable to load column lineage mappings: ${mappingError.message}`)
-
-  const mappingRows = (mappings ?? []) as ColumnMapping[]
-  const rootAssetIds = new Set((rootAssets ?? []).map((asset) => asset.id))
-  const adjacency = new Map<string, ColumnMapping[]>()
-  for (const mapping of mappingRows) {
-    const key = columnKey(mapping.source_asset_id, mapping.source_column)
+function traverseFieldEdges(edges: FieldGraphEdge[], anchor: FieldGraphNodeRef, maxDepth: number) {
+  const adjacency = new Map<string, FieldGraphEdge[]>()
+  for (const edge of edges) {
+    const key = columnKey(edge.source.assetId, edge.source.columnName)
     const rows = adjacency.get(key) ?? []
-    rows.push(mapping)
+    rows.push(edge)
     adjacency.set(key, rows)
   }
 
-  const queue: Array<{ assetId: string; column: string; distance: number; path: Array<Record<string, unknown>>; confidence: number }> = []
-  for (const assetId of rootAssetIds) {
-    for (const column of requestedColumns) queue.push({ assetId, column, distance: 0, path: [], confidence: 1 })
-  }
+  const visited = new Set<string>([columnKey(anchor.assetId, anchor.columnName)])
+  const queue: Array<{ ref: FieldGraphNodeRef; distance: number; path: Array<Record<string, unknown>>; confidence: number }> = [{ ref: anchor, distance: 0, path: [], confidence: 1 }]
+  const traversed: TraversedColumn[] = []
 
-  const visited = new Set(queue.map((item) => columnKey(item.assetId, item.column)))
-  const traversed: Array<{ mapping: ColumnMapping; distance: number; path: Array<Record<string, unknown>>; confidence: number }> = []
   while (queue.length) {
     const current = queue.shift()!
     if (current.distance >= maxDepth) continue
-    const outgoing = adjacency.get(columnKey(current.assetId, current.column)) ?? []
-    for (const mapping of outgoing) {
-      const nextKey = columnKey(mapping.target_asset_id, mapping.target_column)
+    const outgoing = adjacency.get(columnKey(current.ref.assetId, current.ref.columnName)) ?? []
+    for (const edge of outgoing) {
+      const nextKey = columnKey(edge.target.assetId, edge.target.columnName)
       if (visited.has(nextKey)) continue
       visited.add(nextKey)
+      const mapping = toColumnMapping(edge)
       const step = {
         mapping_id: mapping.id,
         transformation_id: mapping.transformation_id,
@@ -142,10 +139,71 @@ export async function analyzeColumnLineageImpact(input: {
       const nextPath = [...current.path, step]
       const confidence = clamp(Math.min(current.confidence, mappingConfidence(mapping)) * (1 / (1 + current.distance * 0.04)), 0.25, 0.96)
       traversed.push({ mapping, distance: current.distance + 1, path: nextPath, confidence })
-      queue.push({ assetId: mapping.target_asset_id, column: mapping.target_column, distance: current.distance + 1, path: nextPath, confidence })
+      queue.push({ ref: edge.target, distance: current.distance + 1, path: nextPath, confidence })
     }
   }
 
+  return traversed
+}
+
+export async function analyzeColumnLineageImpact(input: {
+  projectId: string
+  datasetId: string
+  datasetName?: string | null
+  affectedColumns: string[]
+  maxDepth?: number
+  maxEdges?: number
+  rootRiskScore?: number | null
+  triggerType?: string | null
+  actorUserId?: string | null
+}) {
+  const admin = createAdminClient()
+  const maxDepth = Math.max(1, Math.min(4, Math.trunc(input.maxDepth ?? 4)))
+  const maxEdges = Math.max(10, Math.min(300, Math.trunc(input.maxEdges ?? 240)))
+  const rootRisk = clamp(input.rootRiskScore ?? 0.7)
+  const requestedColumns = [...new Set(input.affectedColumns.map((column) => column.trim()).filter(Boolean))].slice(0, 50)
+
+  const { data: rootAssets, error: rootAssetError } = await admin.schema('governance').from('lineage_assets')
+    .select('id,namespace,name,asset_type,dataset_id,metadata')
+    .eq('project_id', input.projectId)
+    .eq('dataset_id', input.datasetId)
+  if (rootAssetError) throw new Error(`Unable to resolve lineage assets for column impact: ${rootAssetError.message}`)
+
+  const graphProvider = getFieldGraphProvider()
+  const rootRows = (rootAssets ?? []) as LineageAsset[]
+  const nodeByKey = new Map<string, FieldGraphNode>()
+  const uniqueEdges = new Map<string, FieldGraphEdge>()
+  const traversedByTarget = new Map<string, TraversedColumn>()
+  let graphTruncated = false
+  let graphExhausted = true
+  let neighborhoodRequests = 0
+
+  for (const asset of rootRows) {
+    for (const column of requestedColumns) {
+      neighborhoodRequests += 1
+      const anchor = { assetId: asset.id, columnName: column }
+      const neighborhood = await graphProvider.fieldNeighborhood({
+        projectId: input.projectId,
+        anchor,
+        direction: 'DOWNSTREAM',
+        depth: maxDepth,
+        maxEdges,
+      })
+      graphTruncated ||= neighborhood.truncated
+      graphExhausted &&= neighborhood.exhausted
+      for (const node of neighborhood.nodes) nodeByKey.set(columnKey(node.assetId, node.columnName), node)
+      for (const edge of neighborhood.edges) uniqueEdges.set(edge.id, edge)
+      for (const item of traverseFieldEdges(neighborhood.edges, anchor, maxDepth)) {
+        const key = columnKey(item.mapping.target_asset_id, item.mapping.target_column)
+        const current = traversedByTarget.get(key)
+        if (!current || item.distance < current.distance || (item.distance === current.distance && item.confidence > current.confidence)) {
+          traversedByTarget.set(key, item)
+        }
+      }
+    }
+  }
+
+  const traversed = [...traversedByTarget.values()]
   const targetAssetIds = [...new Set(traversed.map((item) => item.mapping.target_asset_id))]
   const { data: targetAssets, error: targetAssetError } = targetAssetIds.length
     ? await admin.schema('governance').from('lineage_assets').select('id,namespace,name,asset_type,dataset_id,metadata').eq('project_id', input.projectId).in('id', targetAssetIds)
@@ -176,7 +234,8 @@ export async function analyzeColumnLineageImpact(input: {
     const distanceDecay = 1 / (1 + Math.max(0, distance - 1) * 0.28)
     const governanceBoost = criticalityWeight(criticality) * 0.3 + certificationWeight(certificationStatus)
     const riskScore = clamp(rootRisk * distanceDecay * 0.72 + governanceBoost)
-    const assetLabel = asset ? [asset.namespace, asset.name].filter(Boolean).join('.') : `asset:${mapping.target_asset_id.slice(0, 8)}`
+    const providerNode = nodeByKey.get(columnKey(mapping.target_asset_id, mapping.target_column))
+    const assetLabel = asset ? [asset.namespace, asset.name].filter(Boolean).join('.') : providerNode?.label ?? `asset:${mapping.target_asset_id.slice(0, 8)}`
     return {
       mappingId: mapping.id,
       assetId: mapping.target_asset_id,
@@ -194,11 +253,13 @@ export async function analyzeColumnLineageImpact(input: {
 
   const criticalAffected = nodes.filter((node) => ['HIGH', 'CRITICAL'].includes(text(node.criticality).toUpperCase()))
   const aggregateRisk = nodes.length ? Math.max(...nodes.map((node) => node.riskScore)) : 0
-  const aggregateConfidence = nodes.length ? nodes.reduce((sum, node) => sum + node.confidence, 0) / nodes.length : (rootAssetIds.size ? 0.8 : 0.35)
+  const rawConfidence = nodes.length ? nodes.reduce((sum, node) => sum + node.confidence, 0) / nodes.length : (rootRows.length ? 0.8 : 0.35)
+  const aggregateConfidence = graphTruncated ? clamp(rawConfidence * 0.85, 0.25, 0.96) : rawConfidence
+  const scopeQualifier = graphTruncated ? ' within the configured bounded field-graph scope' : ''
   const summary = nodes.length
-    ? `${nodes.length} downstream column dependenc${nodes.length === 1 ? 'y' : 'ies'} are affected by ${requestedColumns.length} proposed source column change${requestedColumns.length === 1 ? '' : 's'}; ${criticalAffected.length} reach high or critical governed datasets.`
-    : rootAssetIds.size
-      ? `No downstream column mappings were found for the selected ${requestedColumns.length} source column${requestedColumns.length === 1 ? '' : 's'} within ${maxDepth} hops.`
+    ? `${nodes.length} downstream column dependenc${nodes.length === 1 ? 'y' : 'ies'} are affected by ${requestedColumns.length} proposed source column change${requestedColumns.length === 1 ? '' : 's'}${scopeQualifier}; ${criticalAffected.length} reach high or critical governed datasets.`
+    : rootRows.length
+      ? `No downstream column mappings were found for the selected ${requestedColumns.length} source column${requestedColumns.length === 1 ? '' : 's'} within ${maxDepth} bounded hops.`
       : 'No lineage asset is linked to the selected governed dataset, so column-level impact cannot be proven from persisted evidence.'
 
   const now = new Date().toISOString()
@@ -219,8 +280,13 @@ export async function analyzeColumnLineageImpact(input: {
     evidence: {
       impact_scope: 'COLUMN',
       affected_columns: requestedColumns,
-      root_lineage_asset_ids: [...rootAssetIds],
-      mapping_count_examined: mappingRows.length,
+      root_lineage_asset_ids: rootRows.map((asset) => asset.id),
+      field_graph_provider: graphProvider.providerKey,
+      field_graph_truncated: graphTruncated,
+      field_graph_exhausted: graphExhausted,
+      max_edges_per_anchor: maxEdges,
+      neighborhood_requests: neighborhoodRequests,
+      mapping_count_examined: uniqueEdges.size,
       generated_at: now,
     },
     updated_at: now,
@@ -244,6 +310,8 @@ export async function analyzeColumnLineageImpact(input: {
         target_asset_id: node.assetId,
         target_column: node.column,
         business_description: node.businessDescription,
+        field_graph_provider: graphProvider.providerKey,
+        field_graph_truncated: graphTruncated,
       },
     }))
     const { error: nodeError } = await admin.schema('governance').from('lineage_impact_nodes').insert(rows)
@@ -257,7 +325,17 @@ export async function analyzeColumnLineageImpact(input: {
     eventType: 'COLUMN_LINEAGE_IMPACT_ANALYZED',
     entityType: 'DATASET',
     entityId: input.datasetId,
-    metadata: { analysis_id: analysis.id, affected_columns: requestedColumns, affected_count: nodes.length, critical_affected_count: criticalAffected.length, risk_score: aggregateRisk, confidence: aggregateConfidence },
+    metadata: {
+      analysis_id: analysis.id,
+      affected_columns: requestedColumns,
+      affected_count: nodes.length,
+      critical_affected_count: criticalAffected.length,
+      risk_score: aggregateRisk,
+      confidence: aggregateConfidence,
+      field_graph_provider: graphProvider.providerKey,
+      field_graph_truncated: graphTruncated,
+      mapping_count_examined: uniqueEdges.size,
+    },
   })
 
   return {
@@ -268,6 +346,11 @@ export async function analyzeColumnLineageImpact(input: {
     confidence: aggregateConfidence,
     summary,
     affectedColumns: requestedColumns,
+    maxDepth,
+    maxEdges,
+    graphProvider: graphProvider.providerKey,
+    truncated: graphTruncated,
+    exhausted: graphExhausted,
     nodes,
   }
 }
@@ -279,12 +362,15 @@ export async function assessProposedLineageChange(input: {
   changeSummary?: string | null
   affectedColumns?: string[]
   maxDepth?: number
+  maxEdges?: number
   actorUserId?: string | null
 }) {
   const admin = createAdminClient()
   const changeType = input.changeType.trim().toUpperCase() || 'PIPELINE_LOGIC_CHANGE'
-  const affectedColumns = [...new Set((input.affectedColumns ?? []).map((column) => column.trim()).filter(Boolean))]
+  const affectedColumns = [...new Set((input.affectedColumns ?? []).map((column) => column.trim()).filter(Boolean))].slice(0, 50)
   const baseRisk = changeRisk(changeType)
+  const maxDepth = Math.max(1, Math.min(4, Math.trunc(input.maxDepth ?? 4)))
+  const maxEdges = Math.max(10, Math.min(300, Math.trunc(input.maxEdges ?? 240)))
 
   const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets')
     .select('id,name,project_id')
@@ -300,7 +386,8 @@ export async function assessProposedLineageChange(input: {
     rootAssetName: dataset.name,
     triggerType: 'PROPOSED_CHANGE',
     direction: 'DOWNSTREAM',
-    maxDepth: input.maxDepth ?? 5,
+    maxDepth,
+    maxEdges: Math.min(400, Math.max(maxEdges, 120)),
     rootRiskScore: baseRisk,
     actorUserId: input.actorUserId ?? null,
   })
@@ -311,7 +398,8 @@ export async function assessProposedLineageChange(input: {
         datasetId: input.datasetId,
         datasetName: dataset.name,
         affectedColumns,
-        maxDepth: input.maxDepth ?? 5,
+        maxDepth,
+        maxEdges,
         rootRiskScore: baseRisk,
         triggerType: 'PROPOSED_COLUMN_CHANGE',
         actorUserId: input.actorUserId ?? null,
@@ -323,18 +411,23 @@ export async function assessProposedLineageChange(input: {
   const criticalAffected = Math.max(datasetImpact.criticalAffectedCount, columnImpact?.criticalAffectedCount ?? 0)
   const blastRisk = Math.max(datasetImpact.riskScore, columnImpact?.riskScore ?? 0)
   const riskScore = clamp(Math.max(baseRisk * 0.72 + blastRisk * 0.28, blastRisk))
-  const confidence = columnImpact
+  const scopeLimited = datasetImpact.truncated || Boolean(columnImpact?.truncated)
+  const rawConfidence = columnImpact
     ? clamp((datasetImpact.confidence + columnImpact.confidence) / 2, 0.25, 0.98)
     : datasetImpact.confidence
+  const confidence = scopeLimited ? clamp(rawConfidence * 0.88, 0.25, 0.98) : rawConfidence
   const approvalRequired = riskScore >= 0.75 || criticalAffected > 0 || certifiedAffected > 0
-  const decision = approvalRequired ? 'APPROVAL_REQUIRED' : riskScore >= 0.5 ? 'REVIEW_REQUIRED' : 'SAFE_TO_PROCEED'
+  const decision = approvalRequired ? 'APPROVAL_REQUIRED' : (scopeLimited || riskScore >= 0.5) ? 'REVIEW_REQUIRED' : 'SAFE_TO_PROCEED'
 
   const businessDescriptions = [...new Set(combinedNodes
     .map((node) => 'businessDescription' in node ? text(node.businessDescription) : '')
     .filter(Boolean))]
-  const businessImpact = datasetImpact.affectedCount === 0 && (columnImpact?.affectedCount ?? 0) === 0
+  const baseBusinessImpact = datasetImpact.affectedCount === 0 && (columnImpact?.affectedCount ?? 0) === 0
     ? 'No downstream dependency is proven by the current persisted lineage evidence. Absence of lineage evidence is not proof of no impact.'
     : `${datasetImpact.affectedCount} downstream assets and ${columnImpact?.affectedCount ?? 0} mapped downstream columns are within scope. ${criticalAffected} high or critical governed dependencies and ${certifiedAffected} certified dependencies increase change risk.`
+  const businessImpact = scopeLimited
+    ? `${baseBusinessImpact} The configured graph bound was reached, so the analysis requires review and must not be interpreted as complete-estate proof of safety.`
+    : baseBusinessImpact
 
   const now = new Date().toISOString()
   const { data: existingAnalysis, error: existingError } = await admin.schema('governance').from('lineage_impact_analyses')
@@ -358,6 +451,9 @@ export async function assessProposedLineageChange(input: {
         approval_required: approvalRequired,
         certified_affected_count: certifiedAffected,
         column_impact_analysis_id: columnImpact?.analysisId ?? null,
+        graph_scope_limited: scopeLimited,
+        max_depth: maxDepth,
+        max_edges: maxEdges,
         business_impact: businessImpact,
         business_context: businessDescriptions.slice(0, 20),
         assessed_at: now,
@@ -385,6 +481,9 @@ export async function assessProposedLineageChange(input: {
       approval_required: approvalRequired,
       critical_affected_count: criticalAffected,
       certified_affected_count: certifiedAffected,
+      graph_scope_limited: scopeLimited,
+      max_depth: maxDepth,
+      max_edges: maxEdges,
       production_mutation_performed: false,
     },
   })
@@ -407,6 +506,9 @@ export async function assessProposedLineageChange(input: {
     criticalAffectedCount: criticalAffected,
     certifiedAffectedCount: certifiedAffected,
     businessImpact,
+    scopeLimited,
+    maxDepth,
+    maxEdges,
     datasetImpact,
     columnImpact,
   }
