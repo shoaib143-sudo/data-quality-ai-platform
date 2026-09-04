@@ -53,15 +53,33 @@ create policy governance_documents_project_read
   using (app_private.is_project_member(project_id));
 
 drop policy if exists governance_documents_project_manage on governance.documents;
-create policy governance_documents_project_manage
-  on governance.documents for all to authenticated
+drop policy if exists governance_documents_project_insert on governance.documents;
+drop policy if exists governance_documents_project_update on governance.documents;
+drop policy if exists governance_documents_project_delete on governance.documents;
+
+create policy governance_documents_project_insert
+  on governance.documents for insert to authenticated
+  with check (
+    app_private.is_project_member(project_id)
+    and governance.has_project_capability(project_id,(select auth.uid()),'catalog.update')
+  );
+
+create policy governance_documents_project_update
+  on governance.documents for update to authenticated
   using (
     app_private.is_project_member(project_id)
-    and governance.has_project_capability(project_id,auth.uid(),'catalog.update')
+    and governance.has_project_capability(project_id,(select auth.uid()),'catalog.update')
   )
   with check (
     app_private.is_project_member(project_id)
-    and governance.has_project_capability(project_id,auth.uid(),'catalog.update')
+    and governance.has_project_capability(project_id,(select auth.uid()),'catalog.update')
+  );
+
+create policy governance_documents_project_delete
+  on governance.documents for delete to authenticated
+  using (
+    app_private.is_project_member(project_id)
+    and governance.has_project_capability(project_id,(select auth.uid()),'catalog.update')
   );
 
 drop policy if exists governance_document_chunks_project_read on governance.document_chunks;
@@ -70,15 +88,33 @@ create policy governance_document_chunks_project_read
   using (app_private.is_project_member(project_id));
 
 drop policy if exists governance_document_chunks_project_manage on governance.document_chunks;
-create policy governance_document_chunks_project_manage
-  on governance.document_chunks for all to authenticated
+drop policy if exists governance_document_chunks_project_insert on governance.document_chunks;
+drop policy if exists governance_document_chunks_project_update on governance.document_chunks;
+drop policy if exists governance_document_chunks_project_delete on governance.document_chunks;
+
+create policy governance_document_chunks_project_insert
+  on governance.document_chunks for insert to authenticated
+  with check (
+    app_private.is_project_member(project_id)
+    and governance.has_project_capability(project_id,(select auth.uid()),'catalog.update')
+  );
+
+create policy governance_document_chunks_project_update
+  on governance.document_chunks for update to authenticated
   using (
     app_private.is_project_member(project_id)
-    and governance.has_project_capability(project_id,auth.uid(),'catalog.update')
+    and governance.has_project_capability(project_id,(select auth.uid()),'catalog.update')
   )
   with check (
     app_private.is_project_member(project_id)
-    and governance.has_project_capability(project_id,auth.uid(),'catalog.update')
+    and governance.has_project_capability(project_id,(select auth.uid()),'catalog.update')
+  );
+
+create policy governance_document_chunks_project_delete
+  on governance.document_chunks for delete to authenticated
+  using (
+    app_private.is_project_member(project_id)
+    and governance.has_project_capability(project_id,(select auth.uid()),'catalog.update')
   );
 
 grant select,insert,update,delete on governance.documents,governance.document_chunks to authenticated;
