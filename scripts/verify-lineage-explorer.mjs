@@ -37,7 +37,7 @@ const requiredExplorerContracts=[
   'Governance overlays',
   'Field lineage explorer',
   'Field governance context',
-  'DQ < 80',
+  'DQ &lt; 80',
   'Governed fields only',
 ]
 
