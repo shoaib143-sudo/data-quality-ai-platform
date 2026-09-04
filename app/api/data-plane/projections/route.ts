@@ -7,6 +7,7 @@ import {
   resetProjectionConsumer,
   resumeProjectionConsumer,
 } from '@/lib/data-plane/projection-operations'
+import { rebuildProjectionSnapshot } from '@/lib/data-plane/projection-snapshot'
 
 export async function GET(request: Request) {
   try {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
 type ProjectionOperationBody = {
   projectId?: string
   consumerKey?: string
-  action?: 'RECONCILE' | 'RESET' | 'RESUME'
+  action?: 'RECONCILE' | 'RESET' | 'RESUME' | 'REBUILD_SNAPSHOT'
   reason?: string
 }
 
@@ -35,13 +36,26 @@ export async function POST(request: Request) {
     const user = await requireUser()
     const body = await request.json().catch(() => null) as ProjectionOperationBody | null
     const projectId = body?.projectId?.trim()
-    const consumerKey = body?.consumerKey?.trim()
     const action = body?.action
-    if (!projectId || !consumerKey || !action) {
-      return NextResponse.json({ error: 'projectId, consumerKey and action are required' }, { status: 400 })
+    if (!projectId || !action) {
+      return NextResponse.json({ error: 'projectId and action are required' }, { status: 400 })
     }
 
     await authorizeProject(user.id, projectId, 'retention.manage')
+
+    if (action === 'REBUILD_SNAPSHOT') {
+      const result = await rebuildProjectionSnapshot({
+        projectId,
+        reason: body?.reason ?? '',
+        actorUserId: user.id,
+      })
+      return NextResponse.json({ projectId, action, result })
+    }
+
+    const consumerKey = body?.consumerKey?.trim()
+    if (!consumerKey) {
+      return NextResponse.json({ error: 'consumerKey is required for consumer operations' }, { status: 400 })
+    }
 
     if (action === 'RECONCILE') {
       const result = await reconcileProjectionConsumer({ projectId, consumerKey, actorUserId: user.id })
