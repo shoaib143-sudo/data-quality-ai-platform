@@ -54,7 +54,7 @@ function baseRow(row: AnalyticsEventRow): AnalyticsQueryRow {
   }
 }
 
-function toRunRow(row: AnalyticsEventRow): AnalyticsQueryRow | null {
+function toRunRow(row: AnalyticsEventRow): AnalyticsQueryRow {
   const payload = row.payload ?? {}
   return {
     ...baseRow(row),
