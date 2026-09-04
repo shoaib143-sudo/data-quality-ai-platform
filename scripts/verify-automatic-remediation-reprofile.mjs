@@ -12,6 +12,7 @@ const requiredFiles = [
   'app/workflows/workflow-manager.tsx',
   'supabase/migrations/20260904170400_automatic_remediation_reprofile.sql',
   'supabase/migrations/20260904170500_resume_automatic_remediation_reprofile_claim.sql',
+  'supabase/migrations/20260904170600_synthetic_profiling_remediation_state_machine_suite.sql',
 ]
 
 for (const path of requiredFiles) {
@@ -23,6 +24,10 @@ const checks = [
   ['supabase/migrations/20260904170400_automatic_remediation_reprofile.sql', /VERIFICATION_QUEUED/, 'verification queued lifecycle state'],
   ['supabase/migrations/20260904170400_automatic_remediation_reprofile.sql', /verification_agent_run_id[\s\S]*verification_job_id[\s\S]*verification_requested_at/, 'verification execution linkage schema'],
   ['supabase/migrations/20260904170500_resume_automatic_remediation_reprofile_claim.sql', /claim_profiling_remediation_verification[\s\S]*verification_job_id is null[\s\S]*15 minutes/, 'atomic stale-recoverable resumable verification claim'],
+  ['supabase/migrations/20260904170600_synthetic_profiling_remediation_state_machine_suite.sql', /run_synthetic_profiling_remediation_state_machine_suite/, 'service-side synthetic remediation state machine suite'],
+  ['supabase/migrations/20260904170600_synthetic_profiling_remediation_state_machine_suite.sql', /initial_claim[\s\S]*immediate_duplicate_blocked[\s\S]*stale_unlinked_claim_recovered[\s\S]*linked_job_blocks_reclaim/, 'synthetic claim and idempotency lifecycle checks'],
+  ['supabase/migrations/20260904170600_synthetic_profiling_remediation_state_machine_suite.sql', /delete from app\.organizations[\s\S]*synthetic_cleanup/, 'synthetic remediation estate cleanup'],
+  ['supabase/migrations/20260904170600_synthetic_profiling_remediation_state_machine_suite.sql', /revoke all on function governance\.run_synthetic_profiling_remediation_state_machine_suite\(\) from authenticated[\s\S]*grant execute[\s\S]*service_role/, 'synthetic suite service-role execution boundary'],
   ['lib/profiling/remediation-reprofile.ts', /WAITING_FOR_REMEDIATION[\s\S]*RESOLVED[\s\S]*CLOSED/, 'all remediation issues must resolve before reprofile'],
   ['lib/profiling/remediation-reprofile.ts', /missingIssueIds[\s\S]*WAITING_FOR_REMEDIATION/, 'missing tracked remediation issue blocks reprofile'],
   ['lib/profiling/remediation-reprofile.ts', /profiling_agent[\s\S]*2\.0[\s\S]*enqueueDurableJob[\s\S]*PROFILING/, 'existing profiling durable job path reuse'],
