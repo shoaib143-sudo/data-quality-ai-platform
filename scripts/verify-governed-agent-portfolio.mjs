@@ -65,6 +65,17 @@ requireText('lib/agents/agent-memory.ts', [
   'agent_memories',
   'agent_evaluations',
 ])
+requireText('lib/governance/semantic-agent-memory-indexer.ts', [
+  "objectType: 'AGENT_MEMORY'",
+  "eq('status', 'ACTIVE')",
+  'deleteSemanticObject',
+  'agent_memories',
+])
+requireText('lib/governance/semantic-job-worker.ts', [
+  'reindexProjectAgentMemories',
+  'agentMemories.indexed',
+  'agentMemories.pruned',
+])
 requireText('infra/data-plane/clickhouse/init/004_agent_intelligence_history.sql', [
   'agent_evaluation_history',
   'agent_memory_history',
@@ -77,6 +88,14 @@ requireText('app/api/agents/governance/run/route.ts', [
   'executeGovernanceReadAgent',
   'persistGovernedAgentMemoryAndEvaluation',
   'GOVERNANCE_READ_AGENT_KEYS',
+])
+requireText('app/api/agents/governance/handoff/route.ts', [
+  "authorizeProject(user.id, projectId, 'agent.execute')",
+  'GOVERNED_HANDOFF',
+  'parent_run_id',
+  'source_agent_run_id',
+  'target_agent_run_id',
+  'GOVERNED_AGENT_HANDOFF_COMPLETED',
 ])
 
 console.log('Governed agent portfolio contracts verified.')
