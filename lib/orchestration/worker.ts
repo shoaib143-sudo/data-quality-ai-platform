@@ -14,6 +14,20 @@ import {
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
+async function loadOutcomeEvidence(workflowInstanceId: string) {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .schema('governance')
+    .from('profiling_remediation_outcomes')
+    .select('outcome,checks')
+    .eq('workflow_instance_id', workflowInstanceId)
+    .maybeSingle()
+  return {
+    outcome: data?.outcome && typeof data.outcome === 'object' && !Array.isArray(data.outcome) ? data.outcome as Record<string, unknown> : {},
+    checks: data?.checks && typeof data.checks === 'object' && !Array.isArray(data.checks) ? data.checks as Record<string, unknown> : {},
+  }
+}
+
 async function recordAutomaticVerificationError(input: {
   workflowInstanceId: string
   projectId: string
@@ -24,28 +38,21 @@ async function recordAutomaticVerificationError(input: {
   const admin = createAdminClient()
   const message = input.error instanceof Error ? input.error.message : 'Automatic remediation verification failed.'
   const now = new Date().toISOString()
-
-  const { data: existing } = await admin
-    .schema('governance')
-    .from('profiling_remediation_outcomes')
-    .select('outcome,checks')
-    .eq('workflow_instance_id', input.workflowInstanceId)
-    .maybeSingle()
-  const priorOutcome = existing?.outcome && typeof existing.outcome === 'object' && !Array.isArray(existing.outcome) ? existing.outcome as Record<string, unknown> : {}
-  const priorChecks = existing?.checks && typeof existing.checks === 'object' && !Array.isArray(existing.checks) ? existing.checks as Record<string, unknown> : {}
+  const existing = await loadOutcomeEvidence(input.workflowInstanceId)
 
   await admin.schema('governance').from('profiling_remediation_outcomes').update({
     status: 'VERIFICATION_QUEUED',
     checks: {
-      ...priorChecks,
+      ...existing.checks,
       automatic_reprofile_completed: { passed: false, retryable: true, profiling_run_id: input.profilingRunId, error: message },
     },
     outcome: {
-      ...priorOutcome,
+      ...existing.outcome,
       verification_passed: null,
       recommendation_effective: null,
       verification_source: 'AUTOMATIC_WORKER',
       verification_error: message,
+      verification_cancelled: false,
       verification_retryable: true,
     },
     updated_at: now,
@@ -61,6 +68,48 @@ async function recordAutomaticVerificationError(input: {
     entityId: input.profilingRunId,
     correlationId: input.workflowInstanceId,
     metadata: { workflow_instance_id: input.workflowInstanceId, verification_profile_run_id: input.profilingRunId, retryable: true, error: message },
+  })
+}
+
+async function recordAutomaticVerificationCancellation(input: {
+  workflowInstanceId: string
+  projectId: string
+  userId: string
+  profilingRunId: string
+}) {
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+  const existing = await loadOutcomeEvidence(input.workflowInstanceId)
+
+  await admin.schema('governance').from('profiling_remediation_outcomes').update({
+    status: 'VERIFICATION_CANCELLED',
+    checks: {
+      ...existing.checks,
+      automatic_reprofile_cancelled: { cancelled: true, profiling_run_id: input.profilingRunId, cancelled_at: now },
+    },
+    outcome: {
+      ...existing.outcome,
+      verification_passed: null,
+      recommendation_effective: null,
+      verification_source: 'AUTOMATIC_WORKER',
+      verification_error: null,
+      verification_cancelled: true,
+      verification_cancelled_at: now,
+      verification_retryable: true,
+    },
+    updated_at: now,
+    verified_at: null,
+  }).eq('workflow_instance_id', input.workflowInstanceId)
+
+  await writeGovernanceAudit({
+    projectId: input.projectId,
+    actorUserId: input.userId,
+    actorType: 'SYSTEM',
+    eventType: 'PROFILING_REMEDIATION_AUTOMATIC_VERIFICATION_CANCELLED',
+    entityType: 'PROFILE_RUN',
+    entityId: input.profilingRunId,
+    correlationId: input.workflowInstanceId,
+    metadata: { workflow_instance_id: input.workflowInstanceId, verification_profile_run_id: input.profilingRunId, restartable: true },
   })
 }
 
@@ -140,8 +189,7 @@ export async function executeDurableJob(job: DurableJob) {
     const preparation = await prepareProfilingAttempt({ agentRunId, profilingRunId })
     if (preparation.status === 'CANCELLED') {
       if (automaticVerification) {
-        const cancellation = new Error('Automatic remediation verification profiling run was cancelled.')
-        await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: cancellation })
+        await recordAutomaticVerificationCancellation({ workflowInstanceId, projectId, userId, profilingRunId })
       }
       return
     }
@@ -165,13 +213,7 @@ export async function executeDurableJob(job: DurableJob) {
     }
     if (completedRun.status === 'CANCELLED') {
       if (automaticVerification) {
-        await recordAutomaticVerificationError({
-          workflowInstanceId,
-          projectId,
-          userId,
-          profilingRunId,
-          error: new Error('Automatic remediation verification profiling run was cancelled.'),
-        })
+        await recordAutomaticVerificationCancellation({ workflowInstanceId, projectId, userId, profilingRunId })
       }
       return
     }
