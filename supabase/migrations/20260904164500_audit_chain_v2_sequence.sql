@@ -1,16 +1,11 @@
 create sequence if not exists governance.audit_event_chain_sequence;
 
 alter table governance.audit_events
-  add column if not exists chain_version smallint,
+  add column if not exists chain_version smallint not null default 1,
   add column if not exists chain_sequence bigint;
-
-update governance.audit_events
-set chain_version = 1
-where chain_version is null;
 
 alter table governance.audit_events
   alter column chain_version set default 2,
-  alter column chain_version set not null,
   alter column chain_sequence set default nextval('governance.audit_event_chain_sequence');
 
 create index if not exists audit_events_project_chain_sequence_idx
@@ -82,8 +77,6 @@ declare
   v_strict_failures integer := 0;
   v_legacy_forks integer := 0;
 begin
-  -- Legacy v1 rows were produced before deterministic sequence ordering existed.
-  -- Preserve their hashes unchanged and verify each stored hash plus its predecessor reference.
   for r in
     select id,project_id,actor_user_id,actor_type,event_type,entity_type,entity_id,
            correlation_id,metadata,created_at,previous_hash,event_hash
@@ -120,7 +113,6 @@ begin
     having count(*) > 1
   ) forks;
 
-  -- Version 2+ is a strict, sequence-ordered chain. Any fork or ordering mismatch fails verification.
   for r in
     select id,project_id,actor_user_id,actor_type,event_type,entity_type,entity_id,
            correlation_id,metadata,created_at,previous_hash,event_hash,chain_version,chain_sequence
