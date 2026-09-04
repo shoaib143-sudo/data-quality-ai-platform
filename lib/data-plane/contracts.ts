@@ -172,6 +172,15 @@ export type ProjectionEvent = AnalyticsEvent & {
   operation: 'UPSERT' | 'DELETE' | 'APPEND' | 'REBUILD'
 }
 
+export type ProjectionEventEnvelope = {
+  sequence: string
+  event: ProjectionEvent
+}
+
+export interface ProjectionEventSource {
+  read(scope: TenantScope, afterSequence?: string | null, limit?: number): Promise<ProjectionEventEnvelope[]>
+}
+
 export interface ProjectionPublisher {
   publish(event: ProjectionEvent): Promise<void>
   publishMany(events: ProjectionEvent[]): Promise<void>
