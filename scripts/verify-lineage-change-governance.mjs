@@ -134,7 +134,17 @@ requireText('app/lineage/impact/change-impact-manager.tsx', [
   '/api/lineage/impact/change/gate?analysisId=',
   '/api/lineage/impact/change/execution/authorize',
   '/api/lineage/impact/change/execution/status?analysisId=',
+  '?instanceId=',
   'productionMutationPerformed',
+])
+
+requireText('app/workflows/page.tsx', [
+  'searchParams:Promise<{instanceId?:string|string[]}>',
+  'selectedInstanceId',
+  'selectedProjectId',
+  'orderedProjects',
+  'orderedInstances',
+  'Focused workflow instance',
 ])
 
 console.log('Lineage change governance contracts verified.')
