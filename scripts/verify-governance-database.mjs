@@ -39,6 +39,22 @@ if (semanticPosture.anonymous_execute === true || semanticPosture.match_security
 }
 console.log('PASS semantic governance vector, index, RLS and RPC posture')
 
+const { data: auditPosture, error: auditPostureError } = await supabase.schema('governance').rpc('verify_governance_audit_posture')
+if (auditPostureError) throw new Error(`Unable to verify governance audit posture: ${auditPostureError.message}`)
+if (!auditPosture || typeof auditPosture !== 'object' || auditPosture.valid !== true) {
+  throw new Error(`Governance audit posture is invalid: ${JSON.stringify(auditPosture)}`)
+}
+for (const key of [
+  'service_role_table_insert',
+  'service_role_sequence_usage',
+  'service_role_sequence_select',
+  'append_only_trigger',
+  'hash_chain_trigger',
+]) {
+  if (auditPosture[key] !== true) throw new Error(`Governance audit posture check failed for ${key}: ${JSON.stringify(auditPosture)}`)
+}
+console.log('PASS governance audit service-role sequence and immutable hash-chain posture')
+
 const { count: lineageExecutionRequests, error: lineageExecutionError } = await supabase
   .schema('governance')
   .from('lineage_change_execution_requests')
