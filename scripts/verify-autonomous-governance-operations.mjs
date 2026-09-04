@@ -71,6 +71,15 @@ requireText('supabase/migrations/20260904176000_observability_cross_dataset_corr
   'TEMPORAL_CLUSTER',
   'enable row level security',
 ])
+requireText('supabase/migrations/20260904177000_observability_incident_sla.sql', [
+  'response_due_at',
+  'escalation_level',
+  'set_observability_incident_sla',
+  "when 'CRITICAL' then interval '30 minutes'",
+])
+requireText('supabase/migrations/20260904178000_add_incident_sla_alert_category.sql', [
+  'INCIDENT_SLA_BREACH',
+])
 requireText('lib/observability/incident-intelligence.ts', [
   'investigateObservabilityIncident',
   'SCHEMA_CHANGE_AFFECTING_QUALITY_CONTROLS',
@@ -90,6 +99,12 @@ requireText('lib/observability/cross-dataset-correlation.ts', [
   'shared_probable_root_causes',
   'lineage_linked',
   'OBSERVABILITY_CROSS_DATASET_CORRELATION_EVALUATED',
+])
+requireText('lib/observability/incident-sla.ts', [
+  'evaluateIncidentSlaEscalations',
+  'INCIDENT_SLA_BREACH',
+  'queueAlertNotifications',
+  'OBSERVABILITY_INCIDENT_SLA_ESCALATED',
 ])
 const incidentAction = requireText('app/api/observability/incidents/remediation/route.ts', [
   'TRACKED_GOVERNANCE_ISSUES_ONLY',
@@ -158,6 +173,10 @@ if (worker.indexOf('queueDataQualityVerificationAfterFreshProfile') > worker.ind
   throw new Error('Fresh profiling verification handoff must be wired before Data Quality outcome verification.')
 }
 
+requireText('app/api/jobs/worker/route.ts', [
+  'evaluateIncidentSlaEscalations',
+  'incidentEscalations',
+])
 requireText('app/api/issues/[issueId]/route.ts', [
   'scheduleFreshDataQualityVerificationFromIssue',
   "mode: 'DATA_QUALITY_FRESH_PROFILE'",
@@ -167,7 +186,7 @@ requireText('app/api/issues/[issueId]/route.ts', [
 ])
 requireText('app/api/observability/incidents/route.ts', ['observability_incident_correlations', 'correlateObservabilityIncidents', 'correlations'])
 requireText('app/data-quality/autonomous/page.tsx', ['Autonomous quality operations'])
-requireText('app/observability/incidents/page.tsx', ['AI Operations Center', 'Cross-dataset links', 'Related incidents across datasets'])
+requireText('app/observability/incidents/page.tsx', ['AI Operations Center', 'Cross-dataset links', 'Related incidents across datasets', 'Overdue SLA', 'Escalation L'])
 requireText('app/lineage/impact/page.tsx', ['Lineage Impact Intelligence', 'ChangeImpactManager'])
 
 console.log('Autonomous governance operations contracts verified.')
