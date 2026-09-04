@@ -35,7 +35,10 @@ const checks = [
   ['lib/profiling/remediation-verification.ts', /remediation_issue_ids[\s\S]*trackedIssueIds[\s\S]*missingTrackedIssues/, 'verification evaluates exact persisted remediation issues'],
   ['app/api/profiling/remediation/verify/route.ts', /REMEDIATION_IN_PROGRESS[\s\S]*VERIFICATION_QUEUE_PENDING[\s\S]*verification_profile_run_id[\s\S]*API_LINKED[\s\S]*VERIFICATION_PROFILE_RUNNING/, 'API prevents premature fallback and prefers linked automatic verification evidence'],
   ['app/workflows/page.tsx', /from\('issues'\)[\s\S]*Profiling remediation:%[\s\S]*issues=/, 'workflow page loads remediation issue state'],
-  ['app/workflows/workflow-manager.tsx', /resolutionSummary[\s\S]*resolutionEvidence[\s\S]*Resolve with evidence[\s\S]*Automatic verification queued/, 'workflow UI records evidence and surfaces automatic verification'],
+  ['app/workflows/workflow-manager.tsx', /resolutionSummary[\s\S]*resolutionEvidence[\s\S]*GOVERNANCE_WORKFLOW_UI/, 'workflow UI records resolution evidence'],
+  ['app/workflows/workflow-manager.tsx', /Resolve with evidence/, 'workflow UI exposes evidence-driven resolution control'],
+  ['app/workflows/workflow-manager.tsx', /Automatic verification queued/, 'workflow UI surfaces automatic verification queue state'],
+  ['app/workflows/workflow-manager.tsx', /verification_job_id/, 'workflow UI surfaces automatic verification job linkage'],
 ]
 
 for (const [path, pattern, label] of checks) {
