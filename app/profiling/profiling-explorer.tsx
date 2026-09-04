@@ -40,21 +40,33 @@ export default function ProfilingExplorer({
   findings,
   columns,
   metrics,
+  initialColumnId = null,
+  initialFindingId = null,
 }: {
   findings: ExplorerFinding[]
   columns: ExplorerColumn[]
   metrics: ExplorerMetric[]
+  initialColumnId?: string | null
+  initialFindingId?: string | null
 }) {
+  const validInitialColumn = initialColumnId && columns.some((column) => column.id === initialColumnId) ? initialColumnId : 'ALL'
+  const validInitialFinding = initialFindingId && findings.some((finding) => finding.id === initialFindingId) ? initialFindingId : null
   const [query, setQuery] = useState('')
   const [severity, setSeverity] = useState('ALL')
   const [findingType, setFindingType] = useState('ALL')
-  const [columnId, setColumnId] = useState('ALL')
+  const [columnId, setColumnId] = useState(validInitialColumn)
+  const [focusedFindingId, setFocusedFindingId] = useState<string | null>(validInitialFinding)
+
+  function clearSemanticFocus() {
+    if (focusedFindingId) setFocusedFindingId(null)
+  }
 
   const findingTypes = useMemo(() => Array.from(new Set(findings.map((finding) => finding.finding_type))).sort(), [findings])
   const severities = useMemo(() => Array.from(new Set(findings.map((finding) => finding.severity))).sort(), [findings])
   const filteredFindings = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
     return findings.filter((finding) => {
+      if (focusedFindingId && finding.id !== focusedFindingId) return false
       if (severity !== 'ALL' && finding.severity !== severity) return false
       if (findingType !== 'ALL' && finding.finding_type !== findingType) return false
       if (columnId !== 'ALL' && finding.profile_column_id !== columnId) return false
@@ -62,7 +74,7 @@ export default function ProfilingExplorer({
       return [finding.title, finding.description, finding.finding_type, finding.severity]
         .some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery))
     })
-  }, [findings, query, severity, findingType, columnId])
+  }, [findings, query, severity, findingType, columnId, focusedFindingId])
 
   const metricsByColumn = useMemo(() => {
     const map = new Map<string, ExplorerMetric[]>()
@@ -85,23 +97,30 @@ export default function ProfilingExplorer({
         <p className="mt-1 text-sm text-muted-foreground">Filter persisted governance findings and inspect the exact metric evidence for a selected column.</p>
       </div>
 
+      {focusedFindingId ? (
+        <div className="mt-4 flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          <span>Focused on the finding selected from semantic search.</span>
+          <button type="button" onClick={() => setFocusedFindingId(null)} className="font-semibold underline">Show all findings</button>
+        </div>
+      ) : null}
+
       <div className="mt-5 grid gap-3 md:grid-cols-4">
         <input
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => { clearSemanticFocus(); setQuery(event.target.value) }}
           placeholder="Search findings"
           className="rounded-md border bg-background px-3 py-2 text-sm"
           aria-label="Search findings"
         />
-        <select value={severity} onChange={(event) => setSeverity(event.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Filter by severity">
+        <select value={severity} onChange={(event) => { clearSemanticFocus(); setSeverity(event.target.value) }} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Filter by severity">
           <option value="ALL">All severities</option>
           {severities.map((value) => <option key={value} value={value}>{label(value)}</option>)}
         </select>
-        <select value={findingType} onChange={(event) => setFindingType(event.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Filter by finding type">
+        <select value={findingType} onChange={(event) => { clearSemanticFocus(); setFindingType(event.target.value) }} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Filter by finding type">
           <option value="ALL">All finding types</option>
           {findingTypes.map((value) => <option key={value} value={value}>{label(value)}</option>)}
         </select>
-        <select value={columnId} onChange={(event) => setColumnId(event.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Drill down to column">
+        <select value={columnId} onChange={(event) => { clearSemanticFocus(); setColumnId(event.target.value) }} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Drill down to column">
           <option value="ALL">All columns</option>
           {columns.map((column) => <option key={column.id} value={column.id}>{column.column_name}</option>)}
         </select>
