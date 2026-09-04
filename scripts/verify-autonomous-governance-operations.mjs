@@ -60,6 +60,17 @@ requireText('supabase/migrations/20260904174000_guard_observability_incident_res
   'unresolved_response_issue_count',
   'active_correlated_alert_count',
 ])
+requireText('supabase/migrations/20260904175000_index_autonomous_governance_foreign_keys.sql', [
+  'dq_investigations_dataset_version_idx',
+  'observability_incidents_workflow_idx',
+])
+requireText('supabase/migrations/20260904176000_observability_cross_dataset_correlations.sql', [
+  'governance.observability_incident_correlations',
+  'LINEAGE_RELATED',
+  'SHARED_FAILURE_MODE',
+  'TEMPORAL_CLUSTER',
+  'enable row level security',
+])
 requireText('lib/observability/incident-intelligence.ts', [
   'investigateObservabilityIncident',
   'SCHEMA_CHANGE_AFFECTING_QUALITY_CONTROLS',
@@ -72,6 +83,13 @@ requireText('lib/observability/incident-response-verification.ts', [
   'tracked_response_issues_resolved',
   'correlated_signals_cleared',
   'OBSERVABILITY_INCIDENT_RESPONSE_VERIFIED',
+])
+requireText('lib/observability/cross-dataset-correlation.ts', [
+  'correlateObservabilityIncidents',
+  'shared_categories',
+  'shared_probable_root_causes',
+  'lineage_linked',
+  'OBSERVABILITY_CROSS_DATASET_CORRELATION_EVALUATED',
 ])
 const incidentAction = requireText('app/api/observability/incidents/remediation/route.ts', [
   'TRACKED_GOVERNANCE_ISSUES_ONLY',
@@ -92,7 +110,7 @@ requireText('lib/governance/lineage-impact.ts', [
   'riskScore',
   'confidence',
 ])
-const changeImpact = requireText('lib/governance/lineage-change-impact.ts', [
+requireText('lib/governance/lineage-change-impact.ts', [
   'analyzeColumnLineageImpact',
   'lineage_column_mappings',
   'assessProposedLineageChange',
@@ -130,6 +148,8 @@ const worker = requireText('lib/orchestration/worker.ts', [
   'recordDataQualityReprofileCancellation',
   'investigateObservabilityIncident',
   'enrichObservabilityIncidentWithLineageImpact',
+  'correlateObservabilityIncidents',
+  'correlateIncidentProject',
 ])
 if (worker.indexOf('investigateDataQualityRun') > worker.indexOf('investigateObservabilityIncident')) {
   throw new Error('Durable worker contract must investigate Data Quality before correlated observability incident processing.')
@@ -145,8 +165,9 @@ requireText('app/api/issues/[issueId]/route.ts', [
   'isObservabilityResponse',
   "mode: 'OBSERVABILITY_RESPONSE'",
 ])
+requireText('app/api/observability/incidents/route.ts', ['observability_incident_correlations', 'correlateObservabilityIncidents', 'correlations'])
 requireText('app/data-quality/autonomous/page.tsx', ['Autonomous quality operations'])
-requireText('app/observability/incidents/page.tsx', ['AI Operations Center'])
+requireText('app/observability/incidents/page.tsx', ['AI Operations Center', 'Cross-dataset links', 'Related incidents across datasets'])
 requireText('app/lineage/impact/page.tsx', ['Lineage Impact Intelligence', 'ChangeImpactManager'])
 
 console.log('Autonomous governance operations contracts verified.')
