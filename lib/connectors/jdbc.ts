@@ -105,7 +105,10 @@ function safeIdentifier(value: string, field: string) {
 }
 
 function rejectEmbeddedCredentials(jdbcUrl: string) {
-  if (/jdbc:[^:]+:\/\/[^/\s:@]+:[^/\s@]+@/i.test(jdbcUrl) || /jdbc:[^:]+:\/\/[^/\s@]+@/i.test(jdbcUrl)) {
+  const authorityCredentials = /jdbc:[^:]+:\/\/[^/\s@]+@/i
+  const credentialProperty = /(?:[?&;])(?:user(?:name)?|uid|password|passwd|pwd|pass|token|access_token|accesstoken|secret|client_secret)=/i
+  const oracleThinCredentials = /^jdbc:oracle:thin:[^:@/\s]+(?:\/[^@\s]+)?@/i
+  if (authorityCredentials.test(jdbcUrl) || credentialProperty.test(jdbcUrl) || oracleThinCredentials.test(jdbcUrl)) {
     throw new Error('JDBC URL must not contain embedded credentials; use credentialRef.')
   }
 }
