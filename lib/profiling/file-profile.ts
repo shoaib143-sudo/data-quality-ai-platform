@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { persistGovernedDocumentContent } from '@/lib/governance/document-content'
 import { loadGovernedFileSource } from '@/lib/profiling/governed-file-source'
 import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
 
@@ -61,6 +62,14 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
     { maxRows: sampling.loadLimit, maxBytes: sampling.technicalMaxFileBytes },
   )
 
+  const governedDocument = await persistGovernedDocumentContent(supabase, {
+    projectId: sampling.projectId,
+    datasetId: version.dataset_id,
+    datasetVersionId,
+    profileRunId: profilingRunId,
+    loaded,
+  })
+
   const sampled = applySamplingPolicy(loaded.rows as Record<string, unknown>[], loaded.rowCount, sampling)
   const sampledRows = sampled.rows
 
@@ -102,6 +111,13 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
     sampling_policy: sampled.policy,
     warnings: [...loaded.warnings, ...sampled.warnings],
     metadata: loaded.metadata,
+    governed_document: governedDocument ? {
+      id: governedDocument.document.id,
+      persisted_chunks: governedDocument.persistedChunks,
+      source_rows: governedDocument.sourceRows,
+      persisted_source_rows: governedDocument.persistedSourceRows,
+      truncated: governedDocument.truncated,
+    } : null,
   }
   const schemaSnapshot = { row_count: sampled.sourceRowCount, column_count: columns.length, source_access: sourceAccess, columns }
   const schemaHash = stableHash(columns.map((column) => ({ name: column.name, ordinal_position: column.ordinal_position, source_type: column.source_type, inferred_type: column.inferred_type })))
@@ -145,6 +161,7 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
       schema_hash: schemaHash,
       source_access: sourceAccess,
       file_metadata: loaded.metadata,
+      governed_document: sourceAccess.governed_document,
       columns: columns.map((column) => ({ name: column.name, type: column.inferred_type })),
     },
   }).eq('id', profilingRunId).select().single()
@@ -160,6 +177,7 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
     column_count: columns.length,
     schema_hash: schemaHash,
     source_access: sourceAccess,
+    governed_document: sourceAccess.governed_document,
     snapshot,
     profile_run: run,
   }
