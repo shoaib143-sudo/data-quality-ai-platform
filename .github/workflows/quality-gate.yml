@@ -38,6 +38,8 @@ jobs:
         run: pnpm run verify:remediation
       - name: Verify profiling recommendation learning contracts
         run: pnpm run verify:learning
+      - name: Verify automatic remediation reprofile contracts
+        run: pnpm run verify:reprofile
       - name: Verify live governance database contracts
         if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: pnpm run verify:database
