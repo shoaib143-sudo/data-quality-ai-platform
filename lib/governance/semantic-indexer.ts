@@ -55,6 +55,22 @@ type ProfileFindingRow = {
   recommendation: Record<string, unknown> | null
 }
 
+type ExistingEmbeddingRow = {
+  id: string
+  object_type: string
+  object_key: string
+}
+
+const FILTER_BATCH_SIZE = 100
+const MANAGED_SEMANTIC_TYPES = [
+  'DATASET',
+  'COLUMN',
+  'FINDING',
+  'GLOSSARY_TERM',
+  'POLICY',
+  'LINEAGE_TRANSFORMATION',
+] as const
+
 function compact(parts: Array<string | null | undefined>) {
   return parts.map((part) => part?.trim()).filter(Boolean).join('\n')
 }
@@ -63,6 +79,12 @@ function jsonSummary(value: unknown, prefix: string) {
   if (!value || typeof value !== 'object') return null
   const serialized = JSON.stringify(value)
   return serialized === '{}' || serialized === '[]' ? null : `${prefix}: ${serialized}`
+}
+
+function batches<T>(values: T[], size = FILTER_BATCH_SIZE) {
+  const result: T[][] = []
+  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size))
+  return result
 }
 
 export async function collectProjectSemanticCandidates(projectId: string): Promise<IndexCandidate[]> {
@@ -101,50 +123,50 @@ export async function collectProjectSemanticCandidates(projectId: string): Promi
 
   const datasetRows = (datasets.data ?? []) as DatasetRow[]
   const datasetIds = datasetRows.map((dataset) => dataset.id)
-  let versionRows: DatasetVersionRow[] = []
-  let runRows: ProfileRunRow[] = []
-  let columnRows: ProfileColumnRow[] = []
-  let findingRows: ProfileFindingRow[] = []
+  const versionRows: DatasetVersionRow[] = []
+  const runRows: ProfileRunRow[] = []
+  const columnRows: ProfileColumnRow[] = []
+  const findingRows: ProfileFindingRow[] = []
 
-  if (datasetIds.length) {
+  for (const datasetBatch of batches(datasetIds)) {
     const versions = await admin
       .schema('catalog')
       .from('dataset_versions')
       .select('id,dataset_id,version_number')
-      .in('dataset_id', datasetIds)
+      .in('dataset_id', datasetBatch)
     if (versions.error) throw new Error(`Unable to collect semantic dataset versions: ${versions.error.message}`)
-    versionRows = (versions.data ?? []) as DatasetVersionRow[]
+    versionRows.push(...((versions.data ?? []) as DatasetVersionRow[]))
+  }
 
-    const versionIds = versionRows.map((version) => version.id)
-    if (versionIds.length) {
-      const runs = await admin
+  const versionIds = versionRows.map((version) => version.id)
+  for (const versionBatch of batches(versionIds)) {
+    const runs = await admin
+      .schema('profiling')
+      .from('profile_runs')
+      .select('id,dataset_version_id')
+      .in('dataset_version_id', versionBatch)
+    if (runs.error) throw new Error(`Unable to collect semantic profile runs: ${runs.error.message}`)
+    runRows.push(...((runs.data ?? []) as ProfileRunRow[]))
+  }
+
+  const runIds = runRows.map((run) => run.id)
+  for (const runBatch of batches(runIds)) {
+    const [columns, findings] = await Promise.all([
+      admin
         .schema('profiling')
-        .from('profile_runs')
-        .select('id,dataset_version_id')
-        .in('dataset_version_id', versionIds)
-      if (runs.error) throw new Error(`Unable to collect semantic profile runs: ${runs.error.message}`)
-      runRows = (runs.data ?? []) as ProfileRunRow[]
-
-      const runIds = runRows.map((run) => run.id)
-      if (runIds.length) {
-        const [columns, findings] = await Promise.all([
-          admin
-            .schema('profiling')
-            .from('profile_columns')
-            .select('id,profile_run_id,column_name,source_type,inferred_type,semantic_type,nullable,confidence,is_candidate_key,key_confidence,metadata')
-            .in('profile_run_id', runIds),
-          admin
-            .schema('profiling')
-            .from('profile_findings')
-            .select('id,profile_run_id,profile_column_id,finding_type,severity,title,description,confidence,evidence,recommendation')
-            .in('profile_run_id', runIds),
-        ])
-        if (columns.error) throw new Error(`Unable to collect semantic profile columns: ${columns.error.message}`)
-        if (findings.error) throw new Error(`Unable to collect semantic profile findings: ${findings.error.message}`)
-        columnRows = (columns.data ?? []) as ProfileColumnRow[]
-        findingRows = (findings.data ?? []) as ProfileFindingRow[]
-      }
-    }
+        .from('profile_columns')
+        .select('id,profile_run_id,column_name,source_type,inferred_type,semantic_type,nullable,confidence,is_candidate_key,key_confidence,metadata')
+        .in('profile_run_id', runBatch),
+      admin
+        .schema('profiling')
+        .from('profile_findings')
+        .select('id,profile_run_id,profile_column_id,finding_type,severity,title,description,confidence,evidence,recommendation')
+        .in('profile_run_id', runBatch),
+    ])
+    if (columns.error) throw new Error(`Unable to collect semantic profile columns: ${columns.error.message}`)
+    if (findings.error) throw new Error(`Unable to collect semantic profile findings: ${findings.error.message}`)
+    columnRows.push(...((columns.data ?? []) as ProfileColumnRow[]))
+    findingRows.push(...((findings.data ?? []) as ProfileFindingRow[]))
   }
 
   const datasetById = new Map(datasetRows.map((dataset) => [dataset.id, dataset]))
@@ -297,6 +319,34 @@ export async function collectProjectSemanticCandidates(projectId: string): Promi
   ].filter((candidate) => candidate.content.length > 0)
 }
 
+async function pruneStaleSemanticObjects(projectId: string, candidates: IndexCandidate[]) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .schema('governance')
+    .from('semantic_embeddings')
+    .select('id,object_type,object_key')
+    .eq('project_id', projectId)
+    .in('object_type', [...MANAGED_SEMANTIC_TYPES])
+
+  if (error) throw new Error(`Unable to inspect stale semantic objects: ${error.message}`)
+
+  const active = new Set(candidates.map((candidate) => `${candidate.objectType}:${candidate.objectKey}`))
+  const staleIds = ((data ?? []) as ExistingEmbeddingRow[])
+    .filter((row) => !active.has(`${row.object_type}:${row.object_key}`))
+    .map((row) => row.id)
+
+  for (const staleBatch of batches(staleIds)) {
+    const { error: deleteError } = await admin
+      .schema('governance')
+      .from('semantic_embeddings')
+      .delete()
+      .in('id', staleBatch)
+    if (deleteError) throw new Error(`Unable to prune stale semantic objects: ${deleteError.message}`)
+  }
+
+  return staleIds.length
+}
+
 export async function reindexProjectSemanticObjects(
   projectId: string,
   options: { concurrency?: number } = {},
@@ -326,12 +376,14 @@ export async function reindexProjectSemanticObjects(
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, candidates.length)) }, () => worker()))
+  const pruned = await pruneStaleSemanticObjects(projectId, candidates)
 
   return {
     projectId,
     total: candidates.length,
     indexed: results.filter((result) => result.status === 'INDEXED').length,
     failed: results.filter((result) => result.status === 'FAILED').length,
+    pruned,
     results,
   }
 }
