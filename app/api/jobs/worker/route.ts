@@ -11,6 +11,8 @@ import {
 } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
 import { runProjectionWorker } from '@/lib/data-plane/run-projection-worker'
+import { enqueueDailySemanticIndexJobs } from '@/lib/governance/semantic-jobs'
+import { processSemanticIndexJobs } from '@/lib/governance/semantic-job-worker'
 
 export const maxDuration = 300
 
@@ -39,18 +41,26 @@ export async function GET(request: Request) {
   const workerId = `scheduled-worker:${crypto.randomUUID()}`
   const scheduled = await enqueueDueSchedules(20)
   const jobs = await claimDurableJobs(workerId, 2)
-  const results = await processDurableJobs(jobs)
+  const semanticJobs = jobs.filter((job) => job.job_type === 'SEMANTIC_INDEX')
+  const coreJobs = jobs.filter((job) => job.job_type !== 'SEMANTIC_INDEX')
+  const [results, semanticResults] = await Promise.all([
+    processDurableJobs(coreJobs),
+    processSemanticIndexJobs(semanticJobs),
+  ])
   const events = await claimOutboxEvents(workerId, 30)
   const eventResults = await processOutboxEvents(events)
-  const [incidentEscalations, projections] = await Promise.all([
+  const [incidentEscalations, projections, semanticIndexScheduling] = await Promise.all([
     evaluateIncidentSlaEscalations(50),
     runProjectionWorker({ projectLimit: 10, batchSize: 200 }),
+    enqueueDailySemanticIndexJobs(100),
   ])
   return NextResponse.json({
     workerId,
     scheduled,
     claimed: jobs.length,
     results,
+    semanticResults,
+    semanticIndexScheduling,
     eventsClaimed: events.length,
     eventResults,
     incidentEscalations,
