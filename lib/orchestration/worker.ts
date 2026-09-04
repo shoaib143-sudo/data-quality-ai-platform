@@ -6,6 +6,7 @@ import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { investigateObservabilityIncident } from '@/lib/observability/incident-intelligence'
 import { deliverNotificationJob } from '@/lib/observability/notifications'
 import { executeMetadataDiscovery } from '@/lib/catalog/discovery'
+import { enrichObservabilityIncidentWithLineageImpact } from '@/lib/governance/lineage-impact'
 import { verifyRemediationOutcome } from '@/lib/profiling/remediation-verification'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
@@ -167,6 +168,21 @@ async function prepareProfilingAttempt(input: { agentRunId: string; profilingRun
   return { execute: true, status: profileRun.status }
 }
 
+async function enrichIncidentImpact(input: {
+  incident: Awaited<ReturnType<typeof investigateObservabilityIncident>>
+  userId?: string | null
+}) {
+  if (!input.incident.incidentId || input.incident.status === 'RESOLVED') return null
+  if (!('projectId' in input.incident) || !input.incident.projectId) return null
+  return enrichObservabilityIncidentWithLineageImpact({
+    incidentId: input.incident.incidentId,
+    projectId: input.incident.projectId,
+    datasetId: input.incident.datasetId,
+    severity: 'severity' in input.incident ? input.incident.severity : null,
+    actorUserId: input.userId ?? null,
+  })
+}
+
 export async function executeDurableJob(job: DurableJob) {
   const payload = job.payload ?? {}
 
@@ -271,7 +287,8 @@ export async function executeDurableJob(job: DurableJob) {
     }
 
     await evaluateObservabilitySignals(datasetVersionId, profileRunId)
-    await investigateObservabilityIncident({ datasetVersionId, profileRunId, userId: userId || null })
+    const incident = await investigateObservabilityIncident({ datasetVersionId, profileRunId, userId: userId || null })
+    await enrichIncidentImpact({ incident, userId: userId || null })
     return
   }
 
@@ -281,7 +298,8 @@ export async function executeDurableJob(job: DurableJob) {
     const userId = text(payload.userId)
     if (!datasetVersionId || !profileRunId) throw new Error('Durable observability job payload is incomplete.')
     await evaluateObservabilitySignals(datasetVersionId, profileRunId)
-    await investigateObservabilityIncident({ datasetVersionId, profileRunId, userId: userId || null })
+    const incident = await investigateObservabilityIncident({ datasetVersionId, profileRunId, userId: userId || null })
+    await enrichIncidentImpact({ incident, userId: userId || null })
     return
   }
 
