@@ -6,6 +6,7 @@ import { GOVERNANCE_READ_AGENT_KEYS } from '@/lib/agents/governance-read-agent'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
+import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -55,12 +56,24 @@ export async function POST(request: Request) {
       actorUserId: user.id,
       question: question || null,
     })
+
+    let specialistOutput = result.output as Record<string, unknown>
+    if (result.output.agent.key === 'investigator_agent') {
+      const investigation = await persistInvestigatorRiskAssessment({
+        projectId,
+        agentRunId: result.runId,
+        actorUserId: user.id,
+        output: specialistOutput,
+      })
+      if (investigation) specialistOutput = { ...specialistOutput, investigation }
+    }
+
     const output = await enrichGovernedAgentWithMemory({
       projectId,
       agentDefinitionId,
       agentRunId: result.runId,
       question: question || null,
-      output: result.output as Record<string, unknown>,
+      output: specialistOutput,
     })
     const memory = await persistGovernedAgentMemoryAndEvaluation({
       projectId,
