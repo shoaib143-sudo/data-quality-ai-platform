@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
+import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
+
+function storageExecutionConfig(sourceUri: string) {
+  const normalized = sourceUri.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '')
+  const parts = normalized.split('/')
+  if (parts.length < 2 || parts.some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('Storage FILE sourceUri must use bucket/path syntax with a normalized object path.')
+  }
+  return { bucket: parts[0], path: parts.slice(1).join('/') }
+}
 
 export async function POST(request: Request) {
   try {
@@ -13,15 +23,12 @@ export async function POST(request: Request) {
     const sourceUri = text(body.sourceUri)
     if (!projectId || !sourceUri) return NextResponse.json({ error: 'projectId and sourceUri are required.' }, { status: 400 })
 
-    const admin = createAdminClient()
-    const { data: project } = await admin.schema('app').from('projects').select('id, organization_id').eq('id', projectId).maybeSingle()
-    if (!project) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
-    const { data: membership } = await admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-    if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
+    await authorizeProject(user.id, projectId, 'catalog.read')
 
+    const admin = createAdminClient()
     const executionConfig = /^https?:\/\//i.test(sourceUri)
       ? { url: sourceUri }
-      : { bucket: sourceUri.split('/')[0], path: sourceUri.split('/').slice(1).join('/') }
+      : storageExecutionConfig(sourceUri)
 
     const loaded = await loadFileSource(admin, { sourceUri, executionConfig }, { maxRows: 1000 })
     const firstRow = loaded.rows[0] ?? {}
@@ -48,6 +55,7 @@ export async function POST(request: Request) {
       warnings: loaded.warnings,
     })
   } catch (error) {
+    if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'FILE discovery failed.' }, { status: 400 })
   }
 }
