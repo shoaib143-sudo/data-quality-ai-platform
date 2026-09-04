@@ -16,6 +16,7 @@ import { enqueueDailySemanticIndexJobs } from '@/lib/governance/semantic-jobs'
 import { processSemanticIndexJobs } from '@/lib/governance/semantic-job-worker'
 import { refreshAllPredictiveRisk } from '@/lib/governance/predictive-risk'
 import { applyAllPredictiveRiskGovernedActions } from '@/lib/governance/governed-autonomy'
+import { processGovernanceAgentJobs } from '@/lib/agents/governance-job-worker'
 
 export const maxDuration = 300
 
@@ -45,10 +46,12 @@ export async function GET(request: Request) {
   const scheduled = await enqueueDueSchedules(20)
   const jobs = await claimDurableJobs(workerId, 2)
   const semanticJobs = jobs.filter((job) => job.job_type === 'SEMANTIC_INDEX')
-  const coreJobs = jobs.filter((job) => job.job_type !== 'SEMANTIC_INDEX')
-  const [results, semanticResults] = await Promise.all([
+  const governanceAgentJobs = jobs.filter((job) => job.job_type === 'GOVERNANCE_AGENT')
+  const coreJobs = jobs.filter((job) => job.job_type !== 'SEMANTIC_INDEX' && job.job_type !== 'GOVERNANCE_AGENT')
+  const [results, semanticResults, governanceAgentResults] = await Promise.all([
     processDurableJobs(coreJobs),
     processSemanticIndexJobs(semanticJobs),
+    processGovernanceAgentJobs(governanceAgentJobs),
   ])
   const events = await claimOutboxEvents(workerId, 30)
   const eventResults = await processOutboxEvents(events)
@@ -67,6 +70,7 @@ export async function GET(request: Request) {
     claimed: jobs.length,
     results,
     semanticResults,
+    governanceAgentResults,
     semanticIndexScheduling,
     objectRetention,
     predictiveRisk,
@@ -93,6 +97,14 @@ export async function POST(request: Request) {
     const workerId = `user-kick:${user.id}:${crypto.randomUUID()}`
     const job = await claimDurableJobByAgentRun(workerId, agentRunId)
     if (!job) return NextResponse.json({ accepted: true, claimed: false, message: 'The job is already running, complete, or waiting for retry.' })
+    if (job.job_type === 'SEMANTIC_INDEX') {
+      const semanticResults = await processSemanticIndexJobs([job])
+      return NextResponse.json({ accepted: true, claimed: true, semanticResults })
+    }
+    if (job.job_type === 'GOVERNANCE_AGENT') {
+      const governanceAgentResults = await processGovernanceAgentJobs([job])
+      return NextResponse.json({ accepted: true, claimed: true, governanceAgentResults })
+    }
     const results = await processDurableJobs([job])
     return NextResponse.json({ accepted: true, claimed: true, results })
   } catch (error) {
