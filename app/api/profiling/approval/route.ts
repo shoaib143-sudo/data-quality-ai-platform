@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
     await authorizeProject(user.id, dataset.project_id, 'workflow.manage')
 
-    const { data: definition, error: definitionError } = await admin
+    let { data: definition, error: definitionError } = await admin
       .schema('governance')
       .from('workflow_definitions')
       .select('id,project_id,workflow_key,entity_type,version,enabled')
@@ -96,11 +96,66 @@ export async function POST(request: Request) {
     if (definitionError) {
       throw new Error(`Unable to resolve profiling approval workflow: ${definitionError.message}`)
     }
+
+    let autoProvisioned = false
     if (!definition) {
-      return NextResponse.json({
-        error: `No enabled ${workflowKey} workflow is configured for PROFILE_RUN.`,
-        workflowKey,
-      }, { status: 409 })
+      const { data: created, error: createError } = await admin
+        .schema('governance')
+        .from('workflow_definitions')
+        .insert({
+          project_id: dataset.project_id,
+          workflow_key: workflowKey,
+          name: 'Profiling remediation approval',
+          entity_type: 'PROFILE_RUN',
+          version: 1,
+          steps: [
+            {
+              index: 0,
+              name: 'Data owner approval',
+              capability: 'policy.approve',
+              description: 'Review the profiling investigation evidence and approve or reject the governed remediation recommendation.',
+            },
+          ],
+          enabled: true,
+          created_by: user.id,
+        })
+        .select('id,project_id,workflow_key,entity_type,version,enabled')
+        .single()
+
+      if (createError || !created) {
+        const { data: racedDefinition, error: racedError } = await admin
+          .schema('governance')
+          .from('workflow_definitions')
+          .select('id,project_id,workflow_key,entity_type,version,enabled')
+          .eq('project_id', dataset.project_id)
+          .eq('workflow_key', workflowKey)
+          .eq('entity_type', 'PROFILE_RUN')
+          .eq('enabled', true)
+          .order('version', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (racedError || !racedDefinition) {
+          throw new Error(`Unable to provision profiling approval workflow: ${createError?.message ?? racedError?.message ?? 'unknown error'}`)
+        }
+        definition = racedDefinition
+      } else {
+        definition = created
+        autoProvisioned = true
+        await writeGovernanceAudit({
+          projectId: dataset.project_id,
+          actorUserId: user.id,
+          eventType: 'WORKFLOW_DEFINITION_CREATED',
+          entityType: 'WORKFLOW_DEFINITION',
+          entityId: created.id,
+          metadata: {
+            workflow_key: created.workflow_key,
+            version: created.version,
+            entity_type: 'PROFILE_RUN',
+            source: 'PROFILING_APPROVAL_AUTO_PROVISION',
+          },
+        })
+      }
     }
 
     const { data: existing, error: existingError } = await admin
@@ -123,6 +178,9 @@ export async function POST(request: Request) {
         instanceId: existing.id,
         status: existing.status,
         currentStep: existing.current_step,
+        workflowKey: definition.workflow_key,
+        workflowVersion: definition.version,
+        autoProvisioned,
         reused: true,
       })
     }
@@ -178,6 +236,7 @@ export async function POST(request: Request) {
         dataset_id: dataset.id,
         dataset_version_id: datasetVersion.id,
         recommendation_count: approvalRecommendations.length,
+        auto_provisioned_definition: autoProvisioned,
       },
     })
 
@@ -186,6 +245,7 @@ export async function POST(request: Request) {
       status: 'RUNNING',
       workflowKey: definition.workflow_key,
       workflowVersion: definition.version,
+      autoProvisioned,
       reused: false,
     }, { status: 201 })
   } catch (error) {
