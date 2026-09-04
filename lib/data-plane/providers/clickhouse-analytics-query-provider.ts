@@ -50,6 +50,12 @@ function requireEnv(name: string) {
   return value
 }
 
+function boundedInt(name: string, fallback: number, min: number, max: number) {
+  const parsed = Number.parseInt(process.env[name] ?? '', 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(min, Math.min(max, parsed))
+}
+
 function boundedLimit(value: number | undefined) {
   if (!Number.isFinite(value)) return 100
   return Math.max(1, Math.min(500, Math.trunc(value as number)))
@@ -72,6 +78,8 @@ export class ClickHouseAnalyticsQueryProvider implements AnalyticsQueryProvider 
     const user = requireEnv('CLICKHOUSE_USER')
     const password = requireEnv('CLICKHOUSE_PASSWORD')
     const limit = boundedLimit(request.limit)
+    const maxExecutionSeconds = boundedInt('CLICKHOUSE_QUERY_MAX_EXECUTION_SECONDS', 10, 1, 120)
+    const maxResultRows = boundedInt('CLICKHOUSE_QUERY_MAX_RESULT_ROWS', 1000, 500, 10000)
     const clauses = ['project_id = {projectId:UUID}']
     const parameters = new Map<string, string>([['projectId', request.projectId], ['limit', String(limit)]])
 
@@ -92,6 +100,10 @@ export class ClickHouseAnalyticsQueryProvider implements AnalyticsQueryProvider 
     const url = new URL(endpoint)
     url.searchParams.set('database', database)
     url.searchParams.set('query', sql)
+    url.searchParams.set('readonly', '1')
+    url.searchParams.set('max_execution_time', String(maxExecutionSeconds))
+    url.searchParams.set('max_result_rows', String(maxResultRows))
+    url.searchParams.set('result_overflow_mode', 'throw')
     for (const [key, value] of parameters) url.searchParams.set(`param_${key}`, value)
 
     const response = await providerFetch(url, {
