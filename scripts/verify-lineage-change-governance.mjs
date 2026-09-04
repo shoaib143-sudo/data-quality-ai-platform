@@ -74,6 +74,24 @@ requireText('app/api/lineage/impact/change/gate/route.ts', [
   'analysisId is required.',
 ])
 
+const execution = requireText('app/api/lineage/impact/change/execution/authorize/route.ts', [
+  'evaluateLineageChangeGate',
+  "authorizeProject(user.id, gate.projectId, 'lineage.manage')",
+  "gate.gateStatus !== 'OPEN'",
+  'LINEAGE_CHANGE_EXECUTION_BLOCKED',
+  'LINEAGE_CHANGE_EXECUTION_AUTHORIZED',
+  'authorizationId',
+  'productionMutationPerformed: false',
+  'production_mutation_performed: false',
+])
+if (!execution.includes('!gate.canProceed')) {
+  throw new Error('Lineage execution authorization must fail closed when the deployment gate cannot proceed.')
+}
+forbidText('app/api/lineage/impact/change/execution/authorize/route.ts', [
+  'productionMutationPerformed: true',
+  'production_mutation_performed: true',
+])
+
 requireText('app/lineage/impact/change-impact-manager.tsx', [
   'Pre-change impact gate',
   'Start governed approval',
