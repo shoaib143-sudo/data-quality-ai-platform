@@ -1,3 +1,5 @@
+import { providerFetch } from '@/lib/data-plane/provider-runtime'
+
 export type OpenSearchConnection = {
   endpoint: string
   knowledgeIndex: string
@@ -40,12 +42,12 @@ export async function openSearchRequest(
   init: RequestInit = {},
 ): Promise<Response> {
   const connection = getOpenSearchConnection()
-  return fetch(`${connection.endpoint}${path}`, {
+  return providerFetch(`${connection.endpoint}${path}`, {
     ...init,
     headers: {
       ...connection.headers,
       ...(init.headers ?? {}),
     },
     cache: 'no-store',
-  })
+  }, { providerKey: 'opensearch' })
 }
