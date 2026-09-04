@@ -4,6 +4,7 @@ import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authori
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GOVERNANCE_READ_AGENT_KEYS } from '@/lib/agents/governance-read-agent'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
+import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 
 function text(value: unknown) {
@@ -54,14 +55,21 @@ export async function POST(request: Request) {
       actorUserId: user.id,
       question: question || null,
     })
+    const output = await enrichGovernedAgentWithMemory({
+      projectId,
+      agentDefinitionId,
+      agentRunId: result.runId,
+      question: question || null,
+      output: result.output as Record<string, unknown>,
+    })
     const memory = await persistGovernedAgentMemoryAndEvaluation({
       projectId,
       agentDefinitionId,
       agentRunId: result.runId,
       agentKey: result.output.agent.key,
-      output: result.output as Record<string, unknown>,
+      output,
     })
-    return NextResponse.json({ accepted: true, ...result, memory }, { status: 200 })
+    return NextResponse.json({ accepted: true, runId: result.runId, output, memory }, { status: 200 })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
