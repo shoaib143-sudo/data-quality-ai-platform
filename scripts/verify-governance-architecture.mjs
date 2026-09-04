@@ -48,6 +48,7 @@ const requiredFiles = [
   'supabase/migrations/20260904060100_verify_database_api_security_posture.sql',
   'supabase/migrations/20260904060200_normalize_database_api_security_posture_schema_list.sql',
   'supabase/migrations/20260904104500_governance_semantic_embeddings.sql',
+  'supabase/migrations/20260904164500_audit_chain_v2_sequence.sql',
 ]
 
 for (const path of requiredFiles) {
@@ -88,6 +89,8 @@ const checks = [
   ['supabase/migrations/20260904060000_expose_governance_orchestration_api_schemas.sql', /governance, orchestration[\s\S]*reload config/, 'PostgREST governance and orchestration exposure'],
   ['supabase/migrations/20260904060200_normalize_database_api_security_posture_schema_list.sql', /app_private_exposed[\s\S]*exposed_privileged_function_count/, 'database API security posture verification'],
   ['supabase/migrations/20260904104500_governance_semantic_embeddings.sql', /create extension if not exists vector[\s\S]*using hnsw[\s\S]*match_semantic_embeddings/, 'pgvector semantic registry and HNSW similarity RPC'],
+  ['supabase/migrations/20260904164500_audit_chain_v2_sequence.sql', /chain_version[\s\S]*chain_sequence[\s\S]*pg_advisory_xact_lock[\s\S]*order by chain_sequence desc/, 'deterministic sequence-based audit chain writes'],
+  ['supabase/migrations/20260904164500_audit_chain_v2_sequence.sql', /legacy_events_checked[\s\S]*legacy_forks_observed[\s\S]*strict_events_checked[\s\S]*strict_failures/, 'version-aware immutable audit chain verification'],
 ]
 
 for (const [path, pattern, label] of checks) {
