@@ -68,6 +68,7 @@ Human approval initially required for:
 - `2026-08-30-reconciliation.md` records the next reconciliation checkpoint and confirms that no new product or architecture decisions were identified after the 2026-08-29 record.
 - `2026-08-31-reconciliation.md` records the latest checkpoint. No new durable product or architecture decisions were identified after 2026-08-30, so the existing baseline remains current.
 - `2026-09-04-polyglot-data-platform-component-impact.md` translates ADR-002 into implementation impact, separating new provider/projection components from existing modules that require storage-ownership or interface changes, and defines the phased migration strategy.
+- `2026-09-04-optimum-polyglot-data-platform-implementation-strategy.md` defines the contract-first, projection-first, infrastructure-later execution sequence, including provider refactors, transactional outbox, projection workers, rebuild/reconciliation, shadow reads, database introduction gates, scale tests, agent memory, and migration safety rules.
 
 The capability matrix is intentionally broader than the current implementation scope. Future implementation should draw from it rather than recreate the exploration from scratch.
 
