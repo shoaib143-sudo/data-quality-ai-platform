@@ -40,6 +40,8 @@ jobs:
         run: pnpm run verify:readiness
       - name: Verify provider read fallback behavior
         run: pnpm run verify:provider-fallback
+      - name: Verify governance knowledge model
+        run: pnpm run verify:knowledge-model
       - name: Verify FILE onboarding contracts
         run: pnpm run verify:file-onboarding
       - name: Verify profiling explorer evidence contracts
