@@ -34,9 +34,28 @@ const checks = [
     "status: 'CLOSED'",
     'production_source_mutation: false',
   ]],
+  ['lib/profiling/queue-governed-reprofile.ts', [
+    'queueGovernedReprofile',
+    "PROFILING_AGENT_VERSION = '2.0'",
+    'validateDataSourceForProfiling',
+    "jobType: 'PROFILING'",
+    "trigger: 'GOVERNED_AUTONOMY_REPROFILE'",
+    "String(version.status).toUpperCase() !== 'AVAILABLE'",
+    "String(source.status).toUpperCase() !== 'ACTIVE'",
+    "eq('active', true)",
+  ]],
+  ['lib/governance/approved-autonomy-execution.ts', [
+    'executeApprovedAutonomyAction',
+    "action.action_key !== 'REQUEST_REPROFILE'",
+    "workflow.status !== 'APPROVED'",
+    'queueGovernedReprofile',
+    'human_approval_verified: true',
+    'production_source_mutation: false',
+  ]],
   ['app/api/governance/autonomy/route.ts', [
     "authorizeProject(user.id, projectId, 'issues.manage')",
     'requireActionInProject',
+    'executeApprovedAutonomyAction',
     "operation === 'APPLY_PREDICTIVE_RISK'",
     "operation === 'EXECUTE_APPROVED'",
     "operation === 'ROLLBACK'",
@@ -61,14 +80,16 @@ for (const [path, tokens] of checks) {
   }
 }
 
-const executor = fs.readFileSync('lib/governance/governed-autonomy.ts', 'utf8')
-for (const forbidden of [
-  ".from('quality_rule_definitions').update(",
-  ".from('datasets').delete(",
-  ".from('dataset_versions').delete(",
-  'ALTER TABLE catalog.',
-]) {
-  if (executor.includes(forbidden)) failures.push(`governed autonomy executor contains forbidden mutation: ${forbidden}`)
+for (const path of ['lib/governance/governed-autonomy.ts', 'lib/governance/approved-autonomy-execution.ts']) {
+  const executor = fs.readFileSync(path, 'utf8')
+  for (const forbidden of [
+    ".from('quality_rule_definitions').update(",
+    ".from('datasets').delete(",
+    ".from('dataset_versions').delete(",
+    'ALTER TABLE catalog.',
+  ]) {
+    if (executor.includes(forbidden)) failures.push(`${path} contains forbidden mutation: ${forbidden}`)
+  }
 }
 
 const worker = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
