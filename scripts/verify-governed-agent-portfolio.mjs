@@ -43,6 +43,14 @@ requireText('lib/agents/governance-read-agent.ts', [
   'GOVERNED_READ_AGENT_COMPLETED',
   "mode: 'deterministic_read_only'",
 ])
+requireText('lib/agents/governance-specialist-agent.ts', [
+  ...agentKeys,
+  'executeGovernanceSpecialistAgent',
+  "mode: 'deterministic_specialist_read_only'",
+  'reasoningContract',
+  'confidence',
+  'evidenceCount',
+])
 requireText('supabase/migrations/20260904191840_agent_memory_and_evaluation_foundation.sql', [
   'agent.agent_memories',
   'agent.agent_evaluations',
@@ -85,12 +93,15 @@ requireText('infra/data-plane/clickhouse/init/004_agent_intelligence_history.sql
 ])
 requireText('app/api/agents/governance/run/route.ts', [
   "authorizeProject(user.id, projectId, 'agent.execute')",
-  'executeGovernanceReadAgent',
+  'executeGovernanceSpecialistAgent',
+  'enrichGovernedAgentWithMemory',
   'persistGovernedAgentMemoryAndEvaluation',
   'GOVERNANCE_READ_AGENT_KEYS',
 ])
 requireText('app/api/agents/governance/handoff/route.ts', [
   "authorizeProject(user.id, projectId, 'agent.execute')",
+  'executeGovernanceSpecialistAgent',
+  'enrichGovernedAgentWithMemory',
   'GOVERNED_HANDOFF',
   'parent_run_id',
   'source_agent_run_id',
@@ -104,7 +115,7 @@ requireText('app/api/agents/runs/[runId]/evaluation/route.ts', [
   "score must be between 0 and 1",
 ])
 requireText('app/agents/run-agent-form.tsx', [
-  'GOVERNED_READ_AGENT_KEYS',
+  'GOVERNANCE_READ_AGENT_KEYS',
   "endpoint = '/api/agents/governance/run'",
   'Not required for this agent',
   'Question or objective',
