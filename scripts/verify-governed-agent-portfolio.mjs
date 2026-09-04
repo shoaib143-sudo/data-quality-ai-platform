@@ -43,9 +43,39 @@ requireText('lib/agents/governance-read-agent.ts', [
   'GOVERNED_READ_AGENT_COMPLETED',
   "mode: 'deterministic_read_only'",
 ])
+requireText('supabase/migrations/20260904191840_agent_memory_and_evaluation_foundation.sql', [
+  'agent.agent_memories',
+  'agent.agent_evaluations',
+  'agent_memory_select',
+  'agent_evaluation_select',
+  'AGENT.MEMORY_CREATED',
+  'AGENT.EVALUATION_CREATED',
+  "status <> 'ACTIVE'",
+])
+requireText('supabase/migrations/20260904192455_expire_agent_memories.sql', [
+  'expire_agent_memories',
+  'dgp-agent-memory-expiry',
+  "status='EXPIRED'",
+])
+requireText('lib/agents/agent-memory.ts', [
+  'project_summary:',
+  'SYSTEM_CONTRACT',
+  'operational_contract',
+  'read_only_boundary',
+  'agent_memories',
+  'agent_evaluations',
+])
+requireText('infra/data-plane/clickhouse/init/004_agent_intelligence_history.sql', [
+  'agent_evaluation_history',
+  'agent_memory_history',
+  'AGENT.EVALUATION_CREATED',
+  'AGENT.MEMORY_CREATED',
+  'INTERVAL 730 DAY',
+])
 requireText('app/api/agents/governance/run/route.ts', [
   "authorizeProject(user.id, projectId, 'agent.execute')",
   'executeGovernanceReadAgent',
+  'persistGovernedAgentMemoryAndEvaluation',
   'GOVERNANCE_READ_AGENT_KEYS',
 ])
 
