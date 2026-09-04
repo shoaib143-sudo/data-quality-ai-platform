@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { BoundedLineageNavigator } from './bounded-lineage-navigator'
+import { BoundedFieldLineageNavigator } from './bounded-field-lineage-navigator'
 
 export default async function LineageLayout({children}:{children:ReactNode}){
   await requireUser()
@@ -12,6 +13,7 @@ export default async function LineageLayout({children}:{children:ReactNode}){
   const projects=(data??[]).map(project=>({id:String(project.id),name:String(project.name)}))
   return <>
     {children}
+    <BoundedFieldLineageNavigator projects={projects}/>
     <BoundedLineageNavigator projects={projects}/>
   </>
 }
