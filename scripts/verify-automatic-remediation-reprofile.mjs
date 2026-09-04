@@ -9,12 +9,14 @@ const requiredFiles = [
   'app/api/issues/[issueId]/route.ts',
   'app/api/profiling/remediation/reprofile/route.ts',
   'app/api/profiling/remediation/verify/route.ts',
+  'app/profiling/profiling-governance-panel.tsx',
   'app/workflows/page.tsx',
   'app/workflows/workflow-manager.tsx',
   'supabase/migrations/20260904170400_automatic_remediation_reprofile.sql',
   'supabase/migrations/20260904170500_resume_automatic_remediation_reprofile_claim.sql',
   'supabase/migrations/20260904170600_synthetic_profiling_remediation_state_machine_suite.sql',
   'supabase/migrations/20260904170700_profiling_remediation_verification_cancellation.sql',
+  'supabase/migrations/20260904170800_extend_synthetic_remediation_cancellation_suite.sql',
 ]
 
 for (const path of requiredFiles) {
@@ -31,6 +33,9 @@ const checks = [
   ['supabase/migrations/20260904170600_synthetic_profiling_remediation_state_machine_suite.sql', /delete from app\.organizations[\s\S]*synthetic_cleanup/, 'synthetic remediation estate cleanup'],
   ['supabase/migrations/20260904170600_synthetic_profiling_remediation_state_machine_suite.sql', /revoke all on function governance\.run_synthetic_profiling_remediation_state_machine_suite\(\) from authenticated[\s\S]*grant execute[\s\S]*service_role/, 'synthetic suite service-role execution boundary'],
   ['supabase/migrations/20260904170700_profiling_remediation_verification_cancellation.sql', /VERIFICATION_CANCELLED/, 'cancelled verification lifecycle state'],
+  ['supabase/migrations/20260904170800_extend_synthetic_remediation_cancellation_suite.sql', /cancelled_state_persisted[\s\S]*cancelled_state_not_claimable[\s\S]*fresh_generation_reclaim_succeeds/, 'live synthetic cancelled verification recovery invariants'],
+  ['supabase/migrations/20260904170800_extend_synthetic_remediation_cancellation_suite.sql', /verificationGeneration[\s\S]*synthetic:remediation-verification:[\s\S]*:1/, 'live synthetic verification generation linkage'],
+  ['supabase/migrations/20260904170800_extend_synthetic_remediation_cancellation_suite.sql', /delete from app\.organizations[\s\S]*synthetic_cleanup/, 'extended synthetic remediation estate cleanup'],
   ['lib/profiling/remediation-reprofile.ts', /WAITING_FOR_REMEDIATION[\s\S]*RESOLVED[\s\S]*CLOSED/, 'all remediation issues must resolve before reprofile'],
   ['lib/profiling/remediation-reprofile.ts', /missingIssueIds[\s\S]*WAITING_FOR_REMEDIATION/, 'missing tracked remediation issue blocks reprofile'],
   ['lib/profiling/remediation-reprofile.ts', /profiling_agent[\s\S]*2\.0[\s\S]*enqueueDurableJob[\s\S]*PROFILING/, 'existing profiling durable job path reuse'],
@@ -58,6 +63,8 @@ const checks = [
   ['app/api/profiling/remediation/verify/route.ts', /VERIFICATION_QUEUE_PENDING/, 'API reports automatic verification preparation'],
   ['app/api/profiling/remediation/verify/route.ts', /API_LINKED/, 'API records linked verification evidence source'],
   ['app/api/profiling/remediation/verify/route.ts', /VERIFICATION_PROFILE_RUNNING/, 'API reports linked verification run in progress'],
+  ['app/profiling/profiling-governance-panel.tsx', /verificationCancelled[\s\S]*Restart automatic verification/, 'profiling explorer exposes fresh-generation restart for cancelled verification'],
+  ['app/profiling/profiling-governance-panel.tsx', /Automatic verification was cancelled[\s\S]*fresh governed verification generation/, 'profiling explorer explains cancelled verification recovery'],
   ['app/workflows/page.tsx', /remediationIssueIds[\s\S]*remediation_issue_ids[\s\S]*issueChunks[\s\S]*from\('issues'\)[\s\S]*\.in\('id',ids\)/, 'workflow page resolves remediation issues from persisted registry ids'],
   ['app/workflows/page.tsx', /Math\.ceil\(remediationIssueIds\.length\/100\)/, 'workflow remediation registry lookup is chunk bounded'],
   ['app/workflows/workflow-manager.tsx', /verificationCancelled[\s\S]*canRetryAutomaticVerification[\s\S]*Restart automatic verification/, 'workflow exposes fresh-generation restart for cancelled verification'],
