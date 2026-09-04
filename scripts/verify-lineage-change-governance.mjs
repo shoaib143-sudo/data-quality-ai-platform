@@ -74,12 +74,32 @@ requireText('app/api/lineage/impact/change/gate/route.ts', [
   'analysisId is required.',
 ])
 
+const handoffMigration = requireText('supabase/migrations/20260904179000_lineage_change_execution_handoff.sql', [
+  'governance.lineage_change_execution_requests',
+  'idempotency_key text not null unique',
+  "'AUTHORIZED','CLAIMED','EXECUTING','SUCCEEDED','FAILED','CANCELLED'",
+  'alter table governance.lineage_change_execution_requests enable row level security',
+  'app_private.is_project_member(project_id)',
+  'revoke insert,update,delete on governance.lineage_change_execution_requests from authenticated',
+  'grant select on governance.lineage_change_execution_requests to authenticated',
+  'grant all on governance.lineage_change_execution_requests to service_role',
+  'trg_audit_lineage_change_execution_requests',
+])
+if (!handoffMigration.includes('authorization_id uuid not null unique')) {
+  throw new Error('Lineage execution handoff authorization identifiers must be unique.')
+}
+
 const execution = requireText('app/api/lineage/impact/change/execution/authorize/route.ts', [
   'evaluateLineageChangeGate',
   "authorizeProject(user.id, gate.projectId, 'lineage.manage')",
   "gate.gateStatus !== 'OPEN'",
   'LINEAGE_CHANGE_EXECUTION_BLOCKED',
   'LINEAGE_CHANGE_EXECUTION_AUTHORIZED',
+  'LINEAGE_CHANGE_EXECUTION_REQUEST_REUSED',
+  'lineage_change_execution_requests',
+  'idempotencyKey',
+  "createError?.code === '23505'",
+  'executionRequestId',
   'authorizationId',
   'productionMutationPerformed: false',
   'production_mutation_performed: false',
@@ -87,14 +107,33 @@ const execution = requireText('app/api/lineage/impact/change/execution/authorize
 if (!execution.includes('!gate.canProceed')) {
   throw new Error('Lineage execution authorization must fail closed when the deployment gate cannot proceed.')
 }
+if (!execution.includes('JSON.stringify([gate.analysisId, executionTarget, executionReference])')) {
+  throw new Error('Lineage execution handoff must be idempotent for the exact analysis and execution destination.')
+}
 forbidText('app/api/lineage/impact/change/execution/authorize/route.ts', [
   'productionMutationPerformed: true',
   'production_mutation_performed: true',
 ])
 
+requireText('app/api/lineage/impact/change/execution/status/route.ts', [
+  "authorizeProject(user.id, analysis.project_id, 'lineage.read')",
+  'lineage_change_execution_requests',
+  ".eq('analysis_id', analysis.id)",
+  'authorizationId',
+  'executionTarget',
+  'productionMutationPerformedByLineage: false',
+])
+forbidText('app/api/lineage/impact/change/execution/status/route.ts', ['productionMutationPerformedByLineage: true'])
+
 requireText('app/lineage/impact/change-impact-manager.tsx', [
   'Pre-change impact gate',
   'Start governed approval',
+  'Deployment gate',
+  'Authorize execution handoff',
+  'Governed execution handoff',
+  '/api/lineage/impact/change/gate?analysisId=',
+  '/api/lineage/impact/change/execution/authorize',
+  '/api/lineage/impact/change/execution/status?analysisId=',
   'productionMutationPerformed',
 ])
 
