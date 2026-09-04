@@ -47,8 +47,19 @@ requireText('app/api/agents/governance/handoff/route.ts', [
   'specialist: true',
 ])
 
+requireText('app/api/agents/run/route.ts', [
+  "const PRODUCTION_AGENT_KEY = 'profiling_agent'",
+  "const PRODUCTION_AGENT_VERSION = '2.0'",
+  'validateDataSourceForProfiling',
+  "jobType: 'PROFILING'",
+])
+
 requireText('lib/agents/run-profiling-job.ts', [
-  'profiling_agent',
+  'executePreparedProfilingJob',
+  "requiredTools = ['profile_dataset', 'execute_metrics', 'investigate_profile']",
+  'executeProfilingExecutor',
+  'validateProfilingRun',
+  'syncProfileClassifications',
 ])
 
 requireText('lib/data-quality/automation.ts', [
