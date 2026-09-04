@@ -17,6 +17,8 @@ const metricEvents: Record<string, string[]> = {
   'profiling.metric_history': ['PROFILING.METRIC_BATCH_CAPTURED'],
   'profiling.finding_history': ['PROFILING.FINDING_CREATED', 'PROFILING.FINDING_UPDATED', 'PROFILING.FINDING_DELETED'],
   'dq.score_history': ['DQ.SCORE_CREATED', 'DQ.SCORE_UPDATED'],
+  'observability.alert_history': ['OBSERVABILITY.ALERT_CREATED', 'OBSERVABILITY.ALERT_UPDATED', 'OBSERVABILITY.ALERT_DELETED'],
+  'observability.incident_history': ['OBSERVABILITY.INCIDENT_CREATED', 'OBSERVABILITY.INCIDENT_UPDATED', 'OBSERVABILITY.INCIDENT_DELETED'],
 }
 
 function boundedLimit(value: number | undefined) {
@@ -38,7 +40,7 @@ function boolean(value: unknown) {
 
 function matchesFilters(payload: Record<string, unknown>, filters: AnalyticsQueryRequest['filters']) {
   for (const [key, expected] of Object.entries(filters ?? {})) {
-    if (!['datasetId', 'datasetVersionId', 'profileRunId', 'metricKey', 'severity', 'findingType', 'status'].includes(key)) {
+    if (!['datasetId', 'datasetVersionId', 'profileRunId', 'metricKey', 'severity', 'findingType', 'status', 'category'].includes(key)) {
       throw new Error(`Unsupported analytics filter: ${key}`)
     }
     if (payload[key] !== expected) return false
@@ -98,6 +100,44 @@ function toScoreRow(row: AnalyticsEventRow): AnalyticsQueryRow {
     validityScore: number(payload.validityScore),
     accuracyScore: number(payload.accuracyScore),
     overallScore: number(payload.overallScore),
+  }
+}
+
+function toAlertRow(row: AnalyticsEventRow): AnalyticsQueryRow {
+  const payload = row.payload ?? {}
+  return {
+    ...baseRow(row),
+    alertId: row.aggregate_id,
+    datasetId: text(payload.datasetId),
+    datasetVersionId: text(payload.datasetVersionId),
+    profileRunId: text(payload.profileRunId),
+    category: text(payload.category),
+    severity: text(payload.severity),
+    status: text(payload.status),
+    fingerprint: text(payload.fingerprint),
+    firstObservedAt: text(payload.firstObservedAt),
+    lastObservedAt: text(payload.lastObservedAt),
+    resolvedAt: text(payload.resolvedAt),
+  }
+}
+
+function toIncidentRow(row: AnalyticsEventRow): AnalyticsQueryRow {
+  const payload = row.payload ?? {}
+  return {
+    ...baseRow(row),
+    incidentId: row.aggregate_id,
+    datasetId: text(payload.datasetId),
+    severity: text(payload.severity),
+    status: text(payload.status),
+    confidence: number(payload.confidence),
+    approvalRequired: boolean(payload.approvalRequired),
+    escalationLevel: number(payload.escalationLevel),
+    firstObservedAt: text(payload.firstObservedAt),
+    lastObservedAt: text(payload.lastObservedAt),
+    acknowledgedAt: text(payload.acknowledgedAt),
+    responseDueAt: text(payload.responseDueAt),
+    resolvedAt: text(payload.resolvedAt),
+    lastEscalatedAt: text(payload.lastEscalatedAt),
   }
 }
 
@@ -165,7 +205,9 @@ export class PostgresAnalyticsQueryProvider implements AnalyticsQueryProvider {
       .map((row) => {
         if (request.metric === 'profiling.run_history') return toRunRow(row)
         if (request.metric === 'profiling.finding_history') return toFindingRow(row)
-        return toScoreRow(row)
+        if (request.metric === 'dq.score_history') return toScoreRow(row)
+        if (request.metric === 'observability.alert_history') return toAlertRow(row)
+        return toIncidentRow(row)
       })
       .slice(0, limit)
   }
