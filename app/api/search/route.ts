@@ -14,6 +14,8 @@ type SearchResult = {
   metadata: Record<string, unknown>
 }
 
+const SEMANTIC_PROJECT_CONCURRENCY = 4
+
 function lexicalScore(label: string, description: string | null, query: string, kind: string) {
   const normalized = query.toLowerCase()
   const name = label.toLowerCase()
@@ -63,6 +65,9 @@ function semanticResult(projectId: string, match: SemanticMatch): SearchResult {
         ? `/profiling/explorer?runId=${encodeURIComponent(profileRunId)}&findingId=${encodeURIComponent(objectId)}`
         : '/profiling/explorer'
       break
+    case 'QUALITY_INCIDENT':
+      href = `/issues?issue=${encodeURIComponent(objectId)}`
+      break
     case 'GLOSSARY_TERM':
       label = textMetadata(metadata, 'term') ?? label
       href = `/glossary?term=${encodeURIComponent(objectId)}`
@@ -110,6 +115,20 @@ function mergeResults(lexical: SearchResult[], semantic: SearchResult[]) {
     .slice(0, 75)
 }
 
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  async function worker() {
+    while (true) {
+      const index = cursor++
+      if (index >= items.length) return
+      results[index] = await mapper(items[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, items.length)) }, () => worker()))
+  return results
+}
+
 export async function GET(request: Request) {
   await requireUser()
   const url = new URL(request.url)
@@ -142,7 +161,7 @@ export async function GET(request: Request) {
   const lexical: SearchResult[] = [
     ...(datasets.data ?? []).map((item) => ({ kind: 'DATASET', id: item.id, projectId: item.project_id, label: item.name, description: item.description ?? item.business_domain ?? item.source_identifier, href: `/catalog?dataset=${item.id}`, metadata: { domain: item.business_domain, source: item.source_identifier } })),
     ...(terms.data ?? []).map((item) => ({ kind: 'GLOSSARY_TERM', id: item.id, projectId: item.project_id, label: item.term, description: item.definition, href: `/glossary?term=${item.id}`, metadata: { domain: item.domain, status: item.status } })),
-    ...(issues.data ?? []).map((item) => ({ kind: 'ISSUE', id: item.id, projectId: item.project_id, label: item.title, description: item.description, href: `/issues?issue=${item.id}`, metadata: { status: item.status, severity: item.severity, dataset_id: item.dataset_id } })),
+    ...(issues.data ?? []).map((item) => ({ kind: 'QUALITY_INCIDENT', id: item.id, projectId: item.project_id, label: item.title, description: item.description, href: `/issues?issue=${item.id}`, metadata: { status: item.status, severity: item.severity, dataset_id: item.dataset_id } })),
     ...(labels.data ?? []).map((item) => ({ kind: 'CLASSIFICATION', id: item.id, projectId: item.project_id, label: item.name, description: item.description, href: `/classification?label=${item.id}`, metadata: { sensitivity_level: item.sensitivity_level } })),
     ...(policies.data ?? []).map((item) => ({ kind: 'POLICY', id: item.id, projectId: item.project_id, label: item.name, description: item.description, href: `/classification?policy=${item.id}`, metadata: { required_controls: item.required_controls, retention_days: item.retention_days, encryption_required: item.encryption_required, masking_required: item.masking_required, approval_required: item.approval_required } })),
     ...(contracts.data ?? []).map((item) => ({ kind: 'DATA_CONTRACT', id: item.id, projectId: item.project_id, label: item.name, description: `Contract v${item.current_version} · ${item.status}`, href: `/contracts?dataset=${item.dataset_id}`, metadata: { status: item.status, dataset_id: item.dataset_id, current_version: item.current_version } })),
@@ -158,18 +177,16 @@ export async function GET(request: Request) {
     if (projectError) throw new Error(`Unable to enumerate searchable projects: ${projectError.message}`)
     const projectIds = (projects ?? []).map((project) => project.id)
     const perProjectLimit = Math.max(5, Math.ceil(75 / Math.max(1, projectIds.length)))
-    const groups = await Promise.all(
-      projectIds.map(async (projectId) => ({
+    const groups = await mapWithConcurrency(projectIds, SEMANTIC_PROJECT_CONCURRENCY, async (projectId) => ({
+      projectId,
+      matches: await semanticSearchByEmbedding(supabase, {
         projectId,
-        matches: await semanticSearchByEmbedding(supabase, {
-          projectId,
-          embedding,
-          objectTypes: ['DATASET', 'COLUMN', 'FINDING', 'GLOSSARY_TERM', 'POLICY', 'LINEAGE_TRANSFORMATION'],
-          limit: perProjectLimit,
-          threshold: 0.35,
-        }),
-      })),
-    )
+        embedding,
+        objectTypes: ['DATASET', 'COLUMN', 'FINDING', 'QUALITY_INCIDENT', 'GLOSSARY_TERM', 'POLICY', 'LINEAGE_TRANSFORMATION'],
+        limit: perProjectLimit,
+        threshold: 0.35,
+      }),
+    }))
     semantic = groups.flatMap(({ projectId, matches }) => matches.map((match) => semanticResult(projectId, match)))
   } catch (error) {
     semanticStatus = error instanceof Error && error.name === 'EmbeddingProviderNotConfiguredError' ? 'NOT_CONFIGURED' : 'UNAVAILABLE'
