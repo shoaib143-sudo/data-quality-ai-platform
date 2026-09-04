@@ -152,10 +152,14 @@ export default function ProfilingGovernancePanel({
 
   const openIssues = issues.filter((issue) => !['RESOLVED', 'CLOSED'].includes(issue.status))
   const allTrackedIssuesResolved = issues.length > 0 && openIssues.length === 0
+  const verificationCancelled = outcome?.status === 'VERIFICATION_CANCELLED'
+  const verificationRecoveryLabel = verificationCancelled ? 'Restart automatic verification' : 'Retry automatic verification'
   const canStartApproval = profileRunStatus === 'COMPLETED' && investigation.approvalRequired && !workflow
   const canTrackRemediation = workflow?.status === 'APPROVED' && !outcome
-  const canCheckVerification = workflow?.status === 'APPROVED' && Boolean(outcome) && allTrackedIssuesResolved
-  const canRetryVerification = workflow?.status === 'APPROVED' && outcome?.verificationRetryable === true && allTrackedIssuesResolved
+  const canCheckVerification = workflow?.status === 'APPROVED' && Boolean(outcome) && allTrackedIssuesResolved && !verificationCancelled
+  const canRetryVerification = workflow?.status === 'APPROVED'
+    && (outcome?.verificationRetryable === true || verificationCancelled)
+    && allTrackedIssuesResolved
 
   return (
     <section className="rounded-xl border p-6">
@@ -254,10 +258,10 @@ export default function ProfilingGovernancePanel({
           <button
             type="button"
             disabled={busy !== null}
-            onClick={() => runAction('Retry automatic verification', () => postJson('/api/profiling/remediation/reprofile', { workflowInstanceId: workflow.id }))}
+            onClick={() => runAction(verificationRecoveryLabel, () => postJson('/api/profiling/remediation/reprofile', { workflowInstanceId: workflow.id }))}
             className="rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
           >
-            {busy === 'Retry automatic verification' ? 'Retrying…' : 'Retry automatic verification'}
+            {busy === verificationRecoveryLabel ? 'Scheduling…' : verificationRecoveryLabel}
           </button>
         ) : null}
       </div>
@@ -287,6 +291,7 @@ export default function ProfilingGovernancePanel({
           {outcome.verificationProfileRunId ? <div className="mt-2 break-all text-xs text-muted-foreground">Verification profile: {outcome.verificationProfileRunId}</div> : null}
           {outcome.verificationJobId ? <div className="mt-1 break-all text-xs text-muted-foreground">Verification job: {outcome.verificationJobId}</div> : null}
           {outcome.verificationRetryable ? <p className="mt-3 text-amber-700">Automatic verification needs retry after a technical failure.</p> : null}
+          {verificationCancelled ? <p className="mt-3 text-amber-700">Automatic verification was cancelled. Restarting creates a fresh governed verification generation.</p> : null}
         </div>
       ) : null}
 
