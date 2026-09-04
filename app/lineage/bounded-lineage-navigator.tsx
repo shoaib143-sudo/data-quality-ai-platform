@@ -34,6 +34,7 @@ export function BoundedLineageNavigator({projects}:{projects:Project[]}){
   const [anchor,setAnchor]=useState<Anchor|null>(null)
   const [direction,setDirection]=useState<Direction>('BOTH')
   const [depth,setDepth]=useState(2)
+  const [maxEdges,setMaxEdges]=useState(120)
   const [anchorLoading,setAnchorLoading]=useState(false)
   const [graphLoading,setGraphLoading]=useState(false)
   const [error,setError]=useState<string|null>(null)
@@ -73,7 +74,7 @@ export function BoundedLineageNavigator({projects}:{projects:Project[]}){
       anchorId:anchor.id,
       direction,
       depth:String(depth),
-      maxEdges:'120',
+      maxEdges:String(maxEdges),
     })
     fetch(`/api/lineage/neighborhood?${params.toString()}`,{signal:controller.signal,cache:'no-store'})
       .then(async response=>{
@@ -85,7 +86,7 @@ export function BoundedLineageNavigator({projects}:{projects:Project[]}){
       .catch(cause=>{if((cause as Error).name!=='AbortError')setError(cause instanceof Error?cause.message:'Unable to load lineage neighborhood.')})
       .finally(()=>{if(!controller.signal.aborted)setGraphLoading(false)})
     return()=>controller.abort()
-  },[open,projectId,anchor,direction,depth])
+  },[open,projectId,anchor,direction,depth,maxEdges])
 
   if(pathname!=='/lineage'||!projects.length)return null
 
@@ -100,6 +101,20 @@ export function BoundedLineageNavigator({projects}:{projects:Project[]}){
     return nodeByKey.get(`${ref.type}:${ref.id}`)?.label??`${ref.type} ${ref.id.slice(0,8)}`
   }
 
+  function pivot(ref:{type:string;id:string}){
+    const node=nodeByKey.get(`${ref.type}:${ref.id}`)
+    setAnchor({
+      type:ref.type,
+      id:ref.id,
+      label:node?.label??`${ref.type} ${ref.id.slice(0,8)}`,
+      subtitle:'Expanded from current neighborhood',
+      matchRank:0,
+      metadata:node?.metadata??{},
+    })
+    setNeighborhood(null)
+    setQuery('')
+  }
+
   return <>
     <button type="button" onClick={()=>setOpen(true)} className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-700 px-4 py-3 text-sm font-black text-white shadow-xl shadow-violet-200/60 transition hover:bg-violet-800">
       <GitBranch className="h-4 w-4"/>Bounded lineage
@@ -108,7 +123,7 @@ export function BoundedLineageNavigator({projects}:{projects:Project[]}){
     {open?<div className="fixed inset-0 z-50 bg-slate-950/35 p-3 sm:p-6" onMouseDown={event=>{if(event.currentTarget===event.target)setOpen(false)}}>
       <section className="ml-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b px-5 py-4">
-          <div><div className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700"><GitBranch className="h-3.5 w-3.5"/>GraphProvider traversal</div><h2 className="mt-2 text-xl font-black text-slate-900">Bounded lineage neighborhood</h2><p className="mt-1 text-sm text-slate-500">Anchor-driven traversal only. No whole-estate graph load.</p></div>
+          <div><div className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700"><GitBranch className="h-3.5 w-3.5"/>GraphProvider traversal</div><h2 className="mt-2 text-xl font-black text-slate-900">Bounded lineage neighborhood</h2><p className="mt-1 text-sm text-slate-500">Anchor-driven traversal only. Click any returned node to continue exploring without loading the whole estate.</p></div>
           <button type="button" onClick={()=>setOpen(false)} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50"><X className="h-4 w-4"/></button>
         </header>
 
@@ -131,19 +146,22 @@ export function BoundedLineageNavigator({projects}:{projects:Project[]}){
           <main className="min-w-0 overflow-y-auto p-5">
             {anchor?<>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div><p className="text-[10px] font-black uppercase tracking-wide text-violet-600">{anchor.type}</p><h3 className="text-lg font-black text-slate-900">{anchor.label}</h3></div>
+                <div><p className="text-[10px] font-black uppercase tracking-wide text-violet-600">{anchor.type}</p><h3 className="text-lg font-black text-slate-900">{anchor.label}</h3>{anchor.subtitle?<p className="mt-0.5 text-[10px] font-semibold text-slate-400">{anchor.subtitle}</p>:null}</div>
                 <div className="flex flex-wrap gap-2">
                   {(['UPSTREAM','BOTH','DOWNSTREAM'] as Direction[]).map(value=>{const Icon=value==='UPSTREAM'?ArrowUp:value==='DOWNSTREAM'?ArrowDown:ArrowRight;return <button key={value} type="button" onClick={()=>setDirection(value)} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-[10px] font-black ${direction===value?'border-violet-300 bg-violet-50 text-violet-700':'border-slate-200 text-slate-500'}`}><Icon className="h-3.5 w-3.5"/>{value}</button>})}
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-3 rounded-xl border bg-slate-50 p-3"><span className="text-xs font-bold text-slate-500">Depth</span>{[1,2,3,4].map(value=><button key={value} type="button" onClick={()=>setDepth(value)} className={`h-8 w-8 rounded-lg text-xs font-black ${depth===value?'bg-violet-700 text-white':'border bg-white text-slate-600'}`}>{value}</button>)}<span className="ml-auto text-[10px] font-semibold text-slate-400">Max 120 edges</span></div>
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border bg-slate-50 p-3">
+                <span className="text-xs font-bold text-slate-500">Depth</span>{[1,2,3,4].map(value=><button key={value} type="button" onClick={()=>setDepth(value)} className={`h-8 w-8 rounded-lg text-xs font-black ${depth===value?'bg-violet-700 text-white':'border bg-white text-slate-600'}`}>{value}</button>)}
+                <span className="ml-auto text-xs font-bold text-slate-500">Edge bound</span>{[60,120,240].map(value=><button key={value} type="button" onClick={()=>setMaxEdges(value)} className={`rounded-lg px-2.5 py-2 text-[10px] font-black ${maxEdges===value?'bg-violet-700 text-white':'border bg-white text-slate-600'}`}>{value}</button>)}
+              </div>
 
               {graphLoading?<div className="mt-8 flex items-center justify-center gap-2 py-12 text-sm font-bold text-slate-400"><Loader2 className="h-5 w-5 animate-spin"/>Traversing bounded neighborhood</div>:null}
               {!graphLoading&&neighborhood?<>
                 <div className="mt-4 grid grid-cols-3 gap-2"><MiniStat label="Nodes" value={neighborhood.nodeCount}/><MiniStat label="Edges" value={neighborhood.edgeCount}/><MiniStat label="Depth" value={neighborhood.requestedDepth}/></div>
-                {neighborhood.truncated?<div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-700">Traversal reached the configured edge bound. Narrow the anchor/direction or reduce depth for a more focused view.</div>:null}
-                <div className="mt-4 space-y-2">{neighborhood.edges.map(edge=><article key={edge.id} className="rounded-xl border border-slate-200 p-3"><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center"><div className="min-w-0"><p className="text-[9px] font-black uppercase text-blue-500">{edge.source.type}</p><p className="truncate text-xs font-bold text-slate-800">{label(edge.source)}</p></div><div className="flex items-center justify-center gap-1 text-[10px] font-black text-slate-400"><span>{edge.relationship}</span><ChevronRight className="h-3.5 w-3.5"/></div><div className="min-w-0"><p className="text-[9px] font-black uppercase text-violet-500">{edge.target.type}</p><p className="truncate text-xs font-bold text-slate-800">{label(edge.target)}</p></div></div><p className="mt-2 text-[9px] font-semibold text-slate-400">Traversal depth {edge.depth}</p></article>)}
+                {neighborhood.truncated?<div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-700">Traversal reached the configured edge bound. Pivot to a returned node, narrow direction, or reduce depth for a more focused view.</div>:null}
+                <div className="mt-4 space-y-2">{neighborhood.edges.map(edge=><article key={edge.id} className="rounded-xl border border-slate-200 p-3"><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center"><button type="button" onClick={()=>pivot(edge.source)} className="min-w-0 rounded-lg p-1 text-left transition hover:bg-blue-50"><p className="text-[9px] font-black uppercase text-blue-500">{edge.source.type}</p><p className="truncate text-xs font-bold text-slate-800">{label(edge.source)}</p><p className="mt-0.5 text-[9px] font-semibold text-blue-500">Use as anchor</p></button><div className="flex items-center justify-center gap-1 text-[10px] font-black text-slate-400"><span>{edge.relationship}</span><ChevronRight className="h-3.5 w-3.5"/></div><button type="button" onClick={()=>pivot(edge.target)} className="min-w-0 rounded-lg p-1 text-left transition hover:bg-violet-50"><p className="text-[9px] font-black uppercase text-violet-500">{edge.target.type}</p><p className="truncate text-xs font-bold text-slate-800">{label(edge.target)}</p><p className="mt-0.5 text-[9px] font-semibold text-violet-500">Use as anchor</p></button></div><p className="mt-2 text-[9px] font-semibold text-slate-400">Traversal depth {edge.depth}</p></article>)}
                   {!neighborhood.edges.length?<p className="rounded-xl border border-dashed p-6 text-center text-sm text-slate-400">No persisted lineage edges were found around this anchor.</p>:null}
                 </div>
               </>:null}
