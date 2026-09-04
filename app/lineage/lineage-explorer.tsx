@@ -71,20 +71,11 @@ export type FieldMapping = {
   logicLanguage:string|null
 }
 
-export type DatasetEdge = {
-  id:string
-  sourceLabel:string
-  sourceType:string
-  targetLabel:string
-  targetType:string
-  relationship:string
-  transformationName:string|null
-}
-
 type Props = {
   fields:LineageField[]
   mappings:FieldMapping[]
-  edges:DatasetEdge[]
+  /** @deprecated Dataset traversal is served by the bounded GraphProvider navigator. */
+  edges?: unknown[]
   stats:{ edges:number; datasets:number; assets:number; transformations:number; mappedColumns:number }
 }
 
@@ -120,7 +111,7 @@ function statusClass(status:string){
   return 'bg-amber-50 text-amber-700'
 }
 
-export function LineageExplorer({fields,mappings,edges,stats}:Props){
+export function LineageExplorer({fields,mappings,stats}:Props){
   const [activeOverlays,setActiveOverlays]=useState<OverlayKey[]>(['dq','terms','stakeholders'])
   const [selectedKey,setSelectedKey]=useState<string|null>(null)
   const [search,setSearch]=useState('')
@@ -211,7 +202,7 @@ export function LineageExplorer({fields,mappings,edges,stats}:Props){
 
         {!visibleMappings.length?<div className="mt-4 rounded-xl border border-dashed p-4 text-sm text-slate-500"><span className="font-bold text-slate-700">Column lineage status:</span> no explicit source-to-target field mappings are persisted yet. The explorer is intentionally not inferring transformations from matching column names.</div>:null}
 
-        <details className="mt-5 rounded-2xl border border-slate-200"><summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-700">Dataset-level lineage fallback · {edges.length} edges</summary><div className="space-y-2 border-t p-4">{edges.slice(0,200).map(edge=><div key={edge.id} className="grid gap-2 rounded-xl bg-slate-50 p-3 text-sm md:grid-cols-[1fr_auto_1fr] md:items-center"><div><span className="text-[10px] font-bold uppercase text-blue-500">{edge.sourceType}</span><p className="font-semibold">{edge.sourceLabel}</p></div><div className="flex items-center gap-1 text-xs font-bold text-slate-400">{edge.relationship}<ArrowRight className="h-3.5 w-3.5"/></div><div><span className="text-[10px] font-bold uppercase text-violet-500">{edge.targetType}</span><p className="font-semibold">{edge.targetLabel}</p></div></div>)}</div></details>
+        <div className="mt-5 rounded-2xl border border-violet-100 bg-violet-50/40 p-4 text-sm text-slate-600"><div className="flex items-start gap-3"><GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-violet-600"/><div><p className="font-black text-slate-800">Complete traversal is bounded and anchor-driven</p><p className="mt-1 text-xs leading-5">Use the Dataset lineage and Field lineage navigators to traverse upstream or downstream progressively. The explorer no longer preloads or renders a whole-estate dataset edge fallback.</p></div></div></div>
       </section>
 
       <aside className="self-start rounded-3xl border border-slate-200 bg-white shadow-sm xl:sticky xl:top-6">
