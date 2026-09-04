@@ -1,3 +1,5 @@
+import { createClient } from '@supabase/supabase-js';
+
 const baseUrl = process.env.PRODUCTION_URL || 'https://data-quality-ai-platform.vercel.app';
 const requests = Number(process.env.BENCHMARK_REQUESTS || 25);
 const concurrency = Math.max(1, Number(process.env.BENCHMARK_CONCURRENCY || 5));
@@ -14,12 +16,8 @@ const expectedStatuses = new Set(
     .filter(Number.isFinite),
 );
 
-if (!Number.isInteger(requests) || requests < 1 || requests > 5000) {
-  throw new Error('BENCHMARK_REQUESTS must be an integer from 1 to 5000');
-}
-if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > requests || concurrency > 250) {
-  throw new Error('BENCHMARK_CONCURRENCY must be an integer from 1 to min(BENCHMARK_REQUESTS, 250)');
-}
+if (!Number.isInteger(requests) || requests < 1 || requests > 5000) throw new Error('BENCHMARK_REQUESTS must be an integer from 1 to 5000');
+if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > requests || concurrency > 250) throw new Error('BENCHMARK_CONCURRENCY must be an integer from 1 to min(BENCHMARK_REQUESTS, 250)');
 if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs < 100 || requestTimeoutMs > 120000) throw new Error('BENCHMARK_TIMEOUT_MS must be from 100 to 120000');
 if (!Number.isFinite(maxP95Ms) || maxP95Ms <= 0) throw new Error('BENCHMARK_MAX_P95_MS must be positive');
 if (!Number.isFinite(maxP99Ms) || maxP99Ms < maxP95Ms) throw new Error('BENCHMARK_MAX_P99_MS must be >= BENCHMARK_MAX_P95_MS');
@@ -30,6 +28,7 @@ if (expectedStatuses.size === 0) throw new Error('BENCHMARK_EXPECTED_STATUSES mu
 const url = new URL(path, baseUrl).toString();
 const samples = [];
 let cursor = 0;
+const benchmarkStartedAt = new Date();
 const benchmarkStarted = performance.now();
 
 async function worker() {
@@ -87,6 +86,7 @@ const report = {
   transportErrors: transportErrors.length,
   errorRate: Number(errorRate.toFixed(4)),
   throughputRps: Number(throughputRps.toFixed(2)),
+  durationMs: Number(totalDurationMs.toFixed(2)),
   statusCounts,
   latencyMs: latencies.length ? {
     min: Number(latencies[0].toFixed(2)),
@@ -106,5 +106,31 @@ const report = {
   violations,
 };
 
-console.log(JSON.stringify(report, null, 2));
+async function persistReadinessEvidence() {
+  const projectId = process.env.READINESS_PROJECT_ID?.trim();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!projectId && !supabaseUrl && !serviceRoleKey) return null;
+  if (!projectId || !supabaseUrl || !serviceRoleKey) {
+    throw new Error('READINESS_PROJECT_ID, NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must all be set to persist benchmark evidence');
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)) {
+    throw new Error('READINESS_PROJECT_ID must be a UUID');
+  }
+  const client = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await client.schema('orchestration').from('production_readiness_runs').insert({
+    project_id: projectId,
+    gate_name: 'HTTP_BENCHMARK',
+    status: report.status,
+    started_at: benchmarkStartedAt.toISOString(),
+    completed_at: new Date().toISOString(),
+    evidence: report,
+    notes: `Automated HTTP benchmark for ${url}`,
+  }).select('id,status,completed_at').single();
+  if (error) throw new Error(`Unable to persist HTTP benchmark readiness evidence: ${error.message}`);
+  return data;
+}
+
+const readinessEvidence = await persistReadinessEvidence();
+console.log(JSON.stringify({ ...report, readinessEvidence }, null, 2));
 if (violations.length > 0) process.exitCode = 1;
