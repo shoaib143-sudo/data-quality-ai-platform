@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
+import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
@@ -55,10 +56,18 @@ export async function POST(request: Request) {
       actorUserId: user.id,
       question,
     })
+    const output = await enrichGovernedAgentWithMemory({
+      projectId,
+      agentDefinitionId: targetAgentDefinitionId,
+      agentRunId: target.runId,
+      question,
+      output: target.output as Record<string, unknown>,
+    })
     const correlationId = sourceRun.correlation_id || randomUUID()
     const { error: targetLinkError } = await admin.schema('agent').from('agent_runs').update({
       parent_run_id: sourceAgentRunId,
       correlation_id: correlationId,
+      output,
     }).eq('id', target.runId)
     if (targetLinkError) throw new Error(`Unable to link target agent run to source: ${targetLinkError.message}`)
 
@@ -67,7 +76,7 @@ export async function POST(request: Request) {
       agentDefinitionId: targetAgentDefinitionId,
       agentRunId: target.runId,
       agentKey: target.output.agent.key,
-      output: target.output as Record<string, unknown>,
+      output,
     })
 
     const { data: message, error: messageError } = await admin.schema('agent').from('agent_messages').insert({
@@ -81,6 +90,7 @@ export async function POST(request: Request) {
         target_agent_key: target.output.agent.key,
         read_only: true,
         specialist: true,
+        memory_informed: true,
       },
       status: 'PROCESSED',
       delivered_at: new Date().toISOString(),
@@ -96,10 +106,10 @@ export async function POST(request: Request) {
       entityType: 'AGENT_RUN',
       entityId: target.runId,
       correlationId,
-      metadata: { source_agent_run_id: sourceAgentRunId, target_agent_run_id: target.runId, message_id: message.id, target_agent_key: target.output.agent.key, read_only: true, specialist: true },
+      metadata: { source_agent_run_id: sourceAgentRunId, target_agent_run_id: target.runId, message_id: message.id, target_agent_key: target.output.agent.key, read_only: true, specialist: true, memory_informed: true },
     })
 
-    return NextResponse.json({ accepted: true, sourceAgentRunId, targetRunId: target.runId, message, memory, output: target.output })
+    return NextResponse.json({ accepted: true, sourceAgentRunId, targetRunId: target.runId, message, memory, output })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
