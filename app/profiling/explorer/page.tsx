@@ -57,16 +57,24 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
     return <main className="min-h-screen p-8"><div className="mx-auto max-w-5xl rounded-xl border p-8"><h1 className="text-2xl font-semibold">Profiling Explorer</h1><p className="mt-2 text-sm text-muted-foreground">No profiling runs are available.</p></div></main>
   }
 
-  const [{ data: findings, error: findingsError }, { data: columns, error: columnsError }, { data: metrics, error: metricsError }, workflowResult] = await Promise.all([
+  const [
+    { data: findings, error: findingsError },
+    { data: columns, error: columnsError },
+    { data: metrics, error: metricsError },
+    { data: distributions, error: distributionsError },
+    workflowResult,
+  ] = await Promise.all([
     supabase.schema('profiling').from('profile_findings').select('id,profile_column_id,finding_type,severity,title,description,confidence').eq('profile_run_id', latestRun.id).order('created_at', { ascending: false }).limit(500),
-    supabase.schema('profiling').from('profile_columns').select('id,column_name,source_type,inferred_type').eq('profile_run_id', latestRun.id).order('ordinal_position'),
+    supabase.schema('profiling').from('profile_columns').select('id,column_name,source_type,inferred_type,semantic_type,nullable,confidence,is_candidate_key,key_confidence,total_count,non_null_count,null_count,blank_count,zero_count,distinct_count,distinct_percentage').eq('profile_run_id', latestRun.id).order('ordinal_position'),
     supabase.schema('profiling').from('profile_metrics').select('profile_column_id,metric_key,numeric_value,text_value,boolean_value,json_value').eq('profile_run_id', latestRun.id).order('metric_key').limit(2000),
+    supabase.schema('profiling').from('profile_distributions').select('profile_column_id,distribution_type,distribution').eq('profile_run_id', latestRun.id).order('distribution_type').limit(1000),
     supabase.schema('governance').from('workflow_instances').select('id,status,current_step').eq('entity_type', 'PROFILE_RUN').eq('entity_id', latestRun.id).order('started_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   if (findingsError) throw new Error(`Unable to load profiling findings: ${findingsError.message}`)
   if (columnsError) throw new Error(`Unable to load profiling columns: ${columnsError.message}`)
   if (metricsError) throw new Error(`Unable to load profiling metrics: ${metricsError.message}`)
+  if (distributionsError) throw new Error(`Unable to load profiling distributions: ${distributionsError.message}`)
   if (workflowResult.error) throw new Error(`Unable to load profiling governance workflow: ${workflowResult.error.message}`)
 
   const workflow = workflowResult.data
@@ -160,6 +168,7 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
           findings={(findings ?? []) as any}
           columns={(columns ?? []) as any}
           metrics={(metrics ?? []) as any}
+          distributions={(distributions ?? []) as any}
           initialColumnId={requested.columnId ?? null}
           initialFindingId={requested.findingId ?? null}
         />
