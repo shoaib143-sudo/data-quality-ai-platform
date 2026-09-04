@@ -8,6 +8,8 @@ const supportedMetrics = new Set([
   'profiling.metric_history',
   'profiling.finding_history',
   'dq.score_history',
+  'observability.alert_history',
+  'observability.incident_history',
 ])
 
 function text(value: unknown) {
@@ -15,12 +17,14 @@ function text(value: unknown) {
 }
 
 function capabilityFor(metric: string): AuthorizationCapability {
-  return metric === 'dq.score_history' ? 'quality.read' : 'profiling.read'
+  if (metric === 'dq.score_history') return 'quality.read'
+  if (metric.startsWith('observability.')) return 'observability.read'
+  return 'profiling.read'
 }
 
 function filters(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const allowed = new Set(['datasetId', 'datasetVersionId', 'profileRunId', 'metricKey', 'severity', 'findingType', 'status'])
+  const allowed = new Set(['datasetId', 'datasetVersionId', 'profileRunId', 'metricKey', 'severity', 'findingType', 'status', 'category'])
   const output: Record<string, string | number | boolean | null> = {}
   for (const [key, filterValue] of Object.entries(value as Record<string, unknown>)) {
     if (!allowed.has(key)) throw new Error(`Unsupported analytics filter: ${key}`)
