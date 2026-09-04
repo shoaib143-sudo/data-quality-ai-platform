@@ -8,11 +8,18 @@ const requiredFiles = [
   'lib/profiling/sampling.ts',
   'lib/profiling/file-source-adapter.ts',
   'lib/identity/scim.ts',
+  'lib/governance/semantic-search.ts',
+  'lib/governance/semantic-indexer.ts',
+  'services/embedding-service/app.py',
+  'services/embedding-service/Dockerfile',
+  'scripts/recovery-drill.mjs',
   'app/api/health/live/route.ts',
   'app/api/health/ready/route.ts',
   'app/api/scim/v2/Users/route.ts',
   'app/api/scim/v2/Users/[userId]/route.ts',
   'app/api/lineage/ingest/route.ts',
+  'app/api/search/semantic/route.ts',
+  'app/api/search/semantic/reindex/route.ts',
   'app/api/scorecards/[projectId]/route.ts',
   'app/contracts/page.tsx',
   'app/workflows/page.tsx',
@@ -36,6 +43,7 @@ const requiredFiles = [
   'supabase/migrations/20260904060000_expose_governance_orchestration_api_schemas.sql',
   'supabase/migrations/20260904060100_verify_database_api_security_posture.sql',
   'supabase/migrations/20260904060200_normalize_database_api_security_posture_schema_list.sql',
+  'supabase/migrations/20260904104500_governance_semantic_embeddings.sql',
 ]
 
 for (const path of requiredFiles) {
@@ -50,9 +58,15 @@ const checks = [
   ['lib/profiling/sampling.ts', /FULL[\s\S]*FIXED[\s\S]*PERCENT/, 'configurable sampling modes'],
   ['lib/profiling/file-source-adapter.ts', /extractUnstructuredDocumentText[\s\S]*extractPdfText[\s\S]*extractOfficeZipText/, 'PDF and Office document text extraction'],
   ['lib/identity/scim.ts', /sha256[\s\S]*Bearer/i, 'hashed SCIM bearer tokens'],
+  ['lib/governance/semantic-search.ts', /EMBEDDING_DIMENSIONS\s*=\s*384[\s\S]*match_semantic_embeddings[\s\S]*indexSemanticObject/, 'provider-neutral semantic search and indexing'],
+  ['lib/governance/semantic-indexer.ts', /DATASET[\s\S]*GLOSSARY_TERM[\s\S]*POLICY[\s\S]*LINEAGE_TRANSFORMATION/, 'governance semantic indexing coverage'],
+  ['services/embedding-service/app.py', /all-MiniLM-L6-v2[\s\S]*normalize_embeddings=True[\s\S]*384/, 'free local 384-dimension embedding service'],
+  ['scripts/recovery-drill.mjs', /ALLOW_RECOVERY_TARGET[\s\S]*pg_dump[\s\S]*pg_restore[\s\S]*vectorExtension/, 'isolated destructive recovery drill safeguards'],
   ['app/login/page.tsx', /signInWithSSO/, 'SAML SSO client flow'],
   ['app/auth/callback/route.ts', /exchangeCodeForSession[\s\S]*sso_domains/, 'SSO callback and tenant mapping'],
   ['app/api/lineage/ingest/route.ts', /externalEventId[\s\S]*TRANSFORMS_TO/, 'idempotent external lineage ingestion'],
+  ['app/api/search/semantic/route.ts', /semanticSearch[\s\S]*projectId[\s\S]*SEMANTIC_EMBEDDING_PROVIDER_NOT_CONFIGURED/, 'project-scoped semantic search endpoint'],
+  ['app/api/search/semantic/reindex/route.ts', /catalog\.update[\s\S]*reindexProjectSemanticObjects/, 'authorized semantic reindex endpoint'],
   ['app/api/health/ready/route.ts', /components\.database[\s\S]*components\.queue[\s\S]*governance_contracts/, 'component readiness checks'],
   ['supabase/migrations/20260904041000_enterprise_governance_contracts_events_workflows.sql', /evaluate_data_contract[\s\S]*invalidate_dataset_certification[\s\S]*start_workflow/, 'contracts, invalidation and workflow engine'],
   ['supabase/migrations/20260904051000_automated_platform_contract_checks.sql', /run_platform_contract_checks/, 'database integration contract checks'],
@@ -63,6 +77,7 @@ const checks = [
   ['supabase/migrations/20260904055900_preserve_immutable_revision_references.sql', /drop constraint[\s\S]*object_revisions_project_id_fkey[\s\S]*revision history/i, 'immutable revision reference preservation'],
   ['supabase/migrations/20260904060000_expose_governance_orchestration_api_schemas.sql', /governance, orchestration[\s\S]*reload config/, 'PostgREST governance and orchestration exposure'],
   ['supabase/migrations/20260904060200_normalize_database_api_security_posture_schema_list.sql', /app_private_exposed[\s\S]*exposed_privileged_function_count/, 'database API security posture verification'],
+  ['supabase/migrations/20260904104500_governance_semantic_embeddings.sql', /create extension if not exists vector[\s\S]*using hnsw[\s\S]*match_semantic_embeddings/, 'pgvector semantic registry and HNSW similarity RPC'],
 ]
 
 for (const [path, pattern, label] of checks) {
