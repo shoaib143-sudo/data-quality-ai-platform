@@ -2,6 +2,14 @@
 
 This version hardens the Next.js App Router + Supabase SSR authentication foundation before application modules are connected.
 
+## AI Governance Intelligence roadmap
+
+The active completion roadmap for evolving the platform into a full AI Governance Intelligence Platform is maintained at:
+
+- [`docs/AI_GOVERNANCE_INTELLIGENCE_ROADMAP.md`](docs/AI_GOVERNANCE_INTELLIGENCE_ROADMAP.md)
+
+It defines the target **Observe → Understand → Reason → Recommend → Govern → Act → Verify → Learn** loop, the eight-agent portfolio, governance knowledge activation, CDEs, DQ intelligence, memory/learning, evaluation, investigation, prediction, governed autonomy, implementation waves, and the end-to-end definition of complete.
+
 ## Environment
 
 Create `.env.local` beside `package.json`:
