@@ -33,3 +33,14 @@ jobs:
         run: mvn -B test
       - name: Build bridge container
         run: docker build --pull --tag datanexus-jdbc-bridge:ci .
+      - name: Export bridge container
+        if: github.event_name == 'push'
+        run: docker save datanexus-jdbc-bridge:ci | gzip -9 > jdbc-bridge-image.tar.gz
+      - name: Upload bridge container artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jdbc-bridge-image-${{ github.sha }}
+          path: services/jdbc-bridge/jdbc-bridge-image.tar.gz
+          if-no-files-found: error
+          retention-days: 7
