@@ -24,6 +24,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
 
     const body = await request.json()
     const status = typeof body.status === 'string' ? body.status.toUpperCase() : issue.status
+    const wasResolved = ['RESOLVED', 'CLOSED'].includes(issue.status)
+    const resolvingNow = !wasResolved && ['RESOLVED', 'CLOSED'].includes(status)
+
+    let isProfilingRemediation = false
+    if (resolvingNow && issue.profile_run_id) {
+      const { data: remediationOutcome, error: remediationOutcomeError } = await admin
+        .schema('governance')
+        .from('profiling_remediation_outcomes')
+        .select('id')
+        .eq('project_id', issue.project_id)
+        .eq('source_profile_run_id', issue.profile_run_id)
+        .contains('remediation_issue_ids', [issueId])
+        .limit(1)
+        .maybeSingle()
+      if (remediationOutcomeError) throw new Error(`Unable to validate profiling remediation issue: ${remediationOutcomeError.message}`)
+      isProfilingRemediation = Boolean(remediationOutcome)
+    }
+
+    const resolutionSummary = typeof body.resolutionSummary === 'string' ? body.resolutionSummary.trim() : ''
+    if (isProfilingRemediation && !resolutionSummary) {
+      return NextResponse.json({
+        error: 'Resolution evidence is required before a profiling remediation issue can be resolved.',
+        code: 'REMEDIATION_RESOLUTION_EVIDENCE_REQUIRED',
+      }, { status: 400 })
+    }
+
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
       status,
@@ -33,7 +59,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
     if (typeof body.title === 'string') updates.title = body.title.trim()
     if (typeof body.description === 'string') updates.description = body.description.trim() || null
     if (typeof body.severity === 'string') updates.severity = body.severity.toUpperCase()
-    if (typeof body.resolutionSummary === 'string') updates.resolution_summary = body.resolutionSummary.trim() || null
+    if (typeof body.resolutionSummary === 'string') updates.resolution_summary = resolutionSummary || null
     if (body.resolutionEvidence && typeof body.resolutionEvidence === 'object') updates.resolution_evidence = body.resolutionEvidence
     if (['RESOLVED', 'CLOSED'].includes(status)) updates.resolved_at = new Date().toISOString()
 
@@ -52,7 +78,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
       eventType: `ISSUE_${status}`,
       entityType: 'ISSUE',
       entityId: issueId,
-      metadata: { status },
+      metadata: { status, profiling_remediation: isProfilingRemediation, resolution_summary_present: Boolean(data.resolution_summary) },
     })
 
     let verificationScheduling: Record<string, unknown> | null = null
