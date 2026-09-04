@@ -8,6 +8,7 @@
     "start": "next start",
     "verify:governance": "node scripts/verify-governance-architecture.mjs",
     "verify:semantic": "node scripts/verify-semantic-governance.mjs",
+    "verify:remediation": "node scripts/verify-profiling-remediation.mjs",
     "verify:database": "node scripts/verify-governance-database.mjs",
     "verify:production": "node scripts/verify-production.mjs",
     "benchmark:production": "node scripts/benchmark-production.mjs",
