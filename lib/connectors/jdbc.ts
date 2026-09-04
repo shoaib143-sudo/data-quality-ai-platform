@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const DEFAULT_TIMEOUT_MS = 10_000
+const DEFAULT_TIMEOUT_MS = 30_000
 const POSTGRES_EDGE_FUNCTION = 'dgp-postgres-connector'
 
 export type JdbcConnectionConfig = {
@@ -8,26 +8,51 @@ export type JdbcConnectionConfig = {
   credentialRef: string
   schema: string
   table: string
+  catalog?: string | null
 }
 
 export type JdbcCatalogResult = {
   schemas: string[]
-  tables: Array<{ name: string; type?: string | null }>
+  tables: Array<{ name: string; type?: string | null; catalog?: string | null; schema?: string | null; remarks?: string | null }>
   details: Record<string, unknown>
 }
 
 export type JdbcValidationResult = {
   valid: boolean
-  columns: Array<{ name: string; type?: string | null }>
+  columns: Array<{ name: string; type?: string | null; size?: number | null; scale?: number | null; nullable?: boolean | null; defaultValue?: string | null }>
   rowCount: number | null
   details: Record<string, unknown>
   errors: string[]
   warnings: string[]
 }
 
+export type JdbcTransformation = {
+  catalog?: string | null
+  schema?: string | null
+  name: string
+  operation: string
+  transformationLogic: string
+  logicHash: string
+  engine: string
+}
+
+export type JdbcLineageResult = {
+  databaseProduct: string | null
+  databaseVersion: string | null
+  catalog: string | null
+  schema: string | null
+  transformations: JdbcTransformation[]
+  warnings: string[]
+}
+
 function requiredString(value: unknown, field: string) {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${field} is required.`)
   return value.trim()
+}
+
+function connectorTimeoutMs() {
+  const configured = Number(process.env.JDBC_CONNECTOR_TIMEOUT_MS)
+  return Number.isFinite(configured) && configured >= 1_000 ? Math.min(configured, 180_000) : DEFAULT_TIMEOUT_MS
 }
 
 function validateBridgeUrl(value: string) {
@@ -61,8 +86,21 @@ function isPostgresJdbcUrl(value: unknown) {
   return typeof value === 'string' && value.trim().toLowerCase().startsWith('jdbc:postgresql://')
 }
 
+export function jdbcEngineFromUrl(value: string | null | undefined) {
+  const url = value?.trim().toLowerCase() ?? ''
+  if (url.startsWith('jdbc:postgresql:')) return 'POSTGRESQL'
+  if (url.startsWith('jdbc:sqlserver:')) return 'SQL_SERVER'
+  if (url.startsWith('jdbc:mysql:')) return 'MYSQL'
+  if (url.startsWith('jdbc:mariadb:')) return 'MARIADB'
+  if (url.startsWith('jdbc:databricks:')) return 'DATABRICKS'
+  if (url.startsWith('jdbc:snowflake:')) return 'SNOWFLAKE'
+  if (url.startsWith('jdbc:redshift:')) return 'REDSHIFT'
+  if (url.startsWith('jdbc:oracle:')) return 'ORACLE'
+  return 'GENERIC_JDBC'
+}
+
 function safeIdentifier(value: string, field: string) {
-  if (!/^[A-Za-z_][A-Za-z0-9_$]*$/.test(value)) throw new Error(`${field} contains invalid identifier characters.`)
+  if (!/^[A-Za-z_][A-Za-z0-9_$#@-]*$/.test(value)) throw new Error(`${field} contains invalid identifier characters.`)
   return value
 }
 
@@ -77,22 +115,25 @@ function normalizeConfig(input: JdbcConnectionConfig): JdbcConnectionConfig {
   const credentialRef = requiredString(input.credentialRef, 'credentialRef')
   const schema = safeIdentifier(requiredString(input.schema, 'schema'), 'schema')
   const table = safeIdentifier(requiredString(input.table, 'table'), 'table')
+  const catalog = input.catalog?.trim() ? safeIdentifier(input.catalog.trim(), 'catalog') : null
   rejectEmbeddedCredentials(jdbcUrl)
-  return { ...input, jdbcUrl, credentialRef, schema, table }
+  return { ...input, jdbcUrl, credentialRef, schema, table, catalog }
 }
 
-function normalizeDiscoveryConfig(input: { jdbcUrl: string; credentialRef: string; schema?: string }) {
+function normalizeDiscoveryConfig(input: { jdbcUrl: string; credentialRef: string; schema?: string; catalog?: string }) {
   const jdbcUrl = requiredString(input.jdbcUrl, 'jdbcUrl')
   const credentialRef = requiredString(input.credentialRef, 'credentialRef')
   const schema = input.schema?.trim() || undefined
+  const catalog = input.catalog?.trim() || undefined
   if (schema) safeIdentifier(schema, 'schema')
+  if (catalog) safeIdentifier(catalog, 'catalog')
   rejectEmbeddedCredentials(jdbcUrl)
-  return { jdbcUrl, credentialRef, schema }
+  return { jdbcUrl, credentialRef, schema, catalog }
 }
 
 async function bridgeRequest<T>(path: string, body: Record<string, unknown>) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), connectorTimeoutMs())
   try {
     const response = await fetch(`${bridgeBaseUrl()}${path}`, { method: 'POST', headers: bridgeHeaders(), body: JSON.stringify(body), cache: 'no-store', signal: controller.signal })
     const payload = await response.json().catch(() => null)
@@ -111,11 +152,12 @@ function edgeAction(path: string) {
   if (path === '/v1/catalog') return 'catalog'
   if (path === '/v1/validate') return 'validate'
   if (path === '/v1/query') return 'query'
+  if (path === '/v1/lineage') return 'lineage'
   throw new Error('Unsupported PostgreSQL connector operation.')
 }
 
 async function postgresEdgeRequest<T>(path: string, body: Record<string, unknown>) {
-  if (!isPostgresJdbcUrl(body.jdbc_url)) throw new Error('The built-in temporary connector currently supports PostgreSQL JDBC URLs only.')
+  if (!isPostgresJdbcUrl(body.jdbc_url)) throw new Error('The built-in connector supports PostgreSQL JDBC URLs only.')
   const admin = createAdminClient()
   const { data, error } = await admin.functions.invoke(POSTGRES_EDGE_FUNCTION, {
     body: { action: edgeAction(path), ...body },
@@ -142,15 +184,24 @@ async function postgresEdgeRequest<T>(path: string, body: Record<string, unknown
 }
 
 async function connectorRequest<T>(path: string, body: Record<string, unknown>) {
-  if (isPostgresJdbcUrl(body.jdbc_url)) return postgresEdgeRequest<T>(path, body)
+  if (isPostgresJdbcUrl(body.jdbc_url)) {
+    try { return await postgresEdgeRequest<T>(path, body) }
+    catch (error) {
+      if (!bridgeConfigured() || path !== '/v1/lineage') throw error
+      return bridgeRequest<T>(path, body)
+    }
+  }
   if (bridgeConfigured()) return bridgeRequest<T>(path, body)
-  throw new Error('The connector service is not available for this JDBC driver.')
+  throw new Error(`The JDBC bridge is not configured for ${jdbcEngineFromUrl(String(body.jdbc_url ?? ''))}.`)
 }
 
-export async function discoverJdbcCatalog(input: { jdbcUrl: string; credentialRef: string; schema?: string }): Promise<JdbcCatalogResult> {
+export async function discoverJdbcCatalog(input: { jdbcUrl: string; credentialRef: string; schema?: string; catalog?: string }): Promise<JdbcCatalogResult> {
   const config = normalizeDiscoveryConfig(input)
-  const result = await connectorRequest<{ schemas?: string[]; tables?: Array<{ name: string; type?: string | null }>; details?: Record<string, unknown> }>('/v1/catalog', {
-    jdbc_url: config.jdbcUrl, credential_ref: config.credentialRef, ...(config.schema ? { schema: config.schema } : {}),
+  const result = await connectorRequest<{ schemas?: string[]; tables?: JdbcCatalogResult['tables']; details?: Record<string, unknown> }>('/v1/catalog', {
+    jdbc_url: config.jdbcUrl,
+    credential_ref: config.credentialRef,
+    ...(config.schema ? { schema: config.schema } : {}),
+    ...(config.catalog ? { catalog: config.catalog } : {}),
   })
   return { schemas: Array.isArray(result.schemas) ? result.schemas : [], tables: Array.isArray(result.tables) ? result.tables : [], details: result.details ?? {} }
 }
@@ -158,22 +209,78 @@ export async function discoverJdbcCatalog(input: { jdbcUrl: string; credentialRe
 export async function validateJdbcConnection(input: JdbcConnectionConfig): Promise<JdbcValidationResult> {
   const config = normalizeConfig(input)
   try {
-    const result = await connectorRequest<{ columns?: Array<{ name: string; type?: string | null }>; row_count?: number | null; warnings?: string[]; details?: Record<string, unknown> }>('/v1/validate', {
-      jdbc_url: config.jdbcUrl, credential_ref: config.credentialRef, schema: config.schema, table: config.table,
+    const result = await connectorRequest<{
+      columns?: JdbcValidationResult['columns']
+      row_count?: number | null
+      rowCount?: number | null
+      warnings?: string[]
+      details?: Record<string, unknown>
+    }>('/v1/validate', {
+      jdbc_url: config.jdbcUrl,
+      credential_ref: config.credentialRef,
+      schema: config.schema,
+      table: config.table,
+      ...(config.catalog ? { catalog: config.catalog } : {}),
     })
-    return { valid: true, columns: Array.isArray(result.columns) ? result.columns : [], rowCount: typeof result.row_count === 'number' ? result.row_count : null, details: result.details ?? {}, errors: [], warnings: Array.isArray(result.warnings) ? result.warnings : [] }
+    const rowCount = typeof result.row_count === 'number' ? result.row_count : typeof result.rowCount === 'number' ? result.rowCount : null
+    return { valid: true, columns: Array.isArray(result.columns) ? result.columns : [], rowCount, details: result.details ?? {}, errors: [], warnings: Array.isArray(result.warnings) ? result.warnings : [] }
   } catch (error) {
-    return { valid: false, columns: [], rowCount: null, details: {}, errors: [error instanceof Error ? error.message : 'JDBC validation failed.'], warnings: [] }
+    return { valid: false, columns: [], rowCount: null, details: { engine: jdbcEngineFromUrl(config.jdbcUrl) }, errors: [error instanceof Error ? error.message : 'JDBC validation failed.'], warnings: [] }
   }
 }
 
 export async function loadJdbcRows(input: JdbcConnectionConfig, limit: number) {
   const config = normalizeConfig(input)
-  if (!Number.isInteger(limit) || limit < 1 || limit > 10_000) throw new Error('JDBC row limit must be between 1 and 10000.')
-  const result = await connectorRequest<{ rows?: Record<string, unknown>[]; row_count?: number | null; columns?: Array<{ name: string; type?: string | null }> }>('/v1/query', {
-    jdbc_url: config.jdbcUrl, credential_ref: config.credentialRef, schema: config.schema, table: config.table, limit,
+  if (!Number.isInteger(limit) || limit < 1) throw new Error('JDBC row limit must be a positive integer.')
+  const result = await connectorRequest<{
+    rows?: Record<string, unknown>[]
+    row_count?: number | null
+    rowCount?: number | null
+    columns?: JdbcValidationResult['columns']
+    warnings?: string[]
+  }>('/v1/query', {
+    jdbc_url: config.jdbcUrl,
+    credential_ref: config.credentialRef,
+    schema: config.schema,
+    table: config.table,
+    limit,
+    ...(config.catalog ? { catalog: config.catalog } : {}),
   })
-  return { rows: Array.isArray(result.rows) ? result.rows : [], rowCount: typeof result.row_count === 'number' ? result.row_count : null, columns: Array.isArray(result.columns) ? result.columns : [] }
+  const rowCount = typeof result.row_count === 'number' ? result.row_count : typeof result.rowCount === 'number' ? result.rowCount : null
+  return {
+    rows: Array.isArray(result.rows) ? result.rows : [],
+    rowCount,
+    columns: Array.isArray(result.columns) ? result.columns : [],
+    warnings: Array.isArray(result.warnings) ? result.warnings : [],
+  }
+}
+
+export async function discoverJdbcTransformations(input: JdbcConnectionConfig): Promise<JdbcLineageResult> {
+  const config = normalizeConfig(input)
+  const result = await connectorRequest<{
+    databaseProduct?: string | null
+    database_product?: string | null
+    databaseVersion?: string | null
+    database_version?: string | null
+    catalog?: string | null
+    schema?: string | null
+    transformations?: JdbcTransformation[]
+    warnings?: string[]
+  }>('/v1/lineage', {
+    jdbc_url: config.jdbcUrl,
+    credential_ref: config.credentialRef,
+    schema: config.schema,
+    table: config.table,
+    ...(config.catalog ? { catalog: config.catalog } : {}),
+  })
+  return {
+    databaseProduct: result.databaseProduct ?? result.database_product ?? null,
+    databaseVersion: result.databaseVersion ?? result.database_version ?? null,
+    catalog: result.catalog ?? config.catalog ?? null,
+    schema: result.schema ?? config.schema,
+    transformations: Array.isArray(result.transformations) ? result.transformations : [],
+    warnings: Array.isArray(result.warnings) ? result.warnings : [],
+  }
 }
 
 export function parseJdbcTableReference(value: string | null | undefined) {
@@ -181,6 +288,7 @@ export function parseJdbcTableReference(value: string | null | undefined) {
   if (!reference) return null
   const normalized = reference.replace(/^jdbc-table:\/\//i, '')
   const parts = normalized.split('.').filter(Boolean)
-  if (parts.length === 1) return { schema: 'public', table: parts[0] }
-  return { schema: parts[parts.length - 2], table: parts[parts.length - 1] }
+  if (parts.length === 1) return { catalog: null, schema: 'public', table: parts[0] }
+  if (parts.length === 2) return { catalog: null, schema: parts[0], table: parts[1] }
+  return { catalog: parts[parts.length - 3], schema: parts[parts.length - 2], table: parts[parts.length - 1] }
 }
