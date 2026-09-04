@@ -32,9 +32,15 @@ requireText('lib/data-quality/autonomous-operations.ts', [
 ])
 requireText('lib/data-quality/remediation-verification.ts', [
   'verifyDataQualityRemediation',
-  'scheduleDataQualityVerificationFromIssue',
   'DATA_QUALITY_REMEDIATION_VERIFICATION',
   'material_improvement',
+])
+requireText('lib/data-quality/remediation-reprofile.ts', [
+  'scheduleFreshDataQualityVerificationFromIssue',
+  'DATA_QUALITY_REMEDIATION_VERIFICATION_PROFILE',
+  'queueDataQualityVerificationAfterFreshProfile',
+  'verification_profile_run_id',
+  'verification_profile_job_id',
 ])
 const dqAction = requireText('app/api/data-quality/remediation/route.ts', [
   'TRACKED_GOVERNANCE_ISSUES_ONLY',
@@ -82,13 +88,24 @@ requireText('app/api/lineage/impact/route.ts', [
 const worker = requireText('lib/orchestration/worker.ts', [
   'investigateDataQualityRun',
   'verifyDataQualityRemediation',
+  'queueDataQualityVerificationAfterFreshProfile',
+  "trigger === 'DATA_QUALITY_REMEDIATION_VERIFICATION_PROFILE'",
+  'recordDataQualityReprofileError',
+  'recordDataQualityReprofileCancellation',
   'investigateObservabilityIncident',
   'enrichObservabilityIncidentWithLineageImpact',
 ])
 if (worker.indexOf('investigateDataQualityRun') > worker.indexOf('investigateObservabilityIncident')) {
   throw new Error('Durable worker contract must investigate Data Quality before correlated observability incident processing.')
 }
+if (worker.indexOf('queueDataQualityVerificationAfterFreshProfile') > worker.indexOf('verifyDataQualityRemediation')) {
+  throw new Error('Fresh profiling verification handoff must be wired before Data Quality outcome verification.')
+}
 
+requireText('app/api/issues/[issueId]/route.ts', [
+  'scheduleFreshDataQualityVerificationFromIssue',
+  "mode: 'DATA_QUALITY_FRESH_PROFILE'",
+])
 requireText('app/data-quality/autonomous/page.tsx', ['Autonomous quality operations'])
 requireText('app/observability/incidents/page.tsx', ['AI Operations Center'])
 requireText('app/lineage/impact/page.tsx', ['Lineage Impact Intelligence'])
