@@ -39,7 +39,9 @@ class JdbcBridgeControllerTest {
         statement.execute("CREATE VIEW active_customers AS SELECT id, name FROM customers WHERE id > 10");
       }
     }
-    mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(credentials)).build();
+    mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(credentials))
+        .setControllerAdvice(new JdbcUrlCredentialGuard())
+        .build();
   }
 
   @AfterEach
@@ -64,6 +66,33 @@ class JdbcBridgeControllerTest {
     mvc.perform(post("/v1/validate")
         .contentType("application/json")
         .content("{\"jdbcUrl\":\"jdbc:postgresql://user:password@host/db\",\"credentialRef\":\"test-ref\",\"schema\":\"PUBLIC\",\"table\":\"customers\"}"))
+        .andExpect(status().isBadRequest());
+    Mockito.verifyNoInteractions(credentials);
+  }
+
+  @Test
+  void rejectsSqlServerCredentialProperties() throws Exception {
+    mvc.perform(post("/v1/validate")
+        .contentType("application/json")
+        .content("{\"jdbcUrl\":\"jdbc:sqlserver://host:1433;databaseName=db;user=sa;password=secret\",\"credentialRef\":\"test-ref\",\"schema\":\"dbo\",\"table\":\"customers\"}"))
+        .andExpect(status().isBadRequest());
+    Mockito.verifyNoInteractions(credentials);
+  }
+
+  @Test
+  void rejectsQueryStringCredentialProperties() throws Exception {
+    mvc.perform(post("/v1/validate")
+        .contentType("application/json")
+        .content("{\"jdbcUrl\":\"jdbc:postgresql://host/db?user=app&password=secret\",\"credentialRef\":\"test-ref\",\"schema\":\"PUBLIC\",\"table\":\"customers\"}"))
+        .andExpect(status().isBadRequest());
+    Mockito.verifyNoInteractions(credentials);
+  }
+
+  @Test
+  void rejectsOracleThinCredentials() throws Exception {
+    mvc.perform(post("/v1/validate")
+        .contentType("application/json")
+        .content("{\"jdbcUrl\":\"jdbc:oracle:thin:scott/tiger@//host:1521/service\",\"credentialRef\":\"test-ref\",\"schema\":\"SCOTT\",\"table\":\"customers\"}"))
         .andExpect(status().isBadRequest());
     Mockito.verifyNoInteractions(credentials);
   }
