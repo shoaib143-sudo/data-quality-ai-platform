@@ -20,6 +20,11 @@ function number(value: unknown) {
   return null
 }
 
+function uuidList(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.map((item) => text(item)).filter(Boolean)
+}
+
 export async function verifyRemediationOutcome(input: {
   workflowInstanceId: string
   verificationProfileRunId: string
@@ -72,18 +77,29 @@ export async function verifyRemediationOutcome(input: {
     throw new Error('Verification profiling run must belong to the same dataset as the approved remediation.')
   }
 
-  const [sourceScoreResult, verificationScoreResult, sourceFindingsResult, verificationFindingsResult, issuesResult, linkedOutcomeResult] = await Promise.all([
+  const [sourceScoreResult, verificationScoreResult, sourceFindingsResult, verificationFindingsResult, linkedOutcomeResult] = await Promise.all([
     admin.schema('profiling').from('data_quality_scores').select('overall_score').eq('profile_run_id', sourceProfileRunId).maybeSingle(),
     admin.schema('profiling').from('data_quality_scores').select('overall_score').eq('profile_run_id', input.verificationProfileRunId).maybeSingle(),
     admin.schema('profiling').from('profile_findings').select('id,severity').eq('profile_run_id', sourceProfileRunId),
     admin.schema('profiling').from('profile_findings').select('id,severity').eq('profile_run_id', input.verificationProfileRunId),
-    admin.schema('governance').from('issues').select('id,status,title').eq('project_id', instance.project_id).eq('profile_run_id', sourceProfileRunId).like('title', 'Profiling remediation:%'),
-    admin.schema('governance').from('profiling_remediation_outcomes').select('id,outcome,verification_agent_run_id,verification_job_id').eq('workflow_instance_id', input.workflowInstanceId).maybeSingle(),
+    admin.schema('governance').from('profiling_remediation_outcomes').select('id,outcome,created_by,remediation_issue_ids,verification_agent_run_id,verification_job_id').eq('workflow_instance_id', input.workflowInstanceId).maybeSingle(),
   ])
 
-  for (const queryResult of [sourceScoreResult, verificationScoreResult, sourceFindingsResult, verificationFindingsResult, issuesResult, linkedOutcomeResult]) {
+  for (const queryResult of [sourceScoreResult, verificationScoreResult, sourceFindingsResult, verificationFindingsResult, linkedOutcomeResult]) {
     if (queryResult.error) throw new Error(queryResult.error.message)
   }
+
+  if (!linkedOutcomeResult.data) throw new Error('Profiling remediation outcome is not available for verification.')
+  const trackedIssueIds = uuidList(linkedOutcomeResult.data.remediation_issue_ids)
+  if (!trackedIssueIds.length) throw new Error('Profiling remediation outcome has no tracked remediation issues.')
+
+  const { data: issues, error: issuesError } = await admin
+    .schema('governance')
+    .from('issues')
+    .select('id,status,title,resolution_summary,resolution_evidence')
+    .eq('project_id', instance.project_id)
+    .in('id', trackedIssueIds)
+  if (issuesError) throw new Error(`Unable to resolve tracked remediation issues: ${issuesError.message}`)
 
   const sourceScore = number(sourceScoreResult.data?.overall_score)
   const verificationScore = number(verificationScoreResult.data?.overall_score)
@@ -95,12 +111,13 @@ export async function verifyRemediationOutcome(input: {
 
   const sourceHighSeverityFindings = severe(sourceFindingsResult.data)
   const verificationHighSeverityFindings = severe(verificationFindingsResult.data)
-  const issues = issuesResult.data ?? []
-  const unresolvedIssues = issues.filter((issue) => !['RESOLVED', 'CLOSED'].includes(text(issue.status).toUpperCase()))
+  const trackedIssues = issues ?? []
+  const unresolvedIssues = trackedIssues.filter((issue) => !['RESOLVED', 'CLOSED'].includes(text(issue.status).toUpperCase()))
+  const missingTrackedIssues = trackedIssueIds.filter((issueId) => !trackedIssues.some((issue) => issue.id === issueId))
 
   const qualityNotWorse = sourceScore === null || verificationScore >= sourceScore
   const severeFindingsNotWorse = verificationHighSeverityFindings <= sourceHighSeverityFindings
-  const allTrackedIssuesResolved = issues.length > 0 && unresolvedIssues.length === 0
+  const allTrackedIssuesResolved = missingTrackedIssues.length === 0 && trackedIssues.length === trackedIssueIds.length && unresolvedIssues.length === 0
   const verificationPassed = qualityNotWorse && severeFindingsNotWorse && allTrackedIssuesResolved
   const qualityDelta = sourceScore === null ? null : verificationScore - sourceScore
   const severeFindingsDelta = verificationHighSeverityFindings - sourceHighSeverityFindings
@@ -109,10 +126,16 @@ export async function verifyRemediationOutcome(input: {
   const checks = {
     quality_not_worse: { passed: qualityNotWorse, before: sourceScore, after: verificationScore, delta: qualityDelta },
     high_severity_findings_not_worse: { passed: severeFindingsNotWorse, before: sourceHighSeverityFindings, after: verificationHighSeverityFindings, delta: severeFindingsDelta },
-    tracked_remediation_issues_resolved: { passed: allTrackedIssuesResolved, total: issues.length, unresolved: unresolvedIssues.length },
+    tracked_remediation_issues_resolved: {
+      passed: allTrackedIssuesResolved,
+      expected: trackedIssueIds.length,
+      found: trackedIssues.length,
+      unresolved: unresolvedIssues.length,
+      missing_issue_ids: missingTrackedIssues,
+    },
   }
 
-  const priorOutcome = object(linkedOutcomeResult.data?.outcome)
+  const priorOutcome = object(linkedOutcomeResult.data.outcome)
   const { data: outcome, error: outcomeError } = await admin
     .schema('governance')
     .from('profiling_remediation_outcomes')
@@ -128,7 +151,7 @@ export async function verifyRemediationOutcome(input: {
       source_high_severity_findings: sourceHighSeverityFindings,
       verification_high_severity_findings: verificationHighSeverityFindings,
       high_severity_findings_delta: severeFindingsDelta,
-      remediation_issue_ids: issues.map((issue) => issue.id),
+      remediation_issue_ids: trackedIssueIds,
       checks,
       outcome: {
         ...priorOutcome,
@@ -136,7 +159,7 @@ export async function verifyRemediationOutcome(input: {
         recommendation_effective: recommendationEffective,
         verification_source: input.verificationSource,
       },
-      created_by: input.actorUserId,
+      created_by: linkedOutcomeResult.data.created_by ?? input.actorUserId,
       updated_at: new Date().toISOString(),
       verified_at: new Date().toISOString(),
     }, { onConflict: 'workflow_instance_id' })
