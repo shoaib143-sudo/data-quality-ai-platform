@@ -73,6 +73,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Source profiling run is not complete.' }, { status: 409 })
     }
 
+    const { data: linkedOutcome, error: linkedOutcomeError } = await admin
+      .schema('governance')
+      .from('profiling_remediation_outcomes')
+      .select('id,status,verification_profile_run_id,verification_agent_run_id,verification_job_id,outcome')
+      .eq('workflow_instance_id', workflowInstanceId)
+      .maybeSingle()
+    if (linkedOutcomeError) throw new Error(`Unable to resolve linked remediation outcome: ${linkedOutcomeError.message}`)
+
+    if (!verificationProfileRunId && linkedOutcome?.verification_profile_run_id) {
+      verificationProfileRunId = linkedOutcome.verification_profile_run_id
+    }
+
     if (!verificationProfileRunId) {
       const { data: versions, error: versionsError } = await admin
         .schema('catalog')
@@ -104,6 +116,7 @@ export async function POST(request: Request) {
           error: 'No completed post-remediation profiling run is available yet.',
           code: 'VERIFICATION_PROFILE_PENDING',
           sourceProfileRunId,
+          automaticVerificationStatus: linkedOutcome?.status ?? null,
         }, { status: 409 })
       }
       verificationProfileRunId = latestRun.id
@@ -112,14 +125,22 @@ export async function POST(request: Request) {
     const { data: verificationRun, error: verificationRunError } = await admin
       .schema('profiling')
       .from('profile_runs')
-      .select('id,dataset_version_id,status,completed_at')
+      .select('id,dataset_version_id,status,completed_at,agent_run_id')
       .eq('id', verificationProfileRunId)
       .maybeSingle()
 
     if (verificationRunError) throw new Error(`Unable to load verification profiling run: ${verificationRunError.message}`)
     if (!verificationRun) return NextResponse.json({ error: 'Verification profiling run not found.' }, { status: 404 })
     if (verificationRun.status !== 'COMPLETED') {
-      return NextResponse.json({ error: 'Verification profiling run must be completed.' }, { status: 409 })
+      return NextResponse.json({
+        error: verificationRun.status === 'RUNNING'
+          ? 'Automatic verification profiling is still running.'
+          : `Verification profiling run is ${verificationRun.status}.`,
+        code: verificationRun.status === 'RUNNING' ? 'VERIFICATION_PROFILE_RUNNING' : 'VERIFICATION_PROFILE_NOT_COMPLETE',
+        verificationProfileRunId,
+        verificationAgentRunId: verificationRun.agent_run_id ?? linkedOutcome?.verification_agent_run_id ?? null,
+        verificationJobId: linkedOutcome?.verification_job_id ?? null,
+      }, { status: 409 })
     }
     if (!verificationRun.completed_at || verificationRun.completed_at <= sourceRun.completed_at) {
       return NextResponse.json({ error: 'Verification profiling run must complete after the source profiling run.' }, { status: 409 })
@@ -147,8 +168,8 @@ export async function POST(request: Request) {
       admin.schema('governance').from('issues').select('id,status,title').eq('project_id', instance.project_id).eq('profile_run_id', sourceProfileRunId).like('title', 'Profiling remediation:%'),
     ])
 
-    for (const result of [sourceScoreResult, verificationScoreResult, sourceFindingsResult, verificationFindingsResult, issuesResult]) {
-      if (result.error) throw new Error(result.error.message)
+    for (const queryResult of [sourceScoreResult, verificationScoreResult, sourceFindingsResult, verificationFindingsResult, issuesResult]) {
+      if (queryResult.error) throw new Error(queryResult.error.message)
     }
 
     const sourceScore = number(sourceScoreResult.data?.overall_score)
@@ -188,6 +209,7 @@ export async function POST(request: Request) {
       checks,
     }
 
+    const priorOutcome = object(linkedOutcome?.outcome)
     const { data: outcome, error: outcomeError } = await admin
       .schema('governance')
       .from('profiling_remediation_outcomes')
@@ -206,14 +228,20 @@ export async function POST(request: Request) {
         remediation_issue_ids: issues.map((issue) => issue.id),
         checks,
         outcome: {
+          ...priorOutcome,
           verification_passed: verificationPassed,
           recommendation_effective: recommendationEffective,
+          verification_source: linkedOutcome?.verification_profile_run_id === verificationProfileRunId
+            ? 'LINKED_AUTOMATIC_REPROFILE'
+            : text(body.verificationProfileRunId)
+              ? 'EXPLICIT_PROFILE_RUN'
+              : 'LATEST_COMPLETED_FALLBACK',
         },
         created_by: user.id,
         updated_at: new Date().toISOString(),
         verified_at: new Date().toISOString(),
       }, { onConflict: 'workflow_instance_id' })
-      .select('id,status,quality_score_delta,high_severity_findings_delta')
+      .select('id,status,quality_score_delta,high_severity_findings_delta,verification_profile_run_id,verification_agent_run_id,verification_job_id')
       .single()
 
     if (outcomeError || !outcome) {
@@ -246,11 +274,14 @@ export async function POST(request: Request) {
       eventType: verificationPassed ? 'PROFILING_REMEDIATION_VERIFIED' : 'PROFILING_REMEDIATION_VERIFICATION_FAILED',
       entityType: 'PROFILE_RUN',
       entityId: verificationProfileRunId,
+      correlationId: workflowInstanceId,
       metadata: {
         ...result,
         remediation_outcome_id: outcome.id,
         recommendation_effective: recommendationEffective,
         recommendation_learning_ids: (recommendationLearning ?? []).map((row) => row.id),
+        verification_agent_run_id: outcome.verification_agent_run_id,
+        verification_job_id: outcome.verification_job_id,
       },
     })
 
