@@ -36,7 +36,7 @@ async function writeTelemetry(projectId: string | null, metricKey: string, numer
 async function resolveCapacity(projectId: string) {
   const admin = createAdminClient()
   const { data, error } = await admin.schema('orchestration').from('capacity_policies').select('*').eq('project_id', projectId).maybeSingle()
-  if (error) throw new Error(`Unable to resolve project capacity policy: ${error.message}`)
+  if (error) throw new Error(`Unable to resolve project operating targets: ${error.message}`)
   return {
     maxConcurrentJobs: Number(data?.max_concurrent_jobs ?? 4),
     maxJobsPerHour: Number(data?.max_jobs_per_hour ?? 120),
@@ -72,19 +72,14 @@ export async function enqueueDurableJob(input: {
     if (existing) return existing
   }
 
-  const capacity = await resolveCapacity(input.projectId)
+  const requestedAvailableAt = input.availableAt ? new Date(input.availableAt) : new Date()
+  const availableAt = Number.isFinite(requestedAvailableAt.getTime()) ? requestedAvailableAt.toISOString() : new Date().toISOString()
   const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString()
-  const [{ count: runningCount, error: activeError }, { count: hourlyCount, error: hourlyError }] = await Promise.all([
+  const [{ count: runningCount }, { count: hourlyCount }, targets] = await Promise.all([
     admin.schema('orchestration').from('job_queue').select('id', { count: 'exact', head: true }).eq('project_id', input.projectId).eq('status', 'RUNNING'),
     admin.schema('orchestration').from('job_queue').select('id', { count: 'exact', head: true }).eq('project_id', input.projectId).gte('created_at', oneHourAgo),
+    resolveCapacity(input.projectId),
   ])
-  if (activeError) throw new Error(`Unable to evaluate active job capacity: ${activeError.message}`)
-  if (hourlyError) throw new Error(`Unable to evaluate hourly job capacity: ${hourlyError.message}`)
-
-  const capacityDelayMinutes = (runningCount ?? 0) >= capacity.maxConcurrentJobs || (hourlyCount ?? 0) >= capacity.maxJobsPerHour ? 5 : 0
-  const requestedAvailableAt = input.availableAt ? new Date(input.availableAt) : new Date()
-  const capacityAvailableAt = new Date(Date.now() + capacityDelayMinutes * 60_000)
-  const availableAt = requestedAvailableAt > capacityAvailableAt ? requestedAvailableAt.toISOString() : capacityAvailableAt.toISOString()
 
   const { data, error } = await admin.schema('orchestration').from('job_queue').insert({
     project_id: input.projectId,
@@ -109,8 +104,12 @@ export async function enqueueDurableJob(input: {
 
   await writeTelemetry(input.projectId, 'job.queued', 1, {
     job_type: input.jobType,
-    delayed_by_capacity: capacityDelayMinutes > 0,
     priority: input.priority ?? 100,
+    running_jobs: runningCount ?? 0,
+    jobs_last_hour: hourlyCount ?? 0,
+    advisory_concurrent_target_exceeded: (runningCount ?? 0) >= targets.maxConcurrentJobs,
+    advisory_hourly_target_exceeded: (hourlyCount ?? 0) >= targets.maxJobsPerHour,
+    capacity_mode: 'ADVISORY_ONLY',
   })
   return data
 }
