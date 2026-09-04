@@ -37,12 +37,8 @@ export async function POST(request: Request) {
       .eq('id', workflowInstanceId)
       .maybeSingle()
 
-    if (instanceError) {
-      throw new Error(`Unable to load workflow instance: ${instanceError.message}`)
-    }
-    if (!instance) {
-      return NextResponse.json({ error: 'Workflow instance not found.' }, { status: 404 })
-    }
+    if (instanceError) throw new Error(`Unable to load workflow instance: ${instanceError.message}`)
+    if (!instance) return NextResponse.json({ error: 'Workflow instance not found.' }, { status: 404 })
     if (instance.entity_type !== 'PROFILE_RUN') {
       return NextResponse.json({ error: 'Workflow instance is not a profiling remediation approval.' }, { status: 409 })
     }
@@ -88,9 +84,7 @@ export async function POST(request: Request) {
         .limit(1)
         .maybeSingle()
 
-      if (existingError) {
-        throw new Error(`Unable to check remediation issue: ${existingError.message}`)
-      }
+      if (existingError) throw new Error(`Unable to check remediation issue: ${existingError.message}`)
       if (existing) {
         reused.push(existing)
         continue
@@ -141,6 +135,36 @@ export async function POST(request: Request) {
       })
     }
 
+    const issueIds = [...created, ...reused]
+      .map((issue) => text(issue.id))
+      .filter(Boolean)
+
+    const { data: outcome, error: outcomeError } = await admin
+      .schema('governance')
+      .from('profiling_remediation_outcomes')
+      .upsert({
+        project_id: instance.project_id,
+        workflow_instance_id: workflowInstanceId,
+        source_profile_run_id: profileRunId,
+        status: 'ACTION_TRACKED',
+        execution_mode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
+        production_mutation_performed: false,
+        remediation_issue_ids: issueIds,
+        created_by: user.id,
+        updated_at: new Date().toISOString(),
+        outcome: {
+          recommendation_count: recommendations.length,
+          created_issue_count: created.length,
+          reused_issue_count: reused.length,
+        },
+      }, { onConflict: 'workflow_instance_id' })
+      .select('id,status,remediation_issue_ids')
+      .single()
+
+    if (outcomeError || !outcome) {
+      throw new Error(`Unable to persist remediation outcome: ${outcomeError?.message ?? 'unknown error'}`)
+    }
+
     await writeGovernanceAudit({
       projectId: instance.project_id,
       actorUserId: user.id,
@@ -149,6 +173,7 @@ export async function POST(request: Request) {
       entityId: profileRunId,
       metadata: {
         workflow_instance_id: workflowInstanceId,
+        remediation_outcome_id: outcome.id,
         created_issue_ids: created.map((issue) => issue.id),
         reused_issue_ids: reused.map((issue) => issue.id),
         execution_mode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
@@ -159,6 +184,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       workflowInstanceId,
       profileRunId,
+      remediationOutcomeId: outcome.id,
       executionMode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
       productionMutationPerformed: false,
       created,
