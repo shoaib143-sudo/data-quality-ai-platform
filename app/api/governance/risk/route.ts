@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
-import { listProjectPredictiveRisk, refreshProjectPredictiveRisk } from '@/lib/governance/predictive-risk'
+import { refreshProjectPredictiveRisk } from '@/lib/governance/predictive-risk'
+import { listProjectPredictiveRisk } from '@/lib/governance/predictive-risk-read'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
