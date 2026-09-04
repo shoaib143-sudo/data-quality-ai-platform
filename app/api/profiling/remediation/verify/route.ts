@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { verifyRemediationOutcome } from '@/lib/profiling/remediation-verification'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -12,15 +12,6 @@ function object(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
-}
-
-function number(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
 }
 
 export async function POST(request: Request) {
@@ -61,47 +52,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Workflow is missing the source dataset identifier.' }, { status: 409 })
     }
 
-    const { data: sourceRun, error: sourceRunError } = await admin
-      .schema('profiling')
-      .from('profile_runs')
-      .select('id,completed_at')
-      .eq('id', sourceProfileRunId)
-      .maybeSingle()
+    const [{ data: sourceRun, error: sourceRunError }, { data: linkedOutcome, error: linkedOutcomeError }] = await Promise.all([
+      admin.schema('profiling').from('profile_runs').select('id,completed_at').eq('id', sourceProfileRunId).maybeSingle(),
+      admin.schema('governance').from('profiling_remediation_outcomes').select('status,verification_profile_run_id,verification_agent_run_id,verification_job_id').eq('workflow_instance_id', workflowInstanceId).maybeSingle(),
+    ])
 
     if (sourceRunError) throw new Error(`Unable to load source profiling run: ${sourceRunError.message}`)
-    if (!sourceRun?.completed_at) {
-      return NextResponse.json({ error: 'Source profiling run is not complete.' }, { status: 409 })
-    }
-
-    const { data: linkedOutcome, error: linkedOutcomeError } = await admin
-      .schema('governance')
-      .from('profiling_remediation_outcomes')
-      .select('id,status,verification_profile_run_id,verification_agent_run_id,verification_job_id,outcome')
-      .eq('workflow_instance_id', workflowInstanceId)
-      .maybeSingle()
+    if (!sourceRun?.completed_at) return NextResponse.json({ error: 'Source profiling run is not complete.' }, { status: 409 })
     if (linkedOutcomeError) throw new Error(`Unable to resolve linked remediation outcome: ${linkedOutcomeError.message}`)
+
+    let verificationSource: 'API_LINKED' | 'API_EXPLICIT' | 'API_FALLBACK' = verificationProfileRunId
+      ? 'API_EXPLICIT'
+      : 'API_LINKED'
 
     if (!verificationProfileRunId && linkedOutcome?.verification_profile_run_id) {
       verificationProfileRunId = linkedOutcome.verification_profile_run_id
     }
 
     if (!verificationProfileRunId) {
+      verificationSource = 'API_FALLBACK'
       const { data: versions, error: versionsError } = await admin
         .schema('catalog')
         .from('dataset_versions')
         .select('id')
         .eq('dataset_id', sourceDatasetId)
-
       if (versionsError) throw new Error(`Unable to resolve dataset versions: ${versionsError.message}`)
+
       const versionIds = (versions ?? []).map((version) => version.id)
-      if (!versionIds.length) {
-        return NextResponse.json({ error: 'No dataset versions are available for verification.' }, { status: 409 })
-      }
+      if (!versionIds.length) return NextResponse.json({ error: 'No dataset versions are available for verification.' }, { status: 409 })
 
       const { data: latestRun, error: latestRunError } = await admin
         .schema('profiling')
         .from('profile_runs')
-        .select('id,dataset_version_id,status,completed_at')
+        .select('id')
         .in('dataset_version_id', versionIds)
         .eq('status', 'COMPLETED')
         .neq('id', sourceProfileRunId)
@@ -109,7 +92,6 @@ export async function POST(request: Request) {
         .order('completed_at', { ascending: false })
         .limit(1)
         .maybeSingle()
-
       if (latestRunError) throw new Error(`Unable to locate verification profiling run: ${latestRunError.message}`)
       if (!latestRun) {
         return NextResponse.json({
@@ -125,172 +107,29 @@ export async function POST(request: Request) {
     const { data: verificationRun, error: verificationRunError } = await admin
       .schema('profiling')
       .from('profile_runs')
-      .select('id,dataset_version_id,status,completed_at,agent_run_id')
+      .select('id,status,agent_run_id')
       .eq('id', verificationProfileRunId)
       .maybeSingle()
-
     if (verificationRunError) throw new Error(`Unable to load verification profiling run: ${verificationRunError.message}`)
     if (!verificationRun) return NextResponse.json({ error: 'Verification profiling run not found.' }, { status: 404 })
     if (verificationRun.status !== 'COMPLETED') {
       return NextResponse.json({
-        error: verificationRun.status === 'RUNNING'
-          ? 'Automatic verification profiling is still running.'
-          : `Verification profiling run is ${verificationRun.status}.`,
+        error: verificationRun.status === 'RUNNING' ? 'Automatic verification profiling is still running.' : `Verification profiling run is ${verificationRun.status}.`,
         code: verificationRun.status === 'RUNNING' ? 'VERIFICATION_PROFILE_RUNNING' : 'VERIFICATION_PROFILE_NOT_COMPLETE',
         verificationProfileRunId,
         verificationAgentRunId: verificationRun.agent_run_id ?? linkedOutcome?.verification_agent_run_id ?? null,
         verificationJobId: linkedOutcome?.verification_job_id ?? null,
       }, { status: 409 })
     }
-    if (!verificationRun.completed_at || verificationRun.completed_at <= sourceRun.completed_at) {
-      return NextResponse.json({ error: 'Verification profiling run must complete after the source profiling run.' }, { status: 409 })
-    }
 
-    const { data: verificationVersion, error: verificationVersionError } = await admin
-      .schema('catalog')
-      .from('dataset_versions')
-      .select('id,dataset_id')
-      .eq('id', verificationRun.dataset_version_id)
-      .maybeSingle()
-
-    if (verificationVersionError) throw new Error(`Unable to resolve verification dataset version: ${verificationVersionError.message}`)
-    if (!verificationVersion || verificationVersion.dataset_id !== sourceDatasetId) {
-      return NextResponse.json({
-        error: 'Verification profiling run must belong to the same dataset as the approved remediation.',
-      }, { status: 409 })
-    }
-
-    const [sourceScoreResult, verificationScoreResult, sourceFindingsResult, verificationFindingsResult, issuesResult] = await Promise.all([
-      admin.schema('profiling').from('data_quality_scores').select('overall_score').eq('profile_run_id', sourceProfileRunId).maybeSingle(),
-      admin.schema('profiling').from('data_quality_scores').select('overall_score').eq('profile_run_id', verificationProfileRunId).maybeSingle(),
-      admin.schema('profiling').from('profile_findings').select('id,severity').eq('profile_run_id', sourceProfileRunId),
-      admin.schema('profiling').from('profile_findings').select('id,severity').eq('profile_run_id', verificationProfileRunId),
-      admin.schema('governance').from('issues').select('id,status,title').eq('project_id', instance.project_id).eq('profile_run_id', sourceProfileRunId).like('title', 'Profiling remediation:%'),
-    ])
-
-    for (const queryResult of [sourceScoreResult, verificationScoreResult, sourceFindingsResult, verificationFindingsResult, issuesResult]) {
-      if (queryResult.error) throw new Error(queryResult.error.message)
-    }
-
-    const sourceScore = number(sourceScoreResult.data?.overall_score)
-    const verificationScore = number(verificationScoreResult.data?.overall_score)
-    if (verificationScore === null) {
-      return NextResponse.json({ error: 'Verification profiling run has no overall quality score.' }, { status: 409 })
-    }
-
-    const severe = (rows: Array<{ severity?: unknown }> | null) => (rows ?? [])
-      .filter((row) => ['HIGH', 'CRITICAL'].includes(text(row.severity).toUpperCase()))
-      .length
-
-    const sourceHighSeverityFindings = severe(sourceFindingsResult.data)
-    const verificationHighSeverityFindings = severe(verificationFindingsResult.data)
-    const issues = issuesResult.data ?? []
-    const unresolvedIssues = issues.filter((issue) => !['RESOLVED', 'CLOSED'].includes(text(issue.status).toUpperCase()))
-
-    const qualityNotWorse = sourceScore === null || verificationScore >= sourceScore
-    const severeFindingsNotWorse = verificationHighSeverityFindings <= sourceHighSeverityFindings
-    const allTrackedIssuesResolved = issues.length > 0 && unresolvedIssues.length === 0
-    const verificationPassed = qualityNotWorse && severeFindingsNotWorse && allTrackedIssuesResolved
-    const qualityDelta = sourceScore === null ? null : verificationScore - sourceScore
-    const severeFindingsDelta = verificationHighSeverityFindings - sourceHighSeverityFindings
-    const recommendationEffective = verificationPassed && (qualityDelta === null || qualityDelta >= 0) && severeFindingsDelta <= 0
-
-    const checks = {
-      quality_not_worse: { passed: qualityNotWorse, before: sourceScore, after: verificationScore, delta: qualityDelta },
-      high_severity_findings_not_worse: { passed: severeFindingsNotWorse, before: sourceHighSeverityFindings, after: verificationHighSeverityFindings, delta: severeFindingsDelta },
-      tracked_remediation_issues_resolved: { passed: allTrackedIssuesResolved, total: issues.length, unresolved: unresolvedIssues.length },
-    }
-
-    const result = {
+    const result = await verifyRemediationOutcome({
       workflowInstanceId,
-      sourceProfileRunId,
       verificationProfileRunId,
-      verificationPassed,
-      checks,
-    }
-
-    const priorOutcome = object(linkedOutcome?.outcome)
-    const { data: outcome, error: outcomeError } = await admin
-      .schema('governance')
-      .from('profiling_remediation_outcomes')
-      .upsert({
-        project_id: instance.project_id,
-        workflow_instance_id: workflowInstanceId,
-        source_profile_run_id: sourceProfileRunId,
-        verification_profile_run_id: verificationProfileRunId,
-        status: verificationPassed ? 'VERIFIED' : 'VERIFICATION_FAILED',
-        source_quality_score: sourceScore,
-        verification_quality_score: verificationScore,
-        quality_score_delta: qualityDelta,
-        source_high_severity_findings: sourceHighSeverityFindings,
-        verification_high_severity_findings: verificationHighSeverityFindings,
-        high_severity_findings_delta: severeFindingsDelta,
-        remediation_issue_ids: issues.map((issue) => issue.id),
-        checks,
-        outcome: {
-          ...priorOutcome,
-          verification_passed: verificationPassed,
-          recommendation_effective: recommendationEffective,
-          verification_source: linkedOutcome?.verification_profile_run_id === verificationProfileRunId
-            ? 'LINKED_AUTOMATIC_REPROFILE'
-            : text(body.verificationProfileRunId)
-              ? 'EXPLICIT_PROFILE_RUN'
-              : 'LATEST_COMPLETED_FALLBACK',
-        },
-        created_by: user.id,
-        updated_at: new Date().toISOString(),
-        verified_at: new Date().toISOString(),
-      }, { onConflict: 'workflow_instance_id' })
-      .select('id,status,quality_score_delta,high_severity_findings_delta,verification_profile_run_id,verification_agent_run_id,verification_job_id')
-      .single()
-
-    if (outcomeError || !outcome) {
-      throw new Error(`Unable to persist verification outcome: ${outcomeError?.message ?? 'unknown error'}`)
-    }
-
-    const observedAt = new Date().toISOString()
-    const { data: recommendationLearning, error: learningError } = await admin
-      .schema('governance')
-      .from('profiling_recommendation_learning')
-      .update({
-        remediation_outcome_id: outcome.id,
-        status: recommendationEffective ? 'EFFECTIVE' : 'INEFFECTIVE',
-        effective: recommendationEffective,
-        quality_score_delta: qualityDelta,
-        high_severity_findings_delta: severeFindingsDelta,
-        updated_at: observedAt,
-        observed_at: observedAt,
-      })
-      .eq('workflow_instance_id', workflowInstanceId)
-      .select('id,recommendation_action,status,effective,quality_score_delta,high_severity_findings_delta')
-
-    if (learningError) {
-      throw new Error(`Unable to persist recommendation effectiveness: ${learningError.message}`)
-    }
-
-    await writeGovernanceAudit({
-      projectId: instance.project_id,
       actorUserId: user.id,
-      eventType: verificationPassed ? 'PROFILING_REMEDIATION_VERIFIED' : 'PROFILING_REMEDIATION_VERIFICATION_FAILED',
-      entityType: 'PROFILE_RUN',
-      entityId: verificationProfileRunId,
-      correlationId: workflowInstanceId,
-      metadata: {
-        ...result,
-        remediation_outcome_id: outcome.id,
-        recommendation_effective: recommendationEffective,
-        recommendation_learning_ids: (recommendationLearning ?? []).map((row) => row.id),
-        verification_agent_run_id: outcome.verification_agent_run_id,
-        verification_job_id: outcome.verification_job_id,
-      },
+      verificationSource,
     })
 
-    return NextResponse.json({
-      ...result,
-      remediationOutcome: outcome,
-      recommendationEffective,
-      recommendationLearning: recommendationLearning ?? [],
-    }, { status: verificationPassed ? 200 : 409 })
+    return NextResponse.json(result, { status: result.verificationPassed ? 200 : 409 })
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return NextResponse.json({ error: error.message }, { status: error.status })
