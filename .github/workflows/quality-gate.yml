@@ -36,6 +36,8 @@ jobs:
         run: pnpm run verify:data-plane-operations
       - name: Verify governed agent portfolio
         run: pnpm run verify:agent-portfolio
+      - name: Verify production readiness contracts
+        run: pnpm run verify:readiness
       - name: Verify FILE onboarding contracts
         run: pnpm run verify:file-onboarding
       - name: Verify profiling explorer evidence contracts
