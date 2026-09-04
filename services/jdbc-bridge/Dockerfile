@@ -8,7 +8,7 @@ RUN mvn -q -DskipTests package
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN useradd --system --create-home --uid 10001 appuser
-COPY --from=build /workspace/target/jdbc-bridge-0.1.0.jar /app/app.jar
+COPY --from=build /workspace/target/jdbc-bridge-*.jar /app/app.jar
 USER 10001
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 10000
