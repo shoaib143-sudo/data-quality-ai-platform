@@ -28,6 +28,16 @@ requireMatch(remoteGuard, /lookup\(hostname,\s*\{\s*all:\s*true/, 'Remote FILE g
 requireMatch(remoteGuard, /redirect:\s*['"]manual['"]/, 'Remote FILE guard must inspect redirects explicitly.')
 requireMatch(remoteGuard, /FILE_REMOTE_ALLOWED_HOSTS/, 'Remote FILE guard must support a production host allowlist.')
 
+requireMatch(adapter, /function\s+coerceCsvScalar\(/, 'CSV adapter must apply scalar coercion before profiling.')
+requireMatch(adapter, /\^\(true\|false\)\$/i, 'CSV scalar coercion must recognize explicit boolean values.')
+requireMatch(adapter, /function\s+strictCsvNumber\(/, 'CSV scalar coercion must use strict numeric parsing.')
+requireMatch(adapter, /name===['"]id['"]\|\|name\.endsWith\(['"]_id['"]\)/, 'CSV scalar coercion must preserve identifier columns as text.')
+requireMatch(adapter, /phone\|mobile\|zip\|postal\|postcode/, 'CSV scalar coercion must preserve phone and postal identifier columns as text.')
+requireMatch(adapter, /if\(value===null\)return null/, 'CSV scalar coercion must preserve null values.')
+requireMatch(adapter, /if\(value===['"]['"]\|\|value\.trim\(\)===['"]['"]\)return value/, 'CSV scalar coercion must preserve blank and whitespace-only values for quality metrics.')
+requireMatch(adapter, /\(\?:0\|\[1-9\]\\d\*\)/, 'CSV numeric coercion must reject ambiguous leading-zero integers.')
+requireMatch(adapter, /coerceCsvScalar\(header,record\[index\]\?\?null\)/, 'Parsed CSV rows must use the governed scalar coercion path.')
+
 for (const [name, text] of [['FILE discovery', discovery], ['source registration', registration]]) {
   requireMatch(text, /dataset-files/, `${name} must constrain Supabase Storage reads to dataset-files.`)
   requireMatch(text, /projects\/\$\{projectId\}\//, `${name} must constrain Storage paths to the active project.`)
@@ -53,5 +63,8 @@ console.log(JSON.stringify({
     signedDirectUploads: true,
     failedUploadCleanup: true,
     csvExecutionType: 'FILE',
+    csvScalarTyping: true,
+    identifierPreservation: true,
+    blankPreservation: true,
   },
 }, null, 2))
