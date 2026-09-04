@@ -47,6 +47,33 @@ requireText('app/api/agents/governance/handoff/route.ts', [
   'specialist: true',
 ])
 
+requireText('lib/agents/governance-job-worker.ts', [
+  'executeGovernanceSpecialistAgent',
+  'loadReusableSucceededRun',
+  'attachAgentRunToJob',
+  'persistInvestigatorRiskAssessment',
+  'enrichGovernedAgentWithMemory',
+  'persistGovernedAgentMemoryAndEvaluation',
+  'markDurableJobSucceeded',
+  'markDurableJobFailed',
+  "agentKey === 'investigator_agent'",
+])
+
+requireText('lib/orchestration/queue.ts', [
+  "'GOVERNANCE_AGENT'",
+])
+
+requireText('app/api/jobs/worker/route.ts', [
+  'processGovernanceAgentJobs',
+  "job.job_type === 'GOVERNANCE_AGENT'",
+  'governanceAgentResults',
+])
+
+requireText('supabase/migrations/20260904235120_governance_agent_durable_job_type.sql', [
+  'job_queue_job_type_check',
+  "'GOVERNANCE_AGENT'::text",
+])
+
 requireText('app/api/agents/run/route.ts', [
   "const PRODUCTION_AGENT_KEY = 'profiling_agent'",
   "const PRODUCTION_AGENT_VERSION = '2.0'",
