@@ -24,7 +24,8 @@ const checks = [
   ['app/api/profiling/remediation/route.ts', /profiling_remediation_outcomes[\s\S]*ACTION_TRACKED/, 'remediation outcome persistence'],
   ['app/api/profiling/remediation/verify/route.ts', /VERIFICATION_PROFILE_PENDING[\s\S]*completed_at[\s\S]*quality_not_worse[\s\S]*high_severity_findings_not_worse/, 'automatic evidence-based verification'],
   ['app/api/profiling/remediation/verify/route.ts', /profiling_remediation_outcomes[\s\S]*VERIFIED[\s\S]*VERIFICATION_FAILED[\s\S]*recommendation_effective/, 'verification effectiveness persistence'],
-  ['app/workflows/workflow-manager.tsx', /Track remediation[\s\S]*Verify latest profile[\s\S]*quality_score_delta/, 'workflow remediation and verification controls'],
+  ['app/workflows/workflow-manager.tsx', /Track remediation[\s\S]*Verify latest profile/, 'workflow remediation controls'],
+  ['app/workflows/workflow-manager.tsx', /quality_score_delta[\s\S]*high_severity_findings_delta/, 'workflow verification outcome evidence'],
   ['supabase/migrations/20260904170000_add_profiling_remediation_outcomes.sql', /enable row level security[\s\S]*is_project_member[\s\S]*unique\(workflow_instance_id\)/, 'project-scoped remediation outcome RLS and idempotency'],
   ['supabase/migrations/20260904170100_index_profiling_remediation_outcomes.sql', /verification_profile_run_id[\s\S]*created_by/, 'remediation outcome foreign-key indexes'],
 ]
