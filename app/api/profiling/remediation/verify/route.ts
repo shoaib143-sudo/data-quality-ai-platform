@@ -54,14 +54,32 @@ export async function POST(request: Request) {
 
     const [{ data: sourceRun, error: sourceRunError }, { data: linkedOutcome, error: linkedOutcomeError }] = await Promise.all([
       admin.schema('profiling').from('profile_runs').select('id,completed_at').eq('id', sourceProfileRunId).maybeSingle(),
-      admin.schema('governance').from('profiling_remediation_outcomes').select('status,verification_profile_run_id,verification_agent_run_id,verification_job_id').eq('workflow_instance_id', workflowInstanceId).maybeSingle(),
+      admin.schema('governance').from('profiling_remediation_outcomes').select('status,verification_profile_run_id,verification_agent_run_id,verification_job_id,verification_requested_at').eq('workflow_instance_id', workflowInstanceId).maybeSingle(),
     ])
 
     if (sourceRunError) throw new Error(`Unable to load source profiling run: ${sourceRunError.message}`)
     if (!sourceRun?.completed_at) return NextResponse.json({ error: 'Source profiling run is not complete.' }, { status: 409 })
     if (linkedOutcomeError) throw new Error(`Unable to resolve linked remediation outcome: ${linkedOutcomeError.message}`)
 
-    let verificationSource: 'API_LINKED' | 'API_EXPLICIT' | 'API_FALLBACK' = verificationProfileRunId
+    const explicitVerificationRunId = Boolean(verificationProfileRunId)
+    if (!explicitVerificationRunId && linkedOutcome?.status === 'ACTION_TRACKED') {
+      return NextResponse.json({
+        error: 'Tracked remediation must be resolved before verification is evaluated.',
+        code: 'REMEDIATION_IN_PROGRESS',
+        remediationStatus: linkedOutcome.status,
+      }, { status: 409 })
+    }
+
+    if (!explicitVerificationRunId && linkedOutcome?.status === 'VERIFICATION_QUEUED' && !linkedOutcome.verification_profile_run_id) {
+      return NextResponse.json({
+        error: 'Automatic verification has been claimed and is being prepared.',
+        code: 'VERIFICATION_QUEUE_PENDING',
+        remediationStatus: linkedOutcome.status,
+        verificationRequestedAt: linkedOutcome.verification_requested_at,
+      }, { status: 409 })
+    }
+
+    let verificationSource: 'API_LINKED' | 'API_EXPLICIT' | 'API_FALLBACK' = explicitVerificationRunId
       ? 'API_EXPLICIT'
       : 'API_LINKED'
 
