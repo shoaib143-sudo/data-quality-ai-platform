@@ -1,6 +1,7 @@
 import { executePreparedProfilingJob } from '@/lib/agents/run-profiling-job'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { investigateDataQualityRun } from '@/lib/data-quality/autonomous-operations'
+import { queueDataQualityVerificationAfterFreshProfile } from '@/lib/data-quality/remediation-reprofile'
 import { verifyDataQualityRemediation } from '@/lib/data-quality/remediation-verification'
 import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { investigateObservabilityIncident } from '@/lib/observability/incident-intelligence'
@@ -23,6 +24,20 @@ async function loadOutcomeEvidence(workflowInstanceId: string) {
   const { data } = await admin
     .schema('governance')
     .from('profiling_remediation_outcomes')
+    .select('outcome,checks')
+    .eq('workflow_instance_id', workflowInstanceId)
+    .maybeSingle()
+  return {
+    outcome: data?.outcome && typeof data.outcome === 'object' && !Array.isArray(data.outcome) ? data.outcome as Record<string, unknown> : {},
+    checks: data?.checks && typeof data.checks === 'object' && !Array.isArray(data.checks) ? data.checks as Record<string, unknown> : {},
+  }
+}
+
+async function loadDataQualityOutcomeEvidence(workflowInstanceId: string) {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .schema('governance')
+    .from('data_quality_remediation_outcomes')
     .select('outcome,checks')
     .eq('workflow_instance_id', workflowInstanceId)
     .maybeSingle()
@@ -117,6 +132,87 @@ async function recordAutomaticVerificationCancellation(input: {
   })
 }
 
+async function recordDataQualityReprofileError(input: {
+  workflowInstanceId: string
+  projectId: string
+  userId: string
+  profilingRunId: string
+  error: unknown
+}) {
+  const admin = createAdminClient()
+  const message = input.error instanceof Error ? input.error.message : 'Data Quality verification re-profile failed.'
+  const now = new Date().toISOString()
+  const existing = await loadDataQualityOutcomeEvidence(input.workflowInstanceId)
+
+  await admin.schema('governance').from('data_quality_remediation_outcomes').update({
+    status: 'VERIFICATION_ERROR',
+    checks: {
+      ...existing.checks,
+      fresh_profile_completed: { passed: false, retryable: true, profiling_run_id: input.profilingRunId, error: message },
+    },
+    outcome: {
+      ...existing.outcome,
+      verification_phase: 'FRESH_PROFILE_ERROR',
+      verification_profile_run_id: input.profilingRunId,
+      verification_error: message,
+      verification_retryable: true,
+    },
+    updated_at: now,
+    verified_at: null,
+  }).eq('workflow_instance_id', input.workflowInstanceId)
+
+  await writeGovernanceAudit({
+    projectId: input.projectId,
+    actorUserId: input.userId,
+    actorType: 'SYSTEM',
+    eventType: 'DATA_QUALITY_REMEDIATION_REPROFILE_ERROR',
+    entityType: 'PROFILE_RUN',
+    entityId: input.profilingRunId,
+    correlationId: input.workflowInstanceId,
+    metadata: { workflow_instance_id: input.workflowInstanceId, verification_profile_run_id: input.profilingRunId, retryable: true, error: message },
+  })
+}
+
+async function recordDataQualityReprofileCancellation(input: {
+  workflowInstanceId: string
+  projectId: string
+  userId: string
+  profilingRunId: string
+}) {
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+  const existing = await loadDataQualityOutcomeEvidence(input.workflowInstanceId)
+
+  await admin.schema('governance').from('data_quality_remediation_outcomes').update({
+    status: 'CANCELLED',
+    checks: {
+      ...existing.checks,
+      fresh_profile_cancelled: { cancelled: true, profiling_run_id: input.profilingRunId, cancelled_at: now },
+    },
+    outcome: {
+      ...existing.outcome,
+      verification_phase: 'FRESH_PROFILE_CANCELLED',
+      verification_profile_run_id: input.profilingRunId,
+      verification_cancelled: true,
+      verification_cancelled_at: now,
+      verification_retryable: true,
+    },
+    updated_at: now,
+    verified_at: null,
+  }).eq('workflow_instance_id', input.workflowInstanceId)
+
+  await writeGovernanceAudit({
+    projectId: input.projectId,
+    actorUserId: input.userId,
+    actorType: 'SYSTEM',
+    eventType: 'DATA_QUALITY_REMEDIATION_REPROFILE_CANCELLED',
+    entityType: 'PROFILE_RUN',
+    entityId: input.profilingRunId,
+    correlationId: input.workflowInstanceId,
+    metadata: { workflow_instance_id: input.workflowInstanceId, verification_profile_run_id: input.profilingRunId, restartable: true },
+  })
+}
+
 async function prepareProfilingAttempt(input: { agentRunId: string; profilingRunId: string }) {
   const admin = createAdminClient()
   const [{ data: profileRun, error: profileError }, { data: agentRun, error: agentError }] = await Promise.all([
@@ -201,14 +297,19 @@ export async function executeDurableJob(job: DurableJob) {
       throw new Error('Durable profiling job payload is incomplete.')
     }
 
-    const automaticVerification = text(requestInput.trigger) === 'PROFILING_REMEDIATION_VERIFICATION'
-    const workflowInstanceId = automaticVerification ? text(requestInput.workflowInstanceId) : ''
-    if (automaticVerification && !workflowInstanceId) throw new Error('Automatic remediation verification payload is missing workflowInstanceId.')
+    const trigger = text(requestInput.trigger)
+    const automaticVerification = trigger === 'PROFILING_REMEDIATION_VERIFICATION'
+    const dataQualityFreshProfileVerification = trigger === 'DATA_QUALITY_REMEDIATION_VERIFICATION_PROFILE'
+    const governedVerification = automaticVerification || dataQualityFreshProfileVerification
+    const workflowInstanceId = governedVerification ? text(requestInput.workflowInstanceId) : ''
+    if (governedVerification && !workflowInstanceId) throw new Error('Automatic remediation verification payload is missing workflowInstanceId.')
 
     const preparation = await prepareProfilingAttempt({ agentRunId, profilingRunId })
     if (preparation.status === 'CANCELLED') {
       if (automaticVerification) {
         await recordAutomaticVerificationCancellation({ workflowInstanceId, projectId, userId, profilingRunId })
+      } else if (dataQualityFreshProfileVerification) {
+        await recordDataQualityReprofileCancellation({ workflowInstanceId, projectId, userId, profilingRunId })
       }
       return
     }
@@ -228,17 +329,21 @@ export async function executeDurableJob(job: DurableJob) {
     if (completedRunError || !completedRun) {
       const technicalError = new Error(`Unable to resolve durable profiling run after execution: ${completedRunError?.message ?? 'not found'}`)
       if (automaticVerification) await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: technicalError })
+      if (dataQualityFreshProfileVerification) await recordDataQualityReprofileError({ workflowInstanceId, projectId, userId, profilingRunId, error: technicalError })
       throw technicalError
     }
     if (completedRun.status === 'CANCELLED') {
       if (automaticVerification) {
         await recordAutomaticVerificationCancellation({ workflowInstanceId, projectId, userId, profilingRunId })
+      } else if (dataQualityFreshProfileVerification) {
+        await recordDataQualityReprofileCancellation({ workflowInstanceId, projectId, userId, profilingRunId })
       }
       return
     }
     if (completedRun.status !== 'COMPLETED') {
       const technicalError = new Error(completedRun.error_message || completedRun.error_code || `Profiling run ended as ${completedRun.status}.`)
       if (automaticVerification) await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: technicalError })
+      if (dataQualityFreshProfileVerification) await recordDataQualityReprofileError({ workflowInstanceId, projectId, userId, profilingRunId, error: technicalError })
       throw technicalError
     }
 
@@ -252,6 +357,17 @@ export async function executeDurableJob(job: DurableJob) {
         })
       } catch (verificationError) {
         await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: verificationError })
+        throw verificationError
+      }
+    } else if (dataQualityFreshProfileVerification) {
+      try {
+        await queueDataQualityVerificationAfterFreshProfile({
+          workflowInstanceId,
+          verificationProfileRunId: profilingRunId,
+          userId,
+        })
+      } catch (verificationError) {
+        await recordDataQualityReprofileError({ workflowInstanceId, projectId, userId, profilingRunId, error: verificationError })
         throw verificationError
       }
     }
