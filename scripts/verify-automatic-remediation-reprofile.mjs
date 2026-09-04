@@ -39,7 +39,7 @@ const checks = [
   ['app/api/profiling/remediation/reprofile/route.ts', /workflowInstanceId[\s\S]*issues\.manage[\s\S]*remediation_issue_ids[\s\S]*scheduleRemediationVerificationFromIssue/, 'authorized retry reuses idempotent issue-scoped scheduler'],
   ['app/api/profiling/remediation/reprofile/route.ts', /WAITING_FOR_REMEDIATION[\s\S]*QUEUED[\s\S]*ALREADY_QUEUED/, 'retry endpoint preserves remediation verification states'],
   ['lib/orchestration/worker.ts', /PROFILING_REMEDIATION_VERIFICATION[\s\S]*verifyRemediationOutcome[\s\S]*AUTOMATIC_WORKER/, 'durable worker automatically finalizes verification'],
-  ['lib/orchestration/worker.ts', /recordAutomaticVerificationError[\s\S]*VERIFICATION_FAILED/, 'automatic verification technical failure persistence'],
+  ['lib/orchestration/worker.ts', /recordAutomaticVerificationError[\s\S]*status:\s*'VERIFICATION_QUEUED'[\s\S]*verification_retryable:\s*true/, 'automatic verification technical failures remain retryable'],
   ['lib/profiling/remediation-verification.ts', /remediation_issue_ids[\s\S]*trackedIssueIds[\s\S]*missingTrackedIssues/, 'verification evaluates exact persisted remediation issues'],
   ['app/api/profiling/remediation/verify/route.ts', /REMEDIATION_IN_PROGRESS/, 'API blocks verification while remediation is still tracked'],
   ['app/api/profiling/remediation/verify/route.ts', /VERIFICATION_QUEUE_PENDING/, 'API reports automatic verification preparation'],
