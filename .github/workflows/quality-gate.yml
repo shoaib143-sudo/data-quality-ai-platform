@@ -32,6 +32,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Verify governance architecture contracts
         run: pnpm run verify:governance
+      - name: Verify semantic governance contracts
+        run: pnpm run verify:semantic
       - name: Verify live governance database contracts
         if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: pnpm run verify:database
