@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { inflateRawSync, inflateSync } from 'node:zlib'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { extractWithOcrSpace } from '@/lib/profiling/ocr-space'
+import { safeRemoteFileFetch } from '@/lib/profiling/safe-remote-file'
 
 export type FileSourceConfig = {
   sourceUri?: string | null
@@ -47,7 +48,7 @@ export async function loadFileSource(
   let resolvedSourceUri: string
   let contentType: string | null = null
   if(url){
-    const response=await fetch(url,{headers:{accept:'text/csv,text/plain,application/json,application/pdf,application/octet-stream;q=0.9,*/*;q=0.8'},cache:'no-store'})
+    const response=await safeRemoteFileFetch(url,{headers:{accept:'text/csv,text/plain,application/json,application/pdf,application/octet-stream;q=0.9,*/*;q=0.8'},cache:'no-store'})
     if(!response.ok)throw new Error(`Unable to load FILE source: HTTP ${response.status} ${response.statusText}`)
     const declaredLength=Number(response.headers.get('content-length'))
     if(Number.isFinite(declaredLength)&&declaredLength>maxBytes)throw new Error(`FILE source exceeds the execution engine technical safety ceiling of ${maxBytes} bytes.`)
