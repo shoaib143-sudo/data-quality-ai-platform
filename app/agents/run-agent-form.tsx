@@ -23,6 +23,15 @@ export type DatasetVersionOption = {
   versionNumber: number
 }
 
+const GOVERNED_READ_AGENT_KEYS = new Set([
+  'steward_agent',
+  'governance_analyst_agent',
+  'architect_agent',
+  'investigator_agent',
+  'executive_agent',
+  'support_agent',
+])
+
 export function RunAgentForm({
   agents,
   projects,
@@ -38,9 +47,15 @@ export function RunAgentForm({
   const [datasetVersionId, setDatasetVersionId] = useState(
     datasetVersions.find((version) => version.projectId === projects[0]?.id)?.id ?? '',
   )
+  const [question, setQuestion] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
 
+  const selectedAgent = useMemo(
+    () => agents.find((agent) => agent.id === agentDefinitionId) ?? null,
+    [agents, agentDefinitionId],
+  )
+  const governedReadAgent = Boolean(selectedAgent && GOVERNED_READ_AGENT_KEYS.has(selectedAgent.agentKey))
   const projectVersions = useMemo(
     () => datasetVersions.filter((version) => version.projectId === projectId),
     [datasetVersions, projectId],
@@ -56,37 +71,50 @@ export function RunAgentForm({
     event.preventDefault()
     setStatus(null)
 
-    if (!agentDefinitionId || !projectId || !datasetVersionId) {
-      setStatus('Select an agent, project and dataset version.')
+    if (!selectedAgent || !projectId) {
+      setStatus('Select an agent and project.')
+      return
+    }
+    if (!governedReadAgent && !datasetVersionId) {
+      setStatus('Select a dataset version for this operational agent.')
       return
     }
 
     setRunning(true)
 
     try {
-      const selectedAgent = agents.find((agent) => agent.id === agentDefinitionId)
-      if (!selectedAgent) throw new Error('Selected agent is unavailable.')
-      const endpoint = selectedAgent.agentKey === 'data_quality_agent' ? '/api/data-quality/run' : '/api/agents/run'
+      let endpoint: string
+      let body: Record<string, unknown>
+
+      if (governedReadAgent) {
+        endpoint = '/api/agents/governance/run'
+        body = { agentDefinitionId, projectId, question: question.trim() || undefined }
+      } else if (selectedAgent.agentKey === 'data_quality_agent') {
+        endpoint = '/api/data-quality/run'
+        body = { datasetVersionId }
+      } else {
+        endpoint = '/api/agents/run'
+        body = { agentDefinitionId, projectId, datasetVersionId }
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(selectedAgent.agentKey === 'data_quality_agent'
-          ? { datasetVersionId }
-          : { agentDefinitionId, projectId, datasetVersionId }),
+        body: JSON.stringify(body),
       })
-
       const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error ?? 'Agent execution failed.')
 
-      if (!response.ok) {
-        throw new Error(payload.error ?? 'Agent execution failed.')
-      }
-
-      const runId = payload.agentRunId ?? payload.agent_run_id
+      const runId = payload.runId ?? payload.agentRunId ?? payload.agent_run_id
       if (typeof runId !== 'string' || runId.length === 0) {
-        throw new Error('Agent job was accepted without returning a run identifier.')
+        throw new Error('Agent execution completed without returning a run identifier.')
       }
 
-      router.push(payload.monitorUrl ?? `/monitoring?run=${encodeURIComponent(runId)}`)
+      if (governedReadAgent) {
+        router.push(`/agents/runs/${encodeURIComponent(runId)}`)
+      } else {
+        router.push(payload.monitorUrl ?? `/monitoring?run=${encodeURIComponent(runId)}`)
+      }
       router.refresh()
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Agent execution failed.')
@@ -100,82 +128,87 @@ export function RunAgentForm({
       <div className="mb-5">
         <h2 className="text-lg font-semibold">Run an operational agent</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Select an enabled production agent and the governed dataset version it should execute against.
+          Profiling and Data Quality agents execute against a dataset version. Governed Steward, Analyst, Architect, Investigator, Executive, and Support agents run read-only against the selected project.
         </p>
       </div>
 
-      {agents.length === 0 || projects.length === 0 || datasetVersions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          A runnable agent, project, and dataset version are required before execution can start.
-        </p>
+      {agents.length === 0 || projects.length === 0 ? (
+        <p className="text-sm text-muted-foreground">A runnable agent and project are required before execution can start.</p>
       ) : (
-        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-4">
-          <label className="space-y-2 text-sm">
-            <span className="font-medium">Agent</span>
-            <select
-              value={agentDefinitionId}
-              onChange={(event) => setAgentDefinitionId(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2"
-              disabled={running}
-            >
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name} v{agent.version}
-                </option>
-              ))}
-            </select>
-          </label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <label className="space-y-2 text-sm">
+              <span className="font-medium">Agent</span>
+              <select
+                value={agentDefinitionId}
+                onChange={(event) => setAgentDefinitionId(event.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-2"
+                disabled={running}
+              >
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>{agent.name} v{agent.version}</option>
+                ))}
+              </select>
+            </label>
 
-          <label className="space-y-2 text-sm">
-            <span className="font-medium">Project</span>
-            <select
-              value={projectId}
-              onChange={(event) => handleProjectChange(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2"
-              disabled={running}
-            >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="space-y-2 text-sm">
+              <span className="font-medium">Project</span>
+              <select
+                value={projectId}
+                onChange={(event) => handleProjectChange(event.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-2"
+                disabled={running}
+              >
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>{project.name}</option>
+                ))}
+              </select>
+            </label>
 
-          <label className="space-y-2 text-sm">
-            <span className="font-medium">Dataset version</span>
-            <select
-              value={datasetVersionId}
-              onChange={(event) => setDatasetVersionId(event.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2"
-              disabled={running || projectVersions.length === 0}
-            >
-              <option value="">Select a version</option>
-              {projectVersions.map((version) => (
-                <option key={version.id} value={version.id}>
-                  {version.datasetName} v{version.versionNumber}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="space-y-2 text-sm">
+              <span className="font-medium">Dataset version</span>
+              <select
+                value={governedReadAgent ? '' : datasetVersionId}
+                onChange={(event) => setDatasetVersionId(event.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-2"
+                disabled={running || governedReadAgent || projectVersions.length === 0}
+              >
+                <option value="">{governedReadAgent ? 'Not required for this agent' : 'Select a version'}</option>
+                {!governedReadAgent && projectVersions.map((version) => (
+                  <option key={version.id} value={version.id}>{version.datasetName} v{version.versionNumber}</option>
+                ))}
+              </select>
+            </label>
 
-          <div className="flex items-end">
-            <button
-              type="submit"
-              disabled={running || !datasetVersionId}
-              className="w-full rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {running ? 'Running…' : 'Run Agent'}
-            </button>
+            <div className="flex items-end">
+              <button
+                type="submit"
+                disabled={running || !selectedAgent || !projectId || (!governedReadAgent && !datasetVersionId)}
+                className="w-full rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {running ? 'Running…' : 'Run Agent'}
+              </button>
+            </div>
           </div>
+
+          {governedReadAgent && (
+            <label className="block space-y-2 text-sm">
+              <span className="font-medium">Question or objective <span className="font-normal text-muted-foreground">(optional)</span></span>
+              <textarea
+                value={question}
+                onChange={(event) => setQuestion(event.target.value.slice(0, 1000))}
+                rows={3}
+                placeholder="For example: Summarize the highest-priority governance risks and the evidence behind them."
+                className="w-full rounded-md border bg-background px-3 py-2"
+                disabled={running}
+              />
+              <span className="text-xs text-muted-foreground">Read-only project evidence only · {question.length}/1000 characters</span>
+            </label>
+          )}
         </form>
       )}
 
-      {status && (
-        <p className="mt-4 rounded-md border p-3 text-sm" role="status">
-          {status}
-        </p>
-      )}
+      {status && <p className="mt-4 rounded-md border p-3 text-sm" role="status">{status}</p>}
     </section>
   )
 }
