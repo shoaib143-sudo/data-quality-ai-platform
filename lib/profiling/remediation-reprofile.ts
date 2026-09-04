@@ -17,6 +17,11 @@ function object(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function positiveInteger(value: unknown, fallback = 1) {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
 export type RemediationVerificationScheduleResult = {
   status: 'NOT_REMEDIATION' | 'WAITING_FOR_REMEDIATION' | 'ALREADY_QUEUED' | 'QUEUED'
   workflowInstanceId?: string
@@ -107,6 +112,8 @@ export async function scheduleRemediationVerificationFromIssue(input: {
     }
   }
 
+  const initialOutcome = object(outcome.outcome)
+  const verificationGeneration = positiveInteger(initialOutcome.verification_generation)
   let agentRunId: string | null = outcome.verification_agent_run_id ?? null
   let profilingRunId: string | null = outcome.verification_profile_run_id ?? null
   let jobEnqueued = false
@@ -192,6 +199,7 @@ export async function scheduleRemediationVerificationFromIssue(input: {
       workflowInstanceId: outcome.workflow_instance_id,
       sourceProfileRunId: outcome.source_profile_run_id,
       datasetVersionId: verificationVersion.id,
+      verificationGeneration,
     }
 
     if (!agentRunId || !profilingRunId) {
@@ -228,6 +236,7 @@ export async function scheduleRemediationVerificationFromIssue(input: {
             trigger: 'PROFILING_REMEDIATION_VERIFICATION',
             workflow_instance_id: outcome.workflow_instance_id,
             source_profile_run_id: outcome.source_profile_run_id,
+            verification_generation: verificationGeneration,
           },
           started_at: new Date().toISOString(),
         })
@@ -236,7 +245,6 @@ export async function scheduleRemediationVerificationFromIssue(input: {
       if (profileRunError || !profileRun) throw new Error(`Unable to create verification profiling run: ${profileRunError?.message ?? 'unknown error'}`)
       profilingRunId = profileRun.id
 
-      const existingOutcome = object(outcome.outcome)
       const { error: preQueuePersistError } = await admin
         .schema('governance')
         .from('profiling_remediation_outcomes')
@@ -246,7 +254,8 @@ export async function scheduleRemediationVerificationFromIssue(input: {
           status: 'VERIFICATION_QUEUED',
           updated_at: new Date().toISOString(),
           outcome: {
-            ...existingOutcome,
+            ...initialOutcome,
+            verification_generation: verificationGeneration,
             verification_trigger: 'AUTOMATIC_ON_REMEDIATION_RESOLUTION',
             verification_dataset_version_id: verificationVersion.id,
             verification_queue_phase: 'PROFILE_PREPARED',
@@ -256,7 +265,7 @@ export async function scheduleRemediationVerificationFromIssue(input: {
       if (preQueuePersistError) throw new Error(`Unable to persist prepared verification run linkage: ${preQueuePersistError.message}`)
     }
 
-    const idempotencyKey = `profiling:remediation-verification:${outcome.workflow_instance_id}`
+    const idempotencyKey = `profiling:remediation-verification:${outcome.workflow_instance_id}:${verificationGeneration}`
     const durableJob = await enqueueDurableJob({
       projectId: input.projectId,
       jobType: 'PROFILING',
@@ -297,6 +306,7 @@ export async function scheduleRemediationVerificationFromIssue(input: {
         updated_at: new Date().toISOString(),
         outcome: {
           ...object(currentOutcome.data?.outcome),
+          verification_generation: verificationGeneration,
           verification_trigger: 'AUTOMATIC_ON_REMEDIATION_RESOLUTION',
           verification_dataset_version_id: verificationVersion.id,
           verification_job_id: durableJob.id,
@@ -320,6 +330,7 @@ export async function scheduleRemediationVerificationFromIssue(input: {
         verification_agent_run_id: agentRunId,
         verification_job_id: durableJob.id,
         verification_dataset_version_id: verificationVersion.id,
+        verification_generation: verificationGeneration,
       },
     })
 
@@ -358,13 +369,20 @@ export async function scheduleRemediationVerificationFromIssue(input: {
         verification_requested_at: null,
         verification_requested_by: null,
         updated_at: new Date().toISOString(),
+        outcome: {
+          ...initialOutcome,
+          verification_generation: verificationGeneration,
+          verification_queue_phase: 'QUEUE_FAILED',
+          verification_queue_error: message,
+        },
       }).eq('workflow_instance_id', outcome.workflow_instance_id)
     } else {
       await admin.schema('governance').from('profiling_remediation_outcomes').update({
         status: 'VERIFICATION_QUEUED',
         updated_at: new Date().toISOString(),
         outcome: {
-          ...object(outcome.outcome),
+          ...initialOutcome,
+          verification_generation: verificationGeneration,
           verification_queue_phase: 'JOB_ENQUEUED_LINKAGE_PENDING',
           verification_linkage_error: message,
         },
@@ -382,6 +400,7 @@ export async function scheduleRemediationVerificationFromIssue(input: {
         workflow_instance_id: outcome.workflow_instance_id,
         verification_profile_run_id: profilingRunId,
         verification_agent_run_id: agentRunId,
+        verification_generation: verificationGeneration,
         job_enqueued: jobEnqueued,
         error: message,
       },
