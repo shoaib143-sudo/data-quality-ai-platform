@@ -165,6 +165,7 @@ export interface ObjectStore {
   readonly providerKey: string
   put(request: ObjectStoreWriteRequest): Promise<ObjectStoreObject>
   get(scope: TenantScope, key: string): Promise<Uint8Array | null>
+  signedUrl(scope: TenantScope, key: string, expiresInSeconds?: number): Promise<string>
   delete(scope: TenantScope, key: string): Promise<void>
 }
 
