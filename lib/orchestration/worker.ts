@@ -3,6 +3,7 @@ import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { investigateDataQualityRun } from '@/lib/data-quality/autonomous-operations'
 import { queueDataQualityVerificationAfterFreshProfile } from '@/lib/data-quality/remediation-reprofile'
 import { verifyDataQualityRemediation } from '@/lib/data-quality/remediation-verification'
+import { correlateObservabilityIncidents } from '@/lib/observability/cross-dataset-correlation'
 import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { investigateObservabilityIncident } from '@/lib/observability/incident-intelligence'
 import { deliverNotificationJob } from '@/lib/observability/notifications'
@@ -279,6 +280,14 @@ async function enrichIncidentImpact(input: {
   })
 }
 
+async function correlateIncidentProject(input: {
+  incident: Awaited<ReturnType<typeof investigateObservabilityIncident>>
+  userId?: string | null
+}) {
+  if (!('projectId' in input.incident) || !input.incident.projectId) return null
+  return correlateObservabilityIncidents({ projectId: input.incident.projectId, actorUserId: input.userId ?? null })
+}
+
 export async function executeDurableJob(job: DurableJob) {
   const payload = job.payload ?? {}
 
@@ -405,6 +414,7 @@ export async function executeDurableJob(job: DurableJob) {
     await evaluateObservabilitySignals(datasetVersionId, profileRunId)
     const incident = await investigateObservabilityIncident({ datasetVersionId, profileRunId, userId: userId || null })
     await enrichIncidentImpact({ incident, userId: userId || null })
+    await correlateIncidentProject({ incident, userId: userId || null })
     return
   }
 
@@ -416,6 +426,7 @@ export async function executeDurableJob(job: DurableJob) {
     await evaluateObservabilitySignals(datasetVersionId, profileRunId)
     const incident = await investigateObservabilityIncident({ datasetVersionId, profileRunId, userId: userId || null })
     await enrichIncidentImpact({ incident, userId: userId || null })
+    await correlateIncidentProject({ incident, userId: userId || null })
     return
   }
 
