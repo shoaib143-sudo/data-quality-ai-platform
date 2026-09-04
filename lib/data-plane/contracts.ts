@@ -177,16 +177,20 @@ export interface ProjectionPublisher {
   publishMany(events: ProjectionEvent[]): Promise<void>
 }
 
-export type ProjectionCheckpoint = {
+export type ProjectionCheckpoint = TenantScope & {
   consumerKey: string
+  providerKey: string
+  projectionName: string
   lastCheckpoint: string | null
+  lastEventId?: string | null
   lastSuccessAt: string | null
   lagSeconds: number | null
   lastError: string | null
   status: 'HEALTHY' | 'LAGGING' | 'FAILED' | 'PAUSED' | 'UNKNOWN'
+  metadata?: Record<string, unknown>
 }
 
 export interface ProjectionCheckpointStore {
-  read(consumerKey: string): Promise<ProjectionCheckpoint | null>
+  read(scope: TenantScope, consumerKey: string): Promise<ProjectionCheckpoint | null>
   write(checkpoint: ProjectionCheckpoint): Promise<void>
 }
