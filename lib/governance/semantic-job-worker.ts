@@ -1,3 +1,4 @@
+import { reindexProjectAgentMemories } from '@/lib/governance/semantic-agent-memory-indexer'
 import { reindexProjectDocumentSemanticObjects } from '@/lib/governance/semantic-document-indexer'
 import { reindexProjectSemanticObjects } from '@/lib/governance/semantic-indexer'
 import {
@@ -15,18 +16,19 @@ export async function processSemanticIndexJobs(jobs: DurableJob[]) {
         : job.project_id
       if (!projectId) throw new Error('Semantic indexing job is missing projectId.')
 
-      const [governance, documents] = await Promise.all([
+      const [governance, documents, agentMemories] = await Promise.all([
         reindexProjectSemanticObjects(projectId, { concurrency: 3 }),
         reindexProjectDocumentSemanticObjects(projectId, { concurrency: 3 }),
+        reindexProjectAgentMemories(projectId, { concurrency: 3 }),
       ])
       await markDurableJobSucceeded(job)
       results.push({
         jobId: job.id,
         projectId,
         status: 'SUCCEEDED',
-        indexed: governance.indexed + documents.indexed,
-        failed: governance.failed + documents.failed,
-        pruned: governance.pruned + documents.pruned,
+        indexed: governance.indexed + documents.indexed + agentMemories.indexed,
+        failed: governance.failed + documents.failed + agentMemories.failed,
+        pruned: governance.pruned + documents.pruned + agentMemories.pruned,
       })
     } catch (error) {
       await markDurableJobFailed(job, error)
