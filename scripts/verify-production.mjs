@@ -1,5 +1,6 @@
 const baseUrl = (process.env.PRODUCTION_URL || 'https://data-quality-ai-platform.vercel.app').replace(/\/$/, '')
 const bridgeUrl = (process.env.JDBC_BRIDGE_URL || '').replace(/\/$/, '')
+const embeddingUrl = (process.env.GOVERNANCE_EMBEDDING_URL || '').replace(/\/$/, '')
 const timeoutMs = Number(process.env.VERIFY_TIMEOUT_MS || 15000)
 
 async function request(url, options = {}) {
@@ -30,13 +31,16 @@ const ready = await readyResponse.json()
 if (!['READY','DEGRADED'].includes(ready.status)) throw new Error(`Production readiness returned ${String(ready.status)}`)
 if (ready.components?.database?.status !== 'READY') throw new Error('Production database readiness is not READY.')
 if (ready.components?.agents?.status !== 'READY') throw new Error('Production agent readiness is not READY.')
+if (!['READY','DEGRADED'].includes(ready.components?.semantic_embeddings?.status)) throw new Error('Semantic embedding readiness component is missing or invalid.')
 console.log(`PASS production readiness payload -> ${ready.status}`)
+console.log(`PASS semantic embedding readiness -> ${ready.components.semantic_embeddings.status}`)
 
 await check('/api/profiling/run', (response) => [401, 403, 405].includes(response.status))
 await check('/api/profiling/validate', (response) => [401, 403, 405].includes(response.status))
 await check('/api/datasets/register', (response) => [401, 403, 405].includes(response.status))
 await check('/api/agents/run', (response) => [401, 403, 405].includes(response.status))
 await check('/api/lineage/ingest', (response) => [401, 403, 405].includes(response.status))
+await check('/api/search/semantic', (response) => [400, 401, 403, 405].includes(response.status))
 
 if (bridgeUrl) {
   const response = await request(`${bridgeUrl}/health`)
@@ -56,6 +60,16 @@ if (bridgeUrl) {
   })
   if (unauthorized.status !== 401) throw new Error(`JDBC bridge unauthenticated boundary returned HTTP ${unauthorized.status}`)
   console.log('PASS JDBC bridge unauthenticated boundary -> 401')
+}
+
+if (embeddingUrl) {
+  const response = await request(`${embeddingUrl}/health`)
+  if (!response.ok) throw new Error(`Semantic embedding provider health check failed with HTTP ${response.status}`)
+  const payload = await response.json()
+  if (payload?.status !== 'ok' || Number(payload?.dimensions) !== 384) {
+    throw new Error('Semantic embedding provider health contract is incompatible.')
+  }
+  console.log(`PASS semantic embedding provider health -> ${String(payload.model || 'configured model')}`)
 }
 
 if (process.env.VERIFY_COOKIE && process.env.VERIFY_PROFILE_RUN_ID) {
