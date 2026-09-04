@@ -4,11 +4,11 @@ import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authori
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   applyPredictiveRiskGovernedActions,
-  executeApprovedGovernedAction,
   listGovernedAutonomy,
   proposeGovernedAction,
   rollbackGovernedAction,
 } from '@/lib/governance/governed-autonomy'
+import { executeApprovedAutonomyAction } from '@/lib/governance/approved-autonomy-execution'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       const actionId = text(body?.actionId ?? body?.action_id)
       if (!actionId) return NextResponse.json({ error: 'actionId is required.' }, { status: 400 })
       if (!(await requireActionInProject(actionId, projectId))) return NextResponse.json({ error: 'Autonomy action was not found in this project.' }, { status: 404 })
-      const action = await executeApprovedGovernedAction(actionId, user.id)
+      const action = await executeApprovedAutonomyAction(actionId, user.id)
       return NextResponse.json({ accepted: true, action })
     }
 
