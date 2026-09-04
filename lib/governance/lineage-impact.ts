@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { getGraphProvider } from '@/lib/data-plane/graph-provider'
 
 type Direction = 'DOWNSTREAM' | 'UPSTREAM'
 
@@ -160,22 +161,41 @@ export async function analyzeLineageImpact(input: {
   triggerId?: string | null
   direction?: Direction
   maxDepth?: number
+  maxEdges?: number
   rootRiskScore?: number | null
   actorUserId?: string | null
 }) {
   const admin = createAdminClient()
   const direction: Direction = input.direction ?? 'DOWNSTREAM'
-  const maxDepth = Math.max(1, Math.min(20, Math.trunc(input.maxDepth ?? 5)))
+  const maxDepth = Math.max(1, Math.min(4, Math.trunc(input.maxDepth ?? 4)))
+  const maxEdges = Math.max(10, Math.min(400, Math.trunc(input.maxEdges ?? 400)))
   const rootType = input.rootAssetType.trim().toUpperCase()
   const rootRisk = clamp(input.rootRiskScore ?? 0.65)
 
-  const { data: edges, error: edgesError } = await admin.schema('governance').from('lineage_edges')
-    .select('id,source_type,source_id,target_type,target_id,relationship,transformation_id,metadata')
-    .eq('project_id', input.projectId)
-    .limit(10000)
-  if (edgesError) throw new Error(`Unable to load lineage graph for impact analysis: ${edgesError.message}`)
+  const graphProvider = getGraphProvider()
+  const neighborhood = await graphProvider.neighborhood({
+    projectId: input.projectId,
+    anchor: { type: rootType, id: input.rootAssetId },
+    direction,
+    depth: maxDepth,
+    maxEdges,
+  })
+  const edges: LineageEdge[] = neighborhood.edges.map((edge) => ({
+    id: edge.id,
+    source_type: edge.source.type,
+    source_id: edge.source.id,
+    target_type: edge.target.type,
+    target_id: edge.target.id,
+    relationship: edge.relationship,
+    transformation_id: edge.transformationId ?? null,
+    metadata: {
+      ...object(edge.metadata),
+      graph_depth: edge.depth,
+      ...(edge.transformation ? { transformation: edge.transformation } : {}),
+    },
+  }))
 
-  const traversed = traverse((edges ?? []) as LineageEdge[], rootType, input.rootAssetId, direction, maxDepth)
+  const traversed = traverse(edges, rootType, input.rootAssetId, direction, maxDepth)
   const enriched = await resolveNamesAndGovernance(input.projectId, traversed)
 
   const scored = enriched.map((node) => {
@@ -192,8 +212,9 @@ export async function analyzeLineageImpact(input: {
   const criticalAffected = scored.filter((node) => ['HIGH', 'CRITICAL'].includes(text(node.criticality).toUpperCase()))
   const aggregateRisk = scored.length ? Math.max(...scored.map((node) => node.riskScore)) : 0
   const aggregateConfidence = scored.length ? scored.reduce((sum, node) => sum + node.confidence, 0) / scored.length : 1
+  const scopeQualifier = neighborhood.truncated ? ' within the configured bounded graph scope' : ''
   const summary = scored.length
-    ? `${scored.length} downstream lineage asset${scored.length === 1 ? '' : 's'} are within ${maxDepth} hop${maxDepth === 1 ? '' : 's'} of ${input.rootAssetName ?? `${rootType}:${input.rootAssetId.slice(0, 8)}`}; ${criticalAffected.length} are high or critical governance assets.`
+    ? `${scored.length} ${direction.toLowerCase()} lineage asset${scored.length === 1 ? '' : 's'} are within ${maxDepth} hop${maxDepth === 1 ? '' : 's'} of ${input.rootAssetName ?? `${rootType}:${input.rootAssetId.slice(0, 8)}`}${scopeQualifier}; ${criticalAffected.length} are high or critical governance assets.`
     : `No ${direction.toLowerCase()} lineage dependencies were found within ${maxDepth} hop${maxDepth === 1 ? '' : 's'} of ${input.rootAssetName ?? `${rootType}:${input.rootAssetId.slice(0, 8)}`}.`
 
   const now = new Date().toISOString()
@@ -212,7 +233,14 @@ export async function analyzeLineageImpact(input: {
     confidence: aggregateConfidence,
     summary,
     evidence: {
-      edge_count_examined: edges?.length ?? 0,
+      graph_provider: graphProvider.providerKey,
+      graph_truncated: neighborhood.truncated,
+      graph_exhausted: neighborhood.exhausted,
+      graph_node_count: neighborhood.nodeCount,
+      edge_count_examined: neighborhood.edgeCount,
+      requested_depth: neighborhood.requestedDepth,
+      max_edges: neighborhood.maxEdges,
+      provider_limits: neighborhood.limits,
       root_risk_score: rootRisk,
       relationships: [...new Set(traversed.flatMap((node) => node.path.map((step) => text(step.relationship))).filter(Boolean))],
       generated_at: now,
@@ -237,6 +265,8 @@ export async function analyzeLineageImpact(input: {
       evidence: {
         edge_evidence: node.edgeEvidence,
         business_description: node.businessDescription,
+        graph_provider: graphProvider.providerKey,
+        graph_truncated: neighborhood.truncated,
       },
     }))
     const { error: nodeError } = await admin.schema('governance').from('lineage_impact_nodes').insert(rows)
@@ -251,7 +281,19 @@ export async function analyzeLineageImpact(input: {
     entityType: rootType,
     entityId: input.rootAssetId,
     correlationId: input.triggerId ?? null,
-    metadata: { analysis_id: analysis.id, direction, max_depth: maxDepth, affected_count: scored.length, critical_affected_count: criticalAffected.length, risk_score: aggregateRisk, confidence: aggregateConfidence, trigger_type: input.triggerType ?? null },
+    metadata: {
+      analysis_id: analysis.id,
+      direction,
+      max_depth: maxDepth,
+      max_edges: maxEdges,
+      graph_provider: graphProvider.providerKey,
+      graph_truncated: neighborhood.truncated,
+      affected_count: scored.length,
+      critical_affected_count: criticalAffected.length,
+      risk_score: aggregateRisk,
+      confidence: aggregateConfidence,
+      trigger_type: input.triggerType ?? null,
+    },
   })
 
   return {
@@ -261,6 +303,10 @@ export async function analyzeLineageImpact(input: {
     rootAssetId: input.rootAssetId,
     direction,
     maxDepth,
+    maxEdges,
+    graphProvider: graphProvider.providerKey,
+    truncated: neighborhood.truncated,
+    exhausted: neighborhood.exhausted,
     affectedCount: scored.length,
     criticalAffectedCount: criticalAffected.length,
     riskScore: aggregateRisk,
@@ -290,7 +336,8 @@ export async function enrichObservabilityIncidentWithLineageImpact(input: {
     triggerType: 'OBSERVABILITY_INCIDENT',
     triggerId: input.incidentId,
     direction: 'DOWNSTREAM',
-    maxDepth: 5,
+    maxDepth: 4,
+    maxEdges: 400,
     rootRiskScore: severityRisk[text(input.severity).toUpperCase()] ?? 0.65,
     actorUserId: input.actorUserId ?? null,
   })
@@ -307,7 +354,14 @@ export async function enrichObservabilityIncidentWithLineageImpact(input: {
       distance: node.distance,
       risk_score: node.riskScore,
       confidence: node.confidence,
-      evidence: { analysis_id: analysis.analysisId, path: node.path, criticality: node.criticality, certification_status: node.certificationStatus },
+      evidence: {
+        analysis_id: analysis.analysisId,
+        path: node.path,
+        criticality: node.criticality,
+        certification_status: node.certificationStatus,
+        graph_provider: analysis.graphProvider,
+        graph_truncated: analysis.truncated,
+      },
     }))
     const { error: impactError } = await admin.schema('governance').from('observability_incident_impacts').insert(impactRows)
     if (impactError) throw new Error(`Unable to persist incident lineage impacts: ${impactError.message}`)
@@ -318,8 +372,20 @@ export async function enrichObservabilityIncidentWithLineageImpact(input: {
   const evidence = object(incident.evidence)
   const risk = object(incident.risk)
   await admin.schema('governance').from('observability_incidents').update({
-    evidence: { ...evidence, lineage_impact_analysis_id: analysis.analysisId, lineage_affected_count: analysis.affectedCount, lineage_critical_affected_count: analysis.criticalAffectedCount },
-    risk: { ...risk, lineage_risk_score: analysis.riskScore, lineage_confidence: analysis.confidence, downstream_affected_count: analysis.affectedCount },
+    evidence: {
+      ...evidence,
+      lineage_impact_analysis_id: analysis.analysisId,
+      lineage_affected_count: analysis.affectedCount,
+      lineage_critical_affected_count: analysis.criticalAffectedCount,
+      lineage_graph_provider: analysis.graphProvider,
+      lineage_graph_truncated: analysis.truncated,
+    },
+    risk: {
+      ...risk,
+      lineage_risk_score: analysis.riskScore,
+      lineage_confidence: analysis.confidence,
+      downstream_affected_count: analysis.affectedCount,
+    },
     updated_at: new Date().toISOString(),
   }).eq('id', input.incidentId)
 
