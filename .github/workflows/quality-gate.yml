@@ -32,6 +32,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Verify data plane provider configuration
         run: pnpm run verify:data-plane-config
+      - name: Verify FILE onboarding contracts
+        run: pnpm run verify:file-onboarding
       - name: Verify governance architecture contracts
         run: pnpm run verify:governance
       - name: Verify semantic governance contracts
