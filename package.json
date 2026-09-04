@@ -9,7 +9,8 @@
     "verify:governance": "node scripts/verify-governance-architecture.mjs",
     "verify:database": "node scripts/verify-governance-database.mjs",
     "verify:production": "node scripts/verify-production.mjs",
-    "benchmark:production": "node scripts/benchmark-production.mjs"
+    "benchmark:production": "node scripts/benchmark-production.mjs",
+    "recovery:drill": "node scripts/recovery-drill.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
