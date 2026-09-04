@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { loadFileSource } from '@/lib/profiling/file-source-adapter'
+import { loadGovernedFileSource } from '@/lib/profiling/governed-file-source'
 import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
 
 type RecordValue = Record<string, unknown>
@@ -52,13 +52,13 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
   const executionConfig = record(executionSource.execution_config)
   const connectionMetadata = record(executionConfig.connection_metadata)
   const sampling = await resolveSamplingPolicy(supabase, datasetVersionId, 1000)
-  const loaded = await loadFileSource(
+  const loaded = await loadGovernedFileSource(
     supabase,
     {
       sourceUri: typeof executionSource.source_uri === 'string' ? executionSource.source_uri : version.source_uri,
       executionConfig: { ...connectionMetadata, ...executionConfig },
     },
-    { maxRows: sampling.loadLimit, maxBytes: sampling.capacityMaxFileBytes },
+    { maxRows: sampling.loadLimit, maxBytes: sampling.technicalMaxFileBytes },
   )
 
   const sampled = applySamplingPolicy(loaded.rows as Record<string, unknown>[], loaded.rowCount, sampling)
