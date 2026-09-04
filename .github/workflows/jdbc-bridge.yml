@@ -31,3 +31,5 @@ jobs:
           cache: maven
       - name: Run bridge tests
         run: mvn -B test
+      - name: Build bridge container
+        run: docker build --pull --tag datanexus-jdbc-bridge:ci .
