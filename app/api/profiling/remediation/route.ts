@@ -19,6 +19,11 @@ function issueSeverity(priority: unknown) {
   return value === 'CRITICAL' || value === 'HIGH' ? 'HIGH' : value === 'LOW' ? 'LOW' : 'MEDIUM'
 }
 
+function uuidList(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.map((item) => text(item)).filter(Boolean)
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
@@ -165,6 +170,43 @@ export async function POST(request: Request) {
       throw new Error(`Unable to persist remediation outcome: ${outcomeError?.message ?? 'unknown error'}`)
     }
 
+    const distinctRecommendations = new Map<string, Record<string, unknown>>()
+    for (const item of recommendations) {
+      const recommendation = object(item)
+      const action = text(recommendation.action) || 'governed_remediation_review'
+      if (!distinctRecommendations.has(action)) distinctRecommendations.set(action, recommendation)
+    }
+
+    const learningRows = [...distinctRecommendations.entries()].map(([action, recommendation]) => ({
+      project_id: instance.project_id,
+      workflow_instance_id: workflowInstanceId,
+      remediation_outcome_id: outcome.id,
+      source_profile_run_id: profileRunId,
+      recommendation_action: action,
+      priority: text(recommendation.priority) || null,
+      rationale: text(recommendation.rationale) || null,
+      finding_ids: uuidList(recommendation.finding_ids),
+      status: 'PENDING',
+      effective: null,
+      evidence: {
+        dataset_id: datasetId,
+        dataset_version_id: datasetVersionId,
+        execution_mode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
+        remediation_issue_ids: issueIds,
+      },
+      created_by: user.id,
+      updated_at: new Date().toISOString(),
+    }))
+
+    if (learningRows.length) {
+      const { error: learningError } = await admin
+        .schema('governance')
+        .from('profiling_recommendation_learning')
+        .upsert(learningRows, { onConflict: 'workflow_instance_id,recommendation_action' })
+
+      if (learningError) throw new Error(`Unable to seed recommendation learning evidence: ${learningError.message}`)
+    }
+
     await writeGovernanceAudit({
       projectId: instance.project_id,
       actorUserId: user.id,
@@ -176,6 +218,7 @@ export async function POST(request: Request) {
         remediation_outcome_id: outcome.id,
         created_issue_ids: created.map((issue) => issue.id),
         reused_issue_ids: reused.map((issue) => issue.id),
+        learning_actions: learningRows.map((row) => row.recommendation_action),
         execution_mode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
         production_mutation_performed: false,
       },
@@ -187,6 +230,7 @@ export async function POST(request: Request) {
       remediationOutcomeId: outcome.id,
       executionMode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
       productionMutationPerformed: false,
+      learningActions: learningRows.map((row) => row.recommendation_action),
       created,
       reused,
     }, { status: created.length ? 201 : 200 })
