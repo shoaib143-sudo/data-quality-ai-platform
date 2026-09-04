@@ -18,6 +18,11 @@ function scopedPath(scope: TenantScope, key: string) {
   return `projects/${scope.projectId}/${normalized}`
 }
 
+function boundedExpiry(value: number | undefined) {
+  if (!Number.isFinite(value)) return 300
+  return Math.max(30, Math.min(3600, Math.trunc(value as number)))
+}
+
 export class SupabaseObjectStore implements ObjectStore {
   readonly providerKey = 'supabase'
 
@@ -48,6 +53,18 @@ export class SupabaseObjectStore implements ObjectStore {
       throw new Error(`Unable to load object: ${error.message}`)
     }
     return new Uint8Array(await data.arrayBuffer())
+  }
+
+  async signedUrl(scope: TenantScope, key: string, expiresInSeconds?: number): Promise<string> {
+    const admin = createAdminClient()
+    const expiresIn = boundedExpiry(expiresInSeconds)
+    const { data, error } = await admin.storage
+      .from(bucketName())
+      .createSignedUrl(scopedPath(scope, key), expiresIn)
+    if (error || !data?.signedUrl) {
+      throw new Error(`Unable to create signed object URL: ${error?.message ?? 'signed URL was not returned'}`)
+    }
+    return data.signedUrl
   }
 
   async delete(scope: TenantScope, key: string): Promise<void> {
