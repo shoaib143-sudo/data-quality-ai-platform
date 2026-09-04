@@ -55,6 +55,25 @@ requireText('app/api/lineage/impact/change/approval/status/route.ts', [
 ])
 forbidText('app/api/lineage/impact/change/approval/status/route.ts', ['productionMutationPerformed: true'])
 
+const gate = requireText('lib/governance/lineage-change-gate.ts', [
+  'evaluateLineageChangeGate',
+  "decision === 'SAFE_TO_PROCEED'",
+  "decision === 'REVIEW_REQUIRED'",
+  "approvalStatus === 'APPROVED'",
+  "gateStatus: approved ? 'OPEN' : 'BLOCKED'",
+  'productionMutationPerformed: false',
+])
+if (!gate.includes(".eq('entity_id', analysis.id)")) {
+  throw new Error('Lineage deployment gate must bind approval to the exact persisted impact analysis.')
+}
+forbidText('lib/governance/lineage-change-gate.ts', ['productionMutationPerformed: true'])
+
+requireText('app/api/lineage/impact/change/gate/route.ts', [
+  'evaluateLineageChangeGate',
+  "authorizeProject(user.id, gate.projectId, 'lineage.read')",
+  'analysisId is required.',
+])
+
 requireText('app/lineage/impact/change-impact-manager.tsx', [
   'Pre-change impact gate',
   'Start governed approval',
