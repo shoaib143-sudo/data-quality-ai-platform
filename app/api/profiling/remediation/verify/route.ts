@@ -70,6 +70,17 @@ export async function POST(request: Request) {
       }, { status: 409 })
     }
 
+    if (!explicitVerificationRunId && linkedOutcome?.status === 'VERIFICATION_CANCELLED') {
+      return NextResponse.json({
+        error: 'Automatic verification was cancelled. Restart verification before evaluating remediation.',
+        code: 'VERIFICATION_CANCELLED_RESTART_REQUIRED',
+        remediationStatus: linkedOutcome.status,
+        verificationProfileRunId: linkedOutcome.verification_profile_run_id,
+        verificationAgentRunId: linkedOutcome.verification_agent_run_id,
+        verificationJobId: linkedOutcome.verification_job_id,
+      }, { status: 409 })
+    }
+
     if (!explicitVerificationRunId && linkedOutcome?.status === 'VERIFICATION_QUEUED' && !linkedOutcome.verification_profile_run_id) {
       return NextResponse.json({
         error: 'Automatic verification has been claimed and is being prepared.',
