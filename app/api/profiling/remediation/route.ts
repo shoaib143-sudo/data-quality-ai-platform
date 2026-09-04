@@ -68,6 +68,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Approved workflow contains no actionable recommendations.' }, { status: 409 })
     }
 
+    const { data: existingOutcome, error: existingOutcomeError } = await admin
+      .schema('governance')
+      .from('profiling_remediation_outcomes')
+      .select('id,status,execution_mode,production_mutation_performed,remediation_issue_ids,verification_profile_run_id,verification_agent_run_id,verification_job_id')
+      .eq('workflow_instance_id', workflowInstanceId)
+      .maybeSingle()
+    if (existingOutcomeError) throw new Error(`Unable to resolve existing remediation outcome: ${existingOutcomeError.message}`)
+
+    if (existingOutcome) {
+      const issueIds = uuidList(existingOutcome.remediation_issue_ids)
+      const { data: existingIssues, error: existingIssuesError } = issueIds.length
+        ? await admin.schema('governance').from('issues').select('id,title,status,severity').in('id', issueIds)
+        : { data: [], error: null }
+      if (existingIssuesError) throw new Error(`Unable to resolve existing remediation issues: ${existingIssuesError.message}`)
+
+      const { data: existingLearning, error: existingLearningError } = await admin
+        .schema('governance')
+        .from('profiling_recommendation_learning')
+        .select('recommendation_action,status,effective')
+        .eq('workflow_instance_id', workflowInstanceId)
+      if (existingLearningError) throw new Error(`Unable to resolve existing recommendation learning evidence: ${existingLearningError.message}`)
+
+      return NextResponse.json({
+        workflowInstanceId,
+        profileRunId,
+        remediationOutcomeId: existingOutcome.id,
+        remediationStatus: existingOutcome.status,
+        executionMode: existingOutcome.execution_mode ?? 'TRACKED_GOVERNANCE_ISSUES_ONLY',
+        productionMutationPerformed: existingOutcome.production_mutation_performed === true,
+        learningActions: (existingLearning ?? []).map((row) => row.recommendation_action),
+        verificationProfileRunId: existingOutcome.verification_profile_run_id,
+        verificationAgentRunId: existingOutcome.verification_agent_run_id,
+        verificationJobId: existingOutcome.verification_job_id,
+        created: [],
+        reused: existingIssues ?? [],
+        reusedOutcome: true,
+      })
+    }
+
     const created: Array<Record<string, unknown>> = []
     const reused: Array<Record<string, unknown>> = []
 
@@ -84,7 +123,6 @@ export async function POST(request: Request) {
         .eq('project_id', instance.project_id)
         .eq('profile_run_id', profileRunId)
         .eq('title', title)
-        .in('status', ['OPEN', 'IN_PROGRESS'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -147,7 +185,7 @@ export async function POST(request: Request) {
     const { data: outcome, error: outcomeError } = await admin
       .schema('governance')
       .from('profiling_remediation_outcomes')
-      .upsert({
+      .insert({
         project_id: instance.project_id,
         workflow_instance_id: workflowInstanceId,
         source_profile_run_id: profileRunId,
@@ -162,11 +200,31 @@ export async function POST(request: Request) {
           created_issue_count: created.length,
           reused_issue_count: reused.length,
         },
-      }, { onConflict: 'workflow_instance_id' })
+      })
       .select('id,status,remediation_issue_ids')
       .single()
 
     if (outcomeError || !outcome) {
+      if (outcomeError?.code === '23505') {
+        const { data: racedOutcome, error: racedOutcomeError } = await admin
+          .schema('governance')
+          .from('profiling_remediation_outcomes')
+          .select('id,status,remediation_issue_ids')
+          .eq('workflow_instance_id', workflowInstanceId)
+          .single()
+        if (racedOutcomeError || !racedOutcome) throw new Error(`Unable to resolve concurrent remediation outcome: ${racedOutcomeError?.message ?? 'unknown error'}`)
+        return NextResponse.json({
+          workflowInstanceId,
+          profileRunId,
+          remediationOutcomeId: racedOutcome.id,
+          remediationStatus: racedOutcome.status,
+          executionMode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
+          productionMutationPerformed: false,
+          created: [],
+          reused: [...created, ...reused],
+          reusedOutcome: true,
+        })
+      }
       throw new Error(`Unable to persist remediation outcome: ${outcomeError?.message ?? 'unknown error'}`)
     }
 
@@ -202,9 +260,11 @@ export async function POST(request: Request) {
       const { error: learningError } = await admin
         .schema('governance')
         .from('profiling_recommendation_learning')
-        .upsert(learningRows, { onConflict: 'workflow_instance_id,recommendation_action' })
+        .insert(learningRows)
 
-      if (learningError) throw new Error(`Unable to seed recommendation learning evidence: ${learningError.message}`)
+      if (learningError && learningError.code !== '23505') {
+        throw new Error(`Unable to seed recommendation learning evidence: ${learningError.message}`)
+      }
     }
 
     await writeGovernanceAudit({
@@ -228,11 +288,13 @@ export async function POST(request: Request) {
       workflowInstanceId,
       profileRunId,
       remediationOutcomeId: outcome.id,
+      remediationStatus: outcome.status,
       executionMode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
       productionMutationPerformed: false,
       learningActions: learningRows.map((row) => row.recommendation_action),
       created,
       reused,
+      reusedOutcome: false,
     }, { status: created.length ? 201 : 200 })
   } catch (error) {
     if (error instanceof AuthorizationError) {
