@@ -21,6 +21,9 @@ const requiredPageContracts=[
   'Governance Intelligence Lineage Explorer',
   'fieldKey(',
   'dqMethod',
+  'for(const column of profileColumns)',
+  'syntheticAssetId=`profile:${datasetId}`',
+  'buildField(syntheticAssetId,columnName,datasetId',
 ]
 
 const requiredExplorerContracts=[
@@ -39,6 +42,10 @@ const requiredExplorerContracts=[
   'Field governance context',
   'DQ &lt; 80',
   'Governed fields only',
+  'visibleFields',
+  'Profiled lineage fields',
+  'Field-to-field arrows are shown only when an explicit persisted column mapping exists.',
+  'not inferring transformations from matching column names',
 ]
 
 for(const contract of requiredPageContracts){
