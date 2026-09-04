@@ -1,35 +1,23 @@
 import type { ProjectionEvent, ProjectionPublisher } from '@/lib/data-plane/contracts'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-function uuidOrNull(value: string | null | undefined) {
-  if (!value) return null
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null
-}
-
 function outboxRow(event: ProjectionEvent) {
   return {
+    event_id: event.eventId,
     project_id: event.projectId,
-    event_type: `PROJECTION.${event.eventType}`,
+    organization_id: event.organizationId ?? null,
+    schema_version: event.schemaVersion,
+    operation: event.operation,
+    event_type: event.eventType,
+    occurred_at: event.occurredAt,
     aggregate_type: event.aggregateType,
-    aggregate_id: uuidOrNull(event.aggregateId),
-    correlation_id: uuidOrNull(event.correlationId),
-    idempotency_key: `projection:${event.eventId}`,
-    payload: {
-      eventId: event.eventId,
-      schemaVersion: event.schemaVersion,
-      operation: event.operation,
-      eventType: event.eventType,
-      occurredAt: event.occurredAt,
-      aggregateType: event.aggregateType,
-      aggregateId: event.aggregateId,
-      aggregateVersion: event.aggregateVersion ?? null,
-      correlationId: event.correlationId ?? null,
-      causationId: event.causationId ?? null,
-      actorType: event.actorType ?? null,
-      actorId: event.actorId ?? null,
-      organizationId: event.organizationId ?? null,
-      data: event.payload ?? {},
-    },
+    aggregate_id: event.aggregateId,
+    aggregate_version: event.aggregateVersion == null ? null : String(event.aggregateVersion),
+    correlation_id: event.correlationId ?? null,
+    causation_id: event.causationId ?? null,
+    actor_type: event.actorType ?? null,
+    actor_id: event.actorId ?? null,
+    payload: event.payload ?? {},
   }
 }
 
@@ -43,9 +31,9 @@ export class PostgresOutboxProjectionPublisher implements ProjectionPublisher {
     const admin = createAdminClient()
     const { error } = await admin
       .schema('orchestration')
-      .from('event_outbox')
+      .from('projection_outbox')
       .upsert(events.map(outboxRow), {
-        onConflict: 'project_id,idempotency_key',
+        onConflict: 'event_id',
         ignoreDuplicates: true,
       })
 
