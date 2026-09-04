@@ -1,0 +1,16 @@
+customer_id,full_name,email,country,age,is_active,signup_date,created_at
+CUST-0001,Alice Tan,alice.tan@example.com,SG,34,true,2025-01-15,2025-01-15T09:30:00Z
+CUST-0002,Ben Lim,ben.lim@example.com,SG,41,true,2025-02-03,2025-02-03T10:15:00Z
+CUST-0003,Carla Wong,carla.wong@example.com,MY,29,false,2025-02-18,2025-02-18T11:45:00Z
+CUST-0004,Daniel Lee,daniel.lee@example.com,SG,52,true,2025-03-02,2025-03-02T08:05:00Z
+CUST-0005,Eva Chen,eva.chen@example.com,HK,37,true,2025-03-21,2025-03-21T14:20:00Z
+CUST-0006,Farid Rahman,farid.rahman@example.com,MY,45,true,2025-04-09,2025-04-09T16:10:00Z
+CUST-0007,Grace Ng,grace.ng@example.com,SG,31,false,2025-04-24,2025-04-24T07:55:00Z
+CUST-0008,Hari Kumar,hari.kumar@example.com,IN,39,true,2025-05-12,2025-05-12T12:40:00Z
+CUST-0009,Irene Koh,irene.koh@example.com,SG,27,true,2025-06-01,2025-06-01T13:25:00Z
+CUST-0010,Jonas Teo,jonas.teo@example.com,SG,48,true,2025-06-19,2025-06-19T15:00:00Z
+CUST-0011,Karen Goh,,SG,36,true,2025-07-07,2025-07-07T09:10:00Z
+CUST-0012,Leo Ong,leo.ong@example.com,SG,36,true,2025-07-22,2025-07-22T10:35:00Z
+CUST-0013,Maya Devi,maya.devi@example.com,IN,33,false,2025-08-05,2025-08-05T11:20:00Z
+CUST-0014,Nora Aziz,nora.aziz@example.com,MY,43,true,2025-08-17,2025-08-17T12:05:00Z
+CUST-0015,Owen Chua,owen.chua@example.com,SG,30,true,2025-08-29,2025-08-29T14:50:00Z
