@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
+import { evaluateIncidentSlaEscalations } from '@/lib/observability/incident-sla'
 import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
 import { claimOutboxEvents, processOutboxEvents } from '@/lib/orchestration/outbox'
 import {
@@ -40,7 +41,8 @@ export async function GET(request: Request) {
   const results = await processDurableJobs(jobs)
   const events = await claimOutboxEvents(workerId, 30)
   const eventResults = await processOutboxEvents(events)
-  return NextResponse.json({ workerId, scheduled, claimed: jobs.length, results, eventsClaimed: events.length, eventResults })
+  const incidentEscalations = await evaluateIncidentSlaEscalations(50)
+  return NextResponse.json({ workerId, scheduled, claimed: jobs.length, results, eventsClaimed: events.length, eventResults, incidentEscalations })
 }
 
 export async function POST(request: Request) {
