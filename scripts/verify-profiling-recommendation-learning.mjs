@@ -20,8 +20,11 @@ for (const path of requiredFiles) {
 
 const checks = [
   ['supabase/migrations/20260904170300_profiling_recommendation_learning.sql', /profiling_recommendation_learning[\s\S]*unique\(workflow_instance_id, recommendation_action\)[\s\S]*enable row level security[\s\S]*is_project_member/, 'durable project-scoped recommendation learning registry'],
-  ['app/api/profiling/remediation/route.ts', /learningRows[\s\S]*profiling_recommendation_learning[\s\S]*status:\s*'PENDING'/, 'approved remediation seeds learning candidates'],
-  ['app/api/profiling/remediation/verify/route.ts', /recommendationEffective[\s\S]*profiling_recommendation_learning[\s\S]*EFFECTIVE[\s\S]*INEFFECTIVE[\s\S]*observed_at/, 'verification resolves recommendation effectiveness'],
+  ['app/api/profiling/remediation/route.ts', /learningRows/, 'remediation learning candidate construction'],
+  ['app/api/profiling/remediation/route.ts', /status:\s*'PENDING'/, 'pending recommendation learning state'],
+  ['app/api/profiling/remediation/route.ts', /profiling_recommendation_learning[\s\S]*upsert\(learningRows/, 'approved remediation learning persistence'],
+  ['app/api/profiling/remediation/verify/route.ts', /recommendationEffective[\s\S]*profiling_recommendation_learning/, 'verification learning resolution path'],
+  ['app/api/profiling/remediation/verify/route.ts', /status:\s*recommendationEffective\s*\?\s*'EFFECTIVE'\s*:\s*'INEFFECTIVE'[\s\S]*observed_at/, 'effective and ineffective recommendation outcome states'],
   ['lib/profiling/recommendation-learning.ts', /success_rate[\s\S]*average_quality_score_delta[\s\S]*average_high_severity_findings_delta/, 'project recommendation effectiveness aggregation'],
   ['app/api/profiling/recommendations/effectiveness/route.ts', /authorizeProject[\s\S]*quality\.read[\s\S]*loadRecommendationEffectiveness/, 'authorized recommendation effectiveness API'],
   ['lib/profiling/investigation-engine.ts', /investigation_version:\s*'1\.1'[\s\S]*historical_effectiveness[\s\S]*recommendation_learning[\s\S]*advisory evidence only/, 'historical effectiveness feedback into future investigations'],
