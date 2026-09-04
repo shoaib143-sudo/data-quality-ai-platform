@@ -13,6 +13,7 @@
     "verify:readiness": "node scripts/verify-production-readiness.mjs",
     "verify:provider-fallback": "node --experimental-strip-types scripts/test-provider-read-fallback.mjs",
     "verify:knowledge-model": "node scripts/verify-governance-knowledge-model.mjs",
+    "verify:quality-intelligence": "node scripts/verify-quality-intelligence.mjs",
     "verify:file-onboarding": "node scripts/verify-file-onboarding.mjs",
     "verify:profiling-explorer": "node scripts/verify-profiling-explorer.mjs",
     "verify:governance": "node scripts/verify-governance-architecture.mjs",
