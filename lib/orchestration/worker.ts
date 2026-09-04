@@ -35,20 +35,21 @@ async function recordAutomaticVerificationError(input: {
   const priorChecks = existing?.checks && typeof existing.checks === 'object' && !Array.isArray(existing.checks) ? existing.checks as Record<string, unknown> : {}
 
   await admin.schema('governance').from('profiling_remediation_outcomes').update({
-    status: 'VERIFICATION_FAILED',
+    status: 'VERIFICATION_QUEUED',
     checks: {
       ...priorChecks,
-      automatic_reprofile_completed: { passed: false, profiling_run_id: input.profilingRunId, error: message },
+      automatic_reprofile_completed: { passed: false, retryable: true, profiling_run_id: input.profilingRunId, error: message },
     },
     outcome: {
       ...priorOutcome,
-      verification_passed: false,
-      recommendation_effective: false,
+      verification_passed: null,
+      recommendation_effective: null,
       verification_source: 'AUTOMATIC_WORKER',
       verification_error: message,
+      verification_retryable: true,
     },
     updated_at: now,
-    verified_at: now,
+    verified_at: null,
   }).eq('workflow_instance_id', input.workflowInstanceId)
 
   await writeGovernanceAudit({
@@ -59,8 +60,59 @@ async function recordAutomaticVerificationError(input: {
     entityType: 'PROFILE_RUN',
     entityId: input.profilingRunId,
     correlationId: input.workflowInstanceId,
-    metadata: { workflow_instance_id: input.workflowInstanceId, verification_profile_run_id: input.profilingRunId, error: message },
+    metadata: { workflow_instance_id: input.workflowInstanceId, verification_profile_run_id: input.profilingRunId, retryable: true, error: message },
   })
+}
+
+async function prepareProfilingAttempt(input: { agentRunId: string; profilingRunId: string }) {
+  const admin = createAdminClient()
+  const [{ data: profileRun, error: profileError }, { data: agentRun, error: agentError }] = await Promise.all([
+    admin.schema('profiling').from('profile_runs').select('id,status,error_code,error_message').eq('id', input.profilingRunId).maybeSingle(),
+    admin.schema('agent').from('agent_runs').select('id,status').eq('id', input.agentRunId).maybeSingle(),
+  ])
+  if (profileError || !profileRun) throw new Error(`Unable to resolve durable profiling run: ${profileError?.message ?? 'not found'}`)
+  if (agentError || !agentRun) throw new Error(`Unable to resolve durable profiling agent run: ${agentError?.message ?? 'not found'}`)
+
+  if (profileRun.status === 'COMPLETED') {
+    if (agentRun.status !== 'SUCCEEDED' && agentRun.status !== 'CANCELLED') {
+      await admin.schema('agent').from('agent_runs').update({
+        status: 'SUCCEEDED',
+        error_code: null,
+        error_message: null,
+        completed_at: new Date().toISOString(),
+      }).eq('id', input.agentRunId)
+    }
+    return { execute: false, status: profileRun.status }
+  }
+
+  if (profileRun.status === 'CANCELLED' || agentRun.status === 'CANCELLED') {
+    return { execute: false, status: 'CANCELLED' }
+  }
+
+  if (profileRun.status === 'FAILED') {
+    await admin.schema('profiling').from('profile_runs').update({
+      status: 'RUNNING',
+      error_code: null,
+      error_message: null,
+      completed_at: null,
+      started_at: new Date().toISOString(),
+    }).eq('id', input.profilingRunId)
+    await admin.schema('agent').from('agent_runs').update({
+      status: 'QUEUED',
+      error_code: null,
+      error_message: null,
+      completed_at: null,
+    }).eq('id', input.agentRunId).neq('status', 'CANCELLED')
+  } else if (agentRun.status === 'FAILED') {
+    await admin.schema('agent').from('agent_runs').update({
+      status: 'QUEUED',
+      error_code: null,
+      error_message: null,
+      completed_at: null,
+    }).eq('id', input.agentRunId)
+  }
+
+  return { execute: true, status: profileRun.status }
 }
 
 export async function executeDurableJob(job: DurableJob) {
@@ -81,47 +133,65 @@ export async function executeDurableJob(job: DurableJob) {
       throw new Error('Durable profiling job payload is incomplete.')
     }
 
-    await executePreparedProfilingJob({ userId, projectId, datasetVersionId, agentDefinitionId, agentVersion, agentRunId, profilingRunId, requestInput })
+    const automaticVerification = text(requestInput.trigger) === 'PROFILING_REMEDIATION_VERIFICATION'
+    const workflowInstanceId = automaticVerification ? text(requestInput.workflowInstanceId) : ''
+    if (automaticVerification && !workflowInstanceId) throw new Error('Automatic remediation verification payload is missing workflowInstanceId.')
 
-    if (text(requestInput.trigger) === 'PROFILING_REMEDIATION_VERIFICATION') {
-      const workflowInstanceId = text(requestInput.workflowInstanceId)
-      if (!workflowInstanceId) throw new Error('Automatic remediation verification payload is missing workflowInstanceId.')
+    const preparation = await prepareProfilingAttempt({ agentRunId, profilingRunId })
+    if (preparation.status === 'CANCELLED') {
+      if (automaticVerification) {
+        const cancellation = new Error('Automatic remediation verification profiling run was cancelled.')
+        await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: cancellation })
+      }
+      return
+    }
 
-      const admin = createAdminClient()
-      const { data: completedRun, error: completedRunError } = await admin
-        .schema('profiling')
-        .from('profile_runs')
-        .select('id,status,error_code,error_message')
-        .eq('id', profilingRunId)
-        .maybeSingle()
+    if (preparation.execute) {
+      await executePreparedProfilingJob({ userId, projectId, datasetVersionId, agentDefinitionId, agentVersion, agentRunId, profilingRunId, requestInput })
+    }
 
-      if (completedRunError || !completedRun) {
+    const admin = createAdminClient()
+    const { data: completedRun, error: completedRunError } = await admin
+      .schema('profiling')
+      .from('profile_runs')
+      .select('id,status,error_code,error_message')
+      .eq('id', profilingRunId)
+      .maybeSingle()
+
+    if (completedRunError || !completedRun) {
+      const technicalError = new Error(`Unable to resolve durable profiling run after execution: ${completedRunError?.message ?? 'not found'}`)
+      if (automaticVerification) await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: technicalError })
+      throw technicalError
+    }
+    if (completedRun.status === 'CANCELLED') {
+      if (automaticVerification) {
         await recordAutomaticVerificationError({
           workflowInstanceId,
           projectId,
           userId,
           profilingRunId,
-          error: new Error(`Unable to resolve automatic verification profiling run: ${completedRunError?.message ?? 'not found'}`),
+          error: new Error('Automatic remediation verification profiling run was cancelled.'),
         })
-      } else if (completedRun.status !== 'COMPLETED') {
-        await recordAutomaticVerificationError({
+      }
+      return
+    }
+    if (completedRun.status !== 'COMPLETED') {
+      const technicalError = new Error(completedRun.error_message || completedRun.error_code || `Profiling run ended as ${completedRun.status}.`)
+      if (automaticVerification) await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: technicalError })
+      throw technicalError
+    }
+
+    if (automaticVerification) {
+      try {
+        await verifyRemediationOutcome({
           workflowInstanceId,
-          projectId,
-          userId,
-          profilingRunId,
-          error: new Error(completedRun.error_message || completedRun.error_code || `Verification profiling run ended as ${completedRun.status}.`),
+          verificationProfileRunId: profilingRunId,
+          actorUserId: userId,
+          verificationSource: 'AUTOMATIC_WORKER',
         })
-      } else {
-        try {
-          await verifyRemediationOutcome({
-            workflowInstanceId,
-            verificationProfileRunId: profilingRunId,
-            actorUserId: userId,
-            verificationSource: 'AUTOMATIC_WORKER',
-          })
-        } catch (verificationError) {
-          await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: verificationError })
-        }
+      } catch (verificationError) {
+        await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: verificationError })
+        throw verificationError
       }
     }
     return
