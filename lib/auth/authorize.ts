@@ -14,6 +14,7 @@ export type AuthorizationCapability =
   | 'retention.manage'
   | 'report.export'
   | 'admin.manage'
+  | 'agent.execute'
   | 'glossary.read'
   | 'glossary.manage'
   | 'lineage.read'
