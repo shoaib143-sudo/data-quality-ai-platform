@@ -10,6 +10,7 @@ import {
   claimDurableJobs,
 } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
+import { runProjectionWorker } from '@/lib/data-plane/run-projection-worker'
 
 export const maxDuration = 300
 
@@ -41,8 +42,20 @@ export async function GET(request: Request) {
   const results = await processDurableJobs(jobs)
   const events = await claimOutboxEvents(workerId, 30)
   const eventResults = await processOutboxEvents(events)
-  const incidentEscalations = await evaluateIncidentSlaEscalations(50)
-  return NextResponse.json({ workerId, scheduled, claimed: jobs.length, results, eventsClaimed: events.length, eventResults, incidentEscalations })
+  const [incidentEscalations, projections] = await Promise.all([
+    evaluateIncidentSlaEscalations(50),
+    runProjectionWorker({ projectLimit: 10, batchSize: 200 }),
+  ])
+  return NextResponse.json({
+    workerId,
+    scheduled,
+    claimed: jobs.length,
+    results,
+    eventsClaimed: events.length,
+    eventResults,
+    incidentEscalations,
+    projections,
+  })
 }
 
 export async function POST(request: Request) {
