@@ -4,7 +4,7 @@ create table if not exists governance.documents (
   dataset_id uuid not null references catalog.datasets(id) on delete cascade,
   dataset_version_id uuid not null references catalog.dataset_versions(id) on delete cascade,
   profile_run_id uuid references profiling.profile_runs(id) on delete set null,
-  source_uri text,
+  source_uri text not null,
   file_name text,
   file_type text not null,
   content_type text,
@@ -15,7 +15,7 @@ create table if not exists governance.documents (
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique(project_id,dataset_version_id,content_hash)
+  unique(project_id,dataset_version_id,source_uri)
 );
 
 create table if not exists governance.document_chunks (
@@ -34,6 +34,8 @@ create table if not exists governance.document_chunks (
 
 create index if not exists governance_documents_project_dataset_idx
   on governance.documents(project_id,dataset_id,dataset_version_id);
+create index if not exists governance_documents_content_hash_idx
+  on governance.documents(project_id,content_hash);
 create index if not exists governance_documents_profile_run_idx
   on governance.documents(profile_run_id)
   where profile_run_id is not null;
