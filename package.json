@@ -19,6 +19,7 @@
     "verify:knowledge-model": "node scripts/verify-governance-knowledge-model.mjs",
     "verify:quality-intelligence": "node scripts/verify-quality-intelligence.mjs",
     "verify:file-onboarding": "node scripts/verify-file-onboarding.mjs",
+    "verify:profiling-lifecycle": "node scripts/verify-profiling-lifecycle-contracts.mjs",
     "verify:profiling-explorer": "node scripts/verify-profiling-explorer.mjs",
     "verify:governance": "node scripts/verify-governance-architecture.mjs",
     "verify:semantic": "node scripts/verify-semantic-governance.mjs",
