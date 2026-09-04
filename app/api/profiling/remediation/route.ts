@@ -24,6 +24,49 @@ function uuidList(value: unknown) {
   return value.map((item) => text(item)).filter(Boolean)
 }
 
+function distinctRecommendationMap(recommendations: unknown[]) {
+  const result = new Map<string, Record<string, unknown>>()
+  for (const item of recommendations) {
+    const recommendation = object(item)
+    const action = text(recommendation.action) || 'governed_remediation_review'
+    if (!result.has(action)) result.set(action, recommendation)
+  }
+  return result
+}
+
+function learningRowsFor(input: {
+  recommendations: Map<string, Record<string, unknown>>
+  projectId: string
+  workflowInstanceId: string
+  remediationOutcomeId: string
+  profileRunId: string
+  datasetId: string | null
+  datasetVersionId: string | null
+  issueIds: string[]
+  userId: string
+}) {
+  return [...input.recommendations.entries()].map(([action, recommendation]) => ({
+    project_id: input.projectId,
+    workflow_instance_id: input.workflowInstanceId,
+    remediation_outcome_id: input.remediationOutcomeId,
+    source_profile_run_id: input.profileRunId,
+    recommendation_action: action,
+    priority: text(recommendation.priority) || null,
+    rationale: text(recommendation.rationale) || null,
+    finding_ids: uuidList(recommendation.finding_ids),
+    status: 'PENDING',
+    effective: null,
+    evidence: {
+      dataset_id: input.datasetId,
+      dataset_version_id: input.datasetVersionId,
+      execution_mode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
+      remediation_issue_ids: input.issueIds,
+    },
+    created_by: input.userId,
+    updated_at: new Date().toISOString(),
+  }))
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
@@ -68,6 +111,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Approved workflow contains no actionable recommendations.' }, { status: 409 })
     }
 
+    const distinctRecommendations = distinctRecommendationMap(recommendations)
+
     const { data: existingOutcome, error: existingOutcomeError } = await admin
       .schema('governance')
       .from('profiling_remediation_outcomes')
@@ -90,6 +135,31 @@ export async function POST(request: Request) {
         .eq('workflow_instance_id', workflowInstanceId)
       if (existingLearningError) throw new Error(`Unable to resolve existing recommendation learning evidence: ${existingLearningError.message}`)
 
+      const existingLearningActions = new Set((existingLearning ?? []).map((row) => row.recommendation_action))
+      const missingRecommendations = new Map(
+        [...distinctRecommendations.entries()].filter(([action]) => !existingLearningActions.has(action)),
+      )
+      const repairRows = learningRowsFor({
+        recommendations: missingRecommendations,
+        projectId: instance.project_id,
+        workflowInstanceId,
+        remediationOutcomeId: existingOutcome.id,
+        profileRunId,
+        datasetId,
+        datasetVersionId,
+        issueIds,
+        userId: user.id,
+      })
+      if (repairRows.length) {
+        const { error: repairError } = await admin
+          .schema('governance')
+          .from('profiling_recommendation_learning')
+          .insert(repairRows)
+        if (repairError && repairError.code !== '23505') {
+          throw new Error(`Unable to repair recommendation learning evidence: ${repairError.message}`)
+        }
+      }
+
       return NextResponse.json({
         workflowInstanceId,
         profileRunId,
@@ -97,7 +167,8 @@ export async function POST(request: Request) {
         remediationStatus: existingOutcome.status,
         executionMode: existingOutcome.execution_mode ?? 'TRACKED_GOVERNANCE_ISSUES_ONLY',
         productionMutationPerformed: existingOutcome.production_mutation_performed === true,
-        learningActions: (existingLearning ?? []).map((row) => row.recommendation_action),
+        learningActions: [...new Set([...(existingLearning ?? []).map((row) => row.recommendation_action), ...repairRows.map((row) => row.recommendation_action)])],
+        learningEvidenceRepaired: repairRows.length,
         verificationProfileRunId: existingOutcome.verification_profile_run_id,
         verificationAgentRunId: existingOutcome.verification_agent_run_id,
         verificationJobId: existingOutcome.verification_job_id,
@@ -110,9 +181,7 @@ export async function POST(request: Request) {
     const created: Array<Record<string, unknown>> = []
     const reused: Array<Record<string, unknown>> = []
 
-    for (const item of recommendations) {
-      const recommendation = object(item)
-      const action = text(recommendation.action) || 'governed_remediation_review'
+    for (const [action, recommendation] of distinctRecommendations) {
       const rationale = text(recommendation.rationale) || 'Approved profiling remediation recommendation.'
       const title = `Profiling remediation: ${action}`
 
@@ -228,33 +297,17 @@ export async function POST(request: Request) {
       throw new Error(`Unable to persist remediation outcome: ${outcomeError?.message ?? 'unknown error'}`)
     }
 
-    const distinctRecommendations = new Map<string, Record<string, unknown>>()
-    for (const item of recommendations) {
-      const recommendation = object(item)
-      const action = text(recommendation.action) || 'governed_remediation_review'
-      if (!distinctRecommendations.has(action)) distinctRecommendations.set(action, recommendation)
-    }
-
-    const learningRows = [...distinctRecommendations.entries()].map(([action, recommendation]) => ({
-      project_id: instance.project_id,
-      workflow_instance_id: workflowInstanceId,
-      remediation_outcome_id: outcome.id,
-      source_profile_run_id: profileRunId,
-      recommendation_action: action,
-      priority: text(recommendation.priority) || null,
-      rationale: text(recommendation.rationale) || null,
-      finding_ids: uuidList(recommendation.finding_ids),
-      status: 'PENDING',
-      effective: null,
-      evidence: {
-        dataset_id: datasetId,
-        dataset_version_id: datasetVersionId,
-        execution_mode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
-        remediation_issue_ids: issueIds,
-      },
-      created_by: user.id,
-      updated_at: new Date().toISOString(),
-    }))
+    const learningRows = learningRowsFor({
+      recommendations: distinctRecommendations,
+      projectId: instance.project_id,
+      workflowInstanceId,
+      remediationOutcomeId: outcome.id,
+      profileRunId,
+      datasetId,
+      datasetVersionId,
+      issueIds,
+      userId: user.id,
+    })
 
     if (learningRows.length) {
       const { error: learningError } = await admin
@@ -292,6 +345,7 @@ export async function POST(request: Request) {
       executionMode: 'TRACKED_GOVERNANCE_ISSUES_ONLY',
       productionMutationPerformed: false,
       learningActions: learningRows.map((row) => row.recommendation_action),
+      learningEvidenceRepaired: 0,
       created,
       reused,
       reusedOutcome: false,
