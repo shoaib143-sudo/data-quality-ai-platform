@@ -4,12 +4,7 @@ import type {
   KnowledgeSearchResponse,
   KnowledgeSearchResult,
 } from '@/lib/data-plane/contracts'
-
-type OpenSearchConfig = {
-  endpoint: string
-  index: string
-  authorization: string | null
-}
+import { getOpenSearchConnection, openSearchRequest } from '@/lib/data-plane/providers/opensearch-http'
 
 type HitSource = {
   projectId?: string
@@ -33,30 +28,6 @@ type SearchResponse = {
   }
 }
 
-function requireEnv(name: string) {
-  const value = process.env[name]?.trim()
-  if (!value) throw new Error(`${name} is not configured`)
-  return value
-}
-
-function basicAuthorization() {
-  const username = process.env.OPENSEARCH_USERNAME?.trim()
-  const password = process.env.OPENSEARCH_PASSWORD
-  if (!username && !password) return null
-  if (!username || password == null) throw new Error('OPENSEARCH_USERNAME and OPENSEARCH_PASSWORD must be configured together')
-  return `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
-}
-
-function config(): OpenSearchConfig {
-  const prefix = (process.env.OPENSEARCH_INDEX_PREFIX ?? 'datanexus').trim().toLowerCase()
-  if (!/^[a-z0-9][a-z0-9_-]*$/.test(prefix)) throw new Error('OPENSEARCH_INDEX_PREFIX contains unsupported characters')
-  return {
-    endpoint: requireEnv('OPENSEARCH_ENDPOINT').replace(/\/$/, ''),
-    index: `${prefix}-knowledge`,
-    authorization: basicAuthorization(),
-  }
-}
-
 function boundedLimit(value: number | undefined) {
   if (!Number.isFinite(value)) return 25
   return Math.max(1, Math.min(100, Math.trunc(value as number)))
@@ -69,15 +40,33 @@ function cursorOffset(value: string | null | undefined) {
   return Math.min(parsed, 9900)
 }
 
-function totalHits(total: SearchResponse['hits'] extends infer T ? T : never) {
-  const value = (total as SearchResponse['hits'])?.total
+function totalHits(hits: SearchResponse['hits']) {
+  const value = hits?.total
   if (typeof value === 'number') return value
   return value?.value ?? 0
 }
 
+function facetValue(value: string | number | boolean | null) {
+  return value === null ? '__NULL__' : String(value)
+}
+
 function metadataFilter(key: string, value: string | number | boolean | null) {
-  if (!/^[A-Za-z0-9_.-]{1,100}$/.test(key)) throw new Error(`Unsupported OpenSearch metadata filter key: ${key}`)
-  return { term: { [`metadata.${key}`]: value } }
+  if (!/^[A-Za-z0-9_.-]{1,100}$/.test(key)) {
+    throw new Error(`Unsupported OpenSearch metadata filter key: ${key}`)
+  }
+  return {
+    nested: {
+      path: 'facets',
+      query: {
+        bool: {
+          filter: [
+            { term: { 'facets.key': key } },
+            { term: { 'facets.value': facetValue(value) } },
+          ],
+        },
+      },
+    },
+  }
 }
 
 function toResult(hit: SearchHit): KnowledgeSearchResult | null {
@@ -99,7 +88,7 @@ export class OpenSearchKnowledgeSearchProvider implements KnowledgeSearchProvide
   readonly providerKey = 'opensearch'
 
   async search(request: KnowledgeSearchRequest): Promise<KnowledgeSearchResponse> {
-    const settings = config()
+    const { knowledgeIndex } = getOpenSearchConnection()
     const limit = boundedLimit(request.limit)
     const from = cursorOffset(request.cursor)
     const lexical = request.lexical !== false
@@ -137,12 +126,9 @@ export class OpenSearchKnowledgeSearchProvider implements KnowledgeSearchProvide
         }
       : { bool: { filter: filters } }
 
-    const response = await fetch(`${settings.endpoint}/${encodeURIComponent(settings.index)}/_search`, {
+    const response = await openSearchRequest(`/${encodeURIComponent(knowledgeIndex)}/_search`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(settings.authorization ? { authorization: settings.authorization } : {}),
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         from,
         size: limit,
@@ -150,7 +136,6 @@ export class OpenSearchKnowledgeSearchProvider implements KnowledgeSearchProvide
         query,
         _source: ['projectId', 'objectType', 'objectId', 'label', 'description', 'href', 'metadata'],
       }),
-      cache: 'no-store',
     })
 
     if (!response.ok) {
