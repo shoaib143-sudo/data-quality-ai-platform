@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeGovernanceReadAgent, GOVERNANCE_READ_AGENT_KEYS } from '@/lib/agents/governance-read-agent'
+import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -52,7 +53,14 @@ export async function POST(request: Request) {
       actorUserId: user.id,
       question: question || null,
     })
-    return NextResponse.json({ accepted: true, ...result }, { status: 200 })
+    const memory = await persistGovernedAgentMemoryAndEvaluation({
+      projectId,
+      agentDefinitionId,
+      agentRunId: result.runId,
+      agentKey: result.output.agent.key,
+      output: result.output as Record<string, unknown>,
+    })
+    return NextResponse.json({ accepted: true, ...result, memory }, { status: 200 })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
