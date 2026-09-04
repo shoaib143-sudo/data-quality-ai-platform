@@ -16,17 +16,19 @@ export default async function LineagePage(){
   const supabase=await createClient()
 
   const [
-    edgeCountResult,datasetsResult,versionsResult,runsResult,assetsResult,transformationsResult,mappingsResult,
+    edgeCountResult,assetCountResult,transformationCountResult,mappingCountResult,
+    datasetsResult,versionsResult,runsResult,mappingsResult,
     termsResult,glossaryMappingsResult,stewardshipResult,certificationsResult,classificationsResult,labelsResult,
     contractsResult,contractVersionsResult,issuesResult,alertsResult,
   ]=await Promise.all([
     supabase.schema('governance').from('lineage_edges').select('id',{count:'exact',head:true}),
+    supabase.schema('governance').from('lineage_assets').select('id',{count:'exact',head:true}),
+    supabase.schema('governance').from('lineage_transformations').select('id',{count:'exact',head:true}),
+    supabase.schema('governance').from('lineage_column_mappings').select('id',{count:'exact',head:true}),
     supabase.schema('catalog').from('datasets').select('id,name,project_id').order('name'),
     supabase.schema('catalog').from('dataset_versions').select('id,dataset_id,version_number'),
     supabase.schema('profiling').from('profile_runs').select('id,dataset_version_id,status,started_at,completed_at').in('status',['COMPLETED','PARTIAL']).order('started_at',{ascending:false}).limit(1000),
-    supabase.schema('governance').from('lineage_assets').select('id,project_id,namespace,name,asset_type,dataset_id').order('last_seen_at',{ascending:false}).limit(5000),
-    supabase.schema('governance').from('lineage_transformations').select('id,source_system,name,operation,logic_language,transformation_logic,logic_hash,metadata,last_seen_at').order('last_seen_at',{ascending:false}).limit(2000),
-    supabase.schema('governance').from('lineage_column_mappings').select('id,project_id,transformation_id,source_asset_id,source_column,target_asset_id,target_column,operation,expression').order('created_at',{ascending:false}).limit(10000),
+    supabase.schema('governance').from('lineage_column_mappings').select('id,project_id,transformation_id,source_asset_id,source_column,target_asset_id,target_column,operation,expression').order('created_at',{ascending:false}).limit(200),
     supabase.schema('governance').from('glossary_terms').select('id,project_id,term,definition,domain,status,owner_user_id').order('term'),
     supabase.schema('governance').from('glossary_mappings').select('id,term_id,dataset_id,column_name,confidence,approved,approved_by'),
     supabase.schema('governance').from('stewardship_assignments').select('id,project_id,dataset_id,user_id,role,accountability,active').eq('active',true),
@@ -39,8 +41,22 @@ export default async function LineagePage(){
     supabase.schema('profiling').from('observability_alerts').select('id,project_id,dataset_id,profile_run_id,category,severity,title,status').order('last_observed_at',{ascending:false}).limit(5000),
   ])
 
-  const baseResults=[edgeCountResult,datasetsResult,versionsResult,runsResult,assetsResult,transformationsResult,mappingsResult,termsResult,glossaryMappingsResult,stewardshipResult,certificationsResult,classificationsResult,labelsResult,contractsResult,contractVersionsResult,issuesResult,alertsResult]
+  const baseResults=[edgeCountResult,assetCountResult,transformationCountResult,mappingCountResult,datasetsResult,versionsResult,runsResult,mappingsResult,termsResult,glossaryMappingsResult,stewardshipResult,certificationsResult,classificationsResult,labelsResult,contractsResult,contractVersionsResult,issuesResult,alertsResult]
   for(const result of baseResults)if(result.error)throw new Error(result.error.message)
+
+  const mappingRows=mappingsResult.data??[]
+  const assetIds=[...new Set(mappingRows.flatMap((row:any)=>[row.source_asset_id,row.target_asset_id]).filter(Boolean))] as string[]
+  const transformationIds=[...new Set(mappingRows.map((row:any)=>row.transformation_id).filter(Boolean))] as string[]
+  const [assetsResult,transformationsResult]=await Promise.all([
+    assetIds.length
+      ? supabase.schema('governance').from('lineage_assets').select('id,project_id,namespace,name,asset_type,dataset_id').in('id',assetIds)
+      : Promise.resolve({data:[],error:null}),
+    transformationIds.length
+      ? supabase.schema('governance').from('lineage_transformations').select('id,source_system,name,operation,logic_language').in('id',transformationIds)
+      : Promise.resolve({data:[],error:null}),
+  ])
+  if(assetsResult.error)throw new Error(assetsResult.error.message)
+  if(transformationsResult.error)throw new Error(transformationsResult.error.message)
 
   const datasets=new Map((datasetsResult.data??[]).map((row:any)=>[row.id,row]))
   const versions=new Map((versionsResult.data??[]).map((row:any)=>[row.id,row]))
@@ -161,7 +177,7 @@ export default async function LineagePage(){
 
   const fieldMap=new Map<string,LineageField>()
   const fieldMappings:FieldMapping[]=[]
-  for(const mapping of mappingsResult.data??[]){
+  for(const mapping of mappingRows){
     if(!mapping.source_asset_id||!mapping.target_asset_id||!mapping.source_column||!mapping.target_column)continue
     const sourceAsset=assets.get(mapping.source_asset_id)
     const targetAsset=assets.get(mapping.target_asset_id)
@@ -184,7 +200,7 @@ export default async function LineagePage(){
 
   return <main className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
     <nav className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm"><Link href="/dashboard" className="flex items-center gap-3 font-bold"><span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5"/></span>Data Governance PowerHouse</Link><div className="flex flex-wrap gap-2 text-sm"><Link href="/catalog" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Catalog</Link><Link href="/glossary" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Glossary</Link><Link href="/data-quality" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Data Quality</Link><Link href="/lineage/impact" className="rounded-xl px-3 py-2 font-semibold text-violet-600 hover:bg-violet-50">Impact analysis</Link><Link href="/lineage/ingest" className="rounded-xl bg-violet-600 px-3 py-2 font-semibold text-white">Ingest lineage</Link></div></nav>
-    <header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600"><GitBranch className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Governance Intelligence Lineage Explorer</h1><p className="mt-1 max-w-4xl text-sm text-slate-500">Trace fields end to end and overlay Data Quality, business meaning, stakeholders, classifications, certifications, contracts, issues, observability and profiling evidence in one governed view.</p></div></div></header>
-    <LineageExplorer fields={[...fieldMap.values()]} mappings={fieldMappings} edges={[]} stats={{edges:edgeCountResult.count??0,datasets:datasets.size,assets:assets.size,transformations:transformations.size,mappedColumns:fieldMappings.length}}/>
+    <header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600"><GitBranch className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Governance Intelligence Lineage Explorer</h1><p className="mt-1 max-w-4xl text-sm text-slate-500">Trace fields end to end and overlay Data Quality, business meaning, stakeholders, classifications, certifications, contracts, issues, observability and profiling evidence in one governed view. The page samples recent explicit mappings for context; complete dataset and field traversal is served through the bounded navigators.</p></div></div></header>
+    <LineageExplorer fields={[...fieldMap.values()]} mappings={fieldMappings} edges={[]} stats={{edges:edgeCountResult.count??0,datasets:datasets.size,assets:assetCountResult.count??0,transformations:transformationCountResult.count??0,mappedColumns:mappingCountResult.count??0}}/>
   </div></main>
 }
