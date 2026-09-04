@@ -9,8 +9,8 @@ function integer(value: unknown, fallback: number) {
   return Number.isInteger(parsed) ? parsed : fallback
 }
 function stringList(value: unknown) {
-  if (Array.isArray(value)) return [...new Set(value.map((item) => text(item)).filter(Boolean))]
-  if (typeof value === 'string') return [...new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean))]
+  if (Array.isArray(value)) return [...new Set(value.map((item) => text(item)).filter(Boolean))].slice(0, 50)
+  if (typeof value === 'string') return [...new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean))].slice(0, 50)
   return []
 }
 
@@ -30,7 +30,8 @@ export async function POST(request: Request) {
       changeType,
       changeSummary: text(body.changeSummary) || null,
       affectedColumns: stringList(body.affectedColumns),
-      maxDepth: integer(body.maxDepth, 5),
+      maxDepth: integer(body.maxDepth, 4),
+      maxEdges: integer(body.maxEdges, 240),
       actorUserId: user.id,
     })
 
