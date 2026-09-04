@@ -25,7 +25,7 @@ SELECT
   JSONExtractString(payload_json, 'agentRunId') AS agent_run_id,
   JSONExtractString(payload_json, 'evaluatorType') AS evaluator_type,
   JSONExtractString(payload_json, 'evaluatorVersion') AS evaluator_version,
-  nullIf(JSONExtractFloat(payload_json, 'score'), 0) AS score,
+  if(JSONHas(payload_json, 'score'), toNullable(JSONExtractFloat(payload_json, 'score')), CAST(NULL, 'Nullable(Float64)')) AS score,
   JSONExtractRaw(payload_json, 'dimensions') AS dimensions_json,
   occurred_at
 FROM analytics_events
@@ -60,7 +60,7 @@ SELECT
   JSONExtractString(payload_json, 'memoryType') AS memory_type,
   JSONExtractString(payload_json, 'memoryKey') AS memory_key,
   JSONExtractString(payload_json, 'status') AS status,
-  nullIf(JSONExtractFloat(payload_json, 'confidence'), 0) AS confidence,
+  if(JSONHas(payload_json, 'confidence'), toNullable(JSONExtractFloat(payload_json, 'confidence')), CAST(NULL, 'Nullable(Float64)')) AS confidence,
   parseDateTime64BestEffortOrNull(JSONExtractString(payload_json, 'expiresAt'), 3, 'UTC') AS expires_at,
   occurred_at
 FROM analytics_events
