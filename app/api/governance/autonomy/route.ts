@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { createAdminClient } from '@/lib/supabase/admin'
 import {
   applyPredictiveRiskGovernedActions,
   executeApprovedGovernedAction,
@@ -16,6 +17,18 @@ function text(value: unknown) {
 function number(value: unknown) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+async function requireActionInProject(actionId: string, projectId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('governance').from('autonomy_actions')
+    .select('id,project_id,status')
+    .eq('id', actionId)
+    .eq('project_id', projectId)
+    .maybeSingle()
+  if (error) throw new Error(`Unable to validate autonomy action project: ${error.message}`)
+  if (!data) return null
+  return data
 }
 
 export async function GET(request: Request) {
@@ -49,16 +62,16 @@ export async function POST(request: Request) {
     if (operation === 'EXECUTE_APPROVED') {
       const actionId = text(body?.actionId ?? body?.action_id)
       if (!actionId) return NextResponse.json({ error: 'actionId is required.' }, { status: 400 })
+      if (!(await requireActionInProject(actionId, projectId))) return NextResponse.json({ error: 'Autonomy action was not found in this project.' }, { status: 404 })
       const action = await executeApprovedGovernedAction(actionId, user.id)
-      if (action.project_id !== projectId) return NextResponse.json({ error: 'Autonomy action belongs to another project.' }, { status: 403 })
       return NextResponse.json({ accepted: true, action })
     }
 
     if (operation === 'ROLLBACK') {
       const actionId = text(body?.actionId ?? body?.action_id)
       if (!actionId) return NextResponse.json({ error: 'actionId is required.' }, { status: 400 })
+      if (!(await requireActionInProject(actionId, projectId))) return NextResponse.json({ error: 'Autonomy action was not found in this project.' }, { status: 404 })
       const action = await rollbackGovernedAction(actionId, user.id)
-      if (action.project_id !== projectId) return NextResponse.json({ error: 'Autonomy action belongs to another project.' }, { status: 403 })
       return NextResponse.json({ accepted: true, action })
     }
 
