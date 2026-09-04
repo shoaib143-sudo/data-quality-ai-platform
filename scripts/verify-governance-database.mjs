@@ -39,6 +39,13 @@ if (semanticPosture.anonymous_execute === true || semanticPosture.match_security
 }
 console.log('PASS semantic governance vector, index, RLS and RPC posture')
 
+const { count: lineageExecutionRequests, error: lineageExecutionError } = await supabase
+  .schema('governance')
+  .from('lineage_change_execution_requests')
+  .select('id', { count: 'exact', head: true })
+if (lineageExecutionError) throw new Error(`Unable to verify lineage execution handoff table: ${lineageExecutionError.message}`)
+console.log(`PASS governed lineage execution handoff table -> ${lineageExecutionRequests ?? 0} persisted requests`)
+
 for (const project of projects ?? []) {
   const { data: contractResult, error: contractError } = await supabase.schema('governance').rpc('run_platform_contract_checks', { p_project_id: project.id })
   if (contractError) throw new Error(`Platform contract checks failed to execute for ${project.name}: ${contractError.message}`)
