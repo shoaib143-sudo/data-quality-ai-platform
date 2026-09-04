@@ -29,7 +29,7 @@ const checks = [
     'applyAllPredictiveRiskGovernedActions',
     "claimed.action_key !== 'CREATE_GOVERNANCE_ISSUE'",
     "workflow.status !== 'APPROVED'",
-    "policy.rollback_strategy !== 'CLOSE_CREATED_ISSUE'",
+    "policyRaw.rollback_strategy !== 'CLOSE_CREATED_ISSUE'",
     "idempotencyKey: `predictive-risk-review:${prediction.id}`",
     "status: 'CLOSED'",
     'production_source_mutation: false',
