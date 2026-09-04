@@ -4,8 +4,12 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { WorkflowManager } from './workflow-manager'
 
-export default async function WorkflowsPage(){
+type WorkflowsPageProps={searchParams:Promise<{instanceId?:string|string[]}>}
+
+export default async function WorkflowsPage({searchParams}:WorkflowsPageProps){
   await requireUser()
+  const params=await searchParams
+  const selectedInstanceId=Array.isArray(params.instanceId)?params.instanceId[0]??'':params.instanceId??''
   const supabase=await createClient()
   const [projects,definitions,instances,outcomes,learning]=await Promise.all([
     supabase.schema('app').from('projects').select('id,name').order('name'),
@@ -15,6 +19,15 @@ export default async function WorkflowsPage(){
     supabase.schema('governance').from('profiling_recommendation_learning').select('id,project_id,workflow_instance_id,recommendation_action,status,effective,quality_score_delta,high_severity_findings_delta,observed_at').order('observed_at',{ascending:false,nullsFirst:false}).limit(500),
   ])
   for(const result of [projects,definitions,instances,outcomes,learning])if(result.error)throw new Error(result.error.message)
+
+  const selectedInstance=selectedInstanceId?(instances.data??[]).find(instance=>instance.id===selectedInstanceId):null
+  const selectedProjectId=selectedInstance?.project_id??''
+  const orderedProjects=selectedProjectId
+    ? [...(projects.data??[])].sort((left,right)=>Number(right.id===selectedProjectId)-Number(left.id===selectedProjectId))
+    : projects.data??[]
+  const orderedInstances=selectedInstanceId
+    ? [...(instances.data??[])].sort((left,right)=>Number(right.id===selectedInstanceId)-Number(left.id===selectedInstanceId))
+    : instances.data??[]
 
   const remediationIssueIds:string[]=Array.from(new Set<string>((outcomes.data??[]).flatMap((outcome)=>
     Array.isArray(outcome.remediation_issue_ids)
@@ -32,5 +45,5 @@ export default async function WorkflowsPage(){
     .sort((left,right)=>new Date(right.updated_at??0).getTime()-new Date(left.updated_at??0).getTime())
     .slice(0,500)
 
-  return <main className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"><nav className="mb-6 flex items-center justify-between rounded-2xl border bg-white px-5 py-3 shadow-sm"><Link href="/dashboard" className="flex items-center gap-3 font-bold"><span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-600 text-white"><Layers3 className="h-5 w-5"/></span>Data Governance PowerHouse</Link><Link href="/stewardship" className="text-sm font-semibold text-violet-600">Stewardship</Link></nav><header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600"><GitBranch className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Governance Workflows</h1><p className="mt-1 text-sm text-slate-500">Versioned, capability-driven approvals with governed profiling remediation, automatic re-profile verification, and recommendation learning.</p></div></div></header><WorkflowManager projects={projects.data??[]} definitions={definitions.data??[]} instances={instances.data??[]} outcomes={outcomes.data??[]} learning={learning.data??[]} issues={issues}/></div></main>
+  return <main className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"><nav className="mb-6 flex items-center justify-between rounded-2xl border bg-white px-5 py-3 shadow-sm"><Link href="/dashboard" className="flex items-center gap-3 font-bold"><span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-600 text-white"><Layers3 className="h-5 w-5"/></span>Data Governance PowerHouse</Link><Link href="/stewardship" className="text-sm font-semibold text-violet-600">Stewardship</Link></nav><header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600"><GitBranch className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Governance Workflows</h1><p className="mt-1 text-sm text-slate-500">Versioned, capability-driven approvals with governed profiling remediation, automatic re-profile verification, and recommendation learning.</p>{selectedInstance?<p className="mt-2 text-xs font-semibold text-violet-600">Focused workflow instance {selectedInstance.id}</p>:null}</div></div></header><WorkflowManager projects={orderedProjects} definitions={definitions.data??[]} instances={orderedInstances} outcomes={outcomes.data??[]} learning={learning.data??[]} issues={issues}/></div></main>
 }
