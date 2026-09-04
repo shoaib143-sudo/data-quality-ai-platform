@@ -117,7 +117,15 @@ const recoverySafeguards = [
   [/pg_dump/, 'logical backup creation'],
   [/pg_restore/, 'isolated restore execution'],
   [/vectorExtension/, 'pgvector recovery validation'],
+  [/semanticRegistry/, 'semantic registry recovery validation'],
+  [/auditChainValid/, 'audit chain recovery validation'],
   [/catalogDatasets[\s\S]*profileRuns[\s\S]*governanceTables/, 'critical restored data validation'],
+  [/RECOVERY_PROJECT_ID/, 'project-scoped recovery evidence'],
+  [/createHash\('sha256'\)/, 'backup checksum evidence'],
+  [/backup_restore_drills/, 'durable recovery drill registry write'],
+  [/status:\s*'PASSED'/, 'successful drill evidence persistence'],
+  [/status:\s*'FAILED'/, 'failed drill evidence persistence'],
+  [/measuredRtoMinutes/, 'measured recovery time evidence'],
 ]
 for (const [pattern, label] of recoverySafeguards) {
   if (!pattern.test(recoveryDrill)) throw new Error(`Recovery drill safeguard contract failed: ${label} is missing.`)
