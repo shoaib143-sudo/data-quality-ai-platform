@@ -1,32 +1,19 @@
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { loadJdbcRows, parseJdbcTableReference } from '@/lib/connectors/jdbc'
+import { jdbcEngineFromUrl, loadJdbcRows, parseJdbcTableReference } from '@/lib/connectors/jdbc'
 import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
 
 type RecordValue = Record<string, unknown>
-
-function record(value: unknown): RecordValue {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as RecordValue : {}
-}
-
-function stringValue(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-function firstString(source: RecordValue, keys: string[]) {
-  for (const key of keys) {
-    const value = stringValue(source[key])
-    if (value) return value
-  }
-  return null
-}
-
+function record(value: unknown): RecordValue { return value && typeof value === 'object' && !Array.isArray(value) ? value as RecordValue : {} }
+function stringValue(value: unknown) { return typeof value === 'string' && value.trim() ? value.trim() : null }
+function firstString(source: RecordValue, keys: string[]) { for (const key of keys) { const value = stringValue(source[key]); if (value) return value } return null }
+function safeIdentifier(value:string){return /^[A-Za-z_][A-Za-z0-9_$#@-]*$/.test(value)}
 function inferType(values: unknown[], declared?: string | null) {
   const type = declared?.toLowerCase() ?? ''
   if (/bool/.test(type)) return 'boolean'
   if (/date|time|timestamp/.test(type)) return 'date'
   if (/int|decimal|numeric|real|double|float|number|money/.test(type)) return 'number'
-  if (/char|text|string|uuid|json|xml/.test(type)) return 'string'
+  if (/char|text|string|uuid|json|xml|variant/.test(type)) return 'string'
   const nonNull = values.filter((value) => value !== null && value !== undefined && value !== '')
   if (nonNull.length === 0) return 'unknown'
   if (nonNull.every((value) => typeof value === 'boolean' || /^(true|false)$/i.test(String(value)))) return 'boolean'
@@ -34,31 +21,16 @@ function inferType(values: unknown[], declared?: string | null) {
   if (nonNull.every((value) => !Number.isNaN(Date.parse(String(value))) && /^\d{4}-\d{2}-\d{2}/.test(String(value)))) return 'date'
   return 'string'
 }
-
-function stableHash(value: unknown) {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
-}
+function stableHash(value: unknown) { return createHash('sha256').update(JSON.stringify(value)).digest('hex') }
 
 export async function executeJdbcProfileDataset(datasetVersionId: string, profilingRunId: string) {
   const supabase = createAdminClient()
-  const { data: datasetVersionRows, error: versionError } = await supabase
-    .schema('catalog')
-    .from('dataset_versions')
-    .select('id, metadata, source_uri, dataset_id')
-    .eq('id', datasetVersionId)
-    .limit(1)
+  const { data: datasetVersionRows, error: versionError } = await supabase.schema('catalog').from('dataset_versions').select('id, metadata, source_uri, dataset_id').eq('id', datasetVersionId).limit(1)
   if (versionError) throw new Error(`Unable to load JDBC dataset version: ${versionError.message}`)
   const datasetVersion = datasetVersionRows?.[0]
   if (!datasetVersion) throw new Error(`Unable to load JDBC dataset version: ${datasetVersionId} was not found.`)
 
-  const { data: executionSourceRows, error: executionSourceError } = await supabase
-    .schema('profiling')
-    .from('dataset_execution_sources')
-    .select('source_type, source_uri, execution_config, active, updated_at')
-    .eq('dataset_version_id', datasetVersionId)
-    .eq('active', true)
-    .order('updated_at', { ascending: false })
-    .limit(1)
+  const { data: executionSourceRows, error: executionSourceError } = await supabase.schema('profiling').from('dataset_execution_sources').select('source_type, source_uri, execution_config, active, updated_at').eq('dataset_version_id', datasetVersionId).eq('active', true).order('updated_at', { ascending: false }).limit(1)
   if (executionSourceError) throw new Error(`Unable to load JDBC execution source: ${executionSourceError.message}`)
   const executionSource = executionSourceRows?.[0]
   if (!executionSource || String(executionSource.source_type).toUpperCase() !== 'JDBC') throw new Error('JDBC dataset execution source is not active.')
@@ -70,29 +42,28 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
   const jdbcUrl = firstString(metadata, ['jdbc_url', 'jdbcUrl', 'url'])
   const credentialRef = firstString(metadata, ['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
   const parsedReference = parseJdbcTableReference(stringValue(executionSource.source_uri) ?? stringValue(datasetVersion.source_uri))
+  const catalog = firstString(metadata,['catalog','catalog_name','catalogName','database','database_name','databaseName']) ?? parsedReference?.catalog ?? null
   const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? parsedReference?.schema ?? 'public'
   const table = firstString(metadata, ['table', 'table_name', 'tableName']) ?? parsedReference?.table
-  if (!jdbcUrl || !credentialRef || !table || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(schema) || !/^[A-Za-z_][A-Za-z0-9_$]*$/.test(table)) throw new Error('JDBC dataset source configuration is incomplete or invalid.')
+  if (!jdbcUrl || !credentialRef || !table || !safeIdentifier(schema) || !safeIdentifier(table) || (catalog && !safeIdentifier(catalog))) throw new Error('JDBC dataset source configuration is incomplete or invalid.')
 
   const sampling = await resolveSamplingPolicy(supabase, datasetVersionId, 1000)
-  const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, sampling.loadLimit)
+  const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table, catalog }, sampling.loadLimit)
   const sampled = applySamplingPolicy(loaded.rows as Record<string, unknown>[], loaded.rowCount ?? loaded.rows.length, sampling)
   const sampledRows = sampled.rows
   const metadataColumns = Array.isArray(versionMetadata.columns) ? versionMetadata.columns : []
-  const declared = new Map(metadataColumns.map((column) => {
-    const item = record(column)
-    return [firstString(item, ['name', 'column_name', 'columnName']), firstString(item, ['data_type', 'physical_type', 'logical_type', 'type'])] as const
-  }).filter(([name]) => Boolean(name)))
+  const declared = new Map(metadataColumns.map((column) => { const item = record(column); return [firstString(item, ['name', 'column_name', 'columnName']), firstString(item, ['data_type', 'physical_type', 'logical_type', 'type'])] as const }).filter(([name]) => Boolean(name)))
   const names = Array.from(new Set([...metadataColumns.map((column) => firstString(record(column), ['name', 'column_name', 'columnName'])).filter((name): name is string => Boolean(name)), ...loaded.columns.map((column) => column.name), ...sampledRows.flatMap((row) => Object.keys(row))]))
   const columns = names.map((name, index) => {
     const values = sampledRows.map((row) => row[name])
     const nullCount = values.filter((value) => value === null || value === undefined).length
     const distinct = new Set(values.filter((value) => value !== null && value !== undefined).map((value) => typeof value === 'string' ? value.trim() : JSON.stringify(value)))
+    const connectorColumn=loaded.columns.find((column) => column.name === name)
     return {
       name,
       ordinal_position: index + 1,
-      source_type: declared.get(name) ?? loaded.columns.find((column) => column.name === name)?.type ?? null,
-      inferred_type: inferType(values, declared.get(name) ?? loaded.columns.find((column) => column.name === name)?.type),
+      source_type: declared.get(name) ?? connectorColumn?.type ?? null,
+      inferred_type: inferType(values, declared.get(name) ?? connectorColumn?.type),
       total_count: values.length,
       non_null_count: values.length - nullCount,
       null_count: nullCount,
@@ -100,10 +71,12 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
       zero_count: values.filter((value) => value === 0 || value === '0').length,
       distinct_count: distinct.size,
       distinct_percentage: values.length ? distinct.size / values.length * 100 : 0,
-      metadata: { profiling_sampled: true, profiling_sample_size: sampledRows.length, profiling_row_count: sampled.sourceRowCount },
+      metadata: { profiling_sampled: true, profiling_sample_size: sampledRows.length, profiling_row_count: sampled.sourceRowCount, connector_column:connectorColumn??null },
     }
   })
-  const schemaSnapshot = { row_count: sampled.sourceRowCount, column_count: columns.length, source_access: { mode: 'source_rows', connector: { kind: 'jdbc', schema, table }, sampled_rows: sampled.sampledRows, sampling_policy: sampled.policy, warnings: sampled.warnings }, columns }
+  const connector={kind:'jdbc',engine:jdbcEngineFromUrl(jdbcUrl),catalog,schema,table}
+  const warnings=[...loaded.warnings,...sampled.warnings]
+  const schemaSnapshot = { row_count: sampled.sourceRowCount, column_count: columns.length, source_access: { mode: 'source_rows', connector, sampled_rows: sampled.sampledRows, sampling_policy: sampled.policy, warnings }, columns }
   const schemaHash = stableHash(columns.map((column) => ({ name: column.name, ordinal_position: column.ordinal_position, source_type: column.source_type, inferred_type: column.inferred_type })))
 
   const { error: deleteColumnsError } = await supabase.schema('profiling').from('profile_columns').delete().eq('profile_run_id', profilingRunId)
