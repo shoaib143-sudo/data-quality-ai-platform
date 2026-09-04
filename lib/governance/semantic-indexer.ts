@@ -55,6 +55,23 @@ type ProfileFindingRow = {
   recommendation: Record<string, unknown> | null
 }
 
+type QualityIncidentRow = {
+  id: string
+  dataset_id: string | null
+  dataset_version_id: string | null
+  profile_run_id: string | null
+  finding_id: string | null
+  quality_rule_run_id: string | null
+  title: string
+  description: string | null
+  severity: string
+  status: string
+  due_at: string | null
+  resolution_summary: string | null
+  resolution_evidence: Record<string, unknown> | null
+  resolved_at: string | null
+}
+
 type ExistingEmbeddingRow = {
   id: string
   object_type: string
@@ -66,6 +83,7 @@ const MANAGED_SEMANTIC_TYPES = [
   'DATASET',
   'COLUMN',
   'FINDING',
+  'QUALITY_INCIDENT',
   'GLOSSARY_TERM',
   'POLICY',
   'LINEAGE_TRANSFORMATION',
@@ -89,7 +107,7 @@ function batches<T>(values: T[], size = FILTER_BATCH_SIZE) {
 
 export async function collectProjectSemanticCandidates(projectId: string): Promise<IndexCandidate[]> {
   const admin = createAdminClient()
-  const [datasets, terms, policies, transformations] = await Promise.all([
+  const [datasets, terms, policies, transformations, issues] = await Promise.all([
     admin
       .schema('catalog')
       .from('datasets')
@@ -110,6 +128,11 @@ export async function collectProjectSemanticCandidates(projectId: string): Promi
       .from('lineage_transformations')
       .select('id,external_id,source_system,name,operation,logic_language,transformation_logic,metadata')
       .eq('project_id', projectId),
+    admin
+      .schema('governance')
+      .from('issues')
+      .select('id,dataset_id,dataset_version_id,profile_run_id,finding_id,quality_rule_run_id,title,description,severity,status,due_at,resolution_summary,resolution_evidence,resolved_at')
+      .eq('project_id', projectId),
   ])
 
   for (const [label, result] of [
@@ -117,11 +140,13 @@ export async function collectProjectSemanticCandidates(projectId: string): Promi
     ['glossary terms', terms],
     ['classification policies', policies],
     ['lineage transformations', transformations],
+    ['quality incidents', issues],
   ] as const) {
     if (result.error) throw new Error(`Unable to collect semantic ${label}: ${result.error.message}`)
   }
 
   const datasetRows = (datasets.data ?? []) as DatasetRow[]
+  const issueRows = (issues.data ?? []) as QualityIncidentRow[]
   const datasetIds = datasetRows.map((dataset) => dataset.id)
   const versionRows: DatasetVersionRow[] = []
   const runRows: ProfileRunRow[] = []
@@ -262,6 +287,39 @@ export async function collectProjectSemanticCandidates(projectId: string): Promi
           finding_type: item.finding_type,
           severity: item.severity,
           confidence: item.confidence,
+        },
+      }
+    }),
+    ...issueRows.map((item) => {
+      const dataset = item.dataset_id ? datasetById.get(item.dataset_id) : undefined
+      const version = item.dataset_version_id ? versionById.get(item.dataset_version_id) : undefined
+      return {
+        objectType: 'QUALITY_INCIDENT',
+        objectKey: item.id,
+        objectId: item.id,
+        content: compact([
+          item.title,
+          item.description,
+          dataset ? `Dataset: ${dataset.name}` : null,
+          version ? `Dataset version: ${version.version_number}` : null,
+          `Severity: ${item.severity}`,
+          `Status: ${item.status}`,
+          item.due_at ? `Due: ${item.due_at}` : null,
+          item.resolution_summary ? `Resolution: ${item.resolution_summary}` : null,
+          jsonSummary(item.resolution_evidence, 'Resolution evidence'),
+        ]),
+        metadata: {
+          dataset_id: item.dataset_id,
+          dataset_name: dataset?.name ?? null,
+          dataset_version_id: item.dataset_version_id,
+          dataset_version: version?.version_number ?? null,
+          profile_run_id: item.profile_run_id,
+          finding_id: item.finding_id,
+          quality_rule_run_id: item.quality_rule_run_id,
+          severity: item.severity,
+          status: item.status,
+          due_at: item.due_at,
+          resolved_at: item.resolved_at,
         },
       }
     }),
