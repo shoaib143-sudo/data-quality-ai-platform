@@ -37,6 +37,10 @@ type SpecialistContext = {
   knowledgeDocuments: Array<Record<string, any>>
   glossaryTerms: Array<Record<string, any>>
   regulatoryApplicability: Array<Record<string, any>>
+  lineageAssets: Array<Record<string, any>>
+  lineageTransformations: Array<Record<string, any>>
+  lineageColumnMappings: Array<Record<string, any>>
+  lineageTransformationEdges: Array<Record<string, any>>
   lineageEdgeCount: number
 }
 
@@ -119,6 +123,10 @@ async function loadContext(admin: ReturnType<typeof createAdminClient>, projectI
     knowledgeDocumentsResult,
     glossaryResult,
     regulatoryResult,
+    lineageAssetsResult,
+    lineageTransformationsResult,
+    lineageColumnMappingsResult,
+    lineageTransformationEdgesResult,
     lineageCountResult,
   ] = await Promise.all([
     admin.schema('catalog').from('datasets').select('id,name,business_domain,data_source_id,source_identifier,created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(500),
@@ -135,6 +143,10 @@ async function loadContext(admin: ReturnType<typeof createAdminClient>, projectI
     admin.schema('governance').from('knowledge_documents').select('id,document_key,document_type,title,summary,domain,jurisdiction,status,source_kind,source_url,metadata').eq('project_id', projectId).eq('status', 'ACTIVE').limit(200),
     admin.schema('governance').from('glossary_terms').select('id,term,definition,domain,synonyms,status').eq('project_id', projectId).limit(500),
     admin.schema('governance').from('regulatory_applicability').select('id,regulation_document_id,scope_type,scope_key,applicability_status,rationale,evidence,metadata').eq('project_id', projectId).limit(500),
+    admin.schema('governance').from('lineage_assets').select('id,namespace,name,asset_type,dataset_id,metadata,last_seen_at').eq('project_id', projectId).order('last_seen_at', { ascending: false }).limit(1000),
+    admin.schema('governance').from('lineage_transformations').select('id,integration_id,external_id,source_system,name,operation,logic_language,logic_hash,metadata,last_seen_at').eq('project_id', projectId).order('last_seen_at', { ascending: false }).limit(300),
+    admin.schema('governance').from('lineage_column_mappings').select('id,transformation_id,source_asset_id,source_column,target_asset_id,target_column,operation,expression,metadata,created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(500),
+    admin.schema('governance').from('lineage_edges').select('id,source_type,source_id,target_type,target_id,relationship,transformation_id,metadata,created_at').eq('project_id', projectId).not('transformation_id', 'is', null).order('created_at', { ascending: false }).limit(300),
     admin.schema('governance').from('lineage_edges').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
   ])
 
@@ -142,7 +154,9 @@ async function loadContext(admin: ReturnType<typeof createAdminClient>, projectI
     ['datasets', datasetsResult], ['scorecards', scorecardsResult], ['CDEs', cdesResult], ['CDE mappings', cdeMappingsResult],
     ['accountability', accountabilityResult], ['contracts', contractsResult], ['certifications', certificationsResult], ['issues', issuesResult],
     ['incidents', incidentsResult], ['remediation knowledge', remediationResult], ['alerts', alertsResult], ['knowledge documents', knowledgeDocumentsResult],
-    ['glossary terms', glossaryResult], ['regulatory applicability', regulatoryResult], ['lineage edges', lineageCountResult],
+    ['glossary terms', glossaryResult], ['regulatory applicability', regulatoryResult], ['lineage assets', lineageAssetsResult],
+    ['lineage transformations', lineageTransformationsResult], ['lineage column mappings', lineageColumnMappingsResult],
+    ['lineage transformation edges', lineageTransformationEdgesResult], ['lineage edges', lineageCountResult],
   ] as const) {
     if (result.error) throw new Error(`Unable to load specialist agent ${label}: ${result.error.message}`)
   }
@@ -198,6 +212,10 @@ async function loadContext(admin: ReturnType<typeof createAdminClient>, projectI
     knowledgeDocuments: knowledgeDocumentsResult.data ?? [],
     glossaryTerms: glossaryResult.data ?? [],
     regulatoryApplicability: regulatoryResult.data ?? [],
+    lineageAssets: lineageAssetsResult.data ?? [],
+    lineageTransformations: lineageTransformationsResult.data ?? [],
+    lineageColumnMappings: lineageColumnMappingsResult.data ?? [],
+    lineageTransformationEdges: lineageTransformationEdgesResult.data ?? [],
     lineageEdgeCount: Number(lineageCountResult.count ?? 0),
   }
 }
@@ -295,6 +313,7 @@ function roleEvidence(agentKey: GovernanceReadAgentKey, ctx: SpecialistContext) 
       focus: 'architecture_lineage_contract_and_change_risk',
       observations: [
         `${ctx.datasets.length} dataset(s), ${ctx.lineageEdgeCount} technical lineage edge(s), and ${ctx.contracts.length} data contract(s) form the current governed architecture.`,
+        `${ctx.lineageTransformations.length} transformation(s) and ${ctx.lineageColumnMappings.length} field-level lineage mapping(s) are available as governed technical evidence.`,
         `${schemaAlerts.length} open schema-drift alert(s) require compatibility review.`,
         `${ctx.cdeMappings.length} CDE-to-column mapping(s) connect business criticality to physical data.`,
         `${ctx.comparisons.length} persisted profile comparison(s) provide schema/metric change evidence.`,
@@ -303,7 +322,17 @@ function roleEvidence(agentKey: GovernanceReadAgentKey, ctx: SpecialistContext) 
         ...(schemaAlerts.length ? [{ priority: 'HIGH', action: 'Review schema drift against active contracts and downstream lineage before release.', evidence: schemaAlerts.slice(0, 20).map((row) => row.id) }] : []),
         ...(!ctx.contracts.length ? [{ priority: 'MEDIUM', action: 'Introduce contracts for critical producer/consumer boundaries.', evidence: [] }] : []),
       ],
-      evidence: { schemaAlerts: schemaAlerts.slice(0, 50), contracts: ctx.contracts.slice(0, 50), cdeMappings: ctx.cdeMappings.slice(0, 100), profileComparisons: ctx.comparisons.slice(0, 30), lineageEdgeCount: ctx.lineageEdgeCount },
+      evidence: {
+        schemaAlerts: schemaAlerts.slice(0, 50),
+        contracts: ctx.contracts.slice(0, 50),
+        cdeMappings: ctx.cdeMappings.slice(0, 100),
+        profileComparisons: ctx.comparisons.slice(0, 30),
+        lineageEdgeCount: ctx.lineageEdgeCount,
+        lineageAssets: ctx.lineageAssets.slice(0, 100),
+        lineageTransformations: ctx.lineageTransformations.slice(0, 50),
+        lineageColumnMappings: ctx.lineageColumnMappings.slice(0, 100),
+        lineageTransformationEdges: ctx.lineageTransformationEdges.slice(0, 50),
+      },
     }
   }
 
@@ -314,6 +343,7 @@ function roleEvidence(agentKey: GovernanceReadAgentKey, ctx: SpecialistContext) 
       focus: 'root_cause_hypothesis_and_prior_case_reuse',
       observations: [
         `${openIncidents.length} open incident(s), ${openIssues.length} open issue(s), ${ctx.anomalies.length} anomaly signal(s), and ${failedRules.length} failed rule result(s) are available for investigation.`,
+        `${ctx.lineageTransformations.length} transformation(s), ${ctx.lineageColumnMappings.length} field-level mapping(s), and ${ctx.lineageTransformationEdges.length} transformation edge(s) are available for bounded root-cause tracing.`,
         `${usefulRemediation.length} prior remediation case(s) are marked WORKED and ${failedRemediation.length} are marked FAILED.`,
         `${failedProfiles.length} failed and ${partialProfiles.length} partial profile run(s) appear in the bounded history.`,
       ],
@@ -321,9 +351,20 @@ function roleEvidence(agentKey: GovernanceReadAgentKey, ctx: SpecialistContext) 
         ...(freshnessAlerts.length ? [{ confidence: 0.75, hypothesis: 'A freshness/SLA breach may be contributing to downstream quality risk.', evidence: freshnessAlerts.slice(0, 10).map((row) => row.id) }] : []),
         ...(failedRules.length ? [{ confidence: 0.8, hypothesis: 'One or more governed quality controls are currently violated.', evidence: failedRules.slice(0, 20).map((row) => row.id) }] : []),
         ...(ctx.anomalies.length ? [{ confidence: 0.7, hypothesis: 'Profile metric drift may explain a change in observed data behavior.', evidence: ctx.anomalies.slice(0, 20).map((row) => row.id) }] : []),
+        ...(ctx.lineageColumnMappings.length ? [{ confidence: 0.65, hypothesis: 'A transformation or mapped source field may contribute to the observed downstream behavior; verify the persisted expressions before attribution.', evidence: ctx.lineageColumnMappings.slice(0, 20).map((row) => row.id) }] : []),
       ],
       recommendations: usefulRemediation.slice(0, 10).map((row) => ({ priority: 'MEDIUM', action: row.reusable_guidance || row.remediation_action, evidence: [row.id], priorOutcome: row.outcome_status, confidence: row.confidence })),
-      evidence: { incidents: ctx.incidents.slice(0, 30), issues: ctx.issues.slice(0, 30), anomalies: ctx.anomalies.slice(0, 50), failedRules: failedRules.slice(0, 50), remediationKnowledge: ctx.remediationKnowledge.slice(0, 30) },
+      evidence: {
+        incidents: ctx.incidents.slice(0, 30),
+        issues: ctx.issues.slice(0, 30),
+        anomalies: ctx.anomalies.slice(0, 50),
+        failedRules: failedRules.slice(0, 50),
+        remediationKnowledge: ctx.remediationKnowledge.slice(0, 30),
+        lineageAssets: ctx.lineageAssets.slice(0, 100),
+        lineageTransformations: ctx.lineageTransformations.slice(0, 50),
+        lineageColumnMappings: ctx.lineageColumnMappings.slice(0, 100),
+        lineageTransformationEdges: ctx.lineageTransformationEdges.slice(0, 50),
+      },
     }
   }
 
@@ -374,7 +415,7 @@ function reasoningContract(agentKey: GovernanceReadAgentKey) {
     steward_agent: ['stewardship', 'glossary', 'CDEs', 'classification', 'certification', 'issues'],
     governance_analyst_agent: ['cross-domain risk', 'policy/regulation', 'quality', 'CDEs', 'certification'],
     architect_agent: ['lineage', 'contracts', 'schema/change impact', 'technical standards'],
-    investigator_agent: ['incidents', 'anomalies', 'failed controls', 'prior remediation', 'root-cause hypotheses'],
+    investigator_agent: ['incidents', 'anomalies', 'failed controls', 'prior remediation', 'root-cause hypotheses', 'field lineage'],
     executive_agent: ['portfolio health', 'risk', 'certification coverage', 'regulatory exposure', 'priorities'],
     support_agent: ['diagnostics', 'failed runs', 'alerts', 'issues/incidents', 'known remediation'],
   }[agentKey]
@@ -427,9 +468,10 @@ export async function executeGovernanceSpecialistAgent(input: {
       'governance.knowledge_documents', 'governance.critical_data_elements', 'governance.cde_mappings',
       'governance.accountability_assignments', 'governance.data_contracts', 'governance.dataset_certifications',
       'governance.issues', 'governance.observability_incidents', 'governance.remediation_knowledge',
+      'governance.lineage_assets', 'governance.lineage_transformations', 'governance.lineage_column_mappings', 'governance.lineage_edges',
       'governance.knowledge_relationships',
     ]
-    const evidenceCount = knowledgeMatches.length + graph.edges.length + ctx.alerts.length + ctx.ruleRuns.length + ctx.issues.length + ctx.incidents.length
+    const evidenceCount = knowledgeMatches.length + graph.edges.length + ctx.alerts.length + ctx.ruleRuns.length + ctx.issues.length + ctx.incidents.length + ctx.lineageTransformations.length + ctx.lineageColumnMappings.length + ctx.lineageTransformationEdges.length
     const confidence = Math.max(0.45, Math.min(0.98, 0.55 + Math.min(0.25, evidenceCount / 200) + (graph.edges.length ? 0.08 : 0) + (knowledgeMatches.length ? 0.08 : 0)))
 
     const output = {
@@ -445,7 +487,15 @@ export async function executeGovernanceSpecialistAgent(input: {
         knowledgeMatches: knowledgeMatches.length,
         graphAnchor: graph.anchor,
         graphEdges: graph.edges.length,
-        historySignals: { profileRuns: ctx.profileRuns.length, qualityRuleRuns: ctx.ruleRuns.length, comparisons: ctx.comparisons.length, anomalies: ctx.anomalies.length },
+        historySignals: {
+          profileRuns: ctx.profileRuns.length,
+          qualityRuleRuns: ctx.ruleRuns.length,
+          comparisons: ctx.comparisons.length,
+          anomalies: ctx.anomalies.length,
+          lineageTransformations: ctx.lineageTransformations.length,
+          lineageColumnMappings: ctx.lineageColumnMappings.length,
+          lineageTransformationEdges: ctx.lineageTransformationEdges.length,
+        },
       },
       observations: (specialized as any).observations ?? [],
       recommendations: (specialized as any).recommendations ?? [],
@@ -464,6 +514,7 @@ export async function executeGovernanceSpecialistAgent(input: {
         'This run is deterministic and read-only; it does not execute governance mutations.',
         'Knowledge retrieval is lexical unless the caller separately invokes semantic/hybrid search.',
         'Graph context is bounded to five hops and 100 edges.',
+        'Field-lineage evidence is bounded to the most recent 300 transformations/edges and 500 column mappings for a project.',
         'Freshness currently uses completed profiling observation time as a proxy until source-native watermark telemetry is available.',
       ],
     }
@@ -492,6 +543,8 @@ export async function executeGovernanceSpecialistAgent(input: {
         confidence,
         evidence_count: evidenceCount,
         graph_edge_count: graph.edges.length,
+        field_lineage_mapping_count: ctx.lineageColumnMappings.length,
+        transformation_count: ctx.lineageTransformations.length,
         knowledge_match_count: knowledgeMatches.length,
       },
     })
