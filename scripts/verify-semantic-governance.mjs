@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 const files = {
   search: await readFile('lib/governance/semantic-search.ts', 'utf8'),
   semanticJobs: await readFile('lib/governance/semantic-jobs.ts', 'utf8'),
+  edgeEmbedding: await readFile('supabase/functions/governance-embed/index.ts', 'utf8'),
   indexer: await readFile('lib/governance/semantic-indexer.ts', 'utf8'),
   documentIndexer: await readFile('lib/governance/semantic-document-indexer.ts', 'utf8'),
   documentContent: await readFile('lib/governance/document-content.ts', 'utf8'),
@@ -38,6 +39,9 @@ const checks = [
   [/content_hash\s*===\s*contentHash[\s\S]*metadata[\s\S]*unchanged:\s*true/.test(files.search), 'unchanged embedding reuse with metadata refresh'],
   [files.search.includes('semanticSearchByEmbedding'), 'query embedding reuse API'],
   [containsAll(files.search, ['GOVERNANCE_EMBEDDING_URL', 'GOVERNANCE_EMBEDDING_API_KEY']), 'custom governance embedding provider compatibility'],
+  [containsAll(files.search, ['DEFAULT_SUPABASE_EMBEDDING_MODEL', 'gte-small', '/functions/v1/governance-embed', 'SUPABASE_SERVICE_ROLE_KEY']), 'Supabase native governance embedding provider'],
+  [containsAll(files.edgeEmbedding, ["new Supabase.ai.Session('gte-small')", 'mean_pool: true', 'normalize: true', 'DIMENSIONS = 384']), 'Supabase Edge Runtime 384-dimensional normalized embeddings'],
+  [containsAll(files.edgeEmbedding, ['SUPABASE_SERVICE_ROLE_KEY', 'authorization !== `Bearer ${serviceRoleKey}`']), 'Supabase embedding function service-role authentication'],
   [containsAll(files.search, ['DEFAULT_GATEWAY_EMBEDDING_MODEL', 'https://ai-gateway.vercel.sh/v1/embeddings', 'VERCEL_OIDC_TOKEN', 'AI_GATEWAY_API_KEY', 'dimensions: EMBEDDING_DIMENSIONS']), 'Vercel AI Gateway embedding fallback'],
   [containsAll(files.search, ["from 'next/headers'", "incoming.get('x-vercel-oidc-token')", 'await gatewayApiKey()']), 'Vercel function request-context OIDC authentication'],
   [/normalizeEmbedding[\s\S]*Math\.sqrt[\s\S]*Number\.EPSILON/.test(files.search), 'embedding normalization and zero-vector rejection'],
