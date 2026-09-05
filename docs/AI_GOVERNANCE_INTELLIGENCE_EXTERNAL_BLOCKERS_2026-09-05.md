@@ -25,7 +25,12 @@ Tracked by GitHub issue #4.
 
 The governed lineage intake path is normalized by `lib/governance/lineage-adapters.ts` and exposed through `app/api/lineage/ingest/route.ts`.
 
-Migration `20260905034719_atomic_lineage_batch_ingestion` adds the authoritative write boundary `governance.ingest_lineage_batch_atomic(...)`.
+Migrations:
+
+- `20260905034719_atomic_lineage_batch_ingestion`
+- `20260905035122_reject_lineage_replay_payload_collisions`
+
+`governance.ingest_lineage_batch_atomic(...)` is the authoritative public write boundary. Its persistence implementation is isolated behind `governance.ingest_lineage_batch_atomic_impl(...)`, which is not executable by service-role, authenticated, anon or public callers. The service-role application credential can invoke only the replay-validating wrapper.
 
 The production persistence transaction covers:
 
@@ -37,11 +42,21 @@ The production persistence transaction covers:
 - `governance.lineage_ingestion_events`
 - `governance.audit_events`
 
-The API now normalizes source payloads and submits one RPC rather than issuing independent lineage writes. PostgreSQL rechecks `lineage.manage`, the function is service-role-only, and deterministic transaction-scoped advisory locks protect concurrent project/event retries before the idempotency lookup.
+The API normalizes source payloads and submits one RPC rather than issuing independent lineage writes. PostgreSQL rechecks `lineage.manage`, the wrapper is service-role-only, and deterministic transaction-scoped advisory locks protect concurrent project/event retries before the idempotency lookup.
 
 Rollback-only production verification exercised a complete transformation, one field mapping, one edge, one ingestion event and the batch audit. An identical retry reused the event instead of duplicating it. A deliberately failing two-event batch failed only after its first event had written intermediate state inside the RPC; the caught failure left no first-event or integration residue. This proves the deployed batch is all-or-nothing.
 
-`app/api/lineage/ingest/route.ts` requires `audit_atomic=true` and `database_capability_verified=true` from the database result. `scripts/verify-lineage-atomic-ingestion.mjs` and the Quality Gate protect the route/RPC contract.
+Replay integrity is also enforced before persistence delegation:
+
+- identical `project_id + external_event_id + payload_hash + source` retries remain idempotent
+- an existing `external_event_id` with a different SHA-256 payload hash is rejected
+- an existing `external_event_id` reused by a different source identity is rejected
+- a single submitted batch containing one event ID with different payload hashes is rejected before persistence
+- each replay hash must satisfy the 64-character lowercase hexadecimal SHA-256 contract
+
+The replay-hardening migration was compiled and exercised in a rollback-only production transaction before deployment. Identical replay, payload collision and source collision behavior all passed, and the test left zero lineage rows or implementation wrappers behind after rollback.
+
+`app/api/lineage/ingest/route.ts` requires `audit_atomic=true` and `database_capability_verified=true` from the database result. `scripts/verify-lineage-atomic-ingestion.mjs` and the Quality Gate protect atomicity, authorization, idempotency and replay-collision contracts.
 
 ### Exact missing artifact
 
