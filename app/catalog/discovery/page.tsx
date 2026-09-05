@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Layers3, Radar } from 'lucide-react'
+import { AlertTriangle, Layers3, Radar } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -22,6 +22,14 @@ type DiscoveryJobRow = {
   updated_at: string
 }
 
+function record(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function text(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : ''
+}
+
 export default async function DiscoveryPage() {
   await requireUser()
   const supabase = await createClient()
@@ -35,7 +43,7 @@ export default async function DiscoveryPage() {
     supabase
       .schema('catalog')
       .from('discovery_runs')
-      .select('id,project_id,source_id,status,assets_discovered,objects_observed,objects_added,objects_changed,objects_removed,objects_missing,objects_unchanged,catalog_revision_id,scope_version_id,consistency_mode,error_message,started_at,completed_at')
+      .select('id,project_id,source_id,status,assets_discovered,objects_observed,objects_added,objects_changed,objects_removed,objects_missing,objects_unchanged,catalog_revision_id,scope_version_id,consistency_mode,error_message,started_at,completed_at,schema_snapshot')
       .order('started_at', { ascending: false })
       .limit(200),
     supabase
@@ -49,10 +57,29 @@ export default async function DiscoveryPage() {
   if (currentAssets.error) throw new Error(`Unable to load current published catalog assets: ${currentAssets.error.message}`)
 
   const sourceRows = sources.data ?? []
+  const runRows = runs.data ?? []
   const currentAssetCounts = (currentAssets.data ?? []).reduce<Record<string, number>>((counts, asset) => {
     counts[asset.source_id] = (counts[asset.source_id] ?? 0) + 1
     return counts
   }, {})
+
+  const sourceNameById = new Map(sourceRows.map(source => [source.id, source.name]))
+  const latestRunBySource = new Map<string, (typeof runRows)[number]>()
+  for (const run of runRows) if (!latestRunBySource.has(run.source_id)) latestRunBySource.set(run.source_id, run)
+  const enrichmentBlockers = [...latestRunBySource.values()].flatMap(run => {
+    const snapshot = record(run.schema_snapshot)
+    const lineage = record(record(snapshot.enrichments).lineage)
+    if (text(lineage.status).toUpperCase() !== 'BLOCKED') return []
+    const blocker = record(lineage.blocker)
+    return [{
+      sourceId: run.source_id,
+      sourceName: sourceNameById.get(run.source_id) ?? run.source_id,
+      code: text(blocker.code) || text(snapshot.lineage_enrichment_blocker) || 'EXTERNAL_ENRICHMENT_BLOCKED',
+      resource: text(blocker.resource),
+      permission: text(blocker.permission),
+      message: text(blocker.message),
+    }]
+  })
 
   let jobs: DiscoveryJobRow[] = []
   if (sourceRows.length) {
@@ -88,7 +115,15 @@ export default async function DiscoveryPage() {
             </div>
           </div>
         </header>
-        <DiscoveryManager sources={sourceRows} runs={runs.data ?? []} jobs={jobs} currentAssetCounts={currentAssetCounts} />
+        {enrichmentBlockers.length ? <section className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm">
+          <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" /><div className="min-w-0 flex-1"><h2 className="font-black">External enrichment blockers</h2><p className="mt-1 text-sm text-amber-800">The physical catalog revision is published and remains trusted. The enrichments below are unavailable because an authoritative external dependency denied access.</p></div></div>
+          <div className="mt-4 grid gap-3">{enrichmentBlockers.map(blocker => <div key={`${blocker.sourceId}:${blocker.code}`} className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-black">{blocker.sourceName} · Lineage enrichment</p><code className="rounded bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-900">{blocker.code}</code></div>
+            <p className="mt-2 text-amber-900">{blocker.message || (blocker.resource && blocker.permission ? `Requires ${blocker.permission} on ${blocker.resource}.` : 'The authoritative provider dependency must be made accessible before this enrichment can complete.')}</p>
+            {blocker.resource || blocker.permission ? <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-amber-700"><div><dt className="inline font-bold">Resource: </dt><dd className="inline font-mono">{blocker.resource || '—'}</dd></div><div><dt className="inline font-bold">Required permission: </dt><dd className="inline font-mono">{blocker.permission || '—'}</dd></div></dl> : null}
+          </div>)}</div>
+        </section> : null}
+        <DiscoveryManager sources={sourceRows} runs={runRows} jobs={jobs} currentAssetCounts={currentAssetCounts} />
       </div>
     </main>
   )
