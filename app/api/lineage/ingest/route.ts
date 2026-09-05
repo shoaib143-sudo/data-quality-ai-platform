@@ -43,6 +43,7 @@ export async function POST(request: Request) {
 
     const sourceKey = text(body.sourceKey ?? body.source_key) || normalized.sourceSystem.toLowerCase()
     const sourceName = text(body.sourceName ?? body.source_name) || sourceKey
+    // Idempotency remains keyed by each normalized externalEventId; the atomic RPC persists TRANSFORMS_TO edges and the audit in one transaction.
     const events = normalized.events.map((event) => ({ ...event, payloadHash: hashPayload(event) }))
     const admin = createAdminClient()
     const { data, error } = await admin.schema('governance').rpc('ingest_lineage_batch_atomic', {
