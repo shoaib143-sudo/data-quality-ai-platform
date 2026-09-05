@@ -5,6 +5,7 @@ const replayProtection = fs.readFileSync('supabase/migrations/20260905035122_rej
 const edgeIdentity = fs.readFileSync('supabase/migrations/20260905040325_preserve_parallel_lineage_transformations.sql', 'utf8')
 const route = fs.readFileSync('app/api/lineage/ingest/route.ts', 'utf8')
 const discovery = fs.readFileSync('lib/catalog/discovery.ts', 'utf8')
+const discoveryPage = fs.readFileSync('app/catalog/discovery/page.tsx', 'utf8')
 const lineageEnrichment = fs.readFileSync('lib/catalog/lineage-enrichment.ts', 'utf8')
 const worker = fs.readFileSync('lib/orchestration/worker.ts', 'utf8')
 
@@ -73,5 +74,11 @@ requirePattern(lineageEnrichment, /databricksSystemAccessBlocked[\s\S]*\? 'BLOCK
 requireText(lineageEnrichment, "blocker_resource: databricksSystemAccessBlocked ? 'system.access' : null", 'Databricks blocker must name the exact source schema')
 requireText(lineageEnrichment, "blocker_permission: databricksSystemAccessBlocked ? 'USE SCHEMA' : null", 'Databricks blocker must name the required permission')
 requireText(lineageEnrichment, 'lineage_enrichment_status: status ?? snapshot.lineage_enrichment_status', 'discovery snapshot must expose final lineage status')
+
+requireText(discoveryPage, 'lineage.blocker_code', 'discovery UI must consume persisted blocker code')
+requireText(discoveryPage, 'lineage.blocker_resource', 'discovery UI must consume persisted blocker resource')
+requireText(discoveryPage, 'lineage.blocker_permission', 'discovery UI must consume persisted blocker permission')
+requireText(discoveryPage, 'lineage.blocker_detail', 'discovery UI must consume persisted blocker detail')
+requireText(discoveryPage, 'The physical catalog revision is published and remains trusted.', 'discovery UI must distinguish physical publication from enrichment blocking')
 
 console.log('Atomic lineage ingestion contracts verified.')

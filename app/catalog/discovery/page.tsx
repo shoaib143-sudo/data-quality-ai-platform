@@ -70,14 +70,14 @@ export default async function DiscoveryPage() {
     const snapshot = record(run.schema_snapshot)
     const lineage = record(record(snapshot.enrichments).lineage)
     if (text(lineage.status).toUpperCase() !== 'BLOCKED') return []
-    const blocker = record(lineage.blocker)
+    const legacyBlocker = record(lineage.blocker)
     return [{
       sourceId: run.source_id,
       sourceName: sourceNameById.get(run.source_id) ?? run.source_id,
-      code: text(blocker.code) || text(snapshot.lineage_enrichment_blocker) || 'EXTERNAL_ENRICHMENT_BLOCKED',
-      resource: text(blocker.resource),
-      permission: text(blocker.permission),
-      message: text(blocker.message),
+      code: text(lineage.blocker_code) || text(legacyBlocker.code) || text(snapshot.lineage_enrichment_blocker) || 'EXTERNAL_ENRICHMENT_BLOCKED',
+      resource: text(lineage.blocker_resource) || text(legacyBlocker.resource),
+      permission: text(lineage.blocker_permission) || text(legacyBlocker.permission),
+      message: text(lineage.blocker_detail) || text(legacyBlocker.message),
     }]
   })
 
