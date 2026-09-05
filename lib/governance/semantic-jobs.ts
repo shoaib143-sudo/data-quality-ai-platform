@@ -1,7 +1,7 @@
 import { enqueueDurableJob } from '@/lib/orchestration/queue'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const SEMANTIC_INDEX_JOB_VERSION = 'v3'
+const SEMANTIC_INDEX_JOB_VERSION = 'v4'
 
 export function semanticEmbeddingConfigured() {
   const supabaseNative = Boolean(
