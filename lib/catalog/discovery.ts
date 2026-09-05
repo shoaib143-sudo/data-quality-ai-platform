@@ -191,7 +191,7 @@ async function persistJdbcLineage(source:Source,runId:string,assets:DiscoveredAs
         if(error||!data)continue
         sourceAsset=data;assetByKey.set(dependency,data)
       }
-      const {error}=await admin.schema('governance').from('lineage_edges').upsert({project_id:source.project_id,source_type:sourceAsset.dataset_id?'DATASET':'EXTERNAL_ASSET',source_id:sourceAsset.dataset_id??sourceAsset.id,target_type:target.dataset_id?'DATASET':'EXTERNAL_ASSET',target_id:target.dataset_id??target.id,relationship:'TRANSFORMS_TO',transformation_id:t.id,metadata:{source_id:source.id,discovery_run_id:runId,operation:transformation.operation,logic_hash:transformation.logicHash,auto_discovered:true}},{onConflict:'project_id,source_type,source_id,target_type,target_id,relationship'})
+      const {error}=await admin.schema('governance').from('lineage_edges').upsert({project_id:source.project_id,source_type:sourceAsset.dataset_id?'DATASET':'EXTERNAL_ASSET',source_id:sourceAsset.dataset_id??sourceAsset.id,target_type:target.dataset_id?'DATASET':'EXTERNAL_ASSET',target_id:target.dataset_id??target.id,relationship:'TRANSFORMS_TO',transformation_id:t.id,metadata:{source_id:source.id,discovery_run_id:runId,operation:transformation.operation,logic_hash:transformation.logicHash,auto_discovered:true}},{onConflict:'project_id,source_type,source_id,target_type,target_id,relationship,transformation_id'})
       if(!error)edges+=1
     }
   }
@@ -225,7 +225,7 @@ export async function executeMetadataDiscovery(sourceId: string) {
     const { data: datasets, error: datasetsError } = await admin.schema('catalog').from('datasets').select('id').eq('data_source_id', source.id)
     if (datasetsError) throw new Error(`Unable to resolve discovery lineage datasets: ${datasetsError.message}`)
     for (const dataset of datasets ?? []) {
-      const { error: lineageError } = await admin.schema('governance').from('lineage_edges').upsert({ project_id: source.project_id, source_type: 'DATA_SOURCE', source_id: source.id, target_type: 'DATASET', target_id: dataset.id, relationship: 'DISCOVERED_SOURCE', metadata: { discovery_run_id: run.id, assets_discovered: result.assets.length, discovered_at: completedAt } }, { onConflict: 'project_id,source_type,source_id,target_type,target_id,relationship' })
+      const { error: lineageError } = await admin.schema('governance').from('lineage_edges').upsert({ project_id: source.project_id, source_type: 'DATA_SOURCE', source_id: source.id, target_type: 'DATASET', target_id: dataset.id, relationship: 'DISCOVERED_SOURCE', transformation_id: null, metadata: { discovery_run_id: run.id, assets_discovered: result.assets.length, discovered_at: completedAt } }, { onConflict: 'project_id,source_type,source_id,target_type,target_id,relationship,transformation_id' })
       if (lineageError) console.error('[metadata-discovery-lineage]', lineageError.message)
     }
     return { discoveryRunId: run.id, sourceId: source.id, assetsDiscovered: result.assets.length, transformationsDiscovered:lineage.transformations, lineageEdges:lineage.edges, snapshot: finalSnapshot }
