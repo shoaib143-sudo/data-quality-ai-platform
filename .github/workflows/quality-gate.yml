@@ -50,6 +50,8 @@ jobs:
         run: node scripts/verify-governance-document-semantic-refresh.mjs
       - name: Verify governed human review boundaries
         run: pnpm run verify:governance-reviews
+      - name: Verify governance control intelligence
+        run: pnpm run verify:control-intelligence
       - name: Verify production readiness contracts
         run: pnpm run verify:readiness
       - name: Verify provider read fallback behavior
