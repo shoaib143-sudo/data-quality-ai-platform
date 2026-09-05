@@ -15,6 +15,7 @@
     "verify:investigation-prediction": "node scripts/verify-investigation-prediction.mjs",
     "verify:governed-autonomy": "node scripts/verify-governed-autonomy.mjs",
     "verify:ai-due-diligence": "node scripts/verify-ai-governance-due-diligence.mjs",
+    "verify:governance-reviews": "node scripts/verify-governed-review-boundaries.mjs",
     "verify:readiness": "node scripts/verify-production-readiness.mjs",
     "verify:provider-fallback": "node --experimental-strip-types scripts/test-provider-read-fallback.mjs",
     "verify:knowledge-model": "node scripts/verify-governance-knowledge-model.mjs",
