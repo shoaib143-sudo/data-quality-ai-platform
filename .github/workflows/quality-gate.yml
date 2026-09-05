@@ -80,6 +80,8 @@ jobs:
         run: pnpm run verify:lineage-governance
       - name: Verify atomic lineage ingestion
         run: node scripts/verify-lineage-atomic-ingestion.mjs
+      - name: Verify governed manual lineage writes
+        run: node scripts/verify-lineage-manual-write-boundary.mjs
       - name: Verify lineage explorer overlay contracts
         run: pnpm run verify:lineage-explorer
       - name: Verify live governance database contracts
