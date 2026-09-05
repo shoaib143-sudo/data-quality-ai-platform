@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import type { NativeHierarchyNode, NativeHierarchyResult } from '@/lib/connectors/native-hierarchy'
 
 type Props = {
@@ -63,7 +63,7 @@ export function NativeHierarchyPicker({ hierarchy, mode, selectedNodeIds, disabl
     onSelectionChange([...next])
   }
 
-  function renderNode(node: NativeHierarchyNode, depth: number): React.ReactNode {
+  function renderNode(node: NativeHierarchyNode, depth: number): ReactNode {
     const descendantsCovered = ancestorSelected(node)
     const checked = selected.has(node.id) || descendantsCovered
     const childNodes = children.get(node.id) ?? []
