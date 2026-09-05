@@ -439,8 +439,9 @@ export async function executeDurableJob(job: DurableJob) {
 
   if (job.job_type === 'DISCOVERY') {
     const sourceId = text(payload.sourceId) || text(job.entity_id)
+    const userId = text(payload.userId) || text(payload.user_id)
     if (!sourceId) throw new Error('Durable metadata discovery job payload is incomplete.')
-    await executeMetadataDiscovery(sourceId)
+    await executeMetadataDiscovery(sourceId, userId || null, job.id)
     return
   }
 
