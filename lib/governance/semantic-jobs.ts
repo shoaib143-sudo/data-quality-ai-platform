@@ -2,7 +2,11 @@ import { enqueueDurableJob } from '@/lib/orchestration/queue'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export function semanticEmbeddingConfigured() {
-  return Boolean(process.env.GOVERNANCE_EMBEDDING_URL?.trim())
+  return Boolean(
+    process.env.GOVERNANCE_EMBEDDING_URL?.trim()
+    || process.env.AI_GATEWAY_API_KEY?.trim()
+    || process.env.VERCEL_OIDC_TOKEN?.trim(),
+  )
 }
 
 function utcDayKey(date = new Date()) {
