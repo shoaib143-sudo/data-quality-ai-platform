@@ -68,6 +68,13 @@ function qualified(namespace: string | null, name: string) {
   return namespace ? `${namespace}.${name}` : name
 }
 
+function isDatabricksSystemAccessPermissionWarning(value: string) {
+  const normalized = value.toLowerCase()
+  return normalized.includes('insufficient_permissions')
+    && normalized.includes('use schema')
+    && normalized.includes('system.access')
+}
+
 function sqlDependencies(logic: string) {
   const result: string[] = []
   const regex = /\b(?:from|join|using)\s+([`"\[]?[A-Za-z_][A-Za-z0-9_$#@-]*(?:\.[`"\[]?[A-Za-z_][A-Za-z0-9_$#@-]*){0,2}[`"\]]?)/gi
@@ -417,8 +424,15 @@ async function updateLineageSnapshot(discoveryRunId: string, lineage: Record<str
   if (error || !run) return
   const snapshot = record(run.schema_snapshot)
   const enrichments = record(snapshot.enrichments)
+  const status = typeof lineage.status === 'string' && lineage.status ? lineage.status : null
+  const blockerCode = typeof lineage.blocker_code === 'string' && lineage.blocker_code ? lineage.blocker_code : null
   const { error: updateError } = await admin.schema('catalog').from('discovery_runs').update({
-    schema_snapshot: { ...snapshot, enrichments: { ...enrichments, lineage } },
+    schema_snapshot: {
+      ...snapshot,
+      lineage_enrichment_status: status ?? snapshot.lineage_enrichment_status,
+      lineage_enrichment_blocker: blockerCode,
+      enrichments: { ...enrichments, lineage },
+    },
   }).eq('id', discoveryRunId)
   if (updateError) console.error('[lineage-enrichment-snapshot]', updateError.message)
 }
@@ -493,9 +507,25 @@ export async function executeLineageEnrichment(input: {
   const warnings = [...new Set(results.flatMap(result => result.warnings))]
   const persisted = await persistJdbcLineage(source, input.discoveryRunId, assets, transformations, input.actorUserId?.trim() || null)
   const result = { ...persisted, warnings, engine }
+  const databricksSystemAccessBlocked = engine === 'DATABRICKS'
+    && result.transformations === 0
+    && result.edges === 0
+    && result.columnMappings === 0
+    && warnings.some(isDatabricksSystemAccessPermissionWarning)
+  const status = databricksSystemAccessBlocked
+    ? 'BLOCKED'
+    : warnings.length
+      ? 'COMPLETED_WITH_WARNINGS'
+      : 'COMPLETED'
 
   await updateLineageSnapshot(input.discoveryRunId, {
-    status: 'COMPLETED',
+    status,
+    blocker_code: databricksSystemAccessBlocked ? 'DATABRICKS_SYSTEM_ACCESS_PERMISSION_REQUIRED' : null,
+    blocker_resource: databricksSystemAccessBlocked ? 'system.access' : null,
+    blocker_permission: databricksSystemAccessBlocked ? 'USE SCHEMA' : null,
+    blocker_detail: databricksSystemAccessBlocked
+      ? 'The Databricks principal cannot read system.access lineage tables until USE SCHEMA on system.access is granted.'
+      : null,
     authoritative_column_source: engine === 'DATABRICKS' ? 'system.access.column_lineage' : null,
     transformation_count: result.transformations,
     edge_count: result.edges,
