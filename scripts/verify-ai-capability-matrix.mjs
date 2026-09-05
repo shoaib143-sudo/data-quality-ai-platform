@@ -36,4 +36,10 @@ requireText(route, "schema('governance')", 'governance service schema')
 requireText(route, "rpc('generate_ai_capability_matrix'", 'service-side Matrix RPC')
 requireText(route, 'capabilityCount: matrix.length', 'reported capability cardinality')
 
+const requireUserIndex = route.indexOf('const user = await requireUser()')
+const tryIndex = route.indexOf('try {')
+if (requireUserIndex < 0 || tryIndex < 0 || requireUserIndex > tryIndex) {
+  throw new Error('AI capability matrix contract missing: authentication redirect must propagate outside the route error catcher')
+}
+
 console.log('Evidence-backed 75 capability matrix contract verified.')
