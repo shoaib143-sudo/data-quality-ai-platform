@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const DEFAULT_EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
+export const DEFAULT_GATEWAY_EMBEDDING_MODEL = 'openai/text-embedding-3-small'
+export const VERCEL_AI_GATEWAY_EMBEDDING_URL = 'https://ai-gateway.vercel.sh/v1/embeddings'
 export const EMBEDDING_DIMENSIONS = 384
 
 type SupabaseLike = {
@@ -47,8 +49,14 @@ function embeddingProviderUrl() {
   return process.env.GOVERNANCE_EMBEDDING_URL?.trim() || null
 }
 
+function gatewayApiKey() {
+  return process.env.AI_GATEWAY_API_KEY?.trim() || process.env.VERCEL_OIDC_TOKEN?.trim() || null
+}
+
 function embeddingModel(model?: string) {
-  return model?.trim() || process.env.GOVERNANCE_EMBEDDING_MODEL?.trim() || DEFAULT_EMBEDDING_MODEL
+  const selected = model?.trim() || process.env.GOVERNANCE_EMBEDDING_MODEL?.trim()
+  if (selected) return selected
+  return embeddingProviderUrl() ? DEFAULT_EMBEDDING_MODEL : DEFAULT_GATEWAY_EMBEDDING_MODEL
 }
 
 function parseEmbeddingPayload(payload: unknown): number[] {
@@ -81,30 +89,54 @@ export function validateEmbedding(values: number[]) {
   return values
 }
 
+export function normalizeEmbedding(values: number[]) {
+  const valid = validateEmbedding(values)
+  const norm = Math.sqrt(valid.reduce((sum, value) => sum + value * value, 0))
+  if (!Number.isFinite(norm) || norm <= Number.EPSILON) {
+    throw new Error('Embedding provider returned a zero or invalid vector')
+  }
+  return valid.map((value) => value / norm)
+}
+
 export function toPgVectorLiteral(values: number[]) {
-  return `[${validateEmbedding(values).join(',')}]`
+  return `[${normalizeEmbedding(values).join(',')}]`
 }
 
 export async function embedGovernanceText(text: string, model?: string) {
   const input = text.trim()
   if (!input) throw new Error('Text is required for embedding')
 
-  const url = embeddingProviderUrl()
-  if (!url) {
-    const error = new Error('GOVERNANCE_EMBEDDING_URL is not configured')
-    error.name = 'EmbeddingProviderNotConfiguredError'
-    throw error
+  const customUrl = embeddingProviderUrl()
+  const selectedModel = embeddingModel(model)
+  let url = customUrl
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  let body: Record<string, unknown>
+
+  if (customUrl) {
+    const apiKey = process.env.GOVERNANCE_EMBEDDING_API_KEY?.trim()
+    if (apiKey) headers.authorization = `Bearer ${apiKey}`
+    body = { input, model: selectedModel, text: input }
+  } else {
+    const apiKey = gatewayApiKey()
+    if (!apiKey) {
+      const error = new Error('No governance embedding provider is configured')
+      error.name = 'EmbeddingProviderNotConfiguredError'
+      throw error
+    }
+    url = VERCEL_AI_GATEWAY_EMBEDDING_URL
+    headers.authorization = `Bearer ${apiKey}`
+    body = {
+      input,
+      model: selectedModel,
+      dimensions: EMBEDDING_DIMENSIONS,
+      encoding_format: 'float',
+    }
   }
 
-  const headers: Record<string, string> = { 'content-type': 'application/json' }
-  const apiKey = process.env.GOVERNANCE_EMBEDDING_API_KEY?.trim()
-  if (apiKey) headers.authorization = `Bearer ${apiKey}`
-
-  const selectedModel = embeddingModel(model)
   const response = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ input, model: selectedModel, text: input }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(30_000),
   })
 
@@ -112,7 +144,7 @@ export async function embedGovernanceText(text: string, model?: string) {
     throw new Error(`Embedding provider failed with HTTP ${response.status}`)
   }
 
-  return validateEmbedding(parseEmbeddingPayload(await response.json()))
+  return normalizeEmbedding(parseEmbeddingPayload(await response.json()))
 }
 
 export async function semanticSearchByEmbedding(
