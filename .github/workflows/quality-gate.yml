@@ -78,6 +78,8 @@ jobs:
         run: pnpm run verify:autonomous
       - name: Verify lineage change governance contracts
         run: pnpm run verify:lineage-governance
+      - name: Verify atomic lineage ingestion
+        run: node scripts/verify-lineage-atomic-ingestion.mjs
       - name: Verify lineage explorer overlay contracts
         run: pnpm run verify:lineage-explorer
       - name: Verify live governance database contracts
