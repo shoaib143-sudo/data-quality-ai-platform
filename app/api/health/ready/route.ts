@@ -48,13 +48,35 @@ async function checkSemanticEmbeddingProvider() {
   }
 }
 
+async function checkDatabricksConnector(admin: ReturnType<typeof createAdminClient>) {
+  try {
+    const { data, error } = await admin.functions.invoke('dgp-databricks-connector', { body: { action: 'health' } })
+    if (error) throw error
+    const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {}
+    const drivers = Array.isArray(payload.drivers) ? payload.drivers.map(String) : []
+    const lineageProviders = Array.isArray(payload.lineage_provider) ? payload.lineage_provider.map(String) : []
+    const healthy = payload.ok === true
+      && drivers.includes('databricks')
+      && payload.credential_store === 'supabase-vault'
+      && payload.metadata_provider === 'unity-catalog-rest'
+      && payload.query_provider === 'statement-execution-api'
+      && lineageProviders.includes('system.access.table_lineage')
+      && lineageProviders.includes('system.access.column_lineage')
+    return healthy
+      ? { status: 'READY' as const, detail: 'Native Databricks connector is ready with Supabase Vault, Unity Catalog metadata, SQL Statement Execution, and system lineage.' }
+      : { status: 'DEGRADED' as const, detail: 'Native Databricks connector returned an incompatible health contract.' }
+  } catch {
+    return { status: 'DEGRADED' as const, detail: 'Native Databricks connector could not be invoked.' }
+  }
+}
+
 async function checkJdbcBridge() {
   const configuredUrl = process.env.JDBC_BRIDGE_URL?.trim()
   const configuredToken = process.env.JDBC_BRIDGE_TOKEN?.trim()
   if (!configuredUrl || !configuredToken) {
     return {
       status: 'DEGRADED' as const,
-      detail: 'JDBC bridge is not fully configured. PostgreSQL can still use the built-in connector; other JDBC engines are unavailable.',
+      detail: 'Generic JDBC bridge is not fully configured. Native PostgreSQL and Databricks connectors remain available; other JDBC engines require the bridge.',
     }
   }
 
@@ -65,9 +87,9 @@ async function checkJdbcBridge() {
     if (!response.ok) return { status: 'DEGRADED' as const, detail: `JDBC bridge health returned HTTP ${response.status}.` }
     const payload = await response.json().catch(() => null) as { status?: unknown; service?: unknown; supported_engines?: unknown } | null
     const supported = Array.isArray(payload?.supported_engines) ? payload.supported_engines.map(String) : []
-    const healthy = payload?.status === 'ok' && payload?.service === 'datanexus-jdbc-bridge' && supported.includes('Databricks')
+    const healthy = payload?.status === 'ok' && payload?.service === 'datanexus-jdbc-bridge'
     return healthy
-      ? { status: 'READY' as const, detail: `JDBC bridge is ready with ${supported.length} engine families advertised.` }
+      ? { status: 'READY' as const, detail: `Generic JDBC bridge is ready with ${supported.length} engine families advertised.` }
       : { status: 'DEGRADED' as const, detail: 'JDBC bridge returned an incompatible health contract.' }
   } catch {
     return { status: 'DEGRADED' as const, detail: 'JDBC bridge could not be reached.' }
@@ -103,6 +125,7 @@ export async function GET() {
   }
 
   components.semantic_embeddings = await checkSemanticEmbeddingProvider()
+  components.databricks_connector = await checkDatabricksConnector(admin)
   components.jdbc_bridge = await checkJdbcBridge()
 
   try {
@@ -128,7 +151,7 @@ export async function GET() {
     const degraded = (deadEvents ?? 0) > 0 || (staleEvents ?? 0) > 0
     components.outbox = degraded ? { status: 'DEGRADED', detail: 'Recent dead or stale governance events require attention.' } : { status: 'READY' }
   } catch {
-    components.outbox = { status: 'DEGRADED', detail: 'Governance event outbox health could not be fully evaluated.' }
+    components.outbox = { status: 'DEGRADED', detail: 'Governance event outbox health could not be evaluated.' }
   }
 
   try {
