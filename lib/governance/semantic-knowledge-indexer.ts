@@ -25,11 +25,20 @@ function compact(parts: Array<string | null | undefined>) {
   return parts.map((part) => part?.trim()).filter(Boolean).join('\n')
 }
 
+function isEligibleKnowledgeDocument(document: { source_kind: unknown; review_status: unknown; metadata: unknown }) {
+  const metadata = document.metadata && typeof document.metadata === 'object' && !Array.isArray(document.metadata)
+    ? document.metadata as Record<string, unknown>
+    : {}
+  return document.source_kind === 'SYNTHETIC'
+    || metadata.synthetic_bootstrap === true
+    || document.review_status === 'APPROVED'
+}
+
 export async function collectProjectKnowledgeSemanticCandidates(projectId: string): Promise<Candidate[]> {
   const admin = createAdminClient()
   const [documents, requirements, cdes, contracts, certifications, remediation, accountability, applicability, classifications] = await Promise.all([
     admin.schema('governance').from('knowledge_documents')
-      .select('id,document_key,document_type,title,summary,content,domain,jurisdiction,source_url,metadata')
+      .select('id,document_key,document_type,title,summary,content,domain,jurisdiction,source_kind,source_url,review_status,metadata')
       .eq('project_id', projectId).eq('status', 'ACTIVE').limit(5000),
     admin.schema('governance').from('knowledge_requirements')
       .select('id,document_id,requirement_key,title,requirement_text,obligation_type,priority,metadata')
@@ -71,21 +80,22 @@ export async function collectProjectKnowledgeSemanticCandidates(projectId: strin
     if (result.error) throw new Error(`Unable to collect semantic governance ${label}: ${result.error.message}`)
   }
 
-  const documentRows = documents.data ?? []
+  const documentRows = (documents.data ?? []).filter(isEligibleKnowledgeDocument)
   const documentById = new Map(documentRows.map((document) => [document.id, document]))
+  const requirementRows = (requirements.data ?? []).filter((requirement) => documentById.has(requirement.document_id))
 
   return [
     ...documentRows.map((document) => ({
       objectType: 'KNOWLEDGE_DOCUMENT', objectKey: document.document_key, objectId: document.id,
       content: compact([document.title, document.summary, `Document type: ${document.document_type}`, document.domain ? `Domain: ${document.domain}` : null, document.jurisdiction ? `Jurisdiction: ${document.jurisdiction}` : null, document.content]),
-      metadata: { document_type: document.document_type, domain: document.domain, jurisdiction: document.jurisdiction, source_url: document.source_url, ...(document.metadata ?? {}) },
+      metadata: { document_type: document.document_type, domain: document.domain, jurisdiction: document.jurisdiction, source_kind: document.source_kind, source_url: document.source_url, review_status: document.review_status, ...(document.metadata ?? {}) },
     })),
-    ...(requirements.data ?? []).map((requirement) => {
+    ...requirementRows.map((requirement) => {
       const document = documentById.get(requirement.document_id)
       return {
         objectType: 'KNOWLEDGE_REQUIREMENT', objectKey: requirement.requirement_key, objectId: requirement.id,
         content: compact([requirement.title, requirement.requirement_text, `Obligation type: ${requirement.obligation_type}`, `Priority: ${requirement.priority}`, document ? `Source document: ${document.title}` : null]),
-        metadata: { document_id: requirement.document_id, document_key: document?.document_key ?? null, document_title: document?.title ?? null, obligation_type: requirement.obligation_type, priority: requirement.priority, ...(requirement.metadata ?? {}) },
+        metadata: { document_id: requirement.document_id, document_key: document?.document_key ?? null, document_title: document?.title ?? null, document_review_status: document?.review_status ?? null, obligation_type: requirement.obligation_type, priority: requirement.priority, ...(requirement.metadata ?? {}) },
       }
     }),
     ...(cdes.data ?? []).map((cde) => ({
