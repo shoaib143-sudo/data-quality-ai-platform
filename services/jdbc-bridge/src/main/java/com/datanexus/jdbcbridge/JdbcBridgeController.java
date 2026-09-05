@@ -49,7 +49,8 @@ public class JdbcBridgeController {
       String product = md.getDatabaseProductName();
       List<String> schemas = readNamespaces(md, product);
       Namespace namespace = namespace(connection, md, request.catalog(), request.schema());
-      List<TableInfo> tables = request.schema() == null || request.schema().isBlank() ? List.of() : readTables(md, namespace);
+      boolean namespaceProvided = (request.schema() != null && !request.schema().isBlank()) || (isCatalogDatabase(product) && request.catalog() != null && !request.catalog().isBlank());
+      List<TableInfo> tables = namespaceProvided ? readTables(md, namespace) : List.of();
       Map<String, Object> details = databaseDetails(connection, md, namespace);
       return new CatalogResponse(schemas, tables, details);
     }
@@ -58,7 +59,7 @@ public class JdbcBridgeController {
   @PostMapping("/v1/validate")
   public ValidateResponse validate(@Valid @RequestBody JdbcRequest request) throws Exception {
     validateJdbcUrl(request.jdbcUrl());
-    validateIdentifier(request.schema(), "schema");
+    validateOptionalIdentifier(request.schema(), "schema");
     validateIdentifier(request.table(), "table");
     validateOptionalIdentifier(request.catalog(), "catalog");
     Credentials c = credentials.resolve(request.credentialRef());
@@ -66,6 +67,7 @@ public class JdbcBridgeController {
       connection.setReadOnly(true);
       DatabaseMetaData md = connection.getMetaData();
       Namespace namespace = namespace(connection, md, request.catalog(), request.schema());
+      requireNamespace(namespace);
       List<ColumnInfo> columns = readColumns(md, namespace, request.table());
       if (columns.isEmpty()) throw new IllegalArgumentException("JDBC table was not found or has no visible columns.");
       long rowCount = countRows(connection, namespace, request.table());
@@ -76,7 +78,7 @@ public class JdbcBridgeController {
   @PostMapping("/v1/query")
   public QueryResponse query(@Valid @RequestBody JdbcQueryRequest request) throws Exception {
     validateJdbcUrl(request.jdbcUrl());
-    validateIdentifier(request.schema(), "schema");
+    validateOptionalIdentifier(request.schema(), "schema");
     validateIdentifier(request.table(), "table");
     validateOptionalIdentifier(request.catalog(), "catalog");
     int requestedLimit = request.limit() == null ? 100 : request.limit();
@@ -87,6 +89,7 @@ public class JdbcBridgeController {
       connection.setReadOnly(true);
       DatabaseMetaData md = connection.getMetaData();
       Namespace namespace = namespace(connection, md, request.catalog(), request.schema());
+      requireNamespace(namespace);
       String table = qualifiedTable(md, namespace, request.table());
       String sql = "SELECT * FROM " + table;
       try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -114,7 +117,7 @@ public class JdbcBridgeController {
   @PostMapping("/v1/lineage")
   public LineageResponse lineage(@Valid @RequestBody JdbcLineageRequest request) throws Exception {
     validateJdbcUrl(request.jdbcUrl());
-    validateIdentifier(request.schema(), "schema");
+    validateOptionalIdentifier(request.schema(), "schema");
     validateOptionalIdentifier(request.catalog(), "catalog");
     validateOptionalIdentifier(request.table(), "table");
     Credentials c = credentials.resolve(request.credentialRef());
@@ -122,6 +125,7 @@ public class JdbcBridgeController {
       connection.setReadOnly(true);
       DatabaseMetaData md = connection.getMetaData();
       Namespace namespace = namespace(connection, md, request.catalog(), request.schema());
+      requireNamespace(namespace);
       List<String> warnings = new ArrayList<>();
       List<TransformationInfo> transformations = readViewTransformations(connection, md, namespace, request.table(), warnings);
       return new LineageResponse(
@@ -172,6 +176,12 @@ public class JdbcBridgeController {
     }
     String catalog = firstNonBlank(requestedCatalog, usesCatalogQualifier(product) ? connection.getCatalog() : null);
     return new Namespace(catalog, requestedSchema, product);
+  }
+
+  private static void requireNamespace(Namespace namespace) {
+    if ((namespace.catalog() == null || namespace.catalog().isBlank()) && (namespace.schema() == null || namespace.schema().isBlank())) {
+      throw new IllegalArgumentException("Database namespace is incomplete; the driver must report a catalog/database or schema for the selected object.");
+    }
   }
 
   private static List<TableInfo> readTables(DatabaseMetaData md, Namespace namespace) throws SQLException {
@@ -308,7 +318,7 @@ public class JdbcBridgeController {
       queries.add(new ViewQuery(sql, params(namespace.schema(), table), "table_catalog", "table_schema", "table_name", "view_definition"));
     }
 
-    String namespaceColumn = isCatalogDatabase(product) ? "table_schema" : "table_schema";
+    String namespaceColumn = "table_schema";
     String genericSql = "SELECT table_catalog, table_schema, table_name, view_definition FROM information_schema.views WHERE " + namespaceColumn + "=?" + tableClause;
     queries.add(new ViewQuery(genericSql, informationParams, "table_catalog", "table_schema", "table_name", "view_definition"));
     return queries;
@@ -396,9 +406,9 @@ public class JdbcBridgeController {
   public record CredentialRequest(@NotBlank @Pattern(regexp="[A-Za-z0-9._-]{1,200}") String credentialRef, @NotBlank String username, @NotBlank String password) {}
   public record CredentialResponse(boolean saved, String credentialRef) {}
   public record JdbcCatalogRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String schema, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String catalog) {}
-  public record JdbcRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String schema, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String table, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String catalog) {}
-  public record JdbcQueryRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String schema, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String table, Integer limit, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String catalog) {}
-  public record JdbcLineageRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String schema, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String table, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String catalog) {}
+  public record JdbcRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String schema, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String table, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String catalog) {}
+  public record JdbcQueryRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String schema, @NotBlank @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String table, Integer limit, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String catalog) {}
+  public record JdbcLineageRequest(@NotBlank String jdbcUrl, @NotBlank String credentialRef, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String schema, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String table, @Pattern(regexp="[A-Za-z_][A-Za-z0-9_$#@-]*") String catalog) {}
   public record Namespace(String catalog, String schema, String product) {}
   public record ColumnInfo(String name, String type, Integer size, Integer scale, Boolean nullable, String defaultValue) {}
   public record TableInfo(String name, String type, String catalog, String schema, String remarks) {}

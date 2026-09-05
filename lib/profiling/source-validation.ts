@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { validateJdbcConnection } from '@/lib/connectors/jdbc'
+import { jdbcEngineFromUrl, validateJdbcConnection } from '@/lib/connectors/jdbc'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 import { assertSafeRemoteFileUrl } from '@/lib/profiling/safe-remote-file'
 
@@ -21,6 +21,19 @@ function firstString(source: Record<string, unknown>, keys: string[]) { for (con
 function validIdentifier(value: string) { return /^[A-Za-z_][A-Za-z0-9_$#@-]*$/.test(value) }
 function catalogFromJdbcUrl(jdbcUrl: string | null) { const match = jdbcUrl?.match(/(?:[?&;])ConnCatalog=([^;?&]+)/i); return match?.[1]?.trim() || null }
 
+function jdbcTargetFromSourceIdentifier(sourceIdentifier: string, jdbcUrl: string | null) {
+  const normalized = sourceIdentifier.trim().replace(/^jdbc-table:\/\//i, '')
+  const parts = normalized.split('.').map(part => part.trim()).filter(Boolean)
+  const engine = jdbcEngineFromUrl(jdbcUrl)
+  if (parts.length >= 3) return { catalog: parts.at(-3)!, schema: parts.at(-2)!, table: parts.at(-1)! }
+  if (parts.length === 2) {
+    if (engine === 'MYSQL' || engine === 'MARIADB') return { catalog: parts[0], schema: null, table: parts[1] }
+    return { catalog: null, schema: parts[0], table: parts[1] }
+  }
+  if (parts.length === 1) return { catalog: null, schema: engine === 'POSTGRESQL' ? 'public' : null, table: parts[0] }
+  return { catalog: null, schema: null, table: null }
+}
+
 export async function validateDataSourceForProfiling(supabase: SupabaseClient, source: DataSource, sourceIdentifier: string): Promise<SourceValidationResult> {
   const sourceType = String(source.source_type ?? '').trim().toLowerCase()
   const metadata = record(source.connection_metadata)
@@ -30,10 +43,11 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
   if (!sourceUri) errors.push('A source identifier is required.')
 
   if (sourceType === 'jdbc') {
-    const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? 'public'
-    const table = firstString(metadata, ['table', 'table_name', 'tableName'])
     const jdbcUrl = firstString(metadata, ['jdbc_url', 'jdbcUrl', 'url'])
-    const catalog = firstString(metadata, ['catalog', 'catalog_name', 'catalogName']) ?? catalogFromJdbcUrl(jdbcUrl)
+    const parsedTarget = jdbcTargetFromSourceIdentifier(sourceUri, jdbcUrl)
+    const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? parsedTarget.schema
+    const table = firstString(metadata, ['table', 'table_name', 'tableName']) ?? parsedTarget.table
+    const catalog = firstString(metadata, ['catalog', 'catalog_name', 'catalogName']) ?? catalogFromJdbcUrl(jdbcUrl) ?? parsedTarget.catalog
     const credentialRef = firstString(metadata, ['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
     const rawCredentialKeys = ['password', 'passwd', 'secret', 'client_secret', 'private_key']
     const suppliedBridgeKeys = ['bridge_url', 'bridgeUrl']
@@ -41,11 +55,11 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
     if (suppliedBridgeKeys.some((key) => Object.prototype.hasOwnProperty.call(metadata, key))) errors.push('JDBC source configuration cannot override the server-managed bridge destination.')
     if (!jdbcUrl) errors.push('JDBC sources require jdbc_url in connection metadata.')
     if (!credentialRef) errors.push('JDBC sources require credential_ref; raw database passwords are not accepted.')
-    if (!table) errors.push('JDBC sources require a table name in connection metadata.')
+    if (!table) errors.push('JDBC profiling requires an object/table identity from the selected native hierarchy.')
     if (catalog && !validIdentifier(catalog)) errors.push('JDBC source catalog contains invalid identifier characters.')
-    if (!validIdentifier(schema)) errors.push('JDBC source schema contains invalid identifier characters.')
+    if (schema && !validIdentifier(schema)) errors.push('JDBC source schema contains invalid identifier characters.')
     if (table && !validIdentifier(table)) errors.push('JDBC source table contains invalid identifier characters.')
-    const qualifiedSource = `jdbc-table://${catalog ? `${catalog}.` : ''}${schema}.${table ?? ''}`
+    const qualifiedSource = `jdbc-table://${[catalog, schema, table].filter(Boolean).join('.')}`
     if (errors.length === 0) {
       const validation = await validateJdbcConnection({ jdbcUrl: jdbcUrl!, credentialRef: credentialRef!, schema, table: table!, catalog })
       errors.push(...validation.errors); warnings.push(...validation.warnings)

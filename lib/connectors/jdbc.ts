@@ -8,7 +8,7 @@ const DATABRICKS_EDGE_FUNCTION = 'dgp-databricks-connector'
 export type JdbcConnectionConfig = {
   jdbcUrl: string
   credentialRef: string
-  schema: string
+  schema?: string | null
   table: string
   catalog?: string | null
 }
@@ -136,9 +136,10 @@ function rejectEmbeddedCredentials(jdbcUrl: string) {
 function normalizeConfig(input: JdbcConnectionConfig): JdbcConnectionConfig {
   const jdbcUrl = requiredString(input.jdbcUrl, 'jdbcUrl')
   const credentialRef = requiredString(input.credentialRef, 'credentialRef')
-  const schema = safeIdentifier(requiredString(input.schema, 'schema'), 'schema')
+  const schema = input.schema?.trim() ? safeIdentifier(input.schema.trim(), 'schema') : null
   const table = safeIdentifier(requiredString(input.table, 'table'), 'table')
   const catalog = input.catalog?.trim() ? safeIdentifier(input.catalog.trim(), 'catalog') : null
+  if (!schema && !catalog && !isPostgresJdbcUrl(jdbcUrl)) throw new Error('JDBC object namespace requires a catalog/database or schema.')
   rejectEmbeddedCredentials(jdbcUrl)
   return { ...input, jdbcUrl, credentialRef, schema, table, catalog }
 }
@@ -284,7 +285,7 @@ export async function validateJdbcConnection(input: JdbcConnectionConfig): Promi
     }>('/v1/validate', {
       jdbc_url: config.jdbcUrl,
       credential_ref: config.credentialRef,
-      schema: config.schema,
+      ...(config.schema ? { schema: config.schema } : {}),
       table: config.table,
       ...(config.catalog ? { catalog: config.catalog } : {}),
     })
@@ -307,7 +308,7 @@ export async function loadJdbcRows(input: JdbcConnectionConfig, limit: number) {
   }>('/v1/query', {
     jdbc_url: config.jdbcUrl,
     credential_ref: config.credentialRef,
-    schema: config.schema,
+    ...(config.schema ? { schema: config.schema } : {}),
     table: config.table,
     limit,
     ...(config.catalog ? { catalog: config.catalog } : {}),
@@ -335,7 +336,7 @@ export async function discoverJdbcTransformations(input: JdbcConnectionConfig): 
   }>('/v1/lineage', {
     jdbc_url: config.jdbcUrl,
     credential_ref: config.credentialRef,
-    schema: config.schema,
+    ...(config.schema ? { schema: config.schema } : {}),
     table: config.table,
     ...(config.catalog ? { catalog: config.catalog } : {}),
   })
@@ -343,7 +344,7 @@ export async function discoverJdbcTransformations(input: JdbcConnectionConfig): 
     databaseProduct: result.databaseProduct ?? result.database_product ?? null,
     databaseVersion: result.databaseVersion ?? result.database_version ?? null,
     catalog: result.catalog ?? config.catalog ?? null,
-    schema: result.schema ?? config.schema,
+    schema: result.schema ?? config.schema ?? null,
     transformations: Array.isArray(result.transformations) ? result.transformations : [],
     warnings: Array.isArray(result.warnings) ? result.warnings : [],
   }

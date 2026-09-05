@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { discoverDatabricksSchemaScope, discoverJdbcCatalog, discoverJdbcTransformations, jdbcEngineFromUrl, validateJdbcConnection, type JdbcColumnMapping, type JdbcTransformation } from '@/lib/connectors/jdbc'
 import { readSchemaScope } from '@/lib/connectors/schema-scope'
+import { discoverJdbcFromNativeHierarchy } from '@/lib/catalog/native-jdbc-discovery'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 
 type Source = {
@@ -76,6 +77,8 @@ async function resolveSourceLocation(source: Source) {
 
 async function discoverJdbc(source: Source):Promise<JdbcDiscoveryResult> {
   const metadata = record(source.connection_metadata)
+  if (metadata.hierarchy_selection) return await discoverJdbcFromNativeHierarchy(metadata)
+
   const jdbcUrl = stringField(metadata, ['jdbc_url','jdbcUrl','url'])
   const credentialRef = stringField(metadata, ['credential_ref','credentialRef','secret_ref','secretRef'])
   const configuredSchema = stringField(metadata, ['schema','schema_name','schemaName'])
