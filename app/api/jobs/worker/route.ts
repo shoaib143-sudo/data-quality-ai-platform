@@ -16,6 +16,7 @@ import { enqueueDailySemanticIndexJobs } from '@/lib/governance/semantic-jobs'
 import { processSemanticIndexJobs } from '@/lib/governance/semantic-job-worker'
 import { refreshAllPredictiveRisk } from '@/lib/governance/predictive-risk'
 import { applyAllPredictiveRiskGovernedActions } from '@/lib/governance/governed-autonomy'
+import { refreshAllAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { processGovernanceAgentJobs } from '@/lib/agents/governance-job-worker'
 
 export const maxDuration = 300
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
     cleanupExpiredObjectArtifacts(25),
   ])
   const predictiveRisk = await refreshAllPredictiveRisk()
+  const aiGovernanceIntelligence = await refreshAllAIGovernanceIntelligence()
   const governedAutonomy = await applyAllPredictiveRiskGovernedActions()
 
   return NextResponse.json({
@@ -74,6 +76,7 @@ export async function GET(request: Request) {
     semanticIndexScheduling,
     objectRetention,
     predictiveRisk,
+    aiGovernanceIntelligence,
     governedAutonomy,
     eventsClaimed: events.length,
     eventResults,
