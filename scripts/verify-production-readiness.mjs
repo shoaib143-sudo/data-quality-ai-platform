@@ -22,6 +22,15 @@ requireText('supabase/migrations/20260904194020_production_slo_and_readiness_evi
   'max_dead_job_rate',
   'production_readiness_select',
 ])
+requireText('supabase/migrations/20260905023109_ignore_superseded_dead_jobs_in_platform_health.sql', [
+  'recovered.project_id=dead.project_id',
+  'recovered.job_type=dead.job_type',
+  'recovered.entity_id is not distinct from dead.entity_id',
+  "recovered.status='SUCCEEDED'",
+  "'UNRESOLVED_ONLY'",
+  "'PRESERVED_AUDIT_HISTORY'",
+  'superseded_dead_jobs_last_24h',
+])
 requireText('lib/platform/production-readiness.ts', [
   'getDataPlaneProviderHealth',
   'listProjectionConsumerHealth',
