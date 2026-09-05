@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -36,24 +35,11 @@ export async function POST(request: Request) {
 
     const { data, error } = await admin.schema('governance').rpc(rpcName, args)
     if (error) throw new Error(`Unable to persist governance knowledge review: ${error.message}`)
+    if (!data || typeof data !== 'object' || data.audit_atomic !== true) {
+      throw new Error('Governance knowledge review did not confirm atomic audit persistence.')
+    }
 
-    await writeGovernanceAudit({
-      projectId,
-      actorUserId: user.id,
-      actorType: 'USER',
-      eventType: 'GOVERNANCE_KNOWLEDGE_REVIEW_DECIDED',
-      entityType: objectType === 'CLASSIFICATION' ? 'DATASET_CLASSIFICATION' : 'CDE_MAPPING',
-      entityId: objectId,
-      metadata: {
-        decision,
-        comment: comment || null,
-        capability,
-        human_review: true,
-        ai_override_prohibited: true,
-      },
-    })
-
-    return NextResponse.json({ accepted: true, objectType, decision, review: data })
+    return NextResponse.json({ accepted: true, objectType, decision, capability, review: data })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
