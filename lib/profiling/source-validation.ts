@@ -18,7 +18,8 @@ type DataSource = { id: string; project_id: string; source_type: string | null; 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 function stringValue(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null }
 function firstString(source: Record<string, unknown>, keys: string[]) { for (const key of keys) { const value = stringValue(source[key]); if (value) return value } return null }
-function validIdentifier(value: string) { return /^[A-Za-z_][A-Za-z0-9_$]*$/.test(value) }
+function validIdentifier(value: string) { return /^[A-Za-z_][A-Za-z0-9_$#@-]*$/.test(value) }
+function catalogFromJdbcUrl(jdbcUrl: string | null) { const match = jdbcUrl?.match(/(?:[?&;])ConnCatalog=([^;?&]+)/i); return match?.[1]?.trim() || null }
 
 export async function validateDataSourceForProfiling(supabase: SupabaseClient, source: DataSource, sourceIdentifier: string): Promise<SourceValidationResult> {
   const sourceType = String(source.source_type ?? '').trim().toLowerCase()
@@ -32,6 +33,7 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
     const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? 'public'
     const table = firstString(metadata, ['table', 'table_name', 'tableName'])
     const jdbcUrl = firstString(metadata, ['jdbc_url', 'jdbcUrl', 'url'])
+    const catalog = firstString(metadata, ['catalog', 'catalog_name', 'catalogName']) ?? catalogFromJdbcUrl(jdbcUrl)
     const credentialRef = firstString(metadata, ['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
     const rawCredentialKeys = ['password', 'passwd', 'secret', 'client_secret', 'private_key']
     const suppliedBridgeKeys = ['bridge_url', 'bridgeUrl']
@@ -40,19 +42,21 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
     if (!jdbcUrl) errors.push('JDBC sources require jdbc_url in connection metadata.')
     if (!credentialRef) errors.push('JDBC sources require credential_ref; raw database passwords are not accepted.')
     if (!table) errors.push('JDBC sources require a table name in connection metadata.')
+    if (catalog && !validIdentifier(catalog)) errors.push('JDBC source catalog contains invalid identifier characters.')
     if (!validIdentifier(schema)) errors.push('JDBC source schema contains invalid identifier characters.')
     if (table && !validIdentifier(table)) errors.push('JDBC source table contains invalid identifier characters.')
+    const qualifiedSource = `jdbc-table://${catalog ? `${catalog}.` : ''}${schema}.${table ?? ''}`
     if (errors.length === 0) {
-      const validation = await validateJdbcConnection({ jdbcUrl: jdbcUrl!, credentialRef: credentialRef!, schema, table: table! })
+      const validation = await validateJdbcConnection({ jdbcUrl: jdbcUrl!, credentialRef: credentialRef!, schema, table: table!, catalog })
       errors.push(...validation.errors); warnings.push(...validation.warnings)
       if (validation.rowCount === 0) warnings.push('JDBC source table is reachable but currently contains no rows.')
       return {
-        valid: errors.length === 0, source_type: 'JDBC', execution_type: 'JDBC', source_uri: `jdbc-table://${schema}.${table}`,
+        valid: errors.length === 0, source_type: 'JDBC', execution_type: 'JDBC', source_uri: qualifiedSource,
         checks: { configuration: true, connectivity: validation.valid, schema_available: validation.valid && validation.columns.length > 0 },
-        details: { jdbc_url: jdbcUrl, credential_ref: credentialRef, schema, table, row_count: validation.rowCount, columns: validation.columns, bridge: validation.details }, errors, warnings,
+        details: { jdbc_url: jdbcUrl, credential_ref: credentialRef, catalog, schema, table, row_count: validation.rowCount, columns: validation.columns, bridge: validation.details }, errors, warnings,
       }
     }
-    return { valid: false, source_type: 'JDBC', execution_type: 'JDBC', source_uri: `jdbc-table://${schema}.${table ?? ''}`, checks: { configuration: false, connectivity: false, schema_available: false }, details: { jdbc_url: jdbcUrl, credential_ref: credentialRef, schema, table }, errors, warnings }
+    return { valid: false, source_type: 'JDBC', execution_type: 'JDBC', source_uri: qualifiedSource, checks: { configuration: false, connectivity: false, schema_available: false }, details: { jdbc_url: jdbcUrl, credential_ref: credentialRef, catalog, schema, table }, errors, warnings }
   }
 
   if (['file', 'csv'].includes(sourceType)) {

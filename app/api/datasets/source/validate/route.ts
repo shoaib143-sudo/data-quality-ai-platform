@@ -12,9 +12,10 @@ function sourceIdentifier(source: { source_type: string | null; connection_metad
     : {}
   const type = String(source.source_type ?? '').toLowerCase()
   if (type === 'jdbc') {
+    const catalog = text(metadata.catalog || metadata.catalog_name || metadata.catalogName)
     const schema = text(metadata.schema || metadata.schema_name || metadata.schemaName) || 'public'
     const table = text(metadata.table || metadata.table_name || metadata.tableName)
-    return table ? `jdbc-table://${schema}.${table}` : ''
+    return table ? `jdbc-table://${catalog ? `${catalog}.` : ''}${schema}.${table}` : ''
   }
   if (type === 'csv' || type === 'file') return text(metadata.url || metadata.source_url || metadata.sourceUrl) || (metadata.bucket && metadata.path ? `${metadata.bucket}/${metadata.path}` : '')
   const schema = text(metadata.schema || metadata.schema_name || metadata.schemaName) || 'public'

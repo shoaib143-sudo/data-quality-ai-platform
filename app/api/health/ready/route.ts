@@ -48,6 +48,34 @@ async function checkSemanticEmbeddingProvider() {
   }
 }
 
+async function checkJdbcBridge() {
+  const configuredUrl = process.env.JDBC_BRIDGE_URL?.trim()
+  const configuredToken = process.env.JDBC_BRIDGE_TOKEN?.trim()
+  if (!configuredUrl || !configuredToken) {
+    return {
+      status: 'DEGRADED' as const,
+      detail: 'JDBC bridge is not fully configured. PostgreSQL can still use the built-in connector; other JDBC engines are unavailable.',
+    }
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
+  try {
+    const response = await fetch(`${configuredUrl.replace(/\/$/, '')}/health`, { cache: 'no-store', signal: controller.signal })
+    if (!response.ok) return { status: 'DEGRADED' as const, detail: `JDBC bridge health returned HTTP ${response.status}.` }
+    const payload = await response.json().catch(() => null) as { status?: unknown; service?: unknown; supported_engines?: unknown } | null
+    const supported = Array.isArray(payload?.supported_engines) ? payload.supported_engines.map(String) : []
+    const healthy = payload?.status === 'ok' && payload?.service === 'datanexus-jdbc-bridge' && supported.includes('Databricks')
+    return healthy
+      ? { status: 'READY' as const, detail: `JDBC bridge is ready with ${supported.length} engine families advertised.` }
+      : { status: 'DEGRADED' as const, detail: 'JDBC bridge returned an incompatible health contract.' }
+  } catch {
+    return { status: 'DEGRADED' as const, detail: 'JDBC bridge could not be reached.' }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export async function GET() {
   const admin = createAdminClient()
   const components: Record<string, { status: ComponentStatus; detail?: string }> = {}
@@ -75,6 +103,7 @@ export async function GET() {
   }
 
   components.semantic_embeddings = await checkSemanticEmbeddingProvider()
+  components.jdbc_bridge = await checkJdbcBridge()
 
   try {
     const cutoff = new Date(Date.now() - 30 * 60_000).toISOString()

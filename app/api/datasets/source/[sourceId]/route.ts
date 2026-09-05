@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ sou
     const { data: membership } = await admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
     if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Connection access denied.' }, { status: 403 })
     const metadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? source.connection_metadata as Record<string, unknown> : {}
-    return NextResponse.json({ source: { id: source.id, projectId: source.project_id, name: source.name, sourceType: source.source_type, status: source.status, connectionKind: metadata.connection_kind ?? 'jdbc', jdbcUrl: metadata.jdbc_url ?? '', schema: metadata.schema ?? '', table: metadata.table ?? '' } })
+    return NextResponse.json({ source: { id: source.id, projectId: source.project_id, name: source.name, sourceType: source.source_type, status: source.status, connectionKind: metadata.connection_kind ?? 'jdbc', jdbcUrl: metadata.jdbc_url ?? '', catalog: metadata.catalog ?? '', schema: metadata.schema ?? '', table: metadata.table ?? '' } })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load connection.' }, { status: 500 })
   }

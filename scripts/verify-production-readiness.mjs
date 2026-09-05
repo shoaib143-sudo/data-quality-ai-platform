@@ -63,5 +63,37 @@ requireText('scripts/recovery-drill.mjs', [
   'backup_restore_drills',
   'RECOVERY_DATABASE_URL',
 ])
+requireText('app/api/health/ready/route.ts', [
+  'checkJdbcBridge',
+  'JDBC_BRIDGE_URL',
+  'JDBC_BRIDGE_TOKEN',
+  'datanexus-jdbc-bridge',
+  "supported.includes('Databricks')",
+  'components.jdbc_bridge',
+])
+requireText('app/api/datasets/source/discover/route.ts', [
+  'ConnCatalog',
+  'catalog: catalogName || undefined',
+  'resolvedCatalog',
+])
+requireText('app/api/datasets/source/register/route.ts', [
+  'ConnCatalog',
+  'catalog: catalogName || undefined',
+  'connectionMetadata.catalog = resolvedCatalog',
+  'parts.catalog',
+])
+requireText('lib/profiling/source-validation.ts', [
+  'catalogFromJdbcUrl',
+  'JDBC source catalog contains invalid identifier characters.',
+  'catalog, schema, table',
+  'validateJdbcConnection({ jdbcUrl: jdbcUrl!, credentialRef: credentialRef!, schema, table: table!, catalog })',
+])
+requireText('app/api/datasets/source/validate/route.ts', [
+  'metadata.catalog',
+  'jdbc-table://${catalog ? `${catalog}.` : \'\'}${schema}.${table}',
+])
+requireText('app/api/datasets/source/[sourceId]/route.ts', [
+  'catalog: metadata.catalog',
+])
 
 console.log('Production readiness contracts verified.')
