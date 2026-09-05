@@ -107,20 +107,37 @@ requireText('lib/catalog/discovery.ts', [
   "authoritative_source:'system.access.column_lineage'",
   "lineage_column_mappings",
   'lineageColumnMappings',
+  'discoverJdbcFromNativeHierarchy',
 ])
 requireText('app/api/datasets/source/discover/route.ts', [
-  'ConnCatalog',
-  'catalog: catalogName || undefined',
-  'resolvedCatalog',
+  'discoverNativeHierarchy',
+  'hierarchy_node_count',
+  'native_terms',
 ])
 requireText('app/api/datasets/source/register/route.ts', [
-  'ConnCatalog',
-  'catalog: catalogName || undefined',
-  'connectionMetadata.catalog = resolvedCatalog',
+  'discoverNativeHierarchy',
+  'hierarchy_selection',
+  'native_hierarchy',
+  'credential_ref',
   'parts.catalog',
+])
+requireText('lib/connectors/native-hierarchy-discovery.ts', [
+  "NATIVE_EDGE_FUNCTION = 'dgp-native-hierarchy-connector'",
+  '/v1/hierarchy',
+  'JDBC_BRIDGE_URL',
+  'JDBC_BRIDGE_TOKEN',
+  'rejectEmbeddedCredentials',
+])
+requireText('supabase/functions/dgp-native-hierarchy-connector/index.ts', [
+  'supabase-vault',
+  'unity-catalog/catalogs',
+  'pg_namespace',
+  'pg_class',
+  'pg_attribute',
 ])
 requireText('lib/profiling/source-validation.ts', [
   'catalogFromJdbcUrl',
+  'jdbcTargetFromSourceIdentifier',
   'JDBC source catalog contains invalid identifier characters.',
   'catalog, schema, table',
   'validateJdbcConnection({ jdbcUrl: jdbcUrl!, credentialRef: credentialRef!, schema, table: table!, catalog })',
