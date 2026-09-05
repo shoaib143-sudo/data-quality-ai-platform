@@ -5,7 +5,8 @@ export function semanticEmbeddingConfigured() {
   return Boolean(
     process.env.GOVERNANCE_EMBEDDING_URL?.trim()
     || process.env.AI_GATEWAY_API_KEY?.trim()
-    || process.env.VERCEL_OIDC_TOKEN?.trim(),
+    || process.env.VERCEL_OIDC_TOKEN?.trim()
+    || process.env.VERCEL === '1',
   )
 }
 
