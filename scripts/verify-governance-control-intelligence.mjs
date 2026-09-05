@@ -1,7 +1,9 @@
 import fs from 'node:fs'
 
 const migrationPath = 'supabase/migrations/20260905062116_governance_control_intelligence_engine.sql'
+const gateMigrationPath = 'supabase/migrations/20260905062857_include_governance_control_intelligence_in_formal_gate.sql'
 const migration = fs.readFileSync(migrationPath, 'utf8')
+const gateMigration = fs.readFileSync(gateMigrationPath, 'utf8')
 const files = {
   propose: fs.readFileSync('app/api/governance/controls/propose/route.ts', 'utf8'),
   review: fs.readFileSync('app/api/governance/controls/review/route.ts', 'utf8'),
@@ -39,6 +41,11 @@ const checks = [
   ['review audit atomic', /GOVERNANCE_CONTROL_REVIEWED/i.test(migration) && /atomic_with_decision/i.test(migration)],
   ['evidence audit atomic', /GOVERNANCE_CONTROL_EVIDENCE_RECORDED/i.test(migration) && /atomic_with_evidence/i.test(migration)],
   ['evaluation audit atomic', /GOVERNANCE_CONTROL_EVALUATED/i.test(migration) && /atomic_with_evaluation/i.test(migration)],
+  ['formal gate exposes control intelligence', /'governance_control_intelligence'/i.test(gateMigration)],
+  ['formal gate detects browser DML', /browser_dml_exposed/i.test(gateMigration) && /role_table_grants/i.test(gateMigration)],
+  ['formal gate detects lifecycle violations', /lifecycle_violations/i.test(gateMigration) && /authority_class='UNVERIFIED'/i.test(gateMigration)],
+  ['formal gate distinguishes pending authority', /READY_PENDING_AUTHORITY/i.test(gateMigration)],
+  ['formal gate counts implementation defects', /v_failure_count := v_failure_count \+ 1/i.test(gateMigration)],
   ['proposal route calls RPC only', /rpc\('propose_governance_control'/.test(files.propose) && !/\.from\('control_definitions'\)/.test(files.propose)],
   ['review route calls RPC only', /rpc\('review_governance_control'/.test(files.review) && !/\.from\('control_definitions'\)/.test(files.review)],
   ['scope route calls RPC only', /rpc\('bind_governance_control_scope'/.test(files.scope)],
