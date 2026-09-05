@@ -16,27 +16,44 @@ export async function POST(request: Request) {
     const objectId = text(body?.objectId ?? body?.object_id)
     const decision = text(body?.decision).toUpperCase()
     const comment = text(body?.comment).slice(0, 2000)
+    const supportedTypes = ['CLASSIFICATION', 'CDE_MAPPING', 'KNOWLEDGE_DOCUMENT']
 
-    if (!projectId || !objectId || !['CLASSIFICATION', 'CDE_MAPPING'].includes(objectType)) {
-      return NextResponse.json({ error: 'projectId, objectId and objectType (CLASSIFICATION or CDE_MAPPING) are required.' }, { status: 400 })
+    if (!projectId || !objectId || !supportedTypes.includes(objectType)) {
+      return NextResponse.json({ error: 'projectId, objectId and objectType (CLASSIFICATION, CDE_MAPPING or KNOWLEDGE_DOCUMENT) are required.' }, { status: 400 })
     }
     if (!['APPROVED', 'REJECTED'].includes(decision)) {
       return NextResponse.json({ error: 'decision must be APPROVED or REJECTED.' }, { status: 400 })
     }
 
-    const capability = objectType === 'CLASSIFICATION' ? 'classification.review' : 'stewardship.manage'
+    const capability = objectType === 'CLASSIFICATION'
+      ? 'classification.review'
+      : objectType === 'CDE_MAPPING'
+        ? 'stewardship.manage'
+        : 'policy.approve'
     await authorizeProject(user.id, projectId, capability)
 
     const admin = createAdminClient()
-    const rpcName = objectType === 'CLASSIFICATION' ? 'review_dataset_classification' : 'review_cde_mapping'
+    const rpcName = objectType === 'CLASSIFICATION'
+      ? 'review_dataset_classification'
+      : objectType === 'CDE_MAPPING'
+        ? 'review_cde_mapping'
+        : 'review_governance_knowledge_document'
     const args = objectType === 'CLASSIFICATION'
       ? { p_project_id: projectId, p_classification_id: objectId, p_reviewer: user.id, p_decision: decision, p_comment: comment || null }
-      : { p_project_id: projectId, p_mapping_id: objectId, p_reviewer: user.id, p_decision: decision, p_comment: comment || null }
+      : objectType === 'CDE_MAPPING'
+        ? { p_project_id: projectId, p_mapping_id: objectId, p_reviewer: user.id, p_decision: decision, p_comment: comment || null }
+        : { p_project_id: projectId, p_document_id: objectId, p_reviewer: user.id, p_decision: decision, p_comment: comment || null }
 
     const { data, error } = await admin.schema('governance').rpc(rpcName, args)
     if (error) throw new Error(`Unable to persist governance knowledge review: ${error.message}`)
     if (!data || typeof data !== 'object' || data.audit_atomic !== true) {
       throw new Error('Governance knowledge review did not confirm atomic audit persistence.')
+    }
+    if (objectType === 'KNOWLEDGE_DOCUMENT') {
+      const expectedStatus = decision === 'APPROVED' ? 'ACTIVE' : 'DRAFT'
+      if (data.review_status !== decision || data.status !== expectedStatus) {
+        throw new Error('Governance knowledge document review returned an invalid governed state transition.')
+      }
     }
 
     return NextResponse.json({ accepted: true, objectType, decision, capability, review: data })
