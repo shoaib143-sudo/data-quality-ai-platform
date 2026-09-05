@@ -4,6 +4,11 @@ import type { NativeHierarchyNode, NativeHierarchyResult, NativeHierarchyTerms }
 const NATIVE_EDGE_FUNCTION = 'dgp-native-hierarchy-connector'
 const DEFAULT_TIMEOUT_MS = 60_000
 
+export type NativeHierarchyDiscoveryOptions = {
+  rootsOnly?: boolean
+  catalogs?: string[]
+}
+
 function requiredString(value: unknown, field: string) {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${field} is required.`)
   return value.trim()
@@ -58,10 +63,15 @@ async function bridgeHierarchy(jdbcUrl: string, credentialRef: string) {
   }
 }
 
-async function edgeHierarchy(jdbcUrl: string, credentialRef: string) {
+async function edgeHierarchy(jdbcUrl: string, credentialRef: string, options: NativeHierarchyDiscoveryOptions) {
   const admin = createAdminClient()
   const { data, error } = await admin.functions.invoke(NATIVE_EDGE_FUNCTION, {
-    body: { jdbc_url: jdbcUrl, credential_ref: credentialRef },
+    body: {
+      jdbc_url: jdbcUrl,
+      credential_ref: credentialRef,
+      roots_only: options.rootsOnly === true,
+      catalogs: options.catalogs ?? [],
+    },
   })
   if (error) {
     let message = error.message || 'Native hierarchy connector request failed.'
@@ -109,6 +119,7 @@ function normalizeNode(value: unknown): NativeHierarchyNode | null {
     qualifiedName,
     selectable: source.selectable !== false,
     hasChildren: source.hasChildren === true,
+    nativeId: text('nativeId'),
     catalog: text('catalog'),
     schema: text('schema'),
     object: text('object'),
@@ -140,12 +151,13 @@ function normalizeHierarchy(payload: unknown): NativeHierarchyResult {
   }
 }
 
-export async function discoverNativeHierarchy(input: { jdbcUrl: string; credentialRef: string }): Promise<NativeHierarchyResult> {
+export async function discoverNativeHierarchy(input: { jdbcUrl: string; credentialRef: string } & NativeHierarchyDiscoveryOptions): Promise<NativeHierarchyResult> {
   const jdbcUrl = requiredString(input.jdbcUrl, 'jdbcUrl')
   const credentialRef = requiredString(input.credentialRef, 'credentialRef')
   rejectEmbeddedCredentials(jdbcUrl)
+  const options: NativeHierarchyDiscoveryOptions = { rootsOnly: input.rootsOnly === true, catalogs: input.catalogs ?? [] }
   const payload = builtInHierarchy(jdbcUrl)
-    ? await edgeHierarchy(jdbcUrl, credentialRef)
+    ? await edgeHierarchy(jdbcUrl, credentialRef, options)
     : await bridgeHierarchy(jdbcUrl, credentialRef)
   return normalizeHierarchy(payload)
 }

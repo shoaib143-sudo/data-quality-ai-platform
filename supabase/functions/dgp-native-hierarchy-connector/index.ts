@@ -1,7 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import postgres from "npm:postgres@3.4.7";
 
-type RequestBody = { jdbc_url?: string; credential_ref?: string };
+type RequestBody = {
+  jdbc_url?: string;
+  credential_ref?: string;
+  roots_only?: boolean;
+  catalogs?: string[];
+};
 type NodeKind = "ROOT" | "CATALOG" | "DATABASE" | "SCHEMA" | "OBJECT" | "FIELD" | "NAMESPACE";
 type HierarchyNode = {
   id: string;
@@ -12,6 +17,7 @@ type HierarchyNode = {
   qualifiedName: string;
   selectable: boolean;
   hasChildren: boolean;
+  nativeId?: string | null;
   catalog?: string | null;
   schema?: string | null;
   object?: string | null;
@@ -23,7 +29,7 @@ type HierarchyNode = {
 };
 
 const MAX_NODES = Math.min(250000, Math.max(1000, Number(Deno.env.get("DGP_NATIVE_HIERARCHY_MAX_NODES") ?? "50000") || 50000));
-const MAX_UC_PAGES = 40;
+const MAX_UC_PAGES = Math.min(200, Math.max(1, Number(Deno.env.get("DGP_NATIVE_HIERARCHY_MAX_UC_PAGES") ?? "40") || 40));
 const jsonHeaders = { "content-type": "application/json" };
 
 function reply(status: number, payload: Record<string, unknown>) {
@@ -37,12 +43,24 @@ function safeCredentialRef(value: string) {
   if (!/^DGP_[A-Za-z0-9_]+$/.test(value)) throw new Error("Invalid credential reference.");
   return value;
 }
+function cleanCatalogs(value: unknown) {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim()))].slice(0, 1000)
+    : [];
+}
 function nodeId(kind: NodeKind, qualifiedName: string) {
   return `${kind.toLowerCase()}:${encodeURIComponent(qualifiedName)}`;
 }
 function systemName(value: string | null | undefined) {
   const normalized = String(value ?? "").toLowerCase();
   return normalized === "information_schema" || normalized === "pg_catalog" || normalized === "mysql" || normalized === "performance_schema" || normalized === "sys" || normalized === "system" || normalized.startsWith("pg_toast");
+}
+function stableId(row: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
 }
 function addNode(nodes: HierarchyNode[], input: Omit<HierarchyNode, "id">) {
   if (nodes.length >= MAX_NODES) return null;
@@ -84,14 +102,14 @@ async function postgresHierarchy(jdbcUrl: string, credentials: { username: strin
     const [serverRows, schemaRows, objectRows, columnRows] = await Promise.all([
       db.unsafe("select current_database() as database, version() as version"),
       db.unsafe("select oid::text as id, nspname as name from pg_namespace order by nspname"),
-      db.unsafe("select n.nspname as schema, c.relname as name, c.relkind as relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind in ('r','p','v','m','f','S') order by n.nspname,c.relname"),
-      db.unsafe("select n.nspname as schema, c.relname as object, a.attname as name, format_type(a.atttypid,a.atttypmod) as data_type, a.attnum as ordinal, not a.attnotnull as nullable from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where a.attnum>0 and not a.attisdropped and c.relkind in ('r','p','v','m','f') order by n.nspname,c.relname,a.attnum"),
-    ]) as [Array<{database:string;version:string}>, Array<{id:string;name:string}>, Array<{schema:string;name:string;relkind:string}>, Array<{schema:string;object:string;name:string;data_type:string;ordinal:number;nullable:boolean}>];
+      db.unsafe("select c.oid::text as id, n.nspname as schema, c.relname as name, c.relkind as relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind in ('r','p','v','m','f','S') order by n.nspname,c.relname"),
+      db.unsafe("select c.oid::text as object_id, n.nspname as schema, c.relname as object, a.attname as name, format_type(a.atttypid,a.atttypmod) as data_type, a.attnum as ordinal, not a.attnotnull as nullable from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where a.attnum>0 and not a.attisdropped and c.relkind in ('r','p','v','m','f') order by n.nspname,c.relname,a.attnum"),
+    ]) as [Array<{database:string;version:string}>, Array<{id:string;name:string}>, Array<{id:string;schema:string;name:string;relkind:string}>, Array<{object_id:string;schema:string;object:string;name:string;data_type:string;ordinal:number;nullable:boolean}>];
     const database = serverRows[0]?.database ?? target.database;
-    const rootId = addNode(nodes, { parentId: null, kind: "ROOT", nativeType: "DATABASE", name: database, qualifiedName: database, selectable: false, hasChildren: true, system: false, metadata: { host: target.host } })!;
+    const rootId = addNode(nodes, { parentId: null, kind: "ROOT", nativeType: "DATABASE", name: database, qualifiedName: database, selectable: false, hasChildren: true, nativeId: null, system: false, metadata: { host: target.host } })!;
     const schemaIds = new Map<string,string>();
     for (const schema of schemaRows) {
-      const id = addNode(nodes, { parentId: rootId, kind: "SCHEMA", nativeType: "SCHEMA", name: schema.name, qualifiedName: schema.name, selectable: true, hasChildren: true, schema: schema.name, system: systemName(schema.name), metadata: { oid: schema.id } });
+      const id = addNode(nodes, { parentId: rootId, kind: "SCHEMA", nativeType: "SCHEMA", name: schema.name, qualifiedName: schema.name, selectable: true, hasChildren: true, nativeId: schema.id, schema: schema.name, system: systemName(schema.name), metadata: { oid: schema.id } });
       if (id) schemaIds.set(schema.name, id);
     }
     const objectIds = new Map<string,string>();
@@ -100,17 +118,42 @@ async function postgresHierarchy(jdbcUrl: string, credentials: { username: strin
       const parentId = schemaIds.get(object.schema);
       if (!parentId) continue;
       const qualified = `${object.schema}.${object.name}`;
-      const id = addNode(nodes, { parentId, kind: "OBJECT", nativeType: typeFor(object.relkind), name: object.name, qualifiedName: qualified, selectable: true, hasChildren: object.relkind !== "S", schema: object.schema, object: object.name, objectType: typeFor(object.relkind), system: systemName(object.schema), metadata: { relkind: object.relkind } });
+      const id = addNode(nodes, { parentId, kind: "OBJECT", nativeType: typeFor(object.relkind), name: object.name, qualifiedName: qualified, selectable: true, hasChildren: object.relkind !== "S", nativeId: object.id, schema: object.schema, object: object.name, objectType: typeFor(object.relkind), system: systemName(object.schema), metadata: { oid: object.id, relkind: object.relkind } });
       if (id) objectIds.set(qualified, id);
     }
     for (const column of columnRows) {
       const parentId = objectIds.get(`${column.schema}.${column.object}`);
       if (!parentId) continue;
-      addNode(nodes, { parentId, kind: "FIELD", nativeType: "COLUMN", name: column.name, qualifiedName: `${column.schema}.${column.object}.${column.name}`, selectable: true, hasChildren: false, schema: column.schema, object: column.object, dataType: column.data_type, ordinal: Number(column.ordinal), system: systemName(column.schema), metadata: { nullable: column.nullable } });
+      addNode(nodes, { parentId, kind: "FIELD", nativeType: "COLUMN", name: column.name, qualifiedName: `${column.schema}.${column.object}.${column.name}`, selectable: true, hasChildren: false, nativeId: `${column.object_id}:${column.ordinal}`, schema: column.schema, object: column.object, dataType: column.data_type, ordinal: Number(column.ordinal), system: systemName(column.schema), metadata: { nullable: column.nullable, object_oid: column.object_id, attnum: Number(column.ordinal) } });
     }
     const truncated = nodes.length >= MAX_NODES;
     if (truncated) warnings.push(`Native hierarchy reached the connector safety ceiling of ${MAX_NODES} nodes.`);
-    return { databaseProduct: "PostgreSQL", databaseVersion: serverRows[0]?.version ?? null, terms: { root: "database", catalog: null, schema: "schema", object: "object", field: "column" }, nodes, rootIds: [rootId], warnings, truncated, details: { connector: "supabase-edge-native-hierarchy", credential_store: "supabase-vault", database, host: target.host, max_nodes: MAX_NODES } };
+    return {
+      databaseProduct: "PostgreSQL",
+      databaseVersion: serverRows[0]?.version ?? null,
+      terms: { root: "database", catalog: null, schema: "schema", object: "object", field: "column" },
+      nodes,
+      rootIds: [rootId],
+      warnings,
+      truncated,
+      details: {
+        connector: "supabase-edge-native-hierarchy",
+        credential_store: "supabase-vault",
+        database,
+        host: target.host,
+        max_nodes: MAX_NODES,
+        capabilities: {
+          stable_object_ids: true,
+          stable_field_ids: true,
+          field_metadata: true,
+          partitioning: "DATABASE",
+          resumable_partitions: false,
+          provider_snapshot: false,
+          authoritative_full_listing: true,
+          deletion_evidence: "CONFIRMED_ABSENCE",
+        },
+      },
+    };
   } finally { await db.end({ timeout: 1 }); }
 }
 
@@ -138,47 +181,64 @@ async function databricksJson(target: DatabricksTarget, token: string, path: str
 async function paged(target: DatabricksTarget, token: string, path: string, field: string) {
   const items: Record<string, unknown>[] = [];
   let pageToken = "";
+  let exhausted = false;
   for (let page = 0; page < MAX_UC_PAGES; page++) {
     const separator = path.includes("?") ? "&" : "?";
     const payload = await databricksJson(target, token, `${path}${separator}max_results=1000${pageToken ? `&page_token=${encodeURIComponent(pageToken)}` : ""}`);
     const batch = Array.isArray(payload[field]) ? payload[field] as Record<string, unknown>[] : [];
     items.push(...batch);
     const next = typeof payload.next_page_token === "string" ? payload.next_page_token : "";
-    if (!next) break;
+    if (!next) { exhausted = true; pageToken = ""; break; }
     pageToken = next;
   }
-  return items;
+  return { items, truncated: !exhausted && Boolean(pageToken) };
 }
-async function databricksHierarchy(jdbcUrl: string, credentials: { username: string; password: string }) {
+async function databricksCatalogRows(target: DatabricksTarget, token: string, requested: string[]) {
+  if (!requested.length) return await paged(target, token, "/api/2.1/unity-catalog/catalogs", "catalogs");
+  const items: Record<string, unknown>[] = [];
+  for (const catalog of requested) {
+    const row = await databricksJson(target, token, `/api/2.1/unity-catalog/catalogs/${encodeURIComponent(catalog)}`);
+    items.push(row);
+  }
+  return { items, truncated: false };
+}
+async function databricksHierarchy(jdbcUrl: string, credentials: { username: string; password: string }, options: { rootsOnly: boolean; catalogs: string[] }) {
   const target = parseDatabricksJdbcUrl(jdbcUrl);
   const token = credentials.password;
   const nodes: HierarchyNode[] = [];
   const warnings: string[] = [];
+  let pagingTruncated = false;
   const rootName = target.host;
-  const rootId = addNode(nodes, { parentId: null, kind: "ROOT", nativeType: "METASTORE", name: rootName, qualifiedName: rootName, selectable: false, hasChildren: true, system: false, metadata: { workspace_host: target.host, warehouse_id: target.warehouseId } })!;
-  const catalogs = await paged(target, token, "/api/2.1/unity-catalog/catalogs", "catalogs");
-  for (const catalogRow of catalogs) {
+  const rootId = addNode(nodes, { parentId: null, kind: "ROOT", nativeType: "METASTORE", name: rootName, qualifiedName: rootName, selectable: false, hasChildren: true, nativeId: null, system: false, metadata: { workspace_host: target.host, warehouse_id: target.warehouseId } })!;
+  const catalogResult = await databricksCatalogRows(target, token, options.catalogs);
+  pagingTruncated ||= catalogResult.truncated;
+  for (const catalogRow of catalogResult.items) {
     if (nodes.length >= MAX_NODES) break;
     const catalog = typeof catalogRow.name === "string" ? catalogRow.name : "";
     if (!catalog) continue;
-    const catalogId = addNode(nodes, { parentId: rootId, kind: "CATALOG", nativeType: typeof catalogRow.catalog_type === "string" ? catalogRow.catalog_type : "CATALOG", name: catalog, qualifiedName: catalog, selectable: true, hasChildren: true, catalog, system: systemName(catalog), metadata: { comment: catalogRow.comment ?? null, owner: catalogRow.owner ?? null, catalog_type: catalogRow.catalog_type ?? null } });
-    if (!catalogId) break;
-    const schemas = await paged(target, token, `/api/2.1/unity-catalog/schemas?catalog_name=${encodeURIComponent(catalog)}`, "schemas");
-    for (const schemaRow of schemas) {
+    const catalogNativeId = stableId(catalogRow, ["id", "catalog_id", "metastore_id"]);
+    const catalogId = addNode(nodes, { parentId: rootId, kind: "CATALOG", nativeType: typeof catalogRow.catalog_type === "string" ? catalogRow.catalog_type : "CATALOG", name: catalog, qualifiedName: catalog, selectable: true, hasChildren: true, nativeId: catalogNativeId, catalog, system: systemName(catalog), metadata: { comment: catalogRow.comment ?? null, owner: catalogRow.owner ?? null, catalog_type: catalogRow.catalog_type ?? null, metastore_id: catalogRow.metastore_id ?? null } });
+    if (!catalogId || options.rootsOnly) continue;
+    const schemaResult = await paged(target, token, `/api/2.1/unity-catalog/schemas?catalog_name=${encodeURIComponent(catalog)}`, "schemas");
+    pagingTruncated ||= schemaResult.truncated;
+    for (const schemaRow of schemaResult.items) {
       if (nodes.length >= MAX_NODES) break;
       const schema = typeof schemaRow.name === "string" ? schemaRow.name : "";
       if (!schema) continue;
       const schemaQualified = typeof schemaRow.full_name === "string" ? schemaRow.full_name : `${catalog}.${schema}`;
-      const schemaId = addNode(nodes, { parentId: catalogId, kind: "SCHEMA", nativeType: "SCHEMA", name: schema, qualifiedName: schemaQualified, selectable: true, hasChildren: true, catalog, schema, system: systemName(catalog) || systemName(schema), metadata: { comment: schemaRow.comment ?? null, owner: schemaRow.owner ?? null } });
+      const schemaNativeId = stableId(schemaRow, ["schema_id", "id"]);
+      const schemaId = addNode(nodes, { parentId: catalogId, kind: "SCHEMA", nativeType: "SCHEMA", name: schema, qualifiedName: schemaQualified, selectable: true, hasChildren: true, nativeId: schemaNativeId, catalog, schema, system: systemName(catalog) || systemName(schema), metadata: { comment: schemaRow.comment ?? null, owner: schemaRow.owner ?? null } });
       if (!schemaId) break;
-      const tables = await paged(target, token, `/api/2.1/unity-catalog/tables?catalog_name=${encodeURIComponent(catalog)}&schema_name=${encodeURIComponent(schema)}`, "tables");
-      for (const tableRow of tables) {
+      const tableResult = await paged(target, token, `/api/2.1/unity-catalog/tables?catalog_name=${encodeURIComponent(catalog)}&schema_name=${encodeURIComponent(schema)}`, "tables");
+      pagingTruncated ||= tableResult.truncated;
+      for (const tableRow of tableResult.items) {
         if (nodes.length >= MAX_NODES) break;
         const name = typeof tableRow.name === "string" ? tableRow.name : "";
         if (!name) continue;
         const qualified = typeof tableRow.full_name === "string" ? tableRow.full_name : `${catalog}.${schema}.${name}`;
         const objectType = typeof tableRow.table_type === "string" ? tableRow.table_type : "TABLE";
-        const objectId = addNode(nodes, { parentId: schemaId, kind: "OBJECT", nativeType: objectType, name, qualifiedName: qualified, selectable: true, hasChildren: true, catalog, schema, object: name, objectType, system: systemName(catalog) || systemName(schema), metadata: { comment: tableRow.comment ?? null, owner: tableRow.owner ?? null, data_source_format: tableRow.data_source_format ?? null } });
+        const tableNativeId = stableId(tableRow, ["table_id", "id"]);
+        const objectId = addNode(nodes, { parentId: schemaId, kind: "OBJECT", nativeType: objectType, name, qualifiedName: qualified, selectable: true, hasChildren: true, nativeId: tableNativeId, catalog, schema, object: name, objectType, system: systemName(catalog) || systemName(schema), metadata: { comment: tableRow.comment ?? null, owner: tableRow.owner ?? null, data_source_format: tableRow.data_source_format ?? null, table_id: tableNativeId } });
         if (!objectId) break;
         let columns = Array.isArray(tableRow.columns) ? tableRow.columns as Record<string, unknown>[] : [];
         if (!columns.length) {
@@ -193,14 +253,47 @@ async function databricksHierarchy(jdbcUrl: string, credentials: { username: str
           if (nodes.length >= MAX_NODES) break;
           const columnName = typeof column.name === "string" ? column.name : "";
           if (!columnName) continue;
-          addNode(nodes, { parentId: objectId, kind: "FIELD", nativeType: "COLUMN", name: columnName, qualifiedName: `${qualified}.${columnName}`, selectable: true, hasChildren: false, catalog, schema, object: name, dataType: typeof column.type_text === "string" ? column.type_text : typeof column.type_name === "string" ? column.type_name : null, ordinal: typeof column.position === "number" ? column.position : null, system: systemName(catalog) || systemName(schema), metadata: { nullable: column.nullable ?? null, comment: column.comment ?? null, default_value: column.default_value ?? null } });
+          const position = typeof column.position === "number" ? column.position : null;
+          addNode(nodes, { parentId: objectId, kind: "FIELD", nativeType: "COLUMN", name: columnName, qualifiedName: `${qualified}.${columnName}`, selectable: true, hasChildren: false, nativeId: tableNativeId && position !== null ? `${tableNativeId}:${position}` : null, catalog, schema, object: name, dataType: typeof column.type_text === "string" ? column.type_text : typeof column.type_name === "string" ? column.type_name : null, ordinal: position, system: systemName(catalog) || systemName(schema), metadata: { nullable: column.nullable ?? null, comment: column.comment ?? null, default_value: column.default_value ?? null, table_id: tableNativeId } });
         }
       }
     }
   }
-  const truncated = nodes.length >= MAX_NODES;
-  if (truncated) warnings.push(`Native hierarchy reached the connector safety ceiling of ${MAX_NODES} nodes.`);
-  return { databaseProduct: "Databricks", databaseVersion: null, terms: { root: "metastore", catalog: "catalog", schema: "schema", object: "object", field: "column" }, nodes, rootIds: [rootId], warnings: [...new Set(warnings)].slice(0, 100), truncated, details: { connector: "supabase-edge-native-hierarchy", credential_store: "supabase-vault", workspace_host: target.host, warehouse_id: target.warehouseId, max_nodes: MAX_NODES } };
+  const truncated = nodes.length >= MAX_NODES || pagingTruncated;
+  if (nodes.length >= MAX_NODES) warnings.push(`Native hierarchy reached the connector safety ceiling of ${MAX_NODES} nodes.`);
+  if (pagingTruncated) warnings.push(`Unity Catalog pagination reached the safety ceiling of ${MAX_UC_PAGES} pages for at least one collection.`);
+  const objectNodes = nodes.filter((node) => node.kind === "OBJECT");
+  const stableObjectIds = objectNodes.length > 0 && objectNodes.every((node) => Boolean(node.nativeId));
+  return {
+    databaseProduct: "Databricks",
+    databaseVersion: null,
+    terms: { root: "metastore", catalog: "catalog", schema: "schema", object: "object", field: "column" },
+    nodes,
+    rootIds: [rootId],
+    warnings: [...new Set(warnings)].slice(0, 100),
+    truncated,
+    details: {
+      connector: "supabase-edge-native-hierarchy",
+      credential_store: "supabase-vault",
+      workspace_host: target.host,
+      warehouse_id: target.warehouseId,
+      max_nodes: MAX_NODES,
+      max_uc_pages: MAX_UC_PAGES,
+      roots_only: options.rootsOnly,
+      requested_catalogs: options.catalogs,
+      capabilities: {
+        stable_object_ids: stableObjectIds,
+        stable_field_ids: stableObjectIds,
+        field_metadata: true,
+        partitioning: "CATALOG",
+        resumable_partitions: true,
+        provider_snapshot: false,
+        authoritative_full_listing: true,
+        deletion_evidence: "CONFIRMED_ABSENCE",
+        lineage_enrichment: "SYSTEM_ACCESS_TABLES",
+      },
+    },
+  };
 }
 
 Deno.serve(async (request: Request) => {
@@ -210,7 +303,9 @@ Deno.serve(async (request: Request) => {
     const jdbcUrl = required(body.jdbc_url, "jdbc_url");
     const credentials = await resolveCredential(body.credential_ref);
     if (jdbcUrl.toLowerCase().startsWith("jdbc:postgresql://")) return reply(200, await postgresHierarchy(jdbcUrl, credentials));
-    if (jdbcUrl.toLowerCase().startsWith("jdbc:databricks://")) return reply(200, await databricksHierarchy(jdbcUrl, credentials));
+    if (jdbcUrl.toLowerCase().startsWith("jdbc:databricks://")) {
+      return reply(200, await databricksHierarchy(jdbcUrl, credentials, { rootsOnly: body.roots_only === true, catalogs: cleanCatalogs(body.catalogs) }));
+    }
     return reply(422, { error: "Built-in native hierarchy connector supports PostgreSQL and Databricks. Other JDBC engines use the governed JDBC bridge." });
   } catch (error) {
     return reply(422, { error: error instanceof Error ? error.message : "Native hierarchy discovery failed." });

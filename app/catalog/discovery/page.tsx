@@ -35,18 +35,18 @@ export default async function DiscoveryPage() {
     supabase
       .schema('catalog')
       .from('discovery_runs')
-      .select('id,project_id,source_id,status,assets_discovered,error_message,started_at,completed_at')
+      .select('id,project_id,source_id,status,assets_discovered,objects_observed,objects_added,objects_changed,objects_removed,objects_missing,objects_unchanged,catalog_revision_id,scope_version_id,consistency_mode,error_message,started_at,completed_at')
       .order('started_at', { ascending: false })
       .limit(200),
     supabase
       .schema('catalog')
-      .from('current_discovered_assets')
+      .from('current_catalog_source_assets')
       .select('source_id'),
   ])
 
   if (sources.error) throw new Error(`Unable to load discovery sources: ${sources.error.message}`)
   if (runs.error) throw new Error(`Unable to load discovery history: ${runs.error.message}`)
-  if (currentAssets.error) throw new Error(`Unable to load current metadata assets: ${currentAssets.error.message}`)
+  if (currentAssets.error) throw new Error(`Unable to load current published catalog assets: ${currentAssets.error.message}`)
 
   const sourceRows = sources.data ?? []
   const currentAssetCounts = (currentAssets.data ?? []).reduce<Record<string, number>>((counts, asset) => {
@@ -84,7 +84,7 @@ export default async function DiscoveryPage() {
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Radar className="h-6 w-6" /></span>
             <div>
               <h1 className="text-3xl font-black">Metadata Discovery</h1>
-              <p className="mt-1 text-sm text-slate-500">Scan governed sources for schemas, tables, files, columns and metadata through the durable worker.</p>
+              <p className="mt-1 text-sm text-slate-500">Full scoped reconciliation publishes only complete, trusted catalog revisions. Partial scans never replace the last known-good catalog state.</p>
             </div>
           </div>
         </header>

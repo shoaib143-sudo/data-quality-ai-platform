@@ -5,6 +5,7 @@ import { discoverNativeHierarchy } from '@/lib/connectors/native-hierarchy-disco
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function validCredentialRef(value: string) { return /^DGP_[A-Za-z0-9_]+$/.test(value) }
+function record(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 
 export async function POST(request: Request) {
   try {
@@ -26,10 +27,12 @@ export async function POST(request: Request) {
 
     try {
       const hierarchy = await discoverNativeHierarchy({ jdbcUrl, credentialRef })
+      const capabilities = record(hierarchy.details.capabilities)
       const schemas = hierarchy.nodes.filter(node => node.kind === 'SCHEMA').map(node => node.name)
       const tables = hierarchy.nodes.filter(node => node.kind === 'OBJECT').map(node => ({
         name: node.name,
         type: node.objectType ?? node.nativeType,
+        nativeId: node.nativeId ?? null,
         catalog: node.catalog ?? null,
         schema: node.schema ?? null,
         qualifiedName: node.qualifiedName,
@@ -38,6 +41,7 @@ export async function POST(request: Request) {
         hierarchy,
         schemas,
         tables,
+        capabilities,
         details: {
           ...hierarchy.details,
           database_product: hierarchy.databaseProduct,
@@ -45,6 +49,7 @@ export async function POST(request: Request) {
           native_terms: hierarchy.terms,
           hierarchy_node_count: hierarchy.nodes.length,
           hierarchy_truncated: hierarchy.truncated,
+          capabilities,
         },
       })
     } catch (error) {
