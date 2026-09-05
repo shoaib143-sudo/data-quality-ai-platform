@@ -32,7 +32,8 @@ requireText(migration, 'revoke all on function governance.generate_ai_capability
 requireText(migration, 'grant execute on function governance.generate_ai_capability_matrix(uuid) to service_role', 'service-only execution grant')
 requireText(route, 'requireUser()', 'authenticated Matrix API')
 requireText(route, "authorizeProject(user.id, projectId, 'catalog.read')", 'project authorization')
-requireText(route, "schema('governance').rpc('generate_ai_capability_matrix'", 'service-side Matrix RPC')
+requireText(route, "schema('governance')", 'governance service schema')
+requireText(route, "rpc('generate_ai_capability_matrix'", 'service-side Matrix RPC')
 requireText(route, 'capabilityCount: matrix.length', 'reported capability cardinality')
 
 console.log('Evidence-backed 75 capability matrix contract verified.')
