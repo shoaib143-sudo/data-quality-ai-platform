@@ -1,6 +1,3 @@
-import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
-import { buildGovernanceIntelligenceBrief } from '@/lib/governance/governance-intelligence-brief'
-
 type JsonRecord = Record<string, any>
 
 function record(value: unknown): JsonRecord {
@@ -173,15 +170,4 @@ export function composeSpecialistOutputWithGovernanceIntelligence(
       'Formal readiness blockers are copied from the database verifier and cannot be overridden by specialist reasoning.',
     ])),
   }
-}
-
-export async function enrichSpecialistOutputWithGovernanceIntelligence(input: {
-  projectId: string
-  output: Record<string, unknown>
-}) {
-  const [base, brief] = await Promise.all([
-    enrichOutputWithAIGovernanceIntelligence(input.projectId, input.output),
-    buildGovernanceIntelligenceBrief(input.projectId),
-  ])
-  return composeSpecialistOutputWithGovernanceIntelligence(base, brief)
 }
