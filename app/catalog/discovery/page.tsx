@@ -5,6 +5,23 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { DiscoveryManager } from './discovery-manager'
 
+type DiscoveryJobRow = {
+  id: string
+  project_id: string
+  entity_id: string | null
+  status: string
+  attempts: number
+  max_attempts: number
+  priority: number
+  lease_owner: string | null
+  lease_expires_at: string | null
+  last_error: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  updated_at: string
+}
+
 export default async function DiscoveryPage() {
   await requireUser()
   const supabase = await createClient()
@@ -27,7 +44,7 @@ export default async function DiscoveryPage() {
   if (runs.error) throw new Error(`Unable to load discovery history: ${runs.error.message}`)
 
   const sourceRows = sources.data ?? []
-  let jobs: Array<Record<string, unknown>> = []
+  let jobs: DiscoveryJobRow[] = []
   if (sourceRows.length) {
     const admin = createAdminClient()
     const jobResult = await admin
@@ -39,7 +56,7 @@ export default async function DiscoveryPage() {
       .order('created_at', { ascending: false })
       .limit(300)
     if (jobResult.error) throw new Error(`Unable to load discovery worker jobs: ${jobResult.error.message}`)
-    jobs = jobResult.data ?? []
+    jobs = (jobResult.data ?? []) as DiscoveryJobRow[]
   }
 
   return (
