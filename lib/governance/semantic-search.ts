@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { headers as requestHeaders } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const DEFAULT_EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
@@ -49,8 +50,17 @@ function embeddingProviderUrl() {
   return process.env.GOVERNANCE_EMBEDDING_URL?.trim() || null
 }
 
-function gatewayApiKey() {
-  return process.env.AI_GATEWAY_API_KEY?.trim() || process.env.VERCEL_OIDC_TOKEN?.trim() || null
+async function gatewayApiKey() {
+  const configured = process.env.AI_GATEWAY_API_KEY?.trim() || process.env.VERCEL_OIDC_TOKEN?.trim()
+  if (configured) return configured
+  if (process.env.VERCEL !== '1') return null
+
+  try {
+    const incoming = await requestHeaders()
+    return incoming.get('x-vercel-oidc-token')?.trim() || null
+  } catch {
+    return null
+  }
 }
 
 function embeddingModel(model?: string) {
@@ -118,7 +128,7 @@ export async function embedGovernanceText(text: string, model?: string) {
     if (apiKey) headers.authorization = `Bearer ${apiKey}`
     body = { input, model: selectedModel, text: input }
   } else {
-    const apiKey = gatewayApiKey()
+    const apiKey = await gatewayApiKey()
     if (!apiKey) {
       const error = new Error('No governance embedding provider is configured')
       error.name = 'EmbeddingProviderNotConfiguredError'
