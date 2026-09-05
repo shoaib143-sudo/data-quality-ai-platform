@@ -8,6 +8,7 @@ import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { investigateObservabilityIncident } from '@/lib/observability/incident-intelligence'
 import { deliverNotificationJob } from '@/lib/observability/notifications'
 import { executeMetadataDiscovery } from '@/lib/catalog/discovery'
+import { executeLineageEnrichment } from '@/lib/catalog/lineage-enrichment'
 import { enrichObservabilityIncidentWithLineageImpact } from '@/lib/governance/lineage-impact'
 import { verifyRemediationOutcome } from '@/lib/profiling/remediation-verification'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -442,6 +443,15 @@ export async function executeDurableJob(job: DurableJob) {
     const userId = text(payload.userId) || text(payload.user_id)
     if (!sourceId) throw new Error('Durable metadata discovery job payload is incomplete.')
     await executeMetadataDiscovery(sourceId, userId || null, job.id)
+    return
+  }
+
+  if (job.job_type === 'LINEAGE_ENRICHMENT') {
+    const sourceId = text(payload.sourceId) || text(job.entity_id)
+    const discoveryRunId = text(payload.discoveryRunId)
+    const userId = text(payload.userId) || text(payload.user_id)
+    if (!sourceId || !discoveryRunId) throw new Error('Durable lineage enrichment job payload is incomplete.')
+    await executeLineageEnrichment({ sourceId, discoveryRunId, actorUserId: userId || null })
     return
   }
 
