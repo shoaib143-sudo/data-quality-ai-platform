@@ -1,11 +1,16 @@
 import { enqueueDurableJob } from '@/lib/orchestration/queue'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const SEMANTIC_INDEX_JOB_VERSION = 'v2'
+const SEMANTIC_INDEX_JOB_VERSION = 'v3'
 
 export function semanticEmbeddingConfigured() {
+  const supabaseNative = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+    && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
+  )
   return Boolean(
     process.env.GOVERNANCE_EMBEDDING_URL?.trim()
+    || supabaseNative
     || process.env.AI_GATEWAY_API_KEY?.trim()
     || process.env.VERCEL_OIDC_TOKEN?.trim()
     || process.env.VERCEL === '1',
