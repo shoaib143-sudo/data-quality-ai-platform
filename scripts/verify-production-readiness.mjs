@@ -64,12 +64,49 @@ requireText('scripts/recovery-drill.mjs', [
   'RECOVERY_DATABASE_URL',
 ])
 requireText('app/api/health/ready/route.ts', [
+  'checkDatabricksConnector',
+  "dgp-databricks-connector",
+  "drivers.includes('databricks')",
+  "payload.credential_store === 'supabase-vault'",
+  "payload.metadata_provider === 'unity-catalog-rest'",
+  "payload.query_provider === 'statement-execution-api'",
+  "lineageProviders.includes('system.access.table_lineage')",
+  "lineageProviders.includes('system.access.column_lineage')",
+  'components.databricks_connector',
   'checkJdbcBridge',
   'JDBC_BRIDGE_URL',
   'JDBC_BRIDGE_TOKEN',
   'datanexus-jdbc-bridge',
-  "supported.includes('Databricks')",
   'components.jdbc_bridge',
+  'Native PostgreSQL and Databricks connectors remain available',
+])
+requireText('supabase/functions/dgp-databricks-connector/index.ts', [
+  'supabase-vault',
+  'unity-catalog-rest',
+  'statement-execution-api',
+  'system.access.table_lineage',
+  'system.access.column_lineage',
+  'source_column_name',
+  'target_column_name',
+  'DATABRICKS_SYSTEM_LINEAGE_RECORD',
+])
+requireText('app/api/datasets/source/credentials/route.ts', [
+  "isDatabricks(connectionKind, jdbcUrl)",
+  "dgp-databricks-connector",
+  "connector: 'supabase-edge-databricks'",
+])
+requireText('lib/connectors/jdbc.ts', [
+  "DATABRICKS_EDGE_FUNCTION = 'dgp-databricks-connector'",
+  'isDatabricksJdbcUrl',
+  'databricksEdgeRequest',
+  'columnMappings?: JdbcColumnMapping[]',
+])
+requireText('lib/catalog/discovery.ts', [
+  "engine==='DATABRICKS'",
+  'column_mapping_count',
+  "authoritative_source:'system.access.column_lineage'",
+  "lineage_column_mappings",
+  'lineageColumnMappings',
 ])
 requireText('app/api/datasets/source/discover/route.ts', [
   'ConnCatalog',
