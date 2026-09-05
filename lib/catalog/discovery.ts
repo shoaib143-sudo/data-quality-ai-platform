@@ -301,7 +301,8 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
   const typedSource = source as Source
   const runIdentity = await loadOrCreateRun(typedSource, actorUserId, durableJobId)
   if (runIdentity.alreadyPublished) {
-    const { data: completed } = await admin.schema('catalog').from('discovery_runs').select('catalog_revision_id,objects_observed,objects_added,objects_changed,objects_missing,objects_removed,objects_unchanged,consistency_mode,schema_snapshot').eq('id', runIdentity.id).single()
+    const { data: completed, error: completedError } = await admin.schema('catalog').from('discovery_runs').select('catalog_revision_id,objects_observed,objects_added,objects_changed,objects_missing,objects_removed,objects_unchanged,consistency_mode,schema_snapshot').eq('id', runIdentity.id).single()
+    if (completedError || !completed) throw new Error(`Unable to load completed discovery run: ${completedError?.message ?? 'not found'}`)
     return {
       discoveryRunId: runIdentity.id,
       sourceId: source.id,
