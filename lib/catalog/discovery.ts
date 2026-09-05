@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { discoverJdbcFromNativeHierarchy, type NativeDiscoveryCheckpointAdapter } from '@/lib/catalog/native-jdbc-discovery'
 import { discoverFileMetadata } from '@/lib/catalog/file-metadata-discovery'
+import { enqueueDurableJob } from '@/lib/orchestration/queue'
 
 type Source = {
   id: string
@@ -292,6 +293,41 @@ async function markIncomplete(runId: string, manifest: DiscoveryManifest, messag
   }).eq('id', runId)
 }
 
+async function queueLineageEnrichment(input: {
+  source: Source
+  discoveryRunId: string
+  catalogRevisionId: string | null
+  actorUserId?: string | null
+}) {
+  if (String(input.source.source_type).toUpperCase() !== 'JDBC') {
+    return { status: 'NOT_APPLICABLE', job_id: null, error: null }
+  }
+  if (!input.catalogRevisionId) {
+    return { status: 'NOT_QUEUED', job_id: null, error: 'Catalog revision identity is unavailable.' }
+  }
+  try {
+    const job = await enqueueDurableJob({
+      projectId: input.source.project_id,
+      jobType: 'LINEAGE_ENRICHMENT',
+      entityId: input.source.id,
+      idempotencyKey: `lineage-enrichment:${input.catalogRevisionId}`,
+      payload: {
+        sourceId: input.source.id,
+        discoveryRunId: input.discoveryRunId,
+        catalogRevisionId: input.catalogRevisionId,
+        userId: input.actorUserId?.trim() || null,
+      },
+      priority: 120,
+      maxAttempts: 3,
+    })
+    return { status: 'QUEUED', job_id: job.id, error: null }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to queue lineage enrichment.'
+    console.error('[metadata-discovery-lineage-queue]', message)
+    return { status: 'QUEUE_FAILED', job_id: null, error: message }
+  }
+}
+
 export async function executeMetadataDiscovery(sourceId: string, actorUserId?: string | null, durableJobId?: string | null) {
   const admin = createAdminClient()
   const { data: source, error: sourceError } = await admin.schema('catalog').from('data_sources').select('id,project_id,name,source_type,status,connection_metadata').eq('id', sourceId).maybeSingle()
@@ -303,6 +339,12 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
   if (runIdentity.alreadyPublished) {
     const { data: completed, error: completedError } = await admin.schema('catalog').from('discovery_runs').select('catalog_revision_id,objects_observed,objects_added,objects_changed,objects_missing,objects_removed,objects_unchanged,consistency_mode,schema_snapshot').eq('id', runIdentity.id).single()
     if (completedError || !completed) throw new Error(`Unable to load completed discovery run: ${completedError?.message ?? 'not found'}`)
+    const lineage = await queueLineageEnrichment({
+      source: typedSource,
+      discoveryRunId: runIdentity.id,
+      catalogRevisionId: completed.catalog_revision_id,
+      actorUserId,
+    })
     return {
       discoveryRunId: runIdentity.id,
       sourceId: source.id,
@@ -316,6 +358,7 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
       objectsRemoved: completed.objects_removed,
       objectsUnchanged: completed.objects_unchanged,
       consistencyMode: completed.consistency_mode,
+      lineage,
       snapshot: completed.schema_snapshot,
     }
   }
@@ -357,6 +400,13 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
     if (publicationError) throw new Error(`Atomic catalog publication failed: ${publicationError.message}`)
 
     const publication = record(publicationData)
+    const catalogRevisionId = stringField(publication, ['revision_id'])
+    const lineage = await queueLineageEnrichment({
+      source: typedSource,
+      discoveryRunId: runId,
+      catalogRevisionId,
+      actorUserId,
+    })
     const finalSnapshot = {
       ...result.snapshot,
       discovery_manifest: manifest,
@@ -382,7 +432,7 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
         change_set_hash: publication.change_set_hash ?? null,
       },
       enrichments: {
-        lineage: 'DEFERRED',
+        lineage,
         ai_semantics: 'DEFERRED',
         classification: 'DEFERRED',
         business_domain: 'DEFERRED',
@@ -402,7 +452,7 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
       sourceId: source.id,
       scopeId: frozenScope.scopeId,
       scopeVersionId: frozenScope.scopeVersionId,
-      catalogRevisionId: stringField(publication, ['revision_id']),
+      catalogRevisionId,
       catalogRevisionNumber: integer(publication.revision_number, 0),
       objectsObserved: integer(publication.objects_observed, manifest.observed_object_count),
       objectsAdded: integer(publication.objects_added, 0),
@@ -411,6 +461,7 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
       objectsRemoved: integer(publication.objects_removed, 0),
       objectsUnchanged: integer(publication.objects_unchanged, 0),
       consistencyMode: manifest.consistency_mode,
+      lineage,
       snapshot: finalSnapshot,
     }
   } catch (error) {
