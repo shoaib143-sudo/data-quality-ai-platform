@@ -46,6 +46,8 @@ jobs:
         run: pnpm run verify:governed-autonomy
       - name: Verify AI governance due diligence contracts
         run: pnpm run verify:ai-due-diligence
+      - name: Verify governance document semantic refresh
+        run: node scripts/verify-governance-document-semantic-refresh.mjs
       - name: Verify governed human review boundaries
         run: pnpm run verify:governance-reviews
       - name: Verify production readiness contracts
