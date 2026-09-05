@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const migration = fs.readFileSync('supabase/migrations/20260905034719_atomic_lineage_batch_ingestion.sql', 'utf8')
 const replayProtection = fs.readFileSync('supabase/migrations/20260905035122_reject_lineage_replay_payload_collisions.sql', 'utf8')
+const edgeIdentity = fs.readFileSync('supabase/migrations/20260905040325_preserve_parallel_lineage_transformations.sql', 'utf8')
 const route = fs.readFileSync('app/api/lineage/ingest/route.ts', 'utf8')
 
 function requireText(text, needle, label) {
@@ -15,7 +16,7 @@ requireText(migration, 'hashtextextended', 'project/event lock identity')
 requireText(migration, 'on conflict(project_id,source_key)', 'integration idempotency')
 requireText(migration, 'on conflict(project_id,namespace,name,asset_type)', 'asset idempotency')
 requireText(migration, 'on conflict(project_id,integration_id,external_id)', 'transformation idempotency')
-requireText(migration, 'on conflict(project_id,source_type,source_id,target_type,target_id,relationship)', 'edge idempotency')
+requireText(migration, 'on conflict(project_id,source_type,source_id,target_type,target_id,relationship)', 'historical edge identity before transformation-aware hardening')
 requireText(migration, "'LINEAGE_BATCH_INGESTED'", 'atomic lineage audit')
 requireText(migration, "'atomic_with_batch',true", 'atomic batch audit evidence')
 requireText(migration, "'audit_atomic',true", 'RPC atomic audit confirmation')
@@ -31,6 +32,16 @@ requireText(replayProtection, 'Lineage replay payload mismatch for externalEvent
 requireText(replayProtection, 'Lineage replay source mismatch for externalEventId', 'persisted replay source collision rejection')
 requireText(replayProtection, 'governance.ingest_lineage_batch_atomic_impl(', 'validated delegation to private atomic implementation')
 requireText(replayProtection, 'grant execute on function governance.ingest_lineage_batch_atomic', 'service-role wrapper execution boundary')
+
+requireText(edgeIdentity, 'relationship,transformation_id)', 'transformation-aware edge identity')
+requireText(edgeIdentity, 'nulls not distinct', 'NULL-transformation edge idempotency')
+requireText(edgeIdentity, 'preserves parallel transformation-specific edges', 'parallel transformation identity intent')
+requireText(edgeIdentity, "'governance.ingest_lineage_batch_atomic_impl(uuid,uuid,text,text,text,jsonb)'::regprocedure", 'atomic ingestion producer patch')
+requireText(edgeIdentity, "'governance.upsert_manual_lineage_edge(uuid,uuid,text,uuid,text,uuid,text,jsonb)'::regprocedure", 'manual lineage producer patch')
+requireText(edgeIdentity, "'governance.record_lineage_for_dataset()'::regprocedure", 'dataset lineage producer patch')
+requireText(edgeIdentity, "'governance.record_lineage_for_dataset_version()'::regprocedure", 'dataset version lineage producer patch')
+requireText(edgeIdentity, "'governance.record_lineage_for_profile_run()'::regprocedure", 'profile run lineage producer patch')
+requireText(edgeIdentity, 'raise exception \'Expected legacy lineage edge conflict identity was not found in %\'', 'producer patch postcondition')
 
 requireText(route, "authorizeProject(user.id, projectId, 'lineage.manage')", 'route lineage authorization')
 requireText(route, "rpc('ingest_lineage_batch_atomic'", 'route atomic RPC usage')
