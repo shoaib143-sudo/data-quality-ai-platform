@@ -1,6 +1,6 @@
-import { discoverJdbcTransformations, jdbcEngineFromUrl, type JdbcTransformation } from '@/lib/connectors/jdbc'
+import { jdbcEngineFromUrl, type JdbcTransformation } from '@/lib/connectors/jdbc'
 import { discoverNativeHierarchy } from '@/lib/connectors/native-hierarchy-discovery'
-import { hierarchySelection, selectedFieldNamesForObject, selectedObjectNodes, type NativeHierarchyNode } from '@/lib/connectors/native-hierarchy'
+import { hierarchySelection, selectedObjectNodes, type NativeHierarchyNode } from '@/lib/connectors/native-hierarchy'
 
 export type NativeDiscoveredAsset = {
   asset_type: string
@@ -33,9 +33,9 @@ function assetNamespace(node: NativeHierarchyNode) {
   return node.schema || node.catalog || null
 }
 
-function objectFields(nodes: NativeHierarchyNode[], object: NativeHierarchyNode, selectedNames: Set<string> | null) {
+function objectFields(nodes: NativeHierarchyNode[], object: NativeHierarchyNode) {
   return nodes
-    .filter(node => node.kind === 'FIELD' && node.parentId === object.id && (!selectedNames || selectedNames.has(node.name)))
+    .filter(node => node.kind === 'FIELD' && node.parentId === object.id)
     .sort((left, right) => (left.ordinal ?? Number.MAX_SAFE_INTEGER) - (right.ordinal ?? Number.MAX_SAFE_INTEGER) || left.name.localeCompare(right.name))
     .map(node => ({
       name: node.name,
@@ -47,13 +47,6 @@ function objectFields(nodes: NativeHierarchyNode[], object: NativeHierarchyNode,
       qualified_name: node.qualifiedName,
       metadata: node.metadata ?? {},
     }))
-}
-
-function dedupeTransformations(transformations: JdbcTransformation[]) {
-  return [...new Map(transformations.map(item => [
-    `${item.sourceAsset ?? ''}->${item.targetAsset ?? ''}:${item.logicHash}:${item.catalog ?? ''}:${item.schema ?? ''}:${item.name}`,
-    item,
-  ])).values()]
 }
 
 export async function discoverJdbcFromNativeHierarchy(connectionMetadata: Record<string, unknown>): Promise<NativeJdbcDiscoveryResult> {
@@ -69,15 +62,14 @@ export async function discoverJdbcFromNativeHierarchy(connectionMetadata: Record
     .sort((left, right) => left.qualifiedName.localeCompare(right.qualifiedName))
   const engine = jdbcEngineFromUrl(jdbcUrl)
   const assets: NativeDiscoveredAsset[] = []
-  const transformations: JdbcTransformation[] = []
-  const lineageWarnings: string[] = [...hierarchy.warnings]
-  const lineageCandidates: NativeHierarchyNode[] = []
-  let selectedFieldCount = 0
+  let discoveredFieldCount = 0
 
   for (const object of objects) {
-    const selectedFields = selectedFieldNamesForObject(hierarchy, selection, object)
-    const columns = objectFields(hierarchy.nodes, object, selectedFields)
-    selectedFieldCount += columns.length
+    // Technical metadata discovery always captures the complete field definition for an
+    // included object. Field-level selection is preserved as downstream governance intent,
+    // but must not create an intentionally incomplete digital representation of the object.
+    const columns = objectFields(hierarchy.nodes, object)
+    discoveredFieldCount += columns.length
     const objectType = String(object.objectType ?? object.nativeType ?? 'OBJECT').toUpperCase()
     const namespace = assetNamespace(object)
 
@@ -98,50 +90,27 @@ export async function discoverJdbcFromNativeHierarchy(connectionMetadata: Record
         object_type: object.objectType ?? object.nativeType,
         hierarchy_node_id: object.id,
         hierarchy_selection_mode: selection.mode,
-        field_selection: selectedFields ? 'SELECTED' : 'ALL',
+        metadata_discovery_field_scope: 'FULL_OBJECT',
         native_metadata: object.metadata ?? {},
       },
     })
-
-    if (objectType.includes('VIEW') || engine === 'DATABRICKS') {
-      if (!object.schema && !object.catalog) {
-        lineageWarnings.push(`Transformation discovery skipped for ${object.qualifiedName}: the source did not report a catalog/database or schema namespace.`)
-      } else {
-        lineageCandidates.push(object)
-      }
-    }
   }
 
-  const lineageConcurrency = engine === 'DATABRICKS' ? 12 : 4
-  for (let index = 0; index < lineageCandidates.length; index += lineageConcurrency) {
-    const batch = lineageCandidates.slice(index, index + lineageConcurrency)
-    const results = await Promise.all(batch.map(async (object) => {
-      try {
-        const lineage = await discoverJdbcTransformations({
-          jdbcUrl,
-          credentialRef,
-          catalog: object.catalog ?? null,
-          schema: object.schema ?? null,
-          table: object.name,
-        })
-        return { transformations: lineage.transformations, warnings: lineage.warnings }
-      } catch (error) {
-        return {
-          transformations: [] as JdbcTransformation[],
-          warnings: [`Transformation discovery failed for ${object.qualifiedName}: ${error instanceof Error ? error.message : 'unknown error'}`],
-        }
-      }
-    }))
-    for (const result of results) {
-      transformations.push(...result.transformations)
-      lineageWarnings.push(...result.warnings)
-    }
-  }
-
-  const uniqueTransformations = dedupeTransformations(transformations)
-  const columnMappingCount = uniqueTransformations.reduce((total, item) => total + (item.columnMappings?.length ?? 0), 0)
   const catalogs = [...new Set(objects.map(node => node.catalog).filter((value): value is string => Boolean(value)))]
   const schemas = [...new Set(objects.map(node => node.schema).filter((value): value is string => Boolean(value)))]
+  const complete = !hierarchy.truncated && assets.length === objects.length
+  const consistencyMode = 'BEST_EFFORT_RECONCILIATION'
+  const discoveryManifest = {
+    expected_object_count: objects.length,
+    expected_field_count: discoveredFieldCount,
+    observed_object_count: assets.length,
+    observed_field_count: discoveredFieldCount,
+    failed_item_count: 0,
+    truncated: hierarchy.truncated,
+    complete,
+    consistency_mode: consistencyMode,
+    provider_hierarchy_node_count: hierarchy.nodes.length,
+  }
 
   return {
     assets,
@@ -154,24 +123,25 @@ export async function discoverJdbcFromNativeHierarchy(connectionMetadata: Record
       hierarchy_selection: selection,
       hierarchy_node_count: hierarchy.nodes.length,
       scoped_object_count: objects.length,
-      scoped_field_count: selectedFieldCount,
+      scoped_field_count: discoveredFieldCount,
       catalogs,
       schemas,
       asset_count: assets.length,
-      transformation_count: uniqueTransformations.length,
-      column_mapping_count: columnMappingCount,
-      lineage_candidate_count: lineageCandidates.length,
-      lineage_concurrency: lineageConcurrency,
       hierarchy_details: hierarchy.details,
       hierarchy_warnings: hierarchy.warnings,
-      lineage_warnings: [...new Set(lineageWarnings)],
       discovery_truncated: hierarchy.truncated,
+      discovery_manifest: discoveryManifest,
+      consistency_mode: consistencyMode,
+      lineage_candidate_count: objects.filter(object => String(object.objectType ?? object.nativeType ?? '').toUpperCase().includes('VIEW') || engine === 'DATABRICKS').length,
+      lineage_enrichment_status: 'DEFERRED',
     },
     jdbc: {
       jdbcUrl,
       credentialRef,
       catalog: catalogs.length === 1 ? catalogs[0] : null,
-      transformations: uniqueTransformations,
+      // Lineage is intentionally a downstream enrichment. Factual physical metadata
+      // publication must never wait on lineage permissions, APIs, or AI processing.
+      transformations: [],
     },
   }
 }
