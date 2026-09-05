@@ -108,11 +108,12 @@ export async function embedGovernanceText(text: string, model?: string) {
 
   const customUrl = embeddingProviderUrl()
   const selectedModel = embeddingModel(model)
-  let url = customUrl
+  let url: string
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   let body: Record<string, unknown>
 
   if (customUrl) {
+    url = customUrl
     const apiKey = process.env.GOVERNANCE_EMBEDDING_API_KEY?.trim()
     if (apiKey) headers.authorization = `Bearer ${apiKey}`
     body = { input, model: selectedModel, text: input }
