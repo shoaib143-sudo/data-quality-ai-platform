@@ -7,6 +7,7 @@ import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specia
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
+import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
       if (investigation) specialistOutput = { ...specialistOutput, investigation }
     }
 
+    specialistOutput = await enrichOutputWithAIGovernanceIntelligence(projectId, specialistOutput)
     const output = await enrichGovernedAgentWithMemory({
       projectId,
       agentDefinitionId,
@@ -75,6 +77,11 @@ export async function POST(request: Request) {
       question: question || null,
       output: specialistOutput,
     })
+
+    const admin = createAdminClient()
+    const { error: outputError } = await admin.schema('agent').from('agent_runs').update({ output }).eq('id', result.runId).eq('project_id', projectId)
+    if (outputError) throw new Error(`Unable to persist enriched governance agent output: ${outputError.message}`)
+
     const memory = await persistGovernedAgentMemoryAndEvaluation({
       projectId,
       agentDefinitionId,
