@@ -38,6 +38,8 @@ jobs:
         run: pnpm run verify:agent-portfolio
       - name: Verify governed agent specialization
         run: pnpm run verify:agent-specialization
+      - name: Verify specialist governance intelligence consumption
+        run: node scripts/verify-specialist-governance-intelligence.mjs
       - name: Verify agent memory and learning
         run: pnpm run verify:agent-memory-learning
       - name: Verify investigation and prediction
