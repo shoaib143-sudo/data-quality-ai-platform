@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
-import { discoverDatabricksSchemaScope, discoverJdbcCatalog, jdbcEngineFromUrl } from '@/lib/connectors/jdbc'
-import { readSchemaScope, SchemaScopeError } from '@/lib/connectors/schema-scope'
+import { discoverNativeHierarchy } from '@/lib/connectors/native-hierarchy-discovery'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function validCredentialRef(value: string) { return /^DGP_[A-Za-z0-9_]+$/.test(value) }
-function jdbcCatalog(jdbcUrl: string, requested: string) {
-  if (requested) return requested
-  const match = jdbcUrl.match(/(?:[?&;])ConnCatalog=([^;?&]+)/i)
-  return match?.[1]?.trim() ?? ''
-}
 
 export async function POST(request: Request) {
   try {
@@ -18,28 +12,50 @@ export async function POST(request: Request) {
     const body = await request.json()
     const projectId = text(body.projectId)
     const jdbcUrl = text(body.jdbcUrl)
-    const connectionKind = text(body.connectionKind) || 'jdbc'
-    const schema = text(body.schema)
     const credentialRef = text(body.credentialRef)
-    const catalogName = jdbcCatalog(jdbcUrl, text(body.catalog))
+    const connectionKind = text(body.connectionKind) || 'jdbc'
 
-    if (!projectId || !jdbcUrl || !credentialRef) return NextResponse.json({ error: 'Project, connection string, and database credentials are required.', code: 'INVALID_DISCOVERY_REQUEST' }, { status: 400 })
-    if (!validCredentialRef(credentialRef)) return NextResponse.json({ error: 'The connection credentials are invalid or expired.', code: 'INVALID_CREDENTIAL_REF' }, { status: 400 })
+    if (!projectId || !jdbcUrl || !credentialRef) {
+      return NextResponse.json({ error: 'Project, connection string, and database credentials are required.', code: 'INVALID_DISCOVERY_REQUEST' }, { status: 400 })
+    }
+    if (!validCredentialRef(credentialRef)) {
+      return NextResponse.json({ error: 'The connection credentials are invalid or expired.', code: 'INVALID_CREDENTIAL_REF' }, { status: 400 })
+    }
 
     await authorizeProject(user.id, projectId, 'catalog.read')
 
     try {
-      const discovery = jdbcEngineFromUrl(jdbcUrl) === 'DATABRICKS'
-        ? await discoverDatabricksSchemaScope({ jdbcUrl, credentialRef, catalog: catalogName || undefined }, readSchemaScope(body))
-        : await discoverJdbcCatalog({ jdbcUrl, credentialRef, schema: schema || undefined, catalog: catalogName || undefined })
-      const resolvedCatalog = catalogName || (typeof discovery.details.catalog === 'string' ? discovery.details.catalog : '')
-      return NextResponse.json({ ...discovery, schema: schema || null, catalog: resolvedCatalog || null })
+      const hierarchy = await discoverNativeHierarchy({ jdbcUrl, credentialRef })
+      const schemas = hierarchy.nodes.filter(node => node.kind === 'SCHEMA').map(node => node.name)
+      const tables = hierarchy.nodes.filter(node => node.kind === 'OBJECT').map(node => ({
+        name: node.name,
+        type: node.objectType ?? node.nativeType,
+        catalog: node.catalog ?? null,
+        schema: node.schema ?? null,
+        qualifiedName: node.qualifiedName,
+      }))
+      return NextResponse.json({
+        hierarchy,
+        schemas,
+        tables,
+        details: {
+          ...hierarchy.details,
+          database_product: hierarchy.databaseProduct,
+          database_version: hierarchy.databaseVersion,
+          native_terms: hierarchy.terms,
+          hierarchy_node_count: hierarchy.nodes.length,
+          hierarchy_truncated: hierarchy.truncated,
+        },
+      })
     } catch (error) {
-      if (error instanceof SchemaScopeError) return NextResponse.json({ error: error.message, schemas: error.availableSchemas, code: 'SCHEMA_SCOPE_UNAVAILABLE' }, { status: 422 })
-      return NextResponse.json({ error: error instanceof Error ? error.message : 'JDBC catalog discovery failed.', code: 'JDBC_DISCOVERY_FAILED', connectionKind }, { status: 502 })
+      return NextResponse.json({
+        error: error instanceof Error ? error.message : 'Native database hierarchy discovery failed.',
+        code: 'NATIVE_HIERARCHY_DISCOVERY_FAILED',
+        connectionKind,
+      }, { status: 502 })
     }
   } catch (error) {
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message, code: 'PROJECT_ACCESS_DENIED' }, { status: error.status })
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'JDBC catalog discovery failed.', code: 'JDBC_DISCOVERY_REQUEST_FAILED' }, { status: 400 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Native database hierarchy discovery failed.', code: 'DISCOVERY_REQUEST_FAILED' }, { status: 400 })
   }
 }
