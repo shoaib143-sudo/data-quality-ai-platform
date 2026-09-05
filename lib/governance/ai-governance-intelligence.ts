@@ -97,7 +97,16 @@ export async function enrichOutputWithAIGovernanceIntelligence(
   output: Record<string, unknown>,
 ) {
   const governanceIntelligence = await loadProjectAIGovernanceIntelligence(projectId)
-  return { ...output, governanceIntelligence }
+  const base = { ...output, governanceIntelligence }
+  const agent = output.agent
+  if (!agent || typeof agent !== 'object' || Array.isArray(agent)) return base
+
+  const [{ buildGovernanceIntelligenceBrief }, { composeSpecialistOutputWithGovernanceIntelligence }] = await Promise.all([
+    import('@/lib/governance/governance-intelligence-brief'),
+    import('@/lib/agents/governance-intelligence-specialist-context'),
+  ])
+  const brief = await buildGovernanceIntelligenceBrief(projectId)
+  return composeSpecialistOutputWithGovernanceIntelligence(base, brief)
 }
 
 export async function refreshAllAIGovernanceIntelligence() {
