@@ -1,226 +1,402 @@
-# Data Quality AI Platform --- Project State
+# DataNexus AI — Current Project State
 
-> Durable project checkpoint. Treat the repository, Supabase migration history,
-and this file as the primary continuity sources.
+> Current durable checkpoint. Treat this file, the repository, Supabase migration history, and the latest dated file under `Major discussion/` as the primary continuity sources. `PROJECT_STATE_v2.md` is historical and should not be used as the current implementation baseline.
 
-## 1. Project Identity
+## 1. Project identity
 
-- **Project:** `data-quality-ai-platform`
-- **Git branch:** `main`
-- **GitHub remote:** `https://github.com/shoaib143-sudo/data-quality-ai-platform.git`
-- **Production URL:** `https://data-quality-ai-platform.vercel.app`
-- **Supabase project ref:** `tvjnavjxuehpesxcfvrx`
+- Project: `data-quality-ai-platform`
+- Product name: **DataNexus AI**
+- GitHub: `shoaib143-sudo/data-quality-ai-platform`
+- Branch: `main`
+- Production: `https://data-quality-ai-platform.vercel.app`
+- Supabase project ref: `tvjnavjxuehpesxcfvrx`
+- Main demo project: `479813aa-72a4-4b12-b72a-74da8d2419ce`
 
-## 2. Integrated Lifecycle
+## 2. Current Git / CI / production baseline
 
-```text
-Dataset
- -> Dataset Version
- -> Source Configuration
- -> Source Connectivity
- -> Source Validation
- -> Profiling Ready
- -> Profile Run
- -> Schema Discovery
- -> Profile Columns
- -> Metric Execution
- -> Metric Results
- -> Findings Generation
- -> Quality Score
- -> Investigation
- -> Governance Insights
- -> Contract Validation
- -> Agent Run SUCCEEDED
-```
-
-## 3. Six-Lane Implementation State
-
-### Lane 1 --- Profiling Execution: COMPLETE
-
-Canonical dataset/version resolution, profile-run lifecycle, schema discovery,
-profile-column persistence, deterministic metric execution, source loading,
-findings generation, quality scoring, cancellation guards, terminal-state
-preservation, and final profiling contract validation are implemented.
-
-### Lane 2 --- Metric Persistence Contract: COMPLETE
-
-Metric persistence is validated by execution identity using
-`metric_definition_id + profile_column_id` for column metrics and the null
-column identity for dataset metrics. The database now also enforces the
-execution identity with `uq_profile_metrics_execution_identity`.
-
-The live registry contains 33 enabled metrics: 5 dataset, 25 column, and
-3 distribution metrics.
-
-### Lane 3 --- Findings -> Score -> Investigation: COMPLETE
-
-Deterministic findings, quality scoring, persisted investigation, structured
-business-impact interpretation, evidence/limitations, and the Profiling Agent
-execution chain are implemented. An agent run cannot become `SUCCEEDED` until
-the complete persisted profiling result satisfies the validation contract.
-
-### Lane 4 --- Filtering / Drill-down: COMPLETE
-
-The Profiling Explorer provides finding search, severity/type filters, column
-drill-down, persisted metric evidence, findings, and score context.
-
-### Lane 5 --- Source Onboarding Pipeline: COMPLETE
-
-Dataset registration, version creation, source binding, executable source
-resolution, FILE/CSV validation, Storage validation, PostgreSQL/Supabase table
-validation, and profiling-ready handoff are implemented.
-
-Generic JDBC is integrated through a governed bridge abstraction. JDBC sources
-require `jdbc_url`, `credential_ref`, schema/table identifiers, and the
-server-managed `JDBC_BRIDGE_URL` plus `JDBC_BRIDGE_TOKEN`. Source configuration
-cannot override the bridge destination, preventing a database-backed record from
-turning the server into an arbitrary outbound HTTP proxy. Raw JDBC credentials
-are rejected.
-
-The bridge contract exposes `/v1/validate` and `/v1/query`. The initial bridge
-image includes PostgreSQL, MSSQL, and MySQL JDBC drivers; additional JDBC drivers
-can be added without changing the DataNexus application contract.
-
-### Lane 6 --- Hardening / Observability: COMPLETE
-
-Persisted agent-run logging, project-scoped access, lifecycle guards, failure
-persistence, cooperative cancellation, source-resolution hardening, registry
-uniqueness, performance indexes, historical repair auditing, RLS protection for
-the repair audit table, production smoke verification, bounded production
-latency benchmarking, and JDBC security/test coverage are implemented.
-
-## 4. Live Agent Registry
+Current verified `main` before this state update:
 
 ```text
-profiling_agent v1.0 -> disabled
-profiling_agent v2.0 -> enabled
+d3378631412edefdfee180a21cb8224646f8acd4
+Gate native Databricks connector readiness
 ```
 
-Enabled production profiling tools:
+Quality Gate:
 
 ```text
-profile_dataset v2.0
-execute_metrics v2.0
-investigate_profile v2.0
+run:        33962072205
+run number: 1021
+status:     completed
+conclusion: success
+head SHA:   d3378631412edefdfee180a21cb8224646f8acd4
 ```
 
-## 5. Database and Historical Data Hardening
-
-Applied migrations include:
+Matching Vercel production deployment:
 
 ```text
-20260902194437_harden_agent_registry_uniqueness
-20260902195211_harden_performance_and_historical_metrics
-20260902195412_complete_profiling_performance_indexes
-20260902195726_secure_metric_repair_audit
-20260902195755_reclassify_incomplete_historical_profiling_runs
-20260903230000_restrict_security_definer_rpc_execute
-20260903230500_close_public_profiling_rpc_execute_grant
+dpl_29nsT3dhvK5dBdEindWuk24z3psE
+state: READY
+target: production
 ```
 
-The historical repair normalized the known legacy dataset-metric identity error:
-15 canonical dataset metric rows were retained and 10 duplicate rows removed,
-with every action recorded in `profiling.metric_repair_audit`.
+Repository operational risks remain:
 
-Two historical runs that did not satisfy the current execution contract are now
-explicitly `PARTIAL` rather than falsely represented as successful completions.
-No historical evidence was fabricated or deleted.
+- `main` is not branch protected
+- required checks are not enforced through branch protection
+- commits are unsigned
 
-Post-repair verification reports zero duplicate metric execution identities and
-zero invalid dataset metric rows carrying a profile-column identity. The remaining
-`COMPLETED` run validates successfully with 3 profile columns, 75 column metric
-rows, 5 dataset metric rows, and 9 distribution metric rows.
+## 3. Platform capability state
 
-Performance hardening removed exact duplicate indexes previously reported by the
-Supabase advisor and added coverage for the anomaly metric foreign key. The new
-repair audit foreign keys are indexed and the audit table has RLS enabled.
-Remaining performance advisor output is limited to informational unused-index
-notices and the intentionally synthetic validation table without a primary key.
+The core production platform now includes:
 
-## 6. Security Boundary
+- governed datasource onboarding
+- CSV / file ingestion
+- native PostgreSQL connector
+- native Databricks connector
+- generic JDBC bridge abstraction for other JDBC engines
+- durable metadata discovery
+- profiling and data-quality execution
+- investigations and predictions
+- governed specialized AI agents
+- agent memory / learning
+- semantic governance knowledge
+- governance knowledge graph
+- data contracts / certification readiness
+- governed autonomy
+- enterprise governance knowledge intake with human review boundaries
+- Governance Control Intelligence
+- automated governance evidence collection
+- continuous control reconciliation
+- governance finding → native issue projection
+- governance intelligence brief
+- specialist-agent governance intelligence consumption
+- table-level lineage
+- transformation lineage
+- governed field-lineage ingestion
+- Databricks system lineage integration path
 
-- Service-role credentials remain server-side.
-- Normal user operations preserve organization/project isolation.
-- Agent runs are project-scoped.
-- Tool execution is server-side and tied to an enabled registered agent.
-- JDBC raw passwords/secrets are rejected from source configuration.
-- JDBC credentials are referenced by `credential_ref` and resolved by the bridge.
-- The JDBC bridge destination is server-managed and cannot be supplied by source metadata.
-- JDBC bridge requests require a constant-time bearer-token comparison.
-- Infisical Machine Identity tokens are short-lived, cached in memory, refreshed before expiry, and explicitly invalidated after HTTP 401.
-- Infisical authentication and credential-store failures do not echo response bodies or secret values.
-- Cancellation cannot reactivate a terminal run.
-- Production data modification, deletion, schema changes, remediation execution,
-and governance-policy changes remain approval-gated.
-- SECURITY DEFINER authorization helpers and profiling metadata RPCs are no
-  longer executable by `anon` or `authenticated` through PostgREST.
+Do not rebuild completed modules unless a live defect proves a specific layer is broken.
 
-The remaining Supabase security-advisor warning is leaked-password protection.
-The RLS-without-policy notices are informational and intentionally preserve a
-default-deny posture on internal tables. Leaked-password protection requires
-Auth configuration access and should be enabled before password-based production
-onboarding.
+## 4. Native Databricks connector
 
-## 7. Production Verification
+Databricks no longer depends on the generic JDBC bridge.
 
-Latest GitHub `main` commits are automatically deployed through Vercel when the
-Vercel build quota permits deployment.
-
-The production smoke verifier checks `/login` plus protected POST-only API
-method/auth boundaries. When `JDBC_BRIDGE_URL` is supplied to the verifier, it
-also checks bridge health and confirms the unauthenticated `/v1/query` boundary
-returns 401. Authenticated profiling-contract verification remains optional and
-uses `VERIFY_COOKIE` and `VERIFY_PROFILE_RUN_ID` without logging either value.
-
-A bounded production latency benchmark is available through:
+Primary implementation:
 
 ```text
-pnpm benchmark:production
+supabase/functions/dgp-databricks-connector/index.ts
 ```
 
-It defaults to 25 requests with concurrency 5 against `/login` and fails on
-transport errors or unexpected status codes. It is deliberately bounded and
-must not be treated as a substitute for authenticated profiling load tests.
+Production Edge Function:
 
-## 8. JDBC Bridge Automated Test Coverage
+```text
+slug:       dgp-databricks-connector
+status:     ACTIVE
+version:    1
+verify_jwt: true
+```
 
-The Java bridge has automated coverage for:
+Native flow:
 
-- Infisical Universal Auth success and token caching
-- short-lived token refresh
-- explicit token invalidation
-- concurrency-safe single-flight token refresh
-- HTTP 401 credential-store retry with fresh Machine Identity authentication
-- missing Infisical project/auth configuration
-- invalid credential references
-- secret-safe authentication failures
-- JDBC URL and embedded-credential rejection
-- unsafe schema/table identifier rejection
-- bridge bearer authentication
-- public health endpoint
-- 10,000-row query ceiling
+```text
+DataNexus Web UI
+ -> secure credential route
+ -> Supabase Vault
+ -> dgp-databricks-connector
+ -> Unity Catalog metadata
+ -> SQL Statement Execution
+ -> Databricks system lineage
+ -> Catalog Discovery
+ -> governance lineage persistence
+```
 
-The bridge test suite uses an H2 test-only dependency and local HTTP fixtures, so
-it does not require real Infisical or database credentials in CI.
+Recent native Databricks commits:
 
-## 9. Remaining Production Activation Work
+```text
+122b82be  Add native Databricks connector edge function
+5943d2ce  Route Databricks credentials through Supabase Vault
+e95036f1  Use native Databricks edge connector
+b3723ba3  Persist authoritative Databricks field lineage
+36b91863  Report native Databricks connector readiness
+d3378631  Gate native Databricks connector readiness
+```
 
-The application implementation and automated bridge coverage are complete.
-Remaining work is external or environment-dependent:
+Production readiness currently reports:
 
-- provision and operate the JDBC bridge and credential store
-- provide real connector fixtures/credentials for authenticated E2E
-- enable Supabase leaked-password protection through the Auth configuration
-- run authenticated E2E across the complete profiling lifecycle
-- run connector-specific integration/load tests against PostgreSQL, MSSQL,
-  MySQL and later Oracle/Databricks JDBC drivers as they are provisioned
-- execute measured production benchmark runs and tune workloads from evidence
+```text
+databricks_connector: READY
+```
 
-The generic JDBC code path is complete at the application boundary and is
-security-pinned to the deployment-managed bridge. A real bridge deployment and
-credential-store configuration are still required to connect to an external
-JDBC database. This is an infrastructure provisioning dependency, not an
-unimplemented application path.
+The generic JDBC bridge may remain DEGRADED. That does not block native PostgreSQL or native Databricks.
 
-Do not rebuild completed modules. Any newly discovered defect must be fixed at
-the smallest affected layer and the full dependency chain re-checked.
+## 5. Databricks testing status
+
+**Not complete.**
+
+The native connector implementation is production-ready, but the requested real Web UI test has not yet been completed.
+
+Current live evidence:
+
+```text
+registered Databricks datasources: 0
+Databricks discovery runs:          0
+real field lineage column mappings: 0
+```
+
+Requested test target:
+
+```text
+Catalog: dbw_clinixir
+Schema:  PUB
+```
+
+The user has two Databricks workspaces available. The first has supplied SQL warehouse connection details and is the immediate test target. Do not store workspace credentials, PATs, personal passwords, service-role credentials, or bearer tokens in GitHub.
+
+The previous password and PAT shared in chat must be treated as exposed. Do not copy their values into any repository artifact. Use a rotated PAT directly through the Web UI / approved secret boundary.
+
+Detailed acceptance criteria and the full handover are in:
+
+```text
+Major discussion/2026-09-05-databricks-native-connector-testing-checkpoint-and-handover.md
+```
+
+## 6. Databricks field-lineage truth boundary
+
+The connector can obtain real lineage from Databricks system lineage sources, including:
+
+```text
+system.access.table_lineage
+system.access.column_lineage
+```
+
+Authoritative column mappings are persisted into:
+
+```text
+governance.lineage_column_mappings
+```
+
+Mappings sourced from Databricks column lineage are marked with authoritative provenance.
+
+No synthetic or guessed column mapping may be inserted merely to clear the formal AI Governance Intelligence gate.
+
+If Databricks permissions or source history do not expose real column lineage, keep the blocker open and record the exact limitation.
+
+## 7. Formal AI Governance Intelligence state
+
+Latest verified main demo project result:
+
+```text
+status:                    PARTIAL
+failure_count:             0
+partial_or_external_count: 2
+```
+
+Only remaining formal blockers:
+
+```text
+REAL_FIELD_LINEAGE_DATA_NOT_INGESTED
+REAL_GOVERNANCE_CORPUS_NOT_INGESTED
+```
+
+Current field lineage:
+
+```text
+status:          DATA_PENDING
+column_mappings: 0
+```
+
+Current enterprise governance corpus:
+
+```text
+status:                  BOOTSTRAP_ONLY
+non_synthetic_documents: 0
+```
+
+Other major formal checks pass, including:
+
+- semantic RAG
+- audit integrity
+- knowledge graph
+- memory and learning
+- governed autonomy
+- specialized agents
+- governance knowledge
+- quality intelligence
+- human review boundary
+- CDEs
+- contracts / certification
+- investigation / prediction
+- cross-agent collaboration
+- quality-rule human approval
+- Governance Control Intelligence
+
+Latest audit-chain verification contained 634 events with zero failures.
+
+## 8. Governance Control Intelligence
+
+Current state:
+
+```text
+status:                PASS
+mode:                  READY_PENDING_AUTHORITY
+proposed_controls:     5
+active_controls:       0
+evaluations:           0
+open_findings:         0
+stale_evaluation_gaps: 0
+```
+
+Core lifecycle:
+
+```text
+Governance document
+ -> requirement
+ -> PROPOSED control
+ -> human review
+ -> ACTIVE control
+ -> authoritative evidence
+ -> evaluation
+ -> finding
+ -> governance issue
+ -> agent reasoning
+```
+
+The five current control proposals remain intentionally non-authoritative because the internal source documents do not yet have genuine source-of-record / current-status / organizational approval authority established.
+
+Never approve them merely because a demo actor technically has `policy.approve`.
+
+## 9. Governance documents and authority blocker
+
+Four real documents were previously ingested as pending candidates/references, producing 29 source-derived requirements.
+
+Internal candidates include:
+
+- Maybank CDE Identification Methodology
+- Business Glossary / Data Dictionary Framework
+
+External references include:
+
+- EDMA Global DM Benchmark 2026
+- PwC Data Governance / DA Leader Delivery Playbook 2019
+
+They remain DRAFT / PENDING for enterprise-authority purposes.
+
+To clear the enterprise governance corpus blocker, obtain at least one genuine organization-authoritative document with:
+
+1. real source-of-record / provenance
+2. confirmation that the document is current / approved
+3. genuine organizational approval authority
+
+Do not fabricate provenance or approval.
+
+## 10. Governance control engine state
+
+Implemented capabilities include:
+
+- proposal generation from source-derived requirements
+- human review boundary
+- scope binding
+- evidence collection
+- evaluation
+- findings
+- findings projected into native governance issues
+- automated evidence collection
+- continuous reconciliation
+- five-minute control evaluation SLO
+- control posture read model
+- deterministic governance intelligence brief
+- specialist-agent consumption
+
+Current policy contract:
+
+```text
+PROPOSE_FROM_REQUIREMENTS_HUMAN_APPROVE_BEFORE_ACTIVE_CONTINUOUS_AUTHORITATIVE_EVIDENCE_EVALUATION
+```
+
+## 11. Agent state
+
+Eight governed production agent roles are enabled and have been exercised successfully in the formal gate.
+
+Specialist roles consume deterministic governance intelligence through the shared specialist composition boundary.
+
+Agent reasoning rules include:
+
+- only ACTIVE + APPROVED controls support authoritative conclusions
+- proposed controls remain non-authoritative
+- formal blockers cannot be inferred away
+- never fabricate enterprise policy approval, provenance, attestation, transformation lineage, evidence, or ownership
+
+## 12. Semantic / RAG state
+
+Formal semantic RAG currently passes with 229 persisted embeddings.
+
+The production readiness endpoint can still show a generic semantic-provider DEGRADED state because an external `GOVERNANCE_EMBEDDING_URL` is not configured. This does not mean the formal governance semantic corpus is empty; the formal gate has persisted embeddings and passes.
+
+Do not confuse generic readiness provider configuration with the formal semantic governance gate.
+
+## 13. Immediate work queue
+
+Priority order:
+
+### 1. Complete the real Databricks Web UI test
+
+Use the deployed native connector. Do not add another connector unless a real live defect proves it is necessary.
+
+Expected sequence:
+
+```text
+Web UI connection
+ -> secure PAT provisioning
+ -> dbw_clinixir catalog discovery
+ -> PUB schema discovery
+ -> save datasource
+ -> Catalog Discovery job
+ -> metadata persistence
+ -> table lineage
+ -> column lineage
+ -> formal gate verification
+```
+
+### 2. Fix only real defects found in that run
+
+If the connection fails, identify the exact layer:
+
+- PAT / Vault
+- SQL warehouse / HTTP path
+- Unity Catalog permission
+- SQL Statement Execution
+- system lineage permission / availability
+- DataNexus persistence
+
+Do not guess.
+
+### 3. Clear field-lineage blocker only with real source evidence
+
+A single genuine mapping in production is sufficient for the current formal count-based gate, but it must come from real Databricks lineage or another genuine transformation artifact.
+
+### 4. Clear enterprise governance corpus blocker only with real authority
+
+Obtain a genuinely authoritative internal governance source and complete the governed human review path.
+
+## 14. Working rules
+
+1. Verify live state before changing code.
+2. Do not fabricate data to close a formal gate.
+3. Do not store secrets in GitHub.
+4. Use the smallest fix for a proven defect.
+5. Run Quality Gate after meaningful code changes.
+6. Verify the matching Vercel deployment is READY.
+7. Re-run live database checks after production changes.
+8. Preserve old project decisions in dated Major Discussion files.
+9. Write a new checkpoint after the real Databricks exercise.
+10. Treat current production evidence as stronger than old assumptions in historical state files.
+
+## 15. Next handover source
+
+The detailed continuation prompt is embedded in:
+
+```text
+Major discussion/2026-09-05-databricks-native-connector-testing-checkpoint-and-handover.md
+```
+
+A new agent should read that file before continuing Databricks testing.

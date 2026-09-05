@@ -69,6 +69,7 @@ Human approval initially required for:
 - `2026-08-31-reconciliation.md` records the latest checkpoint. No new durable product or architecture decisions were identified after 2026-08-30, so the existing baseline remains current.
 - `2026-09-04-polyglot-data-platform-component-impact.md` translates ADR-002 into implementation impact, separating new provider/projection components from existing modules that require storage-ownership or interface changes, and defines the phased migration strategy.
 - `2026-09-04-optimum-polyglot-data-platform-implementation-strategy.md` defines the contract-first, projection-first, infrastructure-later execution sequence, including provider refactors, transactional outbox, projection workers, rebuild/reconciliation, shadow reads, database introduction gates, scale tests, agent memory, and migration safety rules.
+- `2026-09-05-databricks-native-connector-testing-checkpoint-and-handover.md` records the native Databricks connector implementation, production readiness, live test boundary, `dbw_clinixir.PUB` acceptance criteria, security rules, formal AI Governance Intelligence blockers, and the handover prompt for the next engineering agent.
 
 The capability matrix is intentionally broader than the current implementation scope. Future implementation should draw from it rather than recreate the exploration from scratch.
 
