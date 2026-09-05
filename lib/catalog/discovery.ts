@@ -12,6 +12,7 @@ type Source = {
 }
 
 type DiscoveredAsset = { asset_type:string; namespace:string|null; name:string; columns:unknown[]; metadata:Record<string,unknown> }
+type PersistedLineageAsset = { id:string; dataset_id:string|null; namespace:string; name:string }
 
 type JdbcDiscoveryResult = {
   assets: DiscoveredAsset[]
@@ -66,6 +67,7 @@ async function discoverJdbc(source: Source):Promise<JdbcDiscoveryResult> {
   const configuredCatalog = stringField(metadata, ['catalog','catalog_name','catalogName','database','database_name','databaseName'])
   if (!jdbcUrl || !credentialRef) throw new Error('JDBC source discovery requires jdbc_url and credential_ref.')
 
+  const engine=jdbcEngineFromUrl(jdbcUrl)
   const root = await discoverJdbcCatalog({ jdbcUrl, credentialRef, ...(configuredSchema ? { schema: configuredSchema } : {}), ...(configuredCatalog ? { catalog: configuredCatalog } : {}) })
   const schemas = configuredSchema ? [configuredSchema] : root.schemas
   const assets: DiscoveredAsset[] = []
@@ -84,7 +86,7 @@ async function discoverJdbc(source: Source):Promise<JdbcDiscoveryResult> {
     const results = await Promise.all(batch.map(async ({ schema, catalog, table }) => {
       const validation = await validateJdbcConnection({ jdbcUrl, credentialRef, schema, table: table.name, catalog })
       const tableType=String(table.type??'TABLE').toUpperCase()
-      if(tableType.includes('VIEW')){
+      if(tableType.includes('VIEW')||engine==='DATABRICKS'){
         try{
           const lineage=await discoverJdbcTransformations({jdbcUrl,credentialRef,schema,table:table.name,catalog})
           transformations.push(...lineage.transformations)
@@ -98,7 +100,7 @@ async function discoverJdbc(source: Source):Promise<JdbcDiscoveryResult> {
         columns: validation.columns,
         metadata: {
           source_type: 'JDBC',
-          jdbc_engine: jdbcEngineFromUrl(jdbcUrl),
+          jdbc_engine: engine,
           catalog: catalog??null,
           schema,
           table_type: table.type ?? null,
@@ -113,17 +115,19 @@ async function discoverJdbc(source: Source):Promise<JdbcDiscoveryResult> {
     assets.push(...results)
   }
 
-  const uniqueTransformations=[...new Map(transformations.map(item=>[`${item.catalog??''}.${item.schema??''}.${item.name}:${item.logicHash}`,item])).values()]
+  const uniqueTransformations=[...new Map(transformations.map(item=>[`${item.sourceAsset??''}->${item.targetAsset??''}:${item.logicHash}`,item])).values()]
+  const columnMappingCount=uniqueTransformations.reduce((total,item)=>total+(item.columnMappings?.length??0),0)
   return {
     assets,
     snapshot: {
       source_type: 'JDBC',
-      jdbc_engine: jdbcEngineFromUrl(jdbcUrl),
+      jdbc_engine: engine,
       schemas: root.schemas,
       configured_schema: configuredSchema,
       configured_catalog: configuredCatalog,
       asset_count: assets.length,
       transformation_count: uniqueTransformations.length,
+      column_mapping_count: columnMappingCount,
       catalog_details: root.details,
       lineage_warnings: [...new Set(lineageWarnings)],
       discovery_truncated: false,
@@ -155,14 +159,19 @@ function sqlDependencies(logic:string){
   return [...new Set(result.map(value=>value.toLowerCase()))]
 }
 
+function splitLineageAsset(fullName:string){
+  const parts=fullName.split('.').map(part=>part.trim()).filter(Boolean)
+  return{namespace:parts.length>1?parts.slice(0,-1).join('.'):'',name:parts.at(-1)??fullName}
+}
+
 async function persistJdbcLineage(source:Source,runId:string,assets:DiscoveredAsset[],transformations:JdbcTransformation[]){
-  if(!transformations.length)return{transformations:0,edges:0}
+  if(!transformations.length)return{transformations:0,edges:0,columnMappings:0}
   const admin=createAdminClient()
   const engine=transformations[0]?.engine||'JDBC'
   const {data:integration,error:integrationError}=await admin.schema('governance').from('lineage_integrations').upsert({project_id:source.project_id,source_key:`jdbc-source:${source.id}`,name:`${source.name} JDBC metadata lineage`,integration_type:engine,enabled:true},{onConflict:'project_id,source_key'}).select('id').single()
   if(integrationError||!integration)throw new Error(`Unable to register JDBC lineage integration: ${integrationError?.message??'unknown error'}`)
 
-  const assetByKey=new Map<string,{id:string;dataset_id:string|null;namespace:string;name:string}>()
+  const assetByKey=new Map<string,PersistedLineageAsset>()
   const registeredDatasets=await admin.schema('catalog').from('datasets').select('id,name,source_identifier').eq('project_id',source.project_id).eq('data_source_id',source.id)
   if(registeredDatasets.error)throw new Error(`Unable to resolve registered JDBC datasets for lineage: ${registeredDatasets.error.message}`)
 
@@ -175,27 +184,59 @@ async function persistJdbcLineage(source:Source,runId:string,assets:DiscoveredAs
     assetByKey.set(asset.name.toLowerCase(),data);assetByKey.set(full.toLowerCase(),data)
   }
 
+  const resolveAsset=async(fullName:string,authoritative=false)=>{
+    const key=fullName.toLowerCase()
+    const existing=assetByKey.get(key)||assetByKey.get(key.split('.').at(-1)!)
+    if(existing)return existing
+    const parts=splitLineageAsset(fullName)
+    const {data,error}=await admin.schema('governance').from('lineage_assets').upsert({project_id:source.project_id,integration_id:integration.id,namespace:parts.namespace,name:parts.name,asset_type:'DATASET',metadata:{source_id:source.id,discovery_run_id:runId,dependency_only:true,authoritative_lineage_source:authoritative?'DATABRICKS_SYSTEM_LINEAGE':undefined},last_seen_at:new Date().toISOString()},{onConflict:'project_id,namespace,name,asset_type'}).select('id,dataset_id,namespace,name').single()
+    if(error||!data)throw new Error(`Unable to register JDBC lineage dependency ${fullName}: ${error?.message??'unknown error'}`)
+    assetByKey.set(key,data);assetByKey.set(parts.name.toLowerCase(),data)
+    return data as PersistedLineageAsset
+  }
+
   let edges=0
+  let columnMappings=0
   for(const transformation of transformations){
-    const externalId=[transformation.catalog,transformation.schema,transformation.name].filter(Boolean).join('.')
-    const {data:t,error:tError}=await admin.schema('governance').from('lineage_transformations').upsert({project_id:source.project_id,integration_id:integration.id,external_id:externalId,source_system:transformation.engine||engine,name:transformation.name,operation:transformation.operation||'VIEW',logic_language:'SQL',transformation_logic:transformation.transformationLogic,logic_hash:transformation.logicHash,metadata:{source_id:source.id,discovery_run_id:runId,catalog:transformation.catalog??null,schema:transformation.schema??null},last_seen_at:new Date().toISOString()},{onConflict:'project_id,integration_id,external_id'}).select('id').single()
+    const structured=Boolean(transformation.sourceAsset&&transformation.targetAsset)
+    const externalId=structured?`databricks-lineage:${transformation.logicHash}`:[transformation.catalog,transformation.schema,transformation.name].filter(Boolean).join('.')
+    const {data:t,error:tError}=await admin.schema('governance').from('lineage_transformations').upsert({project_id:source.project_id,integration_id:integration.id,external_id:externalId,source_system:transformation.engine||engine,name:transformation.name,operation:transformation.operation||'VIEW',logic_language:transformation.transformationLogic?'SQL':null,transformation_logic:transformation.transformationLogic||null,logic_hash:transformation.logicHash,metadata:{source_id:source.id,discovery_run_id:runId,catalog:transformation.catalog??null,schema:transformation.schema??null,...(transformation.metadata??{})},last_seen_at:new Date().toISOString()},{onConflict:'project_id,integration_id,external_id'}).select('id').single()
     if(tError||!t)throw new Error(`Unable to persist JDBC transformation ${externalId}: ${tError?.message??'unknown error'}`)
+
+    if(structured){
+      const sourceAsset=await resolveAsset(transformation.sourceAsset!,true)
+      const targetAsset=await resolveAsset(transformation.targetAsset!,true)
+      const {error:edgeError}=await admin.schema('governance').from('lineage_edges').upsert({project_id:source.project_id,source_type:sourceAsset.dataset_id?'DATASET':'EXTERNAL_ASSET',source_id:sourceAsset.dataset_id??sourceAsset.id,target_type:targetAsset.dataset_id?'DATASET':'EXTERNAL_ASSET',target_id:targetAsset.dataset_id??targetAsset.id,relationship:'TRANSFORMS_TO',transformation_id:t.id,metadata:{source_id:source.id,discovery_run_id:runId,operation:transformation.operation,logic_hash:transformation.logicHash,auto_discovered:true,authoritative_source:transformation.metadata?.authoritative_source??'DATABRICKS_SYSTEM_LINEAGE'}},{onConflict:'project_id,source_type,source_id,target_type,target_id,relationship,transformation_id'})
+      if(!edgeError)edges+=1
+
+      if(transformation.columnMappings?.length){
+        const {error:deleteError}=await admin.schema('governance').from('lineage_column_mappings').delete().eq('transformation_id',t.id)
+        if(deleteError)throw new Error(`Unable to refresh Databricks column mappings for ${externalId}: ${deleteError.message}`)
+        const mappingRows=[]
+        for(const mapping of transformation.columnMappings){
+          const mappingSource=await resolveAsset(mapping.sourceAsset||transformation.sourceAsset!,true)
+          const mappingTarget=await resolveAsset(mapping.targetAsset||transformation.targetAsset!,true)
+          mappingRows.push({project_id:source.project_id,transformation_id:t.id,source_asset_id:mappingSource.id,source_column:mapping.sourceColumn,target_asset_id:mappingTarget.id,target_column:mapping.targetColumn,operation:mapping.operation??transformation.operation,expression:mapping.expression??null,metadata:{source_id:source.id,discovery_run_id:runId,auto_discovered:true,authoritative_source:'system.access.column_lineage',...(mapping.metadata??{})}})
+        }
+        if(mappingRows.length){
+          const {error:mappingError}=await admin.schema('governance').from('lineage_column_mappings').insert(mappingRows)
+          if(mappingError)throw new Error(`Unable to persist Databricks column mappings for ${externalId}: ${mappingError.message}`)
+          columnMappings+=mappingRows.length
+        }
+      }
+      continue
+    }
+
     const targetKey=[transformation.catalog,transformation.schema,transformation.name].filter(Boolean).join('.').toLowerCase()
     const target=assetByKey.get(targetKey)||assetByKey.get([transformation.schema,transformation.name].filter(Boolean).join('.').toLowerCase())||assetByKey.get(transformation.name.toLowerCase())
     if(!target)continue
     for(const dependency of sqlDependencies(transformation.transformationLogic)){
-      let sourceAsset=assetByKey.get(dependency)||assetByKey.get(dependency.split('.').at(-1)!)
-      if(!sourceAsset){
-        const parts=dependency.split('.')
-        const {data,error}=await admin.schema('governance').from('lineage_assets').upsert({project_id:source.project_id,integration_id:integration.id,namespace:parts.length>1?parts.slice(0,-1).join('.'):'',name:parts.at(-1)!,asset_type:'DATASET',metadata:{source_id:source.id,discovery_run_id:runId,dependency_only:true},last_seen_at:new Date().toISOString()},{onConflict:'project_id,namespace,name,asset_type'}).select('id,dataset_id,namespace,name').single()
-        if(error||!data)continue
-        sourceAsset=data;assetByKey.set(dependency,data)
-      }
+      const sourceAsset=await resolveAsset(dependency)
       const {error}=await admin.schema('governance').from('lineage_edges').upsert({project_id:source.project_id,source_type:sourceAsset.dataset_id?'DATASET':'EXTERNAL_ASSET',source_id:sourceAsset.dataset_id??sourceAsset.id,target_type:target.dataset_id?'DATASET':'EXTERNAL_ASSET',target_id:target.dataset_id??target.id,relationship:'TRANSFORMS_TO',transformation_id:t.id,metadata:{source_id:source.id,discovery_run_id:runId,operation:transformation.operation,logic_hash:transformation.logicHash,auto_discovered:true}},{onConflict:'project_id,source_type,source_id,target_type,target_id,relationship,transformation_id'})
       if(!error)edges+=1
     }
   }
-  return{transformations:transformations.length,edges}
+  return{transformations:transformations.length,edges,columnMappings}
 }
 
 export async function executeMetadataDiscovery(sourceId: string) {
@@ -215,7 +256,7 @@ export async function executeMetadataDiscovery(sourceId: string) {
       if (assetsError) throw new Error(`Unable to persist discovered assets: ${assetsError.message}`)
     }
 
-    let lineage={transformations:0,edges:0}
+    let lineage={transformations:0,edges:0,columnMappings:0}
     if(sourceType==='JDBC'&&result.jdbc)lineage=await persistJdbcLineage(typedSource,run.id,result.assets,result.jdbc.transformations)
     const completedAt = new Date().toISOString()
     const finalSnapshot={...result.snapshot,lineage}
@@ -228,7 +269,7 @@ export async function executeMetadataDiscovery(sourceId: string) {
       const { error: lineageError } = await admin.schema('governance').from('lineage_edges').upsert({ project_id: source.project_id, source_type: 'DATA_SOURCE', source_id: source.id, target_type: 'DATASET', target_id: dataset.id, relationship: 'DISCOVERED_SOURCE', transformation_id: null, metadata: { discovery_run_id: run.id, assets_discovered: result.assets.length, discovered_at: completedAt } }, { onConflict: 'project_id,source_type,source_id,target_type,target_id,relationship,transformation_id' })
       if (lineageError) console.error('[metadata-discovery-lineage]', lineageError.message)
     }
-    return { discoveryRunId: run.id, sourceId: source.id, assetsDiscovered: result.assets.length, transformationsDiscovered:lineage.transformations, lineageEdges:lineage.edges, snapshot: finalSnapshot }
+    return { discoveryRunId: run.id, sourceId: source.id, assetsDiscovered: result.assets.length, transformationsDiscovered:lineage.transformations, lineageEdges:lineage.edges, lineageColumnMappings:lineage.columnMappings, snapshot: finalSnapshot }
   } catch (error) {
     await admin.schema('catalog').from('discovery_runs').update({ status: 'FAILED', error_message: error instanceof Error ? error.message : 'Metadata discovery failed.', completed_at: new Date().toISOString() }).eq('id', run.id)
     throw error
