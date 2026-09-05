@@ -3,6 +3,7 @@ import { headers as requestHeaders } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const DEFAULT_EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
+export const DEFAULT_SUPABASE_EMBEDDING_MODEL = 'gte-small'
 export const DEFAULT_GATEWAY_EMBEDDING_MODEL = 'openai/text-embedding-3-small'
 export const VERCEL_AI_GATEWAY_EMBEDDING_URL = 'https://ai-gateway.vercel.sh/v1/embeddings'
 export const EMBEDDING_DIMENSIONS = 384
@@ -50,6 +51,16 @@ function embeddingProviderUrl() {
   return process.env.GOVERNANCE_EMBEDDING_URL?.trim() || null
 }
 
+function supabaseEmbeddingProvider() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (!url || !serviceRoleKey) return null
+  return {
+    url: `${url.replace(/\/$/, '')}/functions/v1/governance-embed`,
+    serviceRoleKey,
+  }
+}
+
 async function gatewayApiKey() {
   const configured = process.env.AI_GATEWAY_API_KEY?.trim() || process.env.VERCEL_OIDC_TOKEN?.trim()
   if (configured) return configured
@@ -64,9 +75,11 @@ async function gatewayApiKey() {
 }
 
 function embeddingModel(model?: string) {
-  const selected = model?.trim() || process.env.GOVERNANCE_EMBEDDING_MODEL?.trim()
-  if (selected) return selected
-  return embeddingProviderUrl() ? DEFAULT_EMBEDDING_MODEL : DEFAULT_GATEWAY_EMBEDDING_MODEL
+  const requested = model?.trim()
+  if (requested) return requested
+  if (embeddingProviderUrl()) return process.env.GOVERNANCE_EMBEDDING_MODEL?.trim() || DEFAULT_EMBEDDING_MODEL
+  if (supabaseEmbeddingProvider()) return DEFAULT_SUPABASE_EMBEDDING_MODEL
+  return process.env.GOVERNANCE_EMBEDDING_MODEL?.trim() || DEFAULT_GATEWAY_EMBEDDING_MODEL
 }
 
 function parseEmbeddingPayload(payload: unknown): number[] {
@@ -128,19 +141,26 @@ export async function embedGovernanceText(text: string, model?: string) {
     if (apiKey) headers.authorization = `Bearer ${apiKey}`
     body = { input, model: selectedModel, text: input }
   } else {
-    const apiKey = await gatewayApiKey()
-    if (!apiKey) {
-      const error = new Error('No governance embedding provider is configured')
-      error.name = 'EmbeddingProviderNotConfiguredError'
-      throw error
-    }
-    url = VERCEL_AI_GATEWAY_EMBEDDING_URL
-    headers.authorization = `Bearer ${apiKey}`
-    body = {
-      input,
-      model: selectedModel,
-      dimensions: EMBEDDING_DIMENSIONS,
-      encoding_format: 'float',
+    const supabaseProvider = supabaseEmbeddingProvider()
+    if (supabaseProvider) {
+      url = supabaseProvider.url
+      headers.authorization = `Bearer ${supabaseProvider.serviceRoleKey}`
+      body = { input }
+    } else {
+      const apiKey = await gatewayApiKey()
+      if (!apiKey) {
+        const error = new Error('No governance embedding provider is configured')
+        error.name = 'EmbeddingProviderNotConfiguredError'
+        throw error
+      }
+      url = VERCEL_AI_GATEWAY_EMBEDDING_URL
+      headers.authorization = `Bearer ${apiKey}`
+      body = {
+        input,
+        model: selectedModel,
+        dimensions: EMBEDDING_DIMENSIONS,
+        encoding_format: 'float',
+      }
     }
   }
 
@@ -152,7 +172,8 @@ export async function embedGovernanceText(text: string, model?: string) {
   })
 
   if (!response.ok) {
-    throw new Error(`Embedding provider failed with HTTP ${response.status}`)
+    const providerMessage = (await response.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 500)
+    throw new Error(`Embedding provider failed with HTTP ${response.status}${providerMessage ? `: ${providerMessage}` : ''}`)
   }
 
   return normalizeEmbedding(parseEmbeddingPayload(await response.json()))
