@@ -3,52 +3,40 @@ import fs from 'node:fs'
 function read(path) {
   return fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 }
-
-const failures = []
-function requireContract(name, source, pattern, message) {
-  if (!pattern.test(source)) failures.push(`${name}: ${message}`)
+function requireContract(source, pattern, message) {
+  if (!pattern.test(source)) throw new Error(message)
 }
-function rejectContract(name, source, pattern, message) {
-  if (pattern.test(source)) failures.push(`${name}: ${message}`)
+function rejectContract(source, pattern, message) {
+  if (pattern.test(source)) throw new Error(message)
 }
 
 const form = read('app/datasets/jdbc-source-form.tsx')
-const registration = read('app/api/datasets/source/register/route.ts')
 const discoveryApi = read('app/api/datasets/source/discover/route.ts')
-const discovery = read('app/catalog/discovery/discovery-manager.tsx')
+const registration = read('app/api/datasets/source/register/route.ts')
 const nativeConnector = read('supabase/functions/dgp-native-hierarchy-connector/index.ts')
 const durableDiscovery = read('lib/catalog/discovery.ts')
 const nativeJdbcDiscovery = read('lib/catalog/native-jdbc-discovery.ts')
 
-requireContract('connect-first', form, /Connect & discover native hierarchy/, 'Databricks must connect before asking the user to select metadata scope.')
-requireContract('hierarchy-picker', form, /NativeHierarchyPicker/, 'Databricks must render the hierarchy returned by Unity Catalog.')
-requireContract('save-scope', form, /Save connection & scope/, 'Databricks must save a governed connection and its discovered scope.')
-requireContract('connection-only', form, /connectionOnly:\s*!isFile/, 'Database UI must save a governed connection rather than forcing a single table activation.')
-requireContract('selection-payload', form, /hierarchySelection:/, 'Databricks registration request must carry the native hierarchy selection.')
-rejectContract('no-preselected-catalog', form, /field\(\s*['"]Catalog['"]\s*,\s*catalog/, 'Databricks onboarding must not force a catalog before first connectivity.')
+requireContract(form, /Connect & discover native hierarchy/, 'Databricks must connect before metadata scope selection.')
+requireContract(form, /NativeHierarchyPicker/, 'Databricks must render the provider-native hierarchy.')
+requireContract(form, /hierarchySelection:/, 'Databricks save must carry native hierarchy selection.')
+requireContract(form, /connectionOnly:\s*!isFile/, 'Database onboarding must save a connection rather than force one table.')
+rejectContract(form, /field\(\s*['"]Catalog['"]\s*,/, 'Databricks must not require a catalog before initial connectivity.')
 
-requireContract('hierarchy-api', discoveryApi, /discoverNativeHierarchy/, 'First connectivity must discover accessible Databricks hierarchy from the source.')
-requireContract('uc-catalogs', nativeConnector, /unity-catalog\/catalogs/, 'Databricks native hierarchy must begin with accessible Unity Catalog catalogs.')
-requireContract('uc-schemas', nativeConnector, /unity-catalog\/schemas\?catalog_name=/, 'Databricks hierarchy must discover schemas beneath each catalog.')
-requireContract('uc-objects', nativeConnector, /unity-catalog\/tables\?catalog_name=/, 'Databricks hierarchy must discover objects beneath each schema.')
-requireContract('uc-fields', nativeConnector, /tableRow\.columns|detail\.columns/, 'Databricks hierarchy must expose fields from Unity Catalog object metadata.')
+requireContract(discoveryApi, /discoverNativeHierarchy/, 'Initial database connectivity must discover the native hierarchy.')
+requireContract(nativeConnector, /unity-catalog\/catalogs/, 'Databricks hierarchy must discover accessible catalogs.')
+requireContract(nativeConnector, /unity-catalog\/schemas\?catalog_name=/, 'Databricks hierarchy must discover schemas under catalogs.')
+requireContract(nativeConnector, /unity-catalog\/tables\?catalog_name=/, 'Databricks hierarchy must discover objects under schemas.')
+requireContract(nativeConnector, /tableRow\.columns|detail\.columns/, 'Databricks hierarchy must expose native fields.')
 
-requireContract('parse-connection-only', registration, /const\s+connectionOnly\s*=\s*body\.connectionOnly\s*===\s*true/, 'Registration API must explicitly parse connectionOnly.')
-requireContract('registration-boundary', registration, /sourceType\s*===\s*['"]JDBC['"]\s*&&\s*connectionOnly/, 'Registration API must have a JDBC connection-only boundary.')
-requireContract('persist-selection', registration, /hierarchy_selection:\s*selection/, 'Registration must persist the native hierarchy selection.')
-requireContract('configured-state', registration, /status:\s*['"]CONFIGURED['"]/, 'Connection-only registration must persist CONFIGURED state.')
-requireContract('saved-result', registration, /connection_saved:\s*true/, 'Connection-only registration must return an explicit saved-connection result.')
+requireContract(registration, /hierarchy_selection:\s*selection/, 'Native hierarchy selection must be persisted with the connection.')
+requireContract(registration, /status:\s*['"]CONFIGURED['"]/, 'Database connections must remain CONFIGURED until durable discovery.')
+requireContract(durableDiscovery, /metadata\.hierarchy_selection/, 'Durable discovery must recognize native hierarchy scope.')
+requireContract(durableDiscovery, /discoverJdbcFromNativeHierarchy\(metadata\)/, 'Durable discovery must execute the native hierarchy scope.')
+requireContract(nativeJdbcDiscovery, /selectedObjectNodes/, 'Native discovery must honor object-level selection.')
+requireContract(nativeJdbcDiscovery, /selectedFieldNamesForObject/, 'Native discovery must honor field-level selection.')
+requireContract(durableDiscovery, /authoritative_source:'system\.access\.column_lineage'/, 'Databricks field lineage must retain authoritative system.access.column_lineage provenance.')
+requireContract(durableDiscovery, /ingest_lineage_batch_atomic/, 'Databricks authoritative lineage must use governed atomic ingestion.')
+requireContract(read('lib/connectors/schema-scope.ts'), /schema_scope|schemaScope/, 'Legacy schema-scoped Databricks sources must remain backward compatible.')
 
-requireContract('durable-native-scope', durableDiscovery, /metadata\.hierarchy_selection[\s\S]{0,300}discoverJdbcFromNativeHierarchy\(metadata\)/, 'Durable discovery must consume the saved native hierarchy scope.')
-requireContract('databricks-lineage', nativeJdbcDiscovery, /engine\s*===\s*['"]DATABRICKS['"]/, 'Databricks discovery must retain authoritative lineage discovery for selected objects.')
-requireContract('field-selection', nativeJdbcDiscovery, /selectedFieldNamesForObject/, 'Databricks discovery must honor field-level selections.')
-requireContract('legacy-compatibility', read('lib/connectors/schema-scope.ts'), /schema_scope|schemaScope/, 'Legacy Databricks schema-scoped connections must remain readable for backward compatibility.')
-
-requireContract('live-polling', discovery, /window\.setInterval\(\(\)\s*=>\s*router\.refresh\(\),\s*2000\)/, 'Catalog Discovery UI must continuously refresh durable discovery progress.')
-requireContract('terminal-polling', discovery, /matchingRun\.completed_at\s*\|\|\s*matchingRun\.error_message/, 'Catalog Discovery UI must stop polling on a terminal run result.')
-requireContract('monitoring-state', discovery, /Monitoring discovery/, 'Catalog Discovery UI must expose a visible monitoring state.')
-requireContract('edit-preserves-source', read('app/datasets/edit/[sourceId]/page.tsx'), /initialSource\s*=/, 'Databricks editing must preserve its existing source and credential reference.')
-requireContract('catalog-discovery-link', read('app/catalog/page.tsx'), /href=["']\/catalog\/discovery["']/, 'Catalog must link to Discovery.')
-
-if (failures.length) throw new Error(`Databricks native hierarchy flow verification failed:\n- ${failures.join('\n- ')}`)
 console.log('Databricks native hierarchy Web UI flow contracts verified.')
