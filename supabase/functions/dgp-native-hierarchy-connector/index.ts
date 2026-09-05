@@ -282,7 +282,7 @@ async function databricksHierarchy(jdbcUrl: string, credentials: { username: str
       roots_only: options.rootsOnly,
       requested_catalogs: options.catalogs,
       capabilities: {
-        stable_object_ids: stableObjectIds,
+        stable_object_ids: options.rootsOnly ? true : stableObjectIds,
         stable_field_ids: false,
         field_metadata: true,
         partitioning: "CATALOG",
