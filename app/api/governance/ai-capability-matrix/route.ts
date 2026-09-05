@@ -4,8 +4,9 @@ import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authori
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function GET(request: Request) {
+  const user = await requireUser()
+
   try {
-    const user = await requireUser()
     const projectId = new URL(request.url).searchParams.get('projectId')?.trim() ?? ''
     if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
 
