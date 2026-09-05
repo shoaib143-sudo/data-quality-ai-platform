@@ -54,6 +54,7 @@ Migrations:
 
 - `20260905030354_governed_enterprise_knowledge_document_approval`
 - `20260905030459_align_enterprise_knowledge_requirement_priority`
+- `20260905034044_enqueue_governance_document_semantic_refresh`
 
 The governed path includes:
 
@@ -62,6 +63,7 @@ The governed path includes:
 - `governance.ingest_governance_knowledge_document(...)`
 - `governance.review_governance_knowledge_document(...)`
 - `trg_protect_knowledge_document_review`
+- `trg_enqueue_knowledge_document_semantic_refresh`
 - lexical parent-document approval filtering
 - semantic parent-document approval filtering
 - formal-gate counting only ACTIVE, APPROVED, non-bootstrap enterprise documents
@@ -69,6 +71,18 @@ The governed path includes:
 Authenticated browser roles cannot directly insert/update/delete `governance.knowledge_documents` or `governance.knowledge_requirements`. The privileged ingestion and review RPCs are service-role-only and perform capability checks inside PostgreSQL.
 
 Rollback-only verification exercised pending ingestion, direct approval-bypass rejection, authorized approval, search visibility and material-change reset behavior. Test document, requirement and audit rows all rolled back cleanly.
+
+The post-review semantic lifecycle is also event-driven and durable:
+
+- approval queues a `SEMANTIC_INDEX` project refresh
+- rejection queues semantic pruning
+- a material edit that resets APPROVED to PENDING queues semantic pruning
+- deletion of an ACTIVE approved document queues semantic pruning
+- semantic refresh jobs use `entity_id = project_id` so later successful project indexing supersedes an event-driven failure under platform-health recovery semantics
+- semantic refresh enqueue uses project-scoped idempotency keys
+- `governance.review_governance_knowledge_document(...)` now resets its transaction-local review context before returning, preventing the guarded-write context from leaking to later statements in the same transaction
+
+The event-driven migration was compiled and exercised in a rollback-only production transaction before deployment. Approval enqueue, approval-reset enqueue and approved-document deletion enqueue all passed, with zero test semantic jobs leaked after rollback.
 
 ### Exact missing artifact
 
