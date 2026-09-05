@@ -31,7 +31,8 @@ contains('lib/catalog/discovery.ts', /jobType:\s*'LINEAGE_ENRICHMENT'/, 'Physica
 contains('app/datasets/jdbc-source-form.tsx', /Connect & discover native hierarchy/, 'Database onboarding must connect before hierarchy selection')
 contains('app/datasets/jdbc-source-form.tsx', /NativeHierarchyPicker/, 'Database onboarding must render the native hierarchy tree')
 contains('app/datasets/native-hierarchy-picker.tsx', /Select from hierarchy/, 'Hierarchy UI must support explicit multi-node selection')
-contains('app/datasets/native-hierarchy-picker.tsx', /catalogs\/databases, schemas, objects, or fields/, 'Hierarchy UI must expose multi-level source-native selection')
+contains('app/datasets/native-hierarchy-picker.tsx', /Search catalog, database, schema, table, view, or field/, 'Hierarchy UI must expose multi-level source-native selection')
+contains('app/datasets/native-hierarchy-picker.tsx', /Explicit exclusions always win/, 'Hierarchy UI must explain exclusion precedence')
 excludes('app/datasets/jdbc-source-form.tsx', /field\('Catalog',\s*catalog/, 'Databricks onboarding must not force a user-supplied catalog before discovery')
 
 contains('services/jdbc-bridge/src/main/java/com/datanexus/jdbcbridge/JdbcHierarchyController.java', /getCatalogs\(\)/, 'Generic JDBC hierarchy must ask the driver for catalogs')
