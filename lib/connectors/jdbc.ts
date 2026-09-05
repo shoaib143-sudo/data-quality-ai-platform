@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const POSTGRES_EDGE_FUNCTION = 'dgp-postgres-connector'
+const DATABRICKS_EDGE_FUNCTION = 'dgp-databricks-connector'
 
 export type JdbcConnectionConfig = {
   jdbcUrl: string
@@ -26,6 +27,16 @@ export type JdbcValidationResult = {
   warnings: string[]
 }
 
+export type JdbcColumnMapping = {
+  sourceAsset: string
+  sourceColumn: string
+  targetAsset: string
+  targetColumn: string
+  operation?: string | null
+  expression?: string | null
+  metadata?: Record<string, unknown>
+}
+
 export type JdbcTransformation = {
   catalog?: string | null
   schema?: string | null
@@ -34,6 +45,10 @@ export type JdbcTransformation = {
   transformationLogic: string
   logicHash: string
   engine: string
+  sourceAsset?: string | null
+  targetAsset?: string | null
+  columnMappings?: JdbcColumnMapping[]
+  metadata?: Record<string, unknown>
 }
 
 export type JdbcLineageResult = {
@@ -84,6 +99,10 @@ function bridgeConfigured() {
 
 function isPostgresJdbcUrl(value: unknown) {
   return typeof value === 'string' && value.trim().toLowerCase().startsWith('jdbc:postgresql://')
+}
+
+function isDatabricksJdbcUrl(value: unknown) {
+  return typeof value === 'string' && value.trim().toLowerCase().startsWith('jdbc:databricks://')
 }
 
 export function jdbcEngineFromUrl(value: string | null | undefined) {
@@ -169,17 +188,16 @@ function edgeAction(path: string) {
   if (path === '/v1/validate') return 'validate'
   if (path === '/v1/query') return 'query'
   if (path === '/v1/lineage') return 'lineage'
-  throw new Error('Unsupported PostgreSQL connector operation.')
+  throw new Error('Unsupported direct connector operation.')
 }
 
-async function postgresEdgeRequest<T>(path: string, body: Record<string, unknown>) {
-  if (!isPostgresJdbcUrl(body.jdbc_url)) throw new Error('The built-in connector supports PostgreSQL JDBC URLs only.')
+async function edgeRequest<T>(functionName: string, engineLabel: string, path: string, body: Record<string, unknown>) {
   const admin = createAdminClient()
-  const { data, error } = await admin.functions.invoke(POSTGRES_EDGE_FUNCTION, {
+  const { data, error } = await admin.functions.invoke(functionName, {
     body: { action: edgeAction(path), ...body },
   })
   if (error) {
-    let message = error.message || 'PostgreSQL connector request failed.'
+    let message = error.message || `${engineLabel} connector request failed.`
     const context = (error as { context?: unknown }).context
     if (context instanceof Response) {
       try {
@@ -199,11 +217,28 @@ async function postgresEdgeRequest<T>(path: string, body: Record<string, unknown
   return payload as T
 }
 
+async function postgresEdgeRequest<T>(path: string, body: Record<string, unknown>) {
+  if (!isPostgresJdbcUrl(body.jdbc_url)) throw new Error('The built-in connector supports PostgreSQL JDBC URLs only.')
+  return edgeRequest<T>(POSTGRES_EDGE_FUNCTION, 'PostgreSQL', path, body)
+}
+
+async function databricksEdgeRequest<T>(path: string, body: Record<string, unknown>) {
+  if (!isDatabricksJdbcUrl(body.jdbc_url)) throw new Error('The built-in connector supports Databricks JDBC URLs only.')
+  return edgeRequest<T>(DATABRICKS_EDGE_FUNCTION, 'Databricks', path, body)
+}
+
 async function connectorRequest<T>(path: string, body: Record<string, unknown>) {
   if (isPostgresJdbcUrl(body.jdbc_url)) {
     try { return await postgresEdgeRequest<T>(path, body) }
     catch (error) {
       if (!bridgeConfigured() || path !== '/v1/lineage') throw error
+      return bridgeRequest<T>(path, body)
+    }
+  }
+  if (isDatabricksJdbcUrl(body.jdbc_url)) {
+    try { return await databricksEdgeRequest<T>(path, body) }
+    catch (error) {
+      if (!bridgeConfigured()) throw error
       return bridgeRequest<T>(path, body)
     }
   }
