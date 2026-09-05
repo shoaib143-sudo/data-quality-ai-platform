@@ -3,6 +3,7 @@ import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specia
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
+import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
@@ -211,6 +212,7 @@ async function executeGovernanceAgentJob(job: DurableJob) {
     if (investigation) specialistOutput = { ...specialistOutput, investigation }
   }
 
+  specialistOutput = await enrichOutputWithAIGovernanceIntelligence(projectId, specialistOutput)
   const output = await enrichGovernedAgentWithMemory({
     projectId,
     agentDefinitionId,
