@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 
 const migration = fs.readFileSync('supabase/migrations/20260905034719_atomic_lineage_batch_ingestion.sql', 'utf8')
+const replayProtection = fs.readFileSync('supabase/migrations/20260905035122_reject_lineage_replay_payload_collisions.sql', 'utf8')
 const route = fs.readFileSync('app/api/lineage/ingest/route.ts', 'utf8')
 
 function requireText(text, needle, label) {
@@ -20,6 +21,16 @@ requireText(migration, "'atomic_with_batch',true", 'atomic batch audit evidence'
 requireText(migration, "'audit_atomic',true", 'RPC atomic audit confirmation')
 requireText(migration, 'revoke execute on function governance.ingest_lineage_batch_atomic', 'browser RPC execution revocation')
 requireText(migration, 'grant execute on function governance.ingest_lineage_batch_atomic', 'service-role RPC boundary')
+
+requireText(replayProtection, 'rename to ingest_lineage_batch_atomic_impl', 'private atomic ingestion implementation')
+requireText(replayProtection, 'revoke execute on function governance.ingest_lineage_batch_atomic_impl', 'private implementation execution revocation')
+requireText(replayProtection, 'count(distinct lower', 'same-batch external event payload collision detection')
+requireText(replayProtection, 'same externalEventId with different payload hashes', 'same-batch collision rejection')
+requireText(replayProtection, "v_payload_hash !~ '^[0-9a-f]{64}$'", 'SHA-256 replay hash validation')
+requireText(replayProtection, 'Lineage replay payload mismatch for externalEventId', 'persisted replay payload collision rejection')
+requireText(replayProtection, 'Lineage replay source mismatch for externalEventId', 'persisted replay source collision rejection')
+requireText(replayProtection, 'governance.ingest_lineage_batch_atomic_impl(', 'validated delegation to private atomic implementation')
+requireText(replayProtection, 'grant execute on function governance.ingest_lineage_batch_atomic', 'service-role wrapper execution boundary')
 
 requireText(route, "authorizeProject(user.id, projectId, 'lineage.manage')", 'route lineage authorization')
 requireText(route, "rpc('ingest_lineage_batch_atomic'", 'route atomic RPC usage')
