@@ -44,6 +44,8 @@ jobs:
         run: pnpm run verify:investigation-prediction
       - name: Verify governed autonomy safety
         run: pnpm run verify:governed-autonomy
+      - name: Verify AI governance due diligence contracts
+        run: pnpm run verify:ai-due-diligence
       - name: Verify production readiness contracts
         run: pnpm run verify:readiness
       - name: Verify provider read fallback behavior
