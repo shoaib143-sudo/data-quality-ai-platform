@@ -48,6 +48,8 @@ jobs:
         run: pnpm run verify:governed-autonomy
       - name: Verify AI governance due diligence contracts
         run: pnpm run verify:ai-due-diligence
+      - name: Verify evidence backed 75 capability matrix
+        run: node scripts/verify-ai-capability-matrix.mjs
       - name: Verify governance document semantic refresh
         run: node scripts/verify-governance-document-semantic-refresh.mjs
       - name: Verify governed human review boundaries
