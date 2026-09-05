@@ -103,12 +103,8 @@ export async function discoverJdbcFromNativeHierarchy(connectionMetadata: Record
     })
 
     if (objectType.includes('VIEW') || engine === 'DATABRICKS') {
-      if (!object.schema && engine !== 'MYSQL' && engine !== 'MARIADB') {
-        lineageWarnings.push(`Transformation discovery skipped for ${object.qualifiedName}: the source did not report the namespace required by its lineage API.`)
-        continue
-      }
-      if (!object.schema && (engine === 'MYSQL' || engine === 'MARIADB')) {
-        lineageWarnings.push(`Transformation discovery for catalog-only ${engine} object ${object.qualifiedName} requires the JDBC bridge catalog-only lineage endpoint.`)
+      if (!object.schema && !object.catalog) {
+        lineageWarnings.push(`Transformation discovery skipped for ${object.qualifiedName}: the source did not report a catalog/database or schema namespace.`)
         continue
       }
       try {
