@@ -22,6 +22,7 @@ const files = {
   evidence: fs.readFileSync('app/api/governance/controls/evidence/route.ts', 'utf8'),
   evaluate: fs.readFileSync('app/api/governance/controls/evaluate/route.ts', 'utf8'),
   refresh: fs.readFileSync('app/api/governance/controls/refresh/route.ts', 'utf8'),
+  posture: fs.readFileSync('app/api/governance/controls/posture/route.ts', 'utf8'),
 }
 
 const checks = [
@@ -80,6 +81,14 @@ const checks = [
   ['AI governance sweep propagates control failures', /failure_count/.test(aiGovernanceSweep) && /throw new Error\(`Governance control intelligence reconciliation reported/.test(aiGovernanceSweep)],
   ['scheduled worker invokes AI governance sweep', /refreshAllAIGovernanceIntelligence\(\)/.test(workerRoute)],
   ['worker runs every minute', /"path"\s*:\s*"\/api\/jobs\/worker"/.test(vercelConfig) && /"schedule"\s*:\s*"\* \* \* \* \*"/.test(vercelConfig)],
+  ['AI governance read model exposes control posture', /controlPosture:\s*ControlPosture/.test(aiGovernanceSweep) && /proposedControls/.test(aiGovernanceSweep) && /activeControls/.test(aiGovernanceSweep) && /openFindings/.test(aiGovernanceSweep)],
+  ['control posture reads definitions evaluations and findings', /from\('control_definitions'\)/.test(aiGovernanceSweep) && /from\('control_evaluations'\)/.test(aiGovernanceSweep) && /from\('governance_findings'\)/.test(aiGovernanceSweep)],
+  ['control posture excludes raw control evidence payloads', !/from\('control_evidence'\)/.test(aiGovernanceSweep)],
+  ['control posture uses latest evaluation per control scope', /latestPerControlScope/.test(aiGovernanceSweep) && /scope_binding_id/.test(aiGovernanceSweep)],
+  ['control posture keeps active authority explicit', /lifecycle_status.*ACTIVE/.test(aiGovernanceSweep) && /review_status.*APPROVED/.test(aiGovernanceSweep)],
+  ['posture route uses governed read model', /loadProjectAIGovernanceIntelligence/.test(files.posture) && /controlPosture:\s*intelligence\.controlPosture/.test(files.posture)],
+  ['posture route enforces catalog read', /authorizeProject\(user\.id, projectId, 'catalog\.read'\)/.test(files.posture)],
+  ['posture route does not query raw evidence', !/control_evidence/.test(files.posture)],
   ['proposal route calls RPC only', /rpc\('propose_governance_control'/.test(files.propose) && !/\.from\('control_definitions'\)/.test(files.propose)],
   ['review route calls RPC only', /rpc\('review_governance_control'/.test(files.review) && !/\.from\('control_definitions'\)/.test(files.review)],
   ['scope route calls RPC only', /rpc\('bind_governance_control_scope'/.test(files.scope)],
