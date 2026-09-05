@@ -5,11 +5,16 @@ const gateMigrationPath = 'supabase/migrations/20260905062857_include_governance
 const issueProjectionPath = 'supabase/migrations/20260905063911_project_control_findings_into_governance_issues.sql'
 const collectorMigrationPath = 'supabase/migrations/20260905064557_automated_governance_control_evidence_collection.sql'
 const collectorFixPath = 'supabase/migrations/20260905064901_fix_automated_control_evidence_upsert_found_state.sql'
+const continuousMigrationPath = 'supabase/migrations/20260905065604_continuous_governance_control_intelligence_reconciliation.sql'
 const migration = fs.readFileSync(migrationPath, 'utf8')
 const gateMigration = fs.readFileSync(gateMigrationPath, 'utf8')
 const issueProjection = fs.readFileSync(issueProjectionPath, 'utf8')
 const collectorMigration = fs.readFileSync(collectorMigrationPath, 'utf8')
 const collectorFix = fs.readFileSync(collectorFixPath, 'utf8')
+const continuousMigration = fs.readFileSync(continuousMigrationPath, 'utf8')
+const aiGovernanceSweep = fs.readFileSync('lib/governance/ai-governance-intelligence.ts', 'utf8')
+const workerRoute = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
+const vercelConfig = fs.readFileSync('vercel.json', 'utf8')
 const files = {
   propose: fs.readFileSync('app/api/governance/controls/propose/route.ts', 'utf8'),
   review: fs.readFileSync('app/api/governance/controls/review/route.ts', 'utf8'),
@@ -67,6 +72,14 @@ const checks = [
   ['collector preserves lookup FOUND state', /v_existing_found := found/i.test(collectorMigration) && /if v_existing_found then/i.test(collectorMigration)],
   ['collector FOUND regression guard', /v_existing_found/i.test(collectorFix) && /pg_get_functiondef/i.test(collectorFix)],
   ['collector RPC service-role boundary', /revoke execute on function governance\.refresh_governance_control_evidence[\s\S]*from public, anon, authenticated/i.test(collectorMigration) && /grant execute on function governance\.refresh_project_governance_control_intelligence[\s\S]*to service_role/i.test(collectorMigration)],
+  ['all-project reconciliation RPC', /governance\.refresh_all_governance_control_intelligence/i.test(continuousMigration)],
+  ['all-project reconciliation filters active approved controls', /lifecycle_status='ACTIVE'[\s\S]*review_status='APPROVED'[\s\S]*evaluation_method='EVIDENCE_ASSERTION'/i.test(continuousMigration)],
+  ['all-project reconciliation isolates project errors', /exception when others/i.test(continuousMigration) && /PARTIAL_FAILURE/i.test(continuousMigration)],
+  ['all-project reconciliation service-role boundary', /revoke execute on function governance\.refresh_all_governance_control_intelligence\(\)[\s\S]*from public, anon, authenticated/i.test(continuousMigration) && /grant execute on function governance\.refresh_all_governance_control_intelligence\(\)[\s\S]*to service_role/i.test(continuousMigration)],
+  ['AI governance sweep invokes control reconciliation', /rpc\('refresh_all_governance_control_intelligence'\)/.test(aiGovernanceSweep) && /Promise\.all/.test(aiGovernanceSweep)],
+  ['AI governance sweep propagates control failures', /failure_count/.test(aiGovernanceSweep) && /throw new Error\(`Governance control intelligence reconciliation reported/.test(aiGovernanceSweep)],
+  ['scheduled worker invokes AI governance sweep', /refreshAllAIGovernanceIntelligence\(\)/.test(workerRoute)],
+  ['worker runs every minute', /"path"\s*:\s*"\/api\/jobs\/worker"/.test(vercelConfig) && /"schedule"\s*:\s*"\* \* \* \* \*"/.test(vercelConfig)],
   ['proposal route calls RPC only', /rpc\('propose_governance_control'/.test(files.propose) && !/\.from\('control_definitions'\)/.test(files.propose)],
   ['review route calls RPC only', /rpc\('review_governance_control'/.test(files.review) && !/\.from\('control_definitions'\)/.test(files.review)],
   ['scope route calls RPC only', /rpc\('bind_governance_control_scope'/.test(files.scope)],
