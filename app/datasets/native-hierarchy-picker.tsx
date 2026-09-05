@@ -116,11 +116,11 @@ export function NativeHierarchyPicker({ hierarchy, mode, selectedNodeIds, disabl
       <label className="flex items-center gap-2"><input type="radio" checked={mode === 'ALL'} onChange={() => onModeChange('ALL')} />All accessible non-system data</label>
       <label className="flex items-center gap-2"><input type="radio" checked={mode === 'SELECTED'} onChange={() => onModeChange('SELECTED')} />Select from hierarchy</label>
     </div>
-    <p className="mt-2 text-xs text-slate-500">DataNexus is showing the hierarchy reported by {hierarchy.databaseProduct}. Expand only the catalogs, schemas, objects, or fields you need. Selecting a parent includes its descendants.</p>
+    <p className="mt-2 text-xs text-slate-500">DataNexus is showing the hierarchy reported by {hierarchy.databaseProduct}. Expand only the catalogs/databases, schemas, objects, or fields you need. Selecting a parent includes its descendants.</p>
     <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
       <label className="relative min-w-0 flex-1">
         <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-        <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search catalog, schema, table, view, or field…" className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+        <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search catalog, database, schema, table, view, or field…" className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
       </label>
       {systemCount > 0 && <label className="flex shrink-0 items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showSystem} onChange={event => setShowSystem(event.target.checked)} />Show system objects ({systemCount})</label>}
     </div>
