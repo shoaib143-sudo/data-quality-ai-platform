@@ -41,7 +41,7 @@ const checks = [
   [containsAll(files.search, ['GOVERNANCE_EMBEDDING_URL', 'GOVERNANCE_EMBEDDING_API_KEY']), 'custom governance embedding provider compatibility'],
   [containsAll(files.search, ['DEFAULT_SUPABASE_EMBEDDING_MODEL', 'gte-small', "admin.functions.invoke('governance-embed'", 'SUPABASE_SERVICE_ROLE_KEY']), 'Supabase native governance embedding provider'],
   [containsAll(files.edgeEmbedding, ["new Supabase.ai.Session('gte-small')", 'mean_pool: true', 'normalize: true', 'DIMENSIONS = 384']), 'Supabase Edge Runtime 384-dimensional normalized embeddings'],
-  [containsAll(files.edgeEmbedding, ["from 'npm:@supabase/server@^1'", "withSupabase({ auth: 'secret' }"]), 'Supabase embedding function secret-key authentication'],
+  [containsAll(files.edgeEmbedding, ['bearerRole', "'service_role'", 'Deno.serve', 'verify_jwt is enabled at the platform boundary']), 'Supabase embedding function service-role JWT authorization'],
   [containsAll(files.search, ['DEFAULT_GATEWAY_EMBEDDING_MODEL', 'https://ai-gateway.vercel.sh/v1/embeddings', 'VERCEL_OIDC_TOKEN', 'AI_GATEWAY_API_KEY', 'dimensions: EMBEDDING_DIMENSIONS']), 'Vercel AI Gateway embedding fallback'],
   [containsAll(files.search, ["from 'next/headers'", "incoming.get('x-vercel-oidc-token')", 'await gatewayApiKey()']), 'Vercel function request-context OIDC authentication'],
   [/normalizeEmbedding[\s\S]*Math\.sqrt[\s\S]*Number\.EPSILON/.test(files.search), 'embedding normalization and zero-vector rejection'],
