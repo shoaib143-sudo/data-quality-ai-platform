@@ -24,7 +24,7 @@ requireMatch(knowledgeMigration, /revoke all on function governance\.review_data
 requireMatch(knowledgeMigration, /revoke all on function governance\.review_cde_mapping[\s\S]*public, anon, authenticated/, 'CDE review RPC must not be directly executable by public/anon/authenticated.')
 
 requireMatch(dqMigration, /approval_status text not null default 'NOT_REQUIRED'/, 'DQ rules must persist an explicit approval status.')
-requireMatch(dqMigration, /where origin='SUGGESTED'[\s\S]*enabled=false/, 'Existing suggested DQ rules must be moved to a non-executing approval state.')
+requireMatch(dqMigration, /set approval_status='PENDING',[\s\S]*enabled=false[\s\S]*where origin='SUGGESTED'/i, 'Existing suggested DQ rules must be moved to a non-executing approval state.')
 requireMatch(dqMigration, /new\.approval_status := 'PENDING'[\s\S]*new\.enabled := false/, 'New suggested DQ rules must default to PENDING and disabled.')
 requireMatch(dqMigration, /approval_reset_reason','MATERIAL_RULE_CHANGE'/, 'Material changes to approved suggested DQ rules must reset approval.')
 requireMatch(dqMigration, /has_project_capability\(p_project_id,p_reviewer,'quality\.manage'\)/, 'DQ rule review RPC must verify quality.manage inside PostgreSQL.')
