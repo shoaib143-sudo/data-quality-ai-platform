@@ -45,6 +45,31 @@ function fileConnectionMetadata(sourceUri: string, projectId: string) {
 
 type DatasetVersionForReconciliation = { id: string; dataset_id: string; version_number: number; metadata: unknown }
 
+type ScopeBoundSource = {
+  id: string
+  project_id: string
+  connection_metadata: unknown
+}
+
+async function ensureSourceScopeVersion(
+  admin: ReturnType<typeof createAdminClient>,
+  source: ScopeBoundSource,
+  actorUserId: string,
+) {
+  const metadata = source.connection_metadata && typeof source.connection_metadata === 'object' && !Array.isArray(source.connection_metadata)
+    ? source.connection_metadata as Record<string, unknown>
+    : {}
+  const nativeSelection = metadata.hierarchy_selection ?? { mode: 'ALL', nodeIds: [], qualifiedNames: [] }
+  const { data, error } = await admin.schema('catalog').rpc('ensure_source_scope_version', {
+    p_project_id: source.project_id,
+    p_source_id: source.id,
+    p_native_selection: nativeSelection,
+    p_actor: actorUserId,
+  })
+  if (error) throw new Error(`Unable to version governed discovery scope: ${error.message}`)
+  return data
+}
+
 async function reconcileSourceBoundDatasets(
   admin: ReturnType<typeof createAdminClient>,
   source: { id: string; project_id: string; source_type: string; connection_metadata: unknown },
@@ -185,12 +210,14 @@ export async function POST(request: Request) {
       if (existing) {
         const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: 'JDBC', connection_metadata: connectionMetadata, status: 'CONFIGURED', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
         if (error || !source) return NextResponse.json({ error: `Unable to save connection: ${error?.message ?? 'unknown error'}` }, { status: 500 })
-        return NextResponse.json({ source, profiling_ready: false, connection_saved: true })
+        const scope = await ensureSourceScopeVersion(admin, source, user.id)
+        return NextResponse.json({ source, scope, profiling_ready: false, connection_saved: true })
       }
 
       const { data: source, error } = await admin.schema('catalog').from('data_sources').insert({ project_id: projectId, name, source_type: 'JDBC', connection_metadata: connectionMetadata, status: 'CONFIGURED' }).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
       if (error || !source) return NextResponse.json({ error: `Unable to save connection: ${error?.message ?? 'unknown error'}` }, { status: 500 })
-      return NextResponse.json({ source, profiling_ready: false, connection_saved: true })
+      const scope = await ensureSourceScopeVersion(admin, source, user.id)
+      return NextResponse.json({ source, scope, profiling_ready: false, connection_saved: true })
     }
 
     let connectionMetadata: Record<string, unknown>
@@ -213,14 +240,16 @@ export async function POST(request: Request) {
     if (existing) {
       const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: sourceType, connection_metadata: connectionMetadata, status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
       if (error || !source) return NextResponse.json({ error: `Unable to activate source: ${error?.message ?? 'unknown error'}` }, { status: 500 })
+      const scope = await ensureSourceScopeVersion(admin, source, user.id)
       await reconcileSourceBoundDatasets(admin, source)
-      return NextResponse.json({ source, profiling_ready: true })
+      return NextResponse.json({ source, scope, profiling_ready: true })
     }
 
     const { data: source, error } = await admin.schema('catalog').from('data_sources').insert({ project_id: projectId, name, source_type: sourceType, connection_metadata: connectionMetadata, status: 'ACTIVE' }).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
     if (error || !source) return NextResponse.json({ error: `Unable to register source: ${error?.message ?? 'unknown error'}` }, { status: 500 })
+    const scope = await ensureSourceScopeVersion(admin, source, user.id)
     await reconcileSourceBoundDatasets(admin, source)
-    return NextResponse.json({ source, profiling_ready: true })
+    return NextResponse.json({ source, scope, profiling_ready: true })
   } catch (error) {
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Source registration failed.' }, { status: 500 })
