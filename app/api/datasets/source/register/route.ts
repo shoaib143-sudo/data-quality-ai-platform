@@ -3,7 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
-import { validateJdbcConnection } from '@/lib/connectors/jdbc'
+import { discoverDatabricksSchemaScope, jdbcEngineFromUrl, validateJdbcConnection } from '@/lib/connectors/jdbc'
+import { readSchemaScope, SchemaScopeError } from '@/lib/connectors/schema-scope'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function serverCredentialRef(kind: string) {
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
     const user = await requireUser()
     const body = await request.json()
     const projectId = text(body.projectId)
+    const sourceId = text(body.sourceId)
     const name = text(body.name)
     const sourceType = text(body.sourceType).toUpperCase() || 'JDBC'
     const sourceUri = text(body.sourceUri) || text(body.jdbcUrl)
@@ -132,10 +134,22 @@ export async function POST(request: Request) {
     if (sourceType === 'JDBC' && connectionOnly) {
       const connectionMetadata: Record<string, unknown> = { jdbc_url: jdbcUrl, connection_kind: connectionKind, credential_ref: credentialRef }
       if (catalogName) connectionMetadata.catalog = catalogName
-      if (schema) connectionMetadata.schema = schema
-      if (table) connectionMetadata.table = table
+      if (jdbcEngineFromUrl(jdbcUrl) === 'DATABRICKS') {
+        if (!catalogName) return NextResponse.json({ error: 'Databricks catalog is required.' }, { status: 400 })
+        const scope = readSchemaScope(body)
+        const discovered = await discoverDatabricksSchemaScope({ jdbcUrl, credentialRef, catalog: catalogName }, scope)
+        const selectedSchemas = discovered.details.selected_schemas as string[]
+        connectionMetadata.schema_scope = scope.schemaScope
+        connectionMetadata.schemas = scope.schemaScope === 'selected' ? selectedSchemas : []
+        if (scope.schemaScope === 'selected' && selectedSchemas.length === 1) connectionMetadata.schema = selectedSchemas[0]
+      } else {
+        if (schema) connectionMetadata.schema = schema
+        if (table) connectionMetadata.table = table
+      }
 
-      const { data: existing } = await admin.schema('catalog').from('data_sources').select('id').eq('project_id', projectId).eq('name', name).maybeSingle()
+      const existingQuery = admin.schema('catalog').from('data_sources').select('id').eq('project_id', projectId)
+      const { data: existing } = await (sourceId ? existingQuery.eq('id', sourceId) : existingQuery.eq('name', name)).maybeSingle()
+      if (sourceId && !existing) return NextResponse.json({ error: 'Connection access denied.' }, { status: 403 })
       if (existing) {
         const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: 'JDBC', connection_metadata: connectionMetadata, status: 'CONFIGURED', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
         if (error || !source) return NextResponse.json({ error: `Unable to save connection: ${error?.message ?? 'unknown error'}` }, { status: 500 })
@@ -176,6 +190,7 @@ export async function POST(request: Request) {
     await reconcileSourceBoundDatasets(admin, source)
     return NextResponse.json({ source, profiling_ready: true })
   } catch (error) {
+    if (error instanceof SchemaScopeError) return NextResponse.json({ error: error.message, schemas: error.availableSchemas }, { status: 422 })
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Source registration failed.' }, { status: 500 })
   }

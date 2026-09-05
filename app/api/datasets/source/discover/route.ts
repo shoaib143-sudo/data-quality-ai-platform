@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
-import { discoverJdbcCatalog } from '@/lib/connectors/jdbc'
+import { discoverDatabricksSchemaScope, discoverJdbcCatalog, jdbcEngineFromUrl } from '@/lib/connectors/jdbc'
+import { readSchemaScope, SchemaScopeError } from '@/lib/connectors/schema-scope'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function validCredentialRef(value: string) { return /^DGP_[A-Za-z0-9_]+$/.test(value) }
@@ -28,10 +29,13 @@ export async function POST(request: Request) {
     await authorizeProject(user.id, projectId, 'catalog.read')
 
     try {
-      const discovery = await discoverJdbcCatalog({ jdbcUrl, credentialRef, schema: schema || undefined, catalog: catalogName || undefined })
+      const discovery = jdbcEngineFromUrl(jdbcUrl) === 'DATABRICKS'
+        ? await discoverDatabricksSchemaScope({ jdbcUrl, credentialRef, catalog: catalogName || undefined }, readSchemaScope(body))
+        : await discoverJdbcCatalog({ jdbcUrl, credentialRef, schema: schema || undefined, catalog: catalogName || undefined })
       const resolvedCatalog = catalogName || (typeof discovery.details.catalog === 'string' ? discovery.details.catalog : '')
       return NextResponse.json({ ...discovery, schema: schema || null, catalog: resolvedCatalog || null })
     } catch (error) {
+      if (error instanceof SchemaScopeError) return NextResponse.json({ error: error.message, schemas: error.availableSchemas, code: 'SCHEMA_SCOPE_UNAVAILABLE' }, { status: 422 })
       return NextResponse.json({ error: error instanceof Error ? error.message : 'JDBC catalog discovery failed.', code: 'JDBC_DISCOVERY_FAILED', connectionKind }, { status: 502 })
     }
   } catch (error) {

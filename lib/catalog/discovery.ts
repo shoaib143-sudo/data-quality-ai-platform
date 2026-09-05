@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { discoverJdbcCatalog, discoverJdbcTransformations, jdbcEngineFromUrl, validateJdbcConnection, type JdbcColumnMapping, type JdbcTransformation } from '@/lib/connectors/jdbc'
+import { discoverDatabricksSchemaScope, discoverJdbcCatalog, discoverJdbcTransformations, jdbcEngineFromUrl, validateJdbcConnection, type JdbcColumnMapping, type JdbcTransformation } from '@/lib/connectors/jdbc'
+import { readSchemaScope } from '@/lib/connectors/schema-scope'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 
 type Source = {
@@ -82,7 +83,9 @@ async function discoverJdbc(source: Source):Promise<JdbcDiscoveryResult> {
   if (!jdbcUrl || !credentialRef) throw new Error('JDBC source discovery requires jdbc_url and credential_ref.')
 
   const engine=jdbcEngineFromUrl(jdbcUrl)
-  const root = await discoverJdbcCatalog({ jdbcUrl, credentialRef, ...(configuredSchema ? { schema: configuredSchema } : {}), ...(configuredCatalog ? { catalog: configuredCatalog } : {}) })
+  const root = engine === 'DATABRICKS'
+    ? await discoverDatabricksSchemaScope({ jdbcUrl, credentialRef, catalog: configuredCatalog || undefined }, readSchemaScope(metadata))
+    : await discoverJdbcCatalog({ jdbcUrl, credentialRef, ...(configuredSchema ? { schema: configuredSchema } : {}), ...(configuredCatalog ? { catalog: configuredCatalog } : {}) })
   const schemas = configuredSchema ? [configuredSchema] : root.schemas
   const assets: DiscoveredAsset[] = []
   const transformations:JdbcTransformation[]=[]
@@ -93,7 +96,9 @@ async function discoverJdbc(source: Source):Promise<JdbcDiscoveryResult> {
     return catalog.tables.map((table) => ({ schema: table.schema || schema, catalog: table.catalog || configuredCatalog, table }))
   }
   const namespaces = schemas.length ? schemas : [configuredSchema || 'public']
-  const tableRefs = (await Promise.all(namespaces.map(discoverSchema))).flat()
+  const tableRefs = engine === 'DATABRICKS'
+    ? root.tables.map(table => ({ schema: table.schema!, catalog: table.catalog || configuredCatalog, table }))
+    : (await Promise.all(namespaces.map(discoverSchema))).flat()
 
   for (let index = 0; index < tableRefs.length; index += 5) {
     const batch = tableRefs.slice(index, index + 5)
@@ -138,6 +143,8 @@ async function discoverJdbc(source: Source):Promise<JdbcDiscoveryResult> {
       jdbc_engine: engine,
       schemas: root.schemas,
       configured_schema: configuredSchema,
+      configured_schemas: root.details.selected_schemas ?? schemas,
+      schema_scope: root.details.schema_scope ?? (configuredSchema ? 'selected' : 'all'),
       configured_catalog: configuredCatalog,
       asset_count: assets.length,
       transformation_count: uniqueTransformations.length,

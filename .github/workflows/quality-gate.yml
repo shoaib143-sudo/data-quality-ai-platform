@@ -72,6 +72,8 @@ jobs:
         run: pnpm run verify:file-onboarding
       - name: Verify Databricks Web UI connection flow
         run: node scripts/verify-databricks-web-ui-flow.mjs
+      - name: Verify Databricks multiple schema scope
+        run: node --experimental-strip-types scripts/test-databricks-schema-scope.mjs
       - name: Verify profiling lifecycle contracts
         run: pnpm run verify:profiling-lifecycle
       - name: Verify profiling explorer evidence contracts

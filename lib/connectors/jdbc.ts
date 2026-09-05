@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveSchemaScope, type SchemaScope } from './schema-scope'
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const POSTGRES_EDGE_FUNCTION = 'dgp-postgres-connector'
@@ -255,6 +256,20 @@ export async function discoverJdbcCatalog(input: { jdbcUrl: string; credentialRe
     ...(config.catalog ? { catalog: config.catalog } : {}),
   })
   return { schemas: Array.isArray(result.schemas) ? result.schemas : [], tables: Array.isArray(result.tables) ? result.tables : [], details: result.details ?? {} }
+}
+
+export async function discoverDatabricksSchemaScope(input: { jdbcUrl: string; credentialRef: string; catalog?: string }, scope: SchemaScope): Promise<JdbcCatalogResult> {
+  const root = await discoverJdbcCatalog(input)
+  const selectedSchemas = resolveSchemaScope(scope, root.schemas)
+  const tables: JdbcCatalogResult['tables'] = []
+  for (let index = 0; index < selectedSchemas.length; index += 5) {
+    const results = await Promise.all(selectedSchemas.slice(index, index + 5).map(async schema => {
+      const result = await discoverJdbcCatalog({ ...input, schema })
+      return result.tables.map(table => ({ ...table, schema: table.schema || schema, catalog: table.catalog || input.catalog }))
+    }))
+    tables.push(...results.flat())
+  }
+  return { schemas: root.schemas, tables, details: { ...root.details, schema_scope: scope.schemaScope, selected_schemas: selectedSchemas } }
 }
 
 export async function validateJdbcConnection(input: JdbcConnectionConfig): Promise<JdbcValidationResult> {
