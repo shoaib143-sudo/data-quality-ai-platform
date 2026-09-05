@@ -4,7 +4,6 @@ import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authori
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getGraphProvider } from '@/lib/data-plane/graph-provider'
 import type { GraphDirection } from '@/lib/data-plane/contracts'
-import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 const ALLOWED_TYPES = new Set([
   'DATA_SOURCE',
@@ -107,25 +106,20 @@ export async function POST(request: Request) {
 
     await authorizeProject(user.id, projectId, 'lineage.manage')
     const admin = createAdminClient()
-    const { data, error } = await admin.schema('governance').from('lineage_edges').upsert({
-      project_id: projectId,
-      source_type: sourceType,
-      source_id: sourceId,
-      target_type: targetType,
-      target_id: targetId,
-      relationship,
-      metadata: { ...cleanMetadata(body.metadata), manual: true, created_by: user.id },
-    }, { onConflict: 'project_id,source_type,source_id,target_type,target_id,relationship' }).select('*').single()
-    if (error || !data) return NextResponse.json({ error: error?.message ?? 'Unable to persist lineage edge.' }, { status: 400 })
-
-    await writeGovernanceAudit({
-      projectId,
-      actorUserId: user.id,
-      eventType: 'LINEAGE_EDGE_MANUALLY_UPSERTED',
-      entityType: 'LINEAGE_EDGE',
-      entityId: data.id,
-      metadata: { source_type: sourceType, source_id: sourceId, target_type: targetType, target_id: targetId, relationship },
+    const { data, error } = await admin.schema('governance').rpc('upsert_manual_lineage_edge', {
+      p_project_id: projectId,
+      p_actor: user.id,
+      p_source_type: sourceType,
+      p_source_id: sourceId,
+      p_target_type: targetType,
+      p_target_id: targetId,
+      p_relationship: relationship,
+      p_metadata: cleanMetadata(body.metadata),
     })
+    if (error) throw new Error(`Unable to persist governed manual lineage edge: ${error.message}`)
+    if (!data || typeof data !== 'object' || data.audit_atomic !== true || data.database_capability_verified !== true) {
+      throw new Error('Manual lineage mutation did not confirm transactional audit and database authorization.')
+    }
 
     return NextResponse.json({ edge: data }, { status: 201 })
   } catch (error) {
