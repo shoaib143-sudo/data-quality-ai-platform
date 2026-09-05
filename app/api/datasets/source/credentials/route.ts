@@ -16,17 +16,22 @@ function bridgeConfig() {
 function isPostgres(kind: string, jdbcUrl: string) {
   return kind.toLowerCase() === 'postgresql' || jdbcUrl.toLowerCase().startsWith('jdbc:postgresql://')
 }
+function isDatabricks(kind: string, jdbcUrl: string) {
+  return kind.toLowerCase() === 'databricks' || jdbcUrl.toLowerCase().startsWith('jdbc:databricks://')
+}
 
-async function storeViaPostgresEdge(
+async function storeViaEdge(
   admin: ReturnType<typeof createAdminClient>,
+  functionName: string,
   credentialRef: string,
   username: string,
   password: string,
+  engineLabel: string,
 ) {
-  const { data, error } = await admin.functions.invoke('dgp-postgres-connector', {
+  const { data, error } = await admin.functions.invoke(functionName, {
     body: { action: 'credential', credential_ref: credentialRef, username, password },
   })
-  if (error) throw new Error(error.message || 'Unable to store PostgreSQL credentials.')
+  if (error) throw new Error(error.message || `Unable to store ${engineLabel} credentials.`)
   const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {}
   if (typeof payload.error === 'string') throw new Error(payload.error)
 }
@@ -73,8 +78,13 @@ export async function POST(request: Request) {
     const credentialRef = connectionRef(projectId, sourceId || undefined)
 
     if (isPostgres(connectionKind, jdbcUrl)) {
-      await storeViaPostgresEdge(admin, credentialRef, username, password)
+      await storeViaEdge(admin, 'dgp-postgres-connector', credentialRef, username, password, 'PostgreSQL')
       return NextResponse.json({ credentialRef, configured: true, connector: 'supabase-edge-postgres' })
+    }
+
+    if (isDatabricks(connectionKind, jdbcUrl)) {
+      await storeViaEdge(admin, 'dgp-databricks-connector', credentialRef, username, password, 'Databricks')
+      return NextResponse.json({ credentialRef, configured: true, connector: 'supabase-edge-databricks' })
     }
 
     const bridge = bridgeConfig()
@@ -84,7 +94,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      error: 'The connector service is not available for this database type. PostgreSQL can use the built-in temporary connector; other JDBC drivers still require the JDBC bridge.',
+      error: 'The connector service is not available for this database type. PostgreSQL and Databricks have built-in secure connectors; other JDBC drivers still require the JDBC bridge.',
       code: 'CONNECTOR_UNAVAILABLE',
     }, { status: 503 })
   } catch (error) {
