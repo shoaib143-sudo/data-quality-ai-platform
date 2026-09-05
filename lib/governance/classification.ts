@@ -20,7 +20,6 @@ export async function syncProfileClassifications(datasetVersionId:string,profile
     admin.schema('governance').from('classification_labels').select('id,code,category').eq('enabled',true),
   ])
   if(columnsError||findingsError||labelsError)throw new Error(columnsError?.message??findingsError?.message??labelsError?.message??'Classification evidence load failed.')
-  const columnById=new Map((columns??[]).map(c=>[c.id,c.column_name]))
   const labelByCode=new Map((labels??[]).map(l=>[l.code,l]))
   const suggestions:Array<Record<string,unknown>>=[]
   for(const column of columns??[]){
@@ -37,8 +36,47 @@ export async function syncProfileClassifications(datasetVersionId:string,profile
       updated_at:new Date().toISOString(),
     })
   }
+
+  const {data:existingRows,error:existingError}=await admin.schema('governance').from('dataset_classifications')
+    .select('id,column_name,label_id,status')
+    .eq('dataset_id',dataset.id)
+  if(existingError)throw new Error(`Unable to load existing classification decisions: ${existingError.message}`)
+  const existingByKey=new Map((existingRows??[]).map(row=>[`${row.column_name??''}:${row.label_id}`,row]))
+
+  let inserted=0
+  let refreshed=0
+  let preservedHumanDecisions=0
   for(const suggestion of suggestions){
-    await admin.schema('governance').from('dataset_classifications').upsert(suggestion,{onConflict:'dataset_id,column_name,label_id'})
+    const key=`${String(suggestion.column_name??'')}:${String(suggestion.label_id??'')}`
+    const existing=existingByKey.get(key)
+    if(!existing){
+      const {error}=await admin.schema('governance').from('dataset_classifications').insert(suggestion)
+      if(error)throw new Error(`Unable to persist classification suggestion: ${error.message}`)
+      inserted+=1
+      continue
+    }
+
+    if(existing.status!=='SUGGESTED'){
+      preservedHumanDecisions+=1
+      continue
+    }
+
+    const {error}=await admin.schema('governance').from('dataset_classifications').update({
+      confidence:suggestion.confidence,
+      source:suggestion.source,
+      evidence:suggestion.evidence,
+      updated_at:suggestion.updated_at,
+    }).eq('id',existing.id)
+    if(error)throw new Error(`Unable to refresh classification suggestion: ${error.message}`)
+    refreshed+=1
   }
-  return {datasetId:dataset.id,profileRunId,suggestions:suggestions.length}
+
+  return {
+    datasetId:dataset.id,
+    profileRunId,
+    suggestions:suggestions.length,
+    inserted,
+    refreshed,
+    preservedHumanDecisions,
+  }
 }
