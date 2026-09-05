@@ -128,16 +128,13 @@ function roleRecommendations(agentKey: string, brief: JsonRecord) {
     }))
 }
 
-export async function enrichSpecialistOutputWithGovernanceIntelligence(input: {
-  projectId: string
-  output: Record<string, unknown>
-}) {
-  const [base, brief] = await Promise.all([
-    enrichOutputWithAIGovernanceIntelligence(input.projectId, input.output),
-    buildGovernanceIntelligenceBrief(input.projectId),
-  ])
-
+export function composeSpecialistOutputWithGovernanceIntelligence(
+  base: Record<string, unknown>,
+  brief: Record<string, unknown>,
+) {
   const agentKey = text(record(base.agent).key)
+  if (!agentKey) return base
+
   const observations = [...stringArray(base.observations), ...intelligenceObservations(brief)]
   const recommendations = [...array(base.recommendations), ...roleRecommendations(agentKey, brief)]
   const specialist = record(base.specialist)
@@ -176,4 +173,15 @@ export async function enrichSpecialistOutputWithGovernanceIntelligence(input: {
       'Formal readiness blockers are copied from the database verifier and cannot be overridden by specialist reasoning.',
     ])),
   }
+}
+
+export async function enrichSpecialistOutputWithGovernanceIntelligence(input: {
+  projectId: string
+  output: Record<string, unknown>
+}) {
+  const [base, brief] = await Promise.all([
+    enrichOutputWithAIGovernanceIntelligence(input.projectId, input.output),
+    buildGovernanceIntelligenceBrief(input.projectId),
+  ])
+  return composeSpecialistOutputWithGovernanceIntelligence(base, brief)
 }
