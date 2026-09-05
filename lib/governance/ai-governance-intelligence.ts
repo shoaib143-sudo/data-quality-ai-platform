@@ -36,7 +36,21 @@ export async function enrichOutputWithAIGovernanceIntelligence(
 
 export async function refreshAllAIGovernanceIntelligence() {
   const admin = createAdminClient()
-  const { data, error } = await admin.schema('governance').rpc('refresh_ai_governance_intelligence')
-  if (error) throw new Error(`Unable to refresh AI governance intelligence: ${error.message}`)
-  return data as Record<string, unknown> | null
+  const [coreResult, controlResult] = await Promise.all([
+    admin.schema('governance').rpc('refresh_ai_governance_intelligence'),
+    admin.schema('governance').rpc('refresh_all_governance_control_intelligence'),
+  ])
+  if (coreResult.error) throw new Error(`Unable to refresh AI governance intelligence: ${coreResult.error.message}`)
+  if (controlResult.error) throw new Error(`Unable to refresh governance control intelligence: ${controlResult.error.message}`)
+
+  const controls = controlResult.data as Record<string, unknown> | null
+  const failureCount = Number(controls?.failure_count ?? 0)
+  if (!Number.isFinite(failureCount) || failureCount > 0) {
+    throw new Error(`Governance control intelligence reconciliation reported ${Number.isFinite(failureCount) ? failureCount : 'an invalid number of'} project failure(s).`)
+  }
+
+  return {
+    core: coreResult.data as Record<string, unknown> | null,
+    controls,
+  }
 }
