@@ -23,9 +23,11 @@ Tracked by GitHub issue #4.
 
 ### Implemented and verified
 
-The governed lineage intake path is implemented in `app/api/lineage/ingest/route.ts` and normalized by `lib/governance/lineage-adapters.ts`.
+The governed lineage intake path is normalized by `lib/governance/lineage-adapters.ts` and exposed through `app/api/lineage/ingest/route.ts`.
 
-The production persistence contract covers:
+Migration `20260905034719_atomic_lineage_batch_ingestion` adds the authoritative write boundary `governance.ingest_lineage_batch_atomic(...)`.
+
+The production persistence transaction covers:
 
 - `governance.lineage_integrations`
 - `governance.lineage_assets`
@@ -33,8 +35,13 @@ The production persistence contract covers:
 - `governance.lineage_column_mappings`
 - `governance.lineage_edges`
 - `governance.lineage_ingestion_events`
+- `governance.audit_events`
 
-A rollback-only production contract test exercised integration creation, source and target assets, transformation persistence, a field mapping, graph edge and ingestion event. The transaction was rolled back and leak checks returned zero test rows.
+The API now normalizes source payloads and submits one RPC rather than issuing independent lineage writes. PostgreSQL rechecks `lineage.manage`, the function is service-role-only, and deterministic transaction-scoped advisory locks protect concurrent project/event retries before the idempotency lookup.
+
+Rollback-only production verification exercised a complete transformation, one field mapping, one edge, one ingestion event and the batch audit. An identical retry reused the event instead of duplicating it. A deliberately failing two-event batch failed only after its first event had written intermediate state inside the RPC; the caught failure left no first-event or integration residue. This proves the deployed batch is all-or-nothing.
+
+`app/api/lineage/ingest/route.ts` requires `audit_atomic=true` and `database_capability_verified=true` from the database result. `scripts/verify-lineage-atomic-ingestion.mjs` and the Quality Gate protect the route/RPC contract.
 
 ### Exact missing artifact
 
@@ -48,7 +55,7 @@ Tracked by GitHub issue #5.
 
 ### Implemented and verified
 
-Production now enforces explicit enterprise-document review rather than inferring authority from a non-synthetic flag.
+Production enforces explicit enterprise-document review rather than inferring authority from a non-synthetic flag.
 
 Migrations:
 
@@ -72,7 +79,7 @@ Authenticated browser roles cannot directly insert/update/delete `governance.kno
 
 Rollback-only verification exercised pending ingestion, direct approval-bypass rejection, authorized approval, search visibility and material-change reset behavior. Test document, requirement and audit rows all rolled back cleanly.
 
-The post-review semantic lifecycle is also event-driven and durable:
+The post-review semantic lifecycle is event-driven and durable:
 
 - approval queues a `SEMANTIC_INDEX` project refresh
 - rejection queues semantic pruning
@@ -80,7 +87,7 @@ The post-review semantic lifecycle is also event-driven and durable:
 - deletion of an ACTIVE approved document queues semantic pruning
 - semantic refresh jobs use `entity_id = project_id` so later successful project indexing supersedes an event-driven failure under platform-health recovery semantics
 - semantic refresh enqueue uses project-scoped idempotency keys
-- `governance.review_governance_knowledge_document(...)` now resets its transaction-local review context before returning, preventing the guarded-write context from leaking to later statements in the same transaction
+- `governance.review_governance_knowledge_document(...)` resets its transaction-local review context before returning
 
 The event-driven migration was compiled and exercised in a rollback-only production transaction before deployment. Approval enqueue, approval-reset enqueue and approved-document deletion enqueue all passed, with zero test semantic jobs leaked after rollback.
 
@@ -90,14 +97,11 @@ At least one genuine organization-authoritative governance document with explici
 
 The current 12-document knowledge corpus remains explicitly bootstrap/synthetic for this gate. Approved enterprise documents remain zero. Product/architecture discussions and public reference material are not enterprise-authoritative substitutes.
 
-## Final verification checkpoint
+## Final verification boundary
 
-After the above hardening:
+After the implementation hardening, the formal AI Governance Intelligence gate remains intentionally `PARTIAL` with `failure_count=0` and exactly two external data blockers:
 
-- `governance.run_all_platform_contract_checks()` returned `PASSED` with `failure_count=0` for all four active projects.
-- Profiling Demo immutable audit chain remained valid with 417 events checked and zero failures.
-- unresolved dead jobs remained zero; superseded semantic activation failures remained preserved as audit history.
-- `governance.verify_ai_governance_intelligence(project_id)` returned `PARTIAL`, `failure_count=0`, and `partial_or_external_count=2`.
-- the only blocker codes were `REAL_FIELD_LINEAGE_DATA_NOT_INGESTED` and `REAL_GOVERNANCE_CORPUS_NOT_INGESTED`.
+- `REAL_FIELD_LINEAGE_DATA_NOT_INGESTED`
+- `REAL_GOVERNANCE_CORPUS_NOT_INGESTED`
 
-No remaining core implementation change can satisfy those two checks without the authentic external artifacts described above.
+No remaining core implementation change can truthfully satisfy those two checks without the authentic external artifacts described above.
