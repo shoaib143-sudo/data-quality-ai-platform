@@ -1,6 +1,8 @@
 import { enqueueDurableJob } from '@/lib/orchestration/queue'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+const SEMANTIC_INDEX_JOB_VERSION = 'v2'
+
 export function semanticEmbeddingConfigured() {
   return Boolean(
     process.env.GOVERNANCE_EMBEDDING_URL?.trim()
@@ -35,8 +37,8 @@ export async function enqueueDailySemanticIndexJobs(limit = 100) {
       projectId: String(project.id),
       jobType: 'SEMANTIC_INDEX',
       entityId: String(project.id),
-      idempotencyKey: `semantic-index:${project.id}:${day}`,
-      payload: { projectId: String(project.id), trigger: 'DAILY_SEMANTIC_INDEX', day },
+      idempotencyKey: `semantic-index:${SEMANTIC_INDEX_JOB_VERSION}:${project.id}:${day}`,
+      payload: { projectId: String(project.id), trigger: 'DAILY_SEMANTIC_INDEX', day, version: SEMANTIC_INDEX_JOB_VERSION },
       priority: 160,
       maxAttempts: 3,
     })
