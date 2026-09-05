@@ -54,8 +54,8 @@ export function isSystemNamespace(name: string) {
 export function hierarchySelection(value: unknown): NativeHierarchySelection {
   const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
   const mode = String(record.mode ?? '').toUpperCase() === 'SELECTED' ? 'SELECTED' : 'ALL'
-  const nodeIds = Array.isArray(record.nodeIds) ? [...new Set(record.nodeIds.filter((item): item is string => typeof item === 'string' && item.trim()).map(item => item.trim()))] : []
-  const qualifiedNames = Array.isArray(record.qualifiedNames) ? [...new Set(record.qualifiedNames.filter((item): item is string => typeof item === 'string' && item.trim()).map(item => item.trim()))] : []
+  const nodeIds = Array.isArray(record.nodeIds) ? [...new Set(record.nodeIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map(item => item.trim()))] : []
+  const qualifiedNames = Array.isArray(record.qualifiedNames) ? [...new Set(record.qualifiedNames.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map(item => item.trim()))] : []
   return { mode, nodeIds, qualifiedNames }
 }
 
