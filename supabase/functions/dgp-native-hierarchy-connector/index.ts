@@ -124,7 +124,7 @@ async function postgresHierarchy(jdbcUrl: string, credentials: { username: strin
     for (const column of columnRows) {
       const parentId = objectIds.get(`${column.schema}.${column.object}`);
       if (!parentId) continue;
-      addNode(nodes, { parentId, kind: "FIELD", nativeType: "COLUMN", name: column.name, qualifiedName: `${column.schema}.${column.object}.${column.name}`, selectable: true, hasChildren: false, nativeId: `${column.object_id}:${column.ordinal}`, schema: column.schema, object: column.object, dataType: column.data_type, ordinal: Number(column.ordinal), system: systemName(column.schema), metadata: { nullable: column.nullable, object_oid: column.object_id, attnum: Number(column.ordinal) } });
+      addNode(nodes, { parentId, kind: "FIELD", nativeType: "COLUMN", name: column.name, qualifiedName: `${column.schema}.${column.object}.${column.name}`, selectable: true, hasChildren: false, nativeId: null, schema: column.schema, object: column.object, dataType: column.data_type, ordinal: Number(column.ordinal), system: systemName(column.schema), metadata: { nullable: column.nullable, object_oid: column.object_id, attnum: Number(column.ordinal), parent_native_id: column.object_id, identity_evidence: "DERIVED_LOCATOR" } });
     }
     const truncated = nodes.length >= MAX_NODES;
     if (truncated) warnings.push(`Native hierarchy reached the connector safety ceiling of ${MAX_NODES} nodes.`);
@@ -144,7 +144,7 @@ async function postgresHierarchy(jdbcUrl: string, credentials: { username: strin
         max_nodes: MAX_NODES,
         capabilities: {
           stable_object_ids: true,
-          stable_field_ids: true,
+          stable_field_ids: false,
           field_metadata: true,
           partitioning: "DATABASE",
           resumable_partitions: false,
@@ -254,7 +254,7 @@ async function databricksHierarchy(jdbcUrl: string, credentials: { username: str
           const columnName = typeof column.name === "string" ? column.name : "";
           if (!columnName) continue;
           const position = typeof column.position === "number" ? column.position : null;
-          addNode(nodes, { parentId: objectId, kind: "FIELD", nativeType: "COLUMN", name: columnName, qualifiedName: `${qualified}.${columnName}`, selectable: true, hasChildren: false, nativeId: tableNativeId && position !== null ? `${tableNativeId}:${position}` : null, catalog, schema, object: name, dataType: typeof column.type_text === "string" ? column.type_text : typeof column.type_name === "string" ? column.type_name : null, ordinal: position, system: systemName(catalog) || systemName(schema), metadata: { nullable: column.nullable ?? null, comment: column.comment ?? null, default_value: column.default_value ?? null, table_id: tableNativeId } });
+          addNode(nodes, { parentId: objectId, kind: "FIELD", nativeType: "COLUMN", name: columnName, qualifiedName: `${qualified}.${columnName}`, selectable: true, hasChildren: false, nativeId: null, catalog, schema, object: name, dataType: typeof column.type_text === "string" ? column.type_text : typeof column.type_name === "string" ? column.type_name : null, ordinal: position, system: systemName(catalog) || systemName(schema), metadata: { nullable: column.nullable ?? null, comment: column.comment ?? null, default_value: column.default_value ?? null, table_id: tableNativeId, parent_native_id: tableNativeId, position, identity_evidence: "DERIVED_LOCATOR" } });
         }
       }
     }
@@ -283,7 +283,7 @@ async function databricksHierarchy(jdbcUrl: string, credentials: { username: str
       requested_catalogs: options.catalogs,
       capabilities: {
         stable_object_ids: stableObjectIds,
-        stable_field_ids: stableObjectIds,
+        stable_field_ids: false,
         field_metadata: true,
         partitioning: "CATALOG",
         resumable_partitions: true,
