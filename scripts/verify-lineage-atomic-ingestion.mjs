@@ -4,6 +4,7 @@ const migration = fs.readFileSync('supabase/migrations/20260905034719_atomic_lin
 const replayProtection = fs.readFileSync('supabase/migrations/20260905035122_reject_lineage_replay_payload_collisions.sql', 'utf8')
 const edgeIdentity = fs.readFileSync('supabase/migrations/20260905040325_preserve_parallel_lineage_transformations.sql', 'utf8')
 const route = fs.readFileSync('app/api/lineage/ingest/route.ts', 'utf8')
+const discovery = fs.readFileSync('lib/catalog/discovery.ts', 'utf8')
 
 function requireText(text, needle, label) {
   if (!text.includes(needle)) throw new Error(`Atomic lineage ingestion contract missing: ${label}`)
@@ -51,5 +52,14 @@ requireText(route, 'data.database_capability_verified !== true', 'route requires
 if (route.includes("from('lineage_integrations').upsert") || route.includes("from('lineage_edges').upsert") || route.includes("from('lineage_column_mappings').insert")) {
   throw new Error('Atomic lineage ingestion contract missing: route still performs multi-request lineage persistence')
 }
+
+requireText(discovery, "if(engine==='DATABRICKS')", 'Databricks-specific governed lineage branch')
+requireText(discovery, "authoritative!=='system.access.column_lineage'", 'authoritative Databricks column-lineage provenance enforcement')
+requireText(discovery, "rpc('ingest_lineage_batch_atomic'", 'Databricks field lineage atomic RPC usage')
+requireText(discovery, "p_source_system:'DATABRICKS'", 'Databricks governed source identity')
+requireText(discovery, "payloadHash:sha256Hex(stableJson(eventWithoutHash))", 'deterministic Databricks SHA-256 payload hash')
+requireText(discovery, "Databricks column lineage ingestion requires the accountable Web UI discovery actor.", 'accountable Web UI actor requirement')
+requireText(discovery, 'transformations=inputTransformations.filter(item=>!governedSet.has(item))', 'Databricks mapped transformations excluded from legacy direct persistence')
+requireText(discovery, "authoritative_source:'system.access.column_lineage'", 'governed mapping provenance preservation')
 
 console.log('Atomic lineage ingestion contracts verified.')
