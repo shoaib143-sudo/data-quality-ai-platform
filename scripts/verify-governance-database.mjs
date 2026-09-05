@@ -74,6 +74,15 @@ for (const project of projects ?? []) {
   const overall = Number(scorecard?.overall_score)
   if (!Number.isFinite(overall) || overall < 0 || overall > 1) throw new Error(`Governance scorecard is invalid for ${project.name}.`)
   console.log(`PASS evidence scorecard ${project.name} -> ${Math.round(overall * 100)}%`)
+
+  const { data: aiGovernance, error: aiGovernanceError } = await supabase.schema('governance').rpc('verify_ai_governance_intelligence', { p_project_id: project.id })
+  if (aiGovernanceError) throw new Error(`AI governance due diligence failed to execute for ${project.name}: ${aiGovernanceError.message}`)
+  if (!aiGovernance || typeof aiGovernance !== 'object') throw new Error(`AI governance due diligence returned no evidence for ${project.name}.`)
+  if (Number(aiGovernance.failure_count ?? -1) !== 0 || aiGovernance.status === 'FAILED') {
+    throw new Error(`AI governance implementation due diligence failed for ${project.name}: ${JSON.stringify(aiGovernance)}`)
+  }
+  const blockers = Array.isArray(aiGovernance.blockers) ? aiGovernance.blockers : []
+  console.log(`PASS AI governance implementation due diligence ${project.name} -> ${aiGovernance.status}; activation blockers=${blockers.length}`)
 }
 
 const [{ count: activeSources, error: sourceError }, { count: deadEvents, error: eventError }] = await Promise.all([
