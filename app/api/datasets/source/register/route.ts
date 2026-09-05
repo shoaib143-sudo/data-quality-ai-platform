@@ -8,6 +8,7 @@ import { discoverNativeHierarchy } from '@/lib/connectors/native-hierarchy-disco
 import { hierarchySelection } from '@/lib/connectors/native-hierarchy'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
+function record(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 function serverCredentialRef(kind: string) {
   const normalized = kind.toLowerCase().replace(/[^a-z0-9]+/g, '_').toUpperCase()
   return process.env[`JDBC_${normalized}_CREDENTIAL_REF`]?.trim() || process.env.JDBC_CREDENTIAL_REF?.trim() || ''
@@ -56,10 +57,8 @@ async function ensureSourceScopeVersion(
   source: ScopeBoundSource,
   actorUserId: string,
 ) {
-  const metadata = source.connection_metadata && typeof source.connection_metadata === 'object' && !Array.isArray(source.connection_metadata)
-    ? source.connection_metadata as Record<string, unknown>
-    : {}
-  const nativeSelection = metadata.hierarchy_selection ?? { mode: 'ALL', nodeIds: [], qualifiedNames: [] }
+  const metadata = record(source.connection_metadata)
+  const nativeSelection = metadata.hierarchy_selection ?? { mode: 'ALL', nodeIds: [], qualifiedNames: [], excludedNodeIds: [], excludedQualifiedNames: [], includeSystem: false, inheritFutureChildren: true }
   const { data, error } = await admin.schema('catalog').rpc('ensure_source_scope_version', {
     p_project_id: source.project_id,
     p_source_id: source.id,
@@ -68,6 +67,26 @@ async function ensureSourceScopeVersion(
   })
   if (error) throw new Error(`Unable to version governed discovery scope: ${error.message}`)
   return data
+}
+
+async function persistConnectorCapabilities(
+  admin: ReturnType<typeof createAdminClient>,
+  source: { id: string; project_id: string; connection_metadata: unknown },
+) {
+  const metadata = record(source.connection_metadata)
+  const nativeHierarchy = record(metadata.native_hierarchy)
+  const details = record(nativeHierarchy.details)
+  const capabilities = record(metadata.connector_capabilities ?? details.capabilities)
+  if (!Object.keys(capabilities).length) return
+  const now = new Date().toISOString()
+  const { error } = await admin.schema('catalog').from('source_discovery_capabilities').upsert({
+    source_id: source.id,
+    project_id: source.project_id,
+    capabilities,
+    discovered_at: now,
+    updated_at: now,
+  }, { onConflict: 'source_id' })
+  if (error) throw new Error(`Unable to persist connector capabilities: ${error.message}`)
 }
 
 async function reconcileSourceBoundDatasets(
@@ -85,7 +104,7 @@ async function reconcileSourceBoundDatasets(
   const latestByDataset = new Map<string, DatasetVersionForReconciliation>()
   for (const version of typedVersions) if (!latestByDataset.has(version.dataset_id)) latestByDataset.set(version.dataset_id, version)
   const executionByVersion = new Map((executionSources ?? []).map(item => [item.dataset_version_id, item]))
-  const baseMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? { ...(source.connection_metadata as Record<string, unknown>) } : {}
+  const baseMetadata = record(source.connection_metadata)
 
   for (const dataset of datasets) {
     const version = latestByDataset.get(dataset.id)
@@ -107,9 +126,9 @@ async function reconcileSourceBoundDatasets(
     if (!validation.valid) continue
 
     const now = new Date().toISOString()
-    const versionMetadata = version.metadata && typeof version.metadata === 'object' ? { ...(version.metadata as Record<string, unknown>) } : {}
-    const datasetMetadata = dataset.metadata && typeof dataset.metadata === 'object' ? { ...(dataset.metadata as Record<string, unknown>) } : {}
-    const executionConfig = executionSource.execution_config && typeof executionSource.execution_config === 'object' ? { ...(executionSource.execution_config as Record<string, unknown>) } : {}
+    const versionMetadata = record(version.metadata)
+    const datasetMetadata = record(dataset.metadata)
+    const executionConfig = record(executionSource.execution_config)
 
     await admin.schema('catalog').from('dataset_versions').update({ status: 'AVAILABLE', metadata: { ...versionMetadata, profiling_ready: true, source_validation: validation }, observed_at: now }).eq('id', version.id)
     await admin.schema('catalog').from('datasets').update({ metadata: { ...datasetMetadata, profiling_ready: true, source_validation: validation }, updated_at: now }).eq('id', dataset.id)
@@ -140,19 +159,24 @@ async function nativeConnectionMetadata(input: {
   const selectableIds = new Set(selectable.map(node => node.id))
   const selectableNames = new Set(selectable.map(node => node.qualifiedName))
 
-  if (selection.mode === 'SELECTED') {
-    const nodeIds = selection.nodeIds.filter(id => selectableIds.has(id))
-    const qualifiedNames = selection.qualifiedNames.filter(name => selectableNames.has(name))
-    if (!nodeIds.length && !qualifiedNames.length) throw new Error('Select at least one catalog, database, schema, object, or field from the discovered hierarchy.')
-    selection.nodeIds = nodeIds
-    selection.qualifiedNames = qualifiedNames
+  selection.nodeIds = selection.nodeIds.filter(id => selectableIds.has(id))
+  selection.qualifiedNames = selection.qualifiedNames.filter(name => selectableNames.has(name))
+  selection.excludedNodeIds = selection.excludedNodeIds.filter(id => selectableIds.has(id))
+  selection.excludedQualifiedNames = selection.excludedQualifiedNames.filter(name => selectableNames.has(name))
+  selection.includeSystem = selection.includeSystem === true
+  selection.inheritFutureChildren = selection.inheritFutureChildren !== false
+
+  if (selection.mode === 'SELECTED' && !selection.nodeIds.length && !selection.qualifiedNames.length) {
+    throw new Error('Select at least one catalog, database, schema, object, or field from the discovered hierarchy.')
   }
 
+  const capabilities = record(hierarchy.details.capabilities)
   return {
     jdbc_url: input.jdbcUrl,
     connection_kind: input.connectionKind,
     credential_ref: input.credentialRef,
     hierarchy_selection: selection,
+    connector_capabilities: capabilities,
     native_hierarchy: {
       database_product: hierarchy.databaseProduct,
       database_version: hierarchy.databaseVersion,
@@ -211,13 +235,15 @@ export async function POST(request: Request) {
         const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: 'JDBC', connection_metadata: connectionMetadata, status: 'CONFIGURED', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
         if (error || !source) return NextResponse.json({ error: `Unable to save connection: ${error?.message ?? 'unknown error'}` }, { status: 500 })
         const scope = await ensureSourceScopeVersion(admin, source, user.id)
-        return NextResponse.json({ source, scope, profiling_ready: false, connection_saved: true })
+        await persistConnectorCapabilities(admin, source)
+        return NextResponse.json({ source, scope, capabilities: record(connectionMetadata.connector_capabilities), profiling_ready: false, connection_saved: true })
       }
 
       const { data: source, error } = await admin.schema('catalog').from('data_sources').insert({ project_id: projectId, name, source_type: 'JDBC', connection_metadata: connectionMetadata, status: 'CONFIGURED' }).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
       if (error || !source) return NextResponse.json({ error: `Unable to save connection: ${error?.message ?? 'unknown error'}` }, { status: 500 })
       const scope = await ensureSourceScopeVersion(admin, source, user.id)
-      return NextResponse.json({ source, scope, profiling_ready: false, connection_saved: true })
+      await persistConnectorCapabilities(admin, source)
+      return NextResponse.json({ source, scope, capabilities: record(connectionMetadata.connector_capabilities), profiling_ready: false, connection_saved: true })
     }
 
     let connectionMetadata: Record<string, unknown>
@@ -241,6 +267,7 @@ export async function POST(request: Request) {
       const { data: source, error } = await admin.schema('catalog').from('data_sources').update({ source_type: sourceType, connection_metadata: connectionMetadata, status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', existing.id).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
       if (error || !source) return NextResponse.json({ error: `Unable to activate source: ${error?.message ?? 'unknown error'}` }, { status: 500 })
       const scope = await ensureSourceScopeVersion(admin, source, user.id)
+      await persistConnectorCapabilities(admin, source)
       await reconcileSourceBoundDatasets(admin, source)
       return NextResponse.json({ source, scope, profiling_ready: true })
     }
@@ -248,6 +275,7 @@ export async function POST(request: Request) {
     const { data: source, error } = await admin.schema('catalog').from('data_sources').insert({ project_id: projectId, name, source_type: sourceType, connection_metadata: connectionMetadata, status: 'ACTIVE' }).select('id, project_id, name, source_type, connection_metadata, status, created_at, updated_at').single()
     if (error || !source) return NextResponse.json({ error: `Unable to register source: ${error?.message ?? 'unknown error'}` }, { status: 500 })
     const scope = await ensureSourceScopeVersion(admin, source, user.id)
+    await persistConnectorCapabilities(admin, source)
     await reconcileSourceBoundDatasets(admin, source)
     return NextResponse.json({ source, scope, profiling_ready: true })
   } catch (error) {
