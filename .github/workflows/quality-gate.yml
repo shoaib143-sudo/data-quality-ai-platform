@@ -54,6 +54,8 @@ jobs:
         run: pnpm run verify:control-intelligence
       - name: Verify governance control operability
         run: node scripts/verify-governance-control-operability.mjs
+      - name: Verify governance intelligence brief truth contract
+        run: node scripts/verify-governance-intelligence-brief.mjs
       - name: Verify production readiness contracts
         run: pnpm run verify:readiness
       - name: Verify provider read fallback behavior
