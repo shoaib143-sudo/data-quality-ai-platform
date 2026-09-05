@@ -49,7 +49,7 @@ function canonicalize(value:unknown):unknown{
   }
   return value
 }
-function stableJson(value:unknown){return JSON.stringify(canonicalize(value))}
+function stableJson(value:unknown):string{return JSON.stringify(canonicalize(value))??'null'}
 function sha256Hex(value:string){return createHash('sha256').update(value).digest('hex')}
 
 async function resolveSourceLocation(source: Source) {
@@ -249,7 +249,7 @@ async function ingestDatabricksColumnLineage(source:Source,actorUserId:string,tr
       metadata:{...(mapping.metadata??{}),authoritative_source:'system.access.column_lineage',data_source_id:source.id},
     }))
     const logicHash=sha256Hex(stableJson({sourceAsset,targetAsset,operation:transformation.operation,mappings:governedMappings}))
-    const stableMetadata={...metadata,data_source_id:source.id,connector_logic_hash:transformation.logicHash,authoritative_source:'system.access.column_lineage'}
+    const stableMetadata={...metadata,data_source_id:source.id,authoritative_source:'system.access.column_lineage'}
     const eventWithoutHash={
       externalEventId,
       eventType:'COMPLETE',
