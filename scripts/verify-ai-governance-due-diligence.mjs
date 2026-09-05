@@ -9,6 +9,9 @@ function requireText(text, needle, label) {
 }
 
 const worker = read('lib/agents/governance-job-worker.ts')
+const scheduledWorker = read('app/api/jobs/worker/route.ts')
+const directAgentRoute = read('app/api/agents/governance/run/route.ts')
+const handoffRoute = read('app/api/agents/governance/handoff/route.ts')
 const semanticJobs = read('lib/governance/semantic-jobs.ts')
 const fieldLineage = read('supabase/migrations/20260905000510_synthetic_field_lineage_integration_suite.sql')
 const contractRename = read('supabase/migrations/20260905000949_rename_contract_specific_evaluator.sql')
@@ -27,6 +30,14 @@ requireText(worker, "eventType: 'GOVERNED_AGENT_HANDOFF_COMPLETED'", 'durable ha
 requireText(worker, 'await persistRunOutput(result.runId, output)', 'memory-enriched specialist output persistence')
 requireText(worker, 'persistGovernedAgentMemoryAndEvaluation', 'durable handoff memory and evaluation persistence')
 requireText(worker, 'persistInvestigatorRiskAssessment', 'durable investigator risk persistence')
+requireText(worker, 'enrichOutputWithAIGovernanceIntelligence', 'durable agent certification/ROI intelligence enrichment')
+
+requireText(directAgentRoute, 'enrichOutputWithAIGovernanceIntelligence', 'direct agent certification/ROI intelligence enrichment')
+requireText(directAgentRoute, ".from('agent_runs').update({ output })", 'direct agent enriched output persistence')
+requireText(handoffRoute, 'enrichOutputWithAIGovernanceIntelligence', 'handoff certification/ROI intelligence enrichment')
+requireText(handoffRoute, 'output,', 'handoff enriched output persistence')
+requireText(scheduledWorker, 'refreshAllAIGovernanceIntelligence', 'scheduled certification/ROI intelligence refresh')
+requireText(scheduledWorker, 'aiGovernanceIntelligence', 'worker exposes refreshed AI governance intelligence evidence')
 
 requireText(fieldLineage, 'run_synthetic_field_lineage_integration_suite', 'self-cleaning field-lineage integration suite')
 requireText(fieldLineage, "'column_mappings_complete'", 'field-lineage mapping assertion')
@@ -61,6 +72,7 @@ requireText(certificationIntelligence, 'certification_readiness', 'certification
 requireText(certificationIntelligence, 'governance_roi_snapshots', 'governance value/ROI evidence')
 requireText(certificationIntelligence, 'Financial ROI is not estimated', 'ROI anti-fabrication limitation')
 requireText(intelligenceLoader, 'loadProjectAIGovernanceIntelligence', 'agent-consumable certification/ROI evidence loader')
+requireText(intelligenceLoader, 'enrichOutputWithAIGovernanceIntelligence', 'shared agent intelligence enrichment helper')
 
 requireText(semanticJobs, 'GOVERNANCE_EMBEDDING_URL', 'explicit semantic embedding configuration boundary')
 requireText(semanticJobs, 'configured: false, queued: 0, projects: 0, skipped: true', 'visible semantic scheduling skip state')
