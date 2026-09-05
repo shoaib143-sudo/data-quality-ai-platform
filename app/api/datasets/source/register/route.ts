@@ -3,8 +3,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
-import { discoverDatabricksSchemaScope, jdbcEngineFromUrl, validateJdbcConnection } from '@/lib/connectors/jdbc'
-import { readSchemaScope, SchemaScopeError } from '@/lib/connectors/schema-scope'
+import { validateJdbcConnection } from '@/lib/connectors/jdbc'
+import { discoverNativeHierarchy } from '@/lib/connectors/native-hierarchy-discovery'
+import { hierarchySelection } from '@/lib/connectors/native-hierarchy'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function serverCredentialRef(kind: string) {
@@ -102,6 +103,45 @@ async function reconcileSourceBoundDatasets(
   }
 }
 
+async function nativeConnectionMetadata(input: {
+  jdbcUrl: string
+  credentialRef: string
+  connectionKind: string
+  selectionInput: unknown
+}) {
+  const hierarchy = await discoverNativeHierarchy({ jdbcUrl: input.jdbcUrl, credentialRef: input.credentialRef })
+  const selection = hierarchySelection(input.selectionInput)
+  const selectable = hierarchy.nodes.filter(node => node.selectable)
+  const selectableIds = new Set(selectable.map(node => node.id))
+  const selectableNames = new Set(selectable.map(node => node.qualifiedName))
+
+  if (selection.mode === 'SELECTED') {
+    const nodeIds = selection.nodeIds.filter(id => selectableIds.has(id))
+    const qualifiedNames = selection.qualifiedNames.filter(name => selectableNames.has(name))
+    if (!nodeIds.length && !qualifiedNames.length) throw new Error('Select at least one catalog, database, schema, object, or field from the discovered hierarchy.')
+    selection.nodeIds = nodeIds
+    selection.qualifiedNames = qualifiedNames
+  }
+
+  return {
+    jdbc_url: input.jdbcUrl,
+    connection_kind: input.connectionKind,
+    credential_ref: input.credentialRef,
+    hierarchy_selection: selection,
+    native_hierarchy: {
+      database_product: hierarchy.databaseProduct,
+      database_version: hierarchy.databaseVersion,
+      terms: hierarchy.terms,
+      root_ids: hierarchy.rootIds,
+      hierarchy_node_count: hierarchy.nodes.length,
+      hierarchy_truncated: hierarchy.truncated,
+      warnings: hierarchy.warnings,
+      details: hierarchy.details,
+      discovered_at: new Date().toISOString(),
+    },
+  } satisfies Record<string, unknown>
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireUser()
@@ -132,20 +172,12 @@ export async function POST(request: Request) {
     if (sourceType === 'JDBC' && !credentialRef) return NextResponse.json({ error: 'Database credentials are required. Enter them in the connection form and test the connection.' }, { status: 400 })
 
     if (sourceType === 'JDBC' && connectionOnly) {
-      const connectionMetadata: Record<string, unknown> = { jdbc_url: jdbcUrl, connection_kind: connectionKind, credential_ref: credentialRef }
-      if (catalogName) connectionMetadata.catalog = catalogName
-      if (jdbcEngineFromUrl(jdbcUrl) === 'DATABRICKS') {
-        if (!catalogName) return NextResponse.json({ error: 'Databricks catalog is required.' }, { status: 400 })
-        const scope = readSchemaScope(body)
-        const discovered = await discoverDatabricksSchemaScope({ jdbcUrl, credentialRef, catalog: catalogName }, scope)
-        const selectedSchemas = discovered.details.selected_schemas as string[]
-        connectionMetadata.schema_scope = scope.schemaScope
-        connectionMetadata.schemas = scope.schemaScope === 'selected' ? selectedSchemas : []
-        if (scope.schemaScope === 'selected' && selectedSchemas.length === 1) connectionMetadata.schema = selectedSchemas[0]
-      } else {
-        if (schema) connectionMetadata.schema = schema
-        if (table) connectionMetadata.table = table
-      }
+      const connectionMetadata = await nativeConnectionMetadata({
+        jdbcUrl,
+        credentialRef,
+        connectionKind,
+        selectionInput: body.hierarchySelection,
+      })
 
       const existingQuery = admin.schema('catalog').from('data_sources').select('id').eq('project_id', projectId)
       const { data: existing } = await (sourceId ? existingQuery.eq('id', sourceId) : existingQuery.eq('name', name)).maybeSingle()
@@ -190,7 +222,6 @@ export async function POST(request: Request) {
     await reconcileSourceBoundDatasets(admin, source)
     return NextResponse.json({ source, profiling_ready: true })
   } catch (error) {
-    if (error instanceof SchemaScopeError) return NextResponse.json({ error: error.message, schemas: error.availableSchemas }, { status: 422 })
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Source registration failed.' }, { status: 500 })
   }
