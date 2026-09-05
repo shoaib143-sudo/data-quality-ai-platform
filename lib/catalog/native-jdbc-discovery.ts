@@ -71,6 +71,7 @@ export async function discoverJdbcFromNativeHierarchy(connectionMetadata: Record
   const assets: NativeDiscoveredAsset[] = []
   const transformations: JdbcTransformation[] = []
   const lineageWarnings: string[] = [...hierarchy.warnings]
+  const lineageCandidates: NativeHierarchyNode[] = []
   let selectedFieldCount = 0
 
   for (const object of objects) {
@@ -105,8 +106,16 @@ export async function discoverJdbcFromNativeHierarchy(connectionMetadata: Record
     if (objectType.includes('VIEW') || engine === 'DATABRICKS') {
       if (!object.schema && !object.catalog) {
         lineageWarnings.push(`Transformation discovery skipped for ${object.qualifiedName}: the source did not report a catalog/database or schema namespace.`)
-        continue
+      } else {
+        lineageCandidates.push(object)
       }
+    }
+  }
+
+  const lineageConcurrency = engine === 'DATABRICKS' ? 12 : 4
+  for (let index = 0; index < lineageCandidates.length; index += lineageConcurrency) {
+    const batch = lineageCandidates.slice(index, index + lineageConcurrency)
+    const results = await Promise.all(batch.map(async (object) => {
       try {
         const lineage = await discoverJdbcTransformations({
           jdbcUrl,
@@ -115,11 +124,17 @@ export async function discoverJdbcFromNativeHierarchy(connectionMetadata: Record
           schema: object.schema ?? null,
           table: object.name,
         })
-        transformations.push(...lineage.transformations)
-        lineageWarnings.push(...lineage.warnings)
+        return { transformations: lineage.transformations, warnings: lineage.warnings }
       } catch (error) {
-        lineageWarnings.push(`Transformation discovery failed for ${object.qualifiedName}: ${error instanceof Error ? error.message : 'unknown error'}`)
+        return {
+          transformations: [] as JdbcTransformation[],
+          warnings: [`Transformation discovery failed for ${object.qualifiedName}: ${error instanceof Error ? error.message : 'unknown error'}`],
+        }
       }
+    }))
+    for (const result of results) {
+      transformations.push(...result.transformations)
+      lineageWarnings.push(...result.warnings)
     }
   }
 
@@ -145,6 +160,8 @@ export async function discoverJdbcFromNativeHierarchy(connectionMetadata: Record
       asset_count: assets.length,
       transformation_count: uniqueTransformations.length,
       column_mapping_count: columnMappingCount,
+      lineage_candidate_count: lineageCandidates.length,
+      lineage_concurrency: lineageConcurrency,
       hierarchy_details: hierarchy.details,
       hierarchy_warnings: hierarchy.warnings,
       lineage_warnings: [...new Set(lineageWarnings)],
