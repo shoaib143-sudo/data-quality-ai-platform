@@ -68,5 +68,10 @@ requirePattern(lineageEnrichment, /payloadHash:\s*sha256Hex\(stableJson\(eventWi
 requireText(lineageEnrichment, 'Databricks column lineage ingestion requires the accountable Web UI discovery actor.', 'accountable Web UI actor requirement')
 requirePattern(lineageEnrichment, /transformations = inputTransformations\.filter\(item => !governedSet\.has\(item\)\)/, 'Databricks mapped transformations excluded from legacy direct persistence')
 requirePattern(lineageEnrichment, /authoritative_source:\s*'system\.access\.column_lineage'/, 'governed mapping provenance preservation')
+requireText(lineageEnrichment, 'DATABRICKS_SYSTEM_ACCESS_PERMISSION_REQUIRED', 'Databricks system.access permission blocker code')
+requirePattern(lineageEnrichment, /databricksSystemAccessBlocked[\s\S]*\? 'BLOCKED'/, 'Databricks zero-lineage permission failure must be BLOCKED rather than completed')
+requireText(lineageEnrichment, "blocker_resource: databricksSystemAccessBlocked ? 'system.access' : null", 'Databricks blocker must name the exact source schema')
+requireText(lineageEnrichment, "blocker_permission: databricksSystemAccessBlocked ? 'USE SCHEMA' : null", 'Databricks blocker must name the required permission')
+requireText(lineageEnrichment, 'lineage_enrichment_status: status ?? snapshot.lineage_enrichment_status', 'discovery snapshot must expose final lineage status')
 
 console.log('Atomic lineage ingestion contracts verified.')
