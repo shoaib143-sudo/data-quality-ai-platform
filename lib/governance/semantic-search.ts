@@ -51,14 +51,11 @@ function embeddingProviderUrl() {
   return process.env.GOVERNANCE_EMBEDDING_URL?.trim() || null
 }
 
-function supabaseEmbeddingProvider() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
-  if (!url || !serviceRoleKey) return null
-  return {
-    url: `${url.replace(/\/$/, '')}/functions/v1/governance-embed`,
-    serviceRoleKey,
-  }
+function supabaseNativeEmbeddingConfigured() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+    && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
+  )
 }
 
 async function gatewayApiKey() {
@@ -78,7 +75,7 @@ function embeddingModel(model?: string) {
   const requested = model?.trim()
   if (requested) return requested
   if (embeddingProviderUrl()) return process.env.GOVERNANCE_EMBEDDING_MODEL?.trim() || DEFAULT_EMBEDDING_MODEL
-  if (supabaseEmbeddingProvider()) return DEFAULT_SUPABASE_EMBEDDING_MODEL
+  if (supabaseNativeEmbeddingConfigured()) return DEFAULT_SUPABASE_EMBEDDING_MODEL
   return process.env.GOVERNANCE_EMBEDDING_MODEL?.trim() || DEFAULT_GATEWAY_EMBEDDING_MODEL
 }
 
@@ -125,11 +122,26 @@ export function toPgVectorLiteral(values: number[]) {
   return `[${normalizeEmbedding(values).join(',')}]`
 }
 
+async function embedWithSupabaseNative(input: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.functions.invoke('governance-embed', {
+    body: { input },
+  })
+  if (error) {
+    throw new Error(`Supabase governance embedding failed: ${error.message}`)
+  }
+  return normalizeEmbedding(parseEmbeddingPayload(data))
+}
+
 export async function embedGovernanceText(text: string, model?: string) {
   const input = text.trim()
   if (!input) throw new Error('Text is required for embedding')
 
   const customUrl = embeddingProviderUrl()
+  if (!customUrl && supabaseNativeEmbeddingConfigured()) {
+    return embedWithSupabaseNative(input)
+  }
+
   const selectedModel = embeddingModel(model)
   let url: string
   const headers: Record<string, string> = { 'content-type': 'application/json' }
@@ -141,26 +153,19 @@ export async function embedGovernanceText(text: string, model?: string) {
     if (apiKey) headers.authorization = `Bearer ${apiKey}`
     body = { input, model: selectedModel, text: input }
   } else {
-    const supabaseProvider = supabaseEmbeddingProvider()
-    if (supabaseProvider) {
-      url = supabaseProvider.url
-      headers.authorization = `Bearer ${supabaseProvider.serviceRoleKey}`
-      body = { input }
-    } else {
-      const apiKey = await gatewayApiKey()
-      if (!apiKey) {
-        const error = new Error('No governance embedding provider is configured')
-        error.name = 'EmbeddingProviderNotConfiguredError'
-        throw error
-      }
-      url = VERCEL_AI_GATEWAY_EMBEDDING_URL
-      headers.authorization = `Bearer ${apiKey}`
-      body = {
-        input,
-        model: selectedModel,
-        dimensions: EMBEDDING_DIMENSIONS,
-        encoding_format: 'float',
-      }
+    const apiKey = await gatewayApiKey()
+    if (!apiKey) {
+      const error = new Error('No governance embedding provider is configured')
+      error.name = 'EmbeddingProviderNotConfiguredError'
+      throw error
+    }
+    url = VERCEL_AI_GATEWAY_EMBEDDING_URL
+    headers.authorization = `Bearer ${apiKey}`
+    body = {
+      input,
+      model: selectedModel,
+      dimensions: EMBEDDING_DIMENSIONS,
+      encoding_format: 'float',
     }
   }
 
