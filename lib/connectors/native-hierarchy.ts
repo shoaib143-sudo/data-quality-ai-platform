@@ -44,7 +44,7 @@ export type NativeHierarchySelection = {
   qualifiedNames: string[]
 }
 
-const SYSTEM_NAMES = new Set(['information_schema', 'pg_catalog', 'mysql', 'performance_schema', 'sys'])
+const SYSTEM_NAMES = new Set(['information_schema', 'pg_catalog', 'mysql', 'performance_schema', 'sys', 'system'])
 
 export function isSystemNamespace(name: string) {
   const normalized = name.trim().toLowerCase()
@@ -62,7 +62,9 @@ export function hierarchySelection(value: unknown): NativeHierarchySelection {
 export function nodeInSelection(node: NativeHierarchyNode, selection: NativeHierarchySelection) {
   if (selection.mode === 'ALL') return !node.system
   if (selection.nodeIds.includes(node.id) || selection.qualifiedNames.includes(node.qualifiedName)) return true
-  return selection.qualifiedNames.some(parent => node.qualifiedName === parent || node.qualifiedName.startsWith(`${parent}.`))
+  return selection.qualifiedNames.some(selected =>
+    node.qualifiedName.startsWith(`${selected}.`) || selected.startsWith(`${node.qualifiedName}.`)
+  )
 }
 
 export function selectedObjectNodes(hierarchy: NativeHierarchyResult, selection: NativeHierarchySelection) {
@@ -71,4 +73,15 @@ export function selectedObjectNodes(hierarchy: NativeHierarchyResult, selection:
 
 export function selectedFieldNodes(hierarchy: NativeHierarchyResult, selection: NativeHierarchySelection) {
   return hierarchy.nodes.filter(node => node.kind === 'FIELD' && nodeInSelection(node, selection))
+}
+
+export function selectedFieldNamesForObject(hierarchy: NativeHierarchyResult, selection: NativeHierarchySelection, objectNode: NativeHierarchyNode) {
+  if (selection.mode === 'ALL') return null
+  const objectSelectedDirectly = selection.nodeIds.includes(objectNode.id) || selection.qualifiedNames.includes(objectNode.qualifiedName)
+  const ancestorSelected = selection.qualifiedNames.some(selected => objectNode.qualifiedName.startsWith(`${selected}.`))
+  if (objectSelectedDirectly || ancestorSelected) return null
+  const fields = hierarchy.nodes
+    .filter(node => node.kind === 'FIELD' && node.parentId === objectNode.id && nodeInSelection(node, selection))
+    .map(node => node.name)
+  return new Set(fields)
 }
