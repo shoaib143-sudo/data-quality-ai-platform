@@ -25,7 +25,7 @@ type DiscoveryJobRow = {
 export default async function DiscoveryPage() {
   await requireUser()
   const supabase = await createClient()
-  const [sources, runs] = await Promise.all([
+  const [sources, runs, currentAssets] = await Promise.all([
     supabase
       .schema('catalog')
       .from('data_sources')
@@ -38,12 +38,22 @@ export default async function DiscoveryPage() {
       .select('id,project_id,source_id,status,assets_discovered,error_message,started_at,completed_at')
       .order('started_at', { ascending: false })
       .limit(200),
+    supabase
+      .schema('catalog')
+      .from('current_discovered_assets')
+      .select('source_id'),
   ])
 
   if (sources.error) throw new Error(`Unable to load discovery sources: ${sources.error.message}`)
   if (runs.error) throw new Error(`Unable to load discovery history: ${runs.error.message}`)
+  if (currentAssets.error) throw new Error(`Unable to load current metadata assets: ${currentAssets.error.message}`)
 
   const sourceRows = sources.data ?? []
+  const currentAssetCounts = (currentAssets.data ?? []).reduce<Record<string, number>>((counts, asset) => {
+    counts[asset.source_id] = (counts[asset.source_id] ?? 0) + 1
+    return counts
+  }, {})
+
   let jobs: DiscoveryJobRow[] = []
   if (sourceRows.length) {
     const admin = createAdminClient()
@@ -78,7 +88,7 @@ export default async function DiscoveryPage() {
             </div>
           </div>
         </header>
-        <DiscoveryManager sources={sourceRows} runs={runs.data ?? []} jobs={jobs} />
+        <DiscoveryManager sources={sourceRows} runs={runs.data ?? []} jobs={jobs} currentAssetCounts={currentAssetCounts} />
       </div>
     </main>
   )
