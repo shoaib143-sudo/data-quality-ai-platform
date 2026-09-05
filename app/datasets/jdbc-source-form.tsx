@@ -15,7 +15,7 @@ const CONNECTIONS: ConnectionOption[] = [
   { id: 'postgresql', label: 'PostgreSQL', description: 'PostgreSQL or Supabase database', placeholder: 'jdbc:postgresql://host:5432/database', fields: ['host','port','database','username','password','ssl','schema','table'], tips: ['Enter the database host, port, database name, username, and password.', 'Keep SSL at Require for normal encrypted connections. Use certificate verification when your database trust configuration supports it.', 'Test the connection first, then choose the discovered schema and table or view.'] },
   { id: 'mssql', label: 'Microsoft SQL Server', description: 'SQL Server or Azure SQL', placeholder: 'jdbc:sqlserver://host:1433;databaseName=database', fields: ['host','port','database','username','password','encryption','schema','table'], tips: ['Enter the SQL Server or Azure SQL host, port, database, username, and password.', 'Encryption is applied to the JDBC connection from the selected setting. Production connections should use encrypted transport with certificate validation.', 'Test the connection first, then select the schema and table or view discovered from the server.'] },
   { id: 'mysql', label: 'MySQL', description: 'MySQL compatible database', placeholder: 'jdbc:mysql://host:3306/database', fields: ['host','port','database','username','password','ssl','schema','table'], tips: ['Enter the MySQL host, port, database, username, and password.', 'SSL mode is translated to the MySQL JDBC driver setting. Use certificate and identity verification where your environment supports it.', 'Test the connection first, then select the discovered schema and table or view.'] },
-  { id: 'databricks', label: 'Databricks Unity Catalog', description: 'Databricks SQL warehouse and Unity Catalog', placeholder: 'jdbc:databricks://host:443;httpPath=/sql/1.0/warehouses/...', fields: ['host','httpPath','token','catalog','schema','table'], tips: ['Enter the SQL warehouse server hostname and HTTP path from Databricks.', 'Enter a Databricks personal access token for testing, or use an approved token supported by your workspace policy.', 'Select the Unity Catalog catalog, then discover and select its schema and table or view. The token is stored through the secure credential flow and is never embedded in the saved source.'] },
+  { id: 'databricks', label: 'Databricks Unity Catalog', description: 'Databricks SQL warehouse and Unity Catalog', placeholder: 'jdbc:databricks://host:443/default;transportMode=http;ssl=1;AuthMech=3;httpPath=/sql/1.0/warehouses/...', fields: ['host','httpPath','token','catalog','schema','table'], tips: ['Enter the SQL warehouse server hostname and HTTP path from Databricks.', 'Enter a Databricks personal access token for testing, or use an approved token supported by your workspace policy.', 'Select the Unity Catalog catalog, then discover and select its schema and table or view. The token is stored through the secure credential flow and is never embedded in the saved source.'] },
   { id: 'jdbc', label: 'Generic JDBC', description: 'Supported JDBC driver endpoint', placeholder: 'jdbc:<driver>://host:port/database', fields: ['driver','jdbcUrl','username','password','schema','table'], tips: ['Use a JDBC URL without embedded username or password.', 'Select a driver supported by the deployed connector runtime. The current bridge bundles PostgreSQL, SQL Server, MySQL, and Databricks drivers.', 'Test discovery before choosing the schema and table or view. Unsupported driver protocols must be added to the connector runtime before they can connect.'] },
 ]
 
@@ -67,7 +67,10 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
   }
   function buildJdbcUrl() {
     if (isFile) return jdbcUrl.trim()
-    if (connectionKind === 'databricks') return jdbcUrl.trim() || `jdbc:databricks://${host.trim()}:443;httpPath=${httpPath.trim()}${catalog.trim() ? `;ConnCatalog=${catalog.trim()}` : ''}`
+    if (connectionKind === 'databricks') return jdbcUrl.trim() || (() => {
+      if (!host.trim() || !httpPath.trim()) return ''
+      return `jdbc:databricks://${host.trim()}:443/default;transportMode=http;ssl=1;AuthMech=3;httpPath=${httpPath.trim()}${catalog.trim() ? `;ConnCatalog=${catalog.trim()}` : ''}`
+    })()
     if (connectionKind === 'postgresql') return jdbcUrl.trim() || (() => { if (!host.trim() || !database.trim()) return ''; return `jdbc:postgresql://${host.trim()}:${port.trim() || '5432'}/${database.trim()}?sslmode=${encodeURIComponent(ssl)}` })()
     if (connectionKind === 'mssql') return jdbcUrl.trim() || (() => { if (!host.trim() || !database.trim()) return ''; const encryption = ssl === 'require' ? 'true' : 'true'; const trustServerCertificate = ssl === 'verify-full' || ssl === 'verify-ca' ? 'false' : 'true'; return `jdbc:sqlserver://${host.trim()}:${port.trim() || '1433'};databaseName=${database.trim()};encrypt=${encryption};trustServerCertificate=${trustServerCertificate}` })()
     if (connectionKind === 'mysql') return jdbcUrl.trim() || (() => { if (!host.trim() || !database.trim()) return ''; return `jdbc:mysql://${host.trim()}:${port.trim() || '3306'}/${database.trim()}?sslMode=${mysqlSslMode(ssl)}` })()
@@ -75,12 +78,15 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
   }
   async function provisionCredentials() {
     if (isFile) return ''
+    if (credentialRef) return credentialRef
     const effectiveUsername = connectionKind === 'databricks' ? 'token' : username.trim()
     const effectivePassword = connectionKind === 'databricks' ? token : password
     if (!effectiveUsername || !effectivePassword) throw new Error(connectionKind === 'databricks' ? 'Databricks access token is required.' : 'Username and password are required.')
     const response = await fetch('/api/datasets/source/credentials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId, connectionKind, jdbcUrl: buildJdbcUrl(), username: effectiveUsername, password: effectivePassword }) })
     const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? 'Unable to securely configure credentials.')
-    setCredentialRef(payload.credentialRef); return payload.credentialRef as string
+    setCredentialRef(payload.credentialRef)
+    if (connectionKind === 'databricks') setToken(''); else setPassword('')
+    return payload.credentialRef as string
   }
   async function discover() {
     setStatus(null); setError(false); setColumns([]); setRowCount(null)
@@ -119,8 +125,8 @@ export function JdbcSourceForm({ projects, organizations }: { projects: JdbcProj
         {connectionKind === 'databricks' && field('HTTP path', httpPath, setHttpPath, '/sql/1.0/warehouses/...')}
         {connectionKind !== 'databricks' && connectionKind !== 'jdbc' && field('Database', database, setDatabase, 'database')}
         {connectionKind === 'jdbc' && field('JDBC URL', jdbcUrl, setJdbcUrl, selected.placeholder)}
-        {connectionKind !== 'databricks' && field('Username', username, setUsername, 'Database username')}
-        {connectionKind === 'databricks' ? field('Access token', token, setToken, 'Workspace token', 'password') : field('Password', password, setPassword, 'Database password', 'password')}
+        {connectionKind !== 'databricks' && field('Username', username, (value) => { setUsername(value); setCredentialRef('') }, 'Database username')}
+        {connectionKind === 'databricks' ? field('Access token', token, (value) => { setToken(value); setCredentialRef('') }, 'Workspace token', 'password') : field('Password', password, (value) => { setPassword(value); setCredentialRef('') }, 'Database password', 'password')}
         {connectionKind !== 'databricks' && connectionKind !== 'jdbc' && <label className="space-y-1.5 text-sm"><span className="font-medium">{connectionKind === 'mssql' ? 'Encryption' : 'SSL mode'} <span className="text-rose-500">*</span></span><select value={ssl} onChange={e => setSsl(e.target.value)} className="w-full rounded-lg border bg-white px-3 py-2.5"><option value="require">Require</option><option value="verify-ca">Verify CA</option><option value="verify-full">Verify full</option></select></label>}
         {connectionKind === 'databricks' && field('Catalog', catalog, setCatalog, 'main')}
       </div></div>}
