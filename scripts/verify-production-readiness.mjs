@@ -102,12 +102,34 @@ requireText('lib/connectors/jdbc.ts', [
   'columnMappings?: JdbcColumnMapping[]',
 ])
 requireText('lib/catalog/discovery.ts', [
-  "engine==='DATABRICKS'",
-  'column_mapping_count',
-  "authoritative_source:'system.access.column_lineage'",
-  "lineage_column_mappings",
-  'lineageColumnMappings',
   'discoverJdbcFromNativeHierarchy',
+  "rpc('publish_discovery_revision'",
+  "jobType: 'LINEAGE_ENRICHMENT'",
+  'enqueueDurableJob',
+  'lineage-enrichment:${input.catalogRevisionId}',
+  "status: 'INCOMPLETE'",
+])
+requireText('lib/catalog/lineage-enrichment.ts', [
+  'discoverJdbcTransformations',
+  "engine === 'DATABRICKS'",
+  'system.access.column_lineage',
+  "rpc('ingest_lineage_batch_atomic'",
+  "from('lineage_column_mappings')",
+  'authoritative_source',
+  'columnMappings',
+])
+requireText('lib/orchestration/worker.ts', [
+  "job.job_type === 'LINEAGE_ENRICHMENT'",
+  'executeLineageEnrichment',
+  'discoveryRunId',
+])
+requireText('lib/orchestration/queue.ts', [
+  "'LINEAGE_ENRICHMENT'",
+  'enqueueDurableJob',
+])
+requireText('supabase/migrations/20260905193000_lineage_enrichment_durable_job.sql', [
+  "'LINEAGE_ENRICHMENT'::text",
+  'job_queue_job_type_check',
 ])
 requireText('app/api/datasets/source/discover/route.ts', [
   'discoverNativeHierarchy',
