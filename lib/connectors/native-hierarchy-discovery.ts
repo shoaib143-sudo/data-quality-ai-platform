@@ -126,7 +126,7 @@ function normalizeHierarchy(payload: unknown): NativeHierarchyResult {
   if (!nodes.length) throw new Error('The connector returned no native hierarchy nodes.')
   const databaseProduct = typeof source.databaseProduct === 'string' && source.databaseProduct.trim() ? source.databaseProduct.trim() : 'Unknown database'
   const rootIds = Array.isArray(source.rootIds)
-    ? source.rootIds.filter((item): item is string => typeof item === 'string' && item.trim())
+    ? source.rootIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
     : nodes.filter(node => node.parentId === null).map(node => node.id)
   return {
     databaseProduct,
