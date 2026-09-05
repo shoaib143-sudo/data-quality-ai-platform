@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 
 const files = {
   search: await readFile('lib/governance/semantic-search.ts', 'utf8'),
+  semanticJobs: await readFile('lib/governance/semantic-jobs.ts', 'utf8'),
   indexer: await readFile('lib/governance/semantic-indexer.ts', 'utf8'),
   documentIndexer: await readFile('lib/governance/semantic-document-indexer.ts', 'utf8'),
   documentContent: await readFile('lib/governance/document-content.ts', 'utf8'),
@@ -36,6 +37,10 @@ const checks = [
   [/contentHash[\s\S]*maybeSingle[\s\S]*content_hash\s*===\s*contentHash/.test(files.search), 'unchanged content hash detection'],
   [/content_hash\s*===\s*contentHash[\s\S]*metadata[\s\S]*unchanged:\s*true/.test(files.search), 'unchanged embedding reuse with metadata refresh'],
   [files.search.includes('semanticSearchByEmbedding'), 'query embedding reuse API'],
+  [containsAll(files.search, ['GOVERNANCE_EMBEDDING_URL', 'GOVERNANCE_EMBEDDING_API_KEY']), 'custom governance embedding provider compatibility'],
+  [containsAll(files.search, ['DEFAULT_GATEWAY_EMBEDDING_MODEL', 'https://ai-gateway.vercel.sh/v1/embeddings', 'VERCEL_OIDC_TOKEN', 'AI_GATEWAY_API_KEY', 'dimensions: EMBEDDING_DIMENSIONS']), 'Vercel AI Gateway embedding fallback'],
+  [/normalizeEmbedding[\s\S]*Math\.sqrt[\s\S]*Number\.EPSILON/.test(files.search), 'embedding normalization and zero-vector rejection'],
+  [containsAll(files.semanticJobs, ['GOVERNANCE_EMBEDDING_URL', 'AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN']), 'semantic job scheduling accepts custom or Vercel gateway provider'],
   [containsAll(files.documentMigration, ['create table if not exists governance.documents', 'create table if not exists governance.document_chunks']), 'durable governed document schema'],
   [containsAll(files.documentMigration, ['unique(project_id,dataset_version_id,source_uri)', 'document_chunks_project_document_idx']), 'stable document identity and chunk indexing'],
   [containsAll(files.documentMigration, ['enable row level security', 'is_project_member', "'catalog.update'"]), 'governed document RLS'],
