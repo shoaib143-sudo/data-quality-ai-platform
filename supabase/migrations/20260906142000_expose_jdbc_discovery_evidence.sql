@@ -1,5 +1,3 @@
-begin;
-
 create or replace view catalog.jdbc_discovery_evidence
 with (security_invoker = true)
 as
@@ -190,5 +188,3 @@ comment on function catalog.verify_jdbc_discovery_evidence(uuid) is
 
 revoke all on function catalog.verify_jdbc_discovery_evidence(uuid) from public, anon;
 grant execute on function catalog.verify_jdbc_discovery_evidence(uuid) to authenticated, service_role;
-
-commit;
