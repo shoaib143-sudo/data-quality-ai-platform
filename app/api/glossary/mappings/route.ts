@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -50,6 +49,7 @@ export async function POST(request: Request) {
     proposed_by: user.id,
     reviewed_by: null,
     reviewed_at: null,
+    last_changed_by: user.id,
     validation_state: targetType === 'CATALOG_ASSET' ? 'VALID' : 'UNVERIFIED',
     evidence: { created_via: 'WEB_UI', proposal_type: 'HUMAN' },
   }
@@ -62,13 +62,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 })
   }
 
-  await writeGovernanceAudit({
-    projectId: term.project_id,
-    actorUserId: user.id,
-    eventType: 'GLOSSARY_MAPPING_PROPOSED',
-    entityType: 'GLOSSARY_MAPPING',
-    entityId: data.id,
-    metadata: { term_id: term.id, target_type: targetType, validation_state: data.validation_state, origin: data.origin },
-  })
+  // Mapping decision evidence and the hash-chained audit event commit atomically with the proposal.
   return NextResponse.json({ mapping: data }, { status: 201 })
 }
