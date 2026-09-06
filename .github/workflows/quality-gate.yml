@@ -80,6 +80,8 @@ jobs:
         run: node scripts/verify-catalog-identity-versioning.mjs
       - name: Verify Generic JDBC production acceptance contract
         run: node scripts/verify-generic-jdbc-acceptance.mjs
+      - name: Verify Supabase security advisor hardening contract
+        run: node scripts/verify-security-advisor-hardening.mjs
       - name: Verify Databricks Web UI connection flow
         run: node scripts/verify-databricks-web-ui-flow.mjs
       - name: Verify Databricks multiple schema scope
