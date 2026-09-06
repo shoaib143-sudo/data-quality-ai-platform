@@ -45,6 +45,10 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
+    if (body.action === 'health') {
+      return json({ status: 'healthy', model: 'gte-small', dimensions: DIMENSIONS })
+    }
+
     const input = typeof body.input === 'string' ? body.input.trim() : ''
     if (!input) return json({ error: 'input is required.' }, 400)
     if (input.length > 100_000) return json({ error: 'input exceeds the supported size.' }, 413)
