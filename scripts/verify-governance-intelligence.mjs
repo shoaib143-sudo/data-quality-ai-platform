@@ -6,6 +6,7 @@ const files = [
   '20260906054100_govern_risk_prediction_authority.sql',
 ].map((name)=>fs.readFileSync(path.join(process.cwd(),'supabase','migrations',name),'utf8'));
 const sql = files.join('\n');
+const patchSql = files[1];
 const failures=[];
 const required=[
   'governance.governance_risk_prediction_events',
@@ -23,11 +24,13 @@ const required=[
 ];
 for(const token of required) if(!sql.includes(token)) failures.push(`missing contract token: ${token}`);
 const forbidden=[
-  /upper\(coalesce\(dc\.status,'ACTIVE'\)\) not in \('RETIRED','ARCHIVED'\)/i,
-  /dcv\.contract_id=dc\.id/i,
   /grant\s+(insert|update|delete)[^;]+governance\.governance_risk_prediction_events[^;]+to\s+(anon|authenticated)/i,
 ];
 for(const re of forbidden) if(re.test(sql)) failures.push(`forbidden pattern: ${re}`);
+if(!patchSql.includes("v_old := 'join governance.data_contract_versions dcv on dcv.contract_id=dc.id';")) failures.push('legacy contract join is not explicitly recognized for migration replacement');
+if(!patchSql.includes("replace(v_def,v_old,'join governance.data_contract_versions dcv on dcv.id=dc.current_version_id')")) failures.push('legacy contract join is not replaced by current governed version identity');
+if(!patchSql.includes("v_old := 'select count(*)::integer into v_contracts")) failures.push('legacy contract-count clause is not explicitly recognized');
+if(!patchSql.includes("dcv.authority_status=''APPROVED''")) failures.push('dynamic patch does not require approved contract authority');
 if(!/after insert or update on governance\.governance_risk_predictions/i.test(sql)) failures.push('risk prediction refresh history trigger missing');
 if(!/before update or delete on governance\.governance_risk_prediction_events/i.test(sql)) failures.push('risk prediction history is not append-only');
 if(!/model_hash is distinct from encode\(extensions\.digest/i.test(sql)) failures.push('history digest verification missing');
