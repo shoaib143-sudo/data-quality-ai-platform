@@ -80,6 +80,8 @@ jobs:
         run: node scripts/verify-catalog-identity-versioning.mjs
       - name: Verify catalog reconciliation FK indexes
         run: node scripts/verify-catalog-reconciliation-indexes.mjs
+      - name: Verify catalog control plane FK indexes
+        run: node scripts/verify-catalog-control-plane-indexes.mjs
       - name: Verify source operational readiness evidence
         run: node scripts/verify-source-operational-readiness.mjs
       - name: Verify onboarding operational evidence boundary
