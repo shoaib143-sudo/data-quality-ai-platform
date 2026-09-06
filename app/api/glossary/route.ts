@@ -1,8 +1,93 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
+import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
-function text(v:unknown){return typeof v==='string'?v.trim():''}
-async function access(projectId:string,userId:string){const admin=createAdminClient();const {data:p}=await admin.schema('app').from('projects').select('organization_id').eq('id',projectId).maybeSingle();if(!p)return null;const {data:m}=await admin.schema('app').from('organization_members').select('role').eq('organization_id',p.organization_id).eq('user_id',userId).maybeSingle();return m?admin:null}
-export async function GET(request:Request){await requireUser();const url=new URL(request.url);const projectId=text(url.searchParams.get('projectId'));const admin=createAdminClient();let q=admin.schema('governance').from('glossary_terms').select('*,glossary_mappings(*)').order('term');if(projectId)q=q.eq('project_id',projectId);const {data,error}=await q;return error?NextResponse.json({error:error.message},{status:500}):NextResponse.json({terms:data??[]})}
-export async function POST(request:Request){const user=await requireUser();const b=await request.json();const projectId=text(b.projectId),term=text(b.term),definition=text(b.definition);if(!projectId||!term||!definition)return NextResponse.json({error:'projectId, term and definition are required.'},{status:400});const admin=await access(projectId,user.id);if(!admin)return NextResponse.json({error:'Project access denied.'},{status:403});const {data,error}=await admin.schema('governance').from('glossary_terms').insert({project_id:projectId,term,definition,domain:text(b.domain)||null,synonyms:Array.isArray(b.synonyms)?b.synonyms.map(String):[],status:text(b.status).toUpperCase()||'DRAFT',owner_user_id:b.ownerUserId||user.id,metadata:b.metadata??{}}).select('*').single();if(error)return NextResponse.json({error:error.message},{status:400});await writeGovernanceAudit({projectId,actorUserId:user.id,eventType:'GLOSSARY_TERM_CREATED',entityType:'GLOSSARY_TERM',entityId:data.id,metadata:{term}});return NextResponse.json({term:data},{status:201})}
+
+function text(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function synonyms(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.map(item => text(item)).filter(Boolean))].slice(0, 50)
+}
+
+export async function GET(request: Request) {
+  const user = await requireUser()
+  const projectId = text(new URL(request.url).searchParams.get('projectId'))
+  if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
+  try {
+    await authorizeProject(user.id, projectId, 'glossary.read')
+  } catch (error) {
+    const auth = authorizationErrorResponse(error)
+    if (auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+    throw error
+  }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .schema('governance')
+    .from('glossary_terms')
+    .select('*,glossary_mappings(*),glossary_term_versions(*)')
+    .eq('project_id', projectId)
+    .order('term')
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ terms: data ?? [] })
+}
+
+export async function POST(request: Request) {
+  const user = await requireUser()
+  const body = await request.json()
+  const projectId = text(body.projectId)
+  const term = text(body.term)
+  const definition = text(body.definition)
+  if (!projectId || !term || !definition) {
+    return NextResponse.json({ error: 'projectId, term and definition are required.' }, { status: 400 })
+  }
+  if (term.length > 250 || definition.length > 8000) {
+    return NextResponse.json({ error: 'Term or definition exceeds the supported length.' }, { status: 400 })
+  }
+  try {
+    await authorizeProject(user.id, projectId, 'glossary.manage')
+  } catch (error) {
+    const auth = authorizationErrorResponse(error)
+    if (auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+    throw error
+  }
+
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+  const { data, error } = await admin
+    .schema('governance')
+    .from('glossary_terms')
+    .insert({
+      project_id: projectId,
+      term,
+      definition,
+      domain: text(body.domain) || null,
+      synonyms: synonyms(body.synonyms),
+      status: 'DRAFT',
+      authority_type: 'HUMAN_GOVERNED',
+      owner_user_id: text(body.ownerUserId) || user.id,
+      approved_by: null,
+      approved_at: null,
+      last_changed_by: user.id,
+      provenance: { origin: 'HUMAN', created_via: 'WEB_UI' },
+      metadata: { source: 'HUMAN_GOVERNED' },
+      updated_at: now,
+    })
+    .select('*')
+    .single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  await writeGovernanceAudit({
+    projectId,
+    actorUserId: user.id,
+    eventType: 'GLOSSARY_TERM_CREATED',
+    entityType: 'GLOSSARY_TERM',
+    entityId: data.id,
+    metadata: { term, authority_type: 'HUMAN_GOVERNED', status: 'DRAFT' },
+  })
+  return NextResponse.json({ term: data }, { status: 201 })
+}
