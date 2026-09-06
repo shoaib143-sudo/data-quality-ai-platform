@@ -23,6 +23,54 @@ class CredentialStoreTest {
   }
 
   @Test
+  void resolvesSingleCredentialFromEnvironmentModeWithoutInfisical() throws Exception {
+    InfisicalAuthClient auth = new InfisicalAuthClient(new ObjectMapper(), "http://unused.invalid", "", "", HttpClient.newHttpClient());
+    CredentialStore store = new CredentialStore(
+        new ObjectMapper(), auth, "http://unused.invalid", "", "dev", "/",
+        "environment", "customer-postgres", "readonly-user", "test-password", HttpClient.newHttpClient());
+
+    Credentials credentials = store.resolve("customer-postgres");
+
+    assertEquals("readonly-user", credentials.username());
+    assertEquals("test-password", credentials.password());
+  }
+
+  @Test
+  void rejectsUnknownCredentialReferenceInEnvironmentMode() throws Exception {
+    InfisicalAuthClient auth = new InfisicalAuthClient(new ObjectMapper(), "http://unused.invalid", "", "", HttpClient.newHttpClient());
+    CredentialStore store = new CredentialStore(
+        new ObjectMapper(), auth, "http://unused.invalid", "", "dev", "/",
+        "environment", "customer-postgres", "readonly-user", "test-password", HttpClient.newHttpClient());
+
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> store.resolve("other-source"));
+    assertTrue(error.getMessage().contains("Unknown credentialRef"));
+  }
+
+  @Test
+  void rejectsIncompleteEnvironmentCredentialConfiguration() throws Exception {
+    InfisicalAuthClient auth = new InfisicalAuthClient(new ObjectMapper(), "http://unused.invalid", "", "", HttpClient.newHttpClient());
+    CredentialStore store = new CredentialStore(
+        new ObjectMapper(), auth, "http://unused.invalid", "", "dev", "/",
+        "environment", "customer-postgres", "readonly-user", "", HttpClient.newHttpClient());
+
+    IllegalStateException error = assertThrows(IllegalStateException.class, () -> store.resolve("customer-postgres"));
+    assertTrue(error.getMessage().contains("JDBC_CREDENTIAL_PASSWORD"));
+  }
+
+  @Test
+  void disablesCredentialWritesInEnvironmentMode() throws Exception {
+    InfisicalAuthClient auth = new InfisicalAuthClient(new ObjectMapper(), "http://unused.invalid", "", "", HttpClient.newHttpClient());
+    CredentialStore store = new CredentialStore(
+        new ObjectMapper(), auth, "http://unused.invalid", "", "dev", "/",
+        "environment", "customer-postgres", "readonly-user", "test-password", HttpClient.newHttpClient());
+
+    IllegalStateException error = assertThrows(
+        IllegalStateException.class,
+        () -> store.upsert("customer-postgres", "new-user", "new-password"));
+    assertTrue(error.getMessage().contains("Credential writes are disabled"));
+  }
+
+  @Test
   void retriesWithFreshTokenAfterInfisical401() throws Exception {
     AtomicInteger loginCount = new AtomicInteger();
     AtomicInteger secretCount = new AtomicInteger();

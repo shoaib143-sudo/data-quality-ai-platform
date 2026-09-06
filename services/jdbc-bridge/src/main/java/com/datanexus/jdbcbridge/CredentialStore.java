@@ -17,6 +17,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class CredentialStore {
+  private static final String MODE_INFISICAL = "infisical";
+  private static final String MODE_ENVIRONMENT = "environment";
+
   private final ObjectMapper mapper;
   private final HttpClient http;
   private final InfisicalAuthClient authClient;
@@ -24,6 +27,10 @@ public class CredentialStore {
   private final String projectId;
   private final String environment;
   private final String secretPath;
+  private final String credentialMode;
+  private final String environmentCredentialRef;
+  private final String environmentUsername;
+  private final String environmentPassword;
   private final Map<String, CachedCredential> cache = new ConcurrentHashMap<>();
 
   public CredentialStore(
@@ -32,8 +39,24 @@ public class CredentialStore {
       @Value("${INFISICAL_API_URL:https://us.infisical.com}") String apiUrl,
       @Value("${INFISICAL_PROJECT_ID:}") String projectId,
       @Value("${INFISICAL_ENVIRONMENT:dev}") String environment,
-      @Value("${INFISICAL_SECRET_PATH:/}") String secretPath) {
-    this(mapper, authClient, apiUrl, projectId, environment, secretPath, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build());
+      @Value("${INFISICAL_SECRET_PATH:/}") String secretPath,
+      @Value("${JDBC_CREDENTIAL_MODE:infisical}") String credentialMode,
+      @Value("${JDBC_CREDENTIAL_REF:}") String environmentCredentialRef,
+      @Value("${JDBC_CREDENTIAL_USERNAME:}") String environmentUsername,
+      @Value("${JDBC_CREDENTIAL_PASSWORD:}") String environmentPassword) {
+    this(
+        mapper,
+        authClient,
+        apiUrl,
+        projectId,
+        environment,
+        secretPath,
+        credentialMode,
+        environmentCredentialRef,
+        environmentUsername,
+        environmentPassword,
+        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
+    );
   }
 
   CredentialStore(
@@ -44,18 +67,40 @@ public class CredentialStore {
       String environment,
       String secretPath,
       HttpClient http) {
+    this(mapper, authClient, apiUrl, projectId, environment, secretPath, MODE_INFISICAL, "", "", "", http);
+  }
+
+  CredentialStore(
+      ObjectMapper mapper,
+      InfisicalAuthClient authClient,
+      String apiUrl,
+      String projectId,
+      String environment,
+      String secretPath,
+      String credentialMode,
+      String environmentCredentialRef,
+      String environmentUsername,
+      String environmentPassword,
+      HttpClient http) {
     this.mapper = mapper;
     this.authClient = authClient;
     this.apiUrl = trimTrailingSlash(apiUrl);
     this.projectId = projectId;
     this.environment = environment;
     this.secretPath = secretPath;
+    this.credentialMode = normalizeMode(credentialMode);
+    this.environmentCredentialRef = trim(environmentCredentialRef);
+    this.environmentUsername = trim(environmentUsername);
+    this.environmentPassword = environmentPassword == null ? "" : environmentPassword;
     this.http = http;
   }
 
   public Credentials resolve(String credentialRef) throws Exception {
     validateCredentialRef(credentialRef);
-    ensureConfigured();
+    if (MODE_ENVIRONMENT.equals(credentialMode)) return resolveEnvironmentCredential(credentialRef);
+    requireInfisicalMode();
+    ensureInfisicalConfigured();
+
     CachedCredential cached = cache.get(credentialRef);
     if (cached != null && cached.expiresAtMillis() > System.currentTimeMillis()) return cached.credentials();
 
@@ -88,9 +133,13 @@ public class CredentialStore {
 
   public void upsert(String credentialRef, String username, String password) throws Exception {
     validateCredentialRef(credentialRef);
+    if (MODE_ENVIRONMENT.equals(credentialMode)) {
+      throw new IllegalStateException("Credential writes are disabled when JDBC_CREDENTIAL_MODE=environment. Update the server-side environment variables instead.");
+    }
+    requireInfisicalMode();
     if (username == null || username.isBlank()) throw new IllegalArgumentException("username is required.");
     if (password == null || password.isBlank()) throw new IllegalArgumentException("password is required.");
-    ensureConfigured();
+    ensureInfisicalConfigured();
 
     String encoded = URLEncoder.encode(credentialRef, StandardCharsets.UTF_8);
     String body = mapper.createObjectNode()
@@ -117,6 +166,18 @@ public class CredentialStore {
     cache.put(credentialRef, new CachedCredential(new Credentials(username, password), System.currentTimeMillis() + 60_000L));
   }
 
+  private Credentials resolveEnvironmentCredential(String credentialRef) {
+    if (environmentCredentialRef.isBlank() || environmentUsername.isBlank() || environmentPassword.isBlank()) {
+      throw new IllegalStateException(
+          "Environment credential mode is not fully configured. Set JDBC_CREDENTIAL_REF, JDBC_CREDENTIAL_USERNAME, and JDBC_CREDENTIAL_PASSWORD."
+      );
+    }
+    if (!environmentCredentialRef.equals(credentialRef)) {
+      throw new IllegalArgumentException("Unknown credentialRef for environment credential mode.");
+    }
+    return new Credentials(environmentUsername, environmentPassword);
+  }
+
   private HttpResponse<String> fetchSecret(String encoded, String query, String token) throws Exception {
     HttpRequest request = HttpRequest.newBuilder(URI.create(apiUrl + "/api/v4/secrets/" + encoded + "?" + query))
         .timeout(Duration.ofSeconds(8)).header("Authorization", "Bearer " + token).GET().build();
@@ -131,8 +192,19 @@ public class CredentialStore {
     return http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
   }
 
-  private void ensureConfigured() {
+  private void ensureInfisicalConfigured() {
     if (projectId.isBlank()) throw new IllegalStateException("Infisical credential store is not configured. Set INFISICAL_PROJECT_ID.");
+  }
+
+  private void requireInfisicalMode() {
+    if (!MODE_INFISICAL.equals(credentialMode)) {
+      throw new IllegalStateException("Unsupported JDBC_CREDENTIAL_MODE. Use infisical or environment.");
+    }
+  }
+
+  private static String normalizeMode(String value) {
+    String normalized = trim(value).toLowerCase();
+    return normalized.isBlank() ? MODE_INFISICAL : normalized;
   }
 
   private static void validateCredentialRef(String credentialRef) {
@@ -142,10 +214,12 @@ public class CredentialStore {
   private static String encode(String value) { return URLEncoder.encode(value, StandardCharsets.UTF_8); }
 
   private static String trimTrailingSlash(String value) {
-    String trimmed = value == null ? "" : value.trim();
+    String trimmed = trim(value);
     while (trimmed.endsWith("/")) trimmed = trimmed.substring(0, trimmed.length() - 1);
     return trimmed;
   }
+
+  private static String trim(String value) { return value == null ? "" : value.trim(); }
 
   private record CachedCredential(Credentials credentials, long expiresAtMillis) {}
 }
