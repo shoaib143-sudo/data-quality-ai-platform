@@ -4,6 +4,8 @@ const migrationFiles=[
   'supabase/migrations/20260906090000_govern_ai_lineage_suggestions.sql',
   'supabase/migrations/20260906090100_govern_ai_lineage_promotion.sql',
   'supabase/migrations/20260906090200_fix_ai_lineage_architect_agent_key.sql',
+  'supabase/migrations/20260906090300_fix_ai_lineage_promotion_row_assignment.sql',
+  'supabase/migrations/20260906090400_reapply_ai_lineage_promotion_expanded_rows.sql',
 ]
 const migration=migrationFiles.map(path=>fs.readFileSync(path,'utf8')).join('\n')
 const route=fs.readFileSync('app/api/lineage/suggestions/route.ts','utf8')
@@ -30,6 +32,11 @@ for(const [needle,label] of [
   ['human_confirmed_ai_inferred','promoted evidence origin'],
   ['governance.verify_ai_lineage_suggestion_posture','production posture verifier'],
   ["'module_3_blocker_cleared',false",'Module #3 blocker retained'],
+  ['select s.* into v_s','expanded AI suggestion row assignment'],
+  ['select a.* into v_source','expanded source catalog row assignment'],
+  ['select a.* into v_target','expanded target catalog row assignment'],
+  ['select la.* into v_existing_source','expanded source lineage row assignment'],
+  ['select la.* into v_existing_target','expanded target lineage row assignment'],
 ])requireMigration(needle,label)
 
 for(const fn of ['generate_ai_lineage_suggestions(uuid,uuid,uuid,integer)','promote_ai_lineage_suggestion(uuid,uuid)','verify_ai_lineage_suggestion_posture(uuid)']){
@@ -50,5 +57,6 @@ requireText('USE SCHEMA','exact Databricks external permission remains visible')
 
 if(/observed_lineage['"]?\s*[:,]\s*true/i.test(all))throw new Error('AI lineage suggestion implementation must never label inferred lineage as observed.')
 if(/module_3_blocker_cleared['"]?\s*[:,]\s*true/i.test(all))throw new Error('AI lineage suggestions must not clear Module #3.')
+if(/select\s+(?:s|a|la)\s+into\s+v_(?:s|source|target|existing_source|existing_target)/i.test(migration))throw new Error('PL/pgSQL composite row assignment is prohibited for AI lineage promotion; use alias.* expansion.')
 
 console.log('AI lineage suggestion truth boundary verified.')
