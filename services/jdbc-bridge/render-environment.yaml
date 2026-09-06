@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: datanexus-jdbc-bridge
+    runtime: docker
+    rootDir: services/jdbc-bridge
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: JDBC_BRIDGE_TOKEN
+        sync: false
+      - key: JDBC_CREDENTIAL_MODE
+        value: environment
+      - key: JDBC_CREDENTIAL_REF
+        sync: false
+      - key: JDBC_CREDENTIAL_USERNAME
+        sync: false
+      - key: JDBC_CREDENTIAL_PASSWORD
+        sync: false
