@@ -18,11 +18,8 @@ alter table governance.glossary_terms add constraint glossary_terms_authority_ty
 alter table governance.glossary_terms drop constraint if exists glossary_terms_reference_authority_check;
 alter table governance.glossary_terms add constraint glossary_terms_reference_authority_check
   check ((status='REFERENCE') = (authority_type='REFERENCE_BOOTSTRAP'));
-alter table governance.glossary_terms drop constraint if exists glossary_terms_approval_evidence_check;
-alter table governance.glossary_terms add constraint glossary_terms_approval_evidence_check
-  check (status <> 'APPROVED' or (approved_by is not null and approved_at is not null and authority_type <> 'REFERENCE_BOOTSTRAP'));
 
--- Existing AI bootstrap terms are useful vocabulary references, not steward-approved enterprise meaning.
+-- Existing AI bootstrap terms are vocabulary references, not steward-approved enterprise meaning.
 update governance.glossary_terms
 set status='REFERENCE',
     authority_type='REFERENCE_BOOTSTRAP',
@@ -35,6 +32,17 @@ set status='REFERENCE',
     ),
     updated_at=now()
 where coalesce((metadata->>'synthetic_bootstrap')::boolean,false)=true;
+
+-- A legacy APPROVED row without approval evidence is review material, not governed authority.
+update governance.glossary_terms
+set status='IN_REVIEW',
+    provenance=coalesce(provenance,'{}'::jsonb) || jsonb_build_object('legacy_approval_evidence_missing',true),
+    updated_at=now()
+where status='APPROVED' and (approved_by is null or approved_at is null);
+
+alter table governance.glossary_terms drop constraint if exists glossary_terms_approval_evidence_check;
+alter table governance.glossary_terms add constraint glossary_terms_approval_evidence_check
+  check (status <> 'APPROVED' or (approved_by is not null and approved_at is not null and authority_type <> 'REFERENCE_BOOTSTRAP'));
 
 create unique index if not exists glossary_terms_project_term_ci_unique
   on governance.glossary_terms(project_id,lower(btrim(term)));
@@ -81,7 +89,8 @@ select t.id,t.project_id,1,t.term,t.definition,t.domain,t.synonyms,t.status,t.au
 from governance.glossary_terms t
 where not exists(select 1 from governance.glossary_term_versions v where v.term_id=t.id);
 
-create or replace view governance.published_glossary_terms as
+create or replace view governance.published_glossary_terms
+with (security_invoker=true) as
 select distinct on (v.term_id)
   v.term_id as id,v.project_id,v.version_number,v.term,v.definition,v.domain,v.synonyms,
   v.authority_type,v.owner_user_id,v.approved_by,v.approved_at,v.provenance,v.created_at as published_at
@@ -89,7 +98,8 @@ from governance.glossary_term_versions v
 where v.status='APPROVED' and v.authority_type <> 'REFERENCE_BOOTSTRAP'
 order by v.term_id,v.version_number desc;
 
-create or replace view governance.glossary_reference_concepts as
+create or replace view governance.glossary_reference_concepts
+with (security_invoker=true) as
 select t.id,t.project_id,t.term,t.definition,t.domain,t.synonyms,t.provenance,t.created_at,t.updated_at
 from governance.glossary_terms t
 where t.status='REFERENCE' and t.authority_type='REFERENCE_BOOTSTRAP';
@@ -114,6 +124,22 @@ alter table governance.glossary_mappings
 
 alter table governance.glossary_mappings alter column dataset_id drop not null;
 alter table governance.glossary_mappings drop constraint if exists glossary_mappings_term_id_dataset_id_column_name_key;
+
+update governance.glossary_mappings gm
+set target_type='DATASET',
+    mapping_status=case when gm.approved then 'APPROVED' else 'PROPOSED' end,
+    origin=case when coalesce((gt.metadata->>'synthetic_bootstrap')::boolean,false) then 'AI_SUGGESTED' else 'HUMAN' end,
+    validation_state='UNVERIFIED',
+    updated_at=now()
+from governance.glossary_terms gt
+where gt.id=gm.term_id;
+
+-- Legacy approved mappings cannot remain authoritative when their term was demoted from unevidenced approval.
+update governance.glossary_mappings gm
+set mapping_status='NEEDS_REVIEW',approved=false,approved_by=null,reviewed_by=null,reviewed_at=null,term_version_number=null,updated_at=now()
+where gm.mapping_status='APPROVED'
+  and not exists(select 1 from governance.glossary_terms gt where gt.id=gm.term_id and gt.status='APPROVED' and gt.authority_type<>'REFERENCE_BOOTSTRAP');
+
 alter table governance.glossary_mappings drop constraint if exists glossary_mappings_target_type_check;
 alter table governance.glossary_mappings add constraint glossary_mappings_target_type_check
   check (target_type in ('DATASET','CATALOG_ASSET'));
@@ -136,15 +162,6 @@ alter table governance.glossary_mappings add constraint glossary_mappings_valida
 alter table governance.glossary_mappings drop constraint if exists glossary_mappings_approved_state_check;
 alter table governance.glossary_mappings add constraint glossary_mappings_approved_state_check
   check (approved = (mapping_status='APPROVED'));
-
-update governance.glossary_mappings gm
-set target_type='DATASET',
-    mapping_status=case when gm.approved then 'APPROVED' else 'PROPOSED' end,
-    origin=case when coalesce((gt.metadata->>'synthetic_bootstrap')::boolean,false) then 'AI_SUGGESTED' else 'HUMAN' end,
-    validation_state='UNVERIFIED',
-    updated_at=now()
-from governance.glossary_terms gt
-where gt.id=gm.term_id;
 
 create unique index if not exists glossary_mappings_dataset_identity_unique
   on governance.glossary_mappings(term_id,dataset_id,coalesce(lower(column_name),''))
@@ -255,6 +272,19 @@ declare
   v_next integer;
   v_kind text;
 begin
+  if tg_op='UPDATE'
+     and old.term is not distinct from new.term
+     and old.definition is not distinct from new.definition
+     and old.domain is not distinct from new.domain
+     and old.synonyms is not distinct from new.synonyms
+     and old.status is not distinct from new.status
+     and old.authority_type is not distinct from new.authority_type
+     and old.owner_user_id is not distinct from new.owner_user_id
+     and old.approved_by is not distinct from new.approved_by
+     and old.approved_at is not distinct from new.approved_at then
+    return new;
+  end if;
+
   select coalesce(max(version_number),0)+1 into v_next
   from governance.glossary_term_versions where term_id=new.id;
 
@@ -287,22 +317,8 @@ $function$;
 
 drop trigger if exists glossary_term_version_capture on governance.glossary_terms;
 create trigger glossary_term_version_capture
-after insert or update of term,definition,domain,synonyms,status,authority_type,owner_user_id,approved_by,approved_at
-on governance.glossary_terms
-for each row
-when (
-  tg_op='INSERT'
-  or old.term is distinct from new.term
-  or old.definition is distinct from new.definition
-  or old.domain is distinct from new.domain
-  or old.synonyms is distinct from new.synonyms
-  or old.status is distinct from new.status
-  or old.authority_type is distinct from new.authority_type
-  or old.owner_user_id is distinct from new.owner_user_id
-  or old.approved_by is distinct from new.approved_by
-  or old.approved_at is distinct from new.approved_at
-)
-execute function governance.capture_glossary_term_version();
+after insert or update on governance.glossary_terms
+for each row execute function governance.capture_glossary_term_version();
 
 create or replace function governance.refresh_glossary_mapping_validity(p_source_id uuid)
 returns jsonb
@@ -355,7 +371,8 @@ $function$;
 revoke all on function governance.refresh_glossary_mapping_validity(uuid) from public,anon,authenticated;
 grant execute on function governance.refresh_glossary_mapping_validity(uuid) to service_role;
 
-create or replace view governance.current_business_semantics as
+create or replace view governance.current_business_semantics
+with (security_invoker=true) as
 select
   p.project_id,p.id as term_id,p.version_number as term_version_number,p.term,p.definition,p.domain,p.synonyms,
   p.authority_type,p.owner_user_id,p.approved_by,p.approved_at,
