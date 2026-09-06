@@ -27,8 +27,6 @@ const required = [
   "c.review_status<>'APPROVED'",
   "c.authority_class='UNVERIFIED'",
   "Only approved active controls can receive an approved waiver",
-  "join app.organization_members m on m.organization_id=p.organization_id",
-  "p.id=p_project_id and m.user_id=p_actor",
   "'waiver_failure_semantics','OVERLAY_NOT_PASS'",
   'governance.verify_quality_control_posture()',
 ];
@@ -37,7 +35,6 @@ const forbidden = [
   /case\s+when\s+w\.id\s+is\s+not\s+null\s+then\s+['"]PASS['"]/i,
   /set\s+result\s*=\s*['"]PASS['"].*waiv/is,
   /grant\s+execute\s+on\s+function\s+(profiling|governance)\.(pin_quality_rule_run_version|capture_quality_rule_run_event|capture_quality_rule_exception_event|capture_control_waiver_event)[^;]*\s+to\s+(anon|authenticated|public)/i,
-  /app_private\.is_project_member\s*\(\s*p_project_id\s*,\s*p_actor\s*\)/i,
 ];
 
 const failures = [];
@@ -63,6 +60,15 @@ if (!/foreign key\(quality_rule_run_id\) references profiling\.quality_rule_runs
 }
 if (!/status='APPROVED' and x\.expires_at>now\(\)/i.test(sql)) {
   failures.push('effective waiver semantics do not enforce expiry at read time');
+}
+
+const membershipFix = fs.readFileSync(path.join(migrationDir, '20260906040000_fix_control_waiver_membership.sql'), 'utf8');
+if (/app_private\.is_project_member\s*\(\s*p_project_id\s*,\s*p_actor\s*\)/i.test(membershipFix)) {
+  failures.push('effective request_control_waiver still calls the nonexistent two-argument RLS helper');
+}
+if (!/join app\.organization_members m on m\.organization_id=p\.organization_id/i.test(membershipFix) ||
+    !/p\.id=p_project_id and m\.user_id=p_actor/i.test(membershipFix)) {
+  failures.push('effective request_control_waiver does not validate the supplied actor against project organization membership');
 }
 
 if (failures.length) {
