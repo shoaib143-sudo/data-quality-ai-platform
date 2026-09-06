@@ -56,11 +56,43 @@ The latest long-term data-platform architecture recommendation is documented in:
 
 - `2026-09-04-ADR-002-polyglot-data-platform-and-knowledge-architecture.md`
 
+Production runtime separation for Generic JDBC is documented in:
+
+- `2026-09-06-ADR-003-runtime-boundary-for-generic-jdbc.md`
+
+The AI-assisted lineage evidence and authority boundary is documented in:
+
+- `2026-09-06-ADR-004-ai-assisted-lineage-truth-boundary.md`
+
+The current production operating-state checkpoint and continuation path is documented in:
+
+- `2026-09-06-production-operating-state-and-continuation.md`
+
 ADR-002 keeps PostgreSQL / Supabase authoritative and standardizes replaceable logical providers for knowledge search, graph traversal, analytics and object storage. OpenSearch, ClickHouse and any dedicated graph engine are introduced only when measured workload and scale justify them.
+
+ADR-003 keeps Vercel as the DataNexus application/control-plane runtime and places the portable Java/Spring Generic JDBC bridge on a replaceable container runtime, currently Render.
+
+ADR-004 permits metadata-derived AI lineage suggestions only as separately labeled inference evidence. It does not allow inferred evidence to become source-observed lineage or clear the externally blocked Databricks lineage requirement.
 
 ADR-001 narrows implementation priority to CSV and database tables, with PostgreSQL / Supabase first and Databricks next. It introduces the Data Profiling Investigation Agent as the first specialist agent and evolves the Monitor toward an issue centric AI Operations Center that includes business issue, impact, risk, recommendation, benefit, outcome, evidence, and verification.
 
 This is a prioritisation increment, not a rejection of the broader architecture. The long term architecture continues to include unstructured documents, logs, APIs, governance knowledge, lineage, policy evaluation, and progressive autonomy.
+
+## Current production authority model
+
+The current operating architecture applies these boundaries:
+
+- source physical metadata remains source-authoritative;
+- DataNexus is authoritative for governance decisions, state, history and derived intelligence;
+- stable identity is preferred over mutable path-only identity;
+- observation is separate from governance authority;
+- AI suggestion is separate from human/governed authority;
+- external reference corpus does not automatically confer internal enterprise authority;
+- inferred lineage remains separate from source-observed lineage;
+- PostgreSQL / Supabase remains the authoritative control plane;
+- search, graph and analytics remain rebuildable projections.
+
+Current production non-lineage enterprise acceptance passes Modules #1, #2 and #4 through #15. Module #3 remains explicitly blocked by missing Databricks `USE SCHEMA` on `system.access` and must not be cleared by inferred lineage.
 
 ## Progressive autonomy architecture
 
@@ -117,6 +149,7 @@ Policy / Risk Evaluation
 - PostgreSQL extensions such as pgvector where appropriate
 - Tenant scoped encrypted connection records
 - Persisted profile, quality, evidence, recommendation, verification and audit data
+- Portable Java 21 / Spring Boot Generic JDBC bridge for enterprise JDBC sources
 
 ### Candidate open source / free components
 
@@ -153,6 +186,9 @@ Do not deploy the entire candidate stack at once. Introduce infrastructure only 
 
 - `2026-08-29-ADR-001-initial-vertical-slice-and-investigation-agent.md` accepted the first concrete architecture increment for CSV and database profiling, secure connection onboarding, the Data Profiling Investigation Agent, and the issue centric AI Operations Center.
 - `2026-09-04-ADR-002-polyglot-data-platform-and-knowledge-architecture.md` records the proposed polyglot data-plane architecture: PostgreSQL/Supabase as authoritative truth, OpenSearch as future knowledge/search projection, ClickHouse as future analytics/telemetry projection, a replaceable GraphProvider, object storage for originals/cold artifacts, and pgvector as embedded semantic capability. Physical infrastructure remains phased and workload-triggered.
+- `2026-09-06-ADR-003-runtime-boundary-for-generic-jdbc.md` records the Vercel control-plane / portable JVM JDBC data-plane split, including the temporary server-side credential mode and runtime replaceability.
+- `2026-09-06-ADR-004-ai-assisted-lineage-truth-boundary.md` records the separation between source-observed lineage, AI-inferred metadata suggestions, and separately promoted human-confirmed inferred dependencies while preserving the Module #3 blocker.
+- `2026-09-06-production-operating-state-and-continuation.md` records the current production acceptance evidence, module state, security truth, source-operational-evidence increment, and continuation path for the next engineering agent.
 
 Significant architecture changes should be recorded as dated ADR style Markdown files in this folder. Each change should capture:
 

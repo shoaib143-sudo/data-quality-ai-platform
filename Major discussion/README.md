@@ -16,6 +16,8 @@ This repository records project knowledge needed by future human contributors an
 
 DataNexus AI starts as an AI powered Data Intelligence platform. As the platform builds trusted knowledge about the data estate and confidence in AI decisions, it progressively evolves toward an Autonomous Data Governance platform.
 
+The current implementation has moved beyond isolated module delivery into production operating-state validation. Production non-lineage enterprise acceptance currently covers Modules #1, #2 and #4 through #15. Source-authoritative Module #3 lineage remains deliberately blocked by missing Databricks `system.access` permission rather than being filled with inferred evidence.
+
 ## Core principles
 
 1. Support Data Engineers, Data Stewards and Governance users, Data Architects, Enterprise Leadership, and cross persona users.
@@ -28,6 +30,8 @@ DataNexus AI starts as an AI powered Data Intelligence platform. As the platform
 8. Preserve evidence, decisions, actions, outcomes, audit history, and verification for AI operated workflows.
 9. Capture useful information broadly first. Reconcile and classify later without deleting historical ideas.
 10. Show the underlying business issue, business impact, risk, recommended action, expected benefit, and measured outcome alongside technical findings.
+11. Keep observation separate from governed authority and AI suggestions separate from human/governed decisions.
+12. Never invent lineage, classification, ownership, policy, control, approval or remediation evidence to make a readiness state appear complete.
 
 ## AI autonomy model
 
@@ -58,6 +62,8 @@ Human approval initially required for:
 - Change governance policies
 - Alter production pipelines
 
+AI-assisted lineage follows the same authority principle: metadata-derived candidates are suggestion evidence only. Human acceptance plus a separate governed promotion may create a human-confirmed inferred dependency, but this still does not become source-observed lineage.
+
 ## Major discussion index
 
 - `2026-08-28-product-direction.md` captures the current product vision, AI capability direction, personas, criticality model, data source strategy, autonomy guard rails, and product naming decision.
@@ -70,8 +76,21 @@ Human approval initially required for:
 - `2026-09-04-polyglot-data-platform-component-impact.md` translates ADR-002 into implementation impact, separating new provider/projection components from existing modules that require storage-ownership or interface changes, and defines the phased migration strategy.
 - `2026-09-04-optimum-polyglot-data-platform-implementation-strategy.md` defines the contract-first, projection-first, infrastructure-later execution sequence, including provider refactors, transactional outbox, projection workers, rebuild/reconciliation, shadow reads, database introduction gates, scale tests, agent memory, and migration safety rules.
 - `2026-09-05-databricks-native-connector-testing-checkpoint-and-handover.md` records the native Databricks connector implementation, production readiness, live test boundary, `dbw_clinixir.PUB` acceptance criteria, security rules, formal AI Governance Intelligence blockers, and the handover prompt for the next engineering agent.
+- `2026-09-06-productionization-decisions-and-truth-boundaries.md` records the productionization decisions for the Module #3 blocker, external governance corpus, origin naming, semantic embeddings, Vercel/Render runtime split, temporary JDBC credentials, multi-schema scope, Supabase plan limitations, security posture reporting, and JDBC runtime incident handling.
+- `2026-09-06-ai-assisted-lineage-suggestions.md` records the production implementation and verification of metadata-derived lineage suggestions, explicit review and promotion, production defects repaired, and the continuing separation from source-authoritative lineage.
+- `2026-09-06-progress-checkpoint-and-agent-handover.md` is the current handover record. It summarizes production acceptance, current catalog/JDBC evidence, recent PRs, residual security warnings, the exact Module #3 blocker, open PR #42, the next execution sequence, and a copy-ready prompt for another engineering agent.
 
 The capability matrix is intentionally broader than the current implementation scope. Future implementation should draw from it rather than recreate the exploration from scratch.
+
+## Current continuation checkpoint
+
+The immediate continuation task is PR #42, `Govern source operational readiness evidence`.
+
+It separates configured source lifecycle state from discovery-backed operational evidence. The production database migration is already applied and its verifier is valid, while the PR application changes remain open pending merge and post-merge production verification.
+
+The authoritative detailed checkpoint is:
+
+- `2026-09-06-progress-checkpoint-and-agent-handover.md`
 
 ## Preservation rule
 
