@@ -1,8 +1,12 @@
 import fs from 'node:fs'
 
-const migrationPath = 'supabase/migrations/20260906085000_verify_non_lineage_enterprise_acceptance.sql'
-const migration = fs.readFileSync(migrationPath, 'utf8')
+const baseMigrationPath = 'supabase/migrations/20260906085000_verify_non_lineage_enterprise_acceptance.sql'
+const integrationMigrationPath = 'supabase/migrations/20260907133000_integrate_project_source_readiness_enterprise_acceptance.sql'
+const baseMigration = fs.readFileSync(baseMigrationPath, 'utf8')
+const integrationMigration = fs.readFileSync(integrationMigrationPath, 'utf8')
+const migration = `${baseMigration}\n${integrationMigration}`
 const lower = migration.toLowerCase()
+const integrationLower = integrationMigration.toLowerCase()
 
 function requireText(needle, label) {
   if (!lower.includes(needle.toLowerCase())) {
@@ -10,9 +14,21 @@ function requireText(needle, label) {
   }
 }
 
+function requireIntegrationText(needle, label) {
+  if (!integrationLower.includes(needle.toLowerCase())) {
+    throw new Error(`Enterprise source-readiness integration missing: ${label}`)
+  }
+}
+
 function requirePattern(pattern, label) {
   if (!pattern.test(migration)) {
     throw new Error(`Non-lineage enterprise acceptance contract missing: ${label}`)
+  }
+}
+
+function requireIntegrationPattern(pattern, label) {
+  if (!pattern.test(integrationMigration)) {
+    throw new Error(`Enterprise source-readiness integration missing: ${label}`)
   }
 }
 
@@ -39,6 +55,7 @@ for (const verifier of [
   'verify_audit_chain',
   'verify_ai_governance_intelligence_active',
   'verify_jdbc_source_acceptance',
+  'verify_project_source_operational_readiness',
 ]) {
   requireText(verifier, `reuses governed verifier ${verifier}`)
 }
@@ -72,6 +89,14 @@ requireText('v_multi_namespace_evidence', 'multi-schema JDBC evidence required')
 requirePattern(/count\(distinct \(a\.source_id, a\.identity_key\)\)/, 'stable identities are unique per source')
 requirePattern(/v_projected_assets\s*=\s*v_current_assets/, 'catalog projection must match current physical assets')
 requirePattern(/v_complete_manifest_sources\s*=\s*v_observed_sources/, 'all observed sources require complete discovery manifests')
+
+requireIntegrationText('rename to verify_non_lineage_enterprise_acceptance_base', 'existing enterprise acceptance preserved as internal base')
+requireIntegrationText('catalog.verify_project_source_operational_readiness(p_project_id)', 'project-scoped readiness verifier consumed')
+requireIntegrationText("'{catalog,source_operational_readiness}'", 'readiness evidence embedded in catalog payload')
+requireIntegrationPattern(/coalesce\(\(v_base->>'valid'\)::boolean, false\)\s*\n\s*and coalesce\(\(v_source_readiness->>'valid'\)::boolean, false\)/, 'overall acceptance requires base and source-readiness validity')
+requireIntegrationText('without requiring all configured sources to be observed', 'UNOBSERVED configured sources remain allowed')
+requireIntegrationText('revoke execute on function governance.verify_non_lineage_enterprise_acceptance_base(uuid) from anon, authenticated', 'internal base remains browser-inaccessible')
+requireIntegrationText('grant execute on function governance.verify_non_lineage_enterprise_acceptance_base(uuid) to service_role', 'internal base remains service-only')
 
 if (/security\s+definer/i.test(migration)) {
   throw new Error('Non-lineage enterprise verifier must not introduce SECURITY DEFINER authority.')
