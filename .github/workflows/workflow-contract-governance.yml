@@ -1,0 +1,30 @@
+name: Workflow and Contract Governance
+
+on:
+  push:
+    branches: [main, governed-workflow-contracts]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-workflow-contract-governance.mjs'
+      - '.github/workflows/workflow-contract-governance.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-workflow-contract-governance.mjs'
+      - '.github/workflows/workflow-contract-governance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  wave3-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify governed workflow and data-contract contracts
+        run: node scripts/verify-workflow-contract-governance.mjs
