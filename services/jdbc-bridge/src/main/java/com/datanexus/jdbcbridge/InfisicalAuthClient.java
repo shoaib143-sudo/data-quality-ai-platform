@@ -2,6 +2,7 @@ package com.datanexus.jdbcbridge;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +27,7 @@ public class InfisicalAuthClient {
 
   private volatile AccessToken cachedToken;
 
+  @Autowired
   public InfisicalAuthClient(
       ObjectMapper mapper,
       @Value("${INFISICAL_AUTH_URL:https://app.infisical.com}") String authUrl,

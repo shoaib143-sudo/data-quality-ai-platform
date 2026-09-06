@@ -7,7 +7,7 @@ RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN useradd --system --create-home --uid 10001 appuser
+RUN useradd --create-home --uid 10001 --user-group --shell /usr/sbin/nologin appuser
 COPY --from=build /workspace/target/app.jar /app/app.jar
 USER 10001
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"
