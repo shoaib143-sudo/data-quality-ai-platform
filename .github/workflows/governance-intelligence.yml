@@ -1,0 +1,30 @@
+name: Governance Intelligence
+
+on:
+  push:
+    branches: [main, governed-governance-intelligence]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-governance-intelligence.mjs'
+      - '.github/workflows/governance-intelligence.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-governance-intelligence.mjs'
+      - '.github/workflows/governance-intelligence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  module13-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify transparent governed governance intelligence
+        run: node scripts/verify-governance-intelligence.mjs
