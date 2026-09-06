@@ -98,6 +98,8 @@ jobs:
         run: node scripts/verify-workflow-event-indexes.mjs
       - name: Verify autonomy event/policy FK indexes
         run: node scripts/verify-autonomy-event-policy-indexes.mjs
+      - name: Verify autonomy policy/version FK indexes
+        run: node scripts/verify-autonomy-policy-version-indexes.mjs
       - name: Verify source operational readiness evidence
         run: node scripts/verify-source-operational-readiness.mjs
       - name: Verify onboarding operational evidence boundary
