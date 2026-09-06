@@ -5,46 +5,58 @@ export const dynamic = 'force-dynamic'
 
 type ComponentStatus = 'READY' | 'DEGRADED' | 'UNAVAILABLE'
 
-async function checkSemanticEmbeddingProvider() {
+async function checkSemanticEmbeddingProvider(admin: ReturnType<typeof createAdminClient>) {
   const configuredUrl = process.env.GOVERNANCE_EMBEDDING_URL?.trim()
-  if (!configuredUrl) {
-    return {
-      status: 'DEGRADED' as const,
-      detail: 'Semantic embedding provider is not configured. Lexical governance search remains available.',
+  if (configuredUrl) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    try {
+      const response = await fetch(`${configuredUrl.replace(/\/$/, '')}/health`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        return {
+          status: 'DEGRADED' as const,
+          detail: `Semantic embedding provider health returned HTTP ${response.status}.`,
+        }
+      }
+      const payload = await response.json().catch(() => null) as { status?: unknown; dimensions?: unknown; model?: unknown } | null
+      const healthy = payload?.status === 'ok' && Number(payload?.dimensions) === 384
+      return healthy
+        ? {
+            status: 'READY' as const,
+            detail: typeof payload?.model === 'string' ? `Embedding model ${payload.model} is ready.` : 'Embedding provider is ready.',
+          }
+        : {
+            status: 'DEGRADED' as const,
+            detail: 'Semantic embedding provider returned an incompatible health contract.',
+          }
+    } catch {
+      return {
+        status: 'DEGRADED' as const,
+        detail: 'Semantic embedding provider could not be reached.',
+      }
+    } finally {
+      clearTimeout(timeout)
     }
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 5000)
   try {
-    const response = await fetch(`${configuredUrl.replace(/\/$/, '')}/health`, {
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-    if (!response.ok) {
-      return {
-        status: 'DEGRADED' as const,
-        detail: `Semantic embedding provider health returned HTTP ${response.status}.`,
-      }
-    }
-    const payload = await response.json().catch(() => null) as { status?: unknown; dimensions?: unknown; model?: unknown } | null
-    const healthy = payload?.status === 'ok' && Number(payload?.dimensions) === 384
+    const { data, error } = await admin.functions.invoke('governance-embed', { body: { action: 'health' } })
+    if (error) throw error
+    const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {}
+    const healthy = payload.status === 'healthy'
+      && payload.model === 'gte-small'
+      && Number(payload.dimensions) === 384
     return healthy
-      ? {
-          status: 'READY' as const,
-          detail: typeof payload?.model === 'string' ? `Embedding model ${payload.model} is ready.` : 'Embedding provider is ready.',
-        }
-      : {
-          status: 'DEGRADED' as const,
-          detail: 'Semantic embedding provider returned an incompatible health contract.',
-        }
+      ? { status: 'READY' as const, detail: 'Governed Supabase embedding model gte-small is ready.' }
+      : { status: 'DEGRADED' as const, detail: 'Governed Supabase embedding provider returned an incompatible health contract.' }
   } catch {
     return {
       status: 'DEGRADED' as const,
-      detail: 'Semantic embedding provider could not be reached.',
+      detail: 'Governed Supabase embedding provider could not be invoked.',
     }
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
@@ -124,7 +136,7 @@ export async function GET() {
     criticalFailure = true
   }
 
-  components.semantic_embeddings = await checkSemanticEmbeddingProvider()
+  components.semantic_embeddings = await checkSemanticEmbeddingProvider(admin)
   components.databricks_connector = await checkDatabricksConnector(admin)
   components.jdbc_bridge = await checkJdbcBridge()
 
@@ -151,7 +163,7 @@ export async function GET() {
     const degraded = (deadEvents ?? 0) > 0 || (staleEvents ?? 0) > 0
     components.outbox = degraded ? { status: 'DEGRADED', detail: 'Recent dead or stale governance events require attention.' } : { status: 'READY' }
   } catch {
-    components.outbox = { status: 'DEGRADED', detail: 'Governance event outbox health could not be evaluated.' }
+    components.outbox = { status: 'DEGRADED', detail: 'Governance event outbox health could not be fully evaluated.' }
   }
 
   try {
