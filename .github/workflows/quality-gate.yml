@@ -84,6 +84,8 @@ jobs:
         run: node scripts/verify-security-advisor-hardening.mjs
       - name: Verify non-lineage enterprise acceptance contract
         run: node scripts/verify-non-lineage-enterprise-acceptance.mjs
+      - name: Verify AI lineage suggestion truth boundary
+        run: node scripts/verify-ai-lineage-suggestions.mjs
       - name: Verify Databricks Web UI connection flow
         run: node scripts/verify-databricks-web-ui-flow.mjs
       - name: Verify Databricks multiple schema scope
