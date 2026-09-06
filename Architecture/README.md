@@ -66,6 +66,10 @@ The AI-assisted lineage evidence and authority boundary is documented in:
 
 The current production operating-state checkpoint and continuation path is documented in:
 
+- `2026-09-07-production-operating-state-and-continuation.md`
+
+The previous checkpoint remains available as historical evidence in:
+
 - `2026-09-06-production-operating-state-and-continuation.md`
 
 ADR-002 keeps PostgreSQL / Supabase authoritative and standardizes replaceable logical providers for knowledge search, graph traversal, analytics and object storage. OpenSearch, ClickHouse and any dedicated graph engine are introduced only when measured workload and scale justify them.
@@ -85,14 +89,14 @@ The current operating architecture applies these boundaries:
 - source physical metadata remains source-authoritative;
 - DataNexus is authoritative for governance decisions, state, history and derived intelligence;
 - stable identity is preferred over mutable path-only identity;
-- observation is separate from governance authority;
+- observation is separate from configuration and governance authority;
 - AI suggestion is separate from human/governed authority;
 - external reference corpus does not automatically confer internal enterprise authority;
 - inferred lineage remains separate from source-observed lineage;
 - PostgreSQL / Supabase remains the authoritative control plane;
 - search, graph and analytics remain rebuildable projections.
 
-Current production non-lineage enterprise acceptance passes Modules #1, #2 and #4 through #15. Module #3 remains explicitly blocked by missing Databricks `USE SCHEMA` on `system.access` and must not be cleared by inferred lineage.
+Current production non-lineage enterprise acceptance passes Modules #1, #2 and #4 through #15 and includes project-scoped source operational-readiness consistency evidence. Module #3 remains explicitly blocked by missing Databricks `USE SCHEMA` on `system.access` plus missing real field-lineage ingestion and must not be cleared by inferred lineage.
 
 ## Progressive autonomy architecture
 
@@ -188,7 +192,8 @@ Do not deploy the entire candidate stack at once. Introduce infrastructure only 
 - `2026-09-04-ADR-002-polyglot-data-platform-and-knowledge-architecture.md` records the proposed polyglot data-plane architecture: PostgreSQL/Supabase as authoritative truth, OpenSearch as future knowledge/search projection, ClickHouse as future analytics/telemetry projection, a replaceable GraphProvider, object storage for originals/cold artifacts, and pgvector as embedded semantic capability. Physical infrastructure remains phased and workload-triggered.
 - `2026-09-06-ADR-003-runtime-boundary-for-generic-jdbc.md` records the Vercel control-plane / portable JVM JDBC data-plane split, including the temporary server-side credential mode and runtime replaceability.
 - `2026-09-06-ADR-004-ai-assisted-lineage-truth-boundary.md` records the separation between source-observed lineage, AI-inferred metadata suggestions, and separately promoted human-confirmed inferred dependencies while preserving the Module #3 blocker.
-- `2026-09-06-production-operating-state-and-continuation.md` records the current production acceptance evidence, module state, security truth, source-operational-evidence increment, and continuation path for the next engineering agent.
+- `2026-09-06-production-operating-state-and-continuation.md` records the previous production acceptance checkpoint before the later JDBC evidence, discovery audit, project-readiness, and enterprise-acceptance integrations.
+- `2026-09-07-production-operating-state-and-continuation.md` records the current production evidence after those integrations, including 570 physical assets, three accepted repeat-stable multi-namespace JDBC sources, project-scoped source readiness, and the unchanged Module #3 external blocker.
 
 Significant architecture changes should be recorded as dated ADR style Markdown files in this folder. Each change should capture:
 
