@@ -82,6 +82,8 @@ jobs:
         run: node scripts/verify-source-operational-readiness.mjs
       - name: Verify governed JDBC discovery evidence
         run: node scripts/verify-jdbc-discovery-evidence.mjs
+      - name: Verify governance report source evidence
+        run: node scripts/verify-governance-report-source-evidence.mjs
       - name: Verify Generic JDBC production acceptance contract
         run: node scripts/verify-generic-jdbc-acceptance.mjs
       - name: Verify Supabase security advisor hardening contract
