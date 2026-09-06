@@ -3,6 +3,7 @@ import fs from 'node:fs'
 const migrationFiles=[
   'supabase/migrations/20260906090000_govern_ai_lineage_suggestions.sql',
   'supabase/migrations/20260906090100_govern_ai_lineage_promotion.sql',
+  'supabase/migrations/20260906090200_fix_ai_lineage_architect_agent_key.sql',
 ]
 const migration=migrationFiles.map(path=>fs.readFileSync(path,'utf8')).join('\n')
 const route=fs.readFileSync('app/api/lineage/suggestions/route.ts','utf8')
@@ -17,6 +18,7 @@ for(const [needle,label] of [
   ["'lineage'::text",'LINEAGE suggestion type'],
   ["when 'lineage' then 'lineage.manage'",'lineage.manage human review capability'],
   ['governance.generate_ai_lineage_suggestions','metadata inference generator'],
+  ["d.agent_key='architect_agent'",'canonical enabled architect agent key'],
   ['metadata-lineage-heuristics-v1','pinned inference model'],
   ["'metadata_only',true",'metadata-only evidence'],
   ["'observed_lineage',false",'not-observed evidence boundary'],
