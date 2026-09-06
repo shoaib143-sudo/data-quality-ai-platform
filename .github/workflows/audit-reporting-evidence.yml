@@ -6,12 +6,20 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'scripts/verify-audit-reporting-evidence.mjs'
+      - 'scripts/verify-governance-report-source-evidence.mjs'
+      - 'app/api/reports/governance/route.ts'
+      - 'app/reports/page.tsx'
+      - 'app/reports/report-manager.tsx'
       - '.github/workflows/audit-reporting-evidence.yml'
   pull_request:
     branches: [main]
     paths:
       - 'supabase/migrations/**'
       - 'scripts/verify-audit-reporting-evidence.mjs'
+      - 'scripts/verify-governance-report-source-evidence.mjs'
+      - 'app/api/reports/governance/route.ts'
+      - 'app/reports/page.tsx'
+      - 'app/reports/report-manager.tsx'
       - '.github/workflows/audit-reporting-evidence.yml'
 
 permissions:
@@ -28,3 +36,5 @@ jobs:
           node-version: 24
       - name: Verify immutable chain-bound audit reporting evidence
         run: node scripts/verify-audit-reporting-evidence.mjs
+      - name: Verify governed report source evidence propagation
+        run: node scripts/verify-governance-report-source-evidence.mjs
