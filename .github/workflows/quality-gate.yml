@@ -92,6 +92,8 @@ jobs:
         run: node scripts/verify-ai-governance-suggestion-indexes.mjs
       - name: Verify glossary governance FK indexes
         run: node scripts/verify-glossary-governance-indexes.mjs
+      - name: Verify control scope FK indexes
+        run: node scripts/verify-control-scope-indexes.mjs
       - name: Verify source operational readiness evidence
         run: node scripts/verify-source-operational-readiness.mjs
       - name: Verify onboarding operational evidence boundary
