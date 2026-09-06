@@ -22,7 +22,8 @@ public class BridgeAuthFilter extends OncePerRequestFilter {
 
   @Override
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
-    if (request.getRequestURI().equals("/health")) {
+    String requestUri = request.getRequestURI();
+    if (requestUri.equals("/") || requestUri.equals("/health")) {
       chain.doFilter(request, response);
       return;
     }
