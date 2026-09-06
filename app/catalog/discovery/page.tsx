@@ -30,10 +30,18 @@ function text(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : ''
 }
 
+function readinessTone(state: string) {
+  if (state === 'OBSERVED_READY') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  if (state === 'DISCOVERY_IN_PROGRESS') return 'border-blue-200 bg-blue-50 text-blue-800'
+  if (state === 'LAST_DISCOVERY_FAILED' || state === 'EVIDENCE_INCONSISTENT') return 'border-red-200 bg-red-50 text-red-800'
+  if (state === 'OBSERVED_EMPTY') return 'border-amber-200 bg-amber-50 text-amber-900'
+  return 'border-slate-200 bg-slate-50 text-slate-700'
+}
+
 export default async function DiscoveryPage() {
   await requireUser()
   const supabase = await createClient()
-  const [sources, runs, currentAssets] = await Promise.all([
+  const [sources, runs, currentAssets, readiness] = await Promise.all([
     supabase
       .schema('catalog')
       .from('data_sources')
@@ -50,14 +58,21 @@ export default async function DiscoveryPage() {
       .schema('catalog')
       .from('current_catalog_source_assets')
       .select('source_id'),
+    supabase
+      .schema('catalog')
+      .from('source_operational_readiness')
+      .select('source_id,source_name,source_type,lifecycle_status,operational_state,has_observation_evidence,current_assets,latest_run_status,latest_run_completed_at,evidence_reason')
+      .order('source_name'),
   ])
 
   if (sources.error) throw new Error(`Unable to load discovery sources: ${sources.error.message}`)
   if (runs.error) throw new Error(`Unable to load discovery history: ${runs.error.message}`)
   if (currentAssets.error) throw new Error(`Unable to load current published catalog assets: ${currentAssets.error.message}`)
+  if (readiness.error) throw new Error(`Unable to load source operational readiness: ${readiness.error.message}`)
 
   const sourceRows = sources.data ?? []
   const runRows = runs.data ?? []
+  const readinessRows = readiness.data ?? []
   const currentAssetCounts = (currentAssets.data ?? []).reduce<Record<string, number>>((counts, asset) => {
     counts[asset.source_id] = (counts[asset.source_id] ?? 0) + 1
     return counts
@@ -123,6 +138,17 @@ export default async function DiscoveryPage() {
             {blocker.resource || blocker.permission ? <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-amber-700"><div><dt className="inline font-bold">Resource: </dt><dd className="inline font-mono">{blocker.resource || '—'}</dd></div><div><dt className="inline font-bold">Required permission: </dt><dd className="inline font-mono">{blocker.permission || '—'}</dd></div></dl> : null}
           </div>)}</div>
         </section> : null}
+        <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div><h2 className="text-lg font-black">Source operational evidence</h2><p className="mt-1 max-w-3xl text-sm text-slate-500">Lifecycle shows whether a source is configured or active. Operational evidence is derived separately from real discovery runs and current physical catalog assets; it never rewrites source lifecycle state.</p></div>
+            <p className="text-xs font-semibold text-slate-500">{readinessRows.filter(row => row.operational_state === 'OBSERVED_READY').length} observed ready · {readinessRows.filter(row => row.operational_state === 'UNOBSERVED').length} unobserved</p>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{readinessRows.map(row => <article key={row.source_id} className="rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-start justify-between gap-3"><div><p className="font-bold">{row.source_name}</p><p className="mt-0.5 text-xs text-slate-500">{row.source_type}</p></div><span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${readinessTone(row.operational_state)}`}>{row.operational_state}</span></div>
+            <dl className="mt-3 grid grid-cols-2 gap-2 text-xs"><div><dt className="font-bold text-slate-500">Lifecycle</dt><dd className="mt-0.5">{row.lifecycle_status}</dd></div><div><dt className="font-bold text-slate-500">Current assets</dt><dd className="mt-0.5">{row.current_assets}</dd></div><div><dt className="font-bold text-slate-500">Latest discovery</dt><dd className="mt-0.5">{row.latest_run_status || 'None'}</dd></div><div><dt className="font-bold text-slate-500">Evidence</dt><dd className="mt-0.5">{row.has_observation_evidence ? 'Observed' : 'Not observed'}</dd></div></dl>
+            <p className="mt-3 text-xs leading-5 text-slate-500">{row.evidence_reason}</p>
+          </article>)}</div>
+        </section>
         <DiscoveryManager sources={sourceRows} runs={runRows} jobs={jobs} currentAssetCounts={currentAssetCounts} />
       </div>
     </main>
