@@ -1,0 +1,30 @@
+name: AI Assisted Governance
+
+on:
+  push:
+    branches: [main, governed-ai-assistance]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-ai-assisted-governance.mjs'
+      - '.github/workflows/ai-assisted-governance.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-ai-assisted-governance.mjs'
+      - '.github/workflows/ai-assisted-governance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  module12-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify AI suggestions remain separate from governance authority
+        run: node scripts/verify-ai-assisted-governance.mjs
