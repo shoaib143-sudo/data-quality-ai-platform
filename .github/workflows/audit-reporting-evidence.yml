@@ -1,0 +1,30 @@
+name: Audit Reporting Evidence
+
+on:
+  push:
+    branches: [main, governed-audit-reporting]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-audit-reporting-evidence.mjs'
+      - '.github/workflows/audit-reporting-evidence.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-audit-reporting-evidence.mjs'
+      - '.github/workflows/audit-reporting-evidence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  module11-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify immutable chain-bound audit reporting evidence
+        run: node scripts/verify-audit-reporting-evidence.mjs
