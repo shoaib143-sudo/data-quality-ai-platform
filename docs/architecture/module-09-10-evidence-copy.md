@@ -1,1 +1,0 @@
-Modules 9 and 10 evidence is governed by pinned workflow semantics, human capability checks, append-only workflow/remediation history, immutable data-contract semantic versions, explicit approval authority, and append-only evaluation history. External lineage and enterprise governance-corpus blockers remain unchanged.
