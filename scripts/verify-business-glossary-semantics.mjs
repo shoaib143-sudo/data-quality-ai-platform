@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const foundation = fs.readFileSync('supabase/migrations/20260906093000_governed_business_glossary_semantics.sql', 'utf8')
 const refresh = fs.readFileSync('supabase/migrations/20260906093100_refresh_glossary_mappings_after_catalog_publish.sql', 'utf8')
+const deprecation = fs.readFileSync('supabase/migrations/20260906093200_deprecate_glossary_authority.sql', 'utf8')
 const termsRoute = fs.readFileSync('app/api/glossary/route.ts', 'utf8')
 const termRoute = fs.readFileSync('app/api/glossary/[termId]/route.ts', 'utf8')
 const mappingsRoute = fs.readFileSync('app/api/glossary/mappings/route.ts', 'utf8')
@@ -19,7 +20,7 @@ function rejectText(text, needle, label) {
 requireText(foundation, "status='REFERENCE'", 'bootstrap vocabulary is reference-only')
 requireText(foundation, "authority_type='REFERENCE_BOOTSTRAP'", 'bootstrap authority is explicit')
 requireText(foundation, 'glossary_term_versions', 'immutable semantic version history')
-requireText(foundation, "change_kind text not null", 'semantic version change evidence')
+requireText(foundation, 'change_kind text not null', 'semantic version change evidence')
 requireText(foundation, 'published_glossary_terms', 'published semantic read model')
 requireText(foundation, 'security_invoker=true', 'RLS-preserving semantic views')
 requireText(foundation, "status='APPROVED' and v.authority_type <> 'REFERENCE_BOOTSTRAP'", 'reference concepts excluded from authority')
@@ -36,6 +37,11 @@ requireText(refresh, 'after update of change_set_hash on catalog.catalog_revisio
 requireText(refresh, 'exception when others', 'semantic refresh cannot invalidate physical publication')
 requireText(refresh, "raise warning 'Glossary mapping validity refresh failed", 'truthful non-blocking refresh failure')
 
+requireText(deprecation, "current_term.status in ('APPROVED','DRAFT','IN_REVIEW')", 'deprecated terms excluded from current semantic authority')
+requireText(deprecation, "elsif new.status='DEPRECATED'", 'deprecation invalidates active mapping approval')
+requireText(deprecation, "where term_id=new.id and mapping_status='APPROVED'", 'all approved mappings require review after deprecation')
+requireText(deprecation, 'deprecated terms retain history but no longer publish authority', 'deprecation read-model intent')
+
 requireText(termsRoute, "authorizeProject(user.id, projectId, 'glossary.read')", 'project-scoped glossary reads')
 requireText(termsRoute, "authorizeProject(user.id, projectId, 'glossary.manage')", 'governed term creation authorization')
 requireText(termsRoute, "status: 'DRAFT'", 'new human terms start as draft')
@@ -46,11 +52,11 @@ requireText(termRoute, "action === 'ADOPT_REFERENCE'", 'explicit reference adopt
 requireText(termRoute, "action === 'SUBMIT_REVIEW'", 'term review submission')
 requireText(termRoute, "action === 'APPROVE'", 'explicit term approval')
 requireText(termRoute, "action === 'DEPRECATE'", 'term deprecation')
-requireText(termRoute, "Editing published meaning opens a new draft", 'published meaning preserved during revision')
+requireText(termRoute, 'Editing published meaning opens a new draft', 'published meaning preserved during revision')
 requireText(termRoute, 'Governed glossary terms are not hard-deleted', 'semantic history preservation')
 
 requireText(mappingsRoute, "mapping_status: 'PROPOSED'", 'mappings begin as proposals')
-requireText(mappingsRoute, "approved: false", 'mapping proposal cannot self-approve')
+requireText(mappingsRoute, 'approved: false', 'mapping proposal cannot self-approve')
 requireText(mappingsRoute, "targetType === 'CATALOG_ASSET'", 'catalog asset mapping support')
 requireText(mappingReviewRoute, "action === 'APPROVE'", 'explicit mapping approval')
 requireText(mappingReviewRoute, "mapping.validation_state !== 'VALID'", 'stale catalog mappings cannot be approved')
