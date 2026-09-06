@@ -16,7 +16,7 @@ function rejectText(text, needle, label) {
 
 requireText(foundation, "target_type in ('DATASET','CATALOG_ASSET')", 'dataset and stable catalog targets')
 requireText(foundation, 'catalog_identity_key', 'catalog identity continuity')
-requireText(foundation, "role in ('BUSINESS_OWNER','TECHNICAL_OWNER','DATA_STEWARD','CUSTODIAN')", 'explicit responsibility roles')
+requireText(foundation, "new.role not in ('BUSINESS_OWNER','TECHNICAL_OWNER','DATA_STEWARD','CUSTODIAN')", 'explicit responsibility roles')
 requireText(foundation, "origin <> 'AI_SUGGESTED' or status='PROPOSED'", 'AI cannot silently activate ownership')
 requireText(foundation, 'stewardship_dataset_business_owner_unique', 'single accountable business owner per current dataset')
 requireText(foundation, 'stewardship_catalog_business_owner_unique', 'single accountable business owner per current catalog identity')
