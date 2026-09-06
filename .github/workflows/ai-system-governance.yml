@@ -1,0 +1,30 @@
+name: AI System Governance
+
+on:
+  push:
+    branches: [main, govern-ai-systems]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-ai-system-governance.mjs'
+      - '.github/workflows/ai-system-governance.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-ai-system-governance.mjs'
+      - '.github/workflows/ai-system-governance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  module15-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify AI system governance authority and immutable evidence
+        run: node scripts/verify-ai-system-governance.mjs
