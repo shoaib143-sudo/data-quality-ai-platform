@@ -123,8 +123,8 @@ begin
   v_chain:=governance.verify_audit_chain(p_project_id);
   v_audit_posture:=governance.verify_governance_audit_posture();
   v_security_posture:=governance.verify_database_api_security_posture();
-  v_quality_control:=case when to_regprocedure('governance.verify_quality_control_posture()') is null then null else governance.verify_quality_control_posture() end;
-  v_workflow_contract:=case when to_regprocedure('governance.verify_workflow_contract_posture()') is null then null else governance.verify_workflow_contract_posture() end;
+  v_quality_control:=governance.verify_quality_control_posture();
+  v_workflow_contract:=governance.verify_workflow_contract_posture();
 
   v_payload:=jsonb_build_object(
     'project_id',p_project_id,
@@ -173,18 +173,24 @@ with integrity as (
     select 1 from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
     where n.nspname='governance' and c.relname='audit_report_snapshots' and t.tgname='audit_report_snapshots_immutable' and not t.tgisinternal and t.tgenabled<>'D'
   ) as immutable_trigger
+), grants as (
+  select
+    has_table_privilege('anon','governance.audit_report_snapshots','INSERT')
+      or has_table_privilege('anon','governance.audit_report_snapshots','UPDATE')
+      or has_table_privilege('anon','governance.audit_report_snapshots','DELETE') as anon_write,
+    has_table_privilege('authenticated','governance.audit_report_snapshots','INSERT')
+      or has_table_privilege('authenticated','governance.audit_report_snapshots','UPDATE')
+      or has_table_privilege('authenticated','governance.audit_report_snapshots','DELETE') as authenticated_write
 )
 select jsonb_build_object(
-  'valid',i.invalid_hashes=0 and i.invalid_anchors=0 and t.immutable_trigger
-    and not has_table_privilege('anon','governance.audit_report_snapshots','INSERT,UPDATE,DELETE')
-    and not has_table_privilege('authenticated','governance.audit_report_snapshots','INSERT,UPDATE,DELETE'),
+  'valid',i.invalid_hashes=0 and i.invalid_anchors=0 and t.immutable_trigger and not g.anon_write and not g.authenticated_write,
   'report_count',i.report_count,
   'invalid_report_hashes',i.invalid_hashes,
   'invalid_chain_anchors',i.invalid_anchors,
   'append_only_trigger',t.immutable_trigger,
-  'anonymous_write_access',has_table_privilege('anon','governance.audit_report_snapshots','INSERT,UPDATE,DELETE'),
-  'authenticated_write_access',has_table_privilege('authenticated','governance.audit_report_snapshots','INSERT,UPDATE,DELETE')
-) from integrity i cross join trig t;
+  'anonymous_write_access',g.anon_write,
+  'authenticated_write_access',g.authenticated_write
+) from integrity i cross join trig t cross join grants g;
 $$;
 revoke all on function governance.verify_audit_reporting_posture() from public,anon,authenticated;
 grant execute on function governance.verify_audit_reporting_posture() to service_role;
