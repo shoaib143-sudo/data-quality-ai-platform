@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -43,9 +42,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ma
   const now = new Date().toISOString()
   const evidence = { ...(mapping.evidence ?? {}), last_review_action: action }
   let updates: Record<string, unknown>
-  let eventType: string
 
   if (action === 'APPROVE') {
+    if (mapping.mapping_status === 'APPROVED') return NextResponse.json({ mapping })
     if (term.status !== 'APPROVED' || term.authority_type === 'REFERENCE_BOOTSTRAP') {
       return NextResponse.json({ error: 'Approve the governed term before approving its semantic mappings.' }, { status: 409 })
     }
@@ -54,21 +53,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ma
     }
     updates = {
       mapping_status: 'APPROVED', approved: true, approved_by: user.id,
-      reviewed_by: user.id, reviewed_at: now, evidence,
+      reviewed_by: user.id, reviewed_at: now, last_changed_by: user.id, evidence,
     }
-    eventType = 'GLOSSARY_MAPPING_APPROVED'
   } else if (action === 'REJECT') {
+    if (mapping.mapping_status === 'REJECTED') return NextResponse.json({ mapping })
     updates = {
       mapping_status: 'REJECTED', approved: false, approved_by: null,
-      reviewed_by: user.id, reviewed_at: now, evidence,
+      reviewed_by: user.id, reviewed_at: now, last_changed_by: user.id, evidence,
     }
-    eventType = 'GLOSSARY_MAPPING_REJECTED'
   } else if (action === 'RESET_PROPOSAL') {
+    if (mapping.mapping_status === 'PROPOSED') return NextResponse.json({ mapping })
     updates = {
       mapping_status: 'PROPOSED', approved: false, approved_by: null,
-      reviewed_by: null, reviewed_at: null, evidence,
+      reviewed_by: null, reviewed_at: null, last_changed_by: user.id, evidence,
     }
-    eventType = 'GLOSSARY_MAPPING_REOPENED'
   } else {
     return NextResponse.json({ error: 'A supported mapping review action is required.' }, { status: 400 })
   }
@@ -82,20 +80,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ma
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  await writeGovernanceAudit({
-    projectId: term.project_id,
-    actorUserId: user.id,
-    eventType,
-    entityType: 'GLOSSARY_MAPPING',
-    entityId: mappingId,
-    metadata: {
-      term_id: term.id,
-      target_type: mapping.target_type,
-      prior_status: mapping.mapping_status,
-      new_status: data.mapping_status,
-      term_version_number: data.term_version_number,
-      validation_state: data.validation_state,
-    },
-  })
+  // Review decision and audit evidence are inserted by DB triggers in this same transaction.
   return NextResponse.json({ mapping: data })
 }

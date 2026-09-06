@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -42,7 +41,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ te
   const action = text(body.action).toUpperCase()
   const now = new Date().toISOString()
   const updates: Record<string, unknown> = { updated_at: now, last_changed_by: user.id }
-  let eventType = 'GLOSSARY_TERM_UPDATED'
 
   if (action) {
     if (action === 'ADOPT_REFERENCE') {
@@ -55,11 +53,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ te
       updates.approved_by = null
       updates.approved_at = null
       updates.provenance = { ...(term.provenance ?? {}), adopted_from_reference: true, authoritative: false, reference_only: false }
-      eventType = 'GLOSSARY_REFERENCE_ADOPTED'
     } else if (action === 'SUBMIT_REVIEW') {
       if (term.status !== 'DRAFT') return NextResponse.json({ error: 'Only a draft term can be submitted for review.' }, { status: 409 })
       updates.status = 'IN_REVIEW'
-      eventType = 'GLOSSARY_TERM_SUBMITTED'
     } else if (action === 'APPROVE') {
       if (term.status !== 'IN_REVIEW' || term.authority_type === 'REFERENCE_BOOTSTRAP') {
         return NextResponse.json({ error: 'Only a governed term in review can be approved.' }, { status: 409 })
@@ -68,18 +64,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ te
       updates.approved_by = user.id
       updates.approved_at = now
       updates.provenance = { ...(term.provenance ?? {}), authoritative: true }
-      eventType = 'GLOSSARY_TERM_APPROVED'
     } else if (action === 'DEPRECATE') {
       if (term.status !== 'APPROVED') return NextResponse.json({ error: 'Only an approved term can be deprecated.' }, { status: 409 })
       updates.status = 'DEPRECATED'
-      eventType = 'GLOSSARY_TERM_DEPRECATED'
     } else if (action === 'REOPEN') {
       if (term.status !== 'DEPRECATED') return NextResponse.json({ error: 'Only a deprecated term can be reopened.' }, { status: 409 })
       updates.status = 'DRAFT'
       updates.approved_by = null
       updates.approved_at = null
       updates.provenance = { ...(term.provenance ?? {}), authoritative: false }
-      eventType = 'GLOSSARY_TERM_REOPENED'
     } else {
       return NextResponse.json({ error: `Unsupported glossary action ${action}.` }, { status: 400 })
     }
@@ -117,7 +110,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ te
       updates.approved_by = null
       updates.approved_at = null
       updates.provenance = { ...(term.provenance ?? {}), authoritative: false }
-      eventType = 'GLOSSARY_TERM_REVISION_OPENED'
     }
   }
 
@@ -132,14 +124,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ te
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  await writeGovernanceAudit({
-    projectId: term.project_id,
-    actorUserId: user.id,
-    eventType,
-    entityType: 'GLOSSARY_TERM',
-    entityId: termId,
-    metadata: { action: action || 'SEMANTIC_EDIT', prior_status: term.status, new_status: data.status, authority_type: data.authority_type },
-  })
+  // Semantic version capture and audit insertion are DB triggers in the same transaction.
   return NextResponse.json({ term: data })
 }
 

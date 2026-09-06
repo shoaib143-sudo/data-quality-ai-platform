@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -81,13 +80,6 @@ export async function POST(request: Request) {
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  await writeGovernanceAudit({
-    projectId,
-    actorUserId: user.id,
-    eventType: 'GLOSSARY_TERM_CREATED',
-    entityType: 'GLOSSARY_TERM',
-    entityId: data.id,
-    metadata: { term, authority_type: 'HUMAN_GOVERNED', status: 'DRAFT' },
-  })
+  // DB triggers capture immutable semantic version + audit evidence in this transaction.
   return NextResponse.json({ term: data }, { status: 201 })
 }
