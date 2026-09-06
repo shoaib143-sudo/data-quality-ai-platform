@@ -38,10 +38,17 @@ function readinessTone(state: string) {
   return 'border-slate-200 bg-slate-50 text-slate-700'
 }
 
+function jdbcEvidenceTone(state: string) {
+  if (state === 'REPEAT_SCAN_STABLE') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  if (state === 'SINGLE_SCAN_EVIDENCE' || state === 'REPEAT_SCAN_CHANGED') return 'border-amber-200 bg-amber-50 text-amber-900'
+  if (state === 'EVIDENCE_INCONSISTENT') return 'border-red-200 bg-red-50 text-red-800'
+  return 'border-slate-200 bg-slate-50 text-slate-700'
+}
+
 export default async function DiscoveryPage() {
   await requireUser()
   const supabase = await createClient()
-  const [sources, runs, currentAssets, readiness] = await Promise.all([
+  const [sources, runs, currentAssets, readiness, jdbcEvidence] = await Promise.all([
     supabase
       .schema('catalog')
       .from('data_sources')
@@ -63,16 +70,23 @@ export default async function DiscoveryPage() {
       .from('source_operational_readiness')
       .select('source_id,source_name,source_type,lifecycle_status,operational_state,has_observation_evidence,current_assets,latest_run_status,latest_run_completed_at,evidence_reason')
       .order('source_name'),
+    supabase
+      .schema('catalog')
+      .from('jdbc_discovery_evidence')
+      .select('source_id,source_name,lifecycle_status,operational_state,evidence_state,current_assets,current_fields,namespace_count,completed_runs,latest_revision_number,previous_revision_number,identity_unique_and_complete,catalog_projection_complete,multi_namespace_observed,repeat_scan_evidence_present,repeat_scan_stable,authority_semantic')
+      .order('source_name'),
   ])
 
   if (sources.error) throw new Error(`Unable to load discovery sources: ${sources.error.message}`)
   if (runs.error) throw new Error(`Unable to load discovery history: ${runs.error.message}`)
   if (currentAssets.error) throw new Error(`Unable to load current published catalog assets: ${currentAssets.error.message}`)
   if (readiness.error) throw new Error(`Unable to load source operational readiness: ${readiness.error.message}`)
+  if (jdbcEvidence.error) throw new Error(`Unable to load JDBC discovery evidence: ${jdbcEvidence.error.message}`)
 
   const sourceRows = sources.data ?? []
   const runRows = runs.data ?? []
   const readinessRows = readiness.data ?? []
+  const jdbcEvidenceRows = jdbcEvidence.data ?? []
   const currentAssetCounts = (currentAssets.data ?? []).reduce<Record<string, number>>((counts, asset) => {
     counts[asset.source_id] = (counts[asset.source_id] ?? 0) + 1
     return counts
@@ -149,6 +163,18 @@ export default async function DiscoveryPage() {
             <p className="mt-3 text-xs leading-5 text-slate-500">{row.evidence_reason}</p>
           </article>)}</div>
         </section>
+        {jdbcEvidenceRows.length ? <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div><h2 className="text-lg font-black">JDBC discovery evidence</h2><p className="mt-1 max-w-4xl text-sm text-slate-500">Observed physical metadata proves namespace breadth, stable identities, catalog projection, and repeat-scan behavior. Acceptance remains enforced separately by the production JDBC acceptance verifier, including connection and secret-boundary checks.</p></div>
+            <p className="text-xs font-semibold text-slate-500">{jdbcEvidenceRows.filter(row => row.multi_namespace_observed).length} multi-namespace · {jdbcEvidenceRows.filter(row => row.repeat_scan_stable).length} repeat-scan stable</p>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">{jdbcEvidenceRows.map(row => <article key={row.source_id} className="rounded-2xl border border-slate-200 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{row.source_name}</p><p className="mt-0.5 text-xs text-slate-500">Lifecycle {row.lifecycle_status} · Operational {row.operational_state || 'UNOBSERVED'}</p></div><span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${jdbcEvidenceTone(row.evidence_state)}`}>{row.evidence_state}</span></div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><div><dt className="font-bold text-slate-500">Assets</dt><dd className="mt-0.5 text-base font-black">{row.current_assets}</dd></div><div><dt className="font-bold text-slate-500">Fields</dt><dd className="mt-0.5 text-base font-black">{row.current_fields}</dd></div><div><dt className="font-bold text-slate-500">Namespaces</dt><dd className="mt-0.5 text-base font-black">{row.namespace_count}</dd></div><div><dt className="font-bold text-slate-500">Completed scans</dt><dd className="mt-0.5 text-base font-black">{row.completed_runs}</dd></div></dl>
+            <div className="mt-4 grid gap-2 text-xs sm:grid-cols-3"><p className={`rounded-xl border px-3 py-2 font-bold ${row.multi_namespace_observed ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>Multiple namespaces: {row.multi_namespace_observed ? 'Observed' : 'Not proven'}</p><p className={`rounded-xl border px-3 py-2 font-bold ${row.repeat_scan_stable ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : row.repeat_scan_evidence_present ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>Repeat scan: {row.repeat_scan_stable ? 'Stable' : row.repeat_scan_evidence_present ? 'Changed' : 'Not yet proven'}</p><p className={`rounded-xl border px-3 py-2 font-bold ${row.identity_unique_and_complete && row.catalog_projection_complete ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}`}>Stable identities: {row.identity_unique_and_complete && row.catalog_projection_complete ? 'Complete' : 'Evidence mismatch'}</p></div>
+            <p className="mt-3 text-[11px] leading-5 text-slate-500">Latest revision {row.latest_revision_number ?? 'none'} · Previous revision {row.previous_revision_number ?? 'none'} · {row.authority_semantic}</p>
+          </article>)}</div>
+        </section> : null}
         <DiscoveryManager sources={sourceRows} runs={runRows} jobs={jobs} currentAssetCounts={currentAssetCounts} />
       </div>
     </main>
