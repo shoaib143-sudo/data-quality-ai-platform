@@ -1,7 +1,10 @@
 import fs from 'node:fs'
 
-const migrationPath='supabase/migrations/20260906090000_govern_ai_lineage_suggestions.sql'
-const migration=fs.readFileSync(migrationPath,'utf8')
+const migrationFiles=[
+  'supabase/migrations/20260906090000_govern_ai_lineage_suggestions.sql',
+  'supabase/migrations/20260906090100_govern_ai_lineage_promotion.sql',
+]
+const migration=migrationFiles.map(path=>fs.readFileSync(path,'utf8')).join('\n')
 const route=fs.readFileSync('app/api/lineage/suggestions/route.ts','utf8')
 const workspace=fs.readFileSync('app/lineage/ai-lineage-suggestions.tsx','utf8')
 const page=fs.readFileSync('app/lineage/suggestions/page.tsx','utf8')
