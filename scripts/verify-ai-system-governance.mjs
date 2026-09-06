@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-const file='20260906062000_govern_ai_systems.sql';
-const sql=fs.readFileSync(path.join(process.cwd(),'supabase','migrations',file),'utf8');
+const baseFile='20260906062000_govern_ai_systems.sql';
+const originFile='20260906063000_enforce_ai_system_origin_naming.sql';
+const sql=fs.readFileSync(path.join(process.cwd(),'supabase','migrations',baseFile),'utf8');
+const originSql=fs.readFileSync(path.join(process.cwd(),'supabase','migrations',originFile),'utf8');
 const failures=[];
 const required=[
   'governance.ai_systems','governance.ai_system_versions','governance.ai_system_decisions','governance.ai_system_assessments',
@@ -23,5 +25,15 @@ if(!/before update or delete on governance\.ai_system_decisions/i.test(sql)) fai
 if(!/before update or delete on governance\.ai_system_assessments/i.test(sql)) failures.push('AI system assessments not append-only');
 if(!/lifecycle_status=case when v_decision='APPROVED' then 'ACTIVE' else 'DRAFT' end/i.test(sql)) failures.push('human decision does not control active lifecycle');
 if(!/current_version_id=v_version_id,lifecycle_status='DRAFT'/i.test(sql)) failures.push('new version does not revoke active authority');
+const originRequired=[
+  'ai_systems_origin_qualified_key',
+  "'syn-demo-document-classifier'",
+  "'syn-demo-external-llm-service'",
+  "'syn-demo-governance-copilot'",
+  "'syn-demo-governance-rag-pipeline'",
+  "'^(int|ext|syn)-[a-z0-9]+(-[a-z0-9]+)*$'",
+  'int-* internal, ext-* external, syn-* synthetic/demo/test'
+];
+for(const token of originRequired) if(!originSql.includes(token)) failures.push(`missing origin naming token: ${token}`);
 if(failures.length){console.error('Module 15 AI system governance contract failed:'); failures.forEach(f=>console.error(` - ${f}`)); process.exit(1);}
 console.log('Module 15 AI system governance contract passed.');
