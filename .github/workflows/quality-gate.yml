@@ -84,6 +84,8 @@ jobs:
         run: node scripts/verify-catalog-control-plane-indexes.mjs
       - name: Verify catalog source policy/capability FK indexes
         run: node scripts/verify-catalog-source-policy-capability-indexes.mjs
+      - name: Verify profiling quality-rule FK indexes
+        run: node scripts/verify-profiling-quality-rule-indexes.mjs
       - name: Verify source operational readiness evidence
         run: node scripts/verify-source-operational-readiness.mjs
       - name: Verify onboarding operational evidence boundary
