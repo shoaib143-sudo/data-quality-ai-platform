@@ -1,0 +1,32 @@
+name: Quality and Policy Contract
+
+on:
+  push:
+    branches: [main, governed-quality-controls]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-quality-policy-controls.mjs'
+      - '.github/workflows/quality-policy-contract.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-quality-policy-controls.mjs'
+      - '.github/workflows/quality-policy-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  wave2-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify Modules 7 and 8 evidence and authority contracts
+        run: node scripts/verify-quality-policy-controls.mjs
