@@ -1,0 +1,30 @@
+name: Autonomous Agent Governance
+
+on:
+  push:
+    branches: [main, governed-autonomy-evidence]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-autonomous-agent-governance.mjs'
+      - '.github/workflows/autonomous-agent-governance.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-autonomous-agent-governance.mjs'
+      - '.github/workflows/autonomous-agent-governance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  module14-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify autonomous action safety and immutable evidence
+        run: node scripts/verify-autonomous-agent-governance.mjs
