@@ -22,9 +22,15 @@ type DiscoveredAsset = {
   name: string
   columns: unknown[]
   metadata: Record<string, unknown>
+  identity_key?: string | null
 }
 
 type PersistedLineageAsset = { id: string; dataset_id: string | null; namespace: string; name: string }
+type ScopedLineageDiscovery = {
+  transformations: JdbcTransformation[]
+  warnings: string[]
+  details: Record<string, unknown>
+}
 export type LineageEnrichmentResult = {
   transformations: number
   edges: number
@@ -113,23 +119,52 @@ function mappingSortKey(mapping: JdbcColumnMapping) {
   })
 }
 
-async function ingestDatabricksColumnLineage(
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())).map(value => value.trim()))]
+}
+
+async function discoverDatabricksScopedLineage(input: { jdbcUrl: string; credentialRef: string; catalogs: string[] }): Promise<ScopedLineageDiscovery> {
+  const admin = createAdminClient()
+  const { data, error } = await admin.functions.invoke('dgp-databricks-connector', {
+    body: {
+      action: 'lineage_scope',
+      jdbc_url: input.jdbcUrl,
+      credential_ref: input.credentialRef,
+      catalogs: input.catalogs,
+    },
+  })
+  if (error) throw new Error(`Databricks scoped lineage connector failed: ${error.message}`)
+  const payload = record(data)
+  const connectorError = stringField(payload, ['error'])
+  if (connectorError) throw new Error(`Databricks scoped lineage connector failed: ${connectorError}`)
+  return {
+    transformations: Array.isArray(payload.transformations) ? payload.transformations as JdbcTransformation[] : [],
+    warnings: Array.isArray(payload.warnings) ? payload.warnings.filter((value): value is string => typeof value === 'string' && Boolean(value.trim())) : [],
+    details: record(payload.details),
+  }
+}
+
+async function ingestDatabricksAuthoritativeLineage(
   source: Source,
   actorUserId: string,
   transformations: JdbcTransformation[],
+  context: { discoveryRunId: string; catalogRevisionId: string },
 ) {
   const admin = createAdminClient()
   const grouped = new Map<string, { transformation: JdbcTransformation; mappings: Map<string, JdbcColumnMapping> }>()
 
   for (const transformation of transformations) {
-    if (!transformation.sourceAsset || !transformation.targetAsset || !transformation.columnMappings?.length) continue
+    if (!transformation.sourceAsset || !transformation.targetAsset) continue
     const authoritative = String(record(transformation.metadata).authoritative_source ?? '').toLowerCase()
-    if (authoritative !== 'system.access.column_lineage') {
-      throw new Error(`Databricks column lineage for ${transformation.sourceAsset} -> ${transformation.targetAsset} lacks system.access.column_lineage provenance.`)
+    if (!['system.access.column_lineage', 'system.access.table_lineage'].includes(authoritative)) {
+      throw new Error(`Databricks lineage for ${transformation.sourceAsset} -> ${transformation.targetAsset} lacks authoritative system.access provenance.`)
+    }
+    if (transformation.columnMappings?.length && authoritative !== 'system.access.column_lineage') {
+      throw new Error(`Databricks field lineage for ${transformation.sourceAsset} -> ${transformation.targetAsset} lacks system.access.column_lineage provenance.`)
     }
     const externalEventId = `databricks-system-lineage:${databricksLineageEventIdentity(transformation)}`
     const current = grouped.get(externalEventId) ?? { transformation, mappings: new Map<string, JdbcColumnMapping>() }
-    for (const mapping of transformation.columnMappings) current.mappings.set(mappingSortKey(mapping), mapping)
+    for (const mapping of transformation.columnMappings ?? []) current.mappings.set(mappingSortKey(mapping), mapping)
     grouped.set(externalEventId, current)
   }
 
@@ -142,6 +177,7 @@ async function ingestDatabricksColumnLineage(
     const sourceParts = splitLineageAsset(sourceAsset)
     const targetParts = splitLineageAsset(targetAsset)
     const metadata = record(transformation.metadata)
+    const authoritativeSource = String(metadata.authoritative_source ?? 'system.access.table_lineage').toLowerCase()
     const mappings = [...group.mappings.values()].sort((left, right) => mappingSortKey(left).localeCompare(mappingSortKey(right)))
     columnMappings += mappings.length
     const governedMappings = mappings.map(mapping => ({
@@ -151,26 +187,35 @@ async function ingestDatabricksColumnLineage(
       targetColumn: mapping.targetColumn,
       operation: mapping.operation ?? transformation.operation,
       expression: mapping.expression ?? null,
-      metadata: { ...(mapping.metadata ?? {}), authoritative_source: 'system.access.column_lineage', data_source_id: source.id },
+      metadata: { ...(mapping.metadata ?? {}), authoritative_source: 'system.access.column_lineage', data_source_id: source.id, catalog_revision_id: context.catalogRevisionId },
     }))
     const logicHash = sha256Hex(stableJson({ sourceAsset, targetAsset, operation: transformation.operation, mappings: governedMappings }))
-    const stableMetadata = { ...metadata, data_source_id: source.id, authoritative_source: 'system.access.column_lineage' }
+    const stableMetadata = {
+      ...metadata,
+      data_source_id: source.id,
+      discovery_run_id: context.discoveryRunId,
+      catalog_revision_id: context.catalogRevisionId,
+      authoritative_source: authoritativeSource,
+    }
     const eventWithoutHash = {
       externalEventId,
       eventType: 'COMPLETE',
       jobNamespace: 'databricks.system.access',
-      jobName: 'column_lineage',
+      jobName: authoritativeSource === 'system.access.column_lineage' ? 'column_lineage' : 'table_lineage',
+      dataSourceId: source.id,
+      discoveryRunId: context.discoveryRunId,
+      catalogRevisionId: context.catalogRevisionId,
       inputs: [{
         namespace: sourceParts.namespace,
         name: sourceParts.name,
         assetType: 'DATASET',
-        metadata: { data_source_id: source.id, databricks_full_name: sourceAsset, authoritative_source: 'system.access.column_lineage' },
+        metadata: { data_source_id: source.id, discovery_run_id: context.discoveryRunId, catalog_revision_id: context.catalogRevisionId, databricks_full_name: sourceAsset, authoritative_source: authoritativeSource },
       }],
       outputs: [{
         namespace: targetParts.namespace,
         name: targetParts.name,
         assetType: 'DATASET',
-        metadata: { data_source_id: source.id, databricks_full_name: targetAsset, authoritative_source: 'system.access.column_lineage' },
+        metadata: { data_source_id: source.id, discovery_run_id: context.discoveryRunId, catalog_revision_id: context.catalogRevisionId, databricks_full_name: targetAsset, authoritative_source: authoritativeSource },
       }],
       transformation: {
         externalId: `databricks-lineage:${externalEventId.slice('databricks-system-lineage:'.length)}`,
@@ -209,6 +254,7 @@ async function ingestDatabricksColumnLineage(
 async function persistJdbcLineage(
   source: Source,
   discoveryRunId: string,
+  catalogRevisionId: string,
   assets: DiscoveredAsset[],
   inputTransformations: JdbcTransformation[],
   actorUserId: string | null,
@@ -217,17 +263,18 @@ async function persistJdbcLineage(
   const engine = String(inputTransformations[0]?.engine || 'JDBC').toUpperCase()
   let governed = { transformations: 0, edges: 0, columnMappings: 0 }
   let transformations = inputTransformations
-
   if (engine === 'DATABRICKS') {
-    const withColumnMappings = inputTransformations.filter(item => Boolean(item.columnMappings?.length))
-    if (withColumnMappings.length) {
-      if (!actorUserId) throw new Error('Databricks column lineage ingestion requires the accountable Web UI discovery actor.')
-      governed = await ingestDatabricksColumnLineage(source, actorUserId, withColumnMappings)
-      const governedSet = new Set(withColumnMappings)
+    const authoritative = inputTransformations.filter(item => {
+      const source = String(record(item.metadata).authoritative_source ?? '').toLowerCase()
+      return Boolean(item.sourceAsset && item.targetAsset) && ['system.access.column_lineage', 'system.access.table_lineage'].includes(source)
+    })
+    if (authoritative.length) {
+      if (!actorUserId) throw new Error('Databricks lineage ingestion requires the accountable Web UI discovery actor.')
+      governed = await ingestDatabricksAuthoritativeLineage(source, actorUserId, authoritative, { discoveryRunId, catalogRevisionId })
+      const governedSet = new Set(authoritative)
       transformations = inputTransformations.filter(item => !governedSet.has(item))
     }
   }
-
   if (!transformations.length) return governed
 
   const admin = createAdminClient()
@@ -252,6 +299,7 @@ async function persistJdbcLineage(
       const normalized = String(value).toLowerCase()
       return normalized === asset.name.toLowerCase() || normalized === full.toLowerCase()
     }))
+    const identityResolution = asset.identity_key?.startsWith('native:') ? 'CATALOG_IDENTITY' : asset.identity_key ? 'QUALIFIED_LOCATOR' : null
     const { data, error } = await admin.schema('governance').from('lineage_assets').upsert({
       project_id: source.project_id,
       integration_id: integration.id,
@@ -259,17 +307,23 @@ async function persistJdbcLineage(
       name: asset.name,
       asset_type: asset.asset_type,
       dataset_id: dataset?.id ?? null,
-      metadata: { source_id: source.id, discovery_run_id: discoveryRunId, auto_discovered: true },
+      data_source_id: source.id,
+      catalog_identity_key: asset.identity_key ?? null,
+      discovered_asset_id: asset.id,
+      catalog_revision_id: catalogRevisionId,
+      identity_resolution: identityResolution,
+      identity_evidence: { full_name: full, catalog_identity_key: asset.identity_key ?? null, catalog_match: true },
+      metadata: { source_id: source.id, discovery_run_id: discoveryRunId, catalog_revision_id: catalogRevisionId, catalog_identity_key: asset.identity_key ?? null, auto_discovered: true },
       last_seen_at: new Date().toISOString(),
     }, { onConflict: 'project_id,namespace,name,asset_type' }).select('id,dataset_id,namespace,name').single()
     if (error || !data) throw new Error(`Unable to register JDBC lineage asset ${full}: ${error?.message ?? 'unknown error'}`)
-    assetByKey.set(asset.name.toLowerCase(), data)
     assetByKey.set(full.toLowerCase(), data)
+    if (!assetByKey.has(asset.name.toLowerCase())) assetByKey.set(asset.name.toLowerCase(), data)
   }
 
   const resolveAsset = async (fullName: string, authoritative = false) => {
     const key = fullName.toLowerCase()
-    const existing = assetByKey.get(key) || assetByKey.get(key.split('.').at(-1)!)
+    const existing = assetByKey.get(key) || (!key.includes('.') ? assetByKey.get(key.split('.').at(-1)!) : undefined)
     if (existing) return existing
     const parts = splitLineageAsset(fullName)
     const { data, error } = await admin.schema('governance').from('lineage_assets').upsert({
@@ -278,17 +332,15 @@ async function persistJdbcLineage(
       namespace: parts.namespace,
       name: parts.name,
       asset_type: 'DATASET',
-      metadata: {
-        source_id: source.id,
-        discovery_run_id: discoveryRunId,
-        dependency_only: true,
-        authoritative_lineage_source: authoritative ? 'DATABRICKS_SYSTEM_LINEAGE' : undefined,
-      },
+      data_source_id: source.id,
+      catalog_revision_id: catalogRevisionId,
+      identity_resolution: 'EXTERNAL_DEPENDENCY',
+      identity_evidence: { full_name: fullName, catalog_match: false, authoritative_lineage_source: authoritative ? 'DATABRICKS_SYSTEM_LINEAGE' : undefined },
+      metadata: { source_id: source.id, discovery_run_id: discoveryRunId, catalog_revision_id: catalogRevisionId, dependency_only: true, authoritative_lineage_source: authoritative ? 'DATABRICKS_SYSTEM_LINEAGE' : undefined },
       last_seen_at: new Date().toISOString(),
     }, { onConflict: 'project_id,namespace,name,asset_type' }).select('id,dataset_id,namespace,name').single()
     if (error || !data) throw new Error(`Unable to register JDBC lineage dependency ${fullName}: ${error?.message ?? 'unknown error'}`)
     assetByKey.set(key, data)
-    assetByKey.set(parts.name.toLowerCase(), data)
     return data as PersistedLineageAsset
   }
 
@@ -296,9 +348,7 @@ async function persistJdbcLineage(
   let columnMappings = 0
   for (const transformation of transformations) {
     const structured = Boolean(transformation.sourceAsset && transformation.targetAsset)
-    const externalId = structured
-      ? `databricks-lineage:${transformation.logicHash}`
-      : [transformation.catalog, transformation.schema, transformation.name].filter(Boolean).join('.')
+    const externalId = structured ? `databricks-lineage:${transformation.logicHash}` : [transformation.catalog, transformation.schema, transformation.name].filter(Boolean).join('.')
     const { data: persisted, error: transformationError } = await admin.schema('governance').from('lineage_transformations').upsert({
       project_id: source.project_id,
       integration_id: integration.id,
@@ -309,13 +359,7 @@ async function persistJdbcLineage(
       logic_language: transformation.transformationLogic ? 'SQL' : null,
       transformation_logic: transformation.transformationLogic || null,
       logic_hash: transformation.logicHash,
-      metadata: {
-        source_id: source.id,
-        discovery_run_id: discoveryRunId,
-        catalog: transformation.catalog ?? null,
-        schema: transformation.schema ?? null,
-        ...(transformation.metadata ?? {}),
-      },
+      metadata: { source_id: source.id, discovery_run_id: discoveryRunId, catalog_revision_id: catalogRevisionId, catalog: transformation.catalog ?? null, schema: transformation.schema ?? null, ...(transformation.metadata ?? {}) },
       last_seen_at: new Date().toISOString(),
     }, { onConflict: 'project_id,integration_id,external_id' }).select('id').single()
     if (transformationError || !persisted) throw new Error(`Unable to persist JDBC transformation ${externalId}: ${transformationError?.message ?? 'unknown error'}`)
@@ -331,14 +375,7 @@ async function persistJdbcLineage(
         target_id: targetAsset.dataset_id ?? targetAsset.id,
         relationship: 'TRANSFORMS_TO',
         transformation_id: persisted.id,
-        metadata: {
-          source_id: source.id,
-          discovery_run_id: discoveryRunId,
-          operation: transformation.operation,
-          logic_hash: transformation.logicHash,
-          auto_discovered: true,
-          authoritative_source: transformation.metadata?.authoritative_source ?? 'DATABRICKS_SYSTEM_LINEAGE',
-        },
+        metadata: { source_id: source.id, discovery_run_id: discoveryRunId, catalog_revision_id: catalogRevisionId, operation: transformation.operation, logic_hash: transformation.logicHash, auto_discovered: true, authoritative_source: transformation.metadata?.authoritative_source ?? 'DATABRICKS_SYSTEM_LINEAGE' },
       }, { onConflict: 'project_id,source_type,source_id,target_type,target_id,relationship,transformation_id' })
       if (!edgeError) edges += 1
 
@@ -358,7 +395,7 @@ async function persistJdbcLineage(
             target_column: mapping.targetColumn,
             operation: mapping.operation ?? transformation.operation,
             expression: mapping.expression ?? null,
-            metadata: { source_id: source.id, discovery_run_id: discoveryRunId, auto_discovered: true, ...(mapping.metadata ?? {}) },
+            metadata: { source_id: source.id, discovery_run_id: discoveryRunId, catalog_revision_id: catalogRevisionId, auto_discovered: true, ...(mapping.metadata ?? {}) },
           })
         }
         if (mappingRows.length) {
@@ -371,9 +408,7 @@ async function persistJdbcLineage(
     }
 
     const targetKey = [transformation.catalog, transformation.schema, transformation.name].filter(Boolean).join('.').toLowerCase()
-    const target = assetByKey.get(targetKey)
-      || assetByKey.get([transformation.schema, transformation.name].filter(Boolean).join('.').toLowerCase())
-      || assetByKey.get(transformation.name.toLowerCase())
+    const target = assetByKey.get(targetKey) || assetByKey.get([transformation.schema, transformation.name].filter(Boolean).join('.').toLowerCase())
     if (!target) continue
     for (const dependency of sqlDependencies(transformation.transformationLogic)) {
       const sourceAsset = await resolveAsset(dependency)
@@ -385,23 +420,13 @@ async function persistJdbcLineage(
         target_id: target.dataset_id ?? target.id,
         relationship: 'TRANSFORMS_TO',
         transformation_id: persisted.id,
-        metadata: {
-          source_id: source.id,
-          discovery_run_id: discoveryRunId,
-          operation: transformation.operation,
-          logic_hash: transformation.logicHash,
-          auto_discovered: true,
-        },
+        metadata: { source_id: source.id, discovery_run_id: discoveryRunId, catalog_revision_id: catalogRevisionId, operation: transformation.operation, logic_hash: transformation.logicHash, auto_discovered: true },
       }, { onConflict: 'project_id,source_type,source_id,target_type,target_id,relationship,transformation_id' })
       if (!error) edges += 1
     }
   }
 
-  return {
-    transformations: governed.transformations + transformations.length,
-    edges: governed.edges + edges,
-    columnMappings: governed.columnMappings + columnMappings,
-  }
+  return { transformations: governed.transformations + transformations.length, edges: governed.edges + edges, columnMappings: governed.columnMappings + columnMappings }
 }
 
 async function mapConcurrent<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
@@ -427,14 +452,81 @@ async function updateLineageSnapshot(discoveryRunId: string, lineage: Record<str
   const status = typeof lineage.status === 'string' && lineage.status ? lineage.status : null
   const blockerCode = typeof lineage.blocker_code === 'string' && lineage.blocker_code ? lineage.blocker_code : null
   const { error: updateError } = await admin.schema('catalog').from('discovery_runs').update({
-    schema_snapshot: {
-      ...snapshot,
-      lineage_enrichment_status: status ?? snapshot.lineage_enrichment_status,
-      lineage_enrichment_blocker: blockerCode,
-      enrichments: { ...enrichments, lineage },
-    },
+    schema_snapshot: { ...snapshot, lineage_enrichment_status: status ?? snapshot.lineage_enrichment_status, lineage_enrichment_blocker: blockerCode, enrichments: { ...enrichments, lineage } },
   }).eq('id', discoveryRunId)
   if (updateError) console.error('[lineage-enrichment-snapshot]', updateError.message)
+}
+
+async function beginLineageRun(input: {
+  source: Source
+  discoveryRunId: string
+  catalogRevisionId: string
+  catalogs: string[]
+  authoritativeSources: string[]
+}) {
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+  const { error } = await admin.schema('governance').from('lineage_enrichment_runs').upsert({
+    project_id: input.source.project_id,
+    source_id: input.source.id,
+    discovery_run_id: input.discoveryRunId,
+    catalog_revision_id: input.catalogRevisionId,
+    status: 'RUNNING',
+    authoritative_sources: input.authoritativeSources,
+    scope_catalogs: input.catalogs,
+    complete: false,
+    truncated: false,
+    transformation_count: 0,
+    edge_count: 0,
+    column_mapping_count: 0,
+    warning_count: 0,
+    blocker_code: null,
+    blocker_resource: null,
+    blocker_permission: null,
+    blocker_detail: null,
+    evidence: {},
+    started_at: now,
+    completed_at: null,
+    updated_at: now,
+  }, { onConflict: 'source_id,catalog_revision_id' })
+  if (error) throw new Error(`Unable to start durable lineage enrichment evidence: ${error.message}`)
+}
+
+async function finishLineageRun(input: {
+  source: Source
+  catalogRevisionId: string
+  status: string
+  complete: boolean
+  truncated: boolean
+  transformations: number
+  edges: number
+  columnMappings: number
+  warnings: string[]
+  blockerCode?: string | null
+  blockerResource?: string | null
+  blockerPermission?: string | null
+  blockerDetail?: string | null
+  evidence?: Record<string, unknown>
+}) {
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+  const { error } = await admin.schema('governance').from('lineage_enrichment_runs').update({
+    status: input.status,
+    complete: input.complete,
+    truncated: input.truncated,
+    transformation_count: input.transformations,
+    edge_count: input.edges,
+    column_mapping_count: input.columnMappings,
+    warning_count: input.warnings.length,
+    blocker_code: input.blockerCode ?? null,
+    blocker_resource: input.blockerResource ?? null,
+    blocker_permission: input.blockerPermission ?? null,
+    blocker_detail: input.blockerDetail ?? null,
+    evidence: { ...(input.evidence ?? {}), warnings: input.warnings.slice(0, 20) },
+    completed_at: now,
+    updated_at: now,
+  }).eq('source_id', input.source.id).eq('catalog_revision_id', input.catalogRevisionId)
+  if (error) throw new Error(`Unable to finalize durable lineage enrichment evidence: ${error.message}`)
 }
 
 export async function executeLineageEnrichment(input: {
@@ -443,17 +535,21 @@ export async function executeLineageEnrichment(input: {
   actorUserId?: string | null
 }): Promise<LineageEnrichmentResult> {
   const admin = createAdminClient()
-  const { data: sourceData, error: sourceError } = await admin.schema('catalog').from('data_sources')
-    .select('id,project_id,name,source_type,connection_metadata')
-    .eq('id', input.sourceId)
-    .maybeSingle()
+  const [{ data: sourceData, error: sourceError }, { data: runContext, error: runError }] = await Promise.all([
+    admin.schema('catalog').from('data_sources').select('id,project_id,name,source_type,connection_metadata').eq('id', input.sourceId).maybeSingle(),
+    admin.schema('catalog').from('discovery_runs').select('id,source_id,catalog_revision_id').eq('id', input.discoveryRunId).maybeSingle(),
+  ])
   if (sourceError || !sourceData) throw new Error(`Unable to resolve lineage source: ${sourceError?.message ?? 'not found'}`)
+  if (runError || !runContext) throw new Error(`Unable to resolve lineage discovery run: ${runError?.message ?? 'not found'}`)
+  if (runContext.source_id !== input.sourceId) throw new Error('Lineage discovery run does not belong to the requested source.')
   const source = sourceData as Source
   if (String(source.source_type).toUpperCase() !== 'JDBC') {
     const result = { transformations: 0, edges: 0, columnMappings: 0, warnings: [], engine: 'NOT_APPLICABLE' }
     await updateLineageSnapshot(input.discoveryRunId, { status: 'NOT_APPLICABLE', ...result })
     return result
   }
+  const catalogRevisionId = String(runContext.catalog_revision_id ?? '').trim()
+  if (!catalogRevisionId) throw new Error('JDBC lineage enrichment requires a published catalog revision identity.')
 
   const metadata = record(source.connection_metadata)
   const jdbcUrl = stringField(metadata, ['jdbc_url', 'jdbcUrl', 'url'])
@@ -461,77 +557,113 @@ export async function executeLineageEnrichment(input: {
   if (!jdbcUrl || !credentialRef) throw new Error('JDBC lineage enrichment requires jdbc_url and credential_ref.')
   const engine = jdbcEngineFromUrl(jdbcUrl)
 
-  const { data: states, error: stateError } = await admin.schema('catalog').from('scope_asset_state')
-    .select('discovered_asset_id')
-    .eq('source_id', source.id)
-    .eq('presence_state', 'ACTIVE')
+  const { data: states, error: stateError } = await admin.schema('catalog').from('scope_asset_state').select('discovered_asset_id').eq('source_id', source.id).eq('presence_state', 'ACTIVE')
   if (stateError) throw new Error(`Unable to resolve active catalog assets for lineage: ${stateError.message}`)
   const activeAssetIds = [...new Set((states ?? []).map(row => row.discovered_asset_id).filter((id): id is string => Boolean(id)))]
-
-  let assetQuery = admin.schema('catalog').from('discovered_assets')
-    .select('id,asset_type,namespace,name,columns,metadata')
-    .eq('source_id', source.id)
-    .eq('is_current', true)
+  let assetQuery = admin.schema('catalog').from('discovered_assets').select('id,asset_type,namespace,name,columns,metadata,identity_key').eq('source_id', source.id).eq('is_current', true)
   if (activeAssetIds.length) assetQuery = assetQuery.in('id', activeAssetIds)
   const { data: assetRows, error: assetError } = await assetQuery.order('asset_key')
   if (assetError) throw new Error(`Unable to load active discovered assets for lineage: ${assetError.message}`)
   const assets = (assetRows ?? []) as DiscoveredAsset[]
+  const catalogs = uniqueStrings(assets.map(asset => stringField(record(asset.metadata), ['catalog'])))
+  const authoritativeSources = engine === 'DATABRICKS' ? ['system.access.column_lineage', 'system.access.table_lineage'] : []
 
-  const lineageTargets = assets.filter(asset => engine === 'DATABRICKS' || String(asset.asset_type).toUpperCase().includes('VIEW'))
-  const concurrency = engine === 'DATABRICKS' ? 12 : 4
-  const results = await mapConcurrent(lineageTargets, concurrency, async asset => {
-    const assetMetadata = record(asset.metadata)
-    const catalog = stringField(assetMetadata, ['catalog'])
-    const schema = stringField(assetMetadata, ['schema'])
-    try {
-      const lineage = await discoverJdbcTransformations({
-        jdbcUrl,
-        credentialRef,
-        catalog,
-        schema,
-        table: asset.name,
+  await beginLineageRun({ source, discoveryRunId: input.discoveryRunId, catalogRevisionId, catalogs, authoritativeSources })
+  try {
+    let transformations: JdbcTransformation[] = []
+    let warnings: string[] = []
+    let discoveryDetails: Record<string, unknown> = {}
+
+    if (engine === 'DATABRICKS') {
+      if (!catalogs.length) throw new Error('Databricks lineage enrichment requires at least one catalog from the published discovery scope.')
+      const scoped = await discoverDatabricksScopedLineage({ jdbcUrl, credentialRef, catalogs })
+      transformations = scoped.transformations
+      warnings = [...new Set(scoped.warnings)]
+      discoveryDetails = scoped.details
+    } else {
+      const lineageTargets = assets.filter(asset => String(asset.asset_type).toUpperCase().includes('VIEW'))
+      const results = await mapConcurrent(lineageTargets, 4, async asset => {
+        const assetMetadata = record(asset.metadata)
+        const catalog = stringField(assetMetadata, ['catalog'])
+        const schema = stringField(assetMetadata, ['schema'])
+        try {
+          const lineage = await discoverJdbcTransformations({ jdbcUrl, credentialRef, catalog, schema, table: asset.name })
+          return { transformations: lineage.transformations, warnings: lineage.warnings }
+        } catch (error) {
+          return { transformations: [] as JdbcTransformation[], warnings: [`Transformation discovery failed for ${qualified(asset.namespace, asset.name)}: ${error instanceof Error ? error.message : 'unknown error'}`] }
+        }
       })
-      return { transformations: lineage.transformations, warnings: lineage.warnings }
-    } catch (error) {
-      return {
-        transformations: [] as JdbcTransformation[],
-        warnings: [`Transformation discovery failed for ${qualified(asset.namespace, asset.name)}: ${error instanceof Error ? error.message : 'unknown error'}`],
-      }
+      transformations = results.flatMap(result => result.transformations)
+      warnings = [...new Set(results.flatMap(result => result.warnings))]
+      discoveryDetails = { mode: 'OBJECT_VIEW_SCAN', query_count: lineageTargets.length }
     }
-  })
 
-  const transformations = [...new Map(results.flatMap(result => result.transformations).map(item => [
-    `${item.sourceAsset ?? ''}->${item.targetAsset ?? ''}:${item.logicHash}`,
-    item,
-  ])).values()]
-  const warnings = [...new Set(results.flatMap(result => result.warnings))]
-  const persisted = await persistJdbcLineage(source, input.discoveryRunId, assets, transformations, input.actorUserId?.trim() || null)
-  const result = { ...persisted, warnings, engine }
-  const databricksSystemAccessBlocked = engine === 'DATABRICKS'
-    && result.transformations === 0
-    && result.edges === 0
-    && result.columnMappings === 0
-    && warnings.some(isDatabricksSystemAccessPermissionWarning)
-  const status = databricksSystemAccessBlocked
-    ? 'BLOCKED'
-    : warnings.length
-      ? 'COMPLETED_WITH_WARNINGS'
-      : 'COMPLETED'
+    transformations = [...new Map(transformations.map(item => [`${item.sourceAsset ?? ''}->${item.targetAsset ?? ''}:${item.logicHash}`, item])).values()]
+    const persisted = await persistJdbcLineage(source, input.discoveryRunId, catalogRevisionId, assets, transformations, input.actorUserId?.trim() || null)
+    const result = { ...persisted, warnings, engine }
+    const databricksSystemAccessBlocked = engine === 'DATABRICKS'
+      && result.transformations === 0
+      && result.edges === 0
+      && result.columnMappings === 0
+      && warnings.some(isDatabricksSystemAccessPermissionWarning)
+    const truncated = discoveryDetails.truncated === true
+    const providerComplete = discoveryDetails.complete === true
+    const status = databricksSystemAccessBlocked ? 'BLOCKED' : warnings.length || truncated ? 'COMPLETED_WITH_WARNINGS' : 'COMPLETED'
+    const complete = status === 'COMPLETED' && (engine !== 'DATABRICKS' || providerComplete)
+    const blockerDetail = databricksSystemAccessBlocked ? 'The Databricks principal cannot read system.access lineage tables until USE SCHEMA on system.access is granted.' : null
 
-  await updateLineageSnapshot(input.discoveryRunId, {
-    status,
-    blocker_code: databricksSystemAccessBlocked ? 'DATABRICKS_SYSTEM_ACCESS_PERMISSION_REQUIRED' : null,
-    blocker_resource: databricksSystemAccessBlocked ? 'system.access' : null,
-    blocker_permission: databricksSystemAccessBlocked ? 'USE SCHEMA' : null,
-    blocker_detail: databricksSystemAccessBlocked
-      ? 'The Databricks principal cannot read system.access lineage tables until USE SCHEMA on system.access is granted.'
-      : null,
-    authoritative_column_source: engine === 'DATABRICKS' ? 'system.access.column_lineage' : null,
-    transformation_count: result.transformations,
-    edge_count: result.edges,
-    column_mapping_count: result.columnMappings,
-    warning_count: warnings.length,
-    warnings: warnings.slice(0, 100),
-  })
-  return result
+    const snapshotPayload = {
+      status,
+      blocker_code: databricksSystemAccessBlocked ? 'DATABRICKS_SYSTEM_ACCESS_PERMISSION_REQUIRED' : null,
+      blocker_resource: databricksSystemAccessBlocked ? 'system.access' : null,
+      blocker_permission: databricksSystemAccessBlocked ? 'USE SCHEMA' : null,
+      blocker_detail: blockerDetail,
+      authoritative_column_source: engine === 'DATABRICKS' ? 'system.access.column_lineage' : null,
+      authoritative_table_source: engine === 'DATABRICKS' ? 'system.access.table_lineage' : null,
+      catalog_revision_id: catalogRevisionId,
+      transformation_count: result.transformations,
+      edge_count: result.edges,
+      column_mapping_count: result.columnMappings,
+      warning_count: warnings.length,
+      warnings: warnings.slice(0, 20),
+      scope_catalogs: catalogs,
+      provider_complete: providerComplete,
+      provider_truncated: truncated,
+      provider_details: discoveryDetails,
+    }
+    await updateLineageSnapshot(input.discoveryRunId, snapshotPayload)
+    await finishLineageRun({
+      source,
+      catalogRevisionId,
+      status,
+      complete,
+      truncated,
+      transformations: result.transformations,
+      edges: result.edges,
+      columnMappings: result.columnMappings,
+      warnings,
+      blockerCode: databricksSystemAccessBlocked ? 'DATABRICKS_SYSTEM_ACCESS_PERMISSION_REQUIRED' : null,
+      blockerResource: databricksSystemAccessBlocked ? 'system.access' : null,
+      blockerPermission: databricksSystemAccessBlocked ? 'USE SCHEMA' : null,
+      blockerDetail,
+      evidence: { discovery_run_id: input.discoveryRunId, catalog_revision_id: catalogRevisionId, provider_details: discoveryDetails },
+    })
+    return result
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Lineage enrichment failed.'
+    await updateLineageSnapshot(input.discoveryRunId, { status: 'FAILED', catalog_revision_id: catalogRevisionId, error: message })
+    await finishLineageRun({
+      source,
+      catalogRevisionId,
+      status: 'FAILED',
+      complete: false,
+      truncated: false,
+      transformations: 0,
+      edges: 0,
+      columnMappings: 0,
+      warnings: [message],
+      evidence: { discovery_run_id: input.discoveryRunId, catalog_revision_id: catalogRevisionId, error: message },
+    }).catch(runError => console.error('[lineage-enrichment-run-finalize]', runError instanceof Error ? runError.message : runError))
+    throw error
+  }
 }
