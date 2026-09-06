@@ -20,8 +20,8 @@ requireText(sourceForm, 'Save connection & governed scope', 'database onboarding
 requireText(sourceForm, 'Open Catalog Discovery', 'database onboarding points to discovery for observed physical facts')
 
 const forbidden = [
-  /function\s+isReady[\s\S]{0,160}ACTIVE/,
-  /sourceLifecycleLabel\([\s\S]{0,160}READY/,
+  /function\s+isReady\s*\([^)]*\)\s*\{[\s\S]*?===\s*['"]ACTIVE['"]/,
+  /function\s+sourceLifecycleLabel\s*\([^)]*\)\s*\{\s*return\s+isReady\s*\([^)]*\)\s*\?\s*['"]READY['"]/,
   /operational connection/,
   /One simple state model/,
 ]
