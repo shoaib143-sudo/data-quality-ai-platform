@@ -88,6 +88,8 @@ jobs:
         run: node scripts/verify-profiling-quality-rule-indexes.mjs
       - name: Verify governance risk prediction FK indexes
         run: node scripts/verify-governance-risk-prediction-indexes.mjs
+      - name: Verify AI governance suggestion FK indexes
+        run: node scripts/verify-ai-governance-suggestion-indexes.mjs
       - name: Verify source operational readiness evidence
         run: node scripts/verify-source-operational-readiness.mjs
       - name: Verify onboarding operational evidence boundary
