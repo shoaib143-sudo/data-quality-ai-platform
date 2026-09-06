@@ -86,6 +86,8 @@ jobs:
         run: pnpm run verify:governance
       - name: Verify semantic governance contracts
         run: pnpm run verify:semantic
+      - name: Verify governed business glossary semantics
+        run: node scripts/verify-business-glossary-semantics.mjs
       - name: Verify profiling remediation contracts
         run: pnpm run verify:remediation
       - name: Verify profiling recommendation learning contracts
