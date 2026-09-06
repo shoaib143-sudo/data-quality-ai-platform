@@ -80,6 +80,8 @@ jobs:
         run: node scripts/verify-catalog-identity-versioning.mjs
       - name: Verify source operational readiness evidence
         run: node scripts/verify-source-operational-readiness.mjs
+      - name: Verify onboarding operational evidence boundary
+        run: node scripts/verify-onboarding-operational-evidence.mjs
       - name: Verify governed JDBC discovery evidence
         run: node scripts/verify-jdbc-discovery-evidence.mjs
       - name: Verify governance report source evidence
