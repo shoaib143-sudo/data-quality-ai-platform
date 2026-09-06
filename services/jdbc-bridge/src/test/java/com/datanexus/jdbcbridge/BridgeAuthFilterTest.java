@@ -47,4 +47,14 @@ class BridgeAuthFilterTest {
     filter.doFilter(request, response, chain);
     assertEquals(200, response.getStatus());
   }
+
+  @Test
+  void rootStatusRemainsPublic() throws Exception {
+    BridgeAuthFilter filter = new BridgeAuthFilter("");
+    var request = new MockHttpServletRequest("GET", "/");
+    var response = new MockHttpServletResponse();
+    var chain = new MockFilterChain();
+    filter.doFilter(request, response, chain);
+    assertEquals(200, response.getStatus());
+  }
 }
