@@ -1,0 +1,23 @@
+name: AI System Current Version FK Index
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify AI system current version FK index
+        run: node scripts/verify-ai-system-current-version-index.mjs
