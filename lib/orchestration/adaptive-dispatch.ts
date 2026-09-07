@@ -20,6 +20,10 @@ import {
   resolveJobSourceResources,
   type JobSourceResource,
 } from '@/lib/orchestration/source-concurrency'
+import {
+  recordIncrementalEligibilityTelemetry,
+  resolveIncrementalEligibility,
+} from '@/lib/orchestration/incremental-eligibility'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type DispatchOptions = {
@@ -163,10 +167,11 @@ async function processCoreJobsBounded(
   try {
     const hardPerSourceMax = Math.max(1, requestedPerSourceMaxConcurrency)
     const initialPerSourceConcurrency = Math.max(1, Math.min(requestedPerSourceConcurrency, hardPerSourceMax))
-    const [concurrency, resources, workload] = await Promise.all([
+    const [concurrency, resources, workload, incrementalEligibility] = await Promise.all([
       resolveCoreConcurrency(jobs, requestedConcurrency),
       resolveJobSourceResources(jobs),
       characterizeDurableJobs(jobs),
+      resolveIncrementalEligibility(jobs),
     ])
     const [criticalPath, sourceLimits] = await Promise.all([
       computeCriticalPathProfiles(jobs, workload),
@@ -175,6 +180,7 @@ async function processCoreJobsBounded(
     await Promise.all([
       recordWorkloadTelemetry(jobs, workload),
       recordCriticalPathTelemetry(jobs, criticalPath),
+      recordIncrementalEligibilityTelemetry(jobs, incrementalEligibility),
     ])
 
     const pending = orderJobsByCriticalPath(jobs, criticalPath, workload)
