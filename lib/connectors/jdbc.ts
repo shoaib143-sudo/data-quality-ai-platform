@@ -106,6 +106,10 @@ function isDatabricksJdbcUrl(value: unknown) {
   return typeof value === 'string' && value.trim().toLowerCase().startsWith('jdbc:databricks://')
 }
 
+function isSqliteJdbcUrl(value: unknown) {
+  return typeof value === 'string' && value.trim().toLowerCase().startsWith('jdbc:sqlite:')
+}
+
 export function jdbcEngineFromUrl(value: string | null | undefined) {
   const url = value?.trim().toLowerCase() ?? ''
   if (url.startsWith('jdbc:postgresql:')) return 'POSTGRESQL'
@@ -116,6 +120,7 @@ export function jdbcEngineFromUrl(value: string | null | undefined) {
   if (url.startsWith('jdbc:snowflake:')) return 'SNOWFLAKE'
   if (url.startsWith('jdbc:redshift:')) return 'REDSHIFT'
   if (url.startsWith('jdbc:oracle:')) return 'ORACLE'
+  if (url.startsWith('jdbc:sqlite:')) return 'SQLITE'
   return 'GENERIC_JDBC'
 }
 
@@ -139,7 +144,7 @@ function normalizeConfig(input: JdbcConnectionConfig): JdbcConnectionConfig {
   const schema = input.schema?.trim() ? safeIdentifier(input.schema.trim(), 'schema') : null
   const table = safeIdentifier(requiredString(input.table, 'table'), 'table')
   const catalog = input.catalog?.trim() ? safeIdentifier(input.catalog.trim(), 'catalog') : null
-  if (!schema && !catalog && !isPostgresJdbcUrl(jdbcUrl)) throw new Error('JDBC object namespace requires a catalog/database or schema.')
+  if (!schema && !catalog && !isPostgresJdbcUrl(jdbcUrl) && !isSqliteJdbcUrl(jdbcUrl)) throw new Error('JDBC object namespace requires a catalog/database or schema.')
   rejectEmbeddedCredentials(jdbcUrl)
   return { ...input, jdbcUrl, credentialRef, schema, table, catalog }
 }

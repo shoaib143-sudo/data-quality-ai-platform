@@ -1,0 +1,11 @@
+com/datanexus/jdbcbridge/JdbcHierarchyControllerTest.class
+com/datanexus/jdbcbridge/InfisicalAuthClientTest.class
+com/datanexus/jdbcbridge/JdbcBridgeExceptionHandlerTest.class
+com/datanexus/jdbcbridge/CredentialStoreTest.class
+com/datanexus/jdbcbridge/BridgeAuthFilterTest.class
+com/datanexus/jdbcbridge/JdbcBridgeControllerTest.class
+com/datanexus/jdbcbridge/InfisicalSecurityTest.class
+com/datanexus/jdbcbridge/RootStatusControllerTest.class
+com/datanexus/jdbcbridge/InfisicalAuthClientTest$HttpHandler.class
+com/datanexus/jdbcbridge/SqliteSupportTest.class
+com/datanexus/jdbcbridge/JdbcBridgeApplicationContextTest.class
