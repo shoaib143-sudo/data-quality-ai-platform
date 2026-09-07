@@ -4,6 +4,7 @@ import { validateProfilingRun } from '@/lib/profiling/run-validation'
 import { recordProfileFailureAlert } from '@/lib/observability/evaluate'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 import { syncProfileClassifications } from '@/lib/governance/classification'
+import { tryReuseProfileEvidence } from '@/lib/profiling/evidence-reuse'
 
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
@@ -148,6 +149,68 @@ export async function executePreparedProfilingJob(input: {
     const profileResult = await executeProfilingExecutor('profile_dataset', { ...requestInput, datasetVersionId, profilingRunId }, context)
     if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeProfileStepId); return }
     await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).eq('status', 'RUNNING'), 'complete profile step')
+
+    let reuseDecision = null
+    try {
+      reuseDecision = await tryReuseProfileEvidence({
+        supabase: admin,
+        userId,
+        projectId,
+        datasetVersionId,
+        profilingRunId,
+        engineName: 'profiling-engine',
+        engineVersion: '1.1',
+      })
+    } catch (error) {
+      console.error(`[profiling-job] evidence reuse planner failed safely: ${errorMessage(error, 'unknown reuse error')}`)
+    }
+
+    if (reuseDecision?.reused) {
+      const reusedAt = new Date().toISOString()
+      const reuseOutput = {
+        execution_mode: 'REUSED',
+        source_profile_run_id: reuseDecision.sourceProfileRunId,
+        reason: reuseDecision.reason,
+        content_hash_authority: reuseDecision.contentHashAuthority,
+        profile_signature: reuseDecision.profileSignature,
+      }
+      const metricReuseStep = await startOrRetryStep(admin, {
+        agentRunId,
+        stepName: metricTool.tool_key,
+        stepOrder: 2,
+        stepInput: { ...requestInput, profilingRunId, tool_definition_id: metricTool.id, tool_version: metricTool.version, execution_mode: 'REUSED' },
+        startedAt: reusedAt,
+      })
+      await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: reuseOutput, completed_at: reusedAt }).eq('id', metricReuseStep.id).eq('status', 'RUNNING'), 'complete reused metric step')
+      const investigationReuseStep = await startOrRetryStep(admin, {
+        agentRunId,
+        stepName: investigationTool.tool_key,
+        stepOrder: 3,
+        stepInput: { ...requestInput, profilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version, execution_mode: 'REUSED' },
+        startedAt: reusedAt,
+      })
+      await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: reuseOutput, completed_at: reusedAt }).eq('id', investigationReuseStep.id).eq('status', 'RUNNING'), 'complete reused investigation step')
+
+      const validation = await validateProfilingRun(profilingRunId, userId)
+      if (!validation.valid) throw new Error(`Reused profiling contract validation failed: ${validation.warnings.join(' ') || 'persisted results are incomplete.'}`)
+      try { await syncProfileClassifications(datasetVersionId, profilingRunId) } catch (error) {
+        console.error(`[profiling-job] reused classification sync failed: ${errorMessage(error, 'unknown error')}`)
+      }
+      const result = {
+        execution_completed: true,
+        execution_mode: 'REUSED',
+        agent_run_id: agentRunId,
+        profiling_run_id: profilingRunId,
+        project_id: projectId,
+        dataset_version_id: datasetVersionId,
+        profile: profileResult,
+        reuse: reuseDecision,
+        validation,
+      }
+      const { error: finalReuseError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: reusedAt }).eq('id', agentRunId).eq('status', 'RUNNING')
+      if (finalReuseError) throw new Error(`Unable to finalize reused agent run: ${finalReuseError.message}`)
+      return
+    }
 
     const metricStartedAt = new Date().toISOString()
     const metricStep = await startOrRetryStep(admin, {
