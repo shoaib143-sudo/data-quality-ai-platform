@@ -1,0 +1,25 @@
+name: SQLite Metric Namespace
+
+on:
+  pull_request:
+    paths:
+      - 'lib/profiling/metric-engine.ts'
+      - 'scripts/verify-sqlite-metric-namespace.mjs'
+      - '.github/workflows/sqlite-metric-namespace.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/profiling/metric-engine.ts'
+      - 'scripts/verify-sqlite-metric-namespace.mjs'
+      - '.github/workflows/sqlite-metric-namespace.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node scripts/verify-sqlite-metric-namespace.mjs
