@@ -34,12 +34,30 @@ public class JdbcBridgeExceptionHandler {
   }
 
   private static Map<String, Object> response(String code, String message, SQLException error) {
+    logSqlException(code, error);
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("error", code);
     body.put("message", message);
     body.put("sql_state", safeState(error.getSQLState()));
     body.put("retryable", isRetryable(error));
     return body;
+  }
+
+  private static void logSqlException(String code, SQLException error) {
+    String detail = sanitize(error.getMessage());
+    System.err.printf("[jdbc-bridge] %s class=%s sql_state=%s vendor_code=%d detail=%s%n",
+        code,
+        error.getClass().getSimpleName(),
+        safeState(error.getSQLState()),
+        error.getErrorCode(),
+        detail);
+  }
+
+  private static String sanitize(String value) {
+    if (value == null || value.isBlank()) return "<none>";
+    String sanitized = value.replaceAll("(?i)jdbc:[^\\s]+", "jdbc:<redacted>");
+    sanitized = sanitized.replaceAll("(?i)(password|passwd|pwd|token|access_token|secret|client_secret)=([^;\\s&]+)", "$1=<redacted>");
+    return sanitized;
   }
 
   private static String safeState(String state) {
