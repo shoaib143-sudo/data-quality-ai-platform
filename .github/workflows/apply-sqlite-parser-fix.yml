@@ -1,48 +1,35 @@
 name: Apply SQLite Parser Fix
-
 on:
   push:
     branches:
       - fix/sqlite-parser-default-schema
-    paths:
-      - '.github/workflows/apply-sqlite-parser-fix.yml'
-
 permissions:
   contents: write
-
 jobs:
   patch:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/sqlite-parser-default-schema
-      - name: Patch metric engine
-        shell: python
-        run: |
-          from pathlib import Path
-          path = Path('lib/profiling/metric-engine.ts')
-          text = path.read_text()
-          old = """      const parsed = parseJdbcTableReference(typeof executionSource.source_uri === 'string' ? executionSource.source_uri : null)
-      const jdbcUrl = stringField(['jdbc_url', 'jdbcUrl', 'url'])
-      const credentialRef = stringField(['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
-      const schema = stringField(['schema', 'schema_name', 'schemaName']) ?? parsed?.schema ?? (jdbcEngineFromUrl(jdbcUrl) === 'SQLITE' ? null : 'public')
-"""
-          new = """      const jdbcUrl = stringField(['jdbc_url', 'jdbcUrl', 'url'])
-      const jdbcEngine = jdbcEngineFromUrl(jdbcUrl)
-      const parsed = parseJdbcTableReference(typeof executionSource.source_uri === 'string' ? executionSource.source_uri : null, jdbcEngine === 'SQLITE' ? null : 'public')
-      const credentialRef = stringField(['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
-      const schema = stringField(['schema', 'schema_name', 'schemaName']) ?? parsed?.schema ?? (jdbcEngine === 'SQLITE' ? null : 'public')
-"""
-          if old not in text:
-              raise SystemExit('Expected metric-engine block was not found; refusing to patch.')
-          path.write_text(text.replace(old, new, 1))
-      - name: Remove one-shot patch workflow
-        run: rm .github/workflows/apply-sqlite-parser-fix.yml
-      - name: Commit patch
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Apply fix
+        run: python .github/scripts/apply_sqlite_parser_default_schema_fix.py
+      - name: Verify namespace contract
+        run: node scripts/verify-sqlite-metric-namespace.mjs
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Production build
+        run: pnpm build
+      - name: Commit verified fix
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/profiling/metric-engine.ts .github/workflows/apply-sqlite-parser-fix.yml
+          git add lib/profiling/metric-engine.ts
           git commit -m 'Fix SQLite metric parser default schema'
           git push origin HEAD:fix/sqlite-parser-default-schema
