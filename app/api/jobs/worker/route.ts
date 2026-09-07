@@ -38,6 +38,50 @@ async function isAuthorizedWorkerRequest(request: Request) {
   return data === true
 }
 
+async function runAdaptiveEventConvergence(workerId: string) {
+  const cycles: Array<Record<string, unknown>> = []
+  const results: Array<Record<string, unknown>> = []
+  const semanticResults: Array<Record<string, unknown>> = []
+  const governanceAgentResults: Array<Record<string, unknown>> = []
+  const eventResults: Array<Record<string, unknown>> = []
+  let claimed = 0
+  let eventsClaimed = 0
+
+  for (let cycle = 1; cycle <= 3; cycle += 1) {
+    const dispatch = await dispatchAdaptiveRounds(`${workerId}:jobs:${cycle}`, {
+      maxRounds: 2,
+      claimBatchSize: 8,
+    })
+    const events = await claimOutboxEvents(`${workerId}:events:${cycle}`, 30)
+    const processedEvents = await processOutboxEvents(events)
+
+    claimed += dispatch.claimed
+    eventsClaimed += events.length
+    results.push(...dispatch.results)
+    semanticResults.push(...dispatch.semanticResults)
+    governanceAgentResults.push(...dispatch.governanceAgentResults)
+    eventResults.push(...processedEvents)
+    cycles.push({
+      cycle,
+      jobsClaimed: dispatch.claimed,
+      dispatchRounds: dispatch.rounds,
+      eventsClaimed: events.length,
+    })
+
+    if (dispatch.claimed === 0 && events.length === 0) break
+  }
+
+  return {
+    cycles,
+    claimed,
+    eventsClaimed,
+    results,
+    semanticResults,
+    governanceAgentResults,
+    eventResults,
+  }
+}
+
 export async function GET(request: Request) {
   if (!(await isAuthorizedWorkerRequest(request))) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
 
@@ -85,19 +129,18 @@ export async function POST(request: Request) {
     if (!(await isAuthorizedWorkerRequest(request))) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
     try {
       const workerId = `event-worker:${crypto.randomUUID()}`
-      const dispatch = await dispatchAdaptiveRounds(workerId, {
-        maxRounds: 3,
-        claimBatchSize: 8,
-      })
+      const convergence = await runAdaptiveEventConvergence(workerId)
       return NextResponse.json({
         accepted: true,
         mode,
         workerId,
-        dispatchRounds: dispatch.rounds,
-        claimed: dispatch.claimed,
-        results: dispatch.results,
-        semanticResults: dispatch.semanticResults,
-        governanceAgentResults: dispatch.governanceAgentResults,
+        convergenceCycles: convergence.cycles,
+        claimed: convergence.claimed,
+        eventsClaimed: convergence.eventsClaimed,
+        results: convergence.results,
+        semanticResults: convergence.semanticResults,
+        governanceAgentResults: convergence.governanceAgentResults,
+        eventResults: convergence.eventResults,
       })
     } catch (error) {
       return NextResponse.json({ error: error instanceof Error ? error.message : 'Adaptive worker execution failed.' }, { status: 500 })
