@@ -8,9 +8,13 @@ import {
 import { processDurableJobs } from '@/lib/orchestration/worker'
 import {
   characterizeDurableJobs,
-  orderJobsByEstimatedRuntime,
   recordWorkloadTelemetry,
 } from '@/lib/orchestration/workload'
+import {
+  computeCriticalPathProfiles,
+  orderJobsByCriticalPath,
+  recordCriticalPathTelemetry,
+} from '@/lib/orchestration/critical-path'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type DispatchOptions = {
@@ -160,10 +164,14 @@ async function processCoreJobsBounded(jobs: DurableJob[], requestedConcurrency: 
     resolveJobResources(jobs),
     characterizeDurableJobs(jobs),
   ])
-  await recordWorkloadTelemetry(jobs, workload)
+  const criticalPath = await computeCriticalPathProfiles(jobs, workload)
+  await Promise.all([
+    recordWorkloadTelemetry(jobs, workload),
+    recordCriticalPathTelemetry(jobs, criticalPath),
+  ])
 
   const perSourceConcurrency = Math.max(1, Math.min(requestedPerSourceConcurrency, concurrency))
-  const pending = orderJobsByEstimatedRuntime(jobs, workload)
+  const pending = orderJobsByCriticalPath(jobs, criticalPath, workload)
   const results: Array<Record<string, unknown>> = []
 
   while (pending.length > 0) {

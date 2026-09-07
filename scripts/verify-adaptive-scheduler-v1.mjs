@@ -3,6 +3,7 @@ import fs from 'node:fs'
 const dispatcher = fs.readFileSync('lib/orchestration/adaptive-dispatch.ts', 'utf8')
 const queue = fs.readFileSync('lib/orchestration/queue.ts', 'utf8')
 const workload = fs.readFileSync('lib/orchestration/workload.ts', 'utf8')
+const criticalPath = fs.readFileSync('lib/orchestration/critical-path.ts', 'utf8')
 const dqQueue = fs.readFileSync('lib/data-quality/queue.ts', 'utf8')
 const workerRoute = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
 const profilingRoute = fs.readFileSync('app/api/agents/run/route.ts', 'utf8')
@@ -19,7 +20,9 @@ requireText(dispatcher, 'ORCHESTRATION_PER_SOURCE_CONCURRENCY', 'source concurre
 requireText(dispatcher, "from('dataset_execution_sources')", 'execution source resource resolution')
 requireText(dispatcher, 'selectResourceBoundedBatch', 'resource-aware scheduler')
 requireText(dispatcher, 'characterizeDurableJobs(jobs)', 'workload characterization')
-requireText(dispatcher, 'orderJobsByEstimatedRuntime(jobs, workload)', 'runtime-aware ordering')
+requireText(dispatcher, 'computeCriticalPathProfiles(jobs, workload)', 'persisted DAG critical-path calculation')
+requireText(dispatcher, 'orderJobsByCriticalPath(jobs, criticalPath, workload)', 'critical-path ordering')
+requireText(dispatcher, 'recordCriticalPathTelemetry(jobs, criticalPath)', 'critical-path telemetry')
 requireText(queue, "'job.queue_wait_ms'", 'queue wait telemetry')
 requireText(queue, 'dependencies?: DurableJobDependency[]', 'dependency-aware enqueue contract')
 requireText(queue, "rpc('enqueue_job_with_dependencies'", 'atomic job and dependency enqueue')
@@ -31,7 +34,17 @@ requireText(workload, "typeof value === 'string' && value.trim() === ''", 'blank
 requireText(workload, 'PROFILE_SAMPLE_NOT_SOURCE_CARDINALITY', 'sample/source truth boundary')
 requireText(workload, "sourceObservedEstimate(metadata, 'source_row_count', 'source_row_count_authority')", 'source row authority gate')
 requireText(workload, "metric_key: 'planner.workload_classified'", 'workload telemetry')
-requireText(workload, 'while (end < jobs.length && jobs[end].priority === priority)', 'no cross-priority runtime reordering')
+
+requireText(criticalPath, "from('job_dependencies')", 'persisted scheduler DAG source')
+requireText(criticalPath, 'MAX_GRAPH_DEPTH = 8', 'bounded dependency traversal depth')
+requireText(criticalPath, 'MAX_GRAPH_EDGES = 1000', 'bounded dependency traversal size')
+requireText(criticalPath, 'depth >= MAX_GRAPH_DEPTH && frontier.length > 0', 'depth truncation detection')
+requireText(criticalPath, "TERMINAL_STATUSES.has(row.status)", 'terminal descendants contribute no future runtime')
+requireText(criticalPath, 'own + downstream', 'bottom-level critical-path weighting')
+requireText(criticalPath, 'while (end < jobs.length && jobs[end].priority === priority)', 'no cross-priority critical-path reordering')
+requireText(criticalPath, "metric_key: 'planner.critical_path_ms'", 'critical-path telemetry metric')
+requireText(criticalPath, 'graph_truncated: profile?.graphTruncated ?? false', 'graph completeness telemetry')
+requireText(criticalPath, "evidence_scope: 'PERSISTED_SCHEDULER_DAG_ONLY'", 'no speculative future fanout')
 
 requireText(workerRoute, "mode === 'ADAPTIVE_DISPATCH'", 'worker-secret event dispatch mode')
 requireText(workerRoute, 'runAdaptiveEventConvergence', 'job and outbox convergence loop')
@@ -67,5 +80,8 @@ if (dispatcher.includes('execution_config.jdbc_url') || dispatcher.includes('cre
 if (workload.includes("sourceRowEstimate = observedRowCount") || workload.includes("row_count_authority: 'SOURCE_OBSERVED'")) {
   throw new Error('Profile/sample row counts must never be promoted to source-authoritative cardinality.')
 }
+if (criticalPath.includes('futureFanout') || criticalPath.includes('predicted_child')) {
+  throw new Error('Critical-path planning must not fabricate downstream jobs that are not persisted in the scheduler DAG.')
+}
 
-console.log('Adaptive Scheduler persisted DAG and workload truth contracts verified.')
+console.log('Adaptive Scheduler persisted DAG critical-path and workload truth contracts verified.')
