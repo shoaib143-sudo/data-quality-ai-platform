@@ -2,9 +2,11 @@ package com.datanexus.jdbcbridge;
 
 import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.DriverManager;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class SqliteSupportTest {
   @Test
@@ -33,6 +35,32 @@ class SqliteSupportTest {
       }
     } finally {
       Files.deleteIfExists(file);
+    }
+  }
+
+  @Test
+  void chinookForeignKeysAreReadableThroughSqlitePragma() throws Exception {
+    var resource = Path.of("/tmp/Chinook.db");
+    try (var input = new java.net.URL("https://raw.githubusercontent.com/dbeaver/dbeaver/b59edd36ff94abfea48f5151a5ea10b3791137f0/plugins/org.jkiss.dbeaver.ui.config.sample/data/Chinook.db").openStream()) {
+      Files.copy(input, resource, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    }
+    try (var connection = DriverManager.getConnection("jdbc:sqlite:" + resource)) {
+      int foreignKeys = 0;
+      try (var tables = connection.getMetaData().getTables(null, null, "%", new String[]{"TABLE"})) {
+        while (tables.next()) {
+          var table = tables.getString("TABLE_NAME");
+          try (var statement = connection.createStatement(); var rs = statement.executeQuery("PRAGMA foreign_key_list(\"" + table.replace("\"", "\"\"") + "\")")) {
+            while (rs.next()) {
+              assertNotNull(rs.getString("table"));
+              assertNotNull(rs.getString("from"));
+              foreignKeys++;
+            }
+          }
+        }
+      }
+      assertEquals(11, foreignKeys);
+    } finally {
+      Files.deleteIfExists(resource);
     }
   }
 }
