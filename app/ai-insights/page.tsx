@@ -19,7 +19,7 @@ function pct(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : 'N/A'
 }
 
-function jsonText(value: unknown) {
+function jsonText(value: unknown): string {
   if (typeof value === 'string') return value
   if (Array.isArray(value)) return value.map(jsonText).filter(Boolean).join(' · ')
   if (value && typeof value === 'object') return JSON.stringify(value)
