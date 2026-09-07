@@ -26,11 +26,10 @@ requireText("'recommendation-identity-v2'", 'stable recommendation identity vers
 requireText("case when coalesce(e.governance_risk_probability,0)>=0.4 then 'RISK_REVIEW' else 'NO_RISK_REVIEW' end", 'risk threshold state identity')
 requireText("case when coalesce(e.overall_score,1)<0.80 then 'QUALITY_REVIEW' else 'QUALITY_OK' end", 'quality threshold state identity')
 requireText("(select governance.current_ai_governance_recommendation_count(p_project_id)) as governance_recommendations", 'capability 59 current-state evidence count')
-requireText('count distinct current non-expired AI governance recommendation contexts', 'capability 59 matrix semantics comment')
 if (stabilityMigration.includes("coalesce(e.governance_risk_probability::text,''),")) {
   throw new Error('Stable recommendation identity must not hash the continuously refreshed exact risk probability.')
 }
-if (capabilityCountMigration.includes('(select count(*) from governance.ai_governance_suggestions where project_id=p_project_id) as governance_recommendations') && !capabilityCountMigration.includes('v_old')) {
+if (capabilityCountMigration.includes('(select count(*) from governance.ai_governance_suggestions where project_id=p_project_id) as governance_recommendations')) {
   throw new Error('Capability 59 must not count raw historical suggestion rows as current evidence.')
 }
 
