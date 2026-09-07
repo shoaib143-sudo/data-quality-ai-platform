@@ -7,10 +7,15 @@ on:
       - 'lib/orchestration/**'
       - 'lib/profiling/sampling.ts'
       - 'lib/profiling/metric-engine.ts'
+      - 'lib/profiling/evidence-reuse.ts'
+      - 'lib/profiling/file-profile.ts'
+      - 'lib/agents/run-profiling-job.ts'
+      - 'supabase/migrations/20260907115000_truth_aware_profile_evidence_reuse.sql'
       - 'app/api/jobs/worker/route.ts'
       - 'app/api/agents/run/route.ts'
       - 'scripts/verify-adaptive-scheduler-v1.mjs'
       - 'scripts/verify-adaptive-sampling.mjs'
+      - 'scripts/verify-profile-evidence-reuse.mjs'
       - '.github/workflows/adaptive-scheduler-v1.yml'
   pull_request:
     branches: [main]
@@ -18,10 +23,15 @@ on:
       - 'lib/orchestration/**'
       - 'lib/profiling/sampling.ts'
       - 'lib/profiling/metric-engine.ts'
+      - 'lib/profiling/evidence-reuse.ts'
+      - 'lib/profiling/file-profile.ts'
+      - 'lib/agents/run-profiling-job.ts'
+      - 'supabase/migrations/20260907115000_truth_aware_profile_evidence_reuse.sql'
       - 'app/api/jobs/worker/route.ts'
       - 'app/api/agents/run/route.ts'
       - 'scripts/verify-adaptive-scheduler-v1.mjs'
       - 'scripts/verify-adaptive-sampling.mjs'
+      - 'scripts/verify-profile-evidence-reuse.mjs'
       - '.github/workflows/adaptive-scheduler-v1.yml'
 
 permissions:
@@ -42,4 +52,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node scripts/verify-adaptive-scheduler-v1.mjs
       - run: node scripts/verify-adaptive-sampling.mjs
+      - run: node scripts/verify-profile-evidence-reuse.mjs
       - run: pnpm run build

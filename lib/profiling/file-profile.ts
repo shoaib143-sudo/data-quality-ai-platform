@@ -107,6 +107,8 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
   const sourceAccess = {
     mode: loaded.format === 'binary' ? 'metadata_only' : 'source_rows',
     connector: { kind: 'file', format: loaded.format, source_uri: loaded.sourceUri },
+    content_hash: loaded.contentHash,
+    content_hash_authority: 'SOURCE_BYTES_SHA256',
     sampled_rows: sampled.sampledRows,
     sampling_policy: sampled.policy,
     warnings: [...loaded.warnings, ...sampled.warnings],
@@ -154,6 +156,7 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
   const { data: run, error: runError } = await supabase.schema('profiling').from('profile_runs').update({
     row_count: sampled.sourceRowCount,
     column_count: columns.length,
+    content_hash: loaded.contentHash,
     schema_hash: schemaHash,
     summary: {
       row_count: sampled.sourceRowCount,
