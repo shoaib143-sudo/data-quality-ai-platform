@@ -2,7 +2,8 @@ import fs from 'node:fs'
 
 const baseMigration = fs.readFileSync('supabase/migrations/20260907051000_evidence_backed_governance_recommendations.sql', 'utf8')
 const stabilityMigration = fs.readFileSync('supabase/migrations/20260907053500_stabilize_ai_governance_recommendation_identity.sql', 'utf8')
-const migration = `${baseMigration}\n${stabilityMigration}`
+const capabilityCountMigration = fs.readFileSync('supabase/migrations/20260907055500_current_ai_capability_recommendation_count.sql', 'utf8')
+const migration = `${baseMigration}\n${stabilityMigration}\n${capabilityCountMigration}`
 
 function requireText(needle, label) {
   if (!migration.includes(needle)) throw new Error(`AI governance recommendation contract missing: ${label}`)
@@ -24,6 +25,10 @@ requireText('governance.current_ai_governance_recommendation_count', 'current re
 requireText("'recommendation-identity-v2'", 'stable recommendation identity version')
 requireText("case when coalesce(e.governance_risk_probability,0)>=0.4 then 'RISK_REVIEW' else 'NO_RISK_REVIEW' end", 'risk threshold state identity')
 requireText("case when coalesce(e.overall_score,1)<0.80 then 'QUALITY_REVIEW' else 'QUALITY_OK' end", 'quality threshold state identity')
+requireText("v_old text := '(select count(*) from governance.ai_governance_suggestions where project_id=p_project_id) as governance_recommendations'", 'expected legacy clause guard')
+requireText("v_new text := '(select governance.current_ai_governance_recommendation_count(p_project_id)) as governance_recommendations'", 'current-state replacement clause')
+requireText('v_definition := replace(v_definition, v_old, v_new)', 'capability matrix replacement operation')
+requireText('Capability 59 counts distinct current non-expired AI governance recommendation contexts', 'capability 59 matrix semantics comment')
 if (stabilityMigration.includes("coalesce(e.governance_risk_probability::text,''),")) {
   throw new Error('Stable recommendation identity must not hash the continuously refreshed exact risk probability.')
 }
