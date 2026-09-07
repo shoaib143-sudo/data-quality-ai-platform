@@ -1,0 +1,26 @@
+name: SQLite generated artifact cleanup
+
+on:
+  push:
+    branches:
+      - sqlite-chinook-e2e-20260907
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sqlite-chinook-e2e-20260907
+          fetch-depth: 0
+      - name: Remove generated Maven outputs from branch
+        run: |
+          git rm -r --ignore-unmatch services/jdbc-bridge/target
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Remove generated JDBC build outputs'
+          git push origin HEAD:sqlite-chinook-e2e-20260907
