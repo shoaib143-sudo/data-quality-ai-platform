@@ -1,0 +1,34 @@
+name: AI Insights UI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/ai-insights/**'
+      - 'scripts/verify-ai-insights-ui.mjs'
+      - '.github/workflows/ai-insights-ui.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/ai-insights/**'
+      - 'scripts/verify-ai-insights-ui.mjs'
+      - '.github/workflows/ai-insights-ui.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-ai-insights-ui.mjs
+      - run: pnpm run build
