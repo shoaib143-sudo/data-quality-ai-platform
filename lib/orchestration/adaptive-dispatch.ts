@@ -6,12 +6,21 @@ import {
   type DurableJob,
 } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 type DispatchOptions = {
   claimBatchSize?: number
   maxConcurrency?: number
   maxRounds?: number
+  perSourceConcurrency?: number
 }
+
+type JobResource = {
+  key: string | null
+  sourceType: string | null
+}
+
+function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
 function boundedInteger(value: unknown, fallback: number, min: number, max: number) {
   const numeric = typeof value === 'number' ? value : Number(value)
@@ -25,6 +34,15 @@ function configuredConcurrency(override?: number) {
     4,
     1,
     12,
+  )
+}
+
+function configuredPerSourceConcurrency(override?: number) {
+  return boundedInteger(
+    override ?? process.env.ORCHESTRATION_PER_SOURCE_CONCURRENCY,
+    2,
+    1,
+    8,
   )
 }
 
@@ -60,15 +78,94 @@ async function resolveCoreConcurrency(jobs: DurableJob[], requested: number) {
   return Math.max(1, Math.min(requested, strictestProjectLimit, jobs.length))
 }
 
-async function processCoreJobsBounded(jobs: DurableJob[], requestedConcurrency: number) {
+async function resolveJobResources(jobs: DurableJob[]) {
+  const resources = new Map<string, JobResource>()
+  const datasetVersionJobs = jobs.filter((job) =>
+    job.entity_id && (job.job_type === 'PROFILING' || job.job_type === 'DATA_QUALITY'))
+  const datasetVersionIds = [...new Set(datasetVersionJobs.map((job) => job.entity_id).filter((value): value is string => Boolean(value)))]
+
+  if (datasetVersionIds.length > 0) {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .schema('profiling')
+      .from('dataset_execution_sources')
+      .select('dataset_version_id,source_type,execution_config')
+      .in('dataset_version_id', datasetVersionIds)
+      .eq('active', true)
+    if (error) throw new Error(`Unable to resolve adaptive source resources: ${error.message}`)
+
+    const byVersion = new Map<string, JobResource>()
+    for (const row of data ?? []) {
+      const executionConfig = row.execution_config && typeof row.execution_config === 'object' && !Array.isArray(row.execution_config)
+        ? row.execution_config as Record<string, unknown>
+        : {}
+      const sourceId = text(executionConfig.source_id)
+      byVersion.set(row.dataset_version_id, {
+        key: sourceId ? `source:${sourceId}` : null,
+        sourceType: text(row.source_type) || null,
+      })
+    }
+    for (const job of datasetVersionJobs) {
+      if (job.entity_id) resources.set(job.id, byVersion.get(job.entity_id) ?? { key: null, sourceType: null })
+    }
+  }
+
+  for (const job of jobs) {
+    if (resources.has(job.id)) continue
+    const payloadSourceId = text(job.payload?.sourceId) || text(job.payload?.source_id)
+    const sourceBound = job.job_type === 'DISCOVERY' || job.job_type === 'LINEAGE_ENRICHMENT'
+    resources.set(job.id, {
+      key: payloadSourceId ? `source:${payloadSourceId}` : sourceBound && job.entity_id ? `source:${job.entity_id}` : null,
+      sourceType: text(job.payload?.sourceType) || text(job.payload?.source_type) || null,
+    })
+  }
+
+  return resources
+}
+
+function selectResourceBoundedBatch(
+  pending: DurableJob[],
+  resources: Map<string, JobResource>,
+  globalLimit: number,
+  perSourceLimit: number,
+) {
+  const selected: DurableJob[] = []
+  const sourceCounts = new Map<string, number>()
+
+  for (const job of pending) {
+    if (selected.length >= globalLimit) break
+    const resource = resources.get(job.id)
+    const key = resource?.key ?? null
+    if (key) {
+      const count = sourceCounts.get(key) ?? 0
+      if (count >= perSourceLimit) continue
+      sourceCounts.set(key, count + 1)
+    }
+    selected.push(job)
+  }
+
+  if (selected.length === 0 && pending.length > 0) selected.push(pending[0])
+  return selected
+}
+
+async function processCoreJobsBounded(jobs: DurableJob[], requestedConcurrency: number, requestedPerSourceConcurrency: number) {
   if (jobs.length === 0) return [] as Array<Record<string, unknown>>
-  const concurrency = await resolveCoreConcurrency(jobs, requestedConcurrency)
+  const [concurrency, resources] = await Promise.all([
+    resolveCoreConcurrency(jobs, requestedConcurrency),
+    resolveJobResources(jobs),
+  ])
+  const perSourceConcurrency = Math.max(1, Math.min(requestedPerSourceConcurrency, concurrency))
+  const pending = [...jobs]
   const results: Array<Record<string, unknown>> = []
 
-  for (let index = 0; index < jobs.length; index += concurrency) {
-    const batch = jobs.slice(index, index + concurrency)
+  while (pending.length > 0) {
+    const batch = selectResourceBoundedBatch(pending, resources, concurrency, perSourceConcurrency)
+    const selectedIds = new Set(batch.map((job) => job.id))
     const settled = await Promise.all(batch.map((job) => processDurableJobs([job])))
     for (const rows of settled) results.push(...rows)
+    for (let index = pending.length - 1; index >= 0; index -= 1) {
+      if (selectedIds.has(pending[index].id)) pending.splice(index, 1)
+    }
   }
   return results
 }
@@ -76,13 +173,14 @@ async function processCoreJobsBounded(jobs: DurableJob[], requestedConcurrency: 
 export async function dispatchAdaptiveRound(workerId: string, options: DispatchOptions = {}) {
   const claimBatchSize = configuredClaimBatch(options.claimBatchSize)
   const maxConcurrency = configuredConcurrency(options.maxConcurrency)
+  const perSourceConcurrency = configuredPerSourceConcurrency(options.perSourceConcurrency)
   const jobs = await claimDurableJobs(workerId, claimBatchSize)
   const semanticJobs = jobs.filter((job) => job.job_type === 'SEMANTIC_INDEX')
   const governanceAgentJobs = jobs.filter((job) => job.job_type === 'GOVERNANCE_AGENT')
   const coreJobs = jobs.filter((job) => job.job_type !== 'SEMANTIC_INDEX' && job.job_type !== 'GOVERNANCE_AGENT')
 
   const [results, semanticResults, governanceAgentResults] = await Promise.all([
-    processCoreJobsBounded(coreJobs, maxConcurrency),
+    processCoreJobsBounded(coreJobs, maxConcurrency, perSourceConcurrency),
     processSemanticIndexJobs(semanticJobs),
     processGovernanceAgentJobs(governanceAgentJobs),
   ])
