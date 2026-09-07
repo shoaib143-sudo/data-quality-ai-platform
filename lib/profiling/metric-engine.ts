@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
-import { loadJdbcRows, parseJdbcTableReference } from '@/lib/connectors/jdbc'
+import { jdbcEngineFromUrl, loadJdbcRows, parseJdbcTableReference } from '@/lib/connectors/jdbc'
 import { DETERMINISTIC_METRICS, isDeterministicMetric, type MetricScope } from '@/lib/profiling/metric-registry'
 import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
 
@@ -217,7 +217,7 @@ export async function loadProfilingRows(supabase: ReturnType<typeof createAdminC
       const parsed = parseJdbcTableReference(typeof executionSource.source_uri === 'string' ? executionSource.source_uri : null)
       const jdbcUrl = stringField(['jdbc_url', 'jdbcUrl', 'url'])
       const credentialRef = stringField(['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
-      const schema = stringField(['schema', 'schema_name', 'schemaName']) ?? parsed?.schema ?? 'public'
+      const schema = stringField(['schema', 'schema_name', 'schemaName']) ?? parsed?.schema ?? (jdbcEngineFromUrl(jdbcUrl) === 'SQLITE' ? null : 'public')
       const table = stringField(['table', 'table_name', 'tableName']) ?? parsed?.table
       if (!jdbcUrl || !credentialRef || !table) throw new Error('JDBC execution source configuration is incomplete.')
       const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, maxRows)
