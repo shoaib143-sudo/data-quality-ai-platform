@@ -221,7 +221,7 @@ export async function loadProfilingRows(supabase: ReturnType<typeof createAdminC
       const schema = stringField(['schema', 'schema_name', 'schemaName']) ?? parsed?.schema ?? (jdbcEngine === 'SQLITE' ? null : 'public')
       const table = stringField(['table', 'table_name', 'tableName']) ?? parsed?.table
       if (!jdbcUrl || !credentialRef || !table) throw new Error('JDBC execution source configuration is incomplete.')
-      const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table }, maxRows)
+      const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table, catalog: parsed?.catalog ?? null }, maxRows)
       return sampledResult(loaded.rows as Row[], loaded.rowCount ?? loaded.rows.length, {
         source_type: 'JDBC',
         source_uri: executionSource.source_uri,
