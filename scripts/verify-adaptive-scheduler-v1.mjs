@@ -38,10 +38,12 @@ requireText(workload, "metric_key: 'planner.workload_classified'", 'workload tel
 requireText(criticalPath, "from('job_dependencies')", 'persisted scheduler DAG source')
 requireText(criticalPath, 'MAX_GRAPH_DEPTH = 8', 'bounded dependency traversal depth')
 requireText(criticalPath, 'MAX_GRAPH_EDGES = 1000', 'bounded dependency traversal size')
+requireText(criticalPath, 'depth >= MAX_GRAPH_DEPTH && frontier.length > 0', 'depth truncation detection')
 requireText(criticalPath, "TERMINAL_STATUSES.has(row.status)", 'terminal descendants contribute no future runtime')
 requireText(criticalPath, 'own + downstream', 'bottom-level critical-path weighting')
 requireText(criticalPath, 'while (end < jobs.length && jobs[end].priority === priority)', 'no cross-priority critical-path reordering')
 requireText(criticalPath, "metric_key: 'planner.critical_path_ms'", 'critical-path telemetry metric')
+requireText(criticalPath, 'graph_truncated: profile?.graphTruncated ?? false', 'graph completeness telemetry')
 requireText(criticalPath, "evidence_scope: 'PERSISTED_SCHEDULER_DAG_ONLY'", 'no speculative future fanout')
 
 requireText(workerRoute, "mode === 'ADAPTIVE_DISPATCH'", 'worker-secret event dispatch mode')
