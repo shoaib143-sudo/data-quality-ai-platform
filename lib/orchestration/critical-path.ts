@@ -79,8 +79,9 @@ async function loadPersistedDescendants(jobs: DurableJob[]) {
   const knownIds = new Set(rootIds)
   let frontier = [...rootIds]
   let graphTruncated = false
+  let depth = 0
 
-  for (let depth = 0; depth < MAX_GRAPH_DEPTH && frontier.length > 0; depth += 1) {
+  for (; depth < MAX_GRAPH_DEPTH && frontier.length > 0; depth += 1) {
     const { data, error } = await admin
       .schema('orchestration')
       .from('job_dependencies')
@@ -109,7 +110,7 @@ async function loadPersistedDescendants(jobs: DurableJob[]) {
     frontier = [...next]
   }
 
-  if (frontier.length > 0 && edges.length > 0) graphTruncated = graphTruncated || edges.length >= MAX_GRAPH_EDGES
+  if (!graphTruncated && depth >= MAX_GRAPH_DEPTH && frontier.length > 0) graphTruncated = true
 
   const ids = [...knownIds]
   const { data: queueData, error: queueError } = await admin
