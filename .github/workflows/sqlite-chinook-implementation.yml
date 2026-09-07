@@ -18,18 +18,22 @@ jobs:
           ref: sqlite-chinook-e2e-20260907
           fetch-depth: 0
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: npm
+          node-version: '24'
+          cache: pnpm
 
       - name: Apply source-observed structural lineage change set
         run: python .github/scripts/apply_sqlite_structural_lineage.py
 
       - name: Typecheck structural lineage change
         run: |
-          npm ci
-          npx tsc --noEmit
+          pnpm install --frozen-lockfile
+          pnpm exec tsc --noEmit
 
       - name: Commit verified structural lineage implementation
         run: |
