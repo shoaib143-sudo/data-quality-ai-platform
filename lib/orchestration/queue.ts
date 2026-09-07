@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type DurableJobType = 'PROFILING' | 'DATA_QUALITY' | 'NOTIFICATION' | 'OBSERVABILITY' | 'DISCOVERY' | 'LINEAGE_ENRICHMENT' | 'SEMANTIC_INDEX' | 'GOVERNANCE_AGENT'
+export type DurableJobDependencyType = 'SUCCESS' | 'TERMINAL'
+export type DurableJobDependency = { jobId: string; dependencyType?: DurableJobDependencyType }
 
 export type DurableJob = {
   id: string
@@ -61,6 +63,18 @@ async function resolveCapacity(projectId: string) {
   }
 }
 
+function normalizedDependencies(dependencies: DurableJobDependency[] | undefined) {
+  const seen = new Set<string>()
+  const rows: Array<{ job_id: string; dependency_type: DurableJobDependencyType }> = []
+  for (const dependency of dependencies ?? []) {
+    const jobId = dependency.jobId?.trim()
+    if (!jobId || seen.has(jobId)) continue
+    seen.add(jobId)
+    rows.push({ job_id: jobId, dependency_type: dependency.dependencyType ?? 'SUCCESS' })
+  }
+  return rows
+}
+
 export async function enqueueDurableJob(input: {
   projectId: string
   jobType: DurableJobType
@@ -71,6 +85,7 @@ export async function enqueueDurableJob(input: {
   priority?: number
   maxAttempts?: number
   availableAt?: string
+  dependencies?: DurableJobDependency[]
 }) {
   const admin = createAdminClient()
   const idempotencyKey = input.idempotencyKey?.trim() || null
@@ -89,6 +104,7 @@ export async function enqueueDurableJob(input: {
 
   const requestedAvailableAt = input.availableAt ? new Date(input.availableAt) : new Date()
   const availableAt = Number.isFinite(requestedAvailableAt.getTime()) ? requestedAvailableAt.toISOString() : new Date().toISOString()
+  const dependencies = normalizedDependencies(input.dependencies)
   const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString()
   const [{ count: runningCount }, { count: hourlyCount }, targets] = await Promise.all([
     admin.schema('orchestration').from('job_queue').select('id', { count: 'exact', head: true }).eq('project_id', input.projectId).eq('status', 'RUNNING'),
@@ -96,18 +112,33 @@ export async function enqueueDurableJob(input: {
     resolveCapacity(input.projectId),
   ])
 
-  const { data, error } = await admin.schema('orchestration').from('job_queue').insert({
-    project_id: input.projectId,
-    job_type: input.jobType,
-    entity_id: input.entityId ?? null,
-    agent_run_id: input.agentRunId ?? null,
-    idempotency_key: idempotencyKey,
-    payload: input.payload,
-    priority: input.priority ?? 100,
-    max_attempts: input.maxAttempts ?? 3,
-    available_at: availableAt,
-  }).select('id,status,attempts,max_attempts,available_at,agent_run_id,idempotency_key').single()
+  const insertResult = dependencies.length > 0
+    ? await admin.schema('orchestration').rpc('enqueue_job_with_dependencies', {
+        p_project_id: input.projectId,
+        p_job_type: input.jobType,
+        p_entity_id: input.entityId ?? null,
+        p_agent_run_id: input.agentRunId ?? null,
+        p_idempotency_key: idempotencyKey,
+        p_payload: input.payload,
+        p_priority: input.priority ?? 100,
+        p_max_attempts: input.maxAttempts ?? 3,
+        p_available_at: availableAt,
+        p_dependencies: dependencies,
+      })
+    : await admin.schema('orchestration').from('job_queue').insert({
+        project_id: input.projectId,
+        job_type: input.jobType,
+        entity_id: input.entityId ?? null,
+        agent_run_id: input.agentRunId ?? null,
+        idempotency_key: idempotencyKey,
+        payload: input.payload,
+        priority: input.priority ?? 100,
+        max_attempts: input.maxAttempts ?? 3,
+        available_at: availableAt,
+      }).select('id,status,attempts,max_attempts,available_at,agent_run_id,idempotency_key').single()
 
+  const data = Array.isArray(insertResult.data) ? insertResult.data[0] : insertResult.data
+  const error = insertResult.error
   if (error) {
     if (idempotencyKey && error.code === '23505') {
       const { data: existing } = await admin.schema('orchestration').from('job_queue').select('id,status,attempts,max_attempts,available_at,agent_run_id,idempotency_key').eq('project_id', input.projectId).eq('idempotency_key', idempotencyKey).maybeSingle()
@@ -120,6 +151,7 @@ export async function enqueueDurableJob(input: {
   await writeTelemetry(input.projectId, 'job.queued', 1, {
     job_type: input.jobType,
     priority: input.priority ?? 100,
+    dependency_count: dependencies.length,
     running_jobs: runningCount ?? 0,
     jobs_last_hour: hourlyCount ?? 0,
     advisory_concurrent_target_exceeded: (runningCount ?? 0) >= targets.maxConcurrentJobs,

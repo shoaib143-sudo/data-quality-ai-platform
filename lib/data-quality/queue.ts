@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { enqueueDurableJob } from '@/lib/orchestration/queue'
+import { enqueueDurableJob, type DurableJobDependency } from '@/lib/orchestration/queue'
 
 export async function queueDataQualityAutomation(input: {
   projectId: string
@@ -44,13 +44,32 @@ export async function queueDataQualityAutomation(input: {
     .maybeSingle()
   if (agentError || !agentDefinition) throw new Error(`Data Quality Agent 1.0 is unavailable: ${agentError?.message ?? 'not registered'}`)
 
+  let parentDurableJobId: string | null = null
+  const parentRunId = input.parentRunId?.trim() || null
+  if (parentRunId) {
+    const { data: parentJob, error: parentJobError } = await admin
+      .schema('orchestration')
+      .from('job_queue')
+      .select('id,project_id,job_type,status')
+      .eq('project_id', input.projectId)
+      .eq('agent_run_id', parentRunId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (parentJobError) throw new Error(`Unable to resolve parent durable job: ${parentJobError.message}`)
+    if (parentJob?.id) parentDurableJobId = parentJob.id
+  }
+
+  const dependencies: DurableJobDependency[] = parentDurableJobId
+    ? [{ jobId: parentDurableJobId, dependencyType: 'SUCCESS' }]
+    : []
   const trigger = input.trigger?.trim() || (input.requestedByUser ? 'USER_REQUEST' : 'PROFILE_COMPLETED')
   const { data: run, error: runError } = await admin.schema('agent').from('agent_runs').insert({
     agent_definition_id: agentDefinition.id,
     project_id: input.projectId,
     dataset_id: input.datasetId,
     dataset_version_id: input.datasetVersionId,
-    parent_run_id: input.parentRunId ?? null,
+    parent_run_id: parentRunId,
     status: 'QUEUED',
     input: {
       datasetVersionId: input.datasetVersionId,
@@ -61,6 +80,7 @@ export async function queueDataQualityAutomation(input: {
       trigger,
       workflowInstanceId: input.workflowInstanceId ?? null,
       verificationGeneration: input.verificationGeneration ?? null,
+      parentDurableJobId,
     },
   }).select('id').single()
   if (runError || !run) throw new Error(`Unable to create data quality agent run: ${runError?.message ?? 'unknown error'}`)
@@ -72,6 +92,7 @@ export async function queueDataQualityAutomation(input: {
       entityId: input.datasetVersionId,
       agentRunId: run.id,
       idempotencyKey,
+      dependencies,
       payload: {
         datasetVersionId: input.datasetVersionId,
         profileRunId: input.profileRunId,
@@ -80,6 +101,7 @@ export async function queueDataQualityAutomation(input: {
         trigger,
         workflowInstanceId: input.workflowInstanceId ?? '',
         verificationGeneration: input.verificationGeneration ?? null,
+        parentDurableJobId,
       },
       maxAttempts: 3,
     })
