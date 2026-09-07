@@ -45,6 +45,8 @@ type ExecutionSourceRow = {
 }
 
 function finiteNumber(value: unknown) {
+  if (value == null) return null
+  if (typeof value === 'string' && value.trim() === '') return null
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric : null
 }
