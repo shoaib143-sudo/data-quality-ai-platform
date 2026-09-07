@@ -4,13 +4,13 @@ on:
   push:
     branches: [main]
     paths:
-      - 'supabase/migrations/20260907051000_evidence_backed_governance_recommendations.sql'
+      - 'supabase/migrations/*governance_recommendation*.sql'
       - 'scripts/verify-ai-governance-recommendations.mjs'
       - '.github/workflows/ai-governance-recommendations.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'supabase/migrations/20260907051000_evidence_backed_governance_recommendations.sql'
+      - 'supabase/migrations/*governance_recommendation*.sql'
       - 'scripts/verify-ai-governance-recommendations.mjs'
       - '.github/workflows/ai-governance-recommendations.yml'
 

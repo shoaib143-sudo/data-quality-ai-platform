@@ -49,16 +49,25 @@ export default async function AICapabilitiesPage({ searchParams }: { searchParam
   if (selectedProjectId) {
     await authorizeProject(user.id, selectedProjectId, 'catalog.read')
     const admin = createAdminClient()
-    const [matrixResult, knowledgeResult, enterpriseKnowledgeResult] = await Promise.all([
+    const [matrixResult, knowledgeResult, enterpriseKnowledgeResult, currentRecommendationResult] = await Promise.all([
       admin.schema('governance').rpc('generate_ai_capability_matrix', { p_project_id: selectedProjectId }),
       admin.schema('governance').from('knowledge_documents').select('id', { count: 'exact', head: true }).eq('project_id', selectedProjectId).eq('status', 'ACTIVE'),
       admin.schema('governance').from('knowledge_documents').select('id', { count: 'exact', head: true })
         .eq('project_id', selectedProjectId).eq('status', 'ACTIVE').eq('review_status', 'APPROVED').neq('source_kind', 'SYNTHETIC'),
+      admin.schema('governance').rpc('current_ai_governance_recommendation_count', { p_project_id: selectedProjectId }),
     ])
     if (matrixResult.error) throw new Error(`Unable to generate AI capability matrix: ${matrixResult.error.message}`)
     if (knowledgeResult.error) throw new Error(`Unable to count governance knowledge: ${knowledgeResult.error.message}`)
     if (enterpriseKnowledgeResult.error) throw new Error(`Unable to count approved governance knowledge: ${enterpriseKnowledgeResult.error.message}`)
-    matrix = (matrixResult.data ?? []) as Capability[]
+    if (currentRecommendationResult.error) throw new Error(`Unable to count current AI governance recommendations: ${currentRecommendationResult.error.message}`)
+    const currentRecommendationCount = Number(currentRecommendationResult.data ?? 0)
+    matrix = ((matrixResult.data ?? []) as Capability[]).map((row) => row.capability_id === 59
+      ? {
+          ...row,
+          evidence_count: Number.isFinite(currentRecommendationCount) ? currentRecommendationCount : 0,
+          status: Number.isFinite(currentRecommendationCount) && currentRecommendationCount > 0 ? 'EVIDENCED' : 'NOT_EVIDENCED',
+        }
+      : row)
     totalKnowledgeCount = knowledgeResult.count ?? 0
     enterpriseKnowledgeCount = enterpriseKnowledgeResult.count ?? 0
   }

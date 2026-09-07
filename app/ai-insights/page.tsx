@@ -88,7 +88,7 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
         .eq('dataset_version_id', version.id).order('created_at', { ascending: false }).limit(50),
       supabase.schema('governance').from('ai_governance_suggestions')
         .select('id,suggestion_type,suggestion,evidence,confidence,created_at')
-        .eq('project_id', selectedProjectId!).eq('subject_id', selectedDatasetId).order('created_at', { ascending: false }).limit(20),
+        .eq('project_id', selectedProjectId!).eq('subject_id', selectedDatasetId).order('created_at', { ascending: false }).limit(100),
     ])
     if (investigationResult.error) throw new Error(`Unable to load AI investigation: ${investigationResult.error.message}`)
     if (predictionResult.error) throw new Error(`Unable to load risk predictions: ${predictionResult.error.message}`)
@@ -120,6 +120,9 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
   const latestPredictionByType = new Map<string, Prediction>()
   for (const prediction of predictions) if (!latestPredictionByType.has(prediction.prediction_type)) latestPredictionByType.set(prediction.prediction_type, prediction)
   const currentPredictions = [...latestPredictionByType.values()]
+  const latestSuggestionByType = new Map<string, Suggestion>()
+  for (const suggestion of suggestions) if (!latestSuggestionByType.has(suggestion.suggestion_type)) latestSuggestionByType.set(suggestion.suggestion_type, suggestion)
+  const currentSuggestions = [...latestSuggestionByType.values()]
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/50 p-5 sm:p-8">
@@ -147,7 +150,7 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
             <div className="rounded-2xl border bg-white p-5"><Gauge className="h-5 w-5 text-blue-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Data health</p><p className="mt-1 text-3xl font-black">{pct(score?.overall_score)}</p><p className="mt-1 text-xs text-slate-500">{profile ? `${profile.row_count ?? 'N/A'} rows · ${profile.column_count ?? 'N/A'} columns sampled` : 'No completed profile'}</p></div>
             <div className="rounded-2xl border bg-white p-5"><ShieldAlert className="h-5 w-5 text-amber-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Material findings</p><p className="mt-1 text-3xl font-black">{materialFindings.length}</p><p className="mt-1 text-xs text-slate-500">{findings.length} total deterministic findings</p></div>
             <div className="rounded-2xl border bg-white p-5"><Lightbulb className="h-5 w-5 text-violet-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Proposed controls</p><p className="mt-1 text-3xl font-black">{pendingRules.length}</p><p className="mt-1 text-xs text-slate-500">{rules.filter((rule) => rule.enabled).length} enabled · human governance preserved</p></div>
-            <div className="rounded-2xl border bg-white p-5"><Sparkles className="h-5 w-5 text-fuchsia-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">AI governance suggestions</p><p className="mt-1 text-3xl font-black">{suggestions.length}</p><p className="mt-1 text-xs text-slate-500">Evidence-backed advisory recommendations</p></div>
+            <div className="rounded-2xl border bg-white p-5"><Sparkles className="h-5 w-5 text-fuchsia-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">AI governance suggestions</p><p className="mt-1 text-3xl font-black">{currentSuggestions.length}</p><p className="mt-1 text-xs text-slate-500">Current advisory recommendation types · history retained for audit</p></div>
           </section>
 
           <section className="grid gap-5 lg:grid-cols-2">
@@ -157,7 +160,7 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
           </section>
 
           <section className="grid gap-5 lg:grid-cols-2">
-            <article className="rounded-2xl border bg-white p-6"><h2 className="text-lg font-black">Governance recommendations</h2><p className="mt-1 text-xs text-slate-500">These are AI suggestions, not governance authority.</p><div className="mt-4 space-y-3">{suggestions.length ? suggestions.map((suggestion) => <div key={suggestion.id} className="rounded-xl border p-4"><div className="flex justify-between gap-3"><span className="text-sm font-bold">{suggestion.suggestion_type.replaceAll('_', ' ')}</span><span className="text-xs text-slate-500">{pct(suggestion.confidence)}</span></div><p className="mt-2 text-sm leading-6 text-slate-700">{jsonText(suggestion.suggestion)}</p></div>) : <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No dataset-level AI governance suggestion has been persisted yet. This is a truthful empty state, not a fabricated recommendation.</div>}</div></article>
+            <article className="rounded-2xl border bg-white p-6"><h2 className="text-lg font-black">Governance recommendations</h2><p className="mt-1 text-xs text-slate-500">These are AI suggestions, not governance authority. The latest current recommendation per type is shown while historical versions remain preserved as audit evidence.</p><div className="mt-4 space-y-3">{currentSuggestions.length ? currentSuggestions.map((suggestion) => <div key={suggestion.id} className="rounded-xl border p-4"><div className="flex justify-between gap-3"><span className="text-sm font-bold">{suggestion.suggestion_type.replaceAll('_', ' ')}</span><span className="text-xs text-slate-500">{pct(suggestion.confidence)}</span></div><p className="mt-2 text-sm leading-6 text-slate-700">{jsonText(suggestion.suggestion)}</p></div>) : <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No dataset-level AI governance suggestion has been persisted yet. This is a truthful empty state, not a fabricated recommendation.</div>}</div></article>
 
             <article className="rounded-2xl border bg-white p-6"><h2 className="text-lg font-black">Pending control review</h2><p className="mt-1 text-xs text-slate-500">Candidate quality controls remain disabled until governed approval.</p><div className="mt-4 space-y-3">{pendingRules.slice(0, 12).map((rule) => <div key={rule.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><span className="text-sm font-bold">{rule.name}</span><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">{rule.approval_status}</span></div><p className="mt-1 text-xs text-slate-500">{rule.column_name || 'Dataset'} · {rule.severity}</p>{rule.description && <p className="mt-2 text-sm text-slate-600">{rule.description}</p>}</div>)}{pendingRules.length === 0 && <p className="text-sm text-slate-500">No pending quality-control proposals.</p>}</div></article>
           </section>
