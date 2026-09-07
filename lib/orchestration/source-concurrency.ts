@@ -18,6 +18,12 @@ function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function boundedInteger(value: unknown, fallback: number, min: number, max: number) {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+  return Math.min(max, Math.max(min, Math.floor(numeric)))
+}
+
 export async function resolveJobSourceResources(jobs: DurableJob[]) {
   const resources = new Map<string, JobSourceResource>()
   if (jobs.length === 0) return resources
@@ -77,14 +83,14 @@ export async function resolveAdaptiveSourceLimits(
   maxLimit: number,
 ) {
   const admin = createAdminClient()
+  const hardMax = Math.max(1, maxLimit)
+  const initial = Math.max(1, Math.min(initialLimit, hardMax))
   const unique = [...new Map([...resources.values()]
     .filter((resource) => resource.key)
     .map((resource) => [`${resource.projectId}:${resource.key}`, resource])).values()]
   const limits = new Map<string, number>()
 
-  for (const resource of unique) {
-    limits.set(`${resource.projectId}:${resource.key}`, Math.max(1, Math.min(initialLimit, maxLimit)))
-  }
+  for (const resource of unique) limits.set(`${resource.projectId}:${resource.key}`, initial)
   if (unique.length === 0) return limits
 
   const projectIds = [...new Set(unique.map((resource) => resource.projectId))]
@@ -101,7 +107,7 @@ export async function resolveAdaptiveSourceLimits(
     const state = row as ControllerStateRow
     limits.set(
       `${state.project_id}:${state.source_key}`,
-      Math.max(1, Math.min(Number(state.current_limit), Number(state.max_limit), maxLimit)),
+      Math.max(1, Math.min(Number(state.current_limit), Number(state.max_limit), hardMax)),
     )
   }
   return limits
@@ -122,9 +128,9 @@ export async function recordSourceConcurrencyOutcome(
   const resource = resources.get(job.id)
   if (!resource?.key) return null
 
-  const initialLimit = Math.max(1, Math.min(Number(process.env.ORCHESTRATION_PER_SOURCE_CONCURRENCY ?? 2), 16))
-  const configuredMax = Math.max(1, Math.min(Number(process.env.ORCHESTRATION_PER_SOURCE_MAX_CONCURRENCY ?? 4), 16))
-  const maxLimit = Math.max(initialLimit, configuredMax)
+  const configuredMax = boundedInteger(process.env.ORCHESTRATION_PER_SOURCE_MAX_CONCURRENCY, 4, 1, 16)
+  const requestedInitial = boundedInteger(process.env.ORCHESTRATION_PER_SOURCE_CONCURRENCY, 2, 1, 16)
+  const initialLimit = Math.min(requestedInitial, configuredMax)
   const signal = outcome === 'SUCCESS' ? 'CLEAN' : 'ADVERSE'
 
   const admin = createAdminClient()
@@ -133,7 +139,7 @@ export async function recordSourceConcurrencyOutcome(
     p_source_key: resource.key,
     p_signal: signal,
     p_initial_limit: initialLimit,
-    p_max_limit: maxLimit,
+    p_max_limit: configuredMax,
   })
   if (rpcError) throw new Error(`Unable to record source concurrency signal: ${rpcError.message}`)
   return data
