@@ -18,39 +18,24 @@ jobs:
           ref: sqlite-chinook-e2e-20260907
           fetch-depth: 0
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
+          node-version: '22'
+          cache: npm
 
-      - name: Apply SQLite support change set
-        run: python .github/scripts/apply_sqlite_support.py
+      - name: Apply source-observed structural lineage change set
+        run: python .github/scripts/apply_sqlite_structural_lineage.py
 
-      - name: Verify pinned DBeaver Chinook artifact identity
+      - name: Typecheck structural lineage change
         run: |
-          curl -fsSL 'https://raw.githubusercontent.com/dbeaver/dbeaver/b59edd36ff94abfea48f5151a5ea10b3791137f0/plugins/org.jkiss.dbeaver.ui.config.sample/data/Chinook.db' -o /tmp/Chinook.db
-          echo 'bdf635be69850bd3be09c9a2dbeef7ddfb80036bd3ef3381383cd03b61e4a61a  /tmp/Chinook.db' | sha256sum -c -
-          python - <<'PY'
-          import sqlite3
-          db = sqlite3.connect('/tmp/Chinook.db')
-          tables = [r[0] for r in db.execute("select name from sqlite_master where type='table' and name not like 'sqlite_%'")]
-          assert len(tables) == 11, len(tables)
-          assert sum(db.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in tables) == 15607
-          assert sum(len(db.execute(f'pragma table_info("{t}")').fetchall()) for t in tables) == 64
-          assert sum(len(db.execute(f'pragma foreign_key_list("{t}")').fetchall()) for t in tables) == 11
-          print('Chinook artifact identity and source evidence verified')
-          PY
+          npm ci
+          npx tsc --noEmit
 
-      - name: Run JDBC bridge tests
-        working-directory: services/jdbc-bridge
-        run: mvn -B test
-
-      - name: Commit verified implementation
+      - name: Commit verified structural lineage implementation
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add services/jdbc-bridge lib/connectors/jdbc.ts
+          git add lib/catalog/lineage-enrichment.ts
           git diff --cached --check
-          git commit -m 'Add governed SQLite JDBC support for Chinook E2E'
+          git commit -m 'Persist source-observed JDBC foreign key lineage'
           git push origin HEAD:sqlite-chinook-e2e-20260907
