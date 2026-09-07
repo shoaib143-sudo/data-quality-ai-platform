@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class CredentialStore {
   private static final String MODE_INFISICAL = "infisical";
   private static final String MODE_ENVIRONMENT = "environment";
+  public static final String SQLITE_FILE_CREDENTIAL_REF = "sqlite-file-readonly";
 
   private final ObjectMapper mapper;
   private final HttpClient http;
@@ -97,6 +98,7 @@ public class CredentialStore {
 
   public Credentials resolve(String credentialRef) throws Exception {
     validateCredentialRef(credentialRef);
+    if (SQLITE_FILE_CREDENTIAL_REF.equals(credentialRef)) return new Credentials("_sqlite_file_", "_sqlite_file_");
     if (MODE_ENVIRONMENT.equals(credentialMode)) return resolveEnvironmentCredential(credentialRef);
     requireInfisicalMode();
     ensureInfisicalConfigured();
@@ -133,6 +135,7 @@ public class CredentialStore {
 
   public void upsert(String credentialRef, String username, String password) throws Exception {
     validateCredentialRef(credentialRef);
+    if (SQLITE_FILE_CREDENTIAL_REF.equals(credentialRef)) throw new IllegalArgumentException("The reserved SQLite file credential reference is not writable.");
     if (MODE_ENVIRONMENT.equals(credentialMode)) {
       throw new IllegalStateException("Credential writes are disabled when JDBC_CREDENTIAL_MODE=environment. Update the server-side environment variables instead.");
     }

@@ -37,7 +37,7 @@ public class JdbcHierarchyController {
     validateJdbcUrl(request.jdbcUrl());
     Credentials c = credentials.resolve(request.credentialRef());
     try (Connection connection = DriverManager.getConnection(request.jdbcUrl(), c.username(), c.password())) {
-      connection.setReadOnly(true);
+      enforceReadOnly(connection);
       DatabaseMetaData md = connection.getMetaData();
       HierarchyBuilder builder = new HierarchyBuilder(md, MAX_NODES);
       String product = nonBlank(md.getDatabaseProductName(), "Generic JDBC");
@@ -121,12 +121,49 @@ public class JdbcHierarchyController {
         metadata.put("type_catalog", blankToNull(safeGet(rs, "TYPE_CAT")));
         metadata.put("type_schema", blankToNull(safeGet(rs, "TYPE_SCHEM")));
         metadata.put("type_name", blankToNull(safeGet(rs, "TYPE_NAME")));
+        metadata.put("primary_keys", readPrimaryKeys(md, resolvedCatalog, resolvedSchema, name));
+        metadata.put("foreign_keys", readForeignKeys(md, resolvedCatalog, resolvedSchema, name));
         String objectId = builder.add(parentId, "OBJECT", nativeType, name, qualified, true, true, resolvedCatalog, resolvedSchema, name, nativeType, null, null, systemName(name) || systemName(resolvedSchema), metadata);
         readColumns(builder, md, objectId, resolvedCatalog, resolvedSchema, name, qualified);
       }
     } catch (SQLException error) {
       builder.warn("Unable to enumerate objects under " + parentQualified + ": " + safeMessage(error));
     }
+  }
+
+  private static List<Map<String, Object>> readPrimaryKeys(DatabaseMetaData md, String catalog, String schema, String table) {
+    List<Map<String, Object>> keys = new ArrayList<>();
+    try (ResultSet rs = md.getPrimaryKeys(catalog, schema, table)) {
+      while (rs.next()) {
+        Map<String, Object> key = new LinkedHashMap<>();
+        key.put("column", blankToNull(safeGet(rs, "COLUMN_NAME")));
+        key.put("key_sequence", safeInt(rs, "KEY_SEQ"));
+        key.put("name", blankToNull(safeGet(rs, "PK_NAME")));
+        keys.add(key);
+      }
+    } catch (SQLException ignored) {}
+    return keys;
+  }
+
+  private static List<Map<String, Object>> readForeignKeys(DatabaseMetaData md, String catalog, String schema, String table) {
+    List<Map<String, Object>> keys = new ArrayList<>();
+    try (ResultSet rs = md.getImportedKeys(catalog, schema, table)) {
+      while (rs.next()) {
+        Map<String, Object> key = new LinkedHashMap<>();
+        key.put("name", blankToNull(safeGet(rs, "FK_NAME")));
+        key.put("source_catalog", blankToNull(safeGet(rs, "FKTABLE_CAT")));
+        key.put("source_schema", blankToNull(safeGet(rs, "FKTABLE_SCHEM")));
+        key.put("source_table", blankToNull(safeGet(rs, "FKTABLE_NAME")));
+        key.put("source_column", blankToNull(safeGet(rs, "FKCOLUMN_NAME")));
+        key.put("target_catalog", blankToNull(safeGet(rs, "PKTABLE_CAT")));
+        key.put("target_schema", blankToNull(safeGet(rs, "PKTABLE_SCHEM")));
+        key.put("target_table", blankToNull(safeGet(rs, "PKTABLE_NAME")));
+        key.put("target_column", blankToNull(safeGet(rs, "PKCOLUMN_NAME")));
+        key.put("key_sequence", safeInt(rs, "KEY_SEQ"));
+        keys.add(key);
+      }
+    } catch (SQLException ignored) {}
+    return keys;
   }
 
   private static void readColumns(HierarchyBuilder builder, DatabaseMetaData md, String parentId, String catalog, String schema, String table, String parentQualified) {
@@ -179,6 +216,15 @@ public class JdbcHierarchyController {
     return new ArrayList<>(result);
   }
 
+  private static void enforceReadOnly(Connection connection) throws SQLException {
+    String product = connection.getMetaData().getDatabaseProductName();
+    if (product != null && product.toLowerCase(Locale.ROOT).contains("sqlite")) {
+      try (var statement = connection.createStatement()) { statement.execute("PRAGMA query_only = ON"); }
+      return;
+    }
+    connection.setReadOnly(true);
+  }
+
   private static String nativeRootLabel(String product) {
     String value = product == null ? "" : product.toLowerCase(Locale.ROOT);
     if (value.contains("sql server")) return "server";
@@ -187,6 +233,7 @@ public class JdbcHierarchyController {
     if (value.contains("redshift")) return "cluster/workgroup";
     if (value.contains("oracle")) return "database";
     if (value.contains("postgres")) return "database";
+    if (value.contains("sqlite")) return "database";
     if (value.contains("mysql") || value.contains("mariadb")) return "server";
     return "connection";
   }

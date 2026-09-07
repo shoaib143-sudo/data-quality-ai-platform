@@ -15,7 +15,7 @@ import java.util.*;
 public class JdbcBridgeController {
   private static final int TECHNICAL_MAX_ROWS = environmentInt("JDBC_BRIDGE_TECHNICAL_MAX_ROWS", 250_000, 1_000, 1_000_000);
   private static final List<String> SUPPORTED_ENGINES = List.of(
-      "PostgreSQL", "Microsoft SQL Server", "MySQL", "MariaDB", "Databricks", "Snowflake", "Amazon Redshift", "Oracle", "Generic JDBC"
+      "PostgreSQL", "Microsoft SQL Server", "MySQL", "MariaDB", "Databricks", "Snowflake", "Amazon Redshift", "Oracle", "SQLite", "Generic JDBC"
   );
   private final CredentialStore credentials;
 
@@ -44,7 +44,7 @@ public class JdbcBridgeController {
     validateOptionalIdentifier(request.catalog(), "catalog");
     Credentials c = credentials.resolve(request.credentialRef());
     try (Connection connection = DriverManager.getConnection(request.jdbcUrl(), c.username(), c.password())) {
-      connection.setReadOnly(true);
+      enforceReadOnly(connection);
       DatabaseMetaData md = connection.getMetaData();
       String product = md.getDatabaseProductName();
       List<String> schemas = readNamespaces(md, product);
@@ -64,7 +64,7 @@ public class JdbcBridgeController {
     validateOptionalIdentifier(request.catalog(), "catalog");
     Credentials c = credentials.resolve(request.credentialRef());
     try (Connection connection = DriverManager.getConnection(request.jdbcUrl(), c.username(), c.password())) {
-      connection.setReadOnly(true);
+      enforceReadOnly(connection);
       DatabaseMetaData md = connection.getMetaData();
       Namespace namespace = namespace(connection, md, request.catalog(), request.schema());
       requireNamespace(namespace);
@@ -86,7 +86,7 @@ public class JdbcBridgeController {
     int limit = Math.min(requestedLimit, TECHNICAL_MAX_ROWS);
     Credentials c = credentials.resolve(request.credentialRef());
     try (Connection connection = DriverManager.getConnection(request.jdbcUrl(), c.username(), c.password())) {
-      connection.setReadOnly(true);
+      enforceReadOnly(connection);
       DatabaseMetaData md = connection.getMetaData();
       Namespace namespace = namespace(connection, md, request.catalog(), request.schema());
       requireNamespace(namespace);
@@ -122,7 +122,7 @@ public class JdbcBridgeController {
     validateOptionalIdentifier(request.table(), "table");
     Credentials c = credentials.resolve(request.credentialRef());
     try (Connection connection = DriverManager.getConnection(request.jdbcUrl(), c.username(), c.password())) {
-      connection.setReadOnly(true);
+      enforceReadOnly(connection);
       DatabaseMetaData md = connection.getMetaData();
       Namespace namespace = namespace(connection, md, request.catalog(), request.schema());
       requireNamespace(namespace);
@@ -179,7 +179,7 @@ public class JdbcBridgeController {
   }
 
   private static void requireNamespace(Namespace namespace) {
-    if ((namespace.catalog() == null || namespace.catalog().isBlank()) && (namespace.schema() == null || namespace.schema().isBlank())) {
+    if ((namespace.catalog() == null || namespace.catalog().isBlank()) && (namespace.schema() == null || namespace.schema().isBlank()) && !isSqlite(namespace.product())) {
       throw new IllegalArgumentException("Database namespace is incomplete; the driver must report a catalog/database or schema for the selected object.");
     }
   }
@@ -304,7 +304,12 @@ public class JdbcBridgeController {
     else if (namespace.catalog() != null) informationParams.add(namespace.catalog());
     if (table != null && !table.isBlank()) informationParams.add(table);
 
-    if (lower.contains("sql server")) {
+    if (lower.contains("sqlite")) {
+      String sql = "SELECT NULL AS table_catalog, NULL AS table_schema, name AS table_name, sql AS view_definition FROM sqlite_master WHERE type='view'" +
+          (table == null || table.isBlank() ? "" : " AND name=?");
+      queries.add(new ViewQuery(sql, params(null, table), "table_catalog", "table_schema", "table_name", "view_definition"));
+      return queries;
+    } else if (lower.contains("sql server")) {
       String sql = "SELECT DB_NAME() AS table_catalog, SCHEMA_NAME(v.schema_id) AS table_schema, v.name AS table_name, m.definition AS view_definition " +
           "FROM sys.views v JOIN sys.sql_modules m ON m.object_id=v.object_id WHERE SCHEMA_NAME(v.schema_id)=?" + (table == null || table.isBlank() ? "" : " AND v.name=?");
       queries.add(new ViewQuery(sql, params(namespace.schema(), table), "table_catalog", "table_schema", "table_name", "view_definition"));
@@ -338,6 +343,19 @@ public class JdbcBridgeController {
     details.put("supports_transactions", md.supportsTransactions());
     details.put("identifier_quote", md.getIdentifierQuoteString());
     return details;
+  }
+
+  private static void enforceReadOnly(Connection connection) throws SQLException {
+    String product = connection.getMetaData().getDatabaseProductName();
+    if (isSqlite(product)) {
+      try (Statement statement = connection.createStatement()) { statement.execute("PRAGMA query_only = ON"); }
+      return;
+    }
+    connection.setReadOnly(true);
+  }
+
+  private static boolean isSqlite(String product) {
+    return product != null && product.toLowerCase(Locale.ROOT).contains("sqlite");
   }
 
   private static boolean isCatalogDatabase(String product) {
