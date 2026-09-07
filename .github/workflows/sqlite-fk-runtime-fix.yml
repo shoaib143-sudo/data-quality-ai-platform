@@ -25,8 +25,8 @@ jobs:
           from pathlib import Path
           p=Path('services/jdbc-bridge/src/test/java/com/datanexus/jdbcbridge/SqliteSupportTest.java')
           t=p.read_text()
+          t=t.replace('import java.nio.file.Files;','import java.nio.file.Files;\nimport java.nio.file.Path;')
           t=t.replace('import static org.junit.jupiter.api.Assertions.assertTrue;','import static org.junit.jupiter.api.Assertions.assertTrue;\nimport static org.junit.jupiter.api.Assertions.assertNotNull;')
-          marker='''\n}\n'''
           test='''\n  @Test\n  void chinookForeignKeysAreReadableThroughSqlitePragma() throws Exception {\n    var resource = Path.of("/tmp/Chinook.db");\n    try (var input = new java.net.URL("https://raw.githubusercontent.com/dbeaver/dbeaver/b59edd36ff94abfea48f5151a5ea10b3791137f0/plugins/org.jkiss.dbeaver.ui.config.sample/data/Chinook.db").openStream()) {\n      Files.copy(input, resource, java.nio.file.StandardCopyOption.REPLACE_EXISTING);\n    }\n    try (var connection = DriverManager.getConnection("jdbc:sqlite:" + resource)) {\n      int foreignKeys = 0;\n      try (var tables = connection.getMetaData().getTables(null, null, "%", new String[]{"TABLE"})) {\n        while (tables.next()) {\n          var table = tables.getString("TABLE_NAME");\n          try (var statement = connection.createStatement(); var rs = statement.executeQuery("PRAGMA foreign_key_list(\\\"" + table.replace("\\\"", "\\\"\\\"") + "\\\")")) {\n            while (rs.next()) {\n              assertNotNull(rs.getString("table"));\n              assertNotNull(rs.getString("from"));\n              foreignKeys++;\n            }\n          }\n        }\n      }\n      assertEquals(11, foreignKeys);\n    } finally {\n      Files.deleteIfExists(resource);\n    }\n  }\n'''
           t=t[:-2]+test+'}\n'
           p.write_text(t)
