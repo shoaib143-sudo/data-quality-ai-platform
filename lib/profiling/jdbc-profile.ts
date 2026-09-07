@@ -41,11 +41,15 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
   const versionMetadata = record(datasetVersion.metadata)
   const jdbcUrl = firstString(metadata, ['jdbc_url', 'jdbcUrl', 'url'])
   const credentialRef = firstString(metadata, ['credential_ref', 'credentialRef', 'secret_ref', 'secretRef'])
-  const parsedReference = parseJdbcTableReference(stringValue(executionSource.source_uri) ?? stringValue(datasetVersion.source_uri))
+  const engine = jdbcEngineFromUrl(jdbcUrl)
+  const parsedReference = parseJdbcTableReference(
+    stringValue(executionSource.source_uri) ?? stringValue(datasetVersion.source_uri),
+    engine === 'SQLITE' ? null : 'public',
+  )
   const catalog = firstString(metadata,['catalog','catalog_name','catalogName','database','database_name','databaseName']) ?? parsedReference?.catalog ?? null
-  const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? parsedReference?.schema ?? 'public'
+  const schema = firstString(metadata, ['schema', 'schema_name', 'schemaName']) ?? parsedReference?.schema ?? (engine === 'POSTGRESQL' ? 'public' : null)
   const table = firstString(metadata, ['table', 'table_name', 'tableName']) ?? parsedReference?.table
-  if (!jdbcUrl || !credentialRef || !table || !safeIdentifier(schema) || !safeIdentifier(table) || (catalog && !safeIdentifier(catalog))) throw new Error('JDBC dataset source configuration is incomplete or invalid.')
+  if (!jdbcUrl || !credentialRef || !table || (schema && !safeIdentifier(schema)) || !safeIdentifier(table) || (catalog && !safeIdentifier(catalog))) throw new Error('JDBC dataset source configuration is incomplete or invalid.')
 
   const sampling = await resolveSamplingPolicy(supabase, datasetVersionId, 1000)
   const loaded = await loadJdbcRows({ jdbcUrl, credentialRef, schema, table, catalog }, sampling.loadLimit)
@@ -74,7 +78,7 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
       metadata: { profiling_sampled: true, profiling_sample_size: sampledRows.length, profiling_row_count: sampled.sourceRowCount, connector_column:connectorColumn??null },
     }
   })
-  const connector={kind:'jdbc',engine:jdbcEngineFromUrl(jdbcUrl),catalog,schema,table}
+  const connector={kind:'jdbc',engine,catalog,schema,table}
   const warnings=[...loaded.warnings,...sampled.warnings]
   const schemaSnapshot = { row_count: sampled.sourceRowCount, column_count: columns.length, source_access: { mode: 'source_rows', connector, sampled_rows: sampled.sampledRows, sampling_policy: sampled.policy, warnings }, columns }
   const schemaHash = stableHash(columns.map((column) => ({ name: column.name, ordinal_position: column.ordinal_position, source_type: column.source_type, inferred_type: column.inferred_type })))

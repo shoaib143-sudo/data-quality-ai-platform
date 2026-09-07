@@ -355,12 +355,12 @@ export async function discoverJdbcTransformations(input: JdbcConnectionConfig): 
   }
 }
 
-export function parseJdbcTableReference(value: string | null | undefined) {
+export function parseJdbcTableReference(value: string | null | undefined, defaultSchema: string | null = 'public') {
   const reference = value?.trim()
   if (!reference) return null
   const normalized = reference.replace(/^jdbc-table:\/\//i, '')
   const parts = normalized.split('.').filter(Boolean)
-  if (parts.length === 1) return { catalog: null, schema: 'public', table: parts[0] }
+  if (parts.length === 1) return { catalog: null, schema: defaultSchema, table: parts[0] }
   if (parts.length === 2) return { catalog: null, schema: parts[0], table: parts[1] }
   return { catalog: parts[parts.length - 3], schema: parts[parts.length - 2], table: parts[parts.length - 1] }
 }
