@@ -94,7 +94,7 @@ public class JdbcBridgeController {
       String sql = "SELECT * FROM " + table;
       try (PreparedStatement statement = connection.prepareStatement(sql)) {
         statement.setMaxRows(limit);
-        statement.setFetchSize(Math.min(limit, 2_000));
+        if (!isSqlite(namespace.product())) statement.setFetchSize(Math.min(limit, 2_000));
         statement.setQueryTimeout(120);
         try (ResultSet rs = statement.executeQuery()) {
           ResultSetMetaData meta = rs.getMetaData();
