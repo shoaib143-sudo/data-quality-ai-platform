@@ -26,6 +26,8 @@ requireText(queue, "rpc('enqueue_job_with_dependencies'", 'atomic job and depend
 requireText(queue, 'dependency_count: dependencies.length', 'dependency telemetry')
 
 requireText(workload, "export type WorkloadClass = 'SMALL' | 'MEDIUM' | 'LARGE' | 'UNKNOWN'", 'workload classes')
+requireText(workload, 'if (value == null) return null', 'null numeric evidence preservation')
+requireText(workload, "typeof value === 'string' && value.trim() === ''", 'blank numeric evidence preservation')
 requireText(workload, 'PROFILE_SAMPLE_NOT_SOURCE_CARDINALITY', 'sample/source truth boundary')
 requireText(workload, "sourceObservedEstimate(metadata, 'source_row_count', 'source_row_count_authority')", 'source row authority gate')
 requireText(workload, "metric_key: 'planner.workload_classified'", 'workload telemetry')
@@ -66,4 +68,4 @@ if (workload.includes("sourceRowEstimate = observedRowCount") || workload.includ
   throw new Error('Profile/sample row counts must never be promoted to source-authoritative cardinality.')
 }
 
-console.log('Adaptive Scheduler persisted DAG contract verified.')
+console.log('Adaptive Scheduler persisted DAG and workload truth contracts verified.')
