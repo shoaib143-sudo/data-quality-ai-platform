@@ -78,9 +78,34 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({})) as Record<string, unknown>
+  const mode = text(body.mode)
+
+  if (mode === 'ADAPTIVE_DISPATCH') {
+    if (!(await isAuthorizedWorkerRequest(request))) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
+    try {
+      const workerId = `event-worker:${crypto.randomUUID()}`
+      const dispatch = await dispatchAdaptiveRounds(workerId, {
+        maxRounds: 3,
+        claimBatchSize: 8,
+      })
+      return NextResponse.json({
+        accepted: true,
+        mode,
+        workerId,
+        dispatchRounds: dispatch.rounds,
+        claimed: dispatch.claimed,
+        results: dispatch.results,
+        semanticResults: dispatch.semanticResults,
+        governanceAgentResults: dispatch.governanceAgentResults,
+      })
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Adaptive worker execution failed.' }, { status: 500 })
+    }
+  }
+
   try {
     const user = await requireUser()
-    const body = await request.json().catch(() => ({}))
     const agentRunId = text(body.agentRunId)
     if (!agentRunId) return NextResponse.json({ error: 'agentRunId is required.' }, { status: 400 })
 
