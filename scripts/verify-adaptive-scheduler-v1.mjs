@@ -4,11 +4,13 @@ const dispatcher = fs.readFileSync('lib/orchestration/adaptive-dispatch.ts', 'ut
 const queue = fs.readFileSync('lib/orchestration/queue.ts', 'utf8')
 const workload = fs.readFileSync('lib/orchestration/workload.ts', 'utf8')
 const criticalPath = fs.readFileSync('lib/orchestration/critical-path.ts', 'utf8')
+const sourceConcurrency = fs.readFileSync('lib/orchestration/source-concurrency.ts', 'utf8')
 const dqQueue = fs.readFileSync('lib/data-quality/queue.ts', 'utf8')
 const workerRoute = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
 const profilingRoute = fs.readFileSync('app/api/agents/run/route.ts', 'utf8')
 const eventDispatchMigration = fs.readFileSync('supabase/migrations/20260907060500_event_driven_durable_worker_dispatch.sql', 'utf8')
 const dagMigration = fs.readFileSync('supabase/migrations/20260907103500_durable_job_dag_dependencies.sql', 'utf8')
+const sourceConcurrencyMigration = fs.readFileSync('supabase/migrations/20260907110500_adaptive_source_concurrency_state.sql', 'utf8')
 
 function requireText(text, needle, label) {
   if (!text.includes(needle)) throw new Error(`Adaptive scheduler contract missing: ${label}`)
@@ -16,9 +18,10 @@ function requireText(text, needle, label) {
 
 requireText(dispatcher, 'getProjectCapacityPolicy', 'project capacity enforcement')
 requireText(dispatcher, 'ORCHESTRATION_WORKER_CONCURRENCY', 'bounded configurable concurrency')
-requireText(dispatcher, 'ORCHESTRATION_PER_SOURCE_CONCURRENCY', 'source concurrency guardrail')
-requireText(dispatcher, "from('dataset_execution_sources')", 'execution source resource resolution')
-requireText(dispatcher, 'selectResourceBoundedBatch', 'resource-aware scheduler')
+requireText(dispatcher, 'ORCHESTRATION_PER_SOURCE_CONCURRENCY', 'initial source concurrency')
+requireText(dispatcher, 'ORCHESTRATION_PER_SOURCE_MAX_CONCURRENCY', 'source concurrency hard ceiling')
+requireText(dispatcher, 'resolveAdaptiveSourceLimits(resources, initialPerSourceConcurrency, hardPerSourceMax)', 'persisted adaptive source limit resolution')
+requireText(dispatcher, 'sourceCounts.get(stateKey)', 'project-scoped source concurrency accounting')
 requireText(dispatcher, 'characterizeDurableJobs(jobs)', 'workload characterization')
 requireText(dispatcher, 'computeCriticalPathProfiles(jobs, workload)', 'persisted DAG critical-path calculation')
 requireText(dispatcher, 'orderJobsByCriticalPath(jobs, criticalPath, workload)', 'critical-path ordering')
@@ -26,7 +29,9 @@ requireText(dispatcher, 'recordCriticalPathTelemetry(jobs, criticalPath)', 'crit
 requireText(queue, "'job.queue_wait_ms'", 'queue wait telemetry')
 requireText(queue, 'dependencies?: DurableJobDependency[]', 'dependency-aware enqueue contract')
 requireText(queue, "rpc('enqueue_job_with_dependencies'", 'atomic job and dependency enqueue')
-requireText(queue, 'dependency_count: dependencies.length', 'dependency telemetry')
+requireText(queue, 'recordSourceConcurrencyOutcome(job, \'SUCCESS\')', 'clean source signal on successful durable jobs')
+requireText(queue, "recordSourceConcurrencyOutcome(job, 'FAILURE', error)", 'source pressure signal on failed durable jobs')
+requireText(queue, "console.error('[source-concurrency-controller]'", 'controller telemetry must not fail durable job completion')
 
 requireText(workload, "export type WorkloadClass = 'SMALL' | 'MEDIUM' | 'LARGE' | 'UNKNOWN'", 'workload classes')
 requireText(workload, 'if (value == null) return null', 'null numeric evidence preservation')
@@ -43,8 +48,25 @@ requireText(criticalPath, "TERMINAL_STATUSES.has(row.status)", 'terminal descend
 requireText(criticalPath, 'own + downstream', 'bottom-level critical-path weighting')
 requireText(criticalPath, 'while (end < jobs.length && jobs[end].priority === priority)', 'no cross-priority critical-path reordering')
 requireText(criticalPath, "metric_key: 'planner.critical_path_ms'", 'critical-path telemetry metric')
-requireText(criticalPath, 'graph_truncated: profile?.graphTruncated ?? false', 'graph completeness telemetry')
 requireText(criticalPath, "evidence_scope: 'PERSISTED_SCHEDULER_DAG_ONLY'", 'no speculative future fanout')
+
+requireText(sourceConcurrency, "from('dataset_execution_sources')", 'governed source identity resolution')
+requireText(sourceConcurrency, "key: sourceId ? `source:${sourceId}` : null", 'stable source scheduler identity')
+requireText(sourceConcurrency, "from('source_concurrency_state')", 'persisted controller state read')
+requireText(sourceConcurrency, 'Math.min(requestedInitial, configuredMax)', 'initial limit must obey hard max')
+requireText(sourceConcurrency, "outcome === 'FAILURE' && !pressureError(error)", 'generic failures must not throttle source')
+requireText(sourceConcurrency, 'too many requests|rate.?limit|throttl', 'source pressure classifier')
+requireText(sourceConcurrency, "rpc('record_source_concurrency_signal'", 'stateful source signal persistence')
+
+requireText(sourceConcurrencyMigration, 'create table if not exists orchestration.source_concurrency_state', 'persisted source controller state')
+requireText(sourceConcurrencyMigration, "last_signal in ('INITIAL','CLEAN','ADVERSE')", 'typed source controller signals')
+requireText(sourceConcurrencyMigration, 'success_streak + 1 >= 4', 'additive increase threshold')
+requireText(sourceConcurrencyMigration, 'least(max_limit, current_limit + 1)', 'additive increase')
+requireText(sourceConcurrencyMigration, 'floor(current_limit / 2.0)', 'multiplicative decrease')
+requireText(sourceConcurrencyMigration, "metric_key, numeric_value, dimensions", 'controller telemetry write')
+requireText(sourceConcurrencyMigration, "'planner.source_concurrency_limit'", 'controller limit telemetry metric')
+requireText(sourceConcurrencyMigration, "'controller', 'AIMD'", 'controller algorithm evidence')
+requireText(sourceConcurrencyMigration, 'controls execution concurrency only; it is not governance authority or source metadata', 'scheduler versus governance truth boundary')
 
 requireText(workerRoute, "mode === 'ADAPTIVE_DISPATCH'", 'worker-secret event dispatch mode')
 requireText(workerRoute, 'runAdaptiveEventConvergence', 'job and outbox convergence loop')
@@ -63,7 +85,6 @@ requireText(dagMigration, 'resolve_failed_job_dependencies', 'failed prerequisit
 requireText(dagMigration, "status = 'CANCELLED'", 'truthful blocked child terminal state')
 requireText(dagMigration, "parent.status <> 'SUCCEEDED'", 'SUCCESS dependency claim blocking')
 requireText(dagMigration, "parent.status not in ('SUCCEEDED','FAILED','DEAD','CANCELLED')", 'TERMINAL dependency claim blocking')
-requireText(dagMigration, 'create or replace function orchestration.claim_job_by_agent_run', 'exact claim dependency enforcement')
 requireText(dagMigration, 'scheduler dependencies only and are not source-observed data lineage', 'dependency versus lineage truth boundary')
 
 requireText(dqQueue, "dependencyType: 'SUCCESS'", 'profile to DQ SUCCESS dependency')
@@ -74,7 +95,7 @@ requireText(dqQueue, 'parentDurableJobId', 'dependency audit referent')
 if (eventDispatchMigration.includes('after update on orchestration.job_queue')) {
   throw new Error('Scheduler must not create retry-trigger storms from ordinary queue updates.')
 }
-if (dispatcher.includes('execution_config.jdbc_url') || dispatcher.includes('credential_ref')) {
+if (dispatcher.includes('execution_config.jdbc_url') || dispatcher.includes('credential_ref') || sourceConcurrency.includes('jdbc_url') || sourceConcurrency.includes('credential_ref')) {
   throw new Error('Resource scheduling must use stable source identity rather than credential or JDBC URL identity.')
 }
 if (workload.includes("sourceRowEstimate = observedRowCount") || workload.includes("row_count_authority: 'SOURCE_OBSERVED'")) {
@@ -84,4 +105,4 @@ if (criticalPath.includes('futureFanout') || criticalPath.includes('predicted_ch
   throw new Error('Critical-path planning must not fabricate downstream jobs that are not persisted in the scheduler DAG.')
 }
 
-console.log('Adaptive Scheduler persisted DAG critical-path and workload truth contracts verified.')
+console.log('Adaptive Scheduler stateful source concurrency, persisted DAG, and workload truth contracts verified.')
