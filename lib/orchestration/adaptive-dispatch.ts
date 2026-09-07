@@ -111,9 +111,9 @@ function selectResourceBoundedBatch(
     if (key && resource) {
       const stateKey = `${resource.projectId}:${key}`
       const limit = Math.max(1, sourceLimits.get(stateKey) ?? initialPerSourceLimit)
-      const count = sourceCounts.get(key) ?? 0
+      const count = sourceCounts.get(stateKey) ?? 0
       if (count >= limit) continue
-      sourceCounts.set(key, count + 1)
+      sourceCounts.set(stateKey, count + 1)
     }
     selected.push(job)
   }
@@ -129,7 +129,8 @@ async function processCoreJobsBounded(
   requestedPerSourceMaxConcurrency: number,
 ) {
   if (jobs.length === 0) return [] as Array<Record<string, unknown>>
-  const initialPerSourceConcurrency = Math.max(1, Math.min(requestedPerSourceConcurrency, requestedPerSourceMaxConcurrency))
+  const hardPerSourceMax = Math.max(1, requestedPerSourceMaxConcurrency)
+  const initialPerSourceConcurrency = Math.max(1, Math.min(requestedPerSourceConcurrency, hardPerSourceMax))
   const [concurrency, resources, workload] = await Promise.all([
     resolveCoreConcurrency(jobs, requestedConcurrency),
     resolveJobSourceResources(jobs),
@@ -137,7 +138,7 @@ async function processCoreJobsBounded(
   ])
   const [criticalPath, sourceLimits] = await Promise.all([
     computeCriticalPathProfiles(jobs, workload),
-    resolveAdaptiveSourceLimits(resources, initialPerSourceConcurrency, requestedPerSourceMaxConcurrency),
+    resolveAdaptiveSourceLimits(resources, initialPerSourceConcurrency, hardPerSourceMax),
   ])
   await Promise.all([
     recordWorkloadTelemetry(jobs, workload),
@@ -169,10 +170,7 @@ export async function dispatchAdaptiveRound(workerId: string, options: DispatchO
   const claimBatchSize = configuredClaimBatch(options.claimBatchSize)
   const maxConcurrency = configuredConcurrency(options.maxConcurrency)
   const perSourceConcurrency = configuredPerSourceConcurrency(options.perSourceConcurrency)
-  const perSourceMaxConcurrency = Math.max(
-    perSourceConcurrency,
-    configuredPerSourceMaxConcurrency(options.perSourceMaxConcurrency),
-  )
+  const perSourceMaxConcurrency = configuredPerSourceMaxConcurrency(options.perSourceMaxConcurrency)
   const jobs = await claimDurableJobs(workerId, claimBatchSize)
   const semanticJobs = jobs.filter((job) => job.job_type === 'SEMANTIC_INDEX')
   const governanceAgentJobs = jobs.filter((job) => job.job_type === 'GOVERNANCE_AGENT')
