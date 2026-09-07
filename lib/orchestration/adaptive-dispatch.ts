@@ -20,6 +20,7 @@ import {
   resolveJobSourceResources,
   type JobSourceResource,
 } from '@/lib/orchestration/source-concurrency'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 type DispatchOptions = {
   claimBatchSize?: number
@@ -122,6 +123,35 @@ function selectResourceBoundedBatch(
   return selected
 }
 
+async function recordPlannerFallback(jobs: DurableJob[], error: unknown) {
+  if (jobs.length === 0) return
+  const admin = createAdminClient()
+  const message = error instanceof Error ? error.message : 'Planner enrichment failed.'
+  const rows = [...new Set(jobs.map((job) => job.project_id))].map((projectId) => ({
+    project_id: projectId,
+    metric_key: 'planner.safe_fallback',
+    numeric_value: 1,
+    dimensions: {
+      mode: 'SEQUENTIAL_SAFE_FALLBACK',
+      claimed_jobs: jobs.filter((job) => job.project_id === projectId).length,
+      error: message.slice(0, 500),
+    },
+  }))
+  const { error: telemetryError } = await admin.schema('orchestration').from('platform_telemetry').insert(rows)
+  if (telemetryError) console.error('[planner-fallback-telemetry]', telemetryError.message)
+}
+
+async function processCoreJobsSafeFallback(jobs: DurableJob[], error: unknown) {
+  console.error('[adaptive-planner]', error instanceof Error ? error.message : error)
+  await recordPlannerFallback(jobs, error)
+  const results: Array<Record<string, unknown>> = []
+  for (const job of jobs) {
+    const rows = await processDurableJobs([job])
+    results.push(...rows)
+  }
+  return results
+}
+
 async function processCoreJobsBounded(
   jobs: DurableJob[],
   requestedConcurrency: number,
@@ -129,41 +159,46 @@ async function processCoreJobsBounded(
   requestedPerSourceMaxConcurrency: number,
 ) {
   if (jobs.length === 0) return [] as Array<Record<string, unknown>>
-  const hardPerSourceMax = Math.max(1, requestedPerSourceMaxConcurrency)
-  const initialPerSourceConcurrency = Math.max(1, Math.min(requestedPerSourceConcurrency, hardPerSourceMax))
-  const [concurrency, resources, workload] = await Promise.all([
-    resolveCoreConcurrency(jobs, requestedConcurrency),
-    resolveJobSourceResources(jobs),
-    characterizeDurableJobs(jobs),
-  ])
-  const [criticalPath, sourceLimits] = await Promise.all([
-    computeCriticalPathProfiles(jobs, workload),
-    resolveAdaptiveSourceLimits(resources, initialPerSourceConcurrency, hardPerSourceMax),
-  ])
-  await Promise.all([
-    recordWorkloadTelemetry(jobs, workload),
-    recordCriticalPathTelemetry(jobs, criticalPath),
-  ])
 
-  const pending = orderJobsByCriticalPath(jobs, criticalPath, workload)
-  const results: Array<Record<string, unknown>> = []
+  try {
+    const hardPerSourceMax = Math.max(1, requestedPerSourceMaxConcurrency)
+    const initialPerSourceConcurrency = Math.max(1, Math.min(requestedPerSourceConcurrency, hardPerSourceMax))
+    const [concurrency, resources, workload] = await Promise.all([
+      resolveCoreConcurrency(jobs, requestedConcurrency),
+      resolveJobSourceResources(jobs),
+      characterizeDurableJobs(jobs),
+    ])
+    const [criticalPath, sourceLimits] = await Promise.all([
+      computeCriticalPathProfiles(jobs, workload),
+      resolveAdaptiveSourceLimits(resources, initialPerSourceConcurrency, hardPerSourceMax),
+    ])
+    await Promise.all([
+      recordWorkloadTelemetry(jobs, workload),
+      recordCriticalPathTelemetry(jobs, criticalPath),
+    ])
 
-  while (pending.length > 0) {
-    const batch = selectResourceBoundedBatch(
-      pending,
-      resources,
-      concurrency,
-      initialPerSourceConcurrency,
-      sourceLimits,
-    )
-    const selectedIds = new Set(batch.map((job) => job.id))
-    const settled = await Promise.all(batch.map((job) => processDurableJobs([job])))
-    for (const rows of settled) results.push(...rows)
-    for (let index = pending.length - 1; index >= 0; index -= 1) {
-      if (selectedIds.has(pending[index].id)) pending.splice(index, 1)
+    const pending = orderJobsByCriticalPath(jobs, criticalPath, workload)
+    const results: Array<Record<string, unknown>> = []
+
+    while (pending.length > 0) {
+      const batch = selectResourceBoundedBatch(
+        pending,
+        resources,
+        concurrency,
+        initialPerSourceConcurrency,
+        sourceLimits,
+      )
+      const selectedIds = new Set(batch.map((job) => job.id))
+      const settled = await Promise.all(batch.map((job) => processDurableJobs([job])))
+      for (const rows of settled) results.push(...rows)
+      for (let index = pending.length - 1; index >= 0; index -= 1) {
+        if (selectedIds.has(pending[index].id)) pending.splice(index, 1)
+      }
     }
+    return results
+  } catch (plannerError) {
+    return processCoreJobsSafeFallback(jobs, plannerError)
   }
-  return results
 }
 
 export async function dispatchAdaptiveRound(workerId: string, options: DispatchOptions = {}) {
