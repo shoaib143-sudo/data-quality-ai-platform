@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { BrainCircuit, Gauge, Lightbulb, ShieldAlert, Sparkles } from 'lucide-react'
 
+import { authorizeProject } from '@/lib/auth/authorize'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -34,7 +36,7 @@ function riskTone(level: string) {
 }
 
 export default async function AIInsightsPage({ searchParams }: { searchParams: Promise<{ projectId?: string; datasetId?: string }> }) {
-  await requireUser()
+  const user = await requireUser()
   const params = await searchParams
   const supabase = await createClient()
 
@@ -60,16 +62,19 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
   let rules: Rule[] = []
   let suggestions: Suggestion[] = []
 
-  if (selectedDatasetId) {
-    const versionResult = await supabase.schema('catalog').from('dataset_versions')
+  if (selectedProjectId) await authorizeProject(user.id, selectedProjectId, 'catalog.read')
+  const evidenceClient = selectedProjectId ? createAdminClient() : null
+
+  if (selectedDatasetId && evidenceClient) {
+    const versionResult = await evidenceClient.schema('catalog').from('dataset_versions')
       .select('id,dataset_id,version_number,status').eq('dataset_id', selectedDatasetId)
       .order('version_number', { ascending: false }).limit(1).maybeSingle()
     if (versionResult.error) throw new Error(`Unable to load latest dataset version: ${versionResult.error.message}`)
     version = versionResult.data as Version | null
   }
 
-  if (version) {
-    const profileResult = await supabase.schema('profiling').from('profile_runs')
+  if (version && evidenceClient) {
+    const profileResult = await evidenceClient.schema('profiling').from('profile_runs')
       .select('id,dataset_version_id,row_count,column_count,completed_at')
       .eq('dataset_version_id', version.id).eq('status', 'COMPLETED')
       .order('completed_at', { ascending: false }).limit(1).maybeSingle()
@@ -77,16 +82,16 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
     profile = profileResult.data as ProfileRun | null
 
     const [investigationResult, predictionResult, ruleResult, suggestionResult] = await Promise.all([
-      supabase.schema('governance').from('data_quality_investigations')
+      evidenceClient.schema('governance').from('data_quality_investigations')
         .select('severity,status,summary,probable_root_causes,business_impact,recommendations,approval_required,created_at')
         .eq('dataset_version_id', version.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      supabase.schema('governance').from('governance_risk_predictions')
+      evidenceClient.schema('governance').from('governance_risk_predictions')
         .select('prediction_type,horizon_days,probability,risk_level,confidence,explanation,calculated_at')
         .eq('dataset_id', selectedDatasetId).order('calculated_at', { ascending: false }).limit(8),
-      supabase.schema('profiling').from('quality_rule_definitions')
+      evidenceClient.schema('profiling').from('quality_rule_definitions')
         .select('id,name,column_name,severity,approval_status,enabled,description')
         .eq('dataset_version_id', version.id).order('created_at', { ascending: false }).limit(50),
-      supabase.schema('governance').from('ai_governance_suggestions')
+      evidenceClient.schema('governance').from('ai_governance_suggestions')
         .select('id,suggestion_type,suggestion,evidence,confidence,created_at')
         .eq('project_id', selectedProjectId!).eq('subject_id', selectedDatasetId).order('created_at', { ascending: false }).limit(100),
     ])
@@ -101,10 +106,10 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
 
     if (profile) {
       const [scoreResult, findingResult] = await Promise.all([
-        supabase.schema('profiling').from('data_quality_scores')
+        evidenceClient.schema('profiling').from('data_quality_scores')
           .select('overall_score,completeness_score,uniqueness_score,validity_score,accuracy_score')
           .eq('profile_run_id', profile.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.schema('profiling').from('profile_findings')
+        evidenceClient.schema('profiling').from('profile_findings')
           .select('id,severity,title,description,confidence').eq('profile_run_id', profile.id)
           .order('created_at', { ascending: false }).limit(50),
       ])
