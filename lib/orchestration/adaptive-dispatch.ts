@@ -6,6 +6,11 @@ import {
   type DurableJob,
 } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
+import {
+  characterizeDurableJobs,
+  orderJobsByEstimatedRuntime,
+  recordWorkloadTelemetry,
+} from '@/lib/orchestration/workload'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type DispatchOptions = {
@@ -150,12 +155,15 @@ function selectResourceBoundedBatch(
 
 async function processCoreJobsBounded(jobs: DurableJob[], requestedConcurrency: number, requestedPerSourceConcurrency: number) {
   if (jobs.length === 0) return [] as Array<Record<string, unknown>>
-  const [concurrency, resources] = await Promise.all([
+  const [concurrency, resources, workload] = await Promise.all([
     resolveCoreConcurrency(jobs, requestedConcurrency),
     resolveJobResources(jobs),
+    characterizeDurableJobs(jobs),
   ])
+  await recordWorkloadTelemetry(jobs, workload)
+
   const perSourceConcurrency = Math.max(1, Math.min(requestedPerSourceConcurrency, concurrency))
-  const pending = [...jobs]
+  const pending = orderJobsByEstimatedRuntime(jobs, workload)
   const results: Array<Record<string, unknown>> = []
 
   while (pending.length > 0) {
