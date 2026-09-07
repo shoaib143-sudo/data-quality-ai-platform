@@ -3,9 +3,10 @@ import fs from 'node:fs'
 const dispatcher = fs.readFileSync('lib/orchestration/adaptive-dispatch.ts', 'utf8')
 const workerRoute = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
 const profilingRoute = fs.readFileSync('app/api/agents/run/route.ts', 'utf8')
+const eventDispatchMigration = fs.readFileSync('supabase/migrations/20260907060500_event_driven_durable_worker_dispatch.sql', 'utf8')
 
 function requireText(text, needle, label) {
-  if (!text.includes(needle)) throw new Error(`Adaptive scheduler v1 contract missing: ${label}`)
+  if (!text.includes(needle)) throw new Error(`Adaptive scheduler contract missing: ${label}`)
 }
 
 requireText(dispatcher, 'getProjectCapacityPolicy', 'project capacity enforcement')
@@ -19,4 +20,19 @@ requireText(profilingRoute, 'claimDurableJobByAgentRun(workerId, activeAgentRunI
 requireText(profilingRoute, 'dispatchAdaptiveRounds(`${workerId}:downstream`', 'immediate downstream drain')
 requireText(profilingRoute, 'adaptive_dispatch: true', 'profiling API dispatch evidence')
 
-console.log('Adaptive Scheduler v1 contract verified.')
+requireText(workerRoute, "mode === 'ADAPTIVE_DISPATCH'", 'worker-secret event dispatch mode')
+requireText(workerRoute, 'isAuthorizedWorkerRequest(request)', 'event dispatch authorization')
+requireText(workerRoute, 'claimBatchSize: 8', 'event dispatch bounded claim size')
+requireText(eventDispatchMigration, 'create table if not exists orchestration.worker_dispatch_state', 'debounce state')
+requireText(eventDispatchMigration, 'net.http_post(', 'asynchronous database wake-up')
+requireText(eventDispatchMigration, "'mode', 'ADAPTIVE_DISPATCH'", 'lightweight worker mode payload')
+requireText(eventDispatchMigration, "last_kicked_at <= clock_timestamp() - interval '750 milliseconds'", 'dispatch debounce')
+requireText(eventDispatchMigration, 'A wake-up failure must never roll back the durable queue insert.', 'durability failure isolation')
+requireText(eventDispatchMigration, 'after insert on orchestration.job_queue', 'queue insert wake trigger')
+requireText(eventDispatchMigration, "new.available_at > clock_timestamp() + interval '1 second'", 'future job cron fallback')
+
+if (eventDispatchMigration.includes('after update on orchestration.job_queue')) {
+  throw new Error('Scheduler v2 must not create retry-trigger storms from ordinary queue updates.')
+}
+
+console.log('Adaptive Scheduler v2 event-driven dispatch contract verified.')
