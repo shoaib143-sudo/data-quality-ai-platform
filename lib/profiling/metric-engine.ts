@@ -198,6 +198,7 @@ export async function loadProfilingRows(supabase: ReturnType<typeof createAdminC
         source_type: sourceType === 'csv' ? 'CSV' : 'FILE',
         source_uri: loaded.sourceUri,
         content_hash: loaded.contentHash,
+        content_hash_authority: 'SOURCE_BYTES_SHA256',
         warnings: loaded.warnings,
       })
     }
