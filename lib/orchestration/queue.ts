@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { recordSourceConcurrencyOutcome } from '@/lib/orchestration/source-concurrency'
 
 export type DurableJobType = 'PROFILING' | 'DATA_QUALITY' | 'NOTIFICATION' | 'OBSERVABILITY' | 'DISCOVERY' | 'LINEAGE_ENRICHMENT' | 'SEMANTIC_INDEX' | 'GOVERNANCE_AGENT'
 export type DurableJobDependencyType = 'SUCCESS' | 'TERMINAL'
@@ -174,7 +175,7 @@ export async function claimDurableJobs(workerId: string, limit = 2) {
   return jobs
 }
 
-export async function markDurableJobSucceeded(job: Pick<DurableJob, 'id' | 'project_id' | 'job_type' | 'created_at' | 'started_at'> | string) {
+export async function markDurableJobSucceeded(job: DurableJob | string) {
   const admin = createAdminClient()
   const now = new Date()
   const jobId = typeof job === 'string' ? job : job.id
@@ -192,6 +193,11 @@ export async function markDurableJobSucceeded(job: Pick<DurableJob, 'id' | 'proj
     const start = new Date(job.started_at ?? job.created_at).getTime()
     await writeTelemetry(job.project_id, 'job.duration_ms', Math.max(0, now.getTime() - start), { job_type: job.job_type, status: 'SUCCEEDED' })
     await writeTelemetry(job.project_id, 'job.succeeded', 1, { job_type: job.job_type })
+    try {
+      await recordSourceConcurrencyOutcome(job, 'SUCCESS')
+    } catch (controllerError) {
+      console.error('[source-concurrency-controller]', controllerError instanceof Error ? controllerError.message : controllerError)
+    }
   }
 }
 
@@ -219,6 +225,11 @@ export async function markDurableJobFailed(job: DurableJob, error: unknown) {
     backoff_minutes: backoffMinutes,
     error: message.slice(0, 500),
   })
+  try {
+    await recordSourceConcurrencyOutcome(job, 'FAILURE', error)
+  } catch (controllerError) {
+    console.error('[source-concurrency-controller]', controllerError instanceof Error ? controllerError.message : controllerError)
+  }
 }
 
 export function numericSetting(value: unknown, fallback: number) {
