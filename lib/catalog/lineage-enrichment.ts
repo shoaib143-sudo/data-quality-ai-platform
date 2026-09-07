@@ -259,8 +259,8 @@ async function persistJdbcLineage(
   inputTransformations: JdbcTransformation[],
   actorUserId: string | null,
 ) {
-  if (!inputTransformations.length) return { transformations: 0, edges: 0, columnMappings: 0 }
-  const engine = String(inputTransformations[0]?.engine || 'JDBC').toUpperCase()
+  const sourceJdbcUrl = stringField(record(source.connection_metadata), ['jdbc_url', 'jdbcUrl', 'url']) ?? ''
+  const engine = String(inputTransformations[0]?.engine || jdbcEngineFromUrl(sourceJdbcUrl) || 'JDBC').toUpperCase()
   let governed = { transformations: 0, edges: 0, columnMappings: 0 }
   let transformations = inputTransformations
   if (engine === 'DATABRICKS') {
@@ -275,8 +275,6 @@ async function persistJdbcLineage(
       transformations = inputTransformations.filter(item => !governedSet.has(item))
     }
   }
-  if (!transformations.length) return governed
-
   const admin = createAdminClient()
   const legacyEngine = transformations[0]?.engine || engine || 'JDBC'
   const { data: integration, error: integrationError } = await admin.schema('governance').from('lineage_integrations').upsert({
@@ -346,6 +344,50 @@ async function persistJdbcLineage(
 
   let edges = 0
   let columnMappings = 0
+  let structuralEdges = 0
+
+  for (const asset of assets) {
+    const nativeMetadata = record(record(asset.metadata).native_metadata)
+    const foreignKeys = Array.isArray(nativeMetadata.foreign_keys) ? nativeMetadata.foreign_keys.map(record) : []
+    const sourceAsset = assetByKey.get(qualified(asset.namespace, asset.name).toLowerCase()) ?? assetByKey.get(asset.name.toLowerCase())
+    if (!sourceAsset) continue
+    for (const foreignKey of foreignKeys) {
+      const targetTable = stringField(foreignKey, ['target_table'])
+      if (!targetTable) continue
+      const targetNamespace = uniqueStrings([
+        stringField(foreignKey, ['target_catalog']),
+        stringField(foreignKey, ['target_schema']),
+      ]).join('.')
+      const targetFull = qualified(targetNamespace || null, targetTable)
+      const targetAsset = assetByKey.get(targetFull.toLowerCase()) ?? assetByKey.get(targetTable.toLowerCase())
+      if (!targetAsset) continue
+      const { error: edgeError } = await admin.schema('governance').from('lineage_edges').upsert({
+        project_id: source.project_id,
+        source_type: sourceAsset.dataset_id ? 'DATASET' : 'EXTERNAL_ASSET',
+        source_id: sourceAsset.dataset_id ?? sourceAsset.id,
+        target_type: targetAsset.dataset_id ? 'DATASET' : 'EXTERNAL_ASSET',
+        target_id: targetAsset.dataset_id ?? targetAsset.id,
+        relationship: 'REFERENCES',
+        transformation_id: null,
+        metadata: {
+          source_id: source.id,
+          discovery_run_id: discoveryRunId,
+          catalog_revision_id: catalogRevisionId,
+          authoritative_source: 'JDBC_DATABASE_METADATA_IMPORTED_KEYS',
+          authority_class: 'SOURCE_OBSERVED_RELATIONSHIP',
+          source_observed: true,
+          foreign_key_name: stringField(foreignKey, ['name']),
+          source_column: stringField(foreignKey, ['source_column']),
+          target_column: stringField(foreignKey, ['target_column']),
+          key_sequence: foreignKey.key_sequence ?? null,
+          auto_discovered: true,
+        },
+      }, { onConflict: 'project_id,source_type,source_id,target_type,target_id,relationship,transformation_id' })
+      if (edgeError) throw new Error(`Unable to persist source-observed JDBC foreign key ${asset.name} -> ${targetTable}: ${edgeError.message}`)
+      structuralEdges += 1
+    }
+  }
+
   for (const transformation of transformations) {
     const structured = Boolean(transformation.sourceAsset && transformation.targetAsset)
     const externalId = structured ? `databricks-lineage:${transformation.logicHash}` : [transformation.catalog, transformation.schema, transformation.name].filter(Boolean).join('.')
@@ -426,7 +468,7 @@ async function persistJdbcLineage(
     }
   }
 
-  return { transformations: governed.transformations + transformations.length, edges: governed.edges + edges, columnMappings: governed.columnMappings + columnMappings }
+  return { transformations: governed.transformations + transformations.length, edges: governed.edges + structuralEdges + edges, columnMappings: governed.columnMappings + columnMappings }
 }
 
 async function mapConcurrent<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
@@ -566,7 +608,11 @@ export async function executeLineageEnrichment(input: {
   if (assetError) throw new Error(`Unable to load active discovered assets for lineage: ${assetError.message}`)
   const assets = (assetRows ?? []) as DiscoveredAsset[]
   const catalogs = uniqueStrings(assets.map(asset => stringField(record(asset.metadata), ['catalog'])))
-  const authoritativeSources = engine === 'DATABRICKS' ? ['system.access.column_lineage', 'system.access.table_lineage'] : []
+  const authoritativeSources = engine === 'DATABRICKS'
+    ? ['system.access.column_lineage', 'system.access.table_lineage']
+    : engine === 'SQLITE'
+      ? ['JDBC_DATABASE_METADATA_IMPORTED_KEYS']
+      : []
 
   await beginLineageRun({ source, discoveryRunId: input.discoveryRunId, catalogRevisionId, catalogs, authoritativeSources })
   try {
