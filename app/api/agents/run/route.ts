@@ -1,9 +1,11 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
-import { enqueueDurableJob } from '@/lib/orchestration/queue'
+import { claimDurableJobByAgentRun, enqueueDurableJob } from '@/lib/orchestration/queue'
+import { processDurableJobs } from '@/lib/orchestration/worker'
+import { dispatchAdaptiveRounds } from '@/lib/orchestration/adaptive-dispatch'
 
 export const maxDuration = 300
 
@@ -166,10 +168,25 @@ export async function POST(request: Request) {
         maxAttempts: 3,
       })
 
+      after(async () => {
+        const workerId = `profiling-kick:${activeAgentRunId}:${crypto.randomUUID()}`
+        try {
+          const claimed = await claimDurableJobByAgentRun(workerId, activeAgentRunId)
+          if (claimed) await processDurableJobs([claimed])
+          await dispatchAdaptiveRounds(`${workerId}:downstream`, {
+            maxRounds: 2,
+            claimBatchSize: 4,
+          })
+        } catch (dispatchError) {
+          console.error('[profiling-adaptive-dispatch]', errorMessage(dispatchError, 'Adaptive profiling dispatch failed.'))
+        }
+      })
+
       return NextResponse.json({
         accepted: true,
         reused: false,
         execution_completed: false,
+        adaptive_dispatch: true,
         agentRunId: activeAgentRunId,
         profilingRunId,
         agentDefinitionId: agentDefinition.id,
