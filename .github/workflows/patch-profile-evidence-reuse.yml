@@ -1,0 +1,57 @@
+name: Patch profile evidence reuse integration
+
+on:
+  push:
+    branches: [feat/truth-aware-profile-evidence-reuse]
+    paths:
+      - '.github/workflows/patch-profile-evidence-reuse.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/truth-aware-profile-evidence-reuse
+      - name: Patch profiling reuse integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('lib/profiling/file-profile.ts')
+          s = p.read_text()
+          old = """  const sourceAccess = {\n    mode: loaded.format === 'binary' ? 'metadata_only' : 'source_rows',\n    connector: { kind: 'file', format: loaded.format, source_uri: loaded.sourceUri },\n    sampled_rows: sampled.sampledRows,"""
+          new = """  const sourceAccess = {\n    mode: loaded.format === 'binary' ? 'metadata_only' : 'source_rows',\n    connector: { kind: 'file', format: loaded.format, source_uri: loaded.sourceUri },\n    content_hash: loaded.contentHash,\n    content_hash_authority: 'SOURCE_BYTES_SHA256',\n    sampled_rows: sampled.sampledRows,"""
+          if old not in s:
+              raise SystemExit('file-profile sourceAccess patch target not found')
+          s = s.replace(old, new, 1)
+          old = """  const { data: run, error: runError } = await supabase.schema('profiling').from('profile_runs').update({\n    row_count: sampled.sourceRowCount,\n    column_count: columns.length,\n    schema_hash: schemaHash,"""
+          new = """  const { data: run, error: runError } = await supabase.schema('profiling').from('profile_runs').update({\n    row_count: sampled.sourceRowCount,\n    column_count: columns.length,\n    content_hash: loaded.contentHash,\n    schema_hash: schemaHash,"""
+          if old not in s:
+              raise SystemExit('file-profile content hash persistence patch target not found')
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('lib/agents/run-profiling-job.ts')
+          s = p.read_text()
+          old = """import { syncProfileClassifications } from '@/lib/governance/classification'\n"""
+          new = """import { syncProfileClassifications } from '@/lib/governance/classification'\nimport { tryReuseProfileEvidence } from '@/lib/profiling/evidence-reuse'\n"""
+          if old not in s:
+              raise SystemExit('profiling job import patch target not found')
+          s = s.replace(old, new, 1)
+          old = """    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).eq('status', 'RUNNING'), 'complete profile step')\n\n    const metricStartedAt = new Date().toISOString()"""
+          new = """    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).eq('status', 'RUNNING'), 'complete profile step')\n\n    let reuseDecision = null\n    try {\n      reuseDecision = await tryReuseProfileEvidence({\n        supabase: admin,\n        userId,\n        projectId,\n        datasetVersionId,\n        profilingRunId,\n        engineName: 'profiling-engine',\n        engineVersion: '1.1',\n      })\n    } catch (error) {\n      console.error(`[profiling-job] evidence reuse planner failed safely: ${errorMessage(error, 'unknown reuse error')}`)\n    }\n\n    if (reuseDecision?.reused) {\n      const reusedAt = new Date().toISOString()\n      const reuseOutput = {\n        execution_mode: 'REUSED',\n        source_profile_run_id: reuseDecision.sourceProfileRunId,\n        reason: reuseDecision.reason,\n        content_hash_authority: reuseDecision.contentHashAuthority,\n        profile_signature: reuseDecision.profileSignature,\n      }\n      const metricReuseStep = await startOrRetryStep(admin, {\n        agentRunId,\n        stepName: metricTool.tool_key,\n        stepOrder: 2,\n        stepInput: { ...requestInput, profilingRunId, tool_definition_id: metricTool.id, tool_version: metricTool.version, execution_mode: 'REUSED' },\n        startedAt: reusedAt,\n      })\n      await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: reuseOutput, completed_at: reusedAt }).eq('id', metricReuseStep.id).eq('status', 'RUNNING'), 'complete reused metric step')\n      const investigationReuseStep = await startOrRetryStep(admin, {\n        agentRunId,\n        stepName: investigationTool.tool_key,\n        stepOrder: 3,\n        stepInput: { ...requestInput, profilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version, execution_mode: 'REUSED' },\n        startedAt: reusedAt,\n      })\n      await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: reuseOutput, completed_at: reusedAt }).eq('id', investigationReuseStep.id).eq('status', 'RUNNING'), 'complete reused investigation step')\n\n      const validation = await validateProfilingRun(profilingRunId, userId)\n      if (!validation.valid) throw new Error(`Reused profiling contract validation failed: ${validation.warnings.join(' ') || 'persisted results are incomplete.'}`)\n      try { await syncProfileClassifications(datasetVersionId, profilingRunId) } catch (error) {\n        console.error(`[profiling-job] reused classification sync failed: ${errorMessage(error, 'unknown error')}`)\n      }\n      const result = {\n        execution_completed: true,\n        execution_mode: 'REUSED',\n        agent_run_id: agentRunId,\n        profiling_run_id: profilingRunId,\n        project_id: projectId,\n        dataset_version_id: datasetVersionId,\n        profile: profileResult,\n        reuse: reuseDecision,\n        validation,\n      }\n      const { error: finalReuseError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: reusedAt }).eq('id', agentRunId).eq('status', 'RUNNING')\n      if (finalReuseError) throw new Error(`Unable to finalize reused agent run: ${finalReuseError.message}`)\n      return\n    }\n\n    const metricStartedAt = new Date().toISOString()"""
+          if old not in s:
+              raise SystemExit('profiling job reuse insertion target not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/profiling/file-profile.ts lib/agents/run-profiling-job.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "Integrate truth-aware profiling evidence reuse"
+          git push origin HEAD:feat/truth-aware-profile-evidence-reuse
