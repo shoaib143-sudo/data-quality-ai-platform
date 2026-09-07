@@ -33,6 +33,21 @@ async function writeTelemetry(projectId: string | null, metricKey: string, numer
   if (error) console.error('[platform-telemetry]', error.message)
 }
 
+async function recordClaimTelemetry(jobs: DurableJob[]) {
+  await Promise.all(jobs.map(async (job) => {
+    if (!job.started_at) return
+    const createdAt = new Date(job.created_at).getTime()
+    const startedAt = new Date(job.started_at).getTime()
+    if (!Number.isFinite(createdAt) || !Number.isFinite(startedAt)) return
+    await writeTelemetry(job.project_id, 'job.queue_wait_ms', Math.max(0, startedAt - createdAt), {
+      job_type: job.job_type,
+      priority: job.priority,
+      attempts: job.attempts,
+      dispatch_mode: job.lease_owner?.startsWith('event-worker:') ? 'EVENT_DRIVEN' : 'WORKER_CLAIM',
+    })
+  }))
+}
+
 async function resolveCapacity(projectId: string) {
   const admin = createAdminClient()
   const { data, error } = await admin.schema('orchestration').from('capacity_policies').select('*').eq('project_id', projectId).maybeSingle()
@@ -122,7 +137,9 @@ export async function claimDurableJobs(workerId: string, limit = 2) {
     p_limit: limit,
   })
   if (error) throw new Error(`Unable to claim durable jobs: ${error.message}`)
-  return (data ?? []) as DurableJob[]
+  const jobs = (data ?? []) as DurableJob[]
+  await recordClaimTelemetry(jobs)
+  return jobs
 }
 
 export async function markDurableJobSucceeded(job: Pick<DurableJob, 'id' | 'project_id' | 'job_type' | 'created_at' | 'started_at'> | string) {
@@ -184,7 +201,9 @@ export async function claimDurableJobByAgentRun(workerId: string, agentRunId: st
   })
   if (error) throw new Error(`Unable to claim durable job for run ${agentRunId}: ${error.message}`)
   if (!data) return null
-  return data as DurableJob
+  const job = data as DurableJob
+  await recordClaimTelemetry([job])
+  return job
 }
 
 export async function getProjectCapacityPolicy(projectId: string) {
