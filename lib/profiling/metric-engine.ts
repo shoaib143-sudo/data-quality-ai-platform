@@ -325,7 +325,13 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   const metricRows: Record<string, unknown>[] = []
   for (const result of results) for (const metric of result.metrics) { const definition = definitionMap.get(`COLUMN:${metric.metric_key}`); if (!definition?.enabled) continue; metricRows.push({ metric_definition_id: definition.id, profile_column_id: columnIdByName.get(result.column_name), metric_key: metric.metric_key, ...(metric.numeric_value !== undefined && metric.numeric_value !== null ? { numeric_value: metric.numeric_value } : {}), ...(metric.text_value !== undefined && metric.text_value !== null ? { text_value: metric.text_value } : {}), ...(metric.json_value !== undefined && metric.json_value !== null ? { json_value: metric.json_value } : {}) }) }
   const duplicateRows = duplicateRowCount(rows)
-  const duplicateMetricBasis = rows.length < loaded.rowCount ? 'SAMPLE' : 'FULL_DATASET'
+  const sourceAccess = 'sourceAccess' in loaded && loaded.sourceAccess && typeof loaded.sourceAccess === 'object' && !Array.isArray(loaded.sourceAccess)
+    ? loaded.sourceAccess as Record<string, unknown>
+    : {}
+  const samplingPolicy = sourceAccess.sampling_policy && typeof sourceAccess.sampling_policy === 'object' && !Array.isArray(sourceAccess.sampling_policy)
+    ? sourceAccess.sampling_policy as Record<string, unknown>
+    : {}
+  const duplicateMetricBasis = samplingPolicy.full_source_coverage_claimed === true ? 'FULL_DATASET' : 'SAMPLE'
   const datasetMetricValues: Record<string, number | string> = { column_count: columnNames.length, row_count: loaded.rowCount, duplicate_row_count: duplicateRows, duplicate_row_rate: rows.length ? round(duplicateRows / rows.length) : 0, schema_hash: schemaHash(columnNames) }
   for (const metric of enabled.filter((m) => m.scope === 'DATASET')) { const definition = definitionMap.get(`DATASET:${metric.metric_key}`); if (!definition) throw new Error(`Enabled dataset metric ${metric.metric_key} is missing from the registry catalog.`); const value = datasetMetricValues[metric.metric_key]; metricRows.push({ metric_definition_id: definition.id, profile_column_id: null, metric_key: metric.metric_key, ...(typeof value === 'number' ? { numeric_value: value } : {}), ...(typeof value === 'string' ? { text_value: value } : {}) }) }
   for (const result of results) {
