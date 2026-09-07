@@ -1,11 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export type SamplingMode = 'FULL' | 'FIXED' | 'PERCENT'
+export type SamplingPolicyOrigin = 'EXPLICIT_DATASET_POLICY' | 'AUTOMATIC_PLANNER'
+export type SamplingEstimateAuthority = 'SOURCE_OBSERVED' | 'UNKNOWN'
+export type SamplingCoverageScope = 'FULL_SOURCE_OBSERVED' | 'SAMPLED_OBSERVATION' | 'BOUNDED_OBSERVATION'
 
 export type ResolvedSamplingPolicy = {
   datasetId: string
   projectId: string
   mode: SamplingMode
+  policyOrigin: SamplingPolicyOrigin
+  plannerReason: string
   loadLimit: number
   configuredMaxRows: number
   samplePercent: number
@@ -14,11 +19,21 @@ export type ResolvedSamplingPolicy = {
   technicalMaxFileBytes: number
   advisoryMaxRows: number | null
   advisoryMaxFileBytes: number | null
+  sourceRowEstimate: number | null
+  sourceSizeEstimate: number | null
+  sourceEstimateAuthority: SamplingEstimateAuthority
 }
 
 function finiteInt(value: unknown, fallback: number) {
+  if (value == null || (typeof value === 'string' && value.trim() === '')) return fallback
   const number = Number(value)
   return Number.isFinite(number) ? Math.max(1, Math.floor(number)) : fallback
+}
+
+function finiteNumber(value: unknown) {
+  if (value == null || (typeof value === 'string' && value.trim() === '')) return null
+  const number = Number(value)
+  return Number.isFinite(number) && number >= 0 ? number : null
 }
 
 function environmentInt(name: string, fallback: number, min: number, max: number) {
@@ -26,6 +41,47 @@ function environmentInt(name: string, fallback: number, min: number, max: number
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return fallback
   return Math.min(max, Math.max(min, Math.floor(parsed)))
+}
+
+function metadataObject(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function sourceObservedEstimate(metadata: Record<string, unknown>, valueKey: string, authorityKey: string) {
+  const authority = typeof metadata[authorityKey] === 'string' ? metadata[authorityKey].trim().toUpperCase() : ''
+  if (authority !== 'SOURCE_OBSERVED') return null
+  return finiteNumber(metadata[valueKey])
+}
+
+async function recordSamplingPlannerTelemetry(
+  supabase: SupabaseClient,
+  policy: ResolvedSamplingPolicy,
+) {
+  try {
+    const { error } = await supabase.schema('orchestration').from('platform_telemetry').insert({
+      project_id: policy.projectId,
+      metric_key: 'planner.sampling_mode',
+      numeric_value: policy.loadLimit,
+      dimensions: {
+        dataset_id: policy.datasetId,
+        mode: policy.mode,
+        policy_origin: policy.policyOrigin,
+        planner_reason: policy.plannerReason,
+        configured_max_rows: policy.configuredMaxRows,
+        sample_percent: policy.samplePercent,
+        source_row_estimate: policy.sourceRowEstimate,
+        source_size_estimate: policy.sourceSizeEstimate,
+        source_estimate_authority: policy.sourceEstimateAuthority,
+        technical_max_rows: policy.technicalMaxRows,
+        technical_max_file_bytes: policy.technicalMaxFileBytes,
+      },
+    })
+    if (error) console.error('[sampling-planner-telemetry]', error.message)
+  } catch (error) {
+    console.error('[sampling-planner-telemetry]', error instanceof Error ? error.message : error)
+  }
 }
 
 export async function resolveSamplingPolicy(
@@ -36,7 +92,7 @@ export async function resolveSamplingPolicy(
   const { data: version, error: versionError } = await supabase
     .schema('catalog')
     .from('dataset_versions')
-    .select('id,dataset_id')
+    .select('id,dataset_id,row_count,column_count,size_bytes,metadata')
     .eq('id', datasetVersionId)
     .maybeSingle()
   if (versionError || !version) throw new Error(`Unable to resolve sampling dataset version: ${versionError?.message ?? 'not found'}`)
@@ -56,18 +112,69 @@ export async function resolveSamplingPolicy(
   if (policyError) throw new Error(`Unable to resolve sampling policy: ${policyError.message}`)
   if (advisoryError) throw new Error(`Unable to resolve advisory operating targets: ${advisoryError.message}`)
 
-  const configuredMaxRows = finiteInt(policy?.max_rows, 1000)
-  const mode = ['FULL','FIXED','PERCENT'].includes(String(policy?.mode).toUpperCase())
-    ? String(policy?.mode).toUpperCase() as SamplingMode
-    : 'FIXED'
-  const samplePercent = Math.min(100, Math.max(0.01, Number(policy?.sample_percent ?? 10)))
-  const deterministicSeed = finiteInt(policy?.deterministic_seed, 17)
   const requested = finiteInt(requestedMaxRows, 1000)
-
-  // These are implementation safety ceilings for the current in-memory execution model,
-  // not tenant quotas. Business operating targets are recorded only for telemetry.
   const technicalMaxRows = environmentInt('PROFILE_TECHNICAL_MAX_ROWS', 250_000, 1_000, 1_000_000)
   const technicalMaxFileBytes = environmentInt('FILE_TECHNICAL_MAX_BYTES', 250 * 1024 * 1024, 1 * 1024 * 1024, 1024 * 1024 * 1024)
+  const autoFullScanMaxRows = Math.min(
+    technicalMaxRows,
+    environmentInt('PROFILE_AUTO_FULL_SCAN_MAX_ROWS', 50_000, 100, technicalMaxRows),
+  )
+  const autoSampleRows = Math.min(
+    technicalMaxRows,
+    environmentInt('PROFILE_AUTO_SAMPLE_ROWS', 10_000, 100, technicalMaxRows),
+  )
+
+  const metadata = metadataObject(version.metadata)
+  const sourceRowEstimate = sourceObservedEstimate(metadata, 'source_row_count', 'source_row_count_authority')
+  const sourceSizeEstimate = sourceObservedEstimate(metadata, 'source_size_bytes', 'source_size_bytes_authority')
+  const sourceEstimateAuthority: SamplingEstimateAuthority = sourceRowEstimate != null || sourceSizeEstimate != null
+    ? 'SOURCE_OBSERVED'
+    : 'UNKNOWN'
+
+  let mode: SamplingMode
+  let configuredMaxRows: number
+  let samplePercent: number
+  let deterministicSeed: number
+  let policyOrigin: SamplingPolicyOrigin
+  let plannerReason: string
+
+  if (policy) {
+    mode = ['FULL', 'FIXED', 'PERCENT'].includes(String(policy.mode).toUpperCase())
+      ? String(policy.mode).toUpperCase() as SamplingMode
+      : 'FIXED'
+    configuredMaxRows = finiteInt(policy.max_rows, 1000)
+    samplePercent = Math.min(100, Math.max(0.01, Number(policy.sample_percent ?? 10)))
+    deterministicSeed = finiteInt(policy.deterministic_seed, 17)
+    policyOrigin = 'EXPLICIT_DATASET_POLICY'
+    plannerReason = 'EXPLICIT_POLICY_PRESERVED'
+  } else {
+    policyOrigin = 'AUTOMATIC_PLANNER'
+    deterministicSeed = 17
+    samplePercent = 100
+
+    const sourceRowsSafelyFull = sourceRowEstimate != null && sourceRowEstimate <= autoFullScanMaxRows
+    const sourceBytesSafelyFull = sourceSizeEstimate != null && sourceSizeEstimate <= technicalMaxFileBytes
+    const completeFullScanEvidence = sourceRowsSafelyFull && sourceBytesSafelyFull
+
+    if (completeFullScanEvidence) {
+      mode = 'FULL'
+      configuredMaxRows = Math.max(1, Math.ceil(sourceRowEstimate))
+      plannerReason = 'SOURCE_OBSERVED_SMALL_WORKLOAD_FULL_SCAN'
+    } else if (
+      (sourceRowEstimate != null && sourceRowEstimate > autoFullScanMaxRows)
+      || (sourceSizeEstimate != null && sourceSizeEstimate > technicalMaxFileBytes)
+    ) {
+      mode = 'FIXED'
+      configuredMaxRows = Math.max(100, Math.min(autoSampleRows, technicalMaxRows))
+      plannerReason = 'SOURCE_OBSERVED_LARGE_WORKLOAD_SAFE_SAMPLE'
+    } else {
+      mode = 'FIXED'
+      configuredMaxRows = Math.max(100, Math.min(requested, technicalMaxRows))
+      plannerReason = sourceEstimateAuthority === 'SOURCE_OBSERVED'
+        ? 'INCOMPLETE_SOURCE_SIZE_EVIDENCE_SAFE_SAMPLE'
+        : 'UNKNOWN_SOURCE_CARDINALITY_SAFE_SAMPLE'
+    }
+  }
 
   let desiredLoadRows: number
   if (mode === 'FULL') desiredLoadRows = technicalMaxRows
@@ -75,10 +182,12 @@ export async function resolveSamplingPolicy(
   else desiredLoadRows = configuredMaxRows
   const loadLimit = Math.min(technicalMaxRows, Math.max(1, desiredLoadRows))
 
-  return {
+  const resolved: ResolvedSamplingPolicy = {
     datasetId: dataset.id,
     projectId: dataset.project_id,
     mode,
+    policyOrigin,
+    plannerReason,
     loadLimit,
     configuredMaxRows,
     samplePercent,
@@ -87,7 +196,13 @@ export async function resolveSamplingPolicy(
     technicalMaxFileBytes,
     advisoryMaxRows: advisory?.max_profile_rows == null ? null : Number(advisory.max_profile_rows),
     advisoryMaxFileBytes: advisory?.max_file_bytes == null ? null : Number(advisory.max_file_bytes),
+    sourceRowEstimate,
+    sourceSizeEstimate,
+    sourceEstimateAuthority,
   }
+
+  await recordSamplingPlannerTelemetry(supabase, resolved)
+  return resolved
 }
 
 function stableHash(value: string, seed: number) {
@@ -109,7 +224,10 @@ export function applySamplingPolicy<T extends Record<string, unknown>>(
   sourceRowCount: number | null,
   policy: ResolvedSamplingPolicy,
 ) {
-  const knownCount = typeof sourceRowCount === 'number' && Number.isFinite(sourceRowCount) ? sourceRowCount : rows.length
+  const connectorObservedCount = typeof sourceRowCount === 'number' && Number.isFinite(sourceRowCount) && sourceRowCount >= 0
+    ? sourceRowCount
+    : null
+  const knownCount = policy.sourceRowEstimate ?? connectorObservedCount ?? rows.length
   let targetRows = rows.length
   if (policy.mode === 'PERCENT') {
     targetRows = Math.max(1, Math.ceil(knownCount * policy.samplePercent / 100))
@@ -129,9 +247,24 @@ export function applySamplingPolicy<T extends Record<string, unknown>>(
       .map((item) => item.row)
   }
 
+  const fullSourceCoverageClaimed = policy.mode === 'FULL'
+    && policy.sourceEstimateAuthority === 'SOURCE_OBSERVED'
+    && policy.sourceRowEstimate != null
+    && policy.sourceSizeEstimate != null
+    && sampled.length >= policy.sourceRowEstimate
+    && rows.length >= policy.sourceRowEstimate
+  const coverageScope: SamplingCoverageScope = fullSourceCoverageClaimed
+    ? 'FULL_SOURCE_OBSERVED'
+    : sampled.length < knownCount || policy.mode !== 'FULL'
+      ? 'SAMPLED_OBSERVATION'
+      : 'BOUNDED_OBSERVATION'
+
   const warnings: string[] = []
+  if (!fullSourceCoverageClaimed) {
+    warnings.push('Profiling evidence is bounded or sampled and must not be interpreted as proof of complete source coverage.')
+  }
   if (knownCount > sampled.length) {
-    warnings.push(`Profiling used ${sampled.length} deterministic sample rows from ${knownCount} source rows under ${policy.mode} sampling.`)
+    warnings.push(`Profiling used ${sampled.length} deterministic sample rows from ${knownCount} observed/estimated rows under ${policy.mode} sampling.`)
   }
   if (policy.mode === 'FULL' && rows.length >= policy.technicalMaxRows && knownCount >= policy.technicalMaxRows) {
     warnings.push(`FULL profiling reached the current execution engine technical safety ceiling of ${policy.technicalMaxRows} in-memory rows. This is not a business quota; use a streaming/distributed executor for larger full scans.`)
@@ -147,6 +280,8 @@ export function applySamplingPolicy<T extends Record<string, unknown>>(
     warnings,
     policy: {
       mode: policy.mode,
+      origin: policy.policyOrigin,
+      planner_reason: policy.plannerReason,
       configured_max_rows: policy.configuredMaxRows,
       sample_percent: policy.samplePercent,
       deterministic_seed: policy.deterministicSeed,
@@ -154,6 +289,11 @@ export function applySamplingPolicy<T extends Record<string, unknown>>(
       technical_max_file_bytes: policy.technicalMaxFileBytes,
       advisory_max_rows: policy.advisoryMaxRows,
       advisory_max_file_bytes: policy.advisoryMaxFileBytes,
+      source_row_estimate: policy.sourceRowEstimate,
+      source_size_estimate: policy.sourceSizeEstimate,
+      source_estimate_authority: policy.sourceEstimateAuthority,
+      coverage_scope: coverageScope,
+      full_source_coverage_claimed: fullSourceCoverageClaimed,
       quota_enforced: false,
     },
   }

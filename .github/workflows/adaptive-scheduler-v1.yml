@@ -5,17 +5,23 @@ on:
     branches: [main]
     paths:
       - 'lib/orchestration/**'
+      - 'lib/profiling/sampling.ts'
+      - 'lib/profiling/metric-engine.ts'
       - 'app/api/jobs/worker/route.ts'
       - 'app/api/agents/run/route.ts'
       - 'scripts/verify-adaptive-scheduler-v1.mjs'
+      - 'scripts/verify-adaptive-sampling.mjs'
       - '.github/workflows/adaptive-scheduler-v1.yml'
   pull_request:
     branches: [main]
     paths:
       - 'lib/orchestration/**'
+      - 'lib/profiling/sampling.ts'
+      - 'lib/profiling/metric-engine.ts'
       - 'app/api/jobs/worker/route.ts'
       - 'app/api/agents/run/route.ts'
       - 'scripts/verify-adaptive-scheduler-v1.mjs'
+      - 'scripts/verify-adaptive-sampling.mjs'
       - '.github/workflows/adaptive-scheduler-v1.yml'
 
 permissions:
@@ -35,4 +41,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: node scripts/verify-adaptive-scheduler-v1.mjs
+      - run: node scripts/verify-adaptive-sampling.mjs
       - run: pnpm run build
