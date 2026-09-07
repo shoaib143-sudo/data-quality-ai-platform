@@ -5,11 +5,9 @@ import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { evaluateIncidentSlaEscalations } from '@/lib/observability/incident-sla'
 import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
 import { claimOutboxEvents, processOutboxEvents } from '@/lib/orchestration/outbox'
-import {
-  claimDurableJobByAgentRun,
-  claimDurableJobs,
-} from '@/lib/orchestration/queue'
+import { claimDurableJobByAgentRun } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
+import { dispatchAdaptiveRounds } from '@/lib/orchestration/adaptive-dispatch'
 import { runProjectionWorker } from '@/lib/data-plane/run-projection-worker'
 import { cleanupExpiredObjectArtifacts } from '@/lib/data-plane/object-lifecycle'
 import { enqueueDailySemanticIndexJobs } from '@/lib/governance/semantic-jobs'
@@ -45,15 +43,7 @@ export async function GET(request: Request) {
 
   const workerId = `scheduled-worker:${crypto.randomUUID()}`
   const scheduled = await enqueueDueSchedules(20)
-  const jobs = await claimDurableJobs(workerId, 2)
-  const semanticJobs = jobs.filter((job) => job.job_type === 'SEMANTIC_INDEX')
-  const governanceAgentJobs = jobs.filter((job) => job.job_type === 'GOVERNANCE_AGENT')
-  const coreJobs = jobs.filter((job) => job.job_type !== 'SEMANTIC_INDEX' && job.job_type !== 'GOVERNANCE_AGENT')
-  const [results, semanticResults, governanceAgentResults] = await Promise.all([
-    processDurableJobs(coreJobs),
-    processSemanticIndexJobs(semanticJobs),
-    processGovernanceAgentJobs(governanceAgentJobs),
-  ])
+  const dispatch = await dispatchAdaptiveRounds(workerId)
   const events = await claimOutboxEvents(workerId, 30)
   const eventResults = await processOutboxEvents(events)
   const [incidentEscalations, projections, semanticIndexScheduling, objectRetention] = await Promise.all([
@@ -69,10 +59,12 @@ export async function GET(request: Request) {
   return NextResponse.json({
     workerId,
     scheduled,
-    claimed: jobs.length,
-    results,
-    semanticResults,
-    governanceAgentResults,
+    adaptiveDispatch: true,
+    dispatchRounds: dispatch.rounds,
+    claimed: dispatch.claimed,
+    results: dispatch.results,
+    semanticResults: dispatch.semanticResults,
+    governanceAgentResults: dispatch.governanceAgentResults,
     semanticIndexScheduling,
     objectRetention,
     predictiveRisk,

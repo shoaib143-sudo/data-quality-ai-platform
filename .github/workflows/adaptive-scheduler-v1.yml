@@ -1,0 +1,38 @@
+name: Adaptive Scheduler v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/orchestration/**'
+      - 'app/api/jobs/worker/route.ts'
+      - 'app/api/agents/run/route.ts'
+      - 'scripts/verify-adaptive-scheduler-v1.mjs'
+      - '.github/workflows/adaptive-scheduler-v1.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/orchestration/**'
+      - 'app/api/jobs/worker/route.ts'
+      - 'app/api/agents/run/route.ts'
+      - 'scripts/verify-adaptive-scheduler-v1.mjs'
+      - '.github/workflows/adaptive-scheduler-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-adaptive-scheduler-v1.mjs
+      - run: pnpm run build
