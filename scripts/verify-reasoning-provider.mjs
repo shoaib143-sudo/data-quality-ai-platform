@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const provider = fs.readFileSync('lib/ai/reasoning-provider.ts', 'utf8')
 const investigation = fs.readFileSync('lib/ai/investigation-model.ts', 'utf8')
+const investigationEngine = fs.readFileSync('lib/profiling/investigation-engine.ts', 'utf8')
 
 function requireText(text, needle, label) {
   if (!text.includes(needle)) throw new Error(`ReasoningProvider contract missing: ${label}`)
@@ -17,12 +18,20 @@ requireText(provider, "process.env.AI_MODEL_API_KEY?.trim()", 'existing credenti
 requireText(provider, "process.env.AI_MODEL_BASE_URL ?? 'https://api.openai.com/v1'", 'existing endpoint configuration compatibility')
 requireText(provider, "process.env.AI_MODEL_NAME?.trim() || 'gpt-4.1-mini'", 'existing model configuration compatibility')
 requireText(provider, "response_format: { type: 'json_object' }", 'structured JSON response contract')
-requireText(investigation, "import { getModelGateway } from './model-gateway'", 'profiling investigation uses Model Gateway')
-requireText(investigation, ".reasoning({ task: 'profiling_investigation' })", 'profiling task-aware routing')
-requireText(investigation, 'if (!provider) return null', 'no-provider backward compatibility')
+requireText(investigation, "import { createGovernanceIntelligentRouter } from './governance-intelligent-router'", 'profiling investigation uses governed Intelligent Router')
+requireText(investigation, 'createGovernanceIntelligentRouter().route({', 'profiling investigation routes through governed router')
+requireText(investigation, "task: 'profiling_investigation'", 'profiling task-aware routing')
+requireText(investigation, "from('dataset_versions')", 'profiling router resolves persisted dataset version identity')
+requireText(investigation, "from('datasets')", 'profiling router resolves persisted project identity')
+requireText(investigation, 'if (!projectId) return null', 'missing project identity fails closed to deterministic-only investigation')
+requireText(investigation, 'if (!decision.provider) return null', 'unavailable route preserves deterministic-only investigation')
+requireText(investigationEngine, 'enrichInvestigationWithModel({', 'active profiling investigation calls governed model enrichment boundary')
 
+if (investigation.includes('getModelGateway') || investigation.includes("from './model-gateway'")) {
+  throw new Error('Profiling investigation must not bypass the governed Intelligent Router through ModelGateway.')
+}
 if (investigation.includes('/chat/completions') || investigation.includes('AI_MODEL_API_KEY')) {
   throw new Error('Profiling investigation must not bypass the governed model boundary.')
 }
 
-console.log('ADR-006 ReasoningProvider boundary verified.')
+console.log('ADR-006 ReasoningProvider and profiling Intelligent Router boundary verified.')
