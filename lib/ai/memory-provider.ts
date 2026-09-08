@@ -157,6 +157,7 @@ export class CanonicalMemoryProvider implements MemoryProvider {
       for (const row of rows) {
         if (row.project_id !== projectId) continue
         if (row.status !== 'ACTIVE') continue
+        if (!row.source_agent_run_id) continue
         if (row.decision_status !== 'VERIFIED' || row.outcome_status !== 'VERIFIED') continue
         if (hasSyntheticBootstrap(row.evidence)) continue
         records.push({
