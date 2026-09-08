@@ -1,11 +1,11 @@
 # DataNexus AI production operating state and continuation
 
 Date: 2026-09-08
-Baseline main SHA: `612698462804291c83b86d6d3ba7d7ee1134b1a4`
+Baseline main SHA: `258a241c9852d2307b60c4bd27dc0037d87c9721`
 
 ## Purpose
 
-This document records the production architecture and truth boundaries after the September 8 E2E acceptance, scheduler optimization, AI capability, governance-corpus, and remediation-verification work. It is intended to let the next engineer continue from evidence rather than reconstructing the platform from chat history.
+This document records the production architecture and truth boundaries after the September 8 E2E acceptance, scheduler optimization, AI capability, governance-corpus, remediation-verification, profiling-audit, and Databricks-lineage revalidation work. It is intended to let the next engineer continue from evidence rather than reconstructing the platform from chat history.
 
 ## Production topology
 
@@ -48,6 +48,26 @@ Observed results:
 | profile metrics | succeeded | succeeded | 1,000 | 29 | 17 | 0.5494 | 8 | 0 |
 
 Both profiling jobs were claimed event-driven in about 1.739 seconds. Downstream DQ fan-out completed automatically. The 1,000 rows are explicitly `SAMPLED_OBSERVATION`, not full-source cardinality evidence.
+
+## September 8 live lineage revalidation and profiling-audit closure
+
+A release-state live canary was executed at approximately 2026-09-08 13:31 UTC against the governed Databricks source and the selected object `pub.gold.customer_water_consumption_behavior_profile_metrics` through the deployed `dgp-databricks-connector` using its governed Supabase Vault `credential_ref`.
+
+The connector successfully reached Databricks and attempted both authoritative queries, but Databricks rejected both:
+
+- `system.access.column_lineage`: `[INSUFFICIENT_PERMISSIONS] User does not have USE SCHEMA on Schema 'system.access'. SQLSTATE: 42501`
+- `system.access.table_lineage`: `[INSUFFICIENT_PERMISSIONS] User does not have USE SCHEMA on Schema 'system.access'. SQLSTATE: 42501`
+
+The connector returned HTTP 200 because lineage availability is represented as explicit warnings rather than transport failure. It returned zero transformations, `complete=false`, and correctly identified `system.access.column_lineage` and `system.access.table_lineage` as the authoritative sources. This proves the remaining lineage gap is an external Databricks authorization boundary, not a missing DataNexus native-query implementation.
+
+The production profiling audit path introduced by PR #106 was also revalidated directly in Supabase:
+
+- 43 completed profile runs exist across production and all 43 have corresponding `PROFILING_RUN_COMPLETED` audit events.
+- The target DataNexus project has 41 `PROFILING_RUN_COMPLETED` audit events and all 41 are chain-version-3 rows with non-null sequence and event hash.
+- The target project's chain-version-3 segment contains 364 hashed rows with zero broken links and zero missing hashes.
+- Older chain-version-1 rows intentionally predate sequence numbering, and chain-version-2 contains two historical discontinuities. Those legacy states must not be misreported as a current chain-version-3 integrity failure.
+
+No audit repair migration is required for the current v3 acceptance path.
 
 ## Adaptive scheduler architecture
 
@@ -153,7 +173,7 @@ Only these remain `DATA_PENDING`:
 - #32 Impact analysis
 - #52 Agent-based data architect
 
-The exact blocker is source-authoritative Databricks field lineage. DataNexus currently does not have the required Databricks `system.access` evidence.
+The exact blocker is source-authoritative Databricks field lineage. The September 8 live canary confirmed that the configured production Databricks identity can reach the workspace and execute governed connector requests, but Databricks denies both authoritative lineage queries with SQLSTATE `42501` because the identity lacks `USE SCHEMA` on `system.access`.
 
 Required Databricks access/evidence:
 
@@ -161,7 +181,9 @@ Required Databricks access/evidence:
 - read access to `system.access.table_lineage`
 - read access to `system.access.column_lineage`
 
-Until that evidence is ingested, `governance.lineage_column_mappings` must not be populated with fabricated source-authoritative mappings. AI inference, FK relationships, human acceptance, or scheduler DAG edges do not satisfy this boundary.
+Until that evidence is ingested, `governance.lineage_column_mappings` must not be populated with fabricated source-authoritative mappings. It currently contains zero mappings. AI inference, FK relationships, human acceptance, or scheduler DAG edges do not satisfy this boundary.
+
+When the Databricks grant is changed, rerun the existing native lineage path before making any code changes. Only a successful source-observed result with real column mappings can clear capabilities #31/#32/#52.
 
 ## Non-negotiable truth and governance rules
 
@@ -184,8 +206,9 @@ Until that evidence is ingested, `governance.lineage_column_mappings` must not b
 The next agent should:
 
 1. Re-resolve current GitHub main, Vercel production SHA, and Supabase state before making claims.
-2. Focus first on the remaining Databricks source-authoritative lineage blocker for capabilities #31/#32/#52.
-3. Trace the native Databricks lineage query and ingestion code and run a live lineage canary.
-4. If `system.access` remains denied, report the exact Databricks grants required and do not synthesize lineage.
-5. If access is available, ingest table and column lineage with source provenance, refresh governance intelligence, regenerate the 75-capability matrix, and require 75/75 only if the evidence is genuinely present.
-6. Run full CI, merge only exact verified heads, apply migrations only when required, verify exact-main deployment, and rerun production acceptance after changes.
+2. Treat the native Databricks lineage implementation as present and the September 8 live canary as proof of the current external authorization boundary.
+3. Do not synthesize lineage or weaken evidence authority while `system.access` remains denied.
+4. After the Databricks identity receives `USE SCHEMA` on `system.access` plus read access to `system.access.table_lineage` and `system.access.column_lineage`, rerun the live native lineage canary immediately.
+5. If access is available, ingest the returned source-observed table and column lineage through `governance.ingest_lineage_batch_atomic`, verify real rows in `governance.lineage_column_mappings`, refresh governance intelligence, regenerate the 75-capability matrix, and require 75/75 only if the evidence is genuinely present.
+6. Preserve the current profiling audit acceptance: completion events are covered and the active chain-version-3 segment has zero broken links.
+7. Run full CI, merge only exact verified heads, apply migrations only when required, verify exact-main deployment, and rerun production acceptance after changes.
