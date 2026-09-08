@@ -117,9 +117,7 @@ function allChecksPassed(checks: EvaluationDatasetJson) {
 }
 
 function sourceId(caseRecord: LearningCaseRecord) {
-  const evidence = caseRecord.evidence?.evidence
-  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) return null
-  const value = (evidence as Record<string, unknown>).source_id
+  const value = caseRecord.evidence?.source_id
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
