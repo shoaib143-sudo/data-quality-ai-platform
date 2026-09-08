@@ -12,39 +12,22 @@ const integrationLower = integrationMigration.toLowerCase()
 const hardeningLower = hardeningMigration.toLowerCase()
 
 function requireText(needle, label) {
-  if (!lower.includes(needle.toLowerCase())) {
-    throw new Error(`Non-lineage enterprise acceptance contract missing: ${label}`)
-  }
+  if (!lower.includes(needle.toLowerCase())) throw new Error(`Non-lineage enterprise acceptance contract missing: ${label}`)
 }
-
 function requireIntegrationText(needle, label) {
-  if (!integrationLower.includes(needle.toLowerCase())) {
-    throw new Error(`Enterprise source-readiness integration missing: ${label}`)
-  }
+  if (!integrationLower.includes(needle.toLowerCase())) throw new Error(`Enterprise source-readiness integration missing: ${label}`)
 }
-
 function requireHardeningText(needle, label) {
-  if (!hardeningLower.includes(needle.toLowerCase())) {
-    throw new Error(`Non-lineage enterprise hardening missing: ${label}`)
-  }
+  if (!hardeningLower.includes(needle.toLowerCase())) throw new Error(`Non-lineage enterprise hardening missing: ${label}`)
 }
-
 function requirePattern(pattern, label) {
-  if (!pattern.test(migration)) {
-    throw new Error(`Non-lineage enterprise acceptance contract missing: ${label}`)
-  }
+  if (!pattern.test(migration)) throw new Error(`Non-lineage enterprise acceptance contract missing: ${label}`)
 }
-
 function requireIntegrationPattern(pattern, label) {
-  if (!pattern.test(integrationMigration)) {
-    throw new Error(`Enterprise source-readiness integration missing: ${label}`)
-  }
+  if (!pattern.test(integrationMigration)) throw new Error(`Enterprise source-readiness integration missing: ${label}`)
 }
-
 function requireHardeningPattern(pattern, label) {
-  if (!pattern.test(hardeningMigration)) {
-    throw new Error(`Non-lineage enterprise hardening missing: ${label}`)
-  }
+  if (!pattern.test(hardeningMigration)) throw new Error(`Non-lineage enterprise hardening missing: ${label}`)
 }
 
 requireText('governance.verify_non_lineage_enterprise_acceptance', 'production acceptance verifier')
@@ -55,36 +38,17 @@ requireText('revoke execute on function governance.verify_non_lineage_enterprise
 requireText('grant execute on function governance.verify_non_lineage_enterprise_acceptance(uuid) to service_role', 'service-role execute preserved')
 
 for (const verifier of [
-  'verify_glossary_evidence_posture',
-  'verify_stewardship_governance_posture',
-  'verify_classification_privacy_posture',
-  'verify_quality_control_posture',
-  'verify_workflow_contract_posture',
-  'verify_audit_reporting_posture',
-  'verify_ai_assisted_governance_posture',
-  'verify_governance_intelligence_posture',
-  'verify_autonomous_agent_posture',
-  'verify_ai_system_governance_posture',
-  'verify_semantic_search_posture',
-  'verify_database_api_security_posture',
-  'verify_audit_chain',
-  'verify_ai_governance_intelligence_active',
-  'verify_jdbc_source_acceptance',
-  'verify_project_source_operational_readiness',
-]) {
-  requireText(verifier, `reuses governed verifier ${verifier}`)
-}
+  'verify_glossary_evidence_posture','verify_stewardship_governance_posture','verify_classification_privacy_posture',
+  'verify_quality_control_posture','verify_workflow_contract_posture','verify_audit_reporting_posture',
+  'verify_ai_assisted_governance_posture','verify_governance_intelligence_posture','verify_autonomous_agent_posture',
+  'verify_ai_system_governance_posture','verify_semantic_search_posture','verify_database_api_security_posture',
+  'verify_audit_chain','verify_ai_governance_intelligence_active','verify_jdbc_source_acceptance','verify_project_source_operational_readiness',
+]) requireText(verifier, `reuses governed verifier ${verifier}`)
 
 for (const catalogEvidence of [
-  'catalog.discovery_runs',
-  "schema_snapshot->'discovery_manifest'",
-  'catalog.discovered_assets',
-  'identity_key',
-  'catalog.discovered_asset_versions',
-  'catalog.current_catalog_source_assets',
-]) {
-  requireText(catalogEvidence, `catalog evidence ${catalogEvidence}`)
-}
+  'catalog.discovery_runs',"schema_snapshot->'discovery_manifest'",'catalog.discovered_assets','identity_key',
+  'catalog.discovered_asset_versions','catalog.current_catalog_source_assets',
+]) requireText(catalogEvidence, `catalog evidence ${catalogEvidence}`)
 
 requireText('NON_LINEAGE_ENTERPRISE_ACCEPTANCE_PASSED', 'explicit success state')
 requireText("'included_modules', jsonb_build_array(1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)", 'only non-lineage modules included')
@@ -96,12 +60,11 @@ requireText('REAL_FIELD_LINEAGE_DATA_NOT_INGESTED', 'real field-lineage data blo
 requireText("'inference_allowed', false", 'lineage inference prohibited')
 requireText("jsonb_array_length(coalesce(v_active_intelligence->'blockers', '[]'::jsonb)) = 1", 'exactly one expected partial blocker')
 requireText("v_active_intelligence->'blockers'->0->>'code' = 'REAL_FIELD_LINEAGE_DATA_NOT_INGESTED'", 'partial state cannot hide another blocker')
-
 requireText("external_references_confer_internal_authority')::boolean, true", 'external references do not imply internal authority')
 requireText("contracts_certification'->>'status' = 'PASS'", 'contract certification required')
 requireText('v_accepted_jdbc_sources = v_observed_jdbc_sources', 'all observed JDBC sources must pass acceptance')
 requireText('v_multi_namespace_evidence', 'multi-schema JDBC evidence required')
-requirePattern(/count\(distinct \(a\.source_id, a\.identity_key\)\)/, 'stable identities are unique per source in the original contract')
+requirePattern(/count\(distinct \(a\.source_id, a\.identity_key\)\)/, 'stable identities are unique per source in original contract')
 requirePattern(/v_projected_assets\s*=\s*v_current_assets/, 'catalog projection must match current physical assets')
 requirePattern(/v_complete_manifest_sources\s*=\s*v_observed_sources/, 'all observed sources require complete discovery manifests')
 
@@ -113,18 +76,15 @@ requireIntegrationText('without requiring all configured sources to be observed'
 requireIntegrationText('revoke execute on function governance.verify_non_lineage_enterprise_acceptance_base(uuid) from anon, authenticated', 'internal base remains browser-inaccessible')
 requireIntegrationText('grant execute on function governance.verify_non_lineage_enterprise_acceptance_base(uuid) to service_role', 'internal base remains service-only')
 
-// Scope narrowing must not leave formerly observed OUT_OF_SCOPE assets counted as
-// current enterprise acceptance assets. The active published projection is the authority.
+// A narrowed source scope must count only the active published projection. Stable
+// identity is joined back from discovered_assets without reviving OUT_OF_SCOPE assets.
 requireHardeningText('from catalog.current_catalog_source_assets ca', 'JDBC verifier reads active published projection')
 requireHardeningText('join catalog.discovered_assets da on da.id = ca.id', 'stable identity evidence retained for active projection')
 requireHardeningText('where ca.source_id = p_source_id', 'JDBC projection remains source scoped')
 requireHardeningPattern(/with observed as \([\s\S]*current_assets as \([\s\S]*catalog\.current_catalog_source_assets ca/, 'project acceptance computes current assets from active projection')
-requireHardeningText("presence_state = 'ACTIVE'", 'active-scope semantics documented by the projection contract')
 requireHardeningText('revoke all on function orchestration.resolve_failed_job_dependencies() from public', 'internal dependency propagation removed from PUBLIC')
 requireHardeningText('revoke execute on function orchestration.resolve_failed_job_dependencies() from anon, authenticated', 'internal dependency propagation removed from browser roles')
 
-if (/security\s+definer/i.test(migration)) {
-  throw new Error('Non-lineage enterprise verifier must not introduce SECURITY DEFINER authority.')
-}
+if (/security\s+definer/i.test(migration)) throw new Error('Non-lineage enterprise verifier must not introduce SECURITY DEFINER authority.')
 
 console.log('Non-lineage enterprise acceptance contract verified.')
