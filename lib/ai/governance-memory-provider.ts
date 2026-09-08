@@ -33,6 +33,7 @@ export function createGovernanceMemoryProvider(): MemoryProvider {
         .eq('status', 'ACTIVE')
         .eq('decision_status', 'VERIFIED')
         .eq('outcome_status', 'VERIFIED')
+        .not('source_agent_run_id', 'is', null)
         .order('occurred_at', { ascending: false, nullsFirst: false })
         .limit(limit)
 
