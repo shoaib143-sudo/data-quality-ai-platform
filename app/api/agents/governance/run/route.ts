@@ -8,9 +8,38 @@ import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learnin
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
+import { createGovernanceTelemetryProvider } from '@/lib/ai/governance-telemetry-provider'
+import { telemetryTraceContextFromRequest } from '@/lib/ai/w3c-trace-context'
+import type { TelemetryProvider, TelemetryTraceContext } from '@/lib/ai/telemetry-provider'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+async function recordStage(input: {
+  telemetry: TelemetryProvider
+  traceContext: TelemetryTraceContext | null
+  projectId: string
+  operation: string
+  agentRunId?: string | null
+  status?: 'SUCCESS' | 'ERROR'
+  startedAt: number
+  attributes?: Record<string, unknown>
+}) {
+  try {
+    await input.telemetry.record({
+      projectId: input.projectId,
+      eventType: 'GOVERNED_AGENT_STAGE',
+      operation: input.operation,
+      status: input.status ?? 'SUCCESS',
+      agentRunId: input.agentRunId ?? null,
+      traceContext: input.traceContext,
+      latencyMs: Math.max(0, Date.now() - input.startedAt),
+      attributes: input.attributes ?? {},
+    })
+  } catch {
+    // Telemetry is observability evidence only. It must not alter governed agent execution or authority.
+  }
 }
 
 export async function GET(request: Request) {
@@ -51,25 +80,63 @@ export async function POST(request: Request) {
     if (question.length > 1000) return NextResponse.json({ error: 'question must be 1000 characters or fewer.' }, { status: 400 })
 
     await authorizeProject(user.id, projectId, 'agent.execute')
+    const telemetry = createGovernanceTelemetryProvider()
+    const traceContext = telemetryTraceContextFromRequest(request)
+
+    const specialistStartedAt = Date.now()
     const result = await executeGovernanceSpecialistAgent({
       projectId,
       agentDefinitionId,
       actorUserId: user.id,
       question: question || null,
     })
+    await recordStage({
+      telemetry,
+      traceContext,
+      projectId,
+      operation: 'governance_specialist_execute',
+      agentRunId: result.runId,
+      startedAt: specialistStartedAt,
+      attributes: {
+        agent_definition_id: agentDefinitionId,
+        agent_key: result.output.agent.key,
+        execution_mode: result.output.mode,
+      },
+    })
 
     let specialistOutput = result.output as Record<string, unknown>
     if (result.output.agent.key === 'investigator_agent') {
+      const riskStartedAt = Date.now()
       const investigation = await persistInvestigatorRiskAssessment({
         projectId,
         agentRunId: result.runId,
         actorUserId: user.id,
         output: specialistOutput,
       })
+      await recordStage({
+        telemetry,
+        traceContext,
+        projectId,
+        operation: 'investigator_risk_assessment',
+        agentRunId: result.runId,
+        startedAt: riskStartedAt,
+        attributes: { persisted: Boolean(investigation) },
+      })
       if (investigation) specialistOutput = { ...specialistOutput, investigation }
     }
 
+    const intelligenceStartedAt = Date.now()
     specialistOutput = await enrichOutputWithAIGovernanceIntelligence(projectId, specialistOutput)
+    await recordStage({
+      telemetry,
+      traceContext,
+      projectId,
+      operation: 'ai_governance_intelligence_enrichment',
+      agentRunId: result.runId,
+      startedAt: intelligenceStartedAt,
+    })
+
+    const memoryStartedAt = Date.now()
     const output = await enrichGovernedAgentWithMemory({
       projectId,
       agentDefinitionId,
@@ -77,11 +144,20 @@ export async function POST(request: Request) {
       question: question || null,
       output: specialistOutput,
     })
+    await recordStage({
+      telemetry,
+      traceContext,
+      projectId,
+      operation: 'governed_agent_memory_enrichment',
+      agentRunId: result.runId,
+      startedAt: memoryStartedAt,
+    })
 
     const admin = createAdminClient()
     const { error: outputError } = await admin.schema('agent').from('agent_runs').update({ output }).eq('id', result.runId).eq('project_id', projectId)
     if (outputError) throw new Error(`Unable to persist enriched governance agent output: ${outputError.message}`)
 
+    const evaluationStartedAt = Date.now()
     const memory = await persistGovernedAgentMemoryAndEvaluation({
       projectId,
       agentDefinitionId,
@@ -89,6 +165,16 @@ export async function POST(request: Request) {
       agentKey: result.output.agent.key,
       output,
     })
+    await recordStage({
+      telemetry,
+      traceContext,
+      projectId,
+      operation: 'governed_agent_memory_evaluation',
+      agentRunId: result.runId,
+      startedAt: evaluationStartedAt,
+      attributes: { agent_key: result.output.agent.key },
+    })
+
     return NextResponse.json({ accepted: true, runId: result.runId, output, memory }, { status: 200 })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
