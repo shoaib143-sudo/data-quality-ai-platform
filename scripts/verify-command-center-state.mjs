@@ -14,6 +14,9 @@ function requireText(path, patterns) {
 requireText('lib/ai/command-center-state.ts', [
   'GovernedCommandCenterState',
   'AI_SYSTEM_NOT_APPROVED',
+  'AI_SYSTEM_CURRENT_VERSION_NO_APPROVAL',
+  'AI_SYSTEM_ACTIVE_WITHOUT_APPROVAL',
+  'AI_TELEMETRY_ERROR',
   'AUTO_POLICY_ENABLED',
   'AUTO_POLICY_NOT_REVIEWED',
   'AUTO_POLICY_NOT_REVERSIBLE',
@@ -25,6 +28,10 @@ requireText('lib/ai/command-center-state.ts', [
 ])
 requireText('lib/ai/governance-command-center-state.ts', [
   "from('ai_systems')",
+  "from('ai_system_versions')",
+  "from('ai_system_decisions')",
+  "from('ai_system_assessments')",
+  "from('ai_telemetry_events')",
   "from('autonomy_policies')",
   "from('autonomy_actions')",
   'project_id',
@@ -36,6 +43,10 @@ requireText('app/admin/ai-command-center/page.tsx', [
   'createGovernanceCommandCenterState',
   'Mutation controls remain closed',
   'form method="get"',
+  'AI governance evidence',
+  'Human decisions',
+  'Assessments',
+  'AI telemetry',
   'Autonomy policies',
   'Recent autonomy actions',
 ])
@@ -51,4 +62,4 @@ for (const forbidden of ['method="post"', "'use server'", '.insert(', '.update('
   if (page.includes(forbidden)) throw new Error(`Command Center page must remain read-only: found ${forbidden}`)
 }
 
-console.log('ADR-006 Command Center read-only control-state and UI boundary verified.')
+console.log('ADR-006 Command Center read-only control-state, governance evidence, and UI boundary verified.')
