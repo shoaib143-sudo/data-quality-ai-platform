@@ -6,6 +6,11 @@ const context = {
   task: 'governance_reasoning',
   sensitivity: 'CONFIDENTIAL',
   risk: 'HIGH',
+  traceContext: {
+    traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+    spanId: '00f067aa0ba902b7',
+    traceFlags: '01',
+  },
 }
 
 {
@@ -40,6 +45,7 @@ const context = {
   assert.equal(events[0].providerId, 'openai_compatible')
   assert.equal(events[0].modelName, 'model-a')
   assert.equal(events[0].aiSystemId, 'system-a')
+  assert.deepEqual(events[0].traceContext, context.traceContext)
   assert.equal(events[0].attributes.route_source, 'GOVERNED_REGISTRY')
   assert.equal(events[0].attributes.routing_policy_id, 'policy-1')
   assert.equal(events[0].attributes.evaluation_average_score, 0.97)
@@ -59,6 +65,7 @@ const context = {
   assert.equal(events[0].status, 'ERROR')
   assert.equal(events[0].attributes.route_reason, 'ROUTING_POLICY_UNAVAILABLE')
   assert.equal(events[0].providerId, null)
+  assert.deepEqual(events[0].traceContext, context.traceContext)
 }
 
 {
