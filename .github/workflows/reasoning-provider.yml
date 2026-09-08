@@ -31,6 +31,8 @@ jobs:
         run: pnpm run verify:reasoning-provider
       - name: Verify Model Gateway contract and routing behavior
         run: pnpm run verify:model-gateway
+      - name: Verify EmbeddingProvider contract and governed runtime behavior
+        run: pnpm run verify:embedding-provider
       - name: Verify RetrievalProvider contract and semantic projection behavior
         run: pnpm run verify:retrieval-provider
       - name: Verify TelemetryProvider contract and persistence safety
