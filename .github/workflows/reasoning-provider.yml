@@ -41,5 +41,7 @@ jobs:
         run: pnpm run verify:model-registry
       - name: Verify Intelligent Router evaluation-aware fail-closed behavior
         run: pnpm run verify:intelligent-router
+      - name: Verify governed RoutingPolicy contract and behavior
+        run: pnpm run verify:routing-policy
       - name: Production build
         run: pnpm run build
