@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { loadGovernanceRuntimePosture } from '@/lib/ai/governance-runtime-posture'
 import { loadProjectAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 
 type JsonRecord = Record<string, any>
@@ -36,9 +37,10 @@ function blockerAction(code: string) {
 
 export async function buildGovernanceIntelligenceBrief(projectId: string) {
   const admin = createAdminClient()
-  const [intelligence, gateResult] = await Promise.all([
+  const [intelligence, gateResult, runtimePosture] = await Promise.all([
     loadProjectAIGovernanceIntelligence(projectId),
     admin.schema('governance').rpc('verify_ai_governance_intelligence', { p_project_id: projectId }),
+    loadGovernanceRuntimePosture(projectId),
   ])
   if (gateResult.error) throw new Error(`Unable to verify AI Governance Intelligence: ${gateResult.error.message}`)
 
@@ -102,6 +104,7 @@ export async function buildGovernanceIntelligenceBrief(projectId: string) {
       partialOrExternalCount: Number(gate.partial_or_external_count ?? 0),
       formalBlockers: blockers,
     },
+    aiRuntime: runtimePosture,
     controlIntelligence: {
       status: text(controlGate.status),
       mode: text(controlGate.mode),
@@ -124,6 +127,8 @@ export async function buildGovernanceIntelligenceBrief(projectId: string) {
     recommendations,
     limitations: [
       'Pending or proposed controls are not compliance assertions and must not be presented as authoritative policy controls.',
+      'Registered AI systems are not runtime execution evidence; routing eligibility requires the governed lifecycle and provider/model conditions enforced by the ModelRegistry.',
+      'AI route-decision and evaluation counts are persisted evidence only; zero counts remain zero and are not inferred from configuration or registration state.',
       'This brief does not fabricate missing enterprise policy approval, provenance, attestation, transformation lineage, evidence, or ownership.',
       'Formal blocker status is copied from the database verifier and remains authoritative for production readiness decisions.',
       'Recommendations are deterministic mappings from persisted blocker, finding, evaluation, and control lifecycle state.',
