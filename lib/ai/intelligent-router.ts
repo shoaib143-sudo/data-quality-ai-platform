@@ -1,7 +1,6 @@
-import {
-  createReasoningProvider,
-  type ReasoningProvider,
-  type ReasoningProviderSelection,
+import type {
+  ReasoningProvider,
+  ReasoningProviderSelection,
 } from './reasoning-provider'
 import type { ModelGateway, ReasoningRouteContext } from './model-gateway'
 import type { ModelRegistry, RegisteredModelVersion } from './model-registry'
@@ -51,7 +50,7 @@ export interface IntelligentModelRouter {
 export type IntelligentRouterDependencies = {
   registry: ModelRegistry
   fallbackGateway: ModelGateway
-  createProvider?: (selection: ReasoningProviderSelection) => ReasoningProvider | null
+  createProvider: (selection: ReasoningProviderSelection) => ReasoningProvider | null
 }
 
 type RankedCandidate = {
@@ -152,7 +151,6 @@ export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter 
       }
     }
 
-    const createProvider = this.dependencies.createProvider ?? createReasoningProvider
     const ranked = candidates.map(scoreCandidate).sort(compareCandidates)
 
     for (const candidate of ranked) {
@@ -161,7 +159,7 @@ export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter 
       if (!providerId || !modelName) continue
 
       try {
-        const provider = createProvider({ providerId, model: modelName })
+        const provider = this.dependencies.createProvider({ providerId, model: modelName })
         if (!provider) continue
         return {
           source: 'GOVERNED_REGISTRY',
