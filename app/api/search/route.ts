@@ -103,7 +103,9 @@ function semanticResult(match: RetrievalMatch): SearchResult {
     score: match.score * 60,
     metadata: {
       ...metadata,
-      similarity: match.score,
+      similarity: match.baseScore ?? match.score,
+      rerank_score: match.provenance.rerankedBy ? match.score : null,
+      reranked_by: match.provenance.rerankedBy ?? null,
       semantic: true,
       retrieval_mode: match.mode,
       retrieval_projection: match.provenance.projection,
