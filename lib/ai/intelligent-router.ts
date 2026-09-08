@@ -5,8 +5,12 @@ import type {
 import type { ModelGateway, ReasoningRouteContext } from './model-gateway'
 import type { ModelRegistry, RegisteredModelVersion } from './model-registry'
 import type { RoutingPolicy, RoutingPolicyEvaluator, RoutingPolicyProvider } from './routing-policy'
+import type { TelemetryTraceContext } from './telemetry-provider'
 
-export type IntelligentRouteContext = ReasoningRouteContext & { projectId: string }
+export type IntelligentRouteContext = ReasoningRouteContext & {
+  projectId: string
+  traceContext?: TelemetryTraceContext | null
+}
 
 export type GovernedRouteEvidence = {
   aiSystemId: string

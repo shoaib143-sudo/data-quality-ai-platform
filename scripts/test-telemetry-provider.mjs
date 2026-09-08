@@ -17,6 +17,13 @@ const receipt = await provider.record({
   status: 'SUCCESS',
   providerId: ' qwen ',
   modelName: ' qwen-test ',
+  traceContext: {
+    traceId: '4BF92F3577B34DA6A3CE929D0E0E4736',
+    spanId: '00F067AA0BA902B7',
+    parentSpanId: 'B7AD6B7169203331',
+    traceFlags: '01',
+    tracestate: 'vendor=opaque',
+  },
   latencyMs: 125,
   inputTokens: 200,
   outputTokens: 50,
@@ -35,6 +42,11 @@ assert.equal(inserted[0].project_id, 'project-a')
 assert.equal(inserted[0].event_type, 'MODEL_INVOCATION')
 assert.equal(inserted[0].operation, 'governance-summary')
 assert.equal(inserted[0].provider_id, 'qwen')
+assert.equal(inserted[0].trace_id, '4bf92f3577b34da6a3ce929d0e0e4736')
+assert.equal(inserted[0].span_id, '00f067aa0ba902b7')
+assert.equal(inserted[0].parent_span_id, 'b7ad6b7169203331')
+assert.equal(inserted[0].trace_flags, '01')
+assert.equal(inserted[0].tracestate, 'vendor=opaque')
 assert.equal(inserted[0].latency_ms, 125)
 assert.equal(inserted[0].input_tokens, 200)
 assert.equal(inserted[0].output_tokens, 50)
@@ -48,6 +60,18 @@ await assert.rejects(
 await assert.rejects(
   provider.record({ projectId: 'project-a', eventType: 'MODEL', operation: 'test', attributes: { nested: { chain_of_thought: 'secret' } } }),
   /must not contain prompt, completion, or hidden reasoning payloads/,
+)
+await assert.rejects(
+  provider.record({ projectId: 'project-a', eventType: 'MODEL', operation: 'test', traceContext: { traceId: '0'.repeat(32) } }),
+  /traceContext.traceId must be a non-zero 32-character hexadecimal W3C trace id/,
+)
+await assert.rejects(
+  provider.record({ projectId: 'project-a', eventType: 'MODEL', operation: 'test', traceContext: { traceId: '4bf92f3577b34da6a3ce929d0e0e4736', spanId: 'bad' } }),
+  /traceContext.spanId must be a non-zero 16-character hexadecimal W3C span id/,
+)
+await assert.rejects(
+  provider.record({ projectId: 'project-a', eventType: 'MODEL', operation: 'test', traceContext: { traceId: '4bf92f3577b34da6a3ce929d0e0e4736', tracestate: 'bad\nstate' } }),
+  /traceContext.tracestate must be at most 512 characters and must not contain newlines/,
 )
 await assert.rejects(
   provider.record({ projectId: 'project-a', eventType: 'MODEL', operation: 'test', latencyMs: -1 }),
