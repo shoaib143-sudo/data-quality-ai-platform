@@ -5,14 +5,29 @@ import path from 'node:path'
 import ts from 'typescript'
 import { pathToFileURL } from 'node:url'
 
-const source = await fs.readFile('lib/governance/policy-decision-provider.ts', 'utf8')
-const transpiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
-}).outputText
-const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'policy-decision-provider-'))
-const modulePath = path.join(dir, 'policy-decision-provider.mjs')
-await fs.writeFile(modulePath, transpiled)
-const { GovernedPolicyDecisionProvider } = await import(pathToFileURL(modulePath).href)
+async function transpileModule(sourcePath, outputName) {
+  const source = await fs.readFile(sourcePath, 'utf8')
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), `${outputName}-`))
+  const modulePath = path.join(dir, `${outputName}.mjs`)
+  await fs.writeFile(modulePath, transpiled)
+  return import(pathToFileURL(modulePath).href)
+}
+
+const { GovernedPolicyDecisionProvider } = await transpileModule(
+  'lib/governance/policy-decision-provider.ts',
+  'policy-decision-provider',
+)
+const { ObservablePolicyDecisionProvider } = await transpileModule(
+  'lib/governance/observable-policy-decision-provider.ts',
+  'observable-policy-decision-provider',
+)
+const { runWithTelemetryTraceContext, currentTelemetryTraceContext } = await transpileModule(
+  'lib/ai/telemetry-trace-context-store.ts',
+  'telemetry-trace-context-store',
+)
 
 const projectId = 'project-1'
 const policy = {
@@ -66,5 +81,45 @@ assert.equal((await providerWith().decide({ ...baseRequest, riskLevel: 'HIGH' })
 assert.equal((await providerWith({ policyRecord: { ...policy, reversible: false } }).decide(baseRequest)).decision, 'REQUIRE_APPROVAL')
 await assert.rejects(() => providerWith().decide({ ...baseRequest, projectId: '   ' }), /projectId is required/)
 await assert.rejects(() => providerWith().decide({ ...baseRequest, confidence: 2 }), /confidence must be between 0 and 1/)
+
+const traceContext = {
+  traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+  parentSpanId: '00f067aa0ba902b7',
+  traceFlags: '01',
+  tracestate: 'vendor=policy-test',
+}
+const events = []
+const observable = new ObservablePolicyDecisionProvider(
+  providerWith(),
+  {
+    id: 'test-telemetry',
+    async record(event) {
+      events.push(event)
+      return { eventId: 'telemetry-1', persisted: true }
+    },
+  },
+  currentTelemetryTraceContext,
+)
+
+const observedResult = await runWithTelemetryTraceContext(traceContext, () => observable.decide(baseRequest))
+assert.equal(observedResult.decision, 'ALLOW')
+assert.equal(events.length, 1)
+assert.equal(events[0].eventType, 'POLICY_DECISION')
+assert.equal(events[0].operation, 'autonomy_policy_decision')
+assert.equal(events[0].providerId, 'governance_autonomy_policy')
+assert.deepEqual(events[0].traceContext, traceContext)
+assert.equal(events[0].attributes.decision, 'ALLOW')
+assert.equal(events[0].attributes.policy_id, 'policy-1')
+assert.equal(events[0].attributes.policy_version_id, 'version-1')
+assert.equal(events[0].attributes.execution_mode, 'AUTO')
+assert.equal(currentTelemetryTraceContext(), null, 'request trace context must not leak after the async scope closes')
+
+const telemetryFailureProvider = new ObservablePolicyDecisionProvider(
+  providerWith({ policyRecord: { ...policy, execution_mode: 'BLOCKED' } }),
+  { id: 'broken-telemetry', async record() { throw new Error('telemetry unavailable') } },
+  () => traceContext,
+)
+const deniedDespiteTelemetryFailure = await telemetryFailureProvider.decide(baseRequest)
+assert.equal(deniedDespiteTelemetryFailure.decision, 'DENY', 'telemetry failure must not change the governed PDP result')
 
 console.log('ADR-006 PolicyDecisionProvider behavior verified.')
