@@ -41,6 +41,13 @@ const state = new GovernedCommandCenterState({
       { id: 'route-policy-cross-project', project_id: 'project-2', task: 'classification', sensitivity: 'ANY', risk: 'ANY', enabled: true, allowed_ai_system_ids: [], min_evaluation_score: null, min_scored_count: 0, allow_environment_fallback: true, reviewer_user_id: 'user-2', reviewer_capability: 'policy.approve', review_note: 'Other project', created_at: '2026-09-08T00:21:00Z' },
     ]
   },
+  async listDataQualityInvestigations() {
+    return [
+      { id: 'investigation-1', project_id: projectId, agent_run_id: 'agent-run-1', dataset_id: 'dataset-1', dataset_version_id: 'dataset-version-1', profile_run_id: 'profile-run-1', severity: 'HIGH', status: 'APPROVAL_REQUIRED', summary: 'Quality issue requires governed review', business_impact: 'Potential reporting risk', approval_required: true, workflow_instance_id: 'workflow-1', evidence: { refs: ['profile-run-1'] }, created_at: '2026-09-08T00:40:00Z', updated_at: '2026-09-08T00:45:00Z' },
+      { id: 'investigation-2', project_id: projectId, agent_run_id: 'agent-run-2', dataset_id: 'dataset-2', dataset_version_id: 'dataset-version-2', profile_run_id: 'profile-run-2', severity: 'HIGH', status: 'ATTENTION_REQUIRED', summary: 'Quality issue requires attention', business_impact: null, approval_required: false, workflow_instance_id: null, evidence: {}, created_at: '2026-09-08T00:41:00Z', updated_at: '2026-09-08T00:46:00Z' },
+      { id: 'investigation-cross-project', project_id: 'project-2', agent_run_id: 'agent-run-3', dataset_id: 'dataset-3', dataset_version_id: 'dataset-version-3', profile_run_id: null, severity: 'INFO', status: 'CONTROLLED', summary: 'Other project investigation', business_impact: null, approval_required: false, workflow_instance_id: null, evidence: {}, created_at: '2026-09-08T00:42:00Z', updated_at: '2026-09-08T00:47:00Z' },
+    ]
+  },
   async listAutonomyPolicies() {
     return [
       { id: 'p-auto', project_id: projectId, action_key: 'auto-action', enabled: true, execution_mode: 'AUTO', min_confidence: '0.9', max_auto_risk_level: 'HIGH', reversible: false, authority_status: 'SYSTEM_BASELINE', reviewed_by: null, reviewed_at: null, current_version_id: 'pv-1' },
@@ -76,6 +83,12 @@ assert.equal(result.counts.routingPolicyVersions, 1)
 assert.equal(result.counts.enabledRoutingPolicyVersions, 1)
 assert.equal(result.routingPolicies.some((row) => row.id === 'route-policy-cross-project'), false)
 assert.equal(result.routingPolicies[0].allow_environment_fallback, false)
+assert.equal(result.counts.investigations, 2)
+assert.equal(result.counts.investigationsApprovalRequired, 1)
+assert.equal(result.counts.investigationsAttentionRequired, 1)
+assert.equal(result.counts.investigationsHighSeverity, 2)
+assert.equal(result.dataQualityInvestigations.some((row) => row.id === 'investigation-cross-project'), false)
+assert.equal(result.dataQualityInvestigations[0].agent_run_id, 'agent-run-1')
 assert.equal(result.counts.enabledAutoPolicies, 1)
 assert.equal(result.counts.enabledApprovalPolicies, 1)
 assert.equal(result.counts.blockedPolicies, 1)
@@ -99,5 +112,6 @@ for (const code of [
 
 assert.ok(codes.has('AI_SYSTEM_NOT_APPROVED'), 'passing automated evaluation must not activate a DRAFT system')
 assert.ok(codes.has('AI_SYSTEM_CURRENT_VERSION_NO_APPROVAL'), 'passing automated evaluation must not replace exact-version human approval')
+assert.equal([...codes].some((code) => code.startsWith('INVESTIGATION_')), false, 'investigation evidence must not manufacture AI governance findings or deployment authority')
 await assert.rejects(() => state.read('   '), /projectId is required/)
-console.log('Command Center control-state, governance evidence, non-authoritative automated evaluation evidence, and project-scoped routing policy visibility verified.')
+console.log('Command Center control-state, governance evidence, non-authoritative evaluation evidence, routing policy visibility, and observational investigation evidence verified.')
