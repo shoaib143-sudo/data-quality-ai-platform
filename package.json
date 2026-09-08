@@ -20,6 +20,7 @@
     "verify:model-registry": "node scripts/verify-model-registry.mjs && node --experimental-strip-types scripts/test-model-registry.mjs",
     "verify:intelligent-router": "node scripts/verify-intelligent-router.mjs && node --experimental-strip-types scripts/test-intelligent-router.mjs",
     "verify:routing-policy": "node scripts/verify-routing-policy.mjs && node --experimental-strip-types scripts/test-routing-policy.mjs",
+    "verify:route-telemetry": "node scripts/verify-route-telemetry.mjs && node --experimental-strip-types scripts/test-route-telemetry.mjs",
     "verify:investigation-prediction": "node scripts/verify-investigation-prediction.mjs",
     "verify:governed-autonomy": "node scripts/verify-governed-autonomy.mjs",
     "verify:ai-due-diligence": "node scripts/verify-ai-governance-due-diligence.mjs",
