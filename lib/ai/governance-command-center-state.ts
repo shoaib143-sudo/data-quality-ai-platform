@@ -57,6 +57,13 @@ export function createGovernanceCommandCenterState() {
       if (error) throw new Error(`Unable to read governed AI routing policy versions: ${error.message}`)
       return data ?? []
     },
+    async listDataQualityInvestigations(projectId) {
+      const { data, error } = await supabase.schema('governance').from('data_quality_investigations')
+        .select('id,project_id,agent_run_id,dataset_id,dataset_version_id,profile_run_id,severity,status,summary,business_impact,approval_required,workflow_instance_id,evidence,created_at,updated_at')
+        .eq('project_id', projectId).order('updated_at', { ascending: false }).limit(100)
+      if (error) throw new Error(`Unable to read data quality investigation evidence: ${error.message}`)
+      return data ?? []
+    },
     async listAutonomyPolicies(projectId) {
       const { data, error } = await supabase.schema('governance').from('autonomy_policies')
         .select('id,project_id,action_key,enabled,execution_mode,min_confidence,max_auto_risk_level,reversible,authority_status,reviewed_by,reviewed_at,current_version_id')
