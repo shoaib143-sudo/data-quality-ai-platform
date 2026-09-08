@@ -42,6 +42,8 @@ jobs:
         run: node scripts/verify-specialist-governance-intelligence.mjs
       - name: Verify agent memory and learning
         run: pnpm run verify:agent-memory-learning
+      - name: Verify ADR-006 TelemetryProvider contract
+        run: pnpm run verify:telemetry-provider
       - name: Verify investigation and prediction
         run: pnpm run verify:investigation-prediction
       - name: Verify governed autonomy safety
