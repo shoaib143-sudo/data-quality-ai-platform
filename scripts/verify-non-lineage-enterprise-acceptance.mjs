@@ -2,11 +2,14 @@ import fs from 'node:fs'
 
 const baseMigrationPath = 'supabase/migrations/20260906085000_verify_non_lineage_enterprise_acceptance.sql'
 const integrationMigrationPath = 'supabase/migrations/20260907133000_integrate_project_source_readiness_enterprise_acceptance.sql'
+const hardeningMigrationPath = 'supabase/migrations/20260908113000_harden_non_lineage_enterprise_acceptance.sql'
 const baseMigration = fs.readFileSync(baseMigrationPath, 'utf8')
 const integrationMigration = fs.readFileSync(integrationMigrationPath, 'utf8')
+const hardeningMigration = fs.readFileSync(hardeningMigrationPath, 'utf8')
 const migration = `${baseMigration}\n${integrationMigration}`
 const lower = migration.toLowerCase()
 const integrationLower = integrationMigration.toLowerCase()
+const hardeningLower = hardeningMigration.toLowerCase()
 
 function requireText(needle, label) {
   if (!lower.includes(needle.toLowerCase())) {
@@ -20,6 +23,12 @@ function requireIntegrationText(needle, label) {
   }
 }
 
+function requireHardeningText(needle, label) {
+  if (!hardeningLower.includes(needle.toLowerCase())) {
+    throw new Error(`Non-lineage enterprise hardening missing: ${label}`)
+  }
+}
+
 function requirePattern(pattern, label) {
   if (!pattern.test(migration)) {
     throw new Error(`Non-lineage enterprise acceptance contract missing: ${label}`)
@@ -29,6 +38,12 @@ function requirePattern(pattern, label) {
 function requireIntegrationPattern(pattern, label) {
   if (!pattern.test(integrationMigration)) {
     throw new Error(`Enterprise source-readiness integration missing: ${label}`)
+  }
+}
+
+function requireHardeningPattern(pattern, label) {
+  if (!pattern.test(hardeningMigration)) {
+    throw new Error(`Non-lineage enterprise hardening missing: ${label}`)
   }
 }
 
@@ -86,7 +101,7 @@ requireText("external_references_confer_internal_authority')::boolean, true", 'e
 requireText("contracts_certification'->>'status' = 'PASS'", 'contract certification required')
 requireText('v_accepted_jdbc_sources = v_observed_jdbc_sources', 'all observed JDBC sources must pass acceptance')
 requireText('v_multi_namespace_evidence', 'multi-schema JDBC evidence required')
-requirePattern(/count\(distinct \(a\.source_id, a\.identity_key\)\)/, 'stable identities are unique per source')
+requirePattern(/count\(distinct \(a\.source_id, a\.identity_key\)\)/, 'stable identities are unique per source in the original contract')
 requirePattern(/v_projected_assets\s*=\s*v_current_assets/, 'catalog projection must match current physical assets')
 requirePattern(/v_complete_manifest_sources\s*=\s*v_observed_sources/, 'all observed sources require complete discovery manifests')
 
@@ -97,6 +112,16 @@ requireIntegrationPattern(/coalesce\(\(v_base->>'valid'\)::boolean, false\)\s*\n
 requireIntegrationText('without requiring all configured sources to be observed', 'UNOBSERVED configured sources remain allowed')
 requireIntegrationText('revoke execute on function governance.verify_non_lineage_enterprise_acceptance_base(uuid) from anon, authenticated', 'internal base remains browser-inaccessible')
 requireIntegrationText('grant execute on function governance.verify_non_lineage_enterprise_acceptance_base(uuid) to service_role', 'internal base remains service-only')
+
+// Scope narrowing must not leave formerly observed OUT_OF_SCOPE assets counted as
+// current enterprise acceptance assets. The active published projection is the authority.
+requireHardeningText('from catalog.current_catalog_source_assets ca', 'JDBC verifier reads active published projection')
+requireHardeningText('join catalog.discovered_assets da on da.id = ca.id', 'stable identity evidence retained for active projection')
+requireHardeningText('where ca.source_id = p_source_id', 'JDBC projection remains source scoped')
+requireHardeningPattern(/with observed as \([\s\S]*current_assets as \([\s\S]*catalog\.current_catalog_source_assets ca/, 'project acceptance computes current assets from active projection')
+requireHardeningText("presence_state = 'ACTIVE'", 'active-scope semantics documented by the projection contract')
+requireHardeningText('revoke all on function orchestration.resolve_failed_job_dependencies() from public', 'internal dependency propagation removed from PUBLIC')
+requireHardeningText('revoke execute on function orchestration.resolve_failed_job_dependencies() from anon, authenticated', 'internal dependency propagation removed from browser roles')
 
 if (/security\s+definer/i.test(migration)) {
   throw new Error('Non-lineage enterprise verifier must not introduce SECURITY DEFINER authority.')
