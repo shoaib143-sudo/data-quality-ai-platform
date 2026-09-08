@@ -9,7 +9,7 @@ CUST-0007,Grace Ng,grace.ng@example.com,SG,31,false,2025-04-24,2025-04-24T07:55:
 CUST-0008,Hari Kumar,hari.kumar@example.com,IN,39,true,2025-05-12,2025-05-12T12:40:00Z
 CUST-0009,Irene Koh,irene.koh@example.com,SG,27,true,2025-06-01,2025-06-01T13:25:00Z
 CUST-0010,Jonas Teo,jonas.teo@example.com,SG,48,true,2025-06-19,2025-06-19T15:00:00Z
-CUST-0011,Karen Goh,,SG,36,true,2025-07-07,2025-07-07T09:10:00Z
+CUST-0011,Karen Goh,karen.goh@example.com,SG,36,true,2025-07-07,2025-07-07T09:10:00Z
 CUST-0012,Leo Ong,leo.ong@example.com,SG,36,true,2025-07-22,2025-07-22T10:35:00Z
 CUST-0013,Maya Devi,maya.devi@example.com,IN,33,false,2025-08-05,2025-08-05T11:20:00Z
 CUST-0014,Nora Aziz,nora.aziz@example.com,MY,43,true,2025-08-17,2025-08-17T12:05:00Z
