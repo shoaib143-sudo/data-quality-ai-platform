@@ -69,6 +69,29 @@ export type AiSystemAssessmentControlRow = {
   created_at: string
 }
 
+export type AiEvaluationControlRow = {
+  id: string
+  project_id: string
+  evaluation_type: string
+  capability: string | null
+  metric_name: string
+  score: number | string | null
+  pass: boolean | null
+  evaluator_type: string
+  evaluator_version: string | null
+  ai_system_id: string | null
+  ai_system_version_id: string | null
+  agent_run_id: string | null
+  source_agent_evaluation_id: string | null
+  telemetry_event_id: string | null
+  correlation_id: string | null
+  evidence_refs: unknown[]
+  dimensions: Record<string, unknown>
+  metadata: Record<string, unknown>
+  observed_at: string
+  created_at: string
+}
+
 export type AiTelemetryControlRow = {
   id: string
   project_id: string
@@ -136,6 +159,7 @@ export type CommandCenterState = {
   aiSystemVersions: AiSystemVersionControlRow[]
   aiSystemDecisions: AiSystemDecisionControlRow[]
   aiSystemAssessments: AiSystemAssessmentControlRow[]
+  aiEvaluationResults: AiEvaluationControlRow[]
   aiTelemetryEvents: AiTelemetryControlRow[]
   autonomyPolicies: AutonomyPolicyControlRow[]
   autonomyActions: AutonomyActionControlRow[]
@@ -151,6 +175,10 @@ export type CommandCenterState = {
     aiSystemVersions: number
     aiSystemDecisions: number
     aiSystemAssessments: number
+    aiEvaluationResults: number
+    aiEvaluationPasses: number
+    aiEvaluationFailures: number
+    aiEvaluationUnresolved: number
     aiTelemetryEvents: number
     aiTelemetryErrors: number
     enabledAutoPolicies: number
@@ -166,6 +194,7 @@ export type CommandCenterPersistence = {
   listAiSystemVersions(projectId: string): Promise<AiSystemVersionControlRow[]>
   listAiSystemDecisions(projectId: string): Promise<AiSystemDecisionControlRow[]>
   listAiSystemAssessments(projectId: string): Promise<AiSystemAssessmentControlRow[]>
+  listAiEvaluationResults(projectId: string): Promise<AiEvaluationControlRow[]>
   listAiTelemetryEvents(projectId: string): Promise<AiTelemetryControlRow[]>
   listAutonomyPolicies(projectId: string): Promise<AutonomyPolicyControlRow[]>
   listAutonomyActions(projectId: string): Promise<AutonomyActionControlRow[]>
@@ -195,11 +224,12 @@ export class GovernedCommandCenterState {
 
   async read(projectIdInput: string): Promise<CommandCenterState> {
     const projectId = requiredText(projectIdInput, 'projectId')
-    const [systemsRaw, versionsRaw, decisionsRaw, assessmentsRaw, telemetryRaw, policiesRaw, actionsRaw] = await Promise.all([
+    const [systemsRaw, versionsRaw, decisionsRaw, assessmentsRaw, evaluationsRaw, telemetryRaw, policiesRaw, actionsRaw] = await Promise.all([
       this.persistence.listAiSystems(projectId),
       this.persistence.listAiSystemVersions(projectId),
       this.persistence.listAiSystemDecisions(projectId),
       this.persistence.listAiSystemAssessments(projectId),
+      this.persistence.listAiEvaluationResults(projectId),
       this.persistence.listAiTelemetryEvents(projectId),
       this.persistence.listAutonomyPolicies(projectId),
       this.persistence.listAutonomyActions(projectId),
@@ -209,6 +239,7 @@ export class GovernedCommandCenterState {
     const aiSystemVersions = versionsRaw.filter((row) => row.project_id === projectId)
     const aiSystemDecisions = decisionsRaw.filter((row) => row.project_id === projectId)
     const aiSystemAssessments = assessmentsRaw.filter((row) => row.project_id === projectId)
+    const aiEvaluationResults = evaluationsRaw.filter((row) => row.project_id === projectId)
     const aiTelemetryEvents = telemetryRaw.filter((row) => row.project_id === projectId)
     const autonomyPolicies = policiesRaw.filter((row) => row.project_id === projectId)
     const autonomyActions = actionsRaw.filter((row) => row.project_id === projectId)
@@ -272,6 +303,7 @@ export class GovernedCommandCenterState {
       aiSystemVersions,
       aiSystemDecisions,
       aiSystemAssessments,
+      aiEvaluationResults,
       aiTelemetryEvents,
       autonomyPolicies,
       autonomyActions,
@@ -282,6 +314,10 @@ export class GovernedCommandCenterState {
         aiSystemVersions: aiSystemVersions.length,
         aiSystemDecisions: aiSystemDecisions.length,
         aiSystemAssessments: aiSystemAssessments.length,
+        aiEvaluationResults: aiEvaluationResults.length,
+        aiEvaluationPasses: aiEvaluationResults.filter((row) => row.pass === true).length,
+        aiEvaluationFailures: aiEvaluationResults.filter((row) => row.pass === false).length,
+        aiEvaluationUnresolved: aiEvaluationResults.filter((row) => row.pass == null).length,
         aiTelemetryEvents: aiTelemetryEvents.length,
         aiTelemetryErrors: aiTelemetryEvents.filter((row) => row.status === 'ERROR').length,
         enabledAutoPolicies,
