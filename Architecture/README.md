@@ -11,6 +11,9 @@ This folder is the source of truth for current architecture, architecture decisi
 5. Treat identity, tenancy, permissions, policy, risk, audit, evidence, verification, and rollback as architectural concerns rather than UI concerns.
 6. Design operations so both the UI and governed AI agents can invoke them.
 7. Do not over provision infrastructure before scale requires it.
+8. Treat models as replaceable workers; DataNexus owns intelligence, evidence, governance, learning, routing and evaluation.
+9. Learn from verified outcomes rather than recursively trusting prior AI output.
+10. Prefer deterministic rules, statistics and specialist ML where they provide stronger truth than generative reasoning.
 
 ## Current target architecture
 
@@ -21,7 +24,7 @@ This folder is the source of truth for current architecture, architecture decisi
                  │                         │
             Web Application          AI / Agent Layer
                  │                         │
-            Next.js / React          Agent Orchestrator
+            Next.js / React          Agent Intelligence
                  │                         │
                  └────────────┬────────────┘
                               │
@@ -29,9 +32,16 @@ This folder is the source of truth for current architecture, architecture decisi
                               │
        ┌──────────────────────┼──────────────────────┐
        │                      │                      │
-  Data Profiling         Knowledge / RAG       AI Reasoning
+  Data Profiling       Knowledge / Retrieval    AI Reasoning
        │                      │                      │
+       │                Learning / Evaluation       │
        └──────────────────────┼──────────────────────┘
+                              │
+                     AI Governance Plane
+                              │
+                    AI Command Center
+                              │
+                  Policy / Risk / Approval
                               │
                          Data Platform
                               │
@@ -64,13 +74,13 @@ The AI-assisted lineage evidence and authority boundary is documented in:
 
 - `2026-09-06-ADR-004-ai-assisted-lineage-truth-boundary.md`
 
+The AI intelligence, learning, governance, evaluation and observability architecture is documented in:
+
+- `2026-09-08-ADR-006-ai-intelligence-learning-governance-evaluation-and-observability.md`
+
 The current production operating-state checkpoint and continuation path is documented in:
 
-- `2026-09-07-production-operating-state-and-continuation.md`
-
-The previous checkpoint remains available as historical evidence in:
-
-- `2026-09-06-production-operating-state-and-continuation.md`
+- `2026-09-08-production-operating-state-and-continuation.md`
 
 ADR-002 keeps PostgreSQL / Supabase authoritative and standardizes replaceable logical providers for knowledge search, graph traversal, analytics and object storage. OpenSearch, ClickHouse and any dedicated graph engine are introduced only when measured workload and scale justify them.
 
@@ -78,9 +88,11 @@ ADR-003 keeps Vercel as the DataNexus application/control-plane runtime and plac
 
 ADR-004 permits metadata-derived AI lineage suggestions only as separately labeled inference evidence. It does not allow inferred evidence to become source-observed lineage or clear the externally blocked Databricks lineage requirement.
 
+ADR-006 defines models as replaceable workers behind DataNexus-owned intelligence contracts. It introduces the Model Gateway, reasoning and retrieval providers, verified learning, dedicated evaluation, deterministic/statistical/ML allocation, Agent Intelligence and Learning, the AI Governance Plane, DataNexus AI Command Center, Policy Decision Point, Model Registry, intelligent routing and separate data/platform/AI observability domains.
+
 ADR-001 narrows implementation priority to CSV and database tables, with PostgreSQL / Supabase first and Databricks next. It introduces the Data Profiling Investigation Agent as the first specialist agent and evolves the Monitor toward an issue centric AI Operations Center that includes business issue, impact, risk, recommendation, benefit, outcome, evidence, and verification.
 
-This is a prioritisation increment, not a rejection of the broader architecture. The long term architecture continues to include unstructured documents, logs, APIs, governance knowledge, lineage, policy evaluation, and progressive autonomy.
+This is a prioritisation increment, not a rejection of the broader architecture. The long term architecture continues to include unstructured documents, logs, APIs, governance knowledge, lineage, policy evaluation, progressive autonomy and governed learning.
 
 ## Current production authority model
 
@@ -93,10 +105,9 @@ The current operating architecture applies these boundaries:
 - AI suggestion is separate from human/governed authority;
 - external reference corpus does not automatically confer internal enterprise authority;
 - inferred lineage remains separate from source-observed lineage;
+- candidate learning remains separate from promoted enterprise knowledge;
 - PostgreSQL / Supabase remains the authoritative control plane;
 - search, graph and analytics remain rebuildable projections.
-
-Current production non-lineage enterprise acceptance passes Modules #1, #2 and #4 through #15 and includes project-scoped source operational-readiness consistency evidence. Module #3 remains explicitly blocked by missing Databricks `USE SCHEMA` on `system.access` plus missing real field-lineage ingestion and must not be cleared by inferred lineage.
 
 ## Progressive autonomy architecture
 
@@ -135,10 +146,13 @@ Policy / Risk Evaluation
 - Lineage
 - Governance knowledge and document processing
 - AI reasoning and retrieval
-- Agent orchestration
+- Model gateway and intelligent routing
+- Agent intelligence and learning
+- AI evaluation
+- AI Governance Plane and AI Command Center
 - Policy and risk engine
 - Governed action execution
-- Observability and operations
+- Data, platform and AI observability
 - Audit and evidence
 - Data estate knowledge model
 - Business impact and value measurement
@@ -166,18 +180,20 @@ Policy / Risk Evaluation
 | Metadata catalog | OpenMetadata or DataHub | Introduce when estate metadata needs exceed application metadata |
 | Lineage | OpenLineage | Introduce with pipeline and transformation lineage |
 | Workflow orchestration | Prefect or Airflow | Introduce as scheduling and dependency complexity grows |
-| Agent orchestration | LangGraph | Introduce as multi step governed agents become active |
+| Agent orchestration | LangGraph | Candidate when multi step governed agents become active; keep orchestration replaceable |
+| Reasoning models | Qwen / Kimi / GLM / DeepSeek families | Benchmark against DataNexus tasks behind ReasoningProvider |
+| Embeddings / reranking | Qwen or BGE families | Benchmark against DataNexus governance retrieval corpus |
+| Local model serving | Ollama or replaceable serving runtime | Useful for local/open model experimentation |
 | Document processing | Unstructured + Apache Tika | Important for policies, standards, and other governance documents |
-| Local models | Ollama | Useful for local / open model experimentation |
-| Policy engine | Open Policy Agent | Important for governed autonomy |
-| Telemetry | OpenTelemetry | Foundation for agent and platform observability |
-| Metrics | Prometheus | Add with broader platform observability |
-| Dashboards | Grafana | Add with broader operational monitoring |
+| Policy engine | Open Policy Agent | Preferred initial dedicated Policy Decision Point when policy complexity requires it |
+| Telemetry | OpenTelemetry | Foundation for data, agent and platform observability |
+| Metrics | Prometheus | Add with broader platform observability if required |
+| Dashboards | Grafana | Add with broader operational monitoring if required |
 | Logs | Loki | Add when centralized log operations justify it |
-| Tracing | Tempo | Add with distributed agent workflows |
+| Tracing | Tempo | Add with distributed agent workflows if required |
 | Secrets | OpenBao | Later, if dedicated secrets management is required |
 | Eventing | NATS or Kafka compatible infrastructure | Later, when event scale requires it |
-| Search | PostgreSQL full text, then OpenSearch if needed | Start simple |
+| Search | PostgreSQL full text, then OpenSearch if needed | Start simple; support hybrid/authority-aware retrieval logically |
 | Historical analytics / telemetry | ClickHouse | Introduce when PostgreSQL historical/telemetry workloads justify a separate analytical plane |
 | Graph traversal | PostgreSQL indexed edges, optional AGE, distributed graph if benchmarked need | Keep GraphProvider replaceable; do not deploy a dedicated graph engine prematurely |
 | Object storage | Supabase Storage / S3-compatible storage | Originals, large artifacts, exports and cold archives |
@@ -192,8 +208,10 @@ Do not deploy the entire candidate stack at once. Introduce infrastructure only 
 - `2026-09-04-ADR-002-polyglot-data-platform-and-knowledge-architecture.md` records the proposed polyglot data-plane architecture: PostgreSQL/Supabase as authoritative truth, OpenSearch as future knowledge/search projection, ClickHouse as future analytics/telemetry projection, a replaceable GraphProvider, object storage for originals/cold artifacts, and pgvector as embedded semantic capability. Physical infrastructure remains phased and workload-triggered.
 - `2026-09-06-ADR-003-runtime-boundary-for-generic-jdbc.md` records the Vercel control-plane / portable JVM JDBC data-plane split, including the temporary server-side credential mode and runtime replaceability.
 - `2026-09-06-ADR-004-ai-assisted-lineage-truth-boundary.md` records the separation between source-observed lineage, AI-inferred metadata suggestions, and separately promoted human-confirmed inferred dependencies while preserving the Module #3 blocker.
-- `2026-09-06-production-operating-state-and-continuation.md` records the previous production acceptance checkpoint before the later JDBC evidence, discovery audit, project-readiness, and enterprise-acceptance integrations.
-- `2026-09-07-production-operating-state-and-continuation.md` records the current production evidence after those integrations, including 570 physical assets, three accepted repeat-stable multi-namespace JDBC sources, project-scoped source readiness, and the unchanged Module #3 external blocker.
+- `2026-09-08-ADR-006-ai-intelligence-learning-governance-evaluation-and-observability.md` establishes replaceable reasoning/retrieval/model contracts, verified learning, the AI Evaluation Engine, deterministic/statistical/ML boundaries, Agent Intelligence and Learning, the AI Governance Plane, DataNexus AI Command Center, policy decision controls and the three-domain observability architecture.
+- `2026-09-06-production-operating-state-and-continuation.md` records the previous production acceptance checkpoint before later JDBC evidence and enterprise-acceptance integrations.
+- `2026-09-07-production-operating-state-and-continuation.md` records the later production evidence including repeat-stable multi-namespace JDBC sources and the unchanged external lineage blocker.
+- `2026-09-08-production-operating-state-and-continuation.md` is the current production operating-state checkpoint.
 
 Significant architecture changes should be recorded as dated ADR style Markdown files in this folder. Each change should capture:
 
