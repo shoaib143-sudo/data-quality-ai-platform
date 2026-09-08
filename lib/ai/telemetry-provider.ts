@@ -2,6 +2,14 @@ export type TelemetryStatus = 'INFO' | 'SUCCESS' | 'ERROR'
 
 export type TelemetryAttributes = Record<string, unknown>
 
+export type TelemetryTraceContext = {
+  traceId: string
+  spanId?: string | null
+  parentSpanId?: string | null
+  traceFlags?: string | null
+  tracestate?: string | null
+}
+
 export type TelemetryEvent = {
   projectId: string
   eventType: string
@@ -13,6 +21,7 @@ export type TelemetryEvent = {
   aiSystemId?: string | null
   aiSystemVersionId?: string | null
   correlationId?: string | null
+  traceContext?: TelemetryTraceContext | null
   latencyMs?: number | null
   inputTokens?: number | null
   outputTokens?: number | null
@@ -42,6 +51,11 @@ export type TelemetryPersistenceRecord = {
   ai_system_id: string | null
   ai_system_version_id: string | null
   correlation_id: string | null
+  trace_id: string | null
+  span_id: string | null
+  parent_span_id: string | null
+  trace_flags: string | null
+  tracestate: string | null
   latency_ms: number | null
   input_tokens: number | null
   output_tokens: number | null
@@ -65,6 +79,10 @@ const FORBIDDEN_ATTRIBUTE_KEYS = new Set([
   'rawinput',
   'rawoutput',
 ])
+
+const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/
+const SPAN_ID_PATTERN = /^[0-9a-f]{16}$/
+const TRACE_FLAGS_PATTERN = /^[0-9a-f]{2}$/
 
 function normalizeKey(key: string) {
   return key.toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -108,6 +126,56 @@ function optionalNonNegativeInteger(value: number | null | undefined, label: str
   return normalized
 }
 
+function normalizedHex(value: string | null | undefined) {
+  const normalized = optionalText(value)
+  return normalized?.toLowerCase() ?? null
+}
+
+function normalizedTraceContext(context: TelemetryTraceContext | null | undefined) {
+  if (!context) {
+    return {
+      trace_id: null,
+      span_id: null,
+      parent_span_id: null,
+      trace_flags: null,
+      tracestate: null,
+    }
+  }
+
+  const traceId = normalizedHex(context.traceId)
+  if (!traceId || !TRACE_ID_PATTERN.test(traceId) || traceId === '0'.repeat(32)) {
+    throw new Error('traceContext.traceId must be a non-zero 32-character hexadecimal W3C trace id')
+  }
+
+  const spanId = normalizedHex(context.spanId)
+  if (spanId && (!SPAN_ID_PATTERN.test(spanId) || spanId === '0'.repeat(16))) {
+    throw new Error('traceContext.spanId must be a non-zero 16-character hexadecimal W3C span id')
+  }
+
+  const parentSpanId = normalizedHex(context.parentSpanId)
+  if (parentSpanId && (!SPAN_ID_PATTERN.test(parentSpanId) || parentSpanId === '0'.repeat(16))) {
+    throw new Error('traceContext.parentSpanId must be a non-zero 16-character hexadecimal W3C span id')
+  }
+
+  const traceFlags = normalizedHex(context.traceFlags)
+  if (traceFlags && !TRACE_FLAGS_PATTERN.test(traceFlags)) {
+    throw new Error('traceContext.traceFlags must be a 2-character hexadecimal W3C trace-flags value')
+  }
+
+  const tracestate = optionalText(context.tracestate)
+  if (tracestate && (tracestate.length > 512 || /[\r\n]/.test(tracestate))) {
+    throw new Error('traceContext.tracestate must be at most 512 characters and must not contain newlines')
+  }
+
+  return {
+    trace_id: traceId,
+    span_id: spanId,
+    parent_span_id: parentSpanId,
+    trace_flags: traceFlags,
+    tracestate,
+  }
+}
+
 export class DurableTelemetryProvider implements TelemetryProvider {
   readonly id = 'postgres_ai_telemetry'
   private readonly persistence: TelemetryPersistence
@@ -119,6 +187,7 @@ export class DurableTelemetryProvider implements TelemetryProvider {
   async record(event: TelemetryEvent): Promise<TelemetryReceipt> {
     const attributes = event.attributes ?? {}
     assertSafeAttributes(attributes)
+    const traceContext = normalizedTraceContext(event.traceContext)
 
     let observedAt: string | undefined
     if (event.observedAt) {
@@ -138,6 +207,7 @@ export class DurableTelemetryProvider implements TelemetryProvider {
       ai_system_id: optionalText(event.aiSystemId),
       ai_system_version_id: optionalText(event.aiSystemVersionId),
       correlation_id: optionalText(event.correlationId),
+      ...traceContext,
       latency_ms: optionalNonNegativeInteger(event.latencyMs, 'latencyMs'),
       input_tokens: optionalNonNegativeInteger(event.inputTokens, 'inputTokens'),
       output_tokens: optionalNonNegativeInteger(event.outputTokens, 'outputTokens'),
