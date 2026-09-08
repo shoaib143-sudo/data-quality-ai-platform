@@ -21,6 +21,14 @@ const checks = [
     'Quality rule autonomy target is outside project scope',
     'autonomy_actions_scope_guard',
   ]],
+  ['supabase/migrations/20260908211118_adr006_pin_verified_policy_decision_version.sql', [
+    'governance.enforce_autonomy_action_policy',
+    'new.policy_version_id is null',
+    'new.policy_version_id is distinct from v_policy.current_version_id',
+    'Verified autonomy policy version is no longer current',
+    'Pinned autonomy policy version is invalid',
+    'Autonomy action policy identity/version is immutable after creation',
+  ]],
   ['lib/governance/policy-decision-provider.ts', [
     'export interface PolicyDecisionProvider',
     'GovernedPolicyDecisionProvider',
@@ -135,4 +143,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Governed autonomy safety and ADR-006 PolicyDecisionProvider contracts verified.')
+console.log('Governed autonomy safety, exact-version pinning, and ADR-006 PolicyDecisionProvider contracts verified.')
