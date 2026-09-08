@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const migration = fs.readFileSync('supabase/migrations/20260909043000_adr006_resource_budgets_and_execution_controls.sql', 'utf8')
+const migration = fs.readFileSync('supabase/migrations/20260908203507_adr006_resource_budgets_and_execution_controls.sql', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-resource-control-state.ts', 'utf8')
 const page = fs.readFileSync('app/admin/ai-command-center/resource-controls/page.tsx', 'utf8')
 
