@@ -32,7 +32,7 @@ requireText('lib/ai/governance-command-center-state.ts', [
 requireText('app/admin/ai-command-center/page.tsx', [
   'DataNexus AI Command Center',
   'authorizeProject',
-  "'catalog.read'",
+  "'admin.manage'",
   'createGovernanceCommandCenterState',
   'Mutation controls remain closed',
   'form method="get"',
