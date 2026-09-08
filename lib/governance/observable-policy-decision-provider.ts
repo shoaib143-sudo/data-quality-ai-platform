@@ -5,20 +5,22 @@ import type {
 } from './policy-decision-provider'
 import type { TelemetryProvider, TelemetryTraceContext } from '@/lib/ai/telemetry-provider'
 
+type TraceContextResolver = () => TelemetryTraceContext | null
+
 export class ObservablePolicyDecisionProvider implements PolicyDecisionProvider {
   readonly id: string
   private readonly delegate: PolicyDecisionProvider
   private readonly telemetry: TelemetryProvider
-  private readonly traceContext: TelemetryTraceContext | null
+  private readonly resolveTraceContext: TraceContextResolver
 
   constructor(
     delegate: PolicyDecisionProvider,
     telemetry: TelemetryProvider,
-    traceContext: TelemetryTraceContext | null = null,
+    resolveTraceContext: TraceContextResolver = () => null,
   ) {
     this.delegate = delegate
     this.telemetry = telemetry
-    this.traceContext = traceContext
+    this.resolveTraceContext = resolveTraceContext
     this.id = delegate.id
   }
 
@@ -33,7 +35,7 @@ export class ObservablePolicyDecisionProvider implements PolicyDecisionProvider 
         operation: 'autonomy_policy_decision',
         status: 'SUCCESS',
         providerId: result.providerId,
-        traceContext: this.traceContext,
+        traceContext: this.resolveTraceContext(),
         latencyMs: Math.max(0, Date.now() - startedAt),
         attributes: {
           action_key: request.actionKey,
