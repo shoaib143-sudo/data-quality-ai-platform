@@ -2,6 +2,10 @@ import {
   SemanticProjectionRetrievalProvider,
   type RetrievalProvider,
 } from './retrieval-provider'
+import {
+  DeterministicRelevanceReranker,
+  RerankingRetrievalProvider,
+} from './reranker-provider'
 import { createGovernanceEmbeddingProvider } from './governance-embedding-provider'
 import {
   semanticSearchByEmbedding,
@@ -12,8 +16,7 @@ type SupabaseLike = Parameters<typeof semanticSearchByEmbedding>[0]
 
 export function createGovernanceRetrievalProvider(supabase: SupabaseLike): RetrievalProvider {
   const embeddingProvider = createGovernanceEmbeddingProvider()
-
-  return new SemanticProjectionRetrievalProvider({
+  const semanticProvider = new SemanticProjectionRetrievalProvider({
     embedQuery: async (query) => (await embeddingProvider.embed({ input: query, purpose: 'query' })).embedding,
     searchProject: async ({ projectId, embedding, objectTypes, threshold, limit }) => semanticSearchByEmbedding(supabase, {
       projectId,
@@ -23,4 +26,9 @@ export function createGovernanceRetrievalProvider(supabase: SupabaseLike): Retri
       limit,
     }),
   })
+
+  return new RerankingRetrievalProvider(
+    semanticProvider,
+    new DeterministicRelevanceReranker(),
+  )
 }
