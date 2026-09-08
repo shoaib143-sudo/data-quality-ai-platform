@@ -84,7 +84,11 @@ function compareCandidates(left: RankedCandidate, right: RankedCandidate) {
 function activePolicy(policy: RoutingPolicy | null) { return policy?.enabled ? policy : null }
 
 export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter {
-  constructor(private readonly dependencies: IntelligentRouterDependencies) {}
+  private readonly dependencies: IntelligentRouterDependencies
+
+  constructor(dependencies: IntelligentRouterDependencies) {
+    this.dependencies = dependencies
+  }
 
   async route(context: IntelligentRouteContext): Promise<IntelligentRouteDecision> {
     const projectId = requiredText(context.projectId, 'projectId')
