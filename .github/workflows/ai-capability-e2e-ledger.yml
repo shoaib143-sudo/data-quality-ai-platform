@@ -1,0 +1,30 @@
+name: AI Capability E2E Ledger
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20260908102000_ai_capability_e2e_execution_ledger.sql'
+      - 'scripts/verify-ai-capability-e2e-ledger.mjs'
+      - '.github/workflows/ai-capability-e2e-ledger.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20260908102000_ai_capability_e2e_execution_ledger.sql'
+      - 'scripts/verify-ai-capability-e2e-ledger.mjs'
+      - '.github/workflows/ai-capability-e2e-ledger.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-ai-capability-e2e-ledger.mjs
+      - run: pnpm run build
