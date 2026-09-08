@@ -31,6 +31,23 @@ export type ExecutionControlDecision = {
   applicableControls: ExecutionControlRow[]
 }
 
+export class ExecutionControlDeniedError extends Error {
+  readonly code = 'AI_EXECUTION_CONTROL_BLOCKED'
+  readonly decision: Extract<ExecutionControlDecision['decision'], 'DENY_PAUSED' | 'DENY_KILLED'>
+  readonly scopes: Array<{ scopeType: ExecutionControlScopeType; scopeKey: string; state: 'PAUSE' | 'KILL' }>
+
+  constructor(decision: Extract<ExecutionControlDecision['decision'], 'DENY_PAUSED' | 'DENY_KILLED'>, controls: ExecutionControlRow[]) {
+    super(decision === 'DENY_KILLED' ? 'AI execution is killed by a governed execution control.' : 'AI execution is paused by a governed execution control.')
+    this.name = 'ExecutionControlDeniedError'
+    this.decision = decision
+    this.scopes = controls.map((row) => ({ scopeType: row.scope_type, scopeKey: row.scope_key, state: row.effective_state as 'PAUSE' | 'KILL' }))
+  }
+}
+
+export function isExecutionControlDeniedError(error: unknown): error is ExecutionControlDeniedError {
+  return error instanceof ExecutionControlDeniedError
+}
+
 function requiredText(value: string, label: string) {
   const normalized = value.trim()
   if (!normalized) throw new Error(`${label} is required`)
@@ -64,5 +81,11 @@ export class GovernedExecutionController {
     }
 
     return { allowed: true, decision: 'ALLOW_NO_CONTROL', blockingControls: [], applicableControls }
+  }
+
+  async assertAllowed(request: ExecutionControlRequest): Promise<ExecutionControlDecision> {
+    const result = await this.evaluate(request)
+    if (!result.allowed) throw new ExecutionControlDeniedError(result.decision, result.blockingControls)
+    return result
   }
 }
