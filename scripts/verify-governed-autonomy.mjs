@@ -21,12 +21,42 @@ const checks = [
     'Quality rule autonomy target is outside project scope',
     'autonomy_actions_scope_guard',
   ]],
+  ['supabase/migrations/20260908211118_adr006_pin_verified_policy_decision_version.sql', [
+    'governance.enforce_autonomy_action_policy',
+    'new.policy_version_id is null',
+    'new.policy_version_id is distinct from v_policy.current_version_id',
+    'Verified autonomy policy version is no longer current',
+    'Pinned autonomy policy version is invalid',
+    'Autonomy action policy identity/version is immutable after creation',
+  ]],
+  ['lib/governance/policy-decision-provider.ts', [
+    'export interface PolicyDecisionProvider',
+    'GovernedPolicyDecisionProvider',
+    "decision: 'DENY'",
+    "decision: 'REQUIRE_APPROVAL'",
+    "decision: 'ALLOW'",
+    'current_version_id',
+    'findPolicyVersion',
+    "readonly id = 'governance_autonomy_policy'",
+  ]],
+  ['lib/governance/governance-policy-decision-provider.ts', [
+    'createGovernancePolicyDecisionProvider',
+    "from('autonomy_policies')",
+    "from('autonomy_policy_versions')",
+    ".eq('id', versionId)",
+    ".eq('policy_id', policyId)",
+    ".eq('project_id', projectId)",
+  ]],
   ['lib/governance/governed-autonomy.ts', [
     'proposeGovernedAction',
     'executeApprovedGovernedAction',
     'rollbackGovernedAction',
     'applyPredictiveRiskGovernedActions',
     'applyAllPredictiveRiskGovernedActions',
+    'createGovernancePolicyDecisionProvider',
+    'policyDecision.decision',
+    'policy_version_id: policyDecision.policyVersionId',
+    'policy_decision_provider: policyDecision.providerId',
     "claimed.action_key !== 'CREATE_GOVERNANCE_ISSUE'",
     "workflow.status !== 'APPROVED'",
     "policyRaw.rollback_strategy !== 'CLOSE_CREATED_ISSUE'",
@@ -92,6 +122,16 @@ for (const path of ['lib/governance/governed-autonomy.ts', 'lib/governance/appro
   }
 }
 
+const adapter = fs.readFileSync('lib/governance/governance-policy-decision-provider.ts', 'utf8')
+for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(', "from('ai_telemetry_events')"]) {
+  if (adapter.includes(forbidden)) failures.push(`PolicyDecisionProvider adapter must remain read-only and policy-authoritative: ${forbidden}`)
+}
+
+const autonomy = fs.readFileSync('lib/governance/governed-autonomy.ts', 'utf8')
+for (const forbidden of ['function riskRank(', 'function allowedTarget(', 'const autoEligible =']) {
+  if (autonomy.includes(forbidden)) failures.push(`governed autonomy must not duplicate PDP decision logic: ${forbidden}`)
+}
+
 const worker = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
 const refreshAt = worker.indexOf('const predictiveRisk = await refreshAllPredictiveRisk()')
 const autonomyAt = worker.indexOf('const governedAutonomy = await applyAllPredictiveRiskGovernedActions()')
@@ -103,4 +143,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Governed autonomy safety contracts verified.')
+console.log('Governed autonomy safety, exact-version pinning, and ADR-006 PolicyDecisionProvider contracts verified.')
