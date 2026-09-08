@@ -39,6 +39,20 @@ const checks = [
     'findPolicyVersion',
     "readonly id = 'governance_autonomy_policy'",
   ]],
+  ['lib/governance/observable-policy-decision-provider.ts', [
+    'ObservablePolicyDecisionProvider',
+    "eventType: 'POLICY_DECISION'",
+    "operation: 'autonomy_policy_decision'",
+    'traceContext: this.resolveTraceContext()',
+    'policy_version_id: result.policyVersionId',
+    'Policy telemetry is observation only.',
+    'return result',
+  ]],
+  ['lib/ai/telemetry-trace-context-store.ts', [
+    'AsyncLocalStorage',
+    'runWithTelemetryTraceContext',
+    'currentTelemetryTraceContext',
+  ]],
   ['lib/governance/governance-policy-decision-provider.ts', [
     'createGovernancePolicyDecisionProvider',
     "from('autonomy_policies')",
@@ -46,6 +60,9 @@ const checks = [
     ".eq('id', versionId)",
     ".eq('policy_id', policyId)",
     ".eq('project_id', projectId)",
+    'ObservablePolicyDecisionProvider',
+    'createGovernanceTelemetryProvider()',
+    'currentTelemetryTraceContext',
   ]],
   ['lib/governance/governed-autonomy.ts', [
     'proposeGovernedAction',
@@ -90,6 +107,8 @@ const checks = [
     "operation === 'EXECUTE_APPROVED'",
     "operation === 'ROLLBACK'",
     "operation === 'PROPOSE'",
+    'telemetryTraceContextFromRequest(request)',
+    'runWithTelemetryTraceContext(traceContext',
   ]],
   ['app/api/jobs/worker/route.ts', [
     'refreshAllPredictiveRisk',
@@ -127,6 +146,19 @@ for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(', "from('
   if (adapter.includes(forbidden)) failures.push(`PolicyDecisionProvider adapter must remain read-only and policy-authoritative: ${forbidden}`)
 }
 
+const observablePdp = fs.readFileSync('lib/governance/observable-policy-decision-provider.ts', 'utf8')
+if (/throw\s+new\s+Error[^\n]*telemetry/i.test(observablePdp)) {
+  failures.push('Observable PolicyDecisionProvider must not convert telemetry failure into a policy decision failure.')
+}
+if (/decision\s*[:=]\s*['"]ALLOW['"]/.test(observablePdp) || /decision\s*[:=]\s*['"]DENY['"]/.test(observablePdp)) {
+  failures.push('Observable PolicyDecisionProvider must not manufacture ALLOW/DENY authority.')
+}
+
+const autonomyRoute = fs.readFileSync('app/api/governance/autonomy/route.ts', 'utf8')
+const authAt = autonomyRoute.indexOf("authorizeProject(user.id, projectId, 'issues.manage')")
+const traceAt = autonomyRoute.indexOf('telemetryTraceContextFromRequest(request)')
+if (authAt < 0 || traceAt < 0 || traceAt <= authAt) failures.push('Autonomy request trace context must be established only after project authorization.')
+
 const autonomy = fs.readFileSync('lib/governance/governed-autonomy.ts', 'utf8')
 for (const forbidden of ['function riskRank(', 'function allowedTarget(', 'const autoEligible =']) {
   if (autonomy.includes(forbidden)) failures.push(`governed autonomy must not duplicate PDP decision logic: ${forbidden}`)
@@ -143,4 +175,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Governed autonomy safety, exact-version pinning, and ADR-006 PolicyDecisionProvider contracts verified.')
+console.log('Governed autonomy safety, exact-version pinning, observable PDP, and ADR-006 PolicyDecisionProvider contracts verified.')
