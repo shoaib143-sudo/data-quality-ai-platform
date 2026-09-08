@@ -111,6 +111,23 @@ export type AiTelemetryControlRow = {
   observed_at: string
 }
 
+export type RoutingPolicyControlRow = {
+  id: string
+  project_id: string
+  task: string
+  sensitivity: string
+  risk: string
+  enabled: boolean
+  allowed_ai_system_ids: string[]
+  min_evaluation_score: number | string | null
+  min_scored_count: number
+  allow_environment_fallback: boolean
+  reviewer_user_id: string
+  reviewer_capability: string
+  review_note: string
+  created_at: string
+}
+
 export type AutonomyPolicyControlRow = {
   id: string
   project_id: string
@@ -161,6 +178,7 @@ export type CommandCenterState = {
   aiSystemAssessments: AiSystemAssessmentControlRow[]
   aiEvaluationResults: AiEvaluationControlRow[]
   aiTelemetryEvents: AiTelemetryControlRow[]
+  routingPolicies: RoutingPolicyControlRow[]
   autonomyPolicies: AutonomyPolicyControlRow[]
   autonomyActions: AutonomyActionControlRow[]
   findings: CommandCenterFinding[]
@@ -181,6 +199,8 @@ export type CommandCenterState = {
     aiEvaluationUnresolved: number
     aiTelemetryEvents: number
     aiTelemetryErrors: number
+    routingPolicyVersions: number
+    enabledRoutingPolicyVersions: number
     enabledAutoPolicies: number
     enabledApprovalPolicies: number
     blockedPolicies: number
@@ -196,6 +216,7 @@ export type CommandCenterPersistence = {
   listAiSystemAssessments(projectId: string): Promise<AiSystemAssessmentControlRow[]>
   listAiEvaluationResults(projectId: string): Promise<AiEvaluationControlRow[]>
   listAiTelemetryEvents(projectId: string): Promise<AiTelemetryControlRow[]>
+  listRoutingPolicies(projectId: string): Promise<RoutingPolicyControlRow[]>
   listAutonomyPolicies(projectId: string): Promise<AutonomyPolicyControlRow[]>
   listAutonomyActions(projectId: string): Promise<AutonomyActionControlRow[]>
 }
@@ -224,13 +245,14 @@ export class GovernedCommandCenterState {
 
   async read(projectIdInput: string): Promise<CommandCenterState> {
     const projectId = requiredText(projectIdInput, 'projectId')
-    const [systemsRaw, versionsRaw, decisionsRaw, assessmentsRaw, evaluationsRaw, telemetryRaw, policiesRaw, actionsRaw] = await Promise.all([
+    const [systemsRaw, versionsRaw, decisionsRaw, assessmentsRaw, evaluationsRaw, telemetryRaw, routingPoliciesRaw, policiesRaw, actionsRaw] = await Promise.all([
       this.persistence.listAiSystems(projectId),
       this.persistence.listAiSystemVersions(projectId),
       this.persistence.listAiSystemDecisions(projectId),
       this.persistence.listAiSystemAssessments(projectId),
       this.persistence.listAiEvaluationResults(projectId),
       this.persistence.listAiTelemetryEvents(projectId),
+      this.persistence.listRoutingPolicies(projectId),
       this.persistence.listAutonomyPolicies(projectId),
       this.persistence.listAutonomyActions(projectId),
     ])
@@ -241,6 +263,7 @@ export class GovernedCommandCenterState {
     const aiSystemAssessments = assessmentsRaw.filter((row) => row.project_id === projectId)
     const aiEvaluationResults = evaluationsRaw.filter((row) => row.project_id === projectId)
     const aiTelemetryEvents = telemetryRaw.filter((row) => row.project_id === projectId)
+    const routingPolicies = routingPoliciesRaw.filter((row) => row.project_id === projectId)
     const autonomyPolicies = policiesRaw.filter((row) => row.project_id === projectId)
     const autonomyActions = actionsRaw.filter((row) => row.project_id === projectId)
     const findings: CommandCenterFinding[] = []
@@ -305,6 +328,7 @@ export class GovernedCommandCenterState {
       aiSystemAssessments,
       aiEvaluationResults,
       aiTelemetryEvents,
+      routingPolicies,
       autonomyPolicies,
       autonomyActions,
       findings,
@@ -320,6 +344,8 @@ export class GovernedCommandCenterState {
         aiEvaluationUnresolved: aiEvaluationResults.filter((row) => row.pass == null).length,
         aiTelemetryEvents: aiTelemetryEvents.length,
         aiTelemetryErrors: aiTelemetryEvents.filter((row) => row.status === 'ERROR').length,
+        routingPolicyVersions: routingPolicies.length,
+        enabledRoutingPolicyVersions: routingPolicies.filter((row) => row.enabled).length,
         enabledAutoPolicies,
         enabledApprovalPolicies,
         blockedPolicies,
