@@ -37,6 +37,8 @@ jobs:
         run: pnpm run verify:telemetry-provider
       - name: Verify EvaluationEngine contract and scorecard behavior
         run: pnpm run verify:evaluation-engine
+      - name: Verify verified-case evaluation dataset authority boundaries
+        run: pnpm run verify:evaluation-dataset
       - name: Verify ModelRegistry lifecycle and evaluation boundaries
         run: pnpm run verify:model-registry
       - name: Verify Intelligent Router evaluation-aware fail-closed behavior
