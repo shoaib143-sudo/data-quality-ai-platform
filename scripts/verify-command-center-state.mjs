@@ -30,6 +30,11 @@ requireText('lib/ai/command-center-state.ts', [
   'routingPolicies',
   'routingPolicyVersions',
   'enabledRoutingPolicyVersions',
+  'listDataQualityInvestigations',
+  'dataQualityInvestigations',
+  'investigationsApprovalRequired',
+  'investigationsAttentionRequired',
+  'investigationsHighSeverity',
   'autonomyExpansionAllowed: false',
   'directMutationEnabled: false',
   'emergencyKillMutationEnabled: false',
@@ -43,15 +48,22 @@ requireText('lib/ai/governance-command-center-state.ts', [
   "from('ai_evaluation_results')",
   "from('ai_telemetry_events')",
   "from('ai_routing_policy_versions')",
+  "from('data_quality_investigations')",
   "from('autonomy_policies')",
   "from('autonomy_actions')",
   'allowed_ai_system_ids',
   'min_evaluation_score',
   'min_scored_count',
   'allow_environment_fallback',
+  'agent_run_id',
+  'dataset_version_id',
+  'profile_run_id',
+  'approval_required',
+  'workflow_instance_id',
   'reviewer_capability',
   'project_id',
   "order('observed_at', { ascending: false }).limit(100)",
+  "order('updated_at', { ascending: false }).limit(100)",
 ])
 requireText('app/admin/ai-command-center/page.tsx', [
   'DataNexus AI Command Center',
@@ -79,6 +91,11 @@ requireText('app/admin/ai-command-center/page.tsx', [
   'Policy mutation remains disabled here',
   'No governed AI routing policy versions are recorded for this project.',
   'unrestricted routing has governance approval',
+  'Data quality investigations',
+  'Investigation records are operational evidence produced by governed runs.',
+  'do not approve an AI system, activate a model version, or create deployment authority.',
+  'No data quality investigation evidence is recorded for this project.',
+  'not that data quality is healthy or governed approval exists.',
   'AI telemetry',
   'Autonomy policies',
   'Recent autonomy actions',
@@ -108,8 +125,8 @@ for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(', '.rpc('
 }
 
 const page = read('app/admin/ai-command-center/page.tsx')
-for (const forbidden of ['method="post"', "'use server'", '.insert(', '.update(', '.delete(', '.upsert(', '.rpc(', '.promote(']) {
-  if (page.includes(forbidden)) throw new Error(`Command Center page must remain read-only: found ${forbidden}`)
+for (const forbidden of ['method="post"', "'use server'", '.insert(', '.update(', '.delete(', '.upsert(', '.rpc(', '.promote(', 'probable_root_causes', 'recommendations', 'investigation.evidence']) {
+  if (page.includes(forbidden)) throw new Error(`Command Center page must remain read-only and summary-safe: found ${forbidden}`)
 }
 
-console.log('ADR-006 Command Center read-only control-state, governance evidence, automated evaluation evidence, governed learning candidates, governed routing policy visibility, and UI boundary verified.')
+console.log('ADR-006 Command Center read-only control-state, governance evidence, automated evaluation evidence, governed learning candidates, governed routing policy visibility, observational investigation evidence, and UI boundary verified.')
