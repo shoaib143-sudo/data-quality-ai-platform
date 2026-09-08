@@ -14,6 +14,7 @@
     "verify:agent-memory-learning": "node scripts/verify-agent-memory-learning.mjs",
     "verify:reasoning-provider": "node scripts/verify-reasoning-provider.mjs && node --experimental-strip-types scripts/test-reasoning-provider.mjs",
     "verify:model-gateway": "node scripts/verify-model-gateway.mjs && node scripts/test-model-gateway.mjs",
+    "verify:retrieval-provider": "node scripts/verify-retrieval-provider.mjs && node --experimental-strip-types scripts/test-retrieval-provider.mjs",
     "verify:investigation-prediction": "node scripts/verify-investigation-prediction.mjs",
     "verify:governed-autonomy": "node scripts/verify-governed-autonomy.mjs",
     "verify:ai-due-diligence": "node scripts/verify-ai-governance-due-diligence.mjs",
