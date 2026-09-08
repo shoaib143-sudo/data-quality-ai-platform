@@ -35,5 +35,7 @@ jobs:
         run: pnpm run verify:retrieval-provider
       - name: Verify TelemetryProvider contract and persistence safety
         run: pnpm run verify:telemetry-provider
+      - name: Verify EvaluationEngine contract and scorecard behavior
+        run: pnpm run verify:evaluation-engine
       - name: Production build
         run: pnpm run build
