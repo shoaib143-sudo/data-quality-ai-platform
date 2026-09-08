@@ -28,6 +28,7 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
         modelName: decision.evidence?.modelName ?? null,
         aiSystemId: decision.evidence?.aiSystemId ?? null,
         aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null,
+        traceContext: context.traceContext ?? null,
         latencyMs: Math.max(0, Date.now() - startedAt),
         attributes: {
           task: context.task,
