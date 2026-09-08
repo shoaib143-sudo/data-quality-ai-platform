@@ -100,6 +100,38 @@ requireText('app/admin/ai-command-center/page.tsx', [
   'Autonomy policies',
   'Recent autonomy actions',
 ])
+requireText('lib/ai/audit-command-center-state.ts', [
+  'GovernedAuditCommandCenterState',
+  'AuditChainVerification',
+  'listAuditEvents',
+  'listAuditReportSnapshots',
+  'verifyAuditChain',
+  'row.project_id === projectId',
+  'visibleEventsMissingSequence',
+  'visibleEventsMissingPreviousHash',
+])
+requireText('lib/ai/governance-audit-command-center-state.ts', [
+  "from('audit_events')",
+  "from('audit_report_snapshots')",
+  "rpc('verify_audit_chain'",
+  'actor_type,event_type,entity_type,entity_id,correlation_id,created_at,previous_hash,event_hash,chain_version,chain_sequence',
+  'chain_tip_event_id,chain_tip_event_hash,audit_event_count,report_hash,created_at',
+  "order('created_at', { ascending: false }).limit(100)",
+  "order('created_at', { ascending: false }).limit(50)",
+])
+requireText('app/admin/ai-command-center/audit/page.tsx', [
+  'Command Center Audit Ledger',
+  "'admin.manage'",
+  'createGovernanceAuditCommandCenterState',
+  'governance.verify_audit_chain',
+  'Event rows alone are not treated as independent proof of chain integrity.',
+  'Recent audit events',
+  'Audit metadata is not rendered.',
+  'Audit report snapshots',
+  'Report payloads and chain-tip hash values are not exposed in this view.',
+  'Audit validity demonstrates the verifier’s assessment of ledger integrity.',
+  'does not approve an AI system, activate a model version, promote learning, mutate policy, or grant deployment authority.',
+])
 requireText('lib/ai/learning-engine.ts', [
   'VERIFIED_OUTCOME_CANDIDATE',
   'DURABLE_UNVALIDATED_SEMANTIC',
@@ -129,4 +161,17 @@ for (const forbidden of ['method="post"', "'use server'", '.insert(', '.update('
   if (page.includes(forbidden)) throw new Error(`Command Center page must remain read-only and summary-safe: found ${forbidden}`)
 }
 
-console.log('ADR-006 Command Center read-only control-state, governance evidence, automated evaluation evidence, governed learning candidates, governed routing policy visibility, observational investigation evidence, and UI boundary verified.')
+const auditAdapter = read('lib/ai/governance-audit-command-center-state.ts')
+for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(']) {
+  if (auditAdapter.includes(forbidden)) throw new Error(`Audit Command Center projection must remain read-only: found ${forbidden}`)
+}
+for (const forbidden of ['metadata', 'report_payload']) {
+  if (auditAdapter.includes(forbidden)) throw new Error(`Audit Command Center adapter must not select raw payload field: ${forbidden}`)
+}
+
+const auditPage = read('app/admin/ai-command-center/audit/page.tsx')
+for (const forbidden of ['method="post"', "'use server'", '.insert(', '.update(', '.delete(', '.upsert(', '.rpc(', '.metadata', 'report_payload', 'chain_tip_event_hash}']) {
+  if (auditPage.includes(forbidden)) throw new Error(`Audit Command Center page must remain read-only and payload-safe: found ${forbidden}`)
+}
+
+console.log('ADR-006 Command Center read-only governance, evaluation, learning, routing, investigation, audit-evidence, and UI boundaries verified.')
