@@ -128,6 +128,24 @@ export type RoutingPolicyControlRow = {
   created_at: string
 }
 
+export type DataQualityInvestigationControlRow = {
+  id: string
+  project_id: string
+  agent_run_id: string
+  dataset_id: string
+  dataset_version_id: string
+  profile_run_id: string | null
+  severity: string
+  status: string
+  summary: string
+  business_impact: string | null
+  approval_required: boolean
+  workflow_instance_id: string | null
+  evidence: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
 export type AutonomyPolicyControlRow = {
   id: string
   project_id: string
@@ -179,6 +197,7 @@ export type CommandCenterState = {
   aiEvaluationResults: AiEvaluationControlRow[]
   aiTelemetryEvents: AiTelemetryControlRow[]
   routingPolicies: RoutingPolicyControlRow[]
+  dataQualityInvestigations: DataQualityInvestigationControlRow[]
   autonomyPolicies: AutonomyPolicyControlRow[]
   autonomyActions: AutonomyActionControlRow[]
   findings: CommandCenterFinding[]
@@ -201,6 +220,10 @@ export type CommandCenterState = {
     aiTelemetryErrors: number
     routingPolicyVersions: number
     enabledRoutingPolicyVersions: number
+    investigations: number
+    investigationsApprovalRequired: number
+    investigationsAttentionRequired: number
+    investigationsHighSeverity: number
     enabledAutoPolicies: number
     enabledApprovalPolicies: number
     blockedPolicies: number
@@ -217,6 +240,7 @@ export type CommandCenterPersistence = {
   listAiEvaluationResults(projectId: string): Promise<AiEvaluationControlRow[]>
   listAiTelemetryEvents(projectId: string): Promise<AiTelemetryControlRow[]>
   listRoutingPolicies(projectId: string): Promise<RoutingPolicyControlRow[]>
+  listDataQualityInvestigations(projectId: string): Promise<DataQualityInvestigationControlRow[]>
   listAutonomyPolicies(projectId: string): Promise<AutonomyPolicyControlRow[]>
   listAutonomyActions(projectId: string): Promise<AutonomyActionControlRow[]>
 }
@@ -245,7 +269,7 @@ export class GovernedCommandCenterState {
 
   async read(projectIdInput: string): Promise<CommandCenterState> {
     const projectId = requiredText(projectIdInput, 'projectId')
-    const [systemsRaw, versionsRaw, decisionsRaw, assessmentsRaw, evaluationsRaw, telemetryRaw, routingPoliciesRaw, policiesRaw, actionsRaw] = await Promise.all([
+    const [systemsRaw, versionsRaw, decisionsRaw, assessmentsRaw, evaluationsRaw, telemetryRaw, routingPoliciesRaw, investigationsRaw, policiesRaw, actionsRaw] = await Promise.all([
       this.persistence.listAiSystems(projectId),
       this.persistence.listAiSystemVersions(projectId),
       this.persistence.listAiSystemDecisions(projectId),
@@ -253,6 +277,7 @@ export class GovernedCommandCenterState {
       this.persistence.listAiEvaluationResults(projectId),
       this.persistence.listAiTelemetryEvents(projectId),
       this.persistence.listRoutingPolicies(projectId),
+      this.persistence.listDataQualityInvestigations(projectId),
       this.persistence.listAutonomyPolicies(projectId),
       this.persistence.listAutonomyActions(projectId),
     ])
@@ -264,6 +289,7 @@ export class GovernedCommandCenterState {
     const aiEvaluationResults = evaluationsRaw.filter((row) => row.project_id === projectId)
     const aiTelemetryEvents = telemetryRaw.filter((row) => row.project_id === projectId)
     const routingPolicies = routingPoliciesRaw.filter((row) => row.project_id === projectId)
+    const dataQualityInvestigations = investigationsRaw.filter((row) => row.project_id === projectId)
     const autonomyPolicies = policiesRaw.filter((row) => row.project_id === projectId)
     const autonomyActions = actionsRaw.filter((row) => row.project_id === projectId)
     const findings: CommandCenterFinding[] = []
@@ -329,6 +355,7 @@ export class GovernedCommandCenterState {
       aiEvaluationResults,
       aiTelemetryEvents,
       routingPolicies,
+      dataQualityInvestigations,
       autonomyPolicies,
       autonomyActions,
       findings,
@@ -346,6 +373,10 @@ export class GovernedCommandCenterState {
         aiTelemetryErrors: aiTelemetryEvents.filter((row) => row.status === 'ERROR').length,
         routingPolicyVersions: routingPolicies.length,
         enabledRoutingPolicyVersions: routingPolicies.filter((row) => row.enabled).length,
+        investigations: dataQualityInvestigations.length,
+        investigationsApprovalRequired: dataQualityInvestigations.filter((row) => row.approval_required || row.status === 'APPROVAL_REQUIRED').length,
+        investigationsAttentionRequired: dataQualityInvestigations.filter((row) => row.status === 'ATTENTION_REQUIRED').length,
+        investigationsHighSeverity: dataQualityInvestigations.filter((row) => isHighRisk(row.severity)).length,
         enabledAutoPolicies,
         enabledApprovalPolicies,
         blockedPolicies,
