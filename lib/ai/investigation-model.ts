@@ -1,9 +1,10 @@
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createGovernanceIntelligentRouter } from './governance-intelligent-router'
 
 type InvestigationRisk = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 
 type InvestigationModelContext = {
-  projectId: string
+  projectId?: string | null
   risk?: InvestigationRisk
 }
 
@@ -17,14 +18,58 @@ const PROFILING_INVESTIGATION_SYSTEM_PROMPT = [
   'Each recommendation must include action, priority, approval_required, rationale.',
 ].join(' ')
 
+function record(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function text(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function investigationRisk(input: Record<string, unknown>, context: InvestigationModelContext) {
+  if (context.risk) return context.risk
+  const risk = text(record(input.deterministic_investigation).risk).toUpperCase()
+  return ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(risk) ? risk as InvestigationRisk : undefined
+}
+
+async function resolveProjectId(input: Record<string, unknown>, context: InvestigationModelContext) {
+  const supplied = text(context.projectId)
+  if (supplied) return supplied
+
+  const datasetVersionId = text(record(input.deterministic_investigation).dataset_version_id)
+  if (!datasetVersionId) return null
+
+  const admin = createAdminClient()
+  const { data: version, error: versionError } = await admin
+    .schema('catalog')
+    .from('dataset_versions')
+    .select('dataset_id')
+    .eq('id', datasetVersionId)
+    .maybeSingle()
+  if (versionError) throw new Error(`Unable to resolve AI investigation dataset version: ${versionError.message}`)
+  if (!version?.dataset_id) return null
+
+  const { data: dataset, error: datasetError } = await admin
+    .schema('catalog')
+    .from('datasets')
+    .select('project_id')
+    .eq('id', version.dataset_id)
+    .maybeSingle()
+  if (datasetError) throw new Error(`Unable to resolve AI investigation project: ${datasetError.message}`)
+  return text(dataset?.project_id) || null
+}
+
 export async function enrichInvestigationWithModel(
   input: Record<string, unknown>,
-  context: InvestigationModelContext,
+  context: InvestigationModelContext = {},
 ) {
+  const projectId = await resolveProjectId(input, context)
+  if (!projectId) return null
+
   const decision = await createGovernanceIntelligentRouter().route({
-    projectId: context.projectId,
+    projectId,
     task: 'profiling_investigation',
-    risk: context.risk,
+    risk: investigationRisk(input, context),
   })
   if (!decision.provider) return null
 
