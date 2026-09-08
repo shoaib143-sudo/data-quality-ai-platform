@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 
 const migration = fs.readFileSync('supabase/migrations/20260905121000_generate_ai_capability_matrix.sql', 'utf8')
+const remediationVerificationMigration = fs.readFileSync('supabase/migrations/20260908092500_capability_45_requires_verified_remediation.sql', 'utf8')
 const baseline = fs.readFileSync('Major discussion/2026-08-28-ai-capability-matrix.md', 'utf8')
 const route = fs.readFileSync('app/api/governance/ai-capability-matrix/route.ts', 'utf8')
 
@@ -30,6 +31,9 @@ requireText(migration, "source_kind<>'SYNTHETIC' and review_status='APPROVED'", 
 requireText(migration, 'security invoker', 'invoker security boundary')
 requireText(migration, 'revoke all on function governance.generate_ai_capability_matrix(uuid) from public, anon, authenticated', 'direct client execution revocation')
 requireText(migration, 'grant execute on function governance.generate_ai_capability_matrix(uuid) to service_role', 'service-only execution grant')
+requireText(remediationVerificationMigration, "profiling_remediation_outcomes where project_id=p_project_id and status=''VERIFIED''", 'verified profiling remediation evidence for capability 45')
+requireText(remediationVerificationMigration, "data_quality_remediation_outcomes where project_id=p_project_id and status=''VERIFIED''", 'verified data-quality remediation evidence for capability 45')
+requireText(remediationVerificationMigration, 'tracked/planned remediation is not verification evidence', 'capability 45 verification authority boundary')
 requireText(route, 'requireUser()', 'authenticated Matrix API')
 requireText(route, "authorizeProject(user.id, projectId, 'catalog.read')", 'project authorization')
 requireText(route, "schema('governance')", 'governance service schema')
