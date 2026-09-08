@@ -50,6 +50,8 @@ jobs:
         run: pnpm run verify:intelligent-router
       - name: Verify ADR-006 governed RoutingPolicy contract
         run: pnpm run verify:routing-policy
+      - name: Verify ADR-006 route-decision telemetry
+        run: pnpm run verify:route-telemetry
       - name: Verify investigation and prediction
         run: pnpm run verify:investigation-prediction
       - name: Verify governed autonomy safety
