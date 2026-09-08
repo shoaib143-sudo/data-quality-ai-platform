@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 const { DurableTelemetryProvider } = await import('../lib/ai/telemetry-provider.ts')
+const { parseW3CTraceContext, telemetryTraceContextFromRequest } = await import('../lib/ai/w3c-trace-context.ts')
 
 const inserted = []
 const provider = new DurableTelemetryProvider({
@@ -52,6 +53,39 @@ assert.equal(inserted[0].input_tokens, 200)
 assert.equal(inserted[0].output_tokens, 50)
 assert.equal(inserted[0].cost_usd, 0)
 assert.equal(inserted[0].observed_at, '2026-09-08T14:45:00.000Z')
+
+const inbound = parseW3CTraceContext(
+  '00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01',
+  'vendor=opaque',
+)
+assert.deepEqual(inbound, {
+  traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+  parentSpanId: '00f067aa0ba902b7',
+  traceFlags: '01',
+  tracestate: 'vendor=opaque',
+})
+assert.equal(parseW3CTraceContext('00-' + '0'.repeat(32) + '-00f067aa0ba902b7-01'), null)
+assert.equal(parseW3CTraceContext('00-4bf92f3577b34da6a3ce929d0e0e4736-' + '0'.repeat(16) + '-01'), null)
+assert.equal(parseW3CTraceContext('malformed'), null)
+assert.deepEqual(
+  telemetryTraceContextFromRequest(new Request('https://example.test', {
+    headers: {
+      traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+      tracestate: 'vendor=request',
+    },
+  })),
+  {
+    traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+    parentSpanId: '00f067aa0ba902b7',
+    traceFlags: '01',
+    tracestate: 'vendor=request',
+  },
+)
+assert.equal(
+  telemetryTraceContextFromRequest(new Request('https://example.test', { headers: { traceparent: 'bad' } })),
+  null,
+  'malformed observability headers must be ignored instead of affecting governed execution',
+)
 
 await assert.rejects(
   provider.record({ projectId: 'project-a', eventType: 'MODEL', operation: 'test', attributes: { prompt: 'secret' } }),
