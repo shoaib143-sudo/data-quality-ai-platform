@@ -86,12 +86,14 @@ export class DeterministicRelevanceReranker implements RerankerProvider {
 export class RerankingRetrievalProvider implements RetrievalProvider {
   readonly id: string
   readonly capabilities: RetrievalCapabilities
+  private readonly retrieval: RetrievalProvider
+  private readonly reranker: RerankerProvider
+  private readonly candidateMultiplier: number
 
-  constructor(
-    private readonly retrieval: RetrievalProvider,
-    private readonly reranker: RerankerProvider,
-    private readonly candidateMultiplier = 3,
-  ) {
+  constructor(retrieval: RetrievalProvider, reranker: RerankerProvider, candidateMultiplier = 3) {
+    this.retrieval = retrieval
+    this.reranker = reranker
+    this.candidateMultiplier = candidateMultiplier
     this.id = `${retrieval.id}+${reranker.id}`
     this.capabilities = retrieval.capabilities
   }
