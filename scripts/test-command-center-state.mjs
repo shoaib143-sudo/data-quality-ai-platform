@@ -25,6 +25,13 @@ const state = new GovernedCommandCenterState({
   async listAiSystemAssessments() {
     return [{ id: 'assessment-1', project_id: projectId, ai_system_id: 'sys-1', version_id: 'v-1', assessment_type: 'RISK', result: 'PARTIAL', assessor_type: 'SYSTEM', assessor_user_id: null, source_agent_run_id: null, evidence: {}, note: null, created_at: '2026-09-08T00:10:00Z' }]
   },
+  async listAiEvaluationResults() {
+    return [
+      { id: 'eval-1', project_id: projectId, evaluation_type: 'ROUTING_QUALITY', capability: 'route', metric_name: 'accuracy', score: '0.99', pass: true, evaluator_type: 'SYSTEM', evaluator_version: '1', ai_system_id: 'sys-1', ai_system_version_id: 'v-1', agent_run_id: null, source_agent_evaluation_id: null, telemetry_event_id: null, correlation_id: null, evidence_refs: [], dimensions: {}, metadata: {}, observed_at: '2026-09-08T00:30:00Z', created_at: '2026-09-08T00:30:00Z' },
+      { id: 'eval-2', project_id: projectId, evaluation_type: 'SAFETY', capability: null, metric_name: 'policy_alignment', score: null, pass: null, evaluator_type: 'SYSTEM', evaluator_version: null, ai_system_id: 'sys-1', ai_system_version_id: 'v-1', agent_run_id: null, source_agent_evaluation_id: null, telemetry_event_id: null, correlation_id: null, evidence_refs: [], dimensions: {}, metadata: {}, observed_at: '2026-09-08T00:31:00Z', created_at: '2026-09-08T00:31:00Z' },
+      { id: 'eval-cross-project', project_id: 'project-2', evaluation_type: 'ROUTING_QUALITY', capability: 'route', metric_name: 'accuracy', score: '1', pass: true, evaluator_type: 'SYSTEM', evaluator_version: '1', ai_system_id: 'sys-2', ai_system_version_id: 'v-2', agent_run_id: null, source_agent_evaluation_id: null, telemetry_event_id: null, correlation_id: null, evidence_refs: [], dimensions: {}, metadata: {}, observed_at: '2026-09-08T00:32:00Z', created_at: '2026-09-08T00:32:00Z' },
+    ]
+  },
   async listAiTelemetryEvents() {
     return [{ id: 'telemetry-1', project_id: projectId, event_type: 'MODEL_CALL', operation: 'route', status: 'ERROR', provider_id: 'provider', model_name: 'model', agent_run_id: null, ai_system_id: 'sys-1', ai_system_version_id: 'v-1', correlation_id: null, latency_ms: 15, input_tokens: 10, output_tokens: 0, cost_usd: 0, observed_at: '2026-09-08T01:00:00Z' }]
   },
@@ -52,6 +59,11 @@ assert.equal(result.counts.aiSystems, 1)
 assert.equal(result.counts.aiSystemVersions, 1)
 assert.equal(result.counts.aiSystemDecisions, 0)
 assert.equal(result.counts.aiSystemAssessments, 1)
+assert.equal(result.counts.aiEvaluationResults, 2)
+assert.equal(result.counts.aiEvaluationPasses, 1)
+assert.equal(result.counts.aiEvaluationFailures, 0)
+assert.equal(result.counts.aiEvaluationUnresolved, 1)
+assert.equal(result.aiEvaluationResults.some((row) => row.id === 'eval-cross-project'), false)
 assert.equal(result.counts.aiTelemetryEvents, 1)
 assert.equal(result.counts.aiTelemetryErrors, 1)
 assert.equal(result.counts.enabledAutoPolicies, 1)
@@ -75,5 +87,7 @@ for (const code of [
   'ACTION_FAILED',
 ]) assert.ok(codes.has(code), `missing ${code}`)
 
+assert.ok(codes.has('AI_SYSTEM_NOT_APPROVED'), 'passing automated evaluation must not activate a DRAFT system')
+assert.ok(codes.has('AI_SYSTEM_CURRENT_VERSION_NO_APPROVAL'), 'passing automated evaluation must not replace exact-version human approval')
 await assert.rejects(() => state.read('   '), /projectId is required/)
-console.log('Command Center control-state and AI governance evidence behavior verified.')
+console.log('Command Center control-state, governance evidence, and non-authoritative automated evaluation evidence behavior verified.')

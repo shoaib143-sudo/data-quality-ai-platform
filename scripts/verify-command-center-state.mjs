@@ -21,6 +21,11 @@ requireText('lib/ai/command-center-state.ts', [
   'AUTO_POLICY_NOT_REVIEWED',
   'AUTO_POLICY_NOT_REVERSIBLE',
   'AUTO_POLICY_HIGH_RISK',
+  'listAiEvaluationResults',
+  'aiEvaluationResults',
+  'aiEvaluationPasses',
+  'aiEvaluationFailures',
+  'aiEvaluationUnresolved',
   'autonomyExpansionAllowed: false',
   'directMutationEnabled: false',
   'emergencyKillMutationEnabled: false',
@@ -31,10 +36,12 @@ requireText('lib/ai/governance-command-center-state.ts', [
   "from('ai_system_versions')",
   "from('ai_system_decisions')",
   "from('ai_system_assessments')",
+  "from('ai_evaluation_results')",
   "from('ai_telemetry_events')",
   "from('autonomy_policies')",
   "from('autonomy_actions')",
   'project_id',
+  "order('observed_at', { ascending: false }).limit(100)",
 ])
 requireText('app/admin/ai-command-center/page.tsx', [
   'DataNexus AI Command Center',
@@ -46,6 +53,9 @@ requireText('app/admin/ai-command-center/page.tsx', [
   'AI governance evidence',
   'Human decisions',
   'Assessments',
+  'Automated evaluation evidence',
+  'PASS or a high score does not approve an AI system, activate a version, or grant deployment authority.',
+  'Absence means evaluation evidence has not been recorded, not that the governed AI systems passed evaluation.',
   'AI telemetry',
   'Autonomy policies',
   'Recent autonomy actions',
@@ -62,4 +72,4 @@ for (const forbidden of ['method="post"', "'use server'", '.insert(', '.update('
   if (page.includes(forbidden)) throw new Error(`Command Center page must remain read-only: found ${forbidden}`)
 }
 
-console.log('ADR-006 Command Center read-only control-state, governance evidence, and UI boundary verified.')
+console.log('ADR-006 Command Center read-only control-state, governance evidence, automated evaluation evidence, and UI boundary verified.')

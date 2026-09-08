@@ -36,6 +36,13 @@ export function createGovernanceCommandCenterState() {
       if (error) throw new Error(`Unable to read AI system assessments: ${error.message}`)
       return data ?? []
     },
+    async listAiEvaluationResults(projectId) {
+      const { data, error } = await supabase.schema('governance').from('ai_evaluation_results')
+        .select('id,project_id,evaluation_type,capability,metric_name,score,pass,evaluator_type,evaluator_version,ai_system_id,ai_system_version_id,agent_run_id,source_agent_evaluation_id,telemetry_event_id,correlation_id,evidence_refs,dimensions,metadata,observed_at,created_at')
+        .eq('project_id', projectId).order('observed_at', { ascending: false }).limit(100)
+      if (error) throw new Error(`Unable to read automated AI evaluation evidence: ${error.message}`)
+      return data ?? []
+    },
     async listAiTelemetryEvents(projectId) {
       const { data, error } = await supabase.schema('governance').from('ai_telemetry_events')
         .select('id,project_id,event_type,operation,status,provider_id,model_name,agent_run_id,ai_system_id,ai_system_version_id,correlation_id,latency_ms,input_tokens,output_tokens,cost_usd,observed_at')
