@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
-import { embedGovernanceText, semanticSearchByEmbedding, type SemanticMatch } from '@/lib/governance/semantic-search'
+import { createGovernanceRetrievalProvider } from '@/lib/ai/governance-retrieval-provider'
+import type { RetrievalMatch } from '@/lib/ai/retrieval-provider'
 import { createClient } from '@/lib/supabase/server'
 
 type SearchResult = {
@@ -13,8 +14,6 @@ type SearchResult = {
   score: number
   metadata: Record<string, unknown>
 }
-
-const SEMANTIC_PROJECT_CONCURRENCY = 4
 
 function lexicalScore(label: string, description: string | null, query: string, kind: string) {
   const normalized = query.toLowerCase()
@@ -39,9 +38,9 @@ function textMetadata(metadata: Record<string, unknown>, key: string) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
-function semanticResult(projectId: string, match: SemanticMatch): SearchResult {
+function semanticResult(match: RetrievalMatch): SearchResult {
   const metadata = match.metadata ?? {}
-  const objectId = match.object_id ?? match.object_key
+  const objectId = match.objectId ?? match.objectKey
   const datasetName = textMetadata(metadata, 'dataset_name')
   const columnName = textMetadata(metadata, 'column_name')
   const profileRunId = textMetadata(metadata, 'profile_run_id')
@@ -51,7 +50,7 @@ function semanticResult(projectId: string, match: SemanticMatch): SearchResult {
   let label = firstLine(match.content)
   let href = '/dashboard'
 
-  switch (match.object_type) {
+  switch (match.objectType) {
     case 'DATASET':
       label = textMetadata(metadata, 'name') ?? label
       href = `/catalog?dataset=${encodeURIComponent(objectId)}`
@@ -95,14 +94,20 @@ function semanticResult(projectId: string, match: SemanticMatch): SearchResult {
   }
 
   return {
-    kind: match.object_type,
+    kind: match.objectType,
     id: objectId,
-    projectId,
+    projectId: match.projectId,
     label,
     description: match.content,
     href,
-    score: Math.max(0, Math.min(1, Number(match.similarity) || 0)) * 60,
-    metadata: { ...metadata, similarity: match.similarity, semantic: true },
+    score: match.score * 60,
+    metadata: {
+      ...metadata,
+      similarity: match.score,
+      semantic: true,
+      retrieval_mode: match.mode,
+      retrieval_projection: match.provenance.projection,
+    },
   }
 }
 
@@ -125,20 +130,6 @@ function mergeResults(lexical: SearchResult[], semantic: SearchResult[]) {
   return [...merged.values()]
     .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label))
     .slice(0, 75)
-}
-
-async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
-  const results = new Array<R>(items.length)
-  let cursor = 0
-  async function worker() {
-    while (true) {
-      const index = cursor++
-      if (index >= items.length) return
-      results[index] = await mapper(items[index])
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, items.length)) }, () => worker()))
-  return results
 }
 
 export async function GET(request: Request) {
@@ -203,24 +194,20 @@ export async function GET(request: Request) {
   let semantic: SearchResult[] = []
   let semanticStatus: 'ENABLED' | 'NOT_CONFIGURED' | 'UNAVAILABLE' = 'ENABLED'
   try {
-    const [{ data: projects, error: projectError }, embedding] = await Promise.all([
-      supabase.schema('app').from('projects').select('id'),
-      embedGovernanceText(query),
-    ])
+    const { data: projects, error: projectError } = await supabase.schema('app').from('projects').select('id')
     if (projectError) throw new Error(`Unable to enumerate searchable projects: ${projectError.message}`)
-    const projectIds = (projects ?? []).map((project) => project.id)
-    const perProjectLimit = Math.max(5, Math.ceil(75 / Math.max(1, projectIds.length)))
-    const groups = await mapWithConcurrency(projectIds, SEMANTIC_PROJECT_CONCURRENCY, async (projectId) => ({
-      projectId,
-      matches: await semanticSearchByEmbedding(supabase, {
-        projectId,
-        embedding,
-        objectTypes: ['DATASET', 'COLUMN', 'FINDING', 'QUALITY_INCIDENT', 'DOCUMENT', 'DOCUMENT_CHUNK', 'GLOSSARY_TERM', 'POLICY', 'LINEAGE_TRANSFORMATION'],
-        limit: perProjectLimit,
-        threshold: 0.35,
-      }),
-    }))
-    semantic = groups.flatMap(({ projectId, matches }) => matches.map((match) => semanticResult(projectId, match)))
+
+    const retrieval = createGovernanceRetrievalProvider(supabase)
+    const retrieved = await retrieval.retrieve({
+      query,
+      projectIds: (projects ?? []).map((project) => project.id),
+      objectTypes: ['DATASET', 'COLUMN', 'FINDING', 'QUALITY_INCIDENT', 'DOCUMENT', 'DOCUMENT_CHUNK', 'GLOSSARY_TERM', 'POLICY', 'LINEAGE_TRANSFORMATION'],
+      modes: ['semantic'],
+      limit: 75,
+      threshold: 0.35,
+    })
+    semantic = retrieved.matches.map(semanticResult)
+    // Hybrid fallback remains mergeResults with NOT_CONFIGURED and UNAVAILABLE semantic states.
   } catch (error) {
     semanticStatus = error instanceof Error && error.name === 'EmbeddingProviderNotConfiguredError' ? 'NOT_CONFIGURED' : 'UNAVAILABLE'
     if (semanticStatus === 'UNAVAILABLE') console.error('Hybrid semantic search unavailable', error)

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const provider = fs.readFileSync('lib/ai/retrieval-provider.ts', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-retrieval-provider.ts', 'utf8')
+const globalSearch = fs.readFileSync('app/api/search/route.ts', 'utf8')
 
 function requireText(text, needle, label) {
   if (!text.includes(needle)) throw new Error(`RetrievalProvider contract missing: ${label}`)
@@ -21,5 +22,13 @@ requireText(provider, 'does not support requested modes', 'fail-closed unsupport
 requireText(adapter, 'embedGovernanceText', 'existing embedding implementation reuse')
 requireText(adapter, 'semanticSearchByEmbedding', 'existing pgvector search implementation reuse')
 requireText(adapter, 'new SemanticProjectionRetrievalProvider', 'governance adapter behind stable contract')
+requireText(globalSearch, 'createGovernanceRetrievalProvider', 'global search provider construction')
+requireText(globalSearch, "modes: ['semantic']", 'global search explicit semantic mode')
+requireText(globalSearch, 'retrieved.matches.map(semanticResult)', 'global search provider result consumption')
+requireText(globalSearch, 'retrieval_projection: match.provenance.projection', 'global search projection truth metadata')
 
-console.log('ADR-006 RetrievalProvider contract verified.')
+if (globalSearch.includes('semanticSearchByEmbedding') || globalSearch.includes('embedGovernanceText')) {
+  throw new Error('Global search must not bypass the RetrievalProvider boundary.')
+}
+
+console.log('ADR-006 RetrievalProvider contract and global search integration verified.')
