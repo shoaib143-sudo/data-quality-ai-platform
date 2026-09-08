@@ -39,7 +39,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
   const selectedProjectId = projects.some((project) => project.id === params.projectId) ? params.projectId! : projects[0]?.id
   const state = selectedProjectId
     ? await (async () => {
-        await authorizeProject(user.id, selectedProjectId, 'catalog.read')
+        await authorizeProject(user.id, selectedProjectId, 'admin.manage')
         return createGovernanceCommandCenterState().read(selectedProjectId)
       })()
     : null
@@ -58,7 +58,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">AI Governance Plane</p>
               <h1 className="text-3xl font-black tracking-tight">DataNexus AI Command Center</h1>
-              <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">Read-only control-state visibility for governed AI systems, autonomy policies, action history and safety findings. This surface does not approve systems, change policies, execute actions or expand autonomy.</p>
+              <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">Read-only control-state visibility for governed AI systems, autonomy policies, action history and safety findings. This surface requires project administrator capability and does not approve systems, change policies, execute actions or expand autonomy.</p>
             </div>
           </div>
         </header>
