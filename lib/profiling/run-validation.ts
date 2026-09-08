@@ -33,6 +33,18 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function isCanonicalInvestigation(value: unknown) {
+  const investigation = asRecord(value)
+  return Object.keys(investigation).length > 0
+    && typeof investigation.status === 'string'
+    && investigation.status.length > 0
+    && typeof investigation.risk === 'string'
+    && investigation.risk.length > 0
+    && Array.isArray(investigation.recommendations)
+    && Array.isArray(investigation.probable_root_causes)
+    && !Object.prototype.hasOwnProperty.call(investigation, 'output')
+}
+
 function identityKey(metricDefinitionId: string, profileColumnId: string | null) {
   return `${metricDefinitionId}:${profileColumnId ?? 'DATASET'}`
 }
@@ -175,8 +187,7 @@ export async function validateProfilingRun(
   if (scoreError) throw new Error(`Unable to load quality score: ${scoreError.message}`)
 
   const summary = asRecord(run.summary)
-  const investigation = asRecord(summary.investigation)
-  const investigationPresent = Object.keys(investigation).length > 0
+  const investigationPresent = isCanonicalInvestigation(summary.investigation)
   const expectedMetricIdentities = expectedIdentities.size
   const persistedMetricIdentities = persistedIdentitySet.size
   const contractComplete = missingIdentities.length === 0
@@ -191,7 +202,7 @@ export async function validateProfilingRun(
   if (unknownMetricDefinitionIds.length) warnings.push(`Persisted metrics reference ${unknownMetricDefinitionIds.length} definition ID(s) that are not currently enabled.`)
   if (metricKeyMismatchList.length) warnings.push('One or more persisted metric keys do not match their metric definitions.')
   if (run.status === 'COMPLETED' && !atomicResultStateComplete) warnings.push('Run is marked COMPLETED but its persisted metric or score state is incomplete.')
-  if (run.status === 'COMPLETED' && !investigationPresent) warnings.push('Run is completed without a persisted investigation outcome.')
+  if (run.status === 'COMPLETED' && !investigationPresent) warnings.push('Run is completed without a canonical persisted investigation outcome.')
   if (metricRows.length !== expectedMetricIdentities) warnings.push(`Persisted metric row count is ${metricRows.length}; expected identity count is ${expectedMetricIdentities}.`)
 
   return {
