@@ -9,6 +9,8 @@ import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memo
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { createGovernanceTelemetryProvider } from '@/lib/ai/governance-telemetry-provider'
+import { createGovernanceExecutionController } from '@/lib/ai/governance-execution-controller'
+import { isExecutionControlDeniedError } from '@/lib/ai/execution-controller'
 import { telemetryTraceContextFromRequest } from '@/lib/ai/w3c-trace-context'
 import type { TelemetryProvider, TelemetryTraceContext } from '@/lib/ai/telemetry-provider'
 
@@ -82,6 +84,16 @@ export async function POST(request: Request) {
     await authorizeProject(user.id, projectId, 'agent.execute')
     const telemetry = createGovernanceTelemetryProvider()
     const traceContext = telemetryTraceContextFromRequest(request)
+    const controlStartedAt = Date.now()
+    const executionControl = await createGovernanceExecutionController().assertAllowed({ projectId, agentDefinitionId })
+    await recordStage({
+      telemetry,
+      traceContext,
+      projectId,
+      operation: 'governed_execution_control_preflight',
+      startedAt: controlStartedAt,
+      attributes: { decision: executionControl.decision, agent_definition_id: agentDefinitionId },
+    })
 
     const specialistStartedAt = Date.now()
     const result = await executeGovernanceSpecialistAgent({
@@ -179,6 +191,9 @@ export async function POST(request: Request) {
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
+    if (isExecutionControlDeniedError(error)) {
+      return NextResponse.json({ error: error.message, code: error.code, decision: error.decision, scopes: error.scopes }, { status: 423 })
+    }
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Governed agent execution failed.' }, { status: 500 })
   }
 }
