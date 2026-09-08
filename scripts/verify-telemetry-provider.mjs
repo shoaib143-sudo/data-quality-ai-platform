@@ -2,6 +2,8 @@ import fs from 'node:fs'
 
 const provider = fs.readFileSync('lib/ai/telemetry-provider.ts', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-telemetry-provider.ts', 'utf8')
+const traceParser = fs.readFileSync('lib/ai/w3c-trace-context.ts', 'utf8')
+const governedAgentRoute = fs.readFileSync('app/api/agents/governance/run/route.ts', 'utf8')
 const migration = fs.readFileSync('supabase/migrations/20260908144850_add_ai_telemetry_provider_ledger.sql', 'utf8')
 const traceMigration = fs.readFileSync('supabase/migrations/20260908221146_add_opentelemetry_trace_context_to_ai_telemetry.sql', 'utf8')
 const observableRouter = fs.readFileSync('lib/ai/observable-intelligent-router.ts', 'utf8')
@@ -48,6 +50,19 @@ requireText(traceMigration, 'Observability evidence only; never governance autho
 requireText(intelligentRouter, 'traceContext?: TelemetryTraceContext | null', 'optional routing trace propagation contract')
 requireText(observableRouter, 'traceContext: context.traceContext ?? null', 'route-decision trace persistence')
 requireText(observableRouter, 'Telemetry is observability evidence, not routing authority.', 'telemetry cannot change routing authority')
+requireText(traceParser, 'export function parseW3CTraceContext', 'W3C traceparent parser')
+requireText(traceParser, "request.headers.get('traceparent')", 'HTTP traceparent intake')
+requireText(traceParser, "request.headers.get('tracestate')", 'HTTP tracestate intake')
+requireText(traceParser, "traceId === '0'.repeat(32)", 'all-zero trace id rejection')
+requireText(traceParser, "parentSpanId === '0'.repeat(16)", 'all-zero parent span rejection')
+requireText(governedAgentRoute, 'telemetryTraceContextFromRequest(request)', 'governed agent request trace intake')
+requireText(governedAgentRoute, "eventType: 'GOVERNED_AGENT_STAGE'", 'governed agent stage telemetry')
+requireText(governedAgentRoute, "operation: 'governance_specialist_execute'", 'specialist execution stage')
+requireText(governedAgentRoute, "operation: 'ai_governance_intelligence_enrichment'", 'AI governance enrichment stage')
+requireText(governedAgentRoute, "operation: 'governed_agent_memory_enrichment'", 'memory enrichment stage')
+requireText(governedAgentRoute, "operation: 'governed_agent_memory_evaluation'", 'memory evaluation stage')
+requireText(governedAgentRoute, 'traceContext: input.traceContext', 'shared trace context persistence')
+requireText(governedAgentRoute, 'Telemetry is observability evidence only.', 'agent telemetry authority boundary')
 
 if (/grant\s+insert[^;]+authenticated/i.test(migration)) {
   throw new Error('Authenticated clients must not receive direct telemetry insert authority.')
@@ -57,6 +72,12 @@ if (/grant\s+(insert|update|delete)[^;]+authenticated/i.test(traceMigration)) {
 }
 if (/prompt|completion|chain[-_ ]?of[-_ ]?thought/i.test(traceMigration.replace(/No prompts, completions, or hidden reasoning payloads\./g, ''))) {
   throw new Error('Trace-context schema must not persist prompt, completion, or hidden reasoning payload fields.')
+}
+if (/attributes:\s*\{[^}]*question\s*:/s.test(governedAgentRoute)) {
+  throw new Error('Governed agent telemetry attributes must not persist the user question.')
+}
+if (/traceContext[^\n]*(authorizeProject|agent\.execute)/.test(governedAgentRoute)) {
+  throw new Error('Trace context must not participate in governed agent authorization.')
 }
 
 console.log('ADR-006 TelemetryProvider contract verified.')
