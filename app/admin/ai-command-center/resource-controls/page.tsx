@@ -1,0 +1,60 @@
+import Link from 'next/link'
+import { Gauge, OctagonX, ShieldCheck } from 'lucide-react'
+
+import { authorizeProject } from '@/lib/auth/authorize'
+import { createGovernanceResourceControlState } from '@/lib/ai/governance-resource-control-state'
+import { requireUser } from '@/lib/supabase/auth'
+import { createClient } from '@/lib/supabase/server'
+
+type Project = { id: string; name: string }
+
+function valueOrDash(value: number | string | null) {
+  return value == null ? 'Not set' : String(value)
+}
+
+export default async function ResourceControlsPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  const user = await requireUser()
+  const params = await searchParams
+  const supabase = await createClient()
+  const projectsResult = await supabase.schema('app').from('projects').select('id,name').order('name')
+  if (projectsResult.error) throw new Error(`Unable to load projects: ${projectsResult.error.message}`)
+  const projects = (projectsResult.data ?? []) as Project[]
+  const selectedProjectId = projects.some((project) => project.id === params.projectId) ? params.projectId! : projects[0]?.id
+  const state = selectedProjectId ? await (async () => {
+    await authorizeProject(user.id, selectedProjectId, 'admin.manage')
+    return createGovernanceResourceControlState().read(selectedProjectId)
+  })() : null
+
+  return <main className="min-h-screen bg-slate-50 p-5 sm:p-8">
+    <div className="mx-auto max-w-7xl space-y-7">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link href={selectedProjectId ? `/admin/ai-command-center?projectId=${selectedProjectId}` : '/admin/ai-command-center'} className="text-sm font-semibold text-slate-600">← AI Command Center</Link>
+        <Link href="/admin" className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold">Administration</Link>
+      </div>
+
+      <header className="rounded-3xl border bg-white p-7 shadow-sm">
+        <div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white"><Gauge className="h-6 w-6"/></span><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">Governed execution controls</p><h1 className="text-3xl font-black">Resource Budgets & Emergency State</h1><p className="mt-2 max-w-4xl text-sm text-slate-600">Read-only visibility from canonical governance policy and execution-controller evidence. Observed telemetry cost or token usage never creates budget authority, and this page exposes no pause, kill, resume, or policy mutation action.</p></div></div>
+      </header>
+
+      <form method="get" className="rounded-2xl border bg-white p-5"><label className="block text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 block w-full max-w-xl rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><button className="mt-3 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load control evidence</button></form>
+
+      {!state ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <article className="rounded-2xl border bg-white p-5"><Gauge className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.effectiveBudgets}</p><p className="text-xs font-bold uppercase text-slate-500">Budget scopes</p></article>
+          <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.enabledBudgets}</p><p className="text-xs font-bold uppercase text-slate-500">Enabled budgets</p></article>
+          <article className="rounded-2xl border bg-white p-5"><OctagonX className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.killedScopes}</p><p className="text-xs font-bold uppercase text-slate-500">Killed scopes</p></article>
+          <article className="rounded-2xl border bg-white p-5"><OctagonX className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.pausedScopes}</p><p className="text-xs font-bold uppercase text-slate-500">Paused scopes</p></article>
+          <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.runningScopes}</p><p className="text-xs font-bold uppercase text-slate-500">Resumed scopes</p></article>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6"><div><h2 className="text-xl font-black">Effective resource budget policies</h2><p className="mt-1 max-w-4xl text-sm text-slate-500">Each row is the latest recorded policy version for its project/scope. Limits are explicit policy evidence and are not calculated from telemetry consumption.</p></div><div className="mt-5 overflow-x-auto">{state.budgets.length ? <table className="w-full min-w-[1200px] text-left text-sm"><thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Scope</th><th className="p-3">Enabled</th><th className="p-3">Input tokens/request</th><th className="p-3">Output tokens/request</th><th className="p-3">Cost/request USD</th><th className="p-3">Cost/day USD</th><th className="p-3">Requests/min</th><th className="p-3">Concurrent</th><th className="p-3">Reviewer</th></tr></thead><tbody>{state.budgets.map((budget) => <tr key={budget.id} className="border-b last:border-0"><td className="p-3 font-bold">{budget.scope_type}<p className="font-mono text-[11px] text-slate-400">{budget.scope_key}</p></td><td className="p-3">{budget.enabled ? 'YES' : 'NO'}</td><td className="p-3">{valueOrDash(budget.max_input_tokens_per_request)}</td><td className="p-3">{valueOrDash(budget.max_output_tokens_per_request)}</td><td className="p-3">{valueOrDash(budget.max_cost_usd_per_request)}</td><td className="p-3">{valueOrDash(budget.max_cost_usd_per_day)}</td><td className="p-3">{valueOrDash(budget.max_requests_per_minute)}</td><td className="p-3">{valueOrDash(budget.max_concurrent_executions)}</td><td className="p-3">{budget.reviewer_capability}<p className="text-xs text-slate-400">{budget.review_note}</p></td></tr>)}</tbody></table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No canonical resource budget policy has been recorded for this project. This means no budget authority is represented here; telemetry usage must not be treated as a substitute.</p>}</div></section>
+
+        <section className="rounded-2xl border bg-white p-6"><div><h2 className="text-xl font-black">Effective emergency execution state</h2><p className="mt-1 max-w-4xl text-sm text-slate-500">The latest append-only execution-controller event determines each scope shown. Absence of a row means no canonical execution-control state has been recorded.</p></div><div className="mt-5 space-y-3">{state.executionControls.length ? state.executionControls.map((control) => <article key={control.id} className="rounded-xl border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold">{control.scope_type} · {control.scope_key}</p><p className="mt-1 text-sm text-slate-600">{control.reason}</p><p className="mt-2 text-xs text-slate-400">{control.actor_capability} · {new Date(control.created_at).toLocaleString()}</p></div><span className="rounded-full border px-3 py-1 text-xs font-black">{control.effective_state}</span></div></article>) : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No canonical pause, kill, or resume event is recorded for this project. This does not imply an inferred RUNNING state.</p>}</div></section>
+
+        <section className="rounded-2xl border bg-white p-6"><h2 className="text-xl font-black">Recent execution-control evidence</h2><p className="mt-1 text-sm text-slate-500">Latest 100 append-only controller events. These records preserve operator provenance and do not grant AI model approval.</p><div className="mt-5 overflow-x-auto">{state.executionControlEvents.length ? <table className="w-full min-w-[900px] text-left text-sm"><thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Created</th><th className="p-3">Scope</th><th className="p-3">Action</th><th className="p-3">Reason</th><th className="p-3">Actor capability</th><th className="p-3">Correlation</th></tr></thead><tbody>{state.executionControlEvents.map((event) => <tr key={event.id} className="border-b last:border-0"><td className="p-3 text-xs">{new Date(event.created_at).toLocaleString()}</td><td className="p-3">{event.scope_type}<p className="font-mono text-[11px] text-slate-400">{event.scope_key}</p></td><td className="p-3 font-black">{event.control_action}</td><td className="p-3">{event.reason}</td><td className="p-3">{event.actor_capability}</td><td className="p-3 font-mono text-xs">{event.correlation_id ?? 'Not recorded'}</td></tr>)}</tbody></table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No execution-control events are recorded for this project.</p>}</div></section>
+
+        <section className="rounded-2xl border bg-slate-950 p-6 text-white"><div className="flex items-center gap-3"><ShieldCheck className="h-5 w-5"/><h2 className="text-lg font-black">Authority boundary</h2></div><p className="mt-3 max-w-4xl text-sm text-slate-300">Budget policy constrains resource use. Execution-control state constrains execution. Neither approves an AI system, activates a model version, promotes learning, changes routing authority, or replaces exact-current-version human deployment approval. Mutation remains disabled in the Command Center.</p></section>
+      </>}
+    </div>
+  </main>
+}
