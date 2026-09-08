@@ -15,7 +15,7 @@ const baseCase = {
   outcome_status: 'VERIFIED',
   effectiveness: '1',
   confidence: '0.95',
-  evidence: { evidence: { source_id: 'learning-verified' } },
+  evidence: { source_id: 'learning-verified', evidence: { verification_source: 'GOVERNED_REPROFILE' } },
   status: 'ACTIVE',
   occurred_at: '2026-09-08T09:22:02Z',
 }
@@ -54,7 +54,7 @@ const builder = new VerifiedEvaluationDatasetBuilder({
         id: 'case-synthetic',
         case_key: 'remediation:synthetic',
         source_kind: 'GOVERNANCE_REMEDIATION_KNOWLEDGE',
-        evidence: { metadata: { synthetic_bootstrap: true }, evidence: { source_id: 'synthetic-learning' } },
+        evidence: { metadata: { synthetic_bootstrap: true }, source_id: 'synthetic-learning' },
       },
     ]
   },
