@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const provider = fs.readFileSync('lib/ai/retrieval-provider.ts', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-retrieval-provider.ts', 'utf8')
+const embeddingAdapter = fs.readFileSync('lib/ai/governance-embedding-provider.ts', 'utf8')
 const globalSearch = fs.readFileSync('app/api/search/route.ts', 'utf8')
 const semanticApi = fs.readFileSync('app/api/search/semantic/route.ts', 'utf8')
 
@@ -22,7 +23,8 @@ requireText(provider, 'authority: false', 'no false authority weighting claim')
 requireText(provider, 'governance.semantic_embeddings', 'semantic projection provenance')
 requireText(provider, 'projection: true', 'retrieval projection truth boundary')
 requireText(provider, 'does not support requested modes', 'fail-closed unsupported channel behavior')
-requireText(adapter, 'embedGovernanceText', 'existing embedding implementation reuse')
+requireText(embeddingAdapter, 'embedGovernanceText', 'existing embedding runtime reuse behind EmbeddingProvider')
+requireText(adapter, 'createGovernanceEmbeddingProvider', 'EmbeddingProvider composition')
 requireText(adapter, 'semanticSearchByEmbedding', 'existing pgvector search implementation reuse')
 requireText(adapter, 'new SemanticProjectionRetrievalProvider', 'governance adapter behind stable contract')
 requireText(globalSearch, 'createGovernanceRetrievalProvider', 'global search provider construction')
@@ -36,6 +38,9 @@ requireText(semanticApi, 'response.matches.map(legacySemanticResult)', 'semantic
 requireText(semanticApi, 'id: match.projectionId', 'semantic API legacy projection id preservation')
 requireText(semanticApi, 'SEMANTIC_EMBEDDING_PROVIDER_NOT_CONFIGURED', 'semantic API provider-not-configured contract')
 
+if (adapter.includes('embedGovernanceText')) {
+  throw new Error('RetrievalProvider adapter must not bypass the EmbeddingProvider boundary.')
+}
 if (globalSearch.includes('semanticSearchByEmbedding') || globalSearch.includes('embedGovernanceText')) {
   throw new Error('Global search must not bypass the RetrievalProvider boundary.')
 }
