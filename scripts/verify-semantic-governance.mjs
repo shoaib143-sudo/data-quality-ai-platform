@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises'
 
 const files = {
   search: await readFile('lib/governance/semantic-search.ts', 'utf8'),
+  retrievalProvider: await readFile('lib/ai/retrieval-provider.ts', 'utf8'),
+  governanceRetrievalProvider: await readFile('lib/ai/governance-retrieval-provider.ts', 'utf8'),
   semanticJobs: await readFile('lib/governance/semantic-jobs.ts', 'utf8'),
   edgeEmbedding: await readFile('supabase/functions/governance-embed/index.ts', 'utf8'),
   indexer: await readFile('lib/governance/semantic-indexer.ts', 'utf8'),
@@ -64,8 +66,12 @@ const checks = [
   [containsAll(files.documentIndexer, ['pruneStaleDocumentEmbeddings', 'semantic_embeddings']), 'stale document embedding pruning'],
   [containsAll(files.documentIndexer, ['UNCHANGED', 'indexed.unchanged']), 'unchanged document embedding reporting'],
   [containsAll(files.reindexRoute, ['reindexProjectSemanticObjects', 'reindexProjectDocumentSemanticObjects', 'groups']), 'combined governance and document semantic reindex'],
-  [/SEMANTIC_PROJECT_CONCURRENCY\s*=\s*4/.test(files.globalSearch), 'bounded hybrid project concurrency'],
-  [containsAll(files.globalSearch, ['mapWithConcurrency', 'semanticSearchByEmbedding']), 'bounded semantic fan-out'],
+  [/SEMANTIC_PROJECT_CONCURRENCY\s*=\s*4/.test(files.retrievalProvider), 'bounded semantic project concurrency owned by RetrievalProvider'],
+  [containsAll(files.retrievalProvider, ['mapWithConcurrency', 'searchProject', "source: 'governance.semantic_embeddings'", 'projection: true']), 'bounded semantic projection fan-out and provenance'],
+  [containsAll(files.governanceRetrievalProvider, ['embedGovernanceText', 'semanticSearchByEmbedding']), 'RetrievalProvider adapter reuses governed semantic implementation'],
+  [containsAll(files.globalSearch, ['createGovernanceRetrievalProvider', "modes: ['semantic']", 'retrieved.matches.map(semanticResult)']), 'global search uses RetrievalProvider boundary'],
+  [!files.globalSearch.includes('semanticSearchByEmbedding') && !files.globalSearch.includes('embedGovernanceText'), 'global search does not bypass RetrievalProvider'],
+  [containsAll(files.globalSearch, ['retrieval_projection', 'match.provenance.projection']), 'global search exposes semantic projection truth metadata'],
   [containsAll(files.globalSearch, ['QUALITY_INCIDENT', '/issues?issue=']), 'quality incident semantic navigation'],
   [containsAll(files.globalSearch, ['DOCUMENT', 'DOCUMENT_CHUNK', '/documents?document=']), 'document semantic navigation'],
   [containsAll(files.globalSearch, [".from('documents')", ".from('document_chunks')"]), 'document lexical fallback retrieval'],
