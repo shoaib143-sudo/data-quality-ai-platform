@@ -37,5 +37,7 @@ jobs:
         run: pnpm run verify:telemetry-provider
       - name: Verify EvaluationEngine contract and scorecard behavior
         run: pnpm run verify:evaluation-engine
+      - name: Verify ModelRegistry lifecycle and evaluation boundaries
+        run: pnpm run verify:model-registry
       - name: Production build
         run: pnpm run build
