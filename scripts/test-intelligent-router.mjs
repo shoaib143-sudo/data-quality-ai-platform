@@ -64,6 +64,7 @@ const context = {
   const router = new EvaluationAwareIntelligentRouter({
     registry: { id: 'registry', async listCurrent() { throw new Error('db unavailable') } },
     fallbackGateway: { reasoning() { fallbackCalls += 1; return provider('environment') } },
+    createProvider() { throw new Error('should not be called') },
   })
   const decision = await router.route(context)
   assert.equal(decision.source, 'UNAVAILABLE')
@@ -94,7 +95,7 @@ const context = {
   const decision = await router.route(context)
   assert.equal(decision.source, 'GOVERNED_REGISTRY')
   assert.equal(decision.evidence.systemKey, 'int-model-a')
-  assert.equal(decision.evidence.evaluationAverageScore, 0.97)
+  assert.ok(Math.abs(decision.evidence.evaluationAverageScore - 0.97) < 1e-12)
   assert.equal(decision.evidence.evaluationScoredCount, 12)
   assert.deepEqual(selected, [{ providerId: 'openai_compatible', model: 'model-a' }])
 }
@@ -121,6 +122,7 @@ const context = {
   const router = new EvaluationAwareIntelligentRouter({
     registry: { id: 'registry', async listCurrent() { return [] } },
     fallbackGateway: { reasoning() { return null } },
+    createProvider() { throw new Error('should not be called') },
   })
   const decision = await router.route(context)
   assert.equal(decision.source, 'UNAVAILABLE')
