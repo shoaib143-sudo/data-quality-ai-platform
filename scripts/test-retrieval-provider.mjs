@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 const { SemanticProjectionRetrievalProvider } = await import('../lib/ai/retrieval-provider.ts')
+const { DeterministicRelevanceReranker, RerankingRetrievalProvider } = await import('../lib/ai/reranker-provider.ts')
 
 let embedCalls = 0
 const searchedProjects = []
@@ -53,4 +54,44 @@ const noProjects = await provider.retrieve({ query: 'customer policy', projectId
 assert.deepEqual(noProjects.matches, [])
 assert.equal(embedCalls, 1)
 
-console.log('ADR-006 RetrievalProvider behavior verified.')
+const reranker = new DeterministicRelevanceReranker()
+const candidates = [
+  {
+    projectId: 'project-a', projectionId: 'semantic-high', objectType: 'DOCUMENT_CHUNK', objectKey: 'high', objectId: 'high',
+    content: 'Unrelated evidence about retention schedules', metadata: {}, score: 0.9, mode: 'semantic',
+    provenance: { source: 'governance.semantic_embeddings', projection: true },
+  },
+  {
+    projectId: 'project-a', projectionId: 'query-match', objectType: 'POLICY', objectKey: 'match', objectId: 'match',
+    content: 'Customer policy requirements and customer policy controls', metadata: {}, score: 0.8, mode: 'semantic',
+    provenance: { source: 'governance.semantic_embeddings', projection: true },
+  },
+]
+const reranked = await reranker.rerank({ query: 'customer policy', candidates, limit: 2 })
+assert.equal(reranked.providerId, 'deterministic_relevance_v1')
+assert.equal(reranked.matches[0].projectionId, 'query-match')
+assert.equal(reranked.matches[0].baseScore, 0.8)
+assert.ok(reranked.matches[0].score > reranked.matches[1].score)
+assert.equal(reranked.matches[0].provenance.rerankedBy, 'deterministic_relevance_v1')
+assert.equal(candidates[1].baseScore, undefined, 'reranker must not mutate source candidates')
+await assert.rejects(
+  reranker.rerank({ query: '   ', candidates, limit: 2 }),
+  /Reranker query is required/,
+)
+
+let upstreamRequest = null
+const wrapped = new RerankingRetrievalProvider({
+  id: 'fake_retrieval',
+  capabilities: provider.capabilities,
+  async retrieve(request) {
+    upstreamRequest = request
+    return { matches: candidates, modesApplied: ['semantic'], capabilities: provider.capabilities }
+  },
+}, reranker, 3)
+const wrappedResponse = await wrapped.retrieve({ query: 'customer policy', projectIds: ['project-a'], modes: ['semantic'], limit: 2 })
+assert.equal(upstreamRequest.limit, 6, 'wrapper must oversample before reranking')
+assert.equal(wrappedResponse.matches.length, 2)
+assert.equal(wrappedResponse.matches[0].projectionId, 'query-match')
+assert.equal(wrapped.capabilities.semantic, true)
+
+console.log('ADR-006 RetrievalProvider and dedicated RerankerProvider behavior verified.')
