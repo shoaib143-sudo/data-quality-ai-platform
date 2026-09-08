@@ -1,7 +1,20 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
-import { semanticSearch } from '@/lib/governance/semantic-search'
+import { createGovernanceRetrievalProvider } from '@/lib/ai/governance-retrieval-provider'
+import type { RetrievalMatch } from '@/lib/ai/retrieval-provider'
 import { createClient } from '@/lib/supabase/server'
+
+function legacySemanticResult(match: RetrievalMatch) {
+  return {
+    id: match.projectionId,
+    object_type: match.objectType,
+    object_key: match.objectKey,
+    object_id: match.objectId,
+    content: match.content,
+    metadata: match.metadata,
+    similarity: match.score,
+  }
+}
 
 export async function GET(request: Request) {
   await requireUser()
@@ -24,13 +37,16 @@ export async function GET(request: Request) {
 
   try {
     const supabase = await createClient()
-    const results = await semanticSearch(supabase, {
-      projectId,
+    const retrieval = createGovernanceRetrievalProvider(supabase)
+    const response = await retrieval.retrieve({
+      projectIds: [projectId],
       query,
       objectTypes: types.length ? types : null,
+      modes: ['semantic'],
       limit: Number.isFinite(requestedLimit) ? requestedLimit : 25,
       threshold: Number.isFinite(requestedThreshold) ? requestedThreshold : 0.35,
     })
+    const results = response.matches.map(legacySemanticResult)
 
     return NextResponse.json({ query, projectId, count: results.length, results })
   } catch (error) {
