@@ -12,6 +12,7 @@
     "verify:agent-portfolio": "node scripts/verify-governed-agent-portfolio.mjs",
     "verify:agent-specialization": "node scripts/verify-agent-specialization.mjs",
     "verify:agent-memory-learning": "node scripts/verify-agent-memory-learning.mjs",
+    "verify:reasoning-provider": "node scripts/verify-reasoning-provider.mjs && node --experimental-strip-types scripts/test-reasoning-provider.mjs",
     "verify:investigation-prediction": "node scripts/verify-investigation-prediction.mjs",
     "verify:governed-autonomy": "node scripts/verify-governed-autonomy.mjs",
     "verify:ai-due-diligence": "node scripts/verify-ai-governance-due-diligence.mjs",
