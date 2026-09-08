@@ -4,6 +4,11 @@ import type {
 } from './reasoning-provider'
 import type { ModelGateway, ReasoningRouteContext } from './model-gateway'
 import type { ModelRegistry, RegisteredModelVersion } from './model-registry'
+import {
+  evaluateModelAgainstRoutingPolicy,
+  type RoutingPolicy,
+  type RoutingPolicyProvider,
+} from './routing-policy'
 
 export type IntelligentRouteContext = ReasoningRouteContext & {
   projectId: string
@@ -18,6 +23,8 @@ export type GovernedRouteEvidence = {
   evaluationAverageScore: number | null
   evaluationScoredCount: number
   evaluationPassRate: number | null
+  routingPolicyId: string | null
+  routingPolicyReason: string
 }
 
 export type IntelligentRouteDecision =
@@ -36,7 +43,10 @@ export type IntelligentRouteDecision =
   | {
       source: 'UNAVAILABLE'
       reason:
+        | 'ROUTING_POLICY_UNAVAILABLE'
         | 'REGISTRY_UNAVAILABLE'
+        | 'POLICY_DENIED_ENVIRONMENT_FALLBACK'
+        | 'NO_GOVERNED_CANDIDATES_SATISFY_POLICY'
         | 'GOVERNED_CANDIDATES_NOT_EXECUTABLE'
         | 'NO_REASONING_PROVIDER_AVAILABLE'
       provider: null
@@ -49,6 +59,7 @@ export interface IntelligentModelRouter {
 
 export type IntelligentRouterDependencies = {
   registry: ModelRegistry
+  routingPolicy: RoutingPolicyProvider
   fallbackGateway: ModelGateway
   createProvider: (selection: ReasoningProviderSelection) => ReasoningProvider | null
 }
@@ -58,6 +69,7 @@ type RankedCandidate = {
   averageScore: number | null
   scoredCount: number
   passRate: number | null
+  policyReason: string
 }
 
 function requiredText(value: string, label: string) {
@@ -66,7 +78,7 @@ function requiredText(value: string, label: string) {
   return normalized
 }
 
-function scoreCandidate(entry: RegisteredModelVersion): RankedCandidate {
+function scoreCandidate(entry: RegisteredModelVersion): Omit<RankedCandidate, 'policyReason'> {
   let weightedScore = 0
   let scoredCount = 0
   let passCount = 0
@@ -107,6 +119,10 @@ function compareCandidates(left: RankedCandidate, right: RankedCandidate) {
   return left.entry.systemKey.localeCompare(right.entry.systemKey)
 }
 
+function activePolicy(policy: RoutingPolicy | null) {
+  return policy?.enabled ? policy : null
+}
+
 export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter {
   private readonly dependencies: IntelligentRouterDependencies
 
@@ -116,8 +132,25 @@ export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter 
 
   async route(context: IntelligentRouteContext): Promise<IntelligentRouteDecision> {
     const projectId = requiredText(context.projectId, 'projectId')
-    let candidates: RegisteredModelVersion[]
+    let policy: RoutingPolicy | null
 
+    try {
+      policy = await this.dependencies.routingPolicy.resolve({
+        projectId,
+        task: context.task,
+        sensitivity: context.sensitivity,
+        risk: context.risk,
+      })
+    } catch {
+      return {
+        source: 'UNAVAILABLE',
+        reason: 'ROUTING_POLICY_UNAVAILABLE',
+        provider: null,
+        evidence: null,
+      }
+    }
+
+    let candidates: RegisteredModelVersion[]
     try {
       candidates = await this.dependencies.registry.listCurrent({
         projectId,
@@ -133,7 +166,18 @@ export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter 
       }
     }
 
+    const enforcedPolicy = activePolicy(policy)
+
     if (candidates.length === 0) {
+      if (enforcedPolicy && !enforcedPolicy.allowEnvironmentFallback) {
+        return {
+          source: 'UNAVAILABLE',
+          reason: 'POLICY_DENIED_ENVIRONMENT_FALLBACK',
+          provider: null,
+          evidence: null,
+        }
+      }
+
       const fallback = this.dependencies.fallbackGateway.reasoning(context)
       if (!fallback) {
         return {
@@ -151,7 +195,26 @@ export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter 
       }
     }
 
-    const ranked = candidates.map(scoreCandidate).sort(compareCandidates)
+    const ranked = candidates
+      .map((entry) => {
+        const scored = scoreCandidate(entry)
+        const policyEvaluation = evaluateModelAgainstRoutingPolicy(entry, policy, {
+          averageScore: scored.averageScore,
+          scoredCount: scored.scoredCount,
+        })
+        return { ...scored, policyReason: policyEvaluation.reason, policyAllowed: policyEvaluation.allowed }
+      })
+      .filter((candidate) => candidate.policyAllowed)
+      .sort(compareCandidates)
+
+    if (ranked.length === 0) {
+      return {
+        source: 'UNAVAILABLE',
+        reason: 'NO_GOVERNED_CANDIDATES_SATISFY_POLICY',
+        provider: null,
+        evidence: null,
+      }
+    }
 
     for (const candidate of ranked) {
       const providerId = candidate.entry.provider?.trim()
@@ -174,11 +237,12 @@ export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter 
             evaluationAverageScore: candidate.averageScore,
             evaluationScoredCount: candidate.scoredCount,
             evaluationPassRate: candidate.passRate,
+            routingPolicyId: enforcedPolicy?.id ?? null,
+            routingPolicyReason: candidate.policyReason,
           },
         }
       } catch {
-        // Try the next already-authorized governed candidate. Never fall back to an
-        // ungoverned environment route once ACTIVE governed candidates exist.
+        // Try the next already-authorized and policy-allowed governed candidate.
       }
     }
 
