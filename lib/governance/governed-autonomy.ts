@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
 
 type RiskLevel = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type ActionStatus = 'PROPOSED' | 'AWAITING_APPROVAL' | 'APPROVED' | 'EXECUTING' | 'EXECUTED' | 'REJECTED' | 'BLOCKED' | 'FAILED' | 'ROLLED_BACK'
@@ -43,18 +44,9 @@ function clamp(value: number) {
   return Math.max(0, Math.min(1, value))
 }
 
-function riskRank(value: unknown) {
-  return ({ INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 } as Record<string, number>)[text(value).toUpperCase()] ?? 0
-}
-
 function normalizeRisk(value: unknown): RiskLevel {
   const normalized = text(value).toUpperCase()
   return (['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(normalized) ? normalized : 'MEDIUM') as RiskLevel
-}
-
-function allowedTarget(policy: AutonomyPolicy, targetType: string) {
-  const allowed = (policy.allowed_target_types ?? []).map((value) => value.toUpperCase())
-  return allowed.length === 0 || allowed.includes(targetType.toUpperCase())
 }
 
 async function loadPolicy(projectId: string, actionKey: string) {
@@ -249,6 +241,13 @@ export async function proposeGovernedAction(input: ProposedAction) {
   const riskLevel = normalizeRisk(input.riskLevel)
   const confidence = clamp(input.confidence)
   const policy = await loadPolicy(input.projectId, actionKey)
+  const policyDecision = await createGovernancePolicyDecisionProvider().decide({
+    projectId: input.projectId,
+    actionKey,
+    targetType,
+    riskLevel,
+    confidence,
+  })
 
   const { data: existing, error: existingError } = await admin.schema('governance').from('autonomy_actions')
     .select('*')
@@ -258,19 +257,15 @@ export async function proposeGovernedAction(input: ProposedAction) {
   if (existingError) throw new Error(`Unable to resolve existing autonomy action: ${existingError.message}`)
   if (existing) return { action: existing, reused: true }
 
-  let initialStatus: ActionStatus = 'PROPOSED'
-  let blockedReason: string | null = null
-  if (!policy.enabled || policy.execution_mode === 'BLOCKED') {
-    initialStatus = 'BLOCKED'
-    blockedReason = text(policy.metadata?.blocked_reason) || `Action ${actionKey} is blocked by governed autonomy policy.`
-  } else if (!allowedTarget(policy, targetType)) {
-    initialStatus = 'BLOCKED'
-    blockedReason = `Target type ${targetType} is not allowlisted for ${actionKey}.`
-  }
+  const initialStatus: ActionStatus = policyDecision.decision === 'DENY' ? 'BLOCKED' : 'PROPOSED'
+  const blockedReason = policyDecision.decision === 'DENY'
+    ? policyDecision.reason || text(policy.metadata?.blocked_reason) || `Action ${actionKey} is blocked by governed autonomy policy.`
+    : null
 
   const { data: action, error: insertError } = await admin.schema('governance').from('autonomy_actions').insert({
     project_id: input.projectId,
-    policy_id: policy.id,
+    policy_id: policyDecision.policyId ?? policy.id,
+    policy_version_id: policyDecision.policyVersionId,
     source_agent_run_id: input.sourceAgentRunId ?? null,
     action_key: actionKey,
     target_type: targetType,
@@ -285,7 +280,7 @@ export async function proposeGovernedAction(input: ProposedAction) {
   }).select('*').single()
   if (insertError || !action) throw new Error(`Unable to persist autonomy action proposal: ${insertError?.message ?? 'unknown error'}`)
 
-  if (initialStatus === 'BLOCKED') {
+  if (policyDecision.decision === 'DENY') {
     await writeGovernanceAudit({
       projectId: input.projectId,
       actorUserId: input.requestedBy ?? null,
@@ -294,17 +289,20 @@ export async function proposeGovernedAction(input: ProposedAction) {
       entityType: targetType,
       entityId: input.targetId ?? action.id,
       correlationId: action.id,
-      metadata: { autonomy_action_id: action.id, action_key: actionKey, reason: blockedReason, risk_level: riskLevel, confidence },
+      metadata: {
+        autonomy_action_id: action.id,
+        action_key: actionKey,
+        reason: blockedReason,
+        risk_level: riskLevel,
+        confidence,
+        policy_decision_provider: policyDecision.providerId,
+        policy_version_id: policyDecision.policyVersionId,
+      },
     })
     return { action, reused: false }
   }
 
-  const autoEligible = policy.execution_mode === 'AUTO'
-    && confidence >= Number(policy.min_confidence)
-    && riskRank(riskLevel) <= riskRank(policy.max_auto_risk_level)
-    && policy.reversible
-
-  if (autoEligible) {
+  if (policyDecision.decision === 'ALLOW') {
     const executed = await executeActionRow(action, input.requestedBy ?? null)
     return { action: executed, reused: false }
   }
@@ -335,7 +333,16 @@ export async function proposeGovernedAction(input: ProposedAction) {
     entityType: targetType,
     entityId: input.targetId ?? action.id,
     correlationId: workflowInstanceId,
-    metadata: { autonomy_action_id: action.id, action_key: actionKey, workflow_instance_id: workflowInstanceId, risk_level: riskLevel, confidence },
+    metadata: {
+      autonomy_action_id: action.id,
+      action_key: actionKey,
+      workflow_instance_id: workflowInstanceId,
+      risk_level: riskLevel,
+      confidence,
+      policy_decision_provider: policyDecision.providerId,
+      policy_version_id: policyDecision.policyVersionId,
+      policy_decision_reason: policyDecision.reason,
+    },
   })
 
   return { action: awaiting, reused: false }
