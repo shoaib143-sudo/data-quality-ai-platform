@@ -50,6 +50,13 @@ export function createGovernanceCommandCenterState() {
       if (error) throw new Error(`Unable to read AI telemetry: ${error.message}`)
       return data ?? []
     },
+    async listRoutingPolicies(projectId) {
+      const { data, error } = await supabase.schema('governance').from('ai_routing_policy_versions')
+        .select('id,project_id,task,sensitivity,risk,enabled,allowed_ai_system_ids,min_evaluation_score,min_scored_count,allow_environment_fallback,reviewer_user_id,reviewer_capability,review_note,created_at')
+        .eq('project_id', projectId).order('created_at', { ascending: false }).limit(100)
+      if (error) throw new Error(`Unable to read governed AI routing policy versions: ${error.message}`)
+      return data ?? []
+    },
     async listAutonomyPolicies(projectId) {
       const { data, error } = await supabase.schema('governance').from('autonomy_policies')
         .select('id,project_id,action_key,enabled,execution_mode,min_confidence,max_auto_risk_level,reversible,authority_status,reviewed_by,reviewed_at,current_version_id')
