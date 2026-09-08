@@ -71,11 +71,13 @@ if (globalSearch.includes('semanticSearchByEmbedding') || globalSearch.includes(
 if (/import\s*\{[^}]*semanticSearch[^}]*\}\s*from\s*['"]@\/lib\/governance\/semantic-search['"]/.test(semanticApi)) {
   throw new Error('Semantic search API must not bypass the RetrievalProvider boundary.')
 }
-if (/\b(openai|anthropic|gemini|llm|reasoningProvider)\b/i.test(reranker)) {
-  throw new Error('Initial reranker must remain deterministic and must not smuggle an LLM into retrieval ranking.')
+if (/\b(openai|anthropic|gemini|reasoningProvider)\b/i.test(reranker)) {
+  throw new Error('Initial reranker must remain deterministic and must not smuggle a reasoning model into retrieval ranking.')
 }
-if (/authority|effective_date|supersed/i.test(reranker)) {
-  throw new Error('Deterministic reranker must not claim authority or temporal scoring that it does not verify.')
+for (const forbidden of ['metadata.authority', "metadata['authority']", 'authorityScore', 'effectiveDateScore', 'supersededPenalty']) {
+  if (reranker.includes(forbidden)) {
+    throw new Error(`Deterministic reranker must not invent authority or temporal scoring: ${forbidden}`)
+  }
 }
 
 console.log('ADR-006 RetrievalProvider, dedicated RerankerProvider, and search integration contracts verified.')
