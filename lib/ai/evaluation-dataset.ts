@@ -151,7 +151,6 @@ function projectCase(
     `governance.data_quality_remediation_outcomes:${learning.remediation_outcome_id}`,
     `agent.agent_runs:${learning.source_agent_run_id}`,
     ...(verificationAgentRunId ? [`agent.agent_runs:${verificationAgentRunId}`] : []),
-    ...(learning.outcome.verification_job_id ? [`governance.data_quality_jobs:${learning.outcome.verification_job_id}`] : []),
   ]
 
   return {
@@ -209,7 +208,7 @@ export class VerifiedEvaluationDatasetBuilder {
         return candidate ? projectCase(candidate, learning) : null
       })
       .filter((value): value is VerifiedEvaluationCase => value !== null)
-      .sort((a, b) => (b.verifiedOutcome.verifiedAt.localeCompare(a.verifiedOutcome.verifiedAt)))
+      .sort((a, b) => b.verifiedOutcome.verifiedAt.localeCompare(a.verifiedOutcome.verifiedAt))
 
     return { datasetKind: 'verified_production_cases', projectId, cases }
   }
