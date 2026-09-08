@@ -37,6 +37,8 @@ jobs:
         run: pnpm run verify:retrieval-provider
       - name: Verify MemoryProvider authority and lifecycle boundaries
         run: pnpm run verify:memory-provider
+      - name: Verify Learning Engine authority and promotion boundaries
+        run: pnpm run verify:learning-engine
       - name: Verify TelemetryProvider contract and persistence safety
         run: pnpm run verify:telemetry-provider
       - name: Verify EvaluationEngine contract and scorecard behavior
