@@ -1,4 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createGovernanceTelemetryProvider } from '@/lib/ai/governance-telemetry-provider'
+import { currentTelemetryTraceContext } from '@/lib/ai/telemetry-trace-context-store'
+import { ObservablePolicyDecisionProvider } from './observable-policy-decision-provider'
 import {
   GovernedPolicyDecisionProvider,
   type PolicyDecisionPersistence,
@@ -32,5 +35,10 @@ export function createGovernancePolicyDecisionProvider() {
     },
   }
 
-  return new GovernedPolicyDecisionProvider(persistence)
+  const governed = new GovernedPolicyDecisionProvider(persistence)
+  return new ObservablePolicyDecisionProvider(
+    governed,
+    createGovernanceTelemetryProvider(),
+    currentTelemetryTraceContext,
+  )
 }
