@@ -2,7 +2,7 @@ import type { TelemetryTraceContext } from './telemetry-provider'
 
 const TRACEPARENT_PATTERN = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/
 
-function validTracestate(value: string | null) {
+function validTracestate(value: string | null | undefined) {
   if (!value) return null
   const normalized = value.trim()
   if (!normalized || normalized.length > 512 || /[\r\n]/.test(normalized)) return null
