@@ -35,6 +35,12 @@ const state = new GovernedCommandCenterState({
   async listAiTelemetryEvents() {
     return [{ id: 'telemetry-1', project_id: projectId, event_type: 'MODEL_CALL', operation: 'route', status: 'ERROR', provider_id: 'provider', model_name: 'model', agent_run_id: null, ai_system_id: 'sys-1', ai_system_version_id: 'v-1', correlation_id: null, latency_ms: 15, input_tokens: 10, output_tokens: 0, cost_usd: 0, observed_at: '2026-09-08T01:00:00Z' }]
   },
+  async listRoutingPolicies() {
+    return [
+      { id: 'route-policy-1', project_id: projectId, task: 'classification', sensitivity: 'ANY', risk: 'HIGH', enabled: true, allowed_ai_system_ids: ['sys-1'], min_evaluation_score: '0.9', min_scored_count: 5, allow_environment_fallback: false, reviewer_user_id: 'user-1', reviewer_capability: 'policy.approve', review_note: 'Reviewed route constraint', created_at: '2026-09-08T00:20:00Z' },
+      { id: 'route-policy-cross-project', project_id: 'project-2', task: 'classification', sensitivity: 'ANY', risk: 'ANY', enabled: true, allowed_ai_system_ids: [], min_evaluation_score: null, min_scored_count: 0, allow_environment_fallback: true, reviewer_user_id: 'user-2', reviewer_capability: 'policy.approve', review_note: 'Other project', created_at: '2026-09-08T00:21:00Z' },
+    ]
+  },
   async listAutonomyPolicies() {
     return [
       { id: 'p-auto', project_id: projectId, action_key: 'auto-action', enabled: true, execution_mode: 'AUTO', min_confidence: '0.9', max_auto_risk_level: 'HIGH', reversible: false, authority_status: 'SYSTEM_BASELINE', reviewed_by: null, reviewed_at: null, current_version_id: 'pv-1' },
@@ -66,6 +72,10 @@ assert.equal(result.counts.aiEvaluationUnresolved, 1)
 assert.equal(result.aiEvaluationResults.some((row) => row.id === 'eval-cross-project'), false)
 assert.equal(result.counts.aiTelemetryEvents, 1)
 assert.equal(result.counts.aiTelemetryErrors, 1)
+assert.equal(result.counts.routingPolicyVersions, 1)
+assert.equal(result.counts.enabledRoutingPolicyVersions, 1)
+assert.equal(result.routingPolicies.some((row) => row.id === 'route-policy-cross-project'), false)
+assert.equal(result.routingPolicies[0].allow_environment_fallback, false)
 assert.equal(result.counts.enabledAutoPolicies, 1)
 assert.equal(result.counts.enabledApprovalPolicies, 1)
 assert.equal(result.counts.blockedPolicies, 1)
@@ -90,4 +100,4 @@ for (const code of [
 assert.ok(codes.has('AI_SYSTEM_NOT_APPROVED'), 'passing automated evaluation must not activate a DRAFT system')
 assert.ok(codes.has('AI_SYSTEM_CURRENT_VERSION_NO_APPROVAL'), 'passing automated evaluation must not replace exact-version human approval')
 await assert.rejects(() => state.read('   '), /projectId is required/)
-console.log('Command Center control-state, governance evidence, and non-authoritative automated evaluation evidence behavior verified.')
+console.log('Command Center control-state, governance evidence, non-authoritative automated evaluation evidence, and project-scoped routing policy visibility verified.')
