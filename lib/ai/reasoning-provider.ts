@@ -22,6 +22,11 @@ export interface ReasoningProvider {
   generateJson(request: ReasoningRequest): Promise<ReasoningResult>
 }
 
+export type ReasoningProviderSelection = {
+  providerId?: string | null
+  model?: string | null
+}
+
 type OpenAICompatibleConfig = {
   apiKey: string
   baseUrl: string
@@ -84,11 +89,11 @@ export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
   }
 }
 
-export function getReasoningProvider(): ReasoningProvider | null {
+export function createReasoningProvider(selection: ReasoningProviderSelection = {}): ReasoningProvider | null {
   const apiKey = process.env.AI_MODEL_API_KEY?.trim()
   if (!apiKey) return null
 
-  const provider = (process.env.AI_REASONING_PROVIDER ?? 'openai_compatible').trim()
+  const provider = (selection.providerId ?? process.env.AI_REASONING_PROVIDER ?? 'openai_compatible').trim()
   if (provider !== 'openai_compatible') {
     throw new Error(`Unsupported AI reasoning provider: ${provider}`)
   }
@@ -96,6 +101,10 @@ export function getReasoningProvider(): ReasoningProvider | null {
   return new OpenAICompatibleReasoningProvider({
     apiKey,
     baseUrl: (process.env.AI_MODEL_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, ''),
-    model: process.env.AI_MODEL_NAME?.trim() || 'gpt-4.1-mini',
+    model: selection.model?.trim() || process.env.AI_MODEL_NAME?.trim() || 'gpt-4.1-mini',
   })
+}
+
+export function getReasoningProvider(): ReasoningProvider | null {
+  return createReasoningProvider()
 }

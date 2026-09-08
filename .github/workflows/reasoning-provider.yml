@@ -1,4 +1,4 @@
-name: ADR-006 ReasoningProvider
+name: ADR-006 Model Gateway and ReasoningProvider
 
 on:
   push:
@@ -29,5 +29,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Verify ReasoningProvider contract and adapter behavior
         run: pnpm run verify:reasoning-provider
+      - name: Verify Model Gateway contract and routing behavior
+        run: pnpm run verify:model-gateway
       - name: Production build
         run: pnpm run build
