@@ -48,6 +48,7 @@ requireText('app/admin/ai-command-center/page.tsx', [
   'authorizeProject',
   "'admin.manage'",
   'createGovernanceCommandCenterState',
+  'createGovernanceLearningEngine',
   'Mutation controls remain closed',
   'form method="get"',
   'AI governance evidence',
@@ -56,9 +57,25 @@ requireText('app/admin/ai-command-center/page.tsx', [
   'Automated evaluation evidence',
   'PASS or a high score does not approve an AI system, activate a version, or grant deployment authority.',
   'Absence means evaluation evidence has not been recorded, not that the governed AI systems passed evaluation.',
+  'Governed learning candidates',
+  'Verified outcomes and semantic memories are candidate learning only.',
+  'Semantic promotion:',
+  'Procedural promotion:',
+  'Offline adaptation:',
+  'Authoritative: no',
+  'this Command Center provides no promotion action.',
   'AI telemetry',
   'Autonomy policies',
   'Recent autonomy actions',
+])
+requireText('lib/ai/learning-engine.ts', [
+  'VERIFIED_OUTCOME_CANDIDATE',
+  'DURABLE_UNVALIDATED_SEMANTIC',
+  'AUTHORITY_PROOF_NOT_RECORDED',
+  'authoritativeSemanticCount: 0',
+  'semanticPromotionEnabled: false',
+  'proceduralPromotionEnabled: false',
+  'offlineAdaptationEnabled: false',
 ])
 requireText('app/admin/page.tsx', ["href=\"/admin/ai-command-center\""])
 
@@ -68,8 +85,8 @@ for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(', '.rpc('
 }
 
 const page = read('app/admin/ai-command-center/page.tsx')
-for (const forbidden of ['method="post"', "'use server'", '.insert(', '.update(', '.delete(', '.upsert(', '.rpc(']) {
+for (const forbidden of ['method="post"', "'use server'", '.insert(', '.update(', '.delete(', '.upsert(', '.rpc(', '.promote(']) {
   if (page.includes(forbidden)) throw new Error(`Command Center page must remain read-only: found ${forbidden}`)
 }
 
-console.log('ADR-006 Command Center read-only control-state, governance evidence, automated evaluation evidence, and UI boundary verified.')
+console.log('ADR-006 Command Center read-only control-state, governance evidence, automated evaluation evidence, governed learning candidates, and UI boundary verified.')
