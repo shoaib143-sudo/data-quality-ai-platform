@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const engine = fs.readFileSync('lib/ai/evaluation-engine.ts', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-evaluation-engine.ts', 'utf8')
+const route = fs.readFileSync('app/api/governance/evaluations/route.ts', 'utf8')
 const ledger = fs.readFileSync('supabase/migrations/20260908150019_add_ai_evaluation_results_ledger.sql', 'utf8')
 const scorecard = fs.readFileSync('supabase/migrations/20260908150134_add_ai_evaluation_scorecard_projection.sql', 'utf8')
 
@@ -18,6 +19,14 @@ requireText(engine, 'FORBIDDEN_PAYLOAD_KEYS', 'sensitive payload guard')
 requireText(engine, 'chainofthought', 'hidden reasoning guard')
 requireText(adapter, "from('ai_evaluation_results')", 'canonical automated evaluation ledger')
 requireText(adapter, "rpc('ai_evaluation_scorecard'", 'deterministic scorecard projection')
+requireText(route, 'export async function GET(request: Request)', 'read-only HTTP scorecard surface')
+requireText(route, 'requireUser()', 'authenticated scorecard access')
+requireText(route, "authorizeProject(user.id, projectId, 'catalog.read')", 'project-scoped scorecard authorization')
+requireText(route, 'createGovernanceEvaluationEngine()', 'canonical evaluation engine adapter')
+requireText(route, 'engine.scorecard({', 'scorecard-only route operation')
+requireText(route, "aiSystemVersionId: optionalQuery(searchParams, 'aiSystemVersionId')", 'AI-system-version scorecard filter')
+requireText(route, "evaluationType: optionalQuery(searchParams, 'evaluationType')", 'evaluation-type scorecard filter')
+requireText(route, "capability: optionalQuery(searchParams, 'capability')", 'capability scorecard filter')
 requireText(ledger, 'create table governance.ai_evaluation_results', 'evaluation ledger schema')
 requireText(ledger, 'references governance.ai_system_versions(id) on delete restrict', 'model version evidence link')
 requireText(ledger, 'references agent.agent_evaluations(id) on delete restrict', 'existing agent evaluation evidence link')
@@ -35,6 +44,15 @@ if (/grant\s+insert[^;]+authenticated/i.test(ledger)) {
 }
 if (/security\s+definer/i.test(scorecard)) {
   throw new Error('Evaluation scorecard must not use SECURITY DEFINER.')
+}
+if (/export\s+async\s+function\s+(POST|PUT|PATCH|DELETE)\b/.test(route)) {
+  throw new Error('Evaluation scorecard route must remain read-only.')
+}
+if (/\.insert\s*\(|\.update\s*\(|\.upsert\s*\(|\.delete\s*\(/.test(route)) {
+  throw new Error('Evaluation scorecard route must not write evaluation evidence directly.')
+}
+if (route.includes("from('ai_evaluation_results')") || route.includes("rpc('ai_evaluation_scorecard'")) {
+  throw new Error('Evaluation scorecard route must use the EvaluationEngine boundary instead of direct persistence access.')
 }
 
 console.log('ADR-006 EvaluationEngine contract verified.')
