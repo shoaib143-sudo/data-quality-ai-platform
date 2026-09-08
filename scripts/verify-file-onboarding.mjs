@@ -40,7 +40,7 @@ requireMatch(adapter, /if\(value===['"]['"]\|\|value\.trim\(\)===['"]['"]\)retur
 requireMatch(adapter, /\(\?:0\|\[1-9\]\\d\*\)/, 'CSV numeric coercion must reject ambiguous leading-zero integers.')
 requireMatch(adapter, /coerceCsvScalar\(header,record\[index\]\?\?null\)/, 'Parsed CSV rows must use the governed scalar coercion path.')
 
-requireMatch(smokeFixture, /CUST-0011,Karen Goh,,SG,36,true/, 'CSV lifecycle fixture must retain an intentional blank email value.')
+requireMatch(smokeFixture, /CUST-0011,Karen Goh,karen\.goh@example\.com,SG,36,true/, 'CSV lifecycle fixture must preserve the approved remediated email value.')
 requireMatch(metricEngine, /function\s+isBlank\(value:\s*unknown\)/, 'Metric engine must explicitly distinguish blank strings from SQL null values.')
 requireMatch(metricEngine, /const\s+completenessMissingCount\s*=\s*nullCount\s*\+\s*blankCount/, 'Completeness missing count must include null and blank values exactly once.')
 requireMatch(metricEngine, /const\s+completenessMissingRate\s*=\s*rowCount\s*\?\s*completenessMissingCount\s*\/\s*rowCount\s*:\s*0/, 'Completeness rate must use null plus blank values as the missing denominator.')
