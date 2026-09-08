@@ -1,4 +1,4 @@
-import { getReasoningProvider } from './reasoning-provider'
+import { getModelGateway } from './model-gateway'
 
 const PROFILING_INVESTIGATION_SYSTEM_PROMPT = [
   'You are the DataNexus AI Data Profiling Investigation Agent.',
@@ -11,7 +11,7 @@ const PROFILING_INVESTIGATION_SYSTEM_PROMPT = [
 ].join(' ')
 
 export async function enrichInvestigationWithModel(input: Record<string, unknown>) {
-  const provider = getReasoningProvider()
+  const provider = getModelGateway().reasoning({ task: 'profiling_investigation' })
   if (!provider) return null
 
   return provider.generateJson({
