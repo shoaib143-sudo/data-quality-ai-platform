@@ -9,9 +9,39 @@ import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memo
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { createGovernanceTelemetryProvider } from '@/lib/ai/governance-telemetry-provider'
+import { telemetryTraceContextFromRequest } from '@/lib/ai/w3c-trace-context'
+import type { TelemetryProvider, TelemetryTraceContext } from '@/lib/ai/telemetry-provider'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+async function recordHandoffStage(input: {
+  telemetry: TelemetryProvider
+  traceContext: TelemetryTraceContext | null
+  projectId: string
+  correlationId: string
+  operation: string
+  agentRunId?: string | null
+  startedAt: number
+  attributes?: Record<string, unknown>
+}) {
+  try {
+    await input.telemetry.record({
+      projectId: input.projectId,
+      eventType: 'GOVERNED_AGENT_HANDOFF_STAGE',
+      operation: input.operation,
+      status: 'SUCCESS',
+      agentRunId: input.agentRunId ?? null,
+      correlationId: input.correlationId,
+      traceContext: input.traceContext,
+      latencyMs: Math.max(0, Date.now() - input.startedAt),
+      attributes: input.attributes ?? {},
+    })
+  } catch {
+    // Telemetry is observability evidence only. It must not alter governed handoff execution or authority.
+  }
 }
 
 export async function POST(request: Request) {
@@ -27,6 +57,8 @@ export async function POST(request: Request) {
     }
 
     await authorizeProject(user.id, projectId, 'agent.execute')
+    const telemetry = createGovernanceTelemetryProvider()
+    const traceContext = telemetryTraceContextFromRequest(request)
     const admin = createAdminClient()
     const { data: sourceRun, error: sourceError } = await admin
       .schema('agent')
@@ -40,6 +72,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Only completed or partial source runs can be handed off.' }, { status: 409 })
     }
 
+    const correlationId = sourceRun.correlation_id || randomUUID()
     const sourceOutput = sourceRun.output && typeof sourceRun.output === 'object' && !Array.isArray(sourceRun.output)
       ? sourceRun.output as Record<string, unknown>
       : {}
@@ -52,25 +85,63 @@ export async function POST(request: Request) {
       observations.length ? `Source observations: ${observations.join(' | ')}` : '',
     ].filter(Boolean).join(' ').slice(0, 1000)
 
+    const specialistStartedAt = Date.now()
     const target = await executeGovernanceSpecialistAgent({
       projectId,
       agentDefinitionId: targetAgentDefinitionId,
       actorUserId: user.id,
       question,
     })
+    await recordHandoffStage({
+      telemetry,
+      traceContext,
+      projectId,
+      correlationId,
+      operation: 'handoff_specialist_execute',
+      agentRunId: target.runId,
+      startedAt: specialistStartedAt,
+      attributes: {
+        source_agent_run_id: sourceAgentRunId,
+        target_agent_definition_id: targetAgentDefinitionId,
+        target_agent_key: target.output.agent.key,
+      },
+    })
 
     let specialistOutput = target.output as Record<string, unknown>
     if (target.output.agent.key === 'investigator_agent') {
+      const riskStartedAt = Date.now()
       const investigation = await persistInvestigatorRiskAssessment({
         projectId,
         agentRunId: target.runId,
         actorUserId: user.id,
         output: specialistOutput,
       })
+      await recordHandoffStage({
+        telemetry,
+        traceContext,
+        projectId,
+        correlationId,
+        operation: 'handoff_investigator_risk_assessment',
+        agentRunId: target.runId,
+        startedAt: riskStartedAt,
+        attributes: { persisted: Boolean(investigation) },
+      })
       if (investigation) specialistOutput = { ...specialistOutput, investigation }
     }
 
+    const intelligenceStartedAt = Date.now()
     specialistOutput = await enrichOutputWithAIGovernanceIntelligence(projectId, specialistOutput)
+    await recordHandoffStage({
+      telemetry,
+      traceContext,
+      projectId,
+      correlationId,
+      operation: 'handoff_ai_governance_intelligence_enrichment',
+      agentRunId: target.runId,
+      startedAt: intelligenceStartedAt,
+    })
+
+    const memoryStartedAt = Date.now()
     const output = await enrichGovernedAgentWithMemory({
       projectId,
       agentDefinitionId: targetAgentDefinitionId,
@@ -78,7 +149,16 @@ export async function POST(request: Request) {
       question,
       output: specialistOutput,
     })
-    const correlationId = sourceRun.correlation_id || randomUUID()
+    await recordHandoffStage({
+      telemetry,
+      traceContext,
+      projectId,
+      correlationId,
+      operation: 'handoff_memory_enrichment',
+      agentRunId: target.runId,
+      startedAt: memoryStartedAt,
+    })
+
     const { error: targetLinkError } = await admin.schema('agent').from('agent_runs').update({
       parent_run_id: sourceAgentRunId,
       correlation_id: correlationId,
@@ -86,12 +166,23 @@ export async function POST(request: Request) {
     }).eq('id', target.runId)
     if (targetLinkError) throw new Error(`Unable to link target agent run to source: ${targetLinkError.message}`)
 
+    const evaluationStartedAt = Date.now()
     const memory = await persistGovernedAgentMemoryAndEvaluation({
       projectId,
       agentDefinitionId: targetAgentDefinitionId,
       agentRunId: target.runId,
       agentKey: target.output.agent.key,
       output,
+    })
+    await recordHandoffStage({
+      telemetry,
+      traceContext,
+      projectId,
+      correlationId,
+      operation: 'handoff_memory_evaluation',
+      agentRunId: target.runId,
+      startedAt: evaluationStartedAt,
+      attributes: { target_agent_key: target.output.agent.key },
     })
 
     const { data: message, error: messageError } = await admin.schema('agent').from('agent_messages').insert({

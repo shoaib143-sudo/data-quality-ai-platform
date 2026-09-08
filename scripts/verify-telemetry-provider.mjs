@@ -4,6 +4,7 @@ const provider = fs.readFileSync('lib/ai/telemetry-provider.ts', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-telemetry-provider.ts', 'utf8')
 const traceParser = fs.readFileSync('lib/ai/w3c-trace-context.ts', 'utf8')
 const governedAgentRoute = fs.readFileSync('app/api/agents/governance/run/route.ts', 'utf8')
+const governedHandoffRoute = fs.readFileSync('app/api/agents/governance/handoff/route.ts', 'utf8')
 const migration = fs.readFileSync('supabase/migrations/20260908144850_add_ai_telemetry_provider_ledger.sql', 'utf8')
 const traceMigration = fs.readFileSync('supabase/migrations/20260908221146_add_opentelemetry_trace_context_to_ai_telemetry.sql', 'utf8')
 const observableRouter = fs.readFileSync('lib/ai/observable-intelligent-router.ts', 'utf8')
@@ -63,6 +64,15 @@ requireText(governedAgentRoute, "operation: 'governed_agent_memory_enrichment'",
 requireText(governedAgentRoute, "operation: 'governed_agent_memory_evaluation'", 'memory evaluation stage')
 requireText(governedAgentRoute, 'traceContext: input.traceContext', 'shared trace context persistence')
 requireText(governedAgentRoute, 'Telemetry is observability evidence only.', 'agent telemetry authority boundary')
+requireText(governedHandoffRoute, 'telemetryTraceContextFromRequest(request)', 'governed handoff request trace intake')
+requireText(governedHandoffRoute, "eventType: 'GOVERNED_AGENT_HANDOFF_STAGE'", 'governed handoff stage telemetry')
+requireText(governedHandoffRoute, 'correlationId: input.correlationId', 'business correlation preservation')
+requireText(governedHandoffRoute, 'traceContext: input.traceContext', 'handoff W3C trace persistence')
+requireText(governedHandoffRoute, "operation: 'handoff_specialist_execute'", 'handoff specialist stage')
+requireText(governedHandoffRoute, "operation: 'handoff_ai_governance_intelligence_enrichment'", 'handoff AI governance stage')
+requireText(governedHandoffRoute, "operation: 'handoff_memory_enrichment'", 'handoff memory stage')
+requireText(governedHandoffRoute, "operation: 'handoff_memory_evaluation'", 'handoff evaluation stage')
+requireText(governedHandoffRoute, 'Telemetry is observability evidence only.', 'handoff telemetry authority boundary')
 
 if (/grant\s+insert[^;]+authenticated/i.test(migration)) {
   throw new Error('Authenticated clients must not receive direct telemetry insert authority.')
@@ -76,8 +86,14 @@ if (/prompt|completion|chain[-_ ]?of[-_ ]?thought/i.test(traceMigration.replace(
 if (/attributes:\s*\{[^}]*question\s*:/s.test(governedAgentRoute)) {
   throw new Error('Governed agent telemetry attributes must not persist the user question.')
 }
+if (/attributes:\s*\{[^}]*\b(objective|question|source_observations)\s*:/s.test(governedHandoffRoute)) {
+  throw new Error('Governed handoff telemetry attributes must not persist objective, question, or source observation text.')
+}
 if (/traceContext[^\n]*(authorizeProject|agent\.execute)/.test(governedAgentRoute)) {
   throw new Error('Trace context must not participate in governed agent authorization.')
+}
+if (/traceContext[^\n]*(authorizeProject|agent\.execute)/.test(governedHandoffRoute)) {
+  throw new Error('Trace context must not participate in governed handoff authorization.')
 }
 
 console.log('ADR-006 TelemetryProvider contract verified.')
