@@ -1,4 +1,4 @@
-name: ADR-006 Model Gateway and ReasoningProvider
+name: ADR-006 AI Provider Contracts
 
 on:
   push:
@@ -31,5 +31,7 @@ jobs:
         run: pnpm run verify:reasoning-provider
       - name: Verify Model Gateway contract and routing behavior
         run: pnpm run verify:model-gateway
+      - name: Verify RetrievalProvider contract and semantic projection behavior
+        run: pnpm run verify:retrieval-provider
       - name: Production build
         run: pnpm run build
