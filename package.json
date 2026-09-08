@@ -16,6 +16,7 @@
     "verify:model-gateway": "node scripts/verify-model-gateway.mjs && node scripts/test-model-gateway.mjs",
     "verify:embedding-provider": "node scripts/verify-embedding-provider.mjs && node --experimental-strip-types scripts/test-embedding-provider.mjs",
     "verify:retrieval-provider": "node scripts/verify-retrieval-provider.mjs && node --experimental-strip-types scripts/test-retrieval-provider.mjs",
+    "verify:memory-provider": "node scripts/verify-memory-provider.mjs && node --experimental-strip-types scripts/test-memory-provider.mjs",
     "verify:telemetry-provider": "node scripts/verify-telemetry-provider.mjs && node --experimental-strip-types scripts/test-telemetry-provider.mjs",
     "verify:evaluation-engine": "node scripts/verify-evaluation-engine.mjs && node --experimental-strip-types scripts/test-evaluation-engine.mjs",
     "verify:evaluation-dataset": "node scripts/verify-evaluation-dataset.mjs && node --experimental-strip-types scripts/test-evaluation-dataset.mjs",
