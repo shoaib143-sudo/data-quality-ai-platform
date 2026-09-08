@@ -13,6 +13,7 @@ export type RetrievalRequest = {
 
 export type RetrievalMatch = {
   projectId: string
+  projectionId: string | null
   objectType: string
   objectKey: string
   objectId: string | null
@@ -41,6 +42,7 @@ export interface RetrievalProvider {
 }
 
 export type SemanticProjectionMatch = {
+  id?: string | null
   object_type: string
   object_key: string
   object_id: string | null
@@ -121,6 +123,7 @@ export class SemanticProjectionRetrievalProvider implements RetrievalProvider {
     const matches = groups
       .flatMap(({ projectId, matches: projectMatches }) => projectMatches.map((match): RetrievalMatch => ({
         projectId,
+        projectionId: match.id ?? null,
         objectType: match.object_type,
         objectKey: match.object_key,
         objectId: match.object_id,
