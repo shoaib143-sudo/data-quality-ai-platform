@@ -1,7 +1,7 @@
 export type LearningCandidateStatus =
   | 'VERIFIED_OUTCOME_CANDIDATE'
   | 'DURABLE_UNVALIDATED_SEMANTIC'
-  | 'AUTHORITATIVE_SEMANTIC'
+  | 'HUMAN_VALIDATED_SEMANTIC_CANDIDATE'
 
 export type LearningAuthorityBlocker =
   | 'SYNTHETIC_BOOTSTRAP'
@@ -152,7 +152,7 @@ function assessSemanticMemory(row: SemanticLearningRow): LearningAssessmentItem 
   return {
     id: row.id,
     projectId: row.project_id,
-    status: humanValidated ? 'AUTHORITATIVE_SEMANTIC' : 'DURABLE_UNVALIDATED_SEMANTIC',
+    status: humanValidated ? 'HUMAN_VALIDATED_SEMANTIC_CANDIDATE' : 'DURABLE_UNVALIDATED_SEMANTIC',
     sourceKind: 'AGENT_SEMANTIC_MEMORY',
     problemType: null,
     effectiveness: null,
@@ -199,7 +199,7 @@ export class GovernedLearningEngine implements LearningEngine {
       projectId,
       verifiedOutcomeCandidates,
       semanticMemories,
-      authoritativeSemanticCount: semanticMemories.filter((item) => item.authoritative).length,
+      authoritativeSemanticCount: 0,
       semanticPromotionEnabled: false,
       proceduralPromotionEnabled: false,
       offlineAdaptationEnabled: false,
