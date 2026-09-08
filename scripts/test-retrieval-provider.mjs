@@ -13,8 +13,8 @@ const provider = new SemanticProjectionRetrievalProvider({
   searchProject: async ({ projectId, embedding, objectTypes, threshold, limit }) => {
     searchedProjects.push({ projectId, embedding, objectTypes, threshold, limit })
     return projectId === 'project-a'
-      ? [{ object_type: 'POLICY', object_key: 'policy-a', object_id: 'a', content: 'Policy A', metadata: { authority: 'approved' }, similarity: 0.8 }]
-      : [{ object_type: 'DOCUMENT_CHUNK', object_key: 'chunk-b', object_id: 'b', content: 'Evidence B', metadata: {}, similarity: 0.9 }]
+      ? [{ id: 'embedding-a', object_type: 'POLICY', object_key: 'policy-a', object_id: 'a', content: 'Policy A', metadata: { authority: 'approved' }, similarity: 0.8 }]
+      : [{ id: 'embedding-b', object_type: 'DOCUMENT_CHUNK', object_key: 'chunk-b', object_id: 'b', content: 'Evidence B', metadata: {}, similarity: 0.9 }]
   },
 })
 
@@ -34,6 +34,7 @@ assert.deepEqual(response.modesApplied, ['semantic'])
 assert.equal(response.capabilities.semantic, true)
 assert.equal(response.capabilities.lexical, false)
 assert.equal(response.matches.length, 2)
+assert.equal(response.matches[0].projectionId, 'embedding-b')
 assert.equal(response.matches[0].objectId, 'b')
 assert.equal(response.matches[0].score, 0.9)
 assert.equal(response.matches[0].provenance.source, 'governance.semantic_embeddings')
