@@ -5,6 +5,7 @@ import type { RetrievalMatch } from '@/lib/ai/retrieval-provider'
 import { createClient } from '@/lib/supabase/server'
 
 // semanticSearch HTTP compatibility is preserved while execution routes through RetrievalProvider.
+// Results may be reranked, but the legacy similarity field remains the original vector similarity.
 function legacySemanticResult(match: RetrievalMatch) {
   return {
     id: match.projectionId,
@@ -12,8 +13,12 @@ function legacySemanticResult(match: RetrievalMatch) {
     object_key: match.objectKey,
     object_id: match.objectId,
     content: match.content,
-    metadata: match.metadata,
-    similarity: match.score,
+    metadata: {
+      ...match.metadata,
+      rerank_score: match.provenance.rerankedBy ? match.score : null,
+      reranked_by: match.provenance.rerankedBy ?? null,
+    },
+    similarity: match.baseScore ?? match.score,
   }
 }
 
