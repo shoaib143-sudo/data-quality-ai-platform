@@ -5,8 +5,12 @@ import type {
 import type { ModelGateway, ReasoningRouteContext } from './model-gateway'
 import type { ModelRegistry, RegisteredModelVersion } from './model-registry'
 import type { RoutingPolicy, RoutingPolicyEvaluator, RoutingPolicyProvider } from './routing-policy'
+import type { TelemetryTraceContext } from './telemetry-provider'
 
-export type IntelligentRouteContext = ReasoningRouteContext & { projectId: string }
+export type IntelligentRouteContext = ReasoningRouteContext & {
+  projectId: string
+  traceContext?: TelemetryTraceContext | null
+}
 
 export type GovernedRouteEvidence = {
   aiSystemId: string
@@ -111,7 +115,7 @@ export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter 
       if (enforcedPolicy && !enforcedPolicy.allowEnvironmentFallback) return { source: 'UNAVAILABLE', reason: 'POLICY_DENIED_ENVIRONMENT_FALLBACK', provider: null, evidence: null }
       const fallback = this.dependencies.fallbackGateway.reasoning(context)
       if (!fallback) return { source: 'UNAVAILABLE', reason: 'NO_REASONING_PROVIDER_AVAILABLE', provider: null, evidence: null }
-      return { source: 'ENVIRONMENT_FALLBACK', reason: 'NO_ACTIVE_GOVERNED_CANDIDATES', provider: fallback, evidence: null }
+      return { source: 'ENVIRONMENT_FALLBACK', reason: 'NO_ACTIVE_GOVERNED_CANDIDATES'; provider: fallback, evidence: null }
     }
 
     const ranked = candidates
