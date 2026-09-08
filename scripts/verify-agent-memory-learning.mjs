@@ -22,12 +22,24 @@ requireText('lib/agents/agent-memory.ts', [
   'persistAgentWorkingMemory','retrieveRelevantAgentMemory','EPISODE','SEMANTIC','agent_memory_relationships',
   'SYSTEM_CONTRACT','evidence_count','specialist_reasoning_contract',
 ])
-requireText('lib/agents/agent-memory-learning.ts', [
-  'PRIOR_LEARNING','workedCases','avoidCases','suppress_failed_prior_actions','interaction_context',
+requireText('lib/agents/governed-learning-context.ts', [
+  'createGovernanceMemoryProvider', "classes: ['episodic']", 'verifiedEpisodes',
 ])
+requireText('lib/agents/agent-memory-learning.ts', [
+  'retrieveGovernedLearningContext','verifiedEpisodeMatches','verifiedEpisodes',
+  'use_verified_prior_episodes_as_context: true','reuse_prior_recommendation_prose: false',
+  'semantic_memory_requires_separate_authority_gate: true','interaction_context',
+])
+const activeLearning = read('lib/agents/agent-memory-learning.ts')
+if (activeLearning.includes('PRIOR_LEARNING') || activeLearning.includes('item.recommendation') || activeLearning.includes('learnedRecommendations')) {
+  throw new Error('Active governed agent learning must not recursively reuse prior recommendation prose.')
+}
+if (activeLearning.includes('retrieveRelevantAgentMemory')) {
+  throw new Error('Active governed agent learning must not use permissive legacy learning-case retrieval as authority.')
+}
 requireText('app/api/agents/governance/run/route.ts', ['enrichGovernedAgentWithMemory','persistGovernedAgentMemoryAndEvaluation'])
 requireText('app/api/agents/governance/handoff/route.ts', ['enrichGovernedAgentWithMemory','memory_informed: true'])
 requireText('lib/governance/semantic-agent-learning-indexer.ts', ['AGENT_LEARNING_CASE','reindexProjectAgentLearningCases'])
 requireText('lib/governance/semantic-job-worker.ts', ['reindexProjectAgentLearningCases','agentLearning.indexed'])
 
-console.log('Layered agent memory and learning contracts verified.')
+console.log('Layered agent memory and verified learning contracts verified.')
