@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 
 const engine = fs.readFileSync('lib/ai/evaluation-engine.ts', 'utf8')
+const retrievalEvaluation = fs.readFileSync('lib/ai/retrieval-evaluation.ts', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-evaluation-engine.ts', 'utf8')
 const route = fs.readFileSync('app/api/governance/evaluations/route.ts', 'utf8')
 const ledger = fs.readFileSync('supabase/migrations/20260908150019_add_ai_evaluation_results_ledger.sql', 'utf8')
@@ -17,6 +18,14 @@ requireText(engine, 'score must be between 0 and 1', 'bounded normalized score')
 requireText(engine, 'Evaluation result requires score or pass evidence', 'evidence requirement')
 requireText(engine, 'FORBIDDEN_PAYLOAD_KEYS', 'sensitive payload guard')
 requireText(engine, 'chainofthought', 'hidden reasoning guard')
+requireText(retrievalEvaluation, 'evaluateRetrieval', 'deterministic retrieval evaluator')
+requireText(retrievalEvaluation, 'recordRetrievalEvaluation', 'canonical evaluation recording adapter')
+requireText(retrievalEvaluation, 'mrrAtK', 'MRR metric')
+requireText(retrievalEvaluation, 'ndcgAtK', 'nDCG metric')
+requireText(retrievalEvaluation, 'recallAtK', 'Recall metric')
+requireText(retrievalEvaluation, "evaluationType: 'RETRIEVAL_RELEVANCE'", 'retrieval-specific evaluation type')
+requireText(retrievalEvaluation, "capability: 'retrieval'", 'retrieval capability classification')
+requireText(retrievalEvaluation, 'labeled_case_ids', 'safe labeled-case evidence metadata')
 requireText(adapter, "from('ai_evaluation_results')", 'canonical automated evaluation ledger')
 requireText(adapter, "rpc('ai_evaluation_scorecard'", 'deterministic scorecard projection')
 requireText(route, 'export async function GET(request: Request)', 'read-only HTTP scorecard surface')
@@ -54,5 +63,8 @@ if (/\.insert\s*\(|\.update\s*\(|\.upsert\s*\(|\.delete\s*\(/.test(route)) {
 if (route.includes("from('ai_evaluation_results')") || route.includes("rpc('ai_evaluation_scorecard'")) {
   throw new Error('Evaluation scorecard route must use the EvaluationEngine boundary instead of direct persistence access.')
 }
+if (/metadata:\s*\{[^}]*\b(query|rankedObjectKeys|content|retrievedContent)\b/s.test(retrievalEvaluation)) {
+  throw new Error('Retrieval evaluation persistence must not store raw query or retrieved content in metadata.')
+}
 
-console.log('ADR-006 EvaluationEngine contract verified.')
+console.log('ADR-006 EvaluationEngine and retrieval relevance evaluation contracts verified.')
