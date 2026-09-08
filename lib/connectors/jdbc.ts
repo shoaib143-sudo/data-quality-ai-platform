@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveSchemaScope, type SchemaScope } from './schema-scope'
 
-const DEFAULT_TIMEOUT_MS = 30_000
+const DEFAULT_TIMEOUT_MS = 120_000
 const POSTGRES_EDGE_FUNCTION = 'dgp-postgres-connector'
 const DATABRICKS_EDGE_FUNCTION = 'dgp-databricks-connector'
 
