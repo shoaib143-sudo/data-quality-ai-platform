@@ -7,12 +7,7 @@ import { pathToFileURL } from 'node:url'
 
 const sourcePath = path.resolve('lib/ai/command-center-state.ts')
 const source = await fs.readFile(sourcePath, 'utf8')
-const transpiled = ts.transpileModule(source, {
-  compilerOptions: {
-    module: ts.ModuleKind.ES2022,
-    target: ts.ScriptTarget.ES2022,
-  },
-}).outputText
+const transpiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText
 const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'command-center-state-'))
 const modulePath = path.join(dir, 'command-center-state.mjs')
 await fs.writeFile(modulePath, transpiled)
@@ -21,9 +16,17 @@ const { GovernedCommandCenterState } = await import(pathToFileURL(modulePath).hr
 const projectId = 'project-1'
 const state = new GovernedCommandCenterState({
   async listAiSystems() {
-    return [
-      { id: 'sys-1', project_id: projectId, system_key: 'router', name: 'Router', system_type: 'ROUTER', lifecycle_status: 'DRAFT', current_version_id: null },
-    ]
+    return [{ id: 'sys-1', project_id: projectId, system_key: 'int-router', name: 'Router', system_type: 'APPLICATION', lifecycle_status: 'DRAFT', current_version_id: 'v-1' }]
+  },
+  async listAiSystemVersions() {
+    return [{ id: 'v-1', project_id: projectId, ai_system_id: 'sys-1', version_number: 1, provider: 'provider', model_name: 'model', external_version: null, intended_use: 'Route governed AI work', risk_tier: 'HIGH', data_categories: [], human_oversight: 'Human approval required', limitations: 'No deployment authority', semantic_hash: 'hash', created_at: '2026-09-08T00:00:00Z' }]
+  },
+  async listAiSystemDecisions() { return [] },
+  async listAiSystemAssessments() {
+    return [{ id: 'assessment-1', project_id: projectId, ai_system_id: 'sys-1', version_id: 'v-1', assessment_type: 'RISK', result: 'PARTIAL', assessor_type: 'SYSTEM', assessor_user_id: null, source_agent_run_id: null, evidence: {}, note: null, created_at: '2026-09-08T00:10:00Z' }]
+  },
+  async listAiTelemetryEvents() {
+    return [{ id: 'telemetry-1', project_id: projectId, event_type: 'MODEL_CALL', operation: 'route', status: 'ERROR', provider_id: 'provider', model_name: 'model', agent_run_id: null, ai_system_id: 'sys-1', ai_system_version_id: 'v-1', correlation_id: null, latency_ms: 15, input_tokens: 10, output_tokens: 0, cost_usd: 0, observed_at: '2026-09-08T01:00:00Z' }]
   },
   async listAutonomyPolicies() {
     return [
@@ -46,15 +49,22 @@ assert.equal(result.controls.directMutationEnabled, false)
 assert.equal(result.controls.emergencyKillMutationEnabled, false)
 assert.equal(result.controls.policyMutationEnabled, false)
 assert.equal(result.counts.aiSystems, 1)
+assert.equal(result.counts.aiSystemVersions, 1)
+assert.equal(result.counts.aiSystemDecisions, 0)
+assert.equal(result.counts.aiSystemAssessments, 1)
+assert.equal(result.counts.aiTelemetryEvents, 1)
+assert.equal(result.counts.aiTelemetryErrors, 1)
 assert.equal(result.counts.enabledAutoPolicies, 1)
 assert.equal(result.counts.enabledApprovalPolicies, 1)
 assert.equal(result.counts.blockedPolicies, 1)
 assert.equal(result.counts.openActions, 1)
-assert.ok(result.counts.highOrCriticalFindings >= 4)
+assert.ok(result.counts.highOrCriticalFindings >= 5)
 
 const codes = new Set(result.findings.map((finding) => finding.code))
 for (const code of [
   'AI_SYSTEM_NOT_APPROVED',
+  'AI_SYSTEM_CURRENT_VERSION_NO_APPROVAL',
+  'AI_TELEMETRY_ERROR',
   'AUTO_POLICY_ENABLED',
   'AUTO_POLICY_NOT_REVIEWED',
   'AUTO_POLICY_NOT_REVERSIBLE',
@@ -66,4 +76,4 @@ for (const code of [
 ]) assert.ok(codes.has(code), `missing ${code}`)
 
 await assert.rejects(() => state.read('   '), /projectId is required/)
-console.log('Command Center control-state behavior verified.')
+console.log('Command Center control-state and AI governance evidence behavior verified.')
