@@ -1,11 +1,11 @@
 # DataNexus AI production operating state and continuation
 
 Date: 2026-09-08
-Baseline main SHA: `258a241c9852d2307b60c4bd27dc0037d87c9721`
+Baseline main SHA: `2f9d51354ff7ebe06023df9696e9f6a745529c1c`
 
 ## Purpose
 
-This document records the production architecture and truth boundaries after the September 8 E2E acceptance, scheduler optimization, AI capability, governance-corpus, remediation-verification, profiling-audit, and Databricks-lineage revalidation work. It is intended to let the next engineer continue from evidence rather than reconstructing the platform from chat history.
+This document records the production architecture and truth boundaries after the September 8 E2E acceptance, scheduler optimization, AI capability, governance-corpus, remediation-verification, profiling-audit, Databricks-lineage revalidation, and ADR-006 AI runtime-governance work. It is intended to let the next engineer continue from evidence rather than reconstructing the platform from chat history.
 
 ## Production topology
 
@@ -140,6 +140,42 @@ The current matrix after governance-corpus approval and verified remediation is:
 
 Capability #59, AI-generated governance recommendations, is evidenced from current recommendation contexts rather than historical row volume.
 
+## ADR-006 production AI runtime and routing governance
+
+The September 8 ADR-006 implementation is now production-live through a sequence of verified exact-head releases. The latest production main SHA is `2f9d51354ff7ebe06023df9696e9f6a745529c1c`, deployed by Vercel deployment `dpl_9xScAraxc48zTVvN7HyeK5g8Evnh` to the canonical `data-quality-ai-platform.vercel.app` alias.
+
+Production slices now present:
+
+- `ReasoningProvider` and environment-backed Model Gateway remain the replaceable runtime provider boundary.
+- `RetrievalProvider` provides governed retrieval projection behavior.
+- `TelemetryProvider` persists append-only AI runtime telemetry in `governance.ai_telemetry_events` and rejects prompt/completion/hidden-reasoning payloads.
+- `EvaluationEngine` persists append-only automated evaluation evidence in `governance.ai_evaluation_results` and exposes the read-only `governance.ai_evaluation_scorecard(...)` projection.
+- `ModelRegistry` reads governed current AI-system versions and attaches evaluation scorecards without creating lifecycle authority.
+- `Intelligent Router` ranks only already-routing-eligible governed candidates by measured evaluation evidence and fails closed on registry failure or when ACTIVE governed candidates cannot be executed.
+- governed routing-policy versions are persisted in `governance.ai_routing_policy_versions` and can further restrict routing by task, sensitivity, risk, explicit AI-system allowlist, minimum evaluation score, minimum scored evidence count, and environment-fallback permission.
+
+Key release points:
+
+- PR #114: TelemetryProvider
+- PR #115: EvaluationEngine
+- PR #116: governed ModelRegistry
+- PR #117: evaluation-aware Intelligent Router
+- PR #118: governed routing-policy enforcement
+
+Routing authority remains human-controlled. The existing `governance.review_ai_system_version(...)` path requires `policy.approve`; an exact current version becomes `ACTIVE` only after human `APPROVED`, while registration of a new current version returns the system to `DRAFT`. Automated evaluation, telemetry, model ranking, and routing policy cannot activate or approve a model.
+
+Current target-project truth:
+
+- four registered AI systems exist, all synthetic/demo and `DRAFT`;
+- zero governed AI-system versions are currently routing-eligible;
+- zero `governance.ai_routing_policy_versions` rows exist for the target project;
+- zero governed AI-system lifecycle assessments existed at the time the EvaluationEngine slice was validated;
+- therefore the environment Model Gateway remains the actual reasoning runtime path today when the Intelligent Router is used, because no human-approved ACTIVE governed candidate exists and no explicit routing policy has been published.
+
+Routing-policy publication is append-only governance evidence. `governance.publish_ai_routing_policy(...)` requires a human reviewer with `policy.approve`, validates any AI-system allowlist against the same project, and writes an `AI_ROUTING_POLICY_PUBLISHED` audit event. Authenticated project members can read routing-policy rows but cannot publish them. Service role can append but cannot update/delete. `governance.resolve_ai_routing_policy(...)` is a service-role-only `SECURITY INVOKER` read path.
+
+No routing policy should be manufactured merely to exercise the feature, and synthetic DRAFT models must not be activated to make routing appear governed. User authorization to continue engineering work is not AI-system approval or routing-policy approval.
+
 ## Enterprise governance corpus
 
 Two non-synthetic INTERNAL enterprise documents were approved through the governed `policy.approve` path and are now `ACTIVE/APPROVED`:
@@ -198,17 +234,20 @@ When the Databricks grant is changed, rerun the existing native lineage path bef
 9. Never weaken RLS/security to make tests pass.
 10. Never delete failed evidence merely to make platform state look successful.
 11. Foreign keys are structural `REFERENCES`, not transformations.
-12. User authorization to execute/fix is not approval of DQ suggestions.
-13. Do not auto-promote unrelated assets or auto-approve DQ recommendations.
+12. User authorization to execute/fix is not approval of DQ suggestions, AI-system lifecycle approval, or routing-policy approval.
+13. Do not auto-promote unrelated assets, auto-approve DQ recommendations, activate synthetic AI systems, or publish routing policy without the required human governance authority.
 
 ## Continuation order
 
 The next agent should:
 
 1. Re-resolve current GitHub main, Vercel production SHA, and Supabase state before making claims.
-2. Treat the native Databricks lineage implementation as present and the September 8 live canary as proof of the current external authorization boundary.
-3. Do not synthesize lineage or weaken evidence authority while `system.access` remains denied.
-4. After the Databricks identity receives `USE SCHEMA` on `system.access` plus read access to `system.access.table_lineage` and `system.access.column_lineage`, rerun the live native lineage canary immediately.
-5. If access is available, ingest the returned source-observed table and column lineage through `governance.ingest_lineage_batch_atomic`, verify real rows in `governance.lineage_column_mappings`, refresh governance intelligence, regenerate the 75-capability matrix, and require 75/75 only if the evidence is genuinely present.
-6. Preserve the current profiling audit acceptance: completion events are covered and the active chain-version-3 segment has zero broken links.
-7. Run full CI, merge only exact verified heads, apply migrations only when required, verify exact-main deployment, and rerun production acceptance after changes.
+2. Treat the ADR-006 runtime stack as production-live: provider boundaries, telemetry, evaluation, governed model registry, Intelligent Router, and governed routing-policy contract are present.
+3. Preserve current AI authority truth: the target project has zero ACTIVE governed models and zero routing-policy rows unless fresh evidence shows otherwise. Do not activate or publish merely to exercise the path.
+4. Treat the native Databricks lineage implementation as present and the September 8 live canary as proof of the current external authorization boundary.
+5. Do not synthesize lineage or weaken evidence authority while `system.access` remains denied.
+6. After the Databricks identity receives `USE SCHEMA` on `system.access` plus read access to `system.access.table_lineage` and `system.access.column_lineage`, rerun the live native lineage canary immediately.
+7. If access is available, ingest the returned source-observed table and column lineage through `governance.ingest_lineage_batch_atomic`, verify real rows in `governance.lineage_column_mappings`, refresh governance intelligence, regenerate the 75-capability matrix, and require 75/75 only if the evidence is genuinely present.
+8. Preserve the current profiling audit acceptance: completion events are covered and the active chain-version-3 segment has zero broken links.
+9. Continue ADR-006 observability by attaching route-decision/fail-closed outcomes to the existing TelemetryProvider if doing so can be implemented without prompt/hidden-reasoning capture and without changing routing authority.
+10. Run full CI, merge only exact verified heads, apply migrations only when required, verify exact-main deployment, and rerun production acceptance after changes.
