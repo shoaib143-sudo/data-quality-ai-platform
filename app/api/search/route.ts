@@ -207,6 +207,7 @@ export async function GET(request: Request) {
       threshold: 0.35,
     })
     semantic = retrieved.matches.map(semanticResult)
+    // Hybrid fallback remains mergeResults with NOT_CONFIGURED and UNAVAILABLE semantic states.
   } catch (error) {
     semanticStatus = error instanceof Error && error.name === 'EmbeddingProviderNotConfiguredError' ? 'NOT_CONFIGURED' : 'UNAVAILABLE'
     if (semanticStatus === 'UNAVAILABLE') console.error('Hybrid semantic search unavailable', error)
