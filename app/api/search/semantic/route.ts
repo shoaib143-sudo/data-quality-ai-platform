@@ -4,6 +4,7 @@ import { createGovernanceRetrievalProvider } from '@/lib/ai/governance-retrieval
 import type { RetrievalMatch } from '@/lib/ai/retrieval-provider'
 import { createClient } from '@/lib/supabase/server'
 
+// semanticSearch HTTP compatibility is preserved while execution routes through RetrievalProvider.
 function legacySemanticResult(match: RetrievalMatch) {
   return {
     id: match.projectionId,
