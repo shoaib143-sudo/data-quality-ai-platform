@@ -9,19 +9,20 @@ function requireText(text, needle, label) {
 
 requireText(provider, 'export interface ReasoningProvider', 'replaceable reasoning provider interface')
 requireText(provider, 'generateJson(request: ReasoningRequest)', 'canonical structured reasoning operation')
+requireText(provider, 'export function createReasoningProvider', 'gateway-callable provider factory')
 requireText(provider, "readonly id = 'openai_compatible'", 'OpenAI-compatible adapter identity')
-requireText(provider, "process.env.AI_REASONING_PROVIDER ?? 'openai_compatible'", 'provider routing configuration')
+requireText(provider, "process.env.AI_REASONING_PROVIDER ?? 'openai_compatible'", 'global provider fallback configuration')
 requireText(provider, 'Unsupported AI reasoning provider', 'fail-closed provider selection')
 requireText(provider, "process.env.AI_MODEL_API_KEY?.trim()", 'existing credential configuration compatibility')
 requireText(provider, "process.env.AI_MODEL_BASE_URL ?? 'https://api.openai.com/v1'", 'existing endpoint configuration compatibility')
 requireText(provider, "process.env.AI_MODEL_NAME?.trim() || 'gpt-4.1-mini'", 'existing model configuration compatibility')
 requireText(provider, "response_format: { type: 'json_object' }", 'structured JSON response contract')
-requireText(investigation, "import { getReasoningProvider } from './reasoning-provider'", 'profiling investigation uses provider boundary')
-requireText(investigation, "task: 'profiling_investigation'", 'profiling task classification')
+requireText(investigation, "import { getModelGateway } from './model-gateway'", 'profiling investigation uses Model Gateway')
+requireText(investigation, ".reasoning({ task: 'profiling_investigation' })", 'profiling task-aware routing')
 requireText(investigation, 'if (!provider) return null', 'no-provider backward compatibility')
 
 if (investigation.includes('/chat/completions') || investigation.includes('AI_MODEL_API_KEY')) {
-  throw new Error('Profiling investigation must not bypass the ReasoningProvider boundary.')
+  throw new Error('Profiling investigation must not bypass the governed model boundary.')
 }
 
 console.log('ADR-006 ReasoningProvider boundary verified.')
