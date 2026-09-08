@@ -39,5 +39,7 @@ jobs:
         run: pnpm run verify:evaluation-engine
       - name: Verify ModelRegistry lifecycle and evaluation boundaries
         run: pnpm run verify:model-registry
+      - name: Verify Intelligent Router evaluation-aware fail-closed behavior
+        run: pnpm run verify:intelligent-router
       - name: Production build
         run: pnpm run build
