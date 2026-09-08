@@ -19,11 +19,15 @@ export type RetrievalMatch = {
   objectId: string | null
   content: string
   metadata: Record<string, unknown>
+  /** Current ranking score. After a reranking stage this is the rerank score. */
   score: number
+  /** Original retrieval score preserved when a reranker changes ranking. */
+  baseScore?: number
   mode: RetrievalMode
   provenance: {
     source: string
     projection: boolean
+    rerankedBy?: string
   }
 }
 
