@@ -36,8 +36,11 @@ function extractJson(content: string) {
 
 export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
   readonly id = 'openai_compatible'
+  private readonly config: OpenAICompatibleConfig
 
-  constructor(private readonly config: OpenAICompatibleConfig) {}
+  constructor(config: OpenAICompatibleConfig) {
+    this.config = config
+  }
 
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
     const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
