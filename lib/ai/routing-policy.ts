@@ -37,11 +37,13 @@ export type RoutingPolicyEvaluation = {
     | 'POLICY_ALLOWED'
 }
 
-export function evaluateModelAgainstRoutingPolicy(
+export type RoutingPolicyEvaluator = (
   model: RegisteredModelVersion,
   policy: RoutingPolicy | null,
   evidence: { averageScore: number | null; scoredCount: number },
-): RoutingPolicyEvaluation {
+) => RoutingPolicyEvaluation
+
+export const evaluateModelAgainstRoutingPolicy: RoutingPolicyEvaluator = (model, policy, evidence) => {
   if (!policy) return { allowed: true, reason: 'NO_ACTIVE_POLICY' }
   if (!policy.enabled) return { allowed: true, reason: 'POLICY_DISABLED' }
 
