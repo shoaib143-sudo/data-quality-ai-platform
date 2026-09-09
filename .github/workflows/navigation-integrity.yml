@@ -1,0 +1,38 @@
+name: Navigation Integrity
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'lib/platform/canonical-routes.ts'
+      - 'scripts/verify-agent-detail-route.mjs'
+      - 'scripts/verify-navigation-integrity.mjs'
+      - 'scripts/test-canonical-routes.mjs'
+      - '.github/workflows/navigation-integrity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'lib/platform/canonical-routes.ts'
+      - 'scripts/verify-agent-detail-route.mjs'
+      - 'scripts/verify-navigation-integrity.mjs'
+      - 'scripts/test-canonical-routes.mjs'
+      - '.github/workflows/navigation-integrity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify agent detail navigation
+        run: node scripts/verify-agent-detail-route.mjs
+      - name: Verify platform navigation integrity
+        run: node scripts/verify-navigation-integrity.mjs
+      - name: Test canonical route builder
+        run: node --experimental-strip-types scripts/test-canonical-routes.mjs
