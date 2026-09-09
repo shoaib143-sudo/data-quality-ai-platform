@@ -28,14 +28,16 @@ const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
   'senior-leadership': ['catalog', 'issues', 'data-quality', 'stewardship', 'reports'],
   'business-user': ['catalog', 'glossary', 'datasets', 'issues', 'data-quality'],
   'data-owner': ['catalog', 'glossary', 'datasets', 'data-quality', 'stewardship', 'issues', 'lineage', 'reports', 'classification'],
+  'data-product-owner': ['catalog', 'glossary', 'datasets', 'lineage', 'stewardship', 'issues', 'data-quality', 'reports'],
   'data-steward': ['catalog', 'glossary', 'datasets', 'data-quality', 'stewardship', 'issues', 'lineage', 'classification', 'reports'],
-  'data-governance-admin': ['dashboard', 'catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'audit', 'reports', 'retention', 'profiling', 'agents', 'datasets'],
   'data-governance-specialist': ['catalog', 'glossary', 'datasets', 'lineage', 'stewardship', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention'],
   'compliance-risk-officer': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention'],
   'privacy-security-officer': ['catalog', 'glossary', 'lineage', 'classification', 'classification-privacy', 'issues', 'audit', 'reports'],
+  'data-governance-admin': ['dashboard', 'catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'audit', 'reports', 'retention', 'profiling', 'agents', 'datasets'],
   'data-custodian': ['catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'profiling', 'agents'],
-  'data-product-owner': ['catalog', 'glossary', 'datasets', 'lineage', 'stewardship', 'issues', 'data-quality', 'reports'],
   'source-system-owner': ['catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'profiling'],
+  'metadata-analyst': ['catalog', 'glossary', 'datasets', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'profiling'],
+  'data-quality-analyst': ['catalog', 'datasets', 'issues', 'data-quality', 'observability', 'audit', 'reports', 'profiling', 'agents'],
 }
 
 export function canAccessWorkspace(persona: PersonaSlug, workspace: WorkspaceKey, organizationRole?: string | null) {
