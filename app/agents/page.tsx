@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { RunAgentForm, type AgentOption, type DatasetVersionOption, type ProjectOption } from './run-agent-form'
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -117,8 +118,8 @@ export default async function AgentsPage() {
     <main className="min-h-screen p-8">
       <div className="mx-auto max-w-6xl space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/dashboard" className="text-sm underline">← Back to dashboard</Link>
-          <Link href="/monitoring" className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link>
+          <Link href={canonicalRoutes.dashboard} className="text-sm underline">← Back to dashboard</Link>
+          <Link href={canonicalRoutes.monitoring} className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link>
         </div>
 
         <header>
@@ -141,7 +142,7 @@ export default async function AgentsPage() {
           <div className="space-y-6">
             {enabledAgents.map((agent) => {
               const agentTools = toolsByAgent.get(agent.id) ?? []
-              const detailHref = `/agents/${encodeURIComponent(agent.agent_key)}/${encodeURIComponent(agent.version)}`
+              const detailHref = canonicalRoutes.agent(agent.agent_key, agent.version)
               return (
                 <section key={agent.id} className="space-y-5 rounded-xl border p-6">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -203,7 +204,7 @@ export default async function AgentsPage() {
                     return (
                       <tr key={run.id} className="border-b last:border-0">
                         <td className="px-3 py-3">
-                          <Link href={`/agents/runs/${run.id}`} className="font-medium underline underline-offset-2">
+                          <Link href={canonicalRoutes.agentRun(run.id)} className="font-medium underline underline-offset-2">
                             {agent ? `${agent.name} v${agent.version}` : 'Registered agent'}
                           </Link>
                         </td>
