@@ -3,7 +3,7 @@ import type {
   IntelligentRouteContext,
   IntelligentRouteDecision,
 } from './intelligent-router'
-import { ObservableReasoningProvider } from './observable-reasoning-provider'
+import { ObservableReasoningProvider } from './observable-reasoning-provider.ts'
 import type { TelemetryProvider } from './telemetry-provider'
 
 export class ObservableIntelligentRouter implements IntelligentModelRouter {
