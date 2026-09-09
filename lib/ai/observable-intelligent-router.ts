@@ -3,11 +3,10 @@ import type {
   IntelligentRouteContext,
   IntelligentRouteDecision,
 } from './intelligent-router'
-import {
-  ReasoningProviderHttpError,
-  type ReasoningProvider,
-  type ReasoningRequest,
-  type ReasoningResult,
+import type {
+  ReasoningProvider,
+  ReasoningRequest,
+  ReasoningResult,
 } from './reasoning-provider'
 import type { TelemetryProvider, TelemetryTraceContext } from './telemetry-provider'
 
@@ -18,6 +17,24 @@ type ObservableReasoningContext = {
   traceContext?: TelemetryTraceContext | null
   routeSource: string
   routeReason: string
+}
+
+type SanitizedProviderHttpFailure = {
+  status: number
+  providerRequestId?: string
+}
+
+function sanitizedProviderHttpFailure(error: unknown): SanitizedProviderHttpFailure | null {
+  if (!(error instanceof Error) || error.name !== 'ReasoningProviderHttpError') return null
+  const candidate = error as Error & { status?: unknown; providerRequestId?: unknown }
+  if (typeof candidate.status !== 'number' || !Number.isInteger(candidate.status)) return null
+  const providerRequestId = typeof candidate.providerRequestId === 'string'
+    ? candidate.providerRequestId.trim().slice(0, 256)
+    : undefined
+  return {
+    status: candidate.status,
+    ...(providerRequestId ? { providerRequestId } : {}),
+  }
 }
 
 class ObservableReasoningProvider implements ReasoningProvider {
@@ -65,7 +82,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
       }
       return result
     } catch (error) {
-      const providerHttpError = error instanceof ReasoningProviderHttpError ? error : null
+      const providerHttpError = sanitizedProviderHttpFailure(error)
       try {
         await this.telemetry.record({
           projectId: this.context.projectId,
