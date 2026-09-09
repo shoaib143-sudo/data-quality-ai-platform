@@ -42,6 +42,7 @@ try {
     task: 'profiling_investigation',
     system: 'Use evidence only.',
     input: { observed: true },
+    maxOutputTokens: 512,
   })
 
   assert.equal(capturedUrl, 'https://reasoning.example/v1/chat/completions')
@@ -55,18 +56,23 @@ try {
   const request = JSON.parse(capturedInit.body)
   assert.equal(request.model, 'test-model')
   assert.equal(request.temperature, 0)
+  assert.equal(request.max_tokens, 512)
   assert.deepEqual(request.response_format, { type: 'json_object' })
   assert.equal(request.messages[0].role, 'system')
   assert.equal(request.messages[1].content, JSON.stringify({ observed: true }))
 
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    choices: [{ message: { content: '{"executive_summary":"no-usage"}' } }],
-    usage: {
-      prompt_tokens: -1,
-      completion_tokens: 1.5,
-      total_tokens: 'unknown',
-    },
-  }), { status: 200, headers: { 'content-type': 'application/json' } })
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body)
+    assert.equal('max_tokens' in body, false)
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: '{"executive_summary":"no-usage"}' } }],
+      usage: {
+        prompt_tokens: -1,
+        completion_tokens: 1.5,
+        total_tokens: 'unknown',
+      },
+    }), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
 
   const resultWithoutObservedUsage = await provider.generateJson({
     task: 'general',
@@ -77,6 +83,19 @@ try {
   assert.equal(resultWithoutObservedUsage.providerRequestId, undefined)
   assert.ok(Number.isInteger(resultWithoutObservedUsage.latencyMs) && resultWithoutObservedUsage.latencyMs >= 0)
 
+  await assert.rejects(() => provider.generateJson({
+    task: 'general',
+    system: 'Use evidence only.',
+    input: {},
+    maxOutputTokens: 0,
+  }), /maxOutputTokens must be a positive integer/)
+  await assert.rejects(() => provider.generateJson({
+    task: 'general',
+    system: 'Use evidence only.',
+    input: {},
+    maxOutputTokens: 1.5,
+  }), /maxOutputTokens must be a positive integer/)
+
   process.env.AI_REASONING_PROVIDER = 'unknown-provider'
   assert.throws(() => getReasoningProvider(), /Unsupported AI reasoning provider/)
 
@@ -84,7 +103,7 @@ try {
   delete process.env.AI_REASONING_PROVIDER
   assert.equal(getReasoningProvider(), null)
 
-  console.log('OpenAI-compatible ReasoningProvider behavior and provider-observed usage verified.')
+  console.log('OpenAI-compatible ReasoningProvider behavior, provider-observed usage, and output cap verified.')
 } finally {
   globalThis.fetch = originalFetch
   for (const [key, value] of Object.entries(originalEnv)) {
