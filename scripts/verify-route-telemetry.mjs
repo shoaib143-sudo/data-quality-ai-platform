@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 
 const observable = fs.readFileSync('lib/ai/observable-intelligent-router.ts', 'utf8')
+const provider = fs.readFileSync('lib/ai/reasoning-provider.ts', 'utf8')
 const composition = fs.readFileSync('lib/ai/governance-intelligent-router.ts', 'utf8')
 const investigation = fs.readFileSync('lib/ai/investigation-model.ts', 'utf8')
 const investigationEngine = fs.readFileSync('lib/profiling/investigation-engine.ts', 'utf8')
@@ -22,7 +23,19 @@ for (const token of [
   'provider_request_id: result.providerRequestId ?? null',
   'total_tokens: result.usage?.totalTokens ?? null',
   "error_name: error instanceof Error ? error.name : 'UnknownError'",
+  "error.name !== 'ReasoningProviderHttpError'",
+  'sanitizedProviderHttpFailure(error)',
+  'provider_http_status: providerHttpError?.status ?? null',
+  'provider_request_id: providerHttpError?.providerRequestId ?? null',
 ]) if (!observable.includes(token)) failures.push(`missing route/invocation telemetry token: ${token}`)
+
+for (const token of [
+  'export class ReasoningProviderHttpError extends Error',
+  "this.name = 'ReasoningProviderHttpError'",
+  'readonly status: number',
+  'readonly providerRequestId?: string',
+  'new ReasoningProviderHttpError(response.status, observedRequestId(response))',
+]) if (!provider.includes(token)) failures.push(`missing sanitized provider failure contract token: ${token}`)
 
 for (const forbidden of [
   /prompt\s*:/i,
@@ -32,6 +45,9 @@ for (const forbidden of [
   /error_message\s*:/i,
 ]) if (forbidden.test(observable)) failures.push(`forbidden telemetry payload pattern: ${forbidden}`)
 
+if (!observable.includes("import type {\n  ReasoningProvider,")) failures.push('reasoning provider dependency must remain type-only in observable wrapper')
+if (observable.includes("import { ReasoningProviderHttpError")) failures.push('observable wrapper must not create a runtime import solely for provider failure correlation')
+if (provider.includes('response.text()')) failures.push('provider HTTP failure path must not read or expose raw upstream response bodies')
 if (!composition.includes('createGovernanceTelemetryProvider()')) failures.push('governance telemetry provider not composed')
 if (!composition.includes('new ObservableIntelligentRouter')) failures.push('governed router not telemetry-decorated')
 if (!/catch\s*\{[\s\S]*?return decision/m.test(observable)) failures.push('telemetry failure must preserve resolved decision')
@@ -50,4 +66,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(` - ${failure}`))
   process.exit(1)
 }
-console.log('ADR-006 route and model invocation telemetry contract passed.')
+console.log('ADR-006 route and runtime-decoupled sanitized model invocation telemetry contract passed.')

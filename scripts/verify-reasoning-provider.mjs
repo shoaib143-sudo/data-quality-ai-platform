@@ -14,8 +14,12 @@ requireText(provider, 'maxOutputTokens?: number', 'optional caller-owned output 
 requireText(provider, 'maxOutputTokens must be a positive integer', 'output ceiling validation')
 requireText(provider, "{ max_tokens: maxOutputTokens }", 'provider-side OpenAI-compatible output ceiling')
 requireText(provider, 'This is not a budget-policy decision by itself', 'budget authority boundary')
-requireText(provider, 'providerHttpError(response: Response)', 'sanitized provider HTTP failure boundary')
-requireText(provider, 'AI reasoning provider returned ${response.status}', 'status-only provider failure evidence')
+requireText(provider, 'export class ReasoningProviderHttpError extends Error', 'typed sanitized provider HTTP failure')
+requireText(provider, 'AI reasoning provider returned ${status}', 'status-only provider failure evidence')
+requireText(provider, "this.name = 'ReasoningProviderHttpError'", 'stable sanitized provider error identity')
+requireText(provider, 'this.status = status', 'sanitized provider HTTP status')
+requireText(provider, 'this.providerRequestId = providerRequestId', 'bounded provider request correlation field')
+requireText(provider, 'new ReasoningProviderHttpError(response.status, observedRequestId(response))', 'sanitized provider error construction')
 requireText(provider, 'observedRequestId(response)', 'bounded provider request correlation')
 requireText(provider, 'export function createReasoningProvider', 'gateway-callable provider factory')
 requireText(provider, "readonly id = 'openai_compatible'", 'OpenAI-compatible adapter identity')
@@ -37,7 +41,7 @@ requireText(investigationEngine, 'enrichInvestigationWithModel({', 'active profi
 if (provider.includes('response.text()')) {
   throw new Error('ReasoningProvider must not surface raw upstream provider error bodies.')
 }
-if (/AI reasoning provider returned \$\{response\.status\}.*text/.test(provider)) {
+if (/AI reasoning provider returned .*text/.test(provider)) {
   throw new Error('ReasoningProvider failure messages must not concatenate upstream response text.')
 }
 if (investigation.includes('getModelGateway') || investigation.includes("from './model-gateway'")) {
@@ -50,4 +54,4 @@ if (/maxOutputTokens\s*:\s*\d+/.test(investigation)) {
   throw new Error('Profiling investigation must not invent a fixed output budget without canonical policy evidence.')
 }
 
-console.log('ADR-006 ReasoningProvider output cap, provider error redaction, and profiling Intelligent Router boundary verified.')
+console.log('ADR-006 ReasoningProvider output cap, typed provider error redaction, and profiling Intelligent Router boundary verified.')

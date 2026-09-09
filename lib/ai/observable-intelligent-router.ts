@@ -19,6 +19,24 @@ type ObservableReasoningContext = {
   routeReason: string
 }
 
+type SanitizedProviderHttpFailure = {
+  status: number
+  providerRequestId?: string
+}
+
+function sanitizedProviderHttpFailure(error: unknown): SanitizedProviderHttpFailure | null {
+  if (!(error instanceof Error) || error.name !== 'ReasoningProviderHttpError') return null
+  const candidate = error as Error & { status?: unknown; providerRequestId?: unknown }
+  if (typeof candidate.status !== 'number' || !Number.isInteger(candidate.status)) return null
+  const providerRequestId = typeof candidate.providerRequestId === 'string'
+    ? candidate.providerRequestId.trim().slice(0, 256)
+    : undefined
+  return {
+    status: candidate.status,
+    ...(providerRequestId ? { providerRequestId } : {}),
+  }
+}
+
 class ObservableReasoningProvider implements ReasoningProvider {
   readonly id: string
   private readonly provider: ReasoningProvider
@@ -64,6 +82,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
       }
       return result
     } catch (error) {
+      const providerHttpError = sanitizedProviderHttpFailure(error)
       try {
         await this.telemetry.record({
           projectId: this.context.projectId,
@@ -80,6 +99,8 @@ class ObservableReasoningProvider implements ReasoningProvider {
             route_source: this.context.routeSource,
             route_reason: this.context.routeReason,
             error_name: error instanceof Error ? error.name : 'UnknownError',
+            provider_http_status: providerHttpError?.status ?? null,
+            provider_request_id: providerHttpError?.providerRequestId ?? null,
           },
         })
       } catch {
