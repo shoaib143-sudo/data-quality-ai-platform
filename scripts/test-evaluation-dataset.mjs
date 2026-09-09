@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 const { VerifiedEvaluationDatasetBuilder } = await import('../lib/ai/evaluation-dataset.ts')
+const { buildGovernedRetrievalEvaluationDataset } = await import('../lib/ai/retrieval-evaluation-dataset.ts')
 
 const projectId = '479813aa-72a4-4b12-b72a-74da8d2419ce'
 const baseCase = {
@@ -102,4 +103,80 @@ for (const mutation of [
 await assert.rejects(builder.build({ projectId: '   ' }), /projectId is required/)
 await assert.rejects(builder.build({ projectId, limit: 0 }), /limit must be a positive integer/)
 
-console.log('ADR-006 verified evaluation dataset behavior verified.')
+const retrievalDataset = buildGovernedRetrievalEvaluationDataset({
+  projectId,
+  records: [
+    {
+      caseId: 'retrieval-case-1',
+      projectId,
+      query: 'customer email quality policy',
+      authority: 'HUMAN_REVIEWED',
+      reviewedBy: 'reviewer-user-id',
+      reviewedAt: '2026-09-09T00:00:00Z',
+      evidenceRefs: ['governance.ai_evaluation_results:label-review-1'],
+      judgments: [
+        { objectKey: 'POLICY:customer-email-quality', relevance: 3 },
+        { objectKey: 'DATASET:customer-profile', relevance: 1 },
+      ],
+    },
+    {
+      caseId: 'other-project-case',
+      projectId: 'other-project',
+      query: 'must not leak',
+      authority: 'GOVERNED_IMPORT',
+      evidenceRefs: ['external:verified-benchmark'],
+      judgments: [{ objectKey: 'POLICY:other', relevance: 2 }],
+    },
+  ],
+})
+assert.equal(retrievalDataset.datasetKind, 'governed_retrieval_relevance')
+assert.equal(retrievalDataset.projectId, projectId)
+assert.equal(retrievalDataset.cases.length, 1)
+assert.deepEqual(retrievalDataset.cases[0], {
+  caseId: 'retrieval-case-1',
+  query: 'customer email quality policy',
+  rankedObjectKeys: [],
+  relevance: {
+    'POLICY:customer-email-quality': 3,
+    'DATASET:customer-profile': 1,
+  },
+})
+assert.deepEqual(retrievalDataset.evidenceRefs, ['governance.ai_evaluation_results:label-review-1'])
+
+assert.throws(() => buildGovernedRetrievalEvaluationDataset({
+  projectId,
+  records: [{
+    caseId: 'unreviewed-human-label',
+    projectId,
+    query: 'query',
+    authority: 'HUMAN_REVIEWED',
+    evidenceRefs: ['governance.review:1'],
+    judgments: [{ objectKey: 'POLICY:key', relevance: 3 }],
+  }],
+}), /reviewedBy is required/)
+
+assert.throws(() => buildGovernedRetrievalEvaluationDataset({
+  projectId,
+  records: [{
+    caseId: 'missing-provenance',
+    projectId,
+    query: 'query',
+    authority: 'GOVERNED_IMPORT',
+    evidenceRefs: [],
+    judgments: [{ objectKey: 'POLICY:key', relevance: 3 }],
+  }],
+}), /requires canonical evidenceRefs/)
+
+assert.throws(() => buildGovernedRetrievalEvaluationDataset({
+  projectId,
+  records: [{
+    caseId: 'no-positive-label',
+    projectId,
+    query: 'query',
+    authority: 'GOVERNED_IMPORT',
+    evidenceRefs: ['external:verified-benchmark'],
+    judgments: [{ objectKey: 'POLICY:key', relevance: 0 }],
+  }],
+}), /requires at least one positive relevance judgment/)
+
+console.log('ADR-006 verified evaluation and governed retrieval dataset behavior verified.')
