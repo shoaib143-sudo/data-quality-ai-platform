@@ -14,6 +14,7 @@ const requireTokens = (path, tokens) => {
 const layout = requireTokens('app/admin/ai-command-center/layout.tsx', [
   '/admin/ai-command-center',
   '/admin/ai-command-center/explorer',
+  '/admin/ai-command-center/traces',
   '/admin/ai-command-center/resource-controls',
   '/admin/ai-command-center/audit',
 ])
@@ -47,10 +48,26 @@ requireTokens('lib/ai/command-center-explorer.ts', [
   "category?: CommandCenterExplorerCategory | 'ALL'",
 ])
 
+const tracePage = requireTokens('app/admin/ai-command-center/traces/page.tsx', [
+  "authorizeProject(user.id, selectedProjectId, 'admin.manage')",
+  'readGovernedTraceTimeline(selectedProjectId)',
+  'Read-only correlation of canonical AI telemetry carrying W3C trace IDs',
+  'does not grant governance authority',
+])
+
+const traceAdapter = requireTokens('lib/ai/governance-trace-timeline.ts', [
+  "from('ai_telemetry_events')",
+  '.not(\'trace_id\', \'is\', null)',
+  'groupGovernedTraceEvents',
+  'trace_id,span_id,parent_span_id',
+])
+
 for (const [path, source] of [
   ['app/admin/ai-command-center/layout.tsx', layout],
   ['app/admin/ai-command-center/explorer/page.tsx', page],
   ['app/admin/ai-command-center/explorer/command-center-explorer.tsx', client],
+  ['app/admin/ai-command-center/traces/page.tsx', tracePage],
+  ['lib/ai/governance-trace-timeline.ts', traceAdapter],
 ]) {
   for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(', 'fetch(', 'method: \'POST\'', 'method: "POST"']) {
     if (source.includes(forbidden)) failures.push(`${path}: interactive Command Center must remain read-only; found ${forbidden}`)
@@ -58,7 +75,9 @@ for (const [path, source] of [
 }
 
 if (page.includes('createAdminClient')) failures.push('Explorer page must not introduce a new service-role read path; reuse the authorized canonical Command Center state adapter.')
+if (tracePage.includes('createAdminClient')) failures.push('Trace page must authorize before using the encapsulated governance trace adapter.')
 if (!page.includes("authorizeProject(user.id, selectedProjectId, 'admin.manage')")) failures.push('Explorer must require admin.manage before loading canonical evidence.')
+if (!tracePage.includes("authorizeProject(user.id, selectedProjectId, 'admin.manage')")) failures.push('Trace timeline must require admin.manage before loading canonical telemetry.')
 
 if (failures.length) {
   console.error('Command Center Explorer verification failed:')
@@ -66,4 +85,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('ADR-006 Command Center Explorer read-only authorization and canonical-evidence boundaries verified.')
+console.log('ADR-006 Command Center Explorer and trace timeline read-only authorization boundaries verified.')
