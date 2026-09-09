@@ -3,10 +3,12 @@ import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { isGovernancePersonaRoleKey } from '@/lib/governance/persona-role-keys'
 
 function text(value:unknown){return typeof value==='string'?value.trim():''}
 
 async function validateTarget(admin:ReturnType<typeof createAdminClient>,projectId:string,targetUserId:string,roleKey:string){
+  if(!isGovernancePersonaRoleKey(roleKey))throw new AuthorizationError('Only finalized governance persona roles can be assigned.',400)
   const {data:project,error:projectError}=await admin.schema('app').from('projects').select('id,organization_id').eq('id',projectId).maybeSingle()
   if(projectError||!project)throw new Error(`Unable to resolve project: ${projectError?.message??'not found'}`)
   const [{data:member,error:memberError},{data:role,error:roleError}]=await Promise.all([
