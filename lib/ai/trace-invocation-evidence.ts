@@ -5,6 +5,9 @@ export type TraceInvocationEvidence = {
   routingPolicyReason: string | null
   providerRequestId: string | null
   requestedMaxOutputTokens: number | null
+  governanceMaxOutputTokens: number | null
+  effectiveMaxOutputTokens: number | null
+  resourceBudgetPolicyId: string | null
   providerHttpStatus: number | null
   totalTokens: number | null
 }
@@ -36,6 +39,9 @@ export function projectTraceInvocationEvidence(attributes: unknown): TraceInvoca
     routingPolicyReason: boundedText(source.routing_policy_reason),
     providerRequestId: boundedText(source.provider_request_id),
     requestedMaxOutputTokens: nonNegativeInteger(source.requested_max_output_tokens),
+    governanceMaxOutputTokens: nonNegativeInteger(source.governance_max_output_tokens),
+    effectiveMaxOutputTokens: nonNegativeInteger(source.effective_max_output_tokens),
+    resourceBudgetPolicyId: boundedText(source.resource_budget_policy_id),
     providerHttpStatus: httpStatus(source.provider_http_status),
     totalTokens: nonNegativeInteger(source.total_tokens),
   }
