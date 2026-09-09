@@ -10,6 +10,8 @@ export const governancePersonaRoleKeys = [
   'DATA_GOVERNANCE_ADMIN',
   'DATA_CUSTODIAN',
   'SOURCE_SYSTEM_OWNER',
+  'METADATA_ANALYST',
+  'DATA_QUALITY_ANALYST',
 ] as const
 
 export type GovernancePersonaRoleKey = (typeof governancePersonaRoleKeys)[number]
