@@ -51,6 +51,28 @@ export type ResourceBudgetConcurrencyLeaseRow = {
   released_at: string | null
 }
 
+export type ModelPricingAuthorityRow = {
+  id: string
+  project_id: string
+  provider: string
+  model_id: string
+  pricing_version: string
+  supersedes_pricing_id: string | null
+  currency: string
+  price_unit_tokens: number
+  input_price_per_million_tokens: number | string
+  output_price_per_million_tokens: number | string
+  effective_from: string
+  effective_to: string | null
+  source_reference: string
+  source_uri: string | null
+  reviewed_by: string
+  reviewed_at: string
+  reviewer_capability: string
+  review_note: string
+  created_at: string
+}
+
 export type ProjectOutputBudgetReadiness = {
   status: 'READY' | 'NOT_CONFIGURED' | 'DISABLED' | 'NO_OUTPUT_LIMIT'
   policyId: string | null
@@ -63,6 +85,7 @@ export type ResourceControlPersistence = {
   listExecutionControlEvents(projectId: string): Promise<ExecutionControlEventRow[]>
   listRecentBudgetAdmissions(projectId: string): Promise<ResourceBudgetAdmissionRow[]>
   listRecentBudgetConcurrencyLeases(projectId: string): Promise<ResourceBudgetConcurrencyLeaseRow[]>
+  listEffectiveModelPricing(projectId: string): Promise<ModelPricingAuthorityRow[]>
 }
 
 function requiredText(value: string, label: string) {
@@ -94,12 +117,13 @@ export class GovernedResourceControlState {
 
   async read(projectIdInput: string) {
     const projectId = requiredText(projectIdInput, 'projectId')
-    const [budgetsRaw, controlsRaw, eventsRaw, admissionsRaw, leasesRaw] = await Promise.all([
+    const [budgetsRaw, controlsRaw, eventsRaw, admissionsRaw, leasesRaw, pricingRaw] = await Promise.all([
       this.persistence.listEffectiveBudgets(projectId),
       this.persistence.listEffectiveExecutionControls(projectId),
       this.persistence.listExecutionControlEvents(projectId),
       this.persistence.listRecentBudgetAdmissions(projectId),
       this.persistence.listRecentBudgetConcurrencyLeases(projectId),
+      this.persistence.listEffectiveModelPricing(projectId),
     ])
 
     const budgets = budgetsRaw.filter((row) => row.project_id === projectId)
@@ -107,6 +131,7 @@ export class GovernedResourceControlState {
     const executionControlEvents = eventsRaw.filter((row) => row.project_id === projectId)
     const budgetAdmissions = admissionsRaw.filter((row) => row.project_id === projectId)
     const budgetConcurrencyLeases = leasesRaw.filter((row) => row.project_id === projectId)
+    const modelPricingAuthorities = pricingRaw.filter((row) => row.project_id === projectId)
     const now = Date.now()
     const activeBudgetConcurrencyLeases = budgetConcurrencyLeases.filter((row) => {
       const expiresAt = Date.parse(row.expires_at)
@@ -121,6 +146,7 @@ export class GovernedResourceControlState {
       budgetAdmissions,
       budgetConcurrencyLeases,
       activeBudgetConcurrencyLeases,
+      modelPricingAuthorities,
       projectOutputBudget: projectOutputBudgetReadiness(budgets),
       counts: {
         effectiveBudgets: budgets.length,
@@ -131,11 +157,14 @@ export class GovernedResourceControlState {
         recentControlEvents: executionControlEvents.length,
         recentBudgetAdmissions: budgetAdmissions.length,
         activeBudgetConcurrencyLeases: activeBudgetConcurrencyLeases.length,
+        effectiveModelPricingAuthorities: modelPricingAuthorities.length,
       },
       controls: {
         budgetMutationEnabled: false as const,
         emergencyMutationEnabled: false as const,
         admissionMutationEnabled: false as const,
+        pricingMutationEnabled: false as const,
+        runtimeCostEnforcementEnabled: false as const,
       },
     }
   }
