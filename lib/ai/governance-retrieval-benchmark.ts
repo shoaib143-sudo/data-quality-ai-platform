@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createGovernanceEvaluationEngine } from './governance-evaluation-engine'
 import { createGovernanceRetrievalProvider } from './governance-retrieval-provider'
 import { buildGovernanceRetrievalEvaluationDataset } from './governance-retrieval-evaluation-dataset'
+import { recordRetrievalEvaluation } from './retrieval-evaluation'
 import { runRetrievalBenchmark, type RetrievalBenchmarkResult } from './retrieval-benchmark-runner'
 
 export async function runGovernanceRetrievalBenchmark(input: {
@@ -22,6 +23,7 @@ export async function runGovernanceRetrievalBenchmark(input: {
     dataset,
     retrieval: createGovernanceRetrievalProvider(supabase),
     evaluationEngine: createGovernanceEvaluationEngine(),
+    recordEvaluation: recordRetrievalEvaluation,
     k: input.k,
   })
 }
