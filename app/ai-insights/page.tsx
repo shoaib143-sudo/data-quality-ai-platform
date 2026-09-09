@@ -35,9 +35,10 @@ function riskTone(level: string) {
   return 'border-emerald-200 bg-emerald-50 text-emerald-800'
 }
 
-export default async function AIInsightsPage({ searchParams }: { searchParams: Promise<{ projectId?: string; datasetId?: string }> }) {
+export default async function AIInsightsPage({ searchParams }: { searchParams: Promise<{ projectId?: string; datasetId?: string; prompt?: string }> }) {
   const user = await requireUser()
   const params = await searchParams
+  const landingPrompt = (params.prompt ?? '').trim().slice(0, 1000)
   const supabase = await createClient()
 
   const projectsResult = await supabase.schema('app').from('projects').select('id,name').order('name')
@@ -133,7 +134,7 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/50 p-5 sm:p-8">
       <div className="mx-auto max-w-7xl space-y-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/dashboard" className="text-sm font-medium text-slate-600 hover:text-slate-950">← Dashboard</Link>
+          <Link href="/home" className="text-sm font-medium text-slate-600 hover:text-slate-950">← Role home</Link>
           <Link href="/ai-capabilities" className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50">AI capability coverage</Link>
         </div>
 
@@ -144,7 +145,10 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
           </div>
         </header>
 
+        {landingPrompt ? <section className="rounded-2xl border border-violet-200 bg-violet-50 p-5"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-violet-600"/><div><p className="text-xs font-black uppercase tracking-wide text-violet-700">Question from your landing page</p><p className="mt-2 font-semibold text-slate-900">{landingPrompt}</p><p className="mt-2 text-xs leading-5 text-slate-600">The evidence below is scoped to the selected governed project and dataset. This page preserves your question as context without treating an AI suggestion as governance authority.</p></div></div></section> : null}
+
         <form className="grid gap-3 rounded-2xl border bg-white p-5 sm:grid-cols-2" method="get">
+          {landingPrompt ? <input type="hidden" name="prompt" value={landingPrompt}/> : null}
           <label className="text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 w-full rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
           <label className="text-sm font-semibold">Dataset<select name="datasetId" defaultValue={selectedDatasetId} className="mt-2 w-full rounded-xl border bg-white px-3 py-2 font-normal">{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name}</option>)}</select></label>
           <button className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white sm:col-span-2">Load AI evidence</button>
@@ -152,10 +156,10 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
 
         {!selectedDataset ? <section className="rounded-2xl border bg-white p-8 text-sm text-slate-600">No governed datasets are available for this project.</section> : <>
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border bg-white p-5"><Gauge className="h-5 w-5 text-blue-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Data health</p><p className="mt-1 text-3xl font-black">{pct(score?.overall_score)}</p><p className="mt-1 text-xs text-slate-500">{profile ? `${profile.row_count ?? 'N/A'} rows · ${profile.column_count ?? 'N/A'} columns sampled` : 'No completed profile'}</p></div>
-            <div className="rounded-2xl border bg-white p-5"><ShieldAlert className="h-5 w-5 text-amber-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Material findings</p><p className="mt-1 text-3xl font-black">{materialFindings.length}</p><p className="mt-1 text-xs text-slate-500">{findings.length} total deterministic findings</p></div>
-            <div className="rounded-2xl border bg-white p-5"><Lightbulb className="h-5 w-5 text-violet-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Proposed controls</p><p className="mt-1 text-3xl font-black">{pendingRules.length}</p><p className="mt-1 text-xs text-slate-500">{rules.filter((rule) => rule.enabled).length} enabled · human governance preserved</p></div>
-            <div className="rounded-2xl border bg-white p-5"><Sparkles className="h-5 w-5 text-fuchsia-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">AI governance suggestions</p><p className="mt-1 text-3xl font-black">{currentSuggestions.length}</p><p className="mt-1 text-xs text-slate-500">Current advisory recommendation types · history retained for audit</p></div>
+            <Link href={profile ? `/profiling/explorer?runId=${encodeURIComponent(profile.id)}` : '/data-quality'} className="rounded-2xl border bg-white p-5 transition hover:border-blue-200 hover:shadow-sm"><Gauge className="h-5 w-5 text-blue-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Data health</p><p className="mt-1 text-3xl font-black">{pct(score?.overall_score)}</p><p className="mt-1 text-xs text-slate-500">{profile ? `${profile.row_count ?? 'N/A'} rows · ${profile.column_count ?? 'N/A'} columns sampled` : 'No completed profile'}</p></Link>
+            <Link href={profile ? `/profiling/explorer?runId=${encodeURIComponent(profile.id)}` : '/issues'} className="rounded-2xl border bg-white p-5 transition hover:border-amber-200 hover:shadow-sm"><ShieldAlert className="h-5 w-5 text-amber-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Material findings</p><p className="mt-1 text-3xl font-black">{materialFindings.length}</p><p className="mt-1 text-xs text-slate-500">{findings.length} total deterministic findings</p></Link>
+            <Link href="/data-quality/rules" className="rounded-2xl border bg-white p-5 transition hover:border-violet-200 hover:shadow-sm"><Lightbulb className="h-5 w-5 text-violet-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">Proposed controls</p><p className="mt-1 text-3xl font-black">{pendingRules.length}</p><p className="mt-1 text-xs text-slate-500">{rules.filter((rule) => rule.enabled).length} enabled · human governance preserved</p></Link>
+            <Link href="/ai-capabilities" className="rounded-2xl border bg-white p-5 transition hover:border-fuchsia-200 hover:shadow-sm"><Sparkles className="h-5 w-5 text-fuchsia-600"/><p className="mt-3 text-xs font-bold uppercase tracking-wide text-slate-500">AI governance suggestions</p><p className="mt-1 text-3xl font-black">{currentSuggestions.length}</p><p className="mt-1 text-xs text-slate-500">Current advisory recommendation types · history retained for audit</p></Link>
           </section>
 
           <section className="grid gap-5 lg:grid-cols-2">
@@ -170,7 +174,7 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
             <article className="rounded-2xl border bg-white p-6"><h2 className="text-lg font-black">Pending control review</h2><p className="mt-1 text-xs text-slate-500">Candidate quality controls remain disabled until governed approval.</p><div className="mt-4 space-y-3">{pendingRules.slice(0, 12).map((rule) => <div key={rule.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><span className="text-sm font-bold">{rule.name}</span><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">{rule.approval_status}</span></div><p className="mt-1 text-xs text-slate-500">{rule.column_name || 'Dataset'} · {rule.severity}</p>{rule.description && <p className="mt-2 text-sm text-slate-600">{rule.description}</p>}</div>)}{pendingRules.length === 0 && <p className="text-sm text-slate-500">No pending quality-control proposals.</p>}</div></article>
           </section>
 
-          <section className="rounded-2xl border bg-white p-6"><h2 className="text-lg font-black">Deterministic evidence behind the AI view</h2><div className="mt-4 grid gap-3 md:grid-cols-2">{findings.slice(0, 12).map((finding) => <div key={finding.id} className="rounded-xl border p-4"><div className="flex justify-between gap-3"><span className="text-sm font-bold">{finding.title}</span><span className="text-xs font-semibold text-slate-500">{finding.severity}</span></div><p className="mt-2 text-sm leading-6 text-slate-600">{finding.description}</p></div>)}{findings.length === 0 && <p className="text-sm text-slate-500">No persisted findings for the latest profile.</p>}</div></section>
+          <section className="rounded-2xl border bg-white p-6"><div className="flex items-center justify-between gap-3"><h2 className="text-lg font-black">Deterministic evidence behind the AI view</h2>{profile ? <Link href={`/profiling/explorer?runId=${encodeURIComponent(profile.id)}`} className="text-sm font-semibold text-blue-600">Open profiling evidence →</Link> : null}</div><div className="mt-4 grid gap-3 md:grid-cols-2">{findings.slice(0, 12).map((finding) => <div key={finding.id} className="rounded-xl border p-4"><div className="flex justify-between gap-3"><span className="text-sm font-bold">{finding.title}</span><span className="text-xs font-semibold text-slate-500">{finding.severity}</span></div><p className="mt-2 text-sm leading-6 text-slate-600">{finding.description}</p></div>)}{findings.length === 0 && <p className="text-sm text-slate-500">No persisted findings for the latest profile.</p>}</div></section>
         </>}
       </div>
     </main>
