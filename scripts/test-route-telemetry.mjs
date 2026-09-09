@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { ObservableIntelligentRouter } from '../lib/ai/observable-intelligent-router.ts'
+import { ReasoningProviderHttpError } from '../lib/ai/reasoning-provider.ts'
 
 const context = {
   projectId: 'project-1',
@@ -131,7 +132,39 @@ const context = {
   assert.equal(events[1].eventType, 'MODEL_INVOCATION')
   assert.equal(events[1].status, 'ERROR')
   assert.equal(events[1].attributes.error_name, 'TypeError')
+  assert.equal(events[1].attributes.provider_http_status, null)
+  assert.equal(events[1].attributes.provider_request_id, null)
   assert.equal(Object.hasOwn(events[1].attributes, 'error_message'), false)
+}
+
+{
+  const providerError = new ReasoningProviderHttpError(429, 'req-rate-limit-456')
+  const events = []
+  const router = new ObservableIntelligentRouter(
+    {
+      async route() {
+        return {
+          source: 'GOVERNED_REGISTRY',
+          reason: 'ACTIVE_GOVERNED_CANDIDATE_SELECTED',
+          provider: { id: 'openai_compatible', async generateJson() { throw providerError } },
+          evidence: { aiSystemId: 'system-a', aiSystemVersionId: 'version-a' },
+        }
+      },
+    },
+    { id: 'telemetry', async record(event) { events.push(event); return { eventId: `evt-${events.length}`, persisted: true } } },
+  )
+  const routed = await router.route(context)
+  await assert.rejects(
+    routed.provider.generateJson({ task: 'governance_reasoning', system: 'safe', input: {} }),
+    (error) => error === providerError,
+  )
+  assert.equal(events.length, 2)
+  assert.equal(events[1].status, 'ERROR')
+  assert.equal(events[1].attributes.error_name, 'ReasoningProviderHttpError')
+  assert.equal(events[1].attributes.provider_http_status, 429)
+  assert.equal(events[1].attributes.provider_request_id, 'req-rate-limit-456')
+  assert.equal(Object.hasOwn(events[1].attributes, 'error_message'), false)
+  assert.equal(JSON.stringify(events[1]).includes(providerError.message), false)
 }
 
 {
@@ -168,4 +201,4 @@ const context = {
   assert.equal(result, decision, 'telemetry failure must not alter a fail-closed route decision')
 }
 
-console.log('ADR-006 Intelligent Router route and model invocation telemetry behavior passed.')
+console.log('ADR-006 Intelligent Router route and sanitized model invocation telemetry behavior passed.')
