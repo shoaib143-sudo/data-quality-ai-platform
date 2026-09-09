@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -76,10 +77,10 @@ export default async function AgentDetailPage({
     <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/agents" className="text-sm font-medium underline underline-offset-4">← Back to AI Agents</Link>
+          <Link href={canonicalRoutes.agents} className="text-sm font-medium underline underline-offset-4">← Back to AI Agents</Link>
           <div className="flex flex-wrap gap-2">
-            <Link href="/agents" className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100">Run an agent</Link>
-            <Link href="/monitoring" className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100">Open Job Monitor</Link>
+            <Link href={canonicalRoutes.agents} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100">Run an agent</Link>
+            <Link href={canonicalRoutes.monitoring} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100">Open Job Monitor</Link>
           </div>
         </div>
 
@@ -169,7 +170,7 @@ export default async function AgentDetailPage({
                   {runs.map((run) => (
                     <tr key={run.id} className="border-b last:border-0">
                       <td className="px-3 py-3">
-                        <Link href={`/agents/runs/${run.id}`} className="font-medium underline underline-offset-4">View run</Link>
+                        <Link href={canonicalRoutes.agentRun(run.id)} className="font-medium underline underline-offset-4">View run</Link>
                       </td>
                       <td className="px-3 py-3">{run.status}{run.error_code ? ` (${run.error_code})` : ''}</td>
                       <td className="px-3 py-3 text-slate-500">{new Date(run.created_at).toLocaleString()}</td>
