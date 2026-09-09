@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 
 const observable = fs.readFileSync('lib/ai/observable-intelligent-router.ts', 'utf8')
-const invocation = fs.readFileSync('lib/ai/observable-reasoning-provider.ts', 'utf8')
 const composition = fs.readFileSync('lib/ai/governance-intelligent-router.ts', 'utf8')
 const investigation = fs.readFileSync('lib/ai/investigation-model.ts', 'utf8')
 const investigationEngine = fs.readFileSync('lib/profiling/investigation-engine.ts', 'utf8')
@@ -10,40 +9,34 @@ const failures = []
 
 for (const token of [
   'ObservableIntelligentRouter',
-  'ObservableReasoningProvider',
+  'class ObservableReasoningProvider',
   "eventType: 'AI_ROUTE_DECISION'",
   "operation: 'model_route'",
+  "eventType: 'MODEL_INVOCATION'",
   'route_source',
   'route_reason',
   'routing_policy_id',
   'evaluation_average_score',
-]) if (!observable.includes(token)) failures.push(`missing route telemetry token: ${token}`)
-
-for (const token of [
-  'export class ObservableReasoningProvider',
-  "eventType: 'MODEL_INVOCATION'",
   'inputTokens: result.usage?.inputTokens ?? null',
   'outputTokens: result.usage?.outputTokens ?? null',
   'provider_request_id: result.providerRequestId ?? null',
   'total_tokens: result.usage?.totalTokens ?? null',
   "error_name: error instanceof Error ? error.name : 'UnknownError'",
-]) if (!invocation.includes(token)) failures.push(`missing invocation telemetry token: ${token}`)
+]) if (!observable.includes(token)) failures.push(`missing route/invocation telemetry token: ${token}`)
 
-for (const [label, source] of [['route', observable], ['invocation', invocation]]) {
-  for (const forbidden of [
-    /prompt\s*:/i,
-    /completion\s*:/i,
-    /hidden[_\s-]*reason/i,
-    /chain[_\s-]*of[_\s-]*thought/i,
-    /error_message\s*:/i,
-  ]) if (forbidden.test(source)) failures.push(`forbidden ${label} telemetry payload pattern: ${forbidden}`)
-}
+for (const forbidden of [
+  /prompt\s*:/i,
+  /completion\s*:/i,
+  /hidden[_\s-]*reason/i,
+  /chain[_\s-]*of[_\s-]*thought/i,
+  /error_message\s*:/i,
+]) if (forbidden.test(observable)) failures.push(`forbidden telemetry payload pattern: ${forbidden}`)
 
 if (!composition.includes('createGovernanceTelemetryProvider()')) failures.push('governance telemetry provider not composed')
 if (!composition.includes('new ObservableIntelligentRouter')) failures.push('governed router not telemetry-decorated')
 if (!/catch\s*\{[\s\S]*?return decision/m.test(observable)) failures.push('telemetry failure must preserve resolved decision')
-if (!invocation.includes('throw error')) failures.push('provider failures must remain failures after telemetry recording')
-if (!invocation.includes('return result')) failures.push('successful model results must remain unchanged after telemetry recording')
+if (!observable.includes('throw error')) failures.push('provider failures must remain failures after telemetry recording')
+if (!observable.includes('return result')) failures.push('successful model results must remain unchanged after telemetry recording')
 
 if (!investigation.includes('createGovernanceIntelligentRouter().route({')) failures.push('profiling investigation does not use governed Intelligent Router')
 if (!investigation.includes("task: 'profiling_investigation'")) failures.push('profiling investigation does not declare profiling_investigation task')
