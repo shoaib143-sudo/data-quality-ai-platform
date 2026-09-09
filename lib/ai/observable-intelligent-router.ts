@@ -141,11 +141,15 @@ class ObservableReasoningProvider implements ReasoningProvider {
 }
 
 export class ObservableIntelligentRouter implements IntelligentModelRouter {
-  constructor(
-    private readonly router: IntelligentModelRouter,
-    private readonly telemetry: TelemetryProvider,
-    private readonly budgetPolicy?: ReasoningBudgetPolicyProvider,
-  ) {}
+  private readonly router: IntelligentModelRouter
+  private readonly telemetry: TelemetryProvider
+  private readonly budgetPolicy?: ReasoningBudgetPolicyProvider
+
+  constructor(router: IntelligentModelRouter, telemetry: TelemetryProvider, budgetPolicy?: ReasoningBudgetPolicyProvider) {
+    this.router = router
+    this.telemetry = telemetry
+    this.budgetPolicy = budgetPolicy
+  }
 
   async route(context: IntelligentRouteContext): Promise<IntelligentRouteDecision> {
     const startedAt = Date.now()
