@@ -32,6 +32,12 @@ export type ExecutionControlStateRow = {
 
 export type ExecutionControlEventRow = Omit<ExecutionControlStateRow, 'effective_state'>
 
+export type ProjectOutputBudgetReadiness = {
+  status: 'READY' | 'NOT_CONFIGURED' | 'DISABLED' | 'NO_OUTPUT_LIMIT'
+  policyId: string | null
+  maxOutputTokens: number | null
+}
+
 export type ResourceControlPersistence = {
   listEffectiveBudgets(projectId: string): Promise<ResourceBudgetControlRow[]>
   listEffectiveExecutionControls(projectId: string): Promise<ExecutionControlStateRow[]>
@@ -42,6 +48,20 @@ function requiredText(value: string, label: string) {
   const normalized = value.trim()
   if (!normalized) throw new Error(`${label} is required`)
   return normalized
+}
+
+export function projectOutputBudgetReadiness(budgets: ResourceBudgetControlRow[]): ProjectOutputBudgetReadiness {
+  const projectBudget = budgets.find((row) => row.scope_type === 'PROJECT' && row.scope_key === 'PROJECT')
+  if (!projectBudget) return { status: 'NOT_CONFIGURED', policyId: null, maxOutputTokens: null }
+  if (!projectBudget.enabled) return { status: 'DISABLED', policyId: projectBudget.id, maxOutputTokens: null }
+  if (projectBudget.max_output_tokens_per_request == null) {
+    return { status: 'NO_OUTPUT_LIMIT', policyId: projectBudget.id, maxOutputTokens: null }
+  }
+  return {
+    status: 'READY',
+    policyId: projectBudget.id,
+    maxOutputTokens: projectBudget.max_output_tokens_per_request,
+  }
 }
 
 export class GovernedResourceControlState {
@@ -64,6 +84,7 @@ export class GovernedResourceControlState {
       budgets,
       executionControls,
       executionControlEvents,
+      projectOutputBudget: projectOutputBudgetReadiness(budgets),
       counts: {
         effectiveBudgets: budgets.length,
         enabledBudgets: budgets.filter((row) => row.enabled).length,
