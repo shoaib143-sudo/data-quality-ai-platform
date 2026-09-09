@@ -9,6 +9,7 @@ import type { TelemetryTraceContext } from './telemetry-provider'
 
 export type IntelligentRouteContext = ReasoningRouteContext & {
   projectId: string
+  executionCorrelationId?: string | null
   traceContext?: TelemetryTraceContext | null
 }
 
