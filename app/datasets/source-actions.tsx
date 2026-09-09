@@ -4,6 +4,8 @@ import { AlertCircle, CheckCircle2, Pencil, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
+
 type ValidationPayload = {
   errors?: string[]
   warnings?: string[]
@@ -54,7 +56,7 @@ export function SourceActions({ projectId, sourceId, status }: { projectId: stri
   const ready = String(status).toUpperCase() === 'ACTIVE'
   return <div className="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
     <div className="flex max-w-xl flex-wrap items-center justify-end gap-2">
-      <a href={`/datasets/edit/${encodeURIComponent(sourceId)}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50">
+      <a href={canonicalRoutes.sourceEdit(sourceId)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50">
         <Pencil className="h-3.5 w-3.5" />
         Edit connection
       </a>

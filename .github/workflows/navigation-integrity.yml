@@ -5,6 +5,7 @@ on:
     paths:
       - 'app/**'
       - 'lib/platform/canonical-routes.ts'
+      - 'lib/platform/resource-route-contracts.mjs'
       - 'scripts/verify-agent-detail-route.mjs'
       - 'scripts/verify-navigation-integrity.mjs'
       - 'scripts/test-canonical-routes.mjs'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'app/**'
       - 'lib/platform/canonical-routes.ts'
+      - 'lib/platform/resource-route-contracts.mjs'
       - 'scripts/verify-agent-detail-route.mjs'
       - 'scripts/verify-navigation-integrity.mjs'
       - 'scripts/test-canonical-routes.mjs'
@@ -24,6 +26,7 @@ permissions:
 
 jobs:
   verify:
+    name: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +35,7 @@ jobs:
           node-version: '24'
       - name: Verify agent detail navigation
         run: node scripts/verify-agent-detail-route.mjs
-      - name: Verify platform navigation integrity
+      - name: Verify platform resource route contracts
         run: node scripts/verify-navigation-integrity.mjs
       - name: Test canonical route builder
         run: node --experimental-strip-types scripts/test-canonical-routes.mjs
