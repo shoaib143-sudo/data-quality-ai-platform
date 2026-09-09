@@ -29,7 +29,7 @@ const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
   'business-user': ['catalog', 'glossary', 'datasets', 'issues', 'data-quality'],
   'data-owner': ['catalog', 'glossary', 'datasets', 'data-quality', 'stewardship', 'issues', 'lineage', 'reports', 'classification'],
   'data-steward': ['catalog', 'glossary', 'datasets', 'data-quality', 'stewardship', 'issues', 'lineage', 'classification', 'reports'],
-  'data-governance-admin': ['dashboard', 'catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'audit', 'reports', 'admin', 'retention', 'profiling', 'agents', 'datasets'],
+  'data-governance-admin': ['dashboard', 'catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'audit', 'reports', 'retention', 'profiling', 'agents', 'datasets'],
   'data-governance-specialist': ['catalog', 'glossary', 'datasets', 'lineage', 'stewardship', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention'],
   'compliance-risk-officer': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention'],
   'privacy-security-officer': ['catalog', 'glossary', 'lineage', 'classification', 'classification-privacy', 'issues', 'audit', 'reports'],
@@ -39,7 +39,7 @@ const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
 }
 
 export function canAccessWorkspace(persona: PersonaSlug, workspace: WorkspaceKey, organizationRole?: string | null) {
-  if (workspace === 'admin' && organizationRole && /^(OWNER|ADMIN)$/i.test(organizationRole)) return true
+  if (workspace === 'admin') return Boolean(organizationRole && /^(OWNER|ADMIN)$/i.test(organizationRole))
   return access[persona].includes(workspace)
 }
 
