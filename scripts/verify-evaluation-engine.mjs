@@ -2,6 +2,8 @@ import fs from 'node:fs'
 
 const engine = fs.readFileSync('lib/ai/evaluation-engine.ts', 'utf8')
 const retrievalEvaluation = fs.readFileSync('lib/ai/retrieval-evaluation.ts', 'utf8')
+const benchmarkRunner = fs.readFileSync('lib/ai/retrieval-benchmark-runner.ts', 'utf8')
+const governedBenchmark = fs.readFileSync('lib/ai/governance-retrieval-benchmark.ts', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-evaluation-engine.ts', 'utf8')
 const route = fs.readFileSync('app/api/governance/evaluations/route.ts', 'utf8')
 const ledger = fs.readFileSync('supabase/migrations/20260908150019_add_ai_evaluation_results_ledger.sql', 'utf8')
@@ -26,6 +28,18 @@ requireText(retrievalEvaluation, 'recallAtK', 'Recall metric')
 requireText(retrievalEvaluation, "evaluationType: 'RETRIEVAL_RELEVANCE'", 'retrieval-specific evaluation type')
 requireText(retrievalEvaluation, "capability: 'retrieval'", 'retrieval capability classification')
 requireText(retrievalEvaluation, 'labeled_case_ids', 'safe labeled-case evidence metadata')
+requireText(benchmarkRunner, 'export async function runRetrievalBenchmark', 'offline retrieval benchmark operation')
+requireText(benchmarkRunner, 'retrieval benchmark requires governed labeled cases', 'benchmark fails closed without governed labels')
+requireText(benchmarkRunner, 'request.retrieval.retrieve({', 'benchmark executes the selected retrieval provider')
+requireText(benchmarkRunner, 'rankedObjectKeys: response.matches.map((match) => match.objectKey)', 'benchmark ranks canonical object keys only')
+requireText(benchmarkRunner, 'request.recordEvaluation({', 'benchmark records metrics through injected evaluation boundary')
+requireText(benchmarkRunner, 'evidenceRefs: request.dataset.evidenceRefs', 'benchmark preserves governed label evidence references')
+requireText(benchmarkRunner, 'reranker changed between labeled cases', 'benchmark rejects inconsistent reranker identity')
+requireText(governedBenchmark, 'buildGovernanceRetrievalEvaluationDataset(projectId)', 'governed benchmark reads persisted label dataset')
+requireText(governedBenchmark, 'createGovernanceRetrievalProvider(supabase)', 'governed benchmark uses production retrieval and reranker composition')
+requireText(governedBenchmark, 'createGovernanceEvaluationEngine()', 'governed benchmark persists canonical evaluation evidence')
+requireText(governedBenchmark, 'recordEvaluation: recordRetrievalEvaluation', 'governed benchmark binds canonical retrieval evaluator')
+requireText(governedBenchmark, 'No governed retrieval relevance labels are available for this project', 'governed benchmark does not fabricate missing labels')
 requireText(adapter, "from('ai_evaluation_results')", 'canonical automated evaluation ledger')
 requireText(adapter, "rpc('ai_evaluation_scorecard'", 'deterministic scorecard projection')
 requireText(route, 'export async function GET(request: Request)', 'read-only HTTP scorecard surface')
@@ -66,5 +80,10 @@ if (route.includes("from('ai_evaluation_results')") || route.includes("rpc('ai_e
 if (/metadata:\s*\{[^}]*\b(query|rankedObjectKeys|content|retrievedContent)\b/s.test(retrievalEvaluation)) {
   throw new Error('Retrieval evaluation persistence must not store raw query or retrieved content in metadata.')
 }
+for (const source of [benchmarkRunner, governedBenchmark]) {
+  if (/\b(approve|activate|promote|deploy)\s*\(/i.test(source) || /lifecycle_status\s*[:=]/i.test(source)) {
+    throw new Error('Retrieval benchmark evidence must not grant model approval, promotion, deployment, or lifecycle authority.')
+  }
+}
 
-console.log('ADR-006 EvaluationEngine and retrieval relevance evaluation contracts verified.')
+console.log('ADR-006 EvaluationEngine, retrieval relevance evaluation, and offline benchmark contracts verified.')
