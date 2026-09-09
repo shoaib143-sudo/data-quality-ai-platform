@@ -96,6 +96,22 @@ try {
     maxOutputTokens: 1.5,
   }), /maxOutputTokens must be a positive integer/)
 
+  const sensitiveUpstreamBody = 'provider-secret-detail: internal-stack-token=abc123'
+  globalThis.fetch = async () => new Response(sensitiveUpstreamBody, {
+    status: 429,
+    headers: { 'x-request-id': 'req-rate-limit-456' },
+  })
+  await assert.rejects(
+    () => provider.generateJson({ task: 'general', system: 'Use evidence only.', input: {} }),
+    (error) => {
+      assert.match(error.message, /AI reasoning provider returned 429/)
+      assert.match(error.message, /req-rate-limit-456/)
+      assert.equal(error.message.includes(sensitiveUpstreamBody), false)
+      assert.equal(error.message.includes('internal-stack-token'), false)
+      return true
+    },
+  )
+
   process.env.AI_REASONING_PROVIDER = 'unknown-provider'
   assert.throws(() => getReasoningProvider(), /Unsupported AI reasoning provider/)
 
@@ -103,7 +119,7 @@ try {
   delete process.env.AI_REASONING_PROVIDER
   assert.equal(getReasoningProvider(), null)
 
-  console.log('OpenAI-compatible ReasoningProvider behavior, provider-observed usage, and output cap verified.')
+  console.log('OpenAI-compatible ReasoningProvider behavior, usage, output cap, and provider error redaction verified.')
 } finally {
   globalThis.fetch = originalFetch
   for (const [key, value] of Object.entries(originalEnv)) {

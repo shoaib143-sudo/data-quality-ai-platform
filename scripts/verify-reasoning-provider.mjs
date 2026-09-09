@@ -14,6 +14,9 @@ requireText(provider, 'maxOutputTokens?: number', 'optional caller-owned output 
 requireText(provider, 'maxOutputTokens must be a positive integer', 'output ceiling validation')
 requireText(provider, "{ max_tokens: maxOutputTokens }", 'provider-side OpenAI-compatible output ceiling')
 requireText(provider, 'This is not a budget-policy decision by itself', 'budget authority boundary')
+requireText(provider, 'providerHttpError(response: Response)', 'sanitized provider HTTP failure boundary')
+requireText(provider, 'AI reasoning provider returned ${response.status}', 'status-only provider failure evidence')
+requireText(provider, 'observedRequestId(response)', 'bounded provider request correlation')
 requireText(provider, 'export function createReasoningProvider', 'gateway-callable provider factory')
 requireText(provider, "readonly id = 'openai_compatible'", 'OpenAI-compatible adapter identity')
 requireText(provider, "process.env.AI_REASONING_PROVIDER ?? 'openai_compatible'", 'global provider fallback configuration')
@@ -31,6 +34,12 @@ requireText(investigation, 'if (!projectId) return null', 'missing project ident
 requireText(investigation, 'if (!decision.provider) return null', 'unavailable route preserves deterministic-only investigation')
 requireText(investigationEngine, 'enrichInvestigationWithModel({', 'active profiling investigation calls governed model enrichment boundary')
 
+if (provider.includes('response.text()')) {
+  throw new Error('ReasoningProvider must not surface raw upstream provider error bodies.')
+}
+if (/AI reasoning provider returned \$\{response\.status\}.*text/.test(provider)) {
+  throw new Error('ReasoningProvider failure messages must not concatenate upstream response text.')
+}
 if (investigation.includes('getModelGateway') || investigation.includes("from './model-gateway'")) {
   throw new Error('Profiling investigation must not bypass the governed Intelligent Router through ModelGateway.')
 }
@@ -41,4 +50,4 @@ if (/maxOutputTokens\s*:\s*\d+/.test(investigation)) {
   throw new Error('Profiling investigation must not invent a fixed output budget without canonical policy evidence.')
 }
 
-console.log('ADR-006 ReasoningProvider, provider-side output cap, and profiling Intelligent Router boundary verified.')
+console.log('ADR-006 ReasoningProvider output cap, provider error redaction, and profiling Intelligent Router boundary verified.')
