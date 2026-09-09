@@ -7,6 +7,7 @@ import { Loader2, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 export type AdminOrganization = { id:string; name:string; currentRole:'OWNER'|'ADMIN' }
 export type AdminMember = { organizationId:string; userId:string; email:string; role:'OWNER'|'ADMIN'|'MEMBER'; createdAt:string }
 export type AdminProject = { id:string; organizationId:string; name:string; description:string|null }
+type Feedback = { key:string; type:'success'|'error'; text:string } | null
 
 export function AdminManager({ organizations, members, projects, currentUserId }:{
   organizations:AdminOrganization[]
@@ -19,31 +20,43 @@ export function AdminManager({ organizations, members, projects, currentUserId }
   const [email,setEmail]=useState('')
   const [inviteRole,setInviteRole]=useState<'OWNER'|'ADMIN'|'MEMBER'>('MEMBER')
   const [busy,setBusy]=useState('')
-  const [message,setMessage]=useState('')
-  const [error,setError]=useState('')
+  const [feedback,setFeedback]=useState<Feedback>(null)
 
   const organization=organizations.find((item)=>item.id===organizationId)
   const visibleMembers=useMemo(()=>members.filter((member)=>member.organizationId===organizationId),[members,organizationId])
   const visibleProjects=useMemo(()=>projects.filter((project)=>project.organizationId===organizationId),[projects,organizationId])
 
   async function call(method:string, body:Record<string,unknown>, key:string) {
-    setBusy(key);setError('');setMessage('')
+    setBusy(key)
+    setFeedback(null)
     try {
       const response=await fetch('/api/admin/members',{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
       const payload=await response.json().catch(()=>({}))
       if(!response.ok) throw new Error(payload.error??'Membership operation failed.')
-      setMessage(method==='POST'?(payload.invitationSent?'Invitation sent and membership created.':'Membership created.'):'Organization membership updated.')
+      const text=method==='POST'
+        ? (payload.invitationSent?'Invitation sent and membership created.':'Membership created.')
+        : method==='DELETE'
+          ? 'Organization membership removed.'
+          : 'Organization membership updated.'
+      setFeedback({key,type:'success',text})
       if(method==='POST') setEmail('')
       router.refresh()
     } catch (e) {
-      setError(e instanceof Error?e.message:'Membership operation failed.')
-    } finally { setBusy('') }
+      setFeedback({key,type:'error',text:e instanceof Error?e.message:'Membership operation failed.'})
+    } finally {
+      setBusy('')
+    }
   }
 
   async function invite(event:FormEvent) {
     event.preventDefault()
     if(!organizationId||!email.trim()) return
     await call('POST',{organizationId,email:email.trim(),role:inviteRole},'invite')
+  }
+
+  function changeOrganization(nextOrganizationId:string) {
+    setOrganizationId(nextOrganizationId)
+    setFeedback(null)
   }
 
   return <div className="space-y-6">
@@ -55,7 +68,7 @@ export function AdminManager({ organizations, members, projects, currentUserId }
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Organization roles govern access to the current project portfolio. OWNER can manage all roles; ADMIN can manage non-owner membership.</p>
         </div>
         <label className="min-w-64 text-sm font-semibold text-slate-700">Organization
-          <select value={organizationId} onChange={(event)=>setOrganizationId(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+          <select value={organizationId} onChange={(event)=>changeOrganization(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
             {organizations.map((item)=><option key={item.id} value={item.id}>{item.name} · {item.currentRole}</option>)}
           </select>
         </label>
@@ -79,8 +92,7 @@ export function AdminManager({ organizations, members, projects, currentUserId }
         <button disabled={busy==='invite'} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
           {busy==='invite'?<Loader2 className="h-4 w-4 animate-spin"/>:<UserPlus className="h-4 w-4"/>}Add member
         </button>
-        {message?<p className="mt-3 text-sm font-medium text-emerald-700">{message}</p>:null}
-        {error?<p className="mt-3 text-sm font-medium text-red-600">{error}</p>:null}
+        {feedback?.key==='invite'?<p className={`mt-3 text-sm font-medium ${feedback.type==='error'?'text-red-600':'text-emerald-700'}`}>{feedback.text}</p>:null}
       </form>
 
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -99,11 +111,12 @@ export function AdminManager({ organizations, members, projects, currentUserId }
           <tbody>{visibleMembers.map((member)=>{
             const canChangeOwner=organization?.currentRole==='OWNER'
             const lockedOwner=member.role==='OWNER'&&!canChangeOwner
-            return <tr key={member.userId} className="border-b border-slate-100">
+            const memberFeedback=feedback&&(feedback.key===member.userId||feedback.key===`delete:${member.userId}`)?feedback:null
+            return <tr key={member.userId} className="border-b border-slate-100 align-top">
               <td className="px-3 py-3"><div className="font-semibold">{member.email||member.userId}</div>{member.userId===currentUserId?<div className="text-xs text-blue-600">You</div>:null}</td>
               <td className="px-3 py-3"><select disabled={Boolean(busy)||lockedOwner} value={member.role} onChange={(event)=>void call('PATCH',{organizationId,userId:member.userId,role:event.target.value},member.userId)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-bold">
                 <option value="MEMBER">MEMBER</option><option value="ADMIN">ADMIN</option>{canChangeOwner||member.role==='OWNER'?<option value="OWNER">OWNER</option>:null}
-              </select></td>
+              </select>{memberFeedback?<div className={`mt-2 max-w-xs text-xs font-medium ${memberFeedback.type==='error'?'text-red-600':'text-emerald-700'}`}>{memberFeedback.text}</div>:null}</td>
               <td className="px-3 py-3 text-slate-500">{new Date(member.createdAt).toLocaleDateString()}</td>
               <td className="px-3 py-3 text-right"><button type="button" disabled={Boolean(busy)||lockedOwner} onClick={()=>void call('DELETE',{organizationId,userId:member.userId},`delete:${member.userId}`)} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-40">{busy===`delete:${member.userId}`?<Loader2 className="h-3.5 w-3.5 animate-spin"/>:<Trash2 className="h-3.5 w-3.5"/>}Remove</button></td>
             </tr>
