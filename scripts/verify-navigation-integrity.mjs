@@ -40,6 +40,7 @@ for (const contract of resourceRouteContracts) {
   contractFiles.add(contract.routeFile)
   check(`${label} detail page exists`, fs.existsSync(contract.routeFile))
   check(`${label} route builder exists`, new RegExp(`\\b${contract.routeBuilder}\\s*\\(`).test(routes))
+  check(`${label} has a canonical source consumer`, (contract.sourceConsumers ?? []).length > 0)
 
   const discoveredParams = paramsFromRouteFile(contract.routeFile)
   check(
@@ -49,11 +50,15 @@ for (const contract of resourceRouteContracts) {
 
   if (!fs.existsSync(contract.routeFile)) continue
   const detail = fs.readFileSync(contract.routeFile, 'utf8')
+  check(
+    `${label} authenticates before resource projection`,
+    (contract.authenticationEvidence ?? []).length > 0 && contract.authenticationEvidence.every((evidence) => detail.includes(evidence)),
+  )
   for (const evidence of contract.resolverEvidence ?? []) {
-    check(`${label} resolves exact identity: ${evidence}`, detail.includes(evidence))
+    check(`${label} resolves exact identity/scope: ${evidence}`, detail.includes(evidence))
   }
   check(
-    `${label} fails closed when identity is unavailable`,
+    `${label} fails closed when identity or scope is unavailable`,
     (contract.missingEvidence ?? []).length > 0 && contract.missingEvidence.every((evidence) => detail.includes(evidence)),
   )
   if (contract.readOnly) {
