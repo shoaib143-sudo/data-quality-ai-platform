@@ -57,8 +57,8 @@ export default async function AICommandCenterTracesPage({ searchParams }: { sear
           {event.eventType === 'MODEL_INVOCATION' && hasTraceInvocationEvidence(event.invocationEvidence) ? <div className="mt-4 grid gap-2 rounded-xl border bg-slate-50 p-4 text-xs text-slate-600 md:grid-cols-2 xl:grid-cols-4">
             <p><span className="font-semibold">Route:</span> {recorded(event.invocationEvidence.routeSource)} · {recorded(event.invocationEvidence.routeReason)}</p>
             <p><span className="font-semibold">Routing policy:</span> {recorded(event.invocationEvidence.routingPolicyId)} · {recorded(event.invocationEvidence.routingPolicyReason)}</p>
-            <p><span className="font-semibold">Requested output ceiling:</span> {recorded(event.invocationEvidence.requestedMaxOutputTokens)} tokens · <span className="font-semibold">Observed total:</span> {recorded(event.invocationEvidence.totalTokens)}</p>
-            <p><span className="font-semibold">Provider correlation:</span> {recorded(event.invocationEvidence.providerRequestId)} · HTTP {recorded(event.invocationEvidence.providerHttpStatus)}</p>
+            <p><span className="font-semibold">Output ceiling:</span> caller {recorded(event.invocationEvidence.requestedMaxOutputTokens)} · governed {recorded(event.invocationEvidence.governanceMaxOutputTokens)} · effective {recorded(event.invocationEvidence.effectiveMaxOutputTokens)} · policy {recorded(event.invocationEvidence.resourceBudgetPolicyId)}</p>
+            <p><span className="font-semibold">Provider correlation:</span> {recorded(event.invocationEvidence.providerRequestId)} · HTTP {recorded(event.invocationEvidence.providerHttpStatus)} · <span className="font-semibold">Observed total:</span> {recorded(event.invocationEvidence.totalTokens)}</p>
           </div> : null}
         </div>)}</div>
       </section>)}
