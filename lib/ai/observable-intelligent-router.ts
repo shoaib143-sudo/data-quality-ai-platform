@@ -8,6 +8,7 @@ import type {
   ReasoningRequest,
   ReasoningResult,
 } from './reasoning-provider'
+import { applyProjectOutputBudget, type ReasoningBudgetPolicyProvider } from './reasoning-budget-policy'
 import type { TelemetryProvider, TelemetryTraceContext } from './telemetry-provider'
 
 type ObservableReasoningContext = {
@@ -45,18 +46,26 @@ class ObservableReasoningProvider implements ReasoningProvider {
   private readonly provider: ReasoningProvider
   private readonly telemetry: TelemetryProvider
   private readonly context: ObservableReasoningContext
+  private readonly budgetPolicy?: ReasoningBudgetPolicyProvider
 
-  constructor(provider: ReasoningProvider, telemetry: TelemetryProvider, context: ObservableReasoningContext) {
+  constructor(provider: ReasoningProvider, telemetry: TelemetryProvider, context: ObservableReasoningContext, budgetPolicy?: ReasoningBudgetPolicyProvider) {
     this.provider = provider
     this.telemetry = telemetry
     this.context = context
+    this.budgetPolicy = budgetPolicy
     this.id = provider.id
   }
 
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
     const startedAt = Date.now()
+    let budgetEvidence = applyProjectOutputBudget(request, null)
     try {
-      const result = await this.provider.generateJson(request)
+      if (this.budgetPolicy) {
+        const projectBudget = await this.budgetPolicy.resolveProjectBudget(this.context.projectId)
+        budgetEvidence = applyProjectOutputBudget(request, projectBudget)
+      }
+
+      const result = await this.provider.generateJson(budgetEvidence.request)
       try {
         await this.telemetry.record({
           projectId: this.context.projectId,
@@ -77,7 +86,10 @@ class ObservableReasoningProvider implements ReasoningProvider {
             route_reason: this.context.routeReason,
             routing_policy_id: this.context.routingPolicyId ?? null,
             routing_policy_reason: this.context.routingPolicyReason ?? null,
-            requested_max_output_tokens: request.maxOutputTokens ?? null,
+            requested_max_output_tokens: budgetEvidence.callerRequestedMaxOutputTokens,
+            governance_max_output_tokens: budgetEvidence.governanceMaxOutputTokens,
+            effective_max_output_tokens: budgetEvidence.effectiveMaxOutputTokens,
+            resource_budget_policy_id: budgetEvidence.budgetPolicyId,
             provider_request_id: result.providerRequestId ?? null,
             total_tokens: result.usage?.totalTokens ?? null,
           },
@@ -107,7 +119,10 @@ class ObservableReasoningProvider implements ReasoningProvider {
             route_reason: this.context.routeReason,
             routing_policy_id: this.context.routingPolicyId ?? null,
             routing_policy_reason: this.context.routingPolicyReason ?? null,
-            requested_max_output_tokens: request.maxOutputTokens ?? null,
+            requested_max_output_tokens: budgetEvidence.callerRequestedMaxOutputTokens,
+            governance_max_output_tokens: budgetEvidence.governanceMaxOutputTokens,
+            effective_max_output_tokens: budgetEvidence.effectiveMaxOutputTokens,
+            resource_budget_policy_id: budgetEvidence.budgetPolicyId,
             error_name: error instanceof Error ? error.name : 'UnknownError',
             provider_http_status: providerHttpError?.status ?? null,
             provider_request_id: providerHttpError?.providerRequestId ?? null,
@@ -124,10 +139,12 @@ class ObservableReasoningProvider implements ReasoningProvider {
 export class ObservableIntelligentRouter implements IntelligentModelRouter {
   private readonly router: IntelligentModelRouter
   private readonly telemetry: TelemetryProvider
+  private readonly budgetPolicy?: ReasoningBudgetPolicyProvider
 
-  constructor(router: IntelligentModelRouter, telemetry: TelemetryProvider) {
+  constructor(router: IntelligentModelRouter, telemetry: TelemetryProvider, budgetPolicy?: ReasoningBudgetPolicyProvider) {
     this.router = router
     this.telemetry = telemetry
+    this.budgetPolicy = budgetPolicy
   }
 
   async route(context: IntelligentRouteContext): Promise<IntelligentRouteDecision> {
@@ -178,7 +195,7 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
         traceContext: context.traceContext ?? null,
         routeSource: decision.source,
         routeReason: decision.reason,
-      }),
+      }, this.budgetPolicy),
     }
   }
 }
