@@ -96,6 +96,7 @@ export default async function PersonaHomePage({ params }: { params: Promise<{ pe
 
   const email = user.email ?? ''
   const userLabel = email ? email.split('@')[0].split(/[._-]/).filter(Boolean).map(part => part[0]?.toUpperCase() + part.slice(1)).join(' ') : 'there'
+  const canAdmin = Boolean(access.organizationRole && /^(OWNER|ADMIN)$/i.test(access.organizationRole))
 
-  return <RoleLandingPage persona={personas[slug]} data={data} userLabel={userLabel} />
+  return <RoleLandingPage persona={personas[slug]} data={data} userLabel={userLabel} canAdmin={canAdmin} />
 }
