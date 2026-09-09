@@ -1,7 +1,7 @@
 import { Activity, AlertTriangle } from 'lucide-react'
 
 import { authorizeProject } from '@/lib/auth/authorize'
-import { readGovernedTraceTimeline } from '@/lib/ai/governance-trace-timeline'
+import { readGovernedTraceTimeline, type GovernedTrace } from '@/lib/ai/governance-trace-timeline'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -20,7 +20,7 @@ export default async function AICommandCenterTracesPage({ searchParams }: { sear
   const projects = (projectsResult.data ?? []) as Project[]
   const selectedProjectId = projects.some((project) => project.id === params.projectId) ? params.projectId! : projects[0]?.id
 
-  let traces = selectedProjectId ? [] : []
+  let traces: GovernedTrace[] = []
   if (selectedProjectId) {
     await authorizeProject(user.id, selectedProjectId, 'admin.manage')
     traces = await readGovernedTraceTimeline(selectedProjectId)
