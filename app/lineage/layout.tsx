@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { requireWorkspaceAccess } from '@/lib/governance/workspace-access'
 import { BoundedLineageNavigator } from './bounded-lineage-navigator'
 import { BoundedFieldLineageNavigator } from './bounded-field-lineage-navigator'
 
 export default async function LineageLayout({children}:{children:ReactNode}){
   await requireUser()
+  await requireWorkspaceAccess('lineage')
   const supabase=await createClient()
   const {data,error}=await supabase.schema('app').from('projects').select('id,name').order('name')
   if(error)throw new Error(error.message)
