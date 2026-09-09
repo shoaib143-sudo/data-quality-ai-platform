@@ -3,10 +3,11 @@ import type {
   IntelligentRouteContext,
   IntelligentRouteDecision,
 } from './intelligent-router'
-import type {
-  ReasoningProvider,
-  ReasoningRequest,
-  ReasoningResult,
+import {
+  ReasoningProviderHttpError,
+  type ReasoningProvider,
+  type ReasoningRequest,
+  type ReasoningResult,
 } from './reasoning-provider'
 import type { TelemetryProvider, TelemetryTraceContext } from './telemetry-provider'
 
@@ -64,6 +65,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
       }
       return result
     } catch (error) {
+      const providerHttpError = error instanceof ReasoningProviderHttpError ? error : null
       try {
         await this.telemetry.record({
           projectId: this.context.projectId,
@@ -80,6 +82,8 @@ class ObservableReasoningProvider implements ReasoningProvider {
             route_source: this.context.routeSource,
             route_reason: this.context.routeReason,
             error_name: error instanceof Error ? error.name : 'UnknownError',
+            provider_http_status: providerHttpError?.status ?? null,
+            provider_request_id: providerHttpError?.providerRequestId ?? null,
           },
         })
       } catch {
