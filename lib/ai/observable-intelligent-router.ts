@@ -107,7 +107,10 @@ class ObservableReasoningProvider implements ReasoningProvider {
             provider_request_id: result.providerRequestId ?? null, total_tokens: result.usage?.totalTokens ?? null,
           },
         })
-      } catch {}
+      } catch {
+        // Telemetry is observability evidence only. A telemetry failure must not
+        // change or invalidate a completed model result.
+      }
       return result
     } catch (error) {
       const providerHttpError = sanitizedProviderHttpFailure(error)
@@ -129,7 +132,9 @@ class ObservableReasoningProvider implements ReasoningProvider {
             provider_request_id: providerHttpError?.providerRequestId ?? null,
           },
         })
-      } catch {}
+      } catch {
+        // Telemetry outages never convert or suppress provider or governance-budget failures.
+      }
       throw error
     }
   }
@@ -162,7 +167,10 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
           evaluation_pass_rate: decision.evidence?.evaluationPassRate ?? null,
         },
       })
-    } catch {}
+    } catch {
+      // Telemetry is observability evidence, not routing authority. A telemetry outage
+      // must not change an already-resolved route decision or bypass a fail-closed outcome.
+    }
     if (!decision.provider) return decision
     return {
       ...decision,
