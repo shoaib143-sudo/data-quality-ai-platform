@@ -1,13 +1,25 @@
-import type { EvaluationEngine } from './evaluation-engine'
+import type { EvaluationEngine, EvaluationReceipt } from './evaluation-engine'
 import type { GovernedRetrievalEvaluationDataset } from './retrieval-evaluation-dataset'
-import { recordRetrievalEvaluation } from './retrieval-evaluation'
+import type { RetrievalEvaluationCase, RetrievalEvaluationSummary } from './retrieval-evaluation'
 import type { RetrievalProvider } from './retrieval-provider'
+
+export type RetrievalEvaluationRecorder = (input: {
+  engine: EvaluationEngine
+  projectId: string
+  providerId: string
+  rerankerId?: string | null
+  cases: RetrievalEvaluationCase[]
+  k?: number
+  evidenceRefs: string[]
+  evaluatorVersion?: string
+}) => Promise<{ summary: RetrievalEvaluationSummary; receipts: EvaluationReceipt[] }>
 
 export type RetrievalBenchmarkRequest = {
   projectId: string
   dataset: GovernedRetrievalEvaluationDataset
   retrieval: RetrievalProvider
   evaluationEngine: EvaluationEngine
+  recordEvaluation: RetrievalEvaluationRecorder
   k?: number
 }
 
@@ -17,12 +29,7 @@ export type RetrievalBenchmarkResult = {
   rerankerId: string | null
   caseCount: number
   k: number
-  summary: {
-    caseCount: number
-    mrrAtK: number
-    ndcgAtK: number
-    recallAtK: number
-  }
+  summary: RetrievalEvaluationSummary
   evaluationResultIds: string[]
 }
 
@@ -46,7 +53,7 @@ export async function runRetrievalBenchmark(request: RetrievalBenchmarkRequest):
   const k = boundedK(request.k)
 
   let observedRerankerId: string | null = null
-  const rankedCases = []
+  const rankedCases: RetrievalEvaluationCase[] = []
   for (const item of request.dataset.cases) {
     const response = await request.retrieval.retrieve({
       query: item.query,
@@ -64,7 +71,7 @@ export async function runRetrievalBenchmark(request: RetrievalBenchmarkRequest):
     })
   }
 
-  const recorded = await recordRetrievalEvaluation({
+  const recorded = await request.recordEvaluation({
     engine: request.evaluationEngine,
     projectId,
     providerId: request.retrieval.id,
