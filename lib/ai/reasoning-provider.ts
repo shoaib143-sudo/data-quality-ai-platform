@@ -87,6 +87,11 @@ function providerMaxOutputTokens(value: number | undefined) {
   return value
 }
 
+function providerHttpError(response: Response) {
+  const requestId = observedRequestId(response)
+  return new Error(`AI reasoning provider returned ${response.status}${requestId ? ` (request ${requestId})` : ''}.`)
+}
+
 export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
   readonly id = 'openai_compatible'
   private readonly config: OpenAICompatibleConfig
@@ -116,10 +121,7 @@ export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
       }),
     })
 
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`AI reasoning provider returned ${response.status}: ${text.slice(0, 500)}`)
-    }
+    if (!response.ok) throw providerHttpError(response)
 
     const payload = await response.json() as {
       choices?: Array<{ message?: { content?: string } }>
