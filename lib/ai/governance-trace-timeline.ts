@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { projectTraceInvocationEvidence, type TraceInvocationEvidence } from './trace-invocation-evidence'
 
 export type GovernedTraceEvent = {
   id: string
@@ -17,6 +18,7 @@ export type GovernedTraceEvent = {
   inputTokens: number | null
   outputTokens: number | null
   costUsd: number | string | null
+  invocationEvidence: TraceInvocationEvidence
   observedAt: string
 }
 
@@ -46,6 +48,7 @@ type TelemetryRow = {
   input_tokens: number | null
   output_tokens: number | null
   cost_usd: number | string | null
+  attributes: unknown
   observed_at: string
 }
 
@@ -68,6 +71,7 @@ function projectTraceEvent(projectId: string, row: TelemetryRow): GovernedTraceE
     inputTokens: row.input_tokens,
     outputTokens: row.output_tokens,
     costUsd: row.cost_usd,
+    invocationEvidence: projectTraceInvocationEvidence(row.attributes),
     observedAt: row.observed_at,
   }
 }
@@ -102,7 +106,7 @@ export async function readGovernedTraceTimeline(projectId: string, limit = 500):
 
   const supabase = createAdminClient()
   const { data, error } = await supabase.schema('governance').from('ai_telemetry_events')
-    .select('id,project_id,trace_id,span_id,parent_span_id,event_type,operation,status,provider_id,model_name,agent_run_id,correlation_id,latency_ms,input_tokens,output_tokens,cost_usd,observed_at')
+    .select('id,project_id,trace_id,span_id,parent_span_id,event_type,operation,status,provider_id,model_name,agent_run_id,correlation_id,latency_ms,input_tokens,output_tokens,cost_usd,attributes,observed_at')
     .eq('project_id', normalizedProjectId)
     .not('trace_id', 'is', null)
     .order('observed_at', { ascending: false })

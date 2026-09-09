@@ -3,6 +3,10 @@ import {
   commandCenterExplorerCounts,
   filterCommandCenterExplorerItems,
 } from '../lib/ai/command-center-explorer.ts'
+import {
+  hasTraceInvocationEvidence,
+  projectTraceInvocationEvidence,
+} from '../lib/ai/trace-invocation-evidence.ts'
 
 const items = [
   {
@@ -38,4 +42,52 @@ assert.equal(counts.byCategory.TELEMETRY, 1)
 assert.equal(counts.byStatus.PASS, 1)
 assert.equal(counts.byStatus.HIGH, 1)
 
-console.log('ADR-006 Command Center Explorer filtering, sorting, search, and counts verified.')
+const invocationEvidence = projectTraceInvocationEvidence({
+  route_source: 'GOVERNED_REGISTRY',
+  route_reason: 'ACTIVE_GOVERNED_CANDIDATE_SELECTED',
+  routing_policy_id: 'policy-1',
+  routing_policy_reason: 'POLICY_ALLOWED',
+  provider_request_id: 'req-123',
+  requested_max_output_tokens: 512,
+  provider_http_status: 429,
+  total_tokens: 150,
+  prompt: 'must never escape the projection',
+  completion: 'must never escape the projection',
+  hidden_reasoning: 'must never escape the projection',
+  api_key: 'must never escape the projection',
+})
+
+assert.deepEqual(invocationEvidence, {
+  routeSource: 'GOVERNED_REGISTRY',
+  routeReason: 'ACTIVE_GOVERNED_CANDIDATE_SELECTED',
+  routingPolicyId: 'policy-1',
+  routingPolicyReason: 'POLICY_ALLOWED',
+  providerRequestId: 'req-123',
+  requestedMaxOutputTokens: 512,
+  providerHttpStatus: 429,
+  totalTokens: 150,
+})
+assert.equal(hasTraceInvocationEvidence(invocationEvidence), true)
+assert.equal(JSON.stringify(invocationEvidence).includes('must never escape'), false)
+assert.equal(JSON.stringify(invocationEvidence).includes('api_key'), false)
+
+const invalidEvidence = projectTraceInvocationEvidence({
+  route_source: 42,
+  provider_request_id: '',
+  requested_max_output_tokens: -1,
+  provider_http_status: 99,
+  total_tokens: 1.5,
+})
+assert.equal(hasTraceInvocationEvidence(invalidEvidence), false)
+assert.deepEqual(invalidEvidence, {
+  routeSource: null,
+  routeReason: null,
+  routingPolicyId: null,
+  routingPolicyReason: null,
+  providerRequestId: null,
+  requestedMaxOutputTokens: null,
+  providerHttpStatus: null,
+  totalTokens: null,
+})
+
+console.log('ADR-006 Command Center Explorer and trace invocation evidence projection verified.')
