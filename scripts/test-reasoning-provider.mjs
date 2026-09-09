@@ -21,7 +21,18 @@ try {
     capturedInit = init
     return new Response(JSON.stringify({
       choices: [{ message: { content: '{"executive_summary":"grounded"}' } }],
-    }), { status: 200, headers: { 'content-type': 'application/json' } })
+      usage: {
+        prompt_tokens: 17,
+        completion_tokens: 9,
+        total_tokens: 26,
+      },
+    }), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'x-request-id': 'req-provider-observed-123',
+      },
+    })
   }
 
   const { getReasoningProvider } = await import('../lib/ai/reasoning-provider.ts')
@@ -37,6 +48,9 @@ try {
   assert.equal(result.provider, 'openai_compatible')
   assert.equal(result.model, 'test-model')
   assert.deepEqual(result.result, { executive_summary: 'grounded' })
+  assert.ok(Number.isInteger(result.latencyMs) && result.latencyMs >= 0)
+  assert.deepEqual(result.usage, { inputTokens: 17, outputTokens: 9, totalTokens: 26 })
+  assert.equal(result.providerRequestId, 'req-provider-observed-123')
 
   const request = JSON.parse(capturedInit.body)
   assert.equal(request.model, 'test-model')
@@ -45,6 +59,24 @@ try {
   assert.equal(request.messages[0].role, 'system')
   assert.equal(request.messages[1].content, JSON.stringify({ observed: true }))
 
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    choices: [{ message: { content: '{"executive_summary":"no-usage"}' } }],
+    usage: {
+      prompt_tokens: -1,
+      completion_tokens: 1.5,
+      total_tokens: 'unknown',
+    },
+  }), { status: 200, headers: { 'content-type': 'application/json' } })
+
+  const resultWithoutObservedUsage = await provider.generateJson({
+    task: 'general',
+    system: 'Use evidence only.',
+    input: { observed: false },
+  })
+  assert.equal(resultWithoutObservedUsage.usage, undefined)
+  assert.equal(resultWithoutObservedUsage.providerRequestId, undefined)
+  assert.ok(Number.isInteger(resultWithoutObservedUsage.latencyMs) && resultWithoutObservedUsage.latencyMs >= 0)
+
   process.env.AI_REASONING_PROVIDER = 'unknown-provider'
   assert.throws(() => getReasoningProvider(), /Unsupported AI reasoning provider/)
 
@@ -52,7 +84,7 @@ try {
   delete process.env.AI_REASONING_PROVIDER
   assert.equal(getReasoningProvider(), null)
 
-  console.log('OpenAI-compatible ReasoningProvider behavior verified.')
+  console.log('OpenAI-compatible ReasoningProvider behavior and provider-observed usage verified.')
 } finally {
   globalThis.fetch = originalFetch
   for (const [key, value] of Object.entries(originalEnv)) {
