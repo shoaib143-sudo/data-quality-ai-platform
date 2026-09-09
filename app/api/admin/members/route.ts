@@ -56,7 +56,12 @@ export async function POST(request: Request) {
     let authUser = await findAuthUserByEmail(ctx.admin, email)
     let invitationSent = false
     if (!authUser) {
-      const { data, error } = await ctx.admin.auth.admin.inviteUserByEmail(email, { data: { invited_to_organization_id: organizationId, invited_by: user.id } })
+      const origin = new URL(request.url).origin
+      const redirectTo = `${origin}/auth/callback?next=/reset-password`
+      const { data, error } = await ctx.admin.auth.admin.inviteUserByEmail(email, {
+        redirectTo,
+        data: { invited_to_organization_id: organizationId, invited_by: user.id },
+      })
       if (error || !data.user) return NextResponse.json({ error: error?.message ?? 'Unable to invite user.' }, { status: 400 })
       authUser = data.user
       invitationSent = true
@@ -68,8 +73,9 @@ export async function POST(request: Request) {
     const { data: membership, error: insertError } = await ctx.admin.schema('app').from('organization_members').insert({ organization_id: organizationId, user_id: authUser.id, role: requestedRole }).select('organization_id,user_id,role,created_at').single()
     if (insertError) return NextResponse.json({ error: insertError.message }, { status: 400 })
 
-    await writeGovernanceAudit({ actorUserId: user.id, eventType: 'ORGANIZATION_MEMBER_ADDED', entityType: 'ORGANIZATION', entityId: organizationId, metadata: { member_user_id: authUser.id, email, role: requestedRole, invitation_sent: invitationSent } })
-    return NextResponse.json({ membership, user: { id: authUser.id, email: authUser.email }, invitationSent }, { status: 201 })
+    const activationRequired = !authUser.last_sign_in_at
+    await writeGovernanceAudit({ actorUserId: user.id, eventType: 'ORGANIZATION_MEMBER_ADDED', entityType: 'ORGANIZATION', entityId: organizationId, metadata: { member_user_id: authUser.id, email, role: requestedRole, invitation_sent: invitationSent, activation_required: activationRequired } })
+    return NextResponse.json({ membership, user: { id: authUser.id, email: authUser.email }, invitationSent, activationRequired }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to add organization member.' }, { status: 500 })
   }
