@@ -3,6 +3,7 @@ import type {
   IntelligentRouteContext,
   IntelligentRouteDecision,
 } from './intelligent-router'
+import { ObservableReasoningProvider } from './observable-reasoning-provider'
 import type { TelemetryProvider } from './telemetry-provider'
 
 export class ObservableIntelligentRouter implements IntelligentModelRouter {
@@ -48,6 +49,18 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
       // must not change an already-resolved route decision or bypass a fail-closed outcome.
     }
 
-    return decision
+    if (!decision.provider) return decision
+
+    return {
+      ...decision,
+      provider: new ObservableReasoningProvider(decision.provider, this.telemetry, {
+        projectId: context.projectId,
+        aiSystemId: decision.evidence?.aiSystemId ?? null,
+        aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null,
+        traceContext: context.traceContext ?? null,
+        routeSource: decision.source,
+        routeReason: decision.reason,
+      }),
+    }
   }
 }
