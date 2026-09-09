@@ -1,6 +1,8 @@
 export type ProjectReasoningBudget = {
   policyId: string
-  maxOutputTokens: number
+  maxOutputTokens: number | null
+  maxRequestsPerMinute: number | null
+  maxConcurrentExecutions: number | null
 }
 
 export interface ReasoningBudgetPolicyProvider {
