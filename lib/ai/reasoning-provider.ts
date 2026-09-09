@@ -50,6 +50,18 @@ type OpenAICompatibleUsage = {
   total_tokens?: unknown
 }
 
+export class ReasoningProviderHttpError extends Error {
+  readonly status: number
+  readonly providerRequestId?: string
+
+  constructor(status: number, providerRequestId?: string) {
+    super(`AI reasoning provider returned ${status}${providerRequestId ? ` (request ${providerRequestId})` : ''}.`)
+    this.name = 'ReasoningProviderHttpError'
+    this.status = status
+    this.providerRequestId = providerRequestId
+  }
+}
+
 function extractJson(content: string) {
   const trimmed = content.trim()
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
@@ -88,8 +100,7 @@ function providerMaxOutputTokens(value: number | undefined) {
 }
 
 function providerHttpError(response: Response) {
-  const requestId = observedRequestId(response)
-  return new Error(`AI reasoning provider returned ${response.status}${requestId ? ` (request ${requestId})` : ''}.`)
+  return new ReasoningProviderHttpError(response.status, observedRequestId(response))
 }
 
 export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
