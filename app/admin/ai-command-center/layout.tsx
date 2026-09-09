@@ -4,6 +4,7 @@ const links = [
   { href: '/admin/ai-command-center', label: 'Overview' },
   { href: '/admin/ai-command-center/explorer', label: 'Explorer' },
   { href: '/admin/ai-command-center/traces', label: 'Trace timeline' },
+  { href: '/admin/ai-command-center/retrieval-evaluation', label: 'Retrieval evaluation' },
   { href: '/admin/ai-command-center/resource-controls', label: 'Resource controls' },
   { href: '/admin/ai-command-center/audit', label: 'Audit evidence' },
 ]
