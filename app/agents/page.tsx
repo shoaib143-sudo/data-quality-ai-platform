@@ -216,7 +216,7 @@ export default async function AgentsPage() {
                 </tbody>
               </table>
             </div>
-          ) : null}
+          )}
         </section>
 
         <p className="text-xs text-muted-foreground">
