@@ -17,14 +17,21 @@ for (const token of [
   'route_source',
   'route_reason',
   'routing_policy_id',
+  'routing_policy_reason',
   'evaluation_average_score',
   'inputTokens: result.usage?.inputTokens ?? null',
   'outputTokens: result.usage?.outputTokens ?? null',
   'provider_request_id: result.providerRequestId ?? null',
   'total_tokens: result.usage?.totalTokens ?? null',
   'modelName?: string | null',
+  'routingPolicyId?: string | null',
+  'routingPolicyReason?: string | null',
   'modelName: this.context.modelName ?? null',
+  'routing_policy_id: this.context.routingPolicyId ?? null',
+  'routing_policy_reason: this.context.routingPolicyReason ?? null',
   'modelName: decision.evidence?.modelName ?? null',
+  'routingPolicyId: decision.evidence?.routingPolicyId ?? null',
+  'routingPolicyReason: decision.evidence?.routingPolicyReason ?? null',
   "error_name: error instanceof Error ? error.name : 'UnknownError'",
   "error.name !== 'ReasoningProviderHttpError'",
   'sanitizedProviderHttpFailure(error)',
@@ -69,4 +76,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(` - ${failure}`))
   process.exit(1)
 }
-console.log('ADR-006 route, routed model identity, and sanitized model invocation telemetry contract passed.')
+console.log('ADR-006 route, routed policy/model identity, and sanitized model invocation telemetry contract passed.')
