@@ -25,6 +25,20 @@ export function createGovernanceResourceControlState() {
       if (error) throw new Error(`Unable to read AI execution-control events: ${error.message}`)
       return data ?? []
     },
+    async listRecentBudgetAdmissions(projectId) {
+      const { data, error } = await supabase.schema('governance').from('ai_resource_budget_request_admissions')
+        .select('id,project_id,policy_version_id,correlation_id,admitted_at')
+        .eq('project_id', projectId).order('admitted_at', { ascending: false }).limit(100)
+      if (error) throw new Error(`Unable to read AI resource budget admissions: ${error.message}`)
+      return data ?? []
+    },
+    async listRecentBudgetConcurrencyLeases(projectId) {
+      const { data, error } = await supabase.schema('governance').from('ai_resource_budget_concurrency_leases')
+        .select('id,admission_id,project_id,policy_version_id,correlation_id,acquired_at,expires_at,released_at')
+        .eq('project_id', projectId).order('acquired_at', { ascending: false }).limit(100)
+      if (error) throw new Error(`Unable to read AI resource budget concurrency leases: ${error.message}`)
+      return data ?? []
+    },
   }
   return new GovernedResourceControlState(persistence)
 }
