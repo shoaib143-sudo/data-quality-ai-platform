@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, CheckCircle2, Database, Gauge, Search, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Database, Gauge, Search, Settings, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react'
 import type { PersonaDefinition } from '@/lib/governance/personas'
 
 export type RoleLandingData = {
@@ -31,7 +31,7 @@ function status(confidence: number | null) {
 const surface = 'rounded-[28px] bg-[#eef3f8] shadow-[10px_10px_24px_rgba(163,177,198,0.34),-10px_-10px_24px_rgba(255,255,255,0.92)]'
 const inset = 'rounded-2xl bg-[#eef3f8] shadow-[inset_4px_4px_10px_rgba(163,177,198,0.22),inset_-4px_-4px_10px_rgba(255,255,255,0.88)]'
 
-export function RoleLandingPage({ persona, data, userLabel }: { persona: PersonaDefinition; data: RoleLandingData; userLabel: string }) {
+export function RoleLandingPage({ persona, data, userLabel, canAdmin = false }: { persona: PersonaDefinition; data: RoleLandingData; userLabel: string; canAdmin?: boolean }) {
   const current = status(data.confidence)
   return (
     <main className="min-h-screen bg-[#eef3f8] text-slate-900">
@@ -44,6 +44,7 @@ export function RoleLandingPage({ persona, data, userLabel }: { persona: Persona
           <nav className="mt-8 space-y-2">
             {persona.nav.map((item, index) => <Link key={item.href} href={item.href} className={`block rounded-2xl px-4 py-3 text-sm font-semibold transition ${index === 0 ? 'bg-blue-50 text-blue-700 shadow-[inset_3px_3px_7px_rgba(147,197,253,0.18),inset_-3px_-3px_7px_rgba(255,255,255,0.9)]' : 'text-slate-600 hover:bg-white/60 hover:text-slate-900'}`}>{item.label}</Link>)}
           </nav>
+          {canAdmin ? <div className="mt-5 border-t border-slate-300/70 pt-4"><Link href="/admin" className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-white/60 hover:text-slate-900"><Settings className="h-4 w-4"/>Administration</Link></div> : null}
           <div className={`${inset} mt-auto p-4`}>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Your perspective</p>
             <p className="mt-2 text-sm font-bold">{persona.title}</p>
@@ -58,7 +59,7 @@ export function RoleLandingPage({ persona, data, userLabel }: { persona: Persona
               <h1 className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">Good day, {userLabel}</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-500">{persona.primaryQuestion}</p>
             </div>
-            <div className={`${inset} flex min-w-[260px] items-center gap-3 px-4 py-3 text-slate-500`}><Search className="h-4 w-4"/><span className="text-sm">Search DataNexus...</span></div>
+            <div className="flex flex-wrap items-center gap-3">{canAdmin ? <Link href="/admin" className={`${inset} inline-flex items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-600 lg:hidden`}><Settings className="h-4 w-4"/>Administration</Link> : null}<div className={`${inset} flex min-w-[260px] items-center gap-3 px-4 py-3 text-slate-500`}><Search className="h-4 w-4"/><span className="text-sm">Search DataNexus...</span></div></div>
           </header>
 
           <section className={`${surface} relative mt-7 overflow-hidden p-7 sm:p-8`}>
