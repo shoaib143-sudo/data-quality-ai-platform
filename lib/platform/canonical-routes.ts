@@ -28,6 +28,12 @@ export const canonicalRoutes = {
     return canonicalResourcePath('/agents/runs', runId)
   },
   datasets: '/datasets',
+  datasetEdit(datasetId: string) {
+    return `${canonicalResourcePath('/datasets/dataset', datasetId)}/edit`
+  },
+  sourceEdit(sourceId: string) {
+    return canonicalResourcePath('/datasets/edit', sourceId)
+  },
   dataQuality: '/data-quality',
   monitoring: '/monitoring',
   pricingAuthority: '/pricing-authority',
