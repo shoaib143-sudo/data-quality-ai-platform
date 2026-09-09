@@ -23,7 +23,7 @@ export async function resolveLandingAccess(userId: string): Promise<LandingAcces
   const organizationId = membershipResult.data?.organization_id ?? null
   const organizationRole = membershipResult.data?.role ? String(membershipResult.data.role) : null
 
-  let roleLabels: string[] = []
+  let roleKeys: string[] = []
   if (organizationId) {
     const projectsResult = await admin.schema('app').from('projects').select('id').eq('organization_id', organizationId)
     if (projectsResult.error) throw new Error(`Unable to resolve organization projects: ${projectsResult.error.message}`)
@@ -36,18 +36,11 @@ export async function resolveLandingAccess(userId: string): Promise<LandingAcces
         .eq('active', true)
         .in('project_id', projectIds)
       if (bindingsResult.error) throw new Error(`Unable to resolve governance roles: ${bindingsResult.error.message}`)
-
-      const roleKeys = (bindingsResult.data ?? []).map(row => String(row.role_key))
-      roleLabels = [...roleKeys]
-      if (roleKeys.length) {
-        const rolesResult = await admin.schema('governance').from('access_roles').select('role_key,name').in('role_key', roleKeys)
-        if (rolesResult.error) throw new Error(`Unable to resolve governance role names: ${rolesResult.error.message}`)
-        roleLabels.push(...(rolesResult.data ?? []).map(row => String(row.name)))
-      }
+      roleKeys = (bindingsResult.data ?? []).map(row => String(row.role_key))
     }
   }
 
-  const persona = resolvePersonaFromRoleLabels(roleLabels, organizationRole)
+  const persona = resolvePersonaFromRoleLabels(roleKeys, organizationRole)
   let enabled = true
   if (organizationId) {
     const settingResult = await admin.schema('governance').from('landing_page_settings')
