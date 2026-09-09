@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
+
 export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDefinitionId, ready }: { projectId: string; datasetId: string; datasetVersionId: string; agentDefinitionId: string | null; ready: boolean }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -39,7 +41,7 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
   }
 
   return <div className="mt-0 flex flex-wrap items-center justify-end gap-3">
-    <Link href={`/datasets/dataset/${encodeURIComponent(datasetId)}/edit`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
+    <Link href={canonicalRoutes.datasetEdit(datasetId)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
       <Pencil className="h-3.5 w-3.5" /> Edit dataset
     </Link>
     {ready && agentDefinitionId ? <button type="button" onClick={() => void runProfiling()} disabled={busy} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
