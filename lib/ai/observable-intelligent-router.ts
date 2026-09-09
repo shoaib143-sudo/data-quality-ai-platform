@@ -14,6 +14,7 @@ type ObservableReasoningContext = {
   projectId: string
   aiSystemId?: string | null
   aiSystemVersionId?: string | null
+  modelName?: string | null
   traceContext?: TelemetryTraceContext | null
   routeSource: string
   routeReason: string
@@ -90,6 +91,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
           operation: request.task,
           status: 'ERROR',
           providerId: this.provider.id,
+          modelName: this.context.modelName ?? null,
           aiSystemId: this.context.aiSystemId ?? null,
           aiSystemVersionId: this.context.aiSystemVersionId ?? null,
           traceContext: this.context.traceContext ?? null,
@@ -162,6 +164,7 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
         projectId: context.projectId,
         aiSystemId: decision.evidence?.aiSystemId ?? null,
         aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null,
+        modelName: decision.evidence?.modelName ?? null,
         traceContext: context.traceContext ?? null,
         routeSource: decision.source,
         routeReason: decision.reason,
