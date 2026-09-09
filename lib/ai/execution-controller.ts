@@ -24,12 +24,19 @@ export type ExecutionControlRequest = {
   agentDefinitionId?: string | null
 }
 
-export type ExecutionControlDecision = {
-  allowed: boolean
-  decision: 'ALLOW_NO_CONTROL' | 'ALLOW_RESUMED' | 'DENY_PAUSED' | 'DENY_KILLED'
-  blockingControls: ExecutionControlRow[]
-  applicableControls: ExecutionControlRow[]
-}
+export type ExecutionControlDecision =
+  | {
+      allowed: true
+      decision: 'ALLOW_NO_CONTROL' | 'ALLOW_RESUMED'
+      blockingControls: []
+      applicableControls: ExecutionControlRow[]
+    }
+  | {
+      allowed: false
+      decision: 'DENY_PAUSED' | 'DENY_KILLED'
+      blockingControls: ExecutionControlRow[]
+      applicableControls: ExecutionControlRow[]
+    }
 
 export class ExecutionControlDeniedError extends Error {
   readonly code = 'AI_EXECUTION_CONTROL_BLOCKED'
