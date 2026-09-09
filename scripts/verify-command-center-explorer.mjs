@@ -53,9 +53,16 @@ const tracePage = requireTokens('app/admin/ai-command-center/traces/page.tsx', [
   'readGovernedTraceTimeline(selectedProjectId)',
   'Read-only correlation of canonical AI telemetry carrying W3C trace IDs',
   'whitelisted evidence projection only',
+  'admission evidence describes execution accounting against resource-budget controls, not governance approval',
   'does not grant governance authority',
+  'event.correlationId',
   'event.invocationEvidence.routingPolicyId',
   'event.invocationEvidence.requestedMaxOutputTokens',
+  'event.invocationEvidence.resourceBudgetAdmissionReason',
+  'event.invocationEvidence.resourceBudgetAdmissionId',
+  'event.invocationEvidence.resourceBudgetLeaseId',
+  'event.invocationEvidence.resourceBudgetRequestCountLastMinute',
+  'event.invocationEvidence.resourceBudgetActiveConcurrency',
   'event.invocationEvidence.providerRequestId',
   'event.invocationEvidence.providerHttpStatus',
 ])
@@ -65,6 +72,7 @@ const traceAdapter = requireTokens('lib/ai/governance-trace-timeline.ts', [
   '.not(\'trace_id\', \'is\', null)',
   'groupGovernedTraceEvents',
   'trace_id,span_id,parent_span_id',
+  'correlation_id',
   'attributes,observed_at',
   'projectTraceInvocationEvidence(row.attributes)',
   'invocationEvidence: TraceInvocationEvidence',
@@ -73,12 +81,24 @@ const traceAdapter = requireTokens('lib/ai/governance-trace-timeline.ts', [
 const traceEvidence = requireTokens('lib/ai/trace-invocation-evidence.ts', [
   'projectTraceInvocationEvidence',
   'hasTraceInvocationEvidence',
+  'TraceBudgetAdmissionReason',
+  "'ADMITTED'",
+  "'ALREADY_ADMITTED'",
+  "'POLICY_NOT_CURRENT'",
+  "'POLICY_DISABLED'",
+  "'RATE_LIMIT'",
+  "'CONCURRENCY_LIMIT'",
   'route_source',
   'route_reason',
   'routing_policy_id',
   'routing_policy_reason',
   'provider_request_id',
   'requested_max_output_tokens',
+  'resource_budget_admission_reason',
+  'resource_budget_admission_id',
+  'resource_budget_lease_id',
+  'resource_budget_request_count_last_minute',
+  'resource_budget_active_concurrency',
   'provider_http_status',
   'total_tokens',
 ])
@@ -103,12 +123,15 @@ for (const forbidden of [
   'completion',
   'hidden_reasoning',
   'api_key',
+  'admission_secret',
 ]) {
   if (tracePage.includes(forbidden)) failures.push(`Trace page must not expose raw/arbitrary telemetry attributes; found ${forbidden}`)
 }
 
 if (!traceAdapter.includes(".select('id,project_id,trace_id,span_id,parent_span_id,event_type,operation,status,provider_id,model_name,agent_run_id,correlation_id,latency_ms,input_tokens,output_tokens,cost_usd,attributes,observed_at')")) failures.push('Trace adapter must select attributes only inside the governance adapter for whitelisted projection.')
 if (traceAdapter.includes('attributes: row.attributes')) failures.push('Trace adapter must never return raw telemetry attributes to the UI.')
+if (traceEvidence.includes('...source')) failures.push('Trace invocation projection must never spread arbitrary telemetry attributes.')
+if (!traceEvidence.includes('BUDGET_ADMISSION_REASONS.has')) failures.push('Budget admission reason must be enum-whitelisted before projection.')
 if (page.includes('createAdminClient')) failures.push('Explorer page must not introduce a new service-role read path; reuse the authorized canonical Command Center state adapter.')
 if (tracePage.includes('createAdminClient')) failures.push('Trace page must authorize before using the encapsulated governance trace adapter.')
 if (!page.includes("authorizeProject(user.id, selectedProjectId, 'admin.manage')")) failures.push('Explorer must require admin.manage before loading canonical evidence.')
@@ -120,4 +143,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('ADR-006 Command Center Explorer, trace timeline, and whitelisted invocation evidence boundaries verified.')
+console.log('ADR-006 Command Center Explorer, trace timeline, and whitelisted budget-admission invocation evidence boundaries verified.')

@@ -40,12 +40,18 @@ const invocationEvidence = projectTraceInvocationEvidence({
   governance_max_output_tokens: 256,
   effective_max_output_tokens: 256,
   resource_budget_policy_id: 'budget-policy-1',
+  resource_budget_admission_reason: 'ADMITTED',
+  resource_budget_admission_id: 'admission-1',
+  resource_budget_lease_id: 'lease-1',
+  resource_budget_request_count_last_minute: 3,
+  resource_budget_active_concurrency: 1,
   provider_http_status: 429,
   total_tokens: 150,
   prompt: 'must never escape the projection',
   completion: 'must never escape the projection',
   hidden_reasoning: 'must never escape the projection',
   api_key: 'must never escape the projection',
+  admission_secret: 'must never escape the projection',
 })
 
 assert.deepEqual(invocationEvidence, {
@@ -58,12 +64,28 @@ assert.deepEqual(invocationEvidence, {
   governanceMaxOutputTokens: 256,
   effectiveMaxOutputTokens: 256,
   resourceBudgetPolicyId: 'budget-policy-1',
+  resourceBudgetAdmissionReason: 'ADMITTED',
+  resourceBudgetAdmissionId: 'admission-1',
+  resourceBudgetLeaseId: 'lease-1',
+  resourceBudgetRequestCountLastMinute: 3,
+  resourceBudgetActiveConcurrency: 1,
   providerHttpStatus: 429,
   totalTokens: 150,
 })
 assert.equal(hasTraceInvocationEvidence(invocationEvidence), true)
 assert.equal(JSON.stringify(invocationEvidence).includes('must never escape'), false)
 assert.equal(JSON.stringify(invocationEvidence).includes('api_key'), false)
+assert.equal(JSON.stringify(invocationEvidence).includes('admission_secret'), false)
+
+const deniedEvidence = projectTraceInvocationEvidence({
+  resource_budget_admission_reason: 'RATE_LIMIT',
+  resource_budget_request_count_last_minute: 10,
+  resource_budget_active_concurrency: 0,
+})
+assert.equal(deniedEvidence.resourceBudgetAdmissionReason, 'RATE_LIMIT')
+assert.equal(deniedEvidence.resourceBudgetRequestCountLastMinute, 10)
+assert.equal(deniedEvidence.resourceBudgetActiveConcurrency, 0)
+assert.equal(hasTraceInvocationEvidence(deniedEvidence), true)
 
 const invalidEvidence = projectTraceInvocationEvidence({
   route_source: 42,
@@ -72,6 +94,11 @@ const invalidEvidence = projectTraceInvocationEvidence({
   governance_max_output_tokens: -2,
   effective_max_output_tokens: 1.5,
   resource_budget_policy_id: '',
+  resource_budget_admission_reason: 'ALLOW_EVERYTHING',
+  resource_budget_admission_id: '',
+  resource_budget_lease_id: 42,
+  resource_budget_request_count_last_minute: -1,
+  resource_budget_active_concurrency: 1.5,
   provider_http_status: 99,
   total_tokens: 1.5,
 })
@@ -86,8 +113,13 @@ assert.deepEqual(invalidEvidence, {
   governanceMaxOutputTokens: null,
   effectiveMaxOutputTokens: null,
   resourceBudgetPolicyId: null,
+  resourceBudgetAdmissionReason: null,
+  resourceBudgetAdmissionId: null,
+  resourceBudgetLeaseId: null,
+  resourceBudgetRequestCountLastMinute: null,
+  resourceBudgetActiveConcurrency: null,
   providerHttpStatus: null,
   totalTokens: null,
 })
 
-console.log('ADR-006 Command Center Explorer and governed output-budget trace projection verified.')
+console.log('ADR-006 Command Center Explorer and governed budget-admission trace projection verified.')
