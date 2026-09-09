@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createGovernanceIntelligentRouter } from './governance-intelligent-router'
 
@@ -6,6 +8,7 @@ type InvestigationRisk = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type InvestigationModelContext = {
   projectId?: string | null
   risk?: InvestigationRisk
+  executionCorrelationId?: string | null
 }
 
 const PROFILING_INVESTIGATION_SYSTEM_PROMPT = [
@@ -65,9 +68,11 @@ export async function enrichInvestigationWithModel(
 ) {
   const projectId = await resolveProjectId(input, context)
   if (!projectId) return null
+  const executionCorrelationId = text(context.executionCorrelationId) || randomUUID()
 
   const decision = await createGovernanceIntelligentRouter().route({
     projectId,
+    executionCorrelationId,
     task: 'profiling_investigation',
     risk: investigationRisk(input, context),
   })
@@ -89,6 +94,7 @@ export async function enrichInvestigationWithModel(
       aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null,
       systemKey: decision.evidence?.systemKey ?? null,
       routingPolicyId: decision.evidence?.routingPolicyId ?? null,
+      executionCorrelationId,
     },
   }
 }
