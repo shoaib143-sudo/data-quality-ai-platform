@@ -16,10 +16,15 @@ const { GovernedResourceControlState, projectOutputBudgetReadiness } = await imp
 const projectId = 'project-a'
 const otherProjectId = 'project-b'
 const projectBudget = { id:'b1', project_id:projectId, scope_type:'PROJECT', scope_key:'PROJECT', enabled:true, max_input_tokens_per_request:1000, max_output_tokens_per_request:500, max_cost_usd_per_request:'1.25', max_cost_usd_per_day:'10', max_requests_per_minute:20, max_concurrent_executions:2, reviewer_user_id:'u1', reviewer_capability:'policy.approve', review_note:'approved budget', created_at:'2026-09-09T00:00:00Z' }
+const projectPricing = { id:'p1', project_id:projectId, provider:'provider-a', model_id:'model-a', pricing_version:'2026-09', currency:'USD', price_unit_tokens:'1000000', input_price_per_million_tokens:'1.250000000000', output_price_per_million_tokens:'5.000000000000', effective_from:'2026-09-09T00:00:00Z', effective_to:null, source_reference:'reviewed provider schedule', source_uri:'https://example.test/pricing', reviewed_at:'2026-09-09T00:00:00Z', reviewer_capability:'policy.approve', review_note:'reviewed pricing evidence' }
 const stateReader = new GovernedResourceControlState({
   async listEffectiveBudgets() { return [
     projectBudget,
     { id:'b2', project_id:otherProjectId, scope_type:'PROJECT', scope_key:'PROJECT', enabled:true, max_input_tokens_per_request:9999, max_output_tokens_per_request:null, max_cost_usd_per_request:null, max_cost_usd_per_day:null, max_requests_per_minute:null, max_concurrent_executions:null, reviewer_user_id:'u2', reviewer_capability:'policy.approve', review_note:'other', created_at:'2026-09-09T00:00:00Z' },
+  ] },
+  async listEffectiveModelPricing() { return [
+    projectPricing,
+    { ...projectPricing, id:'p2', project_id:otherProjectId, model_id:'other-model' },
   ] },
   async listEffectiveExecutionControls() { return [
     { id:'c1', project_id:projectId, scope_type:'PROJECT', scope_key:'PROJECT', control_action:'KILL', effective_state:'KILL', reason:'incident', actor_user_id:'u1', actor_capability:'admin.manage', correlation_id:null, created_at:'2026-09-09T00:00:00Z' },
@@ -43,6 +48,9 @@ const stateReader = new GovernedResourceControlState({
 
 const state = await stateReader.read(projectId)
 assert.equal(state.budgets.length, 1)
+assert.equal(state.modelPricing.length, 1)
+assert.equal(state.modelPricing[0].id, 'p1')
+assert.equal(state.modelPricing[0].input_price_per_million_tokens, '1.250000000000')
 assert.equal(state.executionControls.length, 1)
 assert.equal(state.executionControlEvents.length, 1)
 assert.equal(state.budgetAdmissions.length, 1)
@@ -50,6 +58,7 @@ assert.equal(state.budgetConcurrencyLeases.length, 3)
 assert.equal(state.activeBudgetConcurrencyLeases.length, 1)
 assert.equal(state.activeBudgetConcurrencyLeases[0].id, 'l1')
 assert.equal(state.counts.effectiveBudgets, 1)
+assert.equal(state.counts.effectiveModelPricing, 1)
 assert.equal(state.counts.enabledBudgets, 1)
 assert.equal(state.counts.killedScopes, 1)
 assert.equal(state.counts.runningScopes, 0)
@@ -57,8 +66,10 @@ assert.equal(state.counts.recentBudgetAdmissions, 1)
 assert.equal(state.counts.activeBudgetConcurrencyLeases, 1)
 assert.deepEqual(state.projectOutputBudget, { status:'READY', policyId:'b1', maxOutputTokens:500 })
 assert.equal(state.controls.budgetMutationEnabled, false)
+assert.equal(state.controls.pricingMutationEnabled, false)
 assert.equal(state.controls.emergencyMutationEnabled, false)
 assert.equal(state.controls.admissionMutationEnabled, false)
+assert.equal(state.controls.costEnforcementEnabled, false)
 
 assert.deepEqual(projectOutputBudgetReadiness([]), { status:'NOT_CONFIGURED', policyId:null, maxOutputTokens:null })
 assert.deepEqual(projectOutputBudgetReadiness([{ ...projectBudget, enabled:false }]), { status:'DISABLED', policyId:'b1', maxOutputTokens:null })
@@ -66,4 +77,4 @@ assert.deepEqual(projectOutputBudgetReadiness([{ ...projectBudget, max_output_to
 assert.deepEqual(projectOutputBudgetReadiness([{ ...projectBudget, scope_type:'AI_SYSTEM', scope_key:'system-1' }]), { status:'NOT_CONFIGURED', policyId:null, maxOutputTokens:null }, 'AI_SYSTEM budget must not be treated as project output-budget authority')
 assert.deepEqual(projectOutputBudgetReadiness([{ ...projectBudget, scope_type:'AGENT', scope_key:'agent-1' }]), { status:'NOT_CONFIGURED', policyId:null, maxOutputTokens:null }, 'AGENT budget must not be treated as project output-budget authority')
 await assert.rejects(() => stateReader.read('   '), /projectId is required/)
-console.log('Resource-control Command Center budget, admission, lease, and project readiness checks passed.')
+console.log('Resource-control Command Center budget, pricing, admission, lease, and project readiness checks passed.')
