@@ -9,6 +9,8 @@ export type ReasoningRequest = {
   system: string
   input: Record<string, unknown>
   temperature?: number
+  /** Optional caller-owned provider-side output-token ceiling. This is not a budget-policy decision by itself. */
+  maxOutputTokens?: number
 }
 
 export type ReasoningUsage = {
@@ -79,6 +81,12 @@ function observedRequestId(response: Response) {
   return undefined
 }
 
+function providerMaxOutputTokens(value: number | undefined) {
+  if (value == null) return undefined
+  if (!Number.isInteger(value) || value <= 0) throw new Error('maxOutputTokens must be a positive integer')
+  return value
+}
+
 export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
   readonly id = 'openai_compatible'
   private readonly config: OpenAICompatibleConfig
@@ -89,6 +97,7 @@ export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
 
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
     const startedAt = performance.now()
+    const maxOutputTokens = providerMaxOutputTokens(request.maxOutputTokens)
     const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -99,6 +108,7 @@ export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
         model: this.config.model,
         temperature: request.temperature ?? 0,
         response_format: { type: 'json_object' },
+        ...(maxOutputTokens != null ? { max_tokens: maxOutputTokens } : {}),
         messages: [
           { role: 'system', content: request.system },
           { role: 'user', content: JSON.stringify(request.input) },
