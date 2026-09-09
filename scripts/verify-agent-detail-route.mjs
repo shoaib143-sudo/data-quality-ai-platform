@@ -2,9 +2,12 @@ import fs from 'node:fs'
 
 const listPage = fs.readFileSync('app/agents/page.tsx', 'utf8')
 const detailPage = fs.readFileSync('app/agents/[agentKey]/[version]/page.tsx', 'utf8')
+const routes = fs.readFileSync('lib/platform/canonical-routes.ts', 'utf8')
 
 const checks = [
-  ['agent list links to versioned detail route', listPage.includes('/agents/${encodeURIComponent(agent.agent_key)}/${encodeURIComponent(agent.version)}')],
+  ['agent list uses canonical route builder', listPage.includes('canonicalRoutes.agent(agent.agent_key, agent.version)')],
+  ['agent list uses canonical run route builder', listPage.includes('canonicalRoutes.agentRun(run.id)')],
+  ['agent list has no inline versioned agent path construction', !listPage.includes('/agents/${encodeURIComponent(agent.agent_key)')],
   ['detail route is authenticated', detailPage.includes('await requireUser()')],
   ['detail lookup pins agent key', detailPage.includes(".eq('agent_key', agentKey)")],
   ['detail lookup pins version', detailPage.includes(".eq('version', version)")],
@@ -12,6 +15,9 @@ const checks = [
   ['tools are scoped to exact agent definition', detailPage.includes(".eq('agent_definition_id', agent.id)")],
   ['runs are scoped to exact agent definition', detailPage.match(/\.eq\('agent_definition_id', agent\.id\)/g)?.length === 2],
   ['detail page remains read-only', !/\.(insert|update|delete|upsert)\s*\(/.test(detailPage)],
+  ['detail page uses canonical run links', detailPage.includes('canonicalRoutes.agentRun(run.id)')],
+  ['canonical agent route includes key and version', routes.includes("canonicalResourcePath('/agents', agentKey, version)")],
+  ['canonical run route uses immutable run identity', routes.includes("canonicalResourcePath('/agents/runs', runId)")],
   ['detail page exposes registry metadata', detailPage.includes('{agent.name} v{agent.version}') && detailPage.includes('{agent.agent_key}')],
   ['detail page exposes registered tools', detailPage.includes('Registered tools')],
   ['detail page exposes recent runs', detailPage.includes('Recent runs')],
