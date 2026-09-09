@@ -11,13 +11,14 @@ const transpiled = ts.transpileModule(source, { compilerOptions: { module: ts.Mo
 const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'resource-control-command-center-state-'))
 const modulePath = path.join(dir, 'resource-control-command-center-state.mjs')
 await fs.writeFile(modulePath, transpiled)
-const { GovernedResourceControlState } = await import(pathToFileURL(modulePath).href)
+const { GovernedResourceControlState, projectOutputBudgetReadiness } = await import(pathToFileURL(modulePath).href)
 
 const projectId = 'project-a'
 const otherProjectId = 'project-b'
+const projectBudget = { id:'b1', project_id:projectId, scope_type:'PROJECT', scope_key:'PROJECT', enabled:true, max_input_tokens_per_request:1000, max_output_tokens_per_request:500, max_cost_usd_per_request:'1.25', max_cost_usd_per_day:'10', max_requests_per_minute:20, max_concurrent_executions:2, reviewer_user_id:'u1', reviewer_capability:'policy.approve', review_note:'approved budget', created_at:'2026-09-09T00:00:00Z' }
 const stateReader = new GovernedResourceControlState({
   async listEffectiveBudgets() { return [
-    { id:'b1', project_id:projectId, scope_type:'PROJECT', scope_key:'PROJECT', enabled:true, max_input_tokens_per_request:1000, max_output_tokens_per_request:500, max_cost_usd_per_request:'1.25', max_cost_usd_per_day:'10', max_requests_per_minute:20, max_concurrent_executions:2, reviewer_user_id:'u1', reviewer_capability:'policy.approve', review_note:'approved budget', created_at:'2026-09-09T00:00:00Z' },
+    projectBudget,
     { id:'b2', project_id:otherProjectId, scope_type:'PROJECT', scope_key:'PROJECT', enabled:true, max_input_tokens_per_request:9999, max_output_tokens_per_request:null, max_cost_usd_per_request:null, max_cost_usd_per_day:null, max_requests_per_minute:null, max_concurrent_executions:null, reviewer_user_id:'u2', reviewer_capability:'policy.approve', review_note:'other', created_at:'2026-09-09T00:00:00Z' },
   ] },
   async listEffectiveExecutionControls() { return [
@@ -38,7 +39,14 @@ assert.equal(state.counts.effectiveBudgets, 1)
 assert.equal(state.counts.enabledBudgets, 1)
 assert.equal(state.counts.killedScopes, 1)
 assert.equal(state.counts.runningScopes, 0)
+assert.deepEqual(state.projectOutputBudget, { status:'READY', policyId:'b1', maxOutputTokens:500 })
 assert.equal(state.controls.budgetMutationEnabled, false)
 assert.equal(state.controls.emergencyMutationEnabled, false)
+
+assert.deepEqual(projectOutputBudgetReadiness([]), { status:'NOT_CONFIGURED', policyId:null, maxOutputTokens:null })
+assert.deepEqual(projectOutputBudgetReadiness([{ ...projectBudget, enabled:false }]), { status:'DISABLED', policyId:'b1', maxOutputTokens:null })
+assert.deepEqual(projectOutputBudgetReadiness([{ ...projectBudget, max_output_tokens_per_request:null }]), { status:'NO_OUTPUT_LIMIT', policyId:'b1', maxOutputTokens:null })
+assert.deepEqual(projectOutputBudgetReadiness([{ ...projectBudget, scope_type:'AI_SYSTEM', scope_key:'system-1' }]), { status:'NOT_CONFIGURED', policyId:null, maxOutputTokens:null }, 'AI_SYSTEM budget must not be treated as project output-budget authority')
+assert.deepEqual(projectOutputBudgetReadiness([{ ...projectBudget, scope_type:'AGENT', scope_key:'agent-1' }]), { status:'NOT_CONFIGURED', policyId:null, maxOutputTokens:null }, 'AGENT budget must not be treated as project output-budget authority')
 await assert.rejects(() => stateReader.read('   '), /projectId is required/)
-console.log('Resource-control Command Center behavioral checks passed.')
+console.log('Resource-control Command Center behavioral and project output-budget readiness checks passed.')
