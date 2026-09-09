@@ -1,7 +1,8 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { isPersonaSlug, personas } from '@/lib/governance/personas'
+import { resolveLandingAccess, isLandingPageEnabled } from '@/lib/governance/landing-access'
 import { RoleLandingPage, type RoleLandingData } from '@/components/governance/role-landing-page'
 
 type Dataset = { id: string; business_domain: string | null }
@@ -18,6 +19,12 @@ export default async function PersonaHomePage({ params }: { params: Promise<{ pe
   if (!isPersonaSlug(slug)) notFound()
 
   const user = await requireUser()
+  const access = await resolveLandingAccess(user.id)
+
+  if (slug !== access.persona) redirect('/home')
+  const enabled = await isLandingPageEnabled(access.organizationId, slug)
+  if (!enabled) redirect('/home/unavailable')
+
   const supabase = await createClient()
 
   const [datasetsResult, versionsResult, runsResult, scoresResult, findingsResult, sourcesResult, qualityRunsResult, alertsResult] = await Promise.all([
