@@ -1,5 +1,6 @@
 import { EnvironmentModelGateway } from './model-gateway'
 import { createGovernanceModelRegistry } from './governance-model-registry'
+import { createGovernanceReasoningBudgetPolicyProvider } from './governance-reasoning-budget-policy'
 import { createGovernanceRoutingPolicyProvider } from './governance-routing-policy'
 import { createGovernanceTelemetryProvider } from './governance-telemetry-provider'
 import { ObservableIntelligentRouter } from './observable-intelligent-router'
@@ -16,5 +17,9 @@ export function createGovernanceIntelligentRouter(): IntelligentModelRouter {
     createProvider: createReasoningProvider,
   })
 
-  return new ObservableIntelligentRouter(router, createGovernanceTelemetryProvider())
+  return new ObservableIntelligentRouter(
+    router,
+    createGovernanceTelemetryProvider(),
+    createGovernanceReasoningBudgetPolicyProvider(),
+  )
 }
