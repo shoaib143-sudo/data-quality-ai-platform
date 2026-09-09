@@ -1,0 +1,30 @@
+name: Model Pricing Authority
+
+on:
+  push:
+    branches: [main, feat/adr006-model-pricing-authority]
+    paths:
+      - 'supabase/migrations/20260909134000_adr006_model_pricing_authority.sql'
+      - 'scripts/verify-model-pricing-authority.mjs'
+      - '.github/workflows/model-pricing-authority.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20260909134000_adr006_model_pricing_authority.sql'
+      - 'scripts/verify-model-pricing-authority.mjs'
+      - '.github/workflows/model-pricing-authority.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  adr006-model-pricing-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify append-only governed model pricing authority
+        run: node scripts/verify-model-pricing-authority.mjs
