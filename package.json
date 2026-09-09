@@ -21,7 +21,7 @@
     "verify:command-center-explorer": "node scripts/verify-command-center-explorer.mjs && node --experimental-strip-types scripts/test-command-center-explorer.mjs",
     "verify:retrieval-evaluation-command-center": "node scripts/verify-retrieval-evaluation-command-center.mjs",
     "verify:command-center": "node scripts/verify-command-center-state.mjs && node scripts/test-command-center-state.mjs && node scripts/test-audit-command-center-state.mjs && node scripts/verify-resource-control-command-center.mjs && node scripts/test-resource-control-command-center-state.mjs && pnpm run verify:command-center-explorer && pnpm run verify:retrieval-evaluation-command-center",
-    "verify:execution-controller": "node scripts/verify-execution-controller.mjs && node --experimental-strip-types scripts/test-execution-controller.mjs",
+    "verify:execution-controller": "node scripts/verify-execution-controller.mjs && node --experimental-strip-types scripts/test-execution-controller.mjs && node scripts/verify-resource-budget-admission.mjs",
     "verify:telemetry-provider": "node scripts/verify-telemetry-provider.mjs && node --experimental-strip-types scripts/test-telemetry-provider.mjs",
     "verify:retrieval-benchmark-api": "node scripts/verify-retrieval-benchmark-api.mjs",
     "verify:evaluation-engine": "node scripts/verify-evaluation-engine.mjs && node --experimental-strip-types scripts/test-evaluation-engine.mjs && node --experimental-strip-types scripts/test-retrieval-evaluation.mjs && pnpm run verify:retrieval-benchmark-api",
