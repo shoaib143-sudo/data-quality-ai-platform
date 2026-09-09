@@ -82,6 +82,6 @@ export async function runRetrievalBenchmark(request: RetrievalBenchmarkRequest):
     caseCount: rankedCases.length,
     k,
     summary: recorded.summary,
-    evaluationResultIds: recorded.receipts.map((receipt) => receipt.evaluationResultId),
+    evaluationResultIds: recorded.receipts.map((receipt) => receipt.resultId),
   }
 }
