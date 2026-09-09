@@ -52,7 +52,12 @@ const tracePage = requireTokens('app/admin/ai-command-center/traces/page.tsx', [
   "authorizeProject(user.id, selectedProjectId, 'admin.manage')",
   'readGovernedTraceTimeline(selectedProjectId)',
   'Read-only correlation of canonical AI telemetry carrying W3C trace IDs',
+  'whitelisted evidence projection only',
   'does not grant governance authority',
+  'event.invocationEvidence.routingPolicyId',
+  'event.invocationEvidence.requestedMaxOutputTokens',
+  'event.invocationEvidence.providerRequestId',
+  'event.invocationEvidence.providerHttpStatus',
 ])
 
 const traceAdapter = requireTokens('lib/ai/governance-trace-timeline.ts', [
@@ -60,6 +65,22 @@ const traceAdapter = requireTokens('lib/ai/governance-trace-timeline.ts', [
   '.not(\'trace_id\', \'is\', null)',
   'groupGovernedTraceEvents',
   'trace_id,span_id,parent_span_id',
+  'attributes,observed_at',
+  'projectTraceInvocationEvidence(row.attributes)',
+  'invocationEvidence: TraceInvocationEvidence',
+])
+
+const traceEvidence = requireTokens('lib/ai/trace-invocation-evidence.ts', [
+  'projectTraceInvocationEvidence',
+  'hasTraceInvocationEvidence',
+  'route_source',
+  'route_reason',
+  'routing_policy_id',
+  'routing_policy_reason',
+  'provider_request_id',
+  'requested_max_output_tokens',
+  'provider_http_status',
+  'total_tokens',
 ])
 
 for (const [path, source] of [
@@ -68,12 +89,26 @@ for (const [path, source] of [
   ['app/admin/ai-command-center/explorer/command-center-explorer.tsx', client],
   ['app/admin/ai-command-center/traces/page.tsx', tracePage],
   ['lib/ai/governance-trace-timeline.ts', traceAdapter],
+  ['lib/ai/trace-invocation-evidence.ts', traceEvidence],
 ]) {
   for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(', 'fetch(', 'method: \'POST\'', 'method: "POST"']) {
     if (source.includes(forbidden)) failures.push(`${path}: interactive Command Center must remain read-only; found ${forbidden}`)
   }
 }
 
+for (const forbidden of [
+  'event.attributes',
+  'JSON.stringify(event',
+  'prompt',
+  'completion',
+  'hidden_reasoning',
+  'api_key',
+]) {
+  if (tracePage.includes(forbidden)) failures.push(`Trace page must not expose raw/arbitrary telemetry attributes; found ${forbidden}`)
+}
+
+if (!traceAdapter.includes(".select('id,project_id,trace_id,span_id,parent_span_id,event_type,operation,status,provider_id,model_name,agent_run_id,correlation_id,latency_ms,input_tokens,output_tokens,cost_usd,attributes,observed_at')")) failures.push('Trace adapter must select attributes only inside the governance adapter for whitelisted projection.')
+if (traceAdapter.includes('attributes: row.attributes')) failures.push('Trace adapter must never return raw telemetry attributes to the UI.')
 if (page.includes('createAdminClient')) failures.push('Explorer page must not introduce a new service-role read path; reuse the authorized canonical Command Center state adapter.')
 if (tracePage.includes('createAdminClient')) failures.push('Trace page must authorize before using the encapsulated governance trace adapter.')
 if (!page.includes("authorizeProject(user.id, selectedProjectId, 'admin.manage')")) failures.push('Explorer must require admin.manage before loading canonical evidence.')
@@ -85,4 +120,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('ADR-006 Command Center Explorer and trace timeline read-only authorization boundaries verified.')
+console.log('ADR-006 Command Center Explorer, trace timeline, and whitelisted invocation evidence boundaries verified.')
