@@ -9,10 +9,12 @@ const rolePriority: readonly { roleKey: string; persona: PersonaSlug }[] = [
   { roleKey: 'DATA_GOVERNANCE_SPECIALIST', persona: 'data-governance-specialist' },
   { roleKey: 'COMPLIANCE_RISK_OFFICER', persona: 'compliance-risk-officer' },
   { roleKey: 'PRIVACY_SECURITY_OFFICER', persona: 'privacy-security-officer' },
+  { roleKey: 'METADATA_ANALYST', persona: 'metadata-analyst' },
+  { roleKey: 'DATA_QUALITY_ANALYST', persona: 'data-quality-analyst' },
   { roleKey: 'DATA_CUSTODIAN', persona: 'data-custodian' },
   { roleKey: 'SOURCE_SYSTEM_OWNER', persona: 'source-system-owner' },
   { roleKey: 'BUSINESS_USER', persona: 'business-user' },
-  { roleKey: 'QUALITY_MANAGER', persona: 'data-steward' },
+  { roleKey: 'QUALITY_MANAGER', persona: 'data-quality-analyst' },
   { roleKey: 'POLICY_APPROVER', persona: 'data-governance-specialist' },
   { roleKey: 'READ_ONLY', persona: 'business-user' },
 ]
