@@ -34,7 +34,11 @@ export function AdminManager({ organizations, members, projects, currentUserId }
       const payload=await response.json().catch(()=>({}))
       if(!response.ok) throw new Error(payload.error??'Membership operation failed.')
       const text=method==='POST'
-        ? (payload.invitationSent?'Invitation sent and membership created.':'Membership created.')
+        ? payload.invitationSent
+          ? 'Invitation sent and membership created. The invitation opens the password setup flow.'
+          : payload.activationRequired
+            ? 'Membership created. This account already exists but has not signed in yet. The user must activate access from the sign-in or password reset flow.'
+            : 'Membership created.'
         : method==='DELETE'
           ? 'Organization membership removed.'
           : 'Organization membership updated.'
@@ -78,7 +82,7 @@ export function AdminManager({ organizations, members, projects, currentUserId }
     <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <form onSubmit={(event)=>void invite(event)} className="rounded-3xl border border-blue-100 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-2"><UserPlus className="h-5 w-5 text-blue-600"/><h3 className="text-lg font-bold">Invite or add member</h3></div>
-        <p className="mt-1 text-sm text-slate-500">Existing users are added immediately. New users receive a Supabase invitation and are added with the selected role.</p>
+        <p className="mt-1 text-sm text-slate-500">Existing users are added immediately. New users receive an invitation that takes them directly to account activation and password setup.</p>
         <label className="mt-5 block text-sm font-semibold">Email
           <input type="email" required value={email} onChange={(event)=>setEmail(event.target.value)} placeholder="steward@company.com" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5"/>
         </label>
