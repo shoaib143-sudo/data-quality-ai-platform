@@ -15,6 +15,8 @@ type ObservableReasoningContext = {
   aiSystemId?: string | null
   aiSystemVersionId?: string | null
   modelName?: string | null
+  routingPolicyId?: string | null
+  routingPolicyReason?: string | null
   traceContext?: TelemetryTraceContext | null
   routeSource: string
   routeReason: string
@@ -73,6 +75,8 @@ class ObservableReasoningProvider implements ReasoningProvider {
             task: request.task,
             route_source: this.context.routeSource,
             route_reason: this.context.routeReason,
+            routing_policy_id: this.context.routingPolicyId ?? null,
+            routing_policy_reason: this.context.routingPolicyReason ?? null,
             provider_request_id: result.providerRequestId ?? null,
             total_tokens: result.usage?.totalTokens ?? null,
           },
@@ -100,6 +104,8 @@ class ObservableReasoningProvider implements ReasoningProvider {
             task: request.task,
             route_source: this.context.routeSource,
             route_reason: this.context.routeReason,
+            routing_policy_id: this.context.routingPolicyId ?? null,
+            routing_policy_reason: this.context.routingPolicyReason ?? null,
             error_name: error instanceof Error ? error.name : 'UnknownError',
             provider_http_status: providerHttpError?.status ?? null,
             provider_request_id: providerHttpError?.providerRequestId ?? null,
@@ -165,6 +171,8 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
         aiSystemId: decision.evidence?.aiSystemId ?? null,
         aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null,
         modelName: decision.evidence?.modelName ?? null,
+        routingPolicyId: decision.evidence?.routingPolicyId ?? null,
+        routingPolicyReason: decision.evidence?.routingPolicyReason ?? null,
         traceContext: context.traceContext ?? null,
         routeSource: decision.source,
         routeReason: decision.reason,
