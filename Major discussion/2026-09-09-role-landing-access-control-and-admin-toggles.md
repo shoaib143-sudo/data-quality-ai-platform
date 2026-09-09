@@ -9,12 +9,15 @@ Administrators need control over which role landing pages are available, and use
 
 The motivating example was that a Data Owner should not see or open the Data Governance Admin landing experience.
 
+A second security requirement is equally important: the Data Governance Admin governance persona must not itself grant organization administration. Organization privilege and governance persona are separate dimensions.
+
 ## Final Design
 
-Two controls are deliberately separated:
+Three controls are deliberately separated:
 
 1. **Landing-page availability** controls whether a persona experience is enabled for an organization.
-2. **Workspace authorization** controls which functional areas that persona is allowed to open.
+2. **Governance workspace authorization** controls which functional areas that governance persona is allowed to open.
+3. **Organization administration authorization** controls `/admin` and requires organization `OWNER` or `ADMIN` privilege.
 
 Hiding a card is not considered a security control.
 
@@ -36,42 +39,62 @@ The eleven personas are:
 10. Data Product Owner
 11. Source System / Application Owner
 
+The finalized governance role keys are `SENIOR_LEADERSHIP`, `BUSINESS_USER`, `DATA_OWNER`, `DATA_PRODUCT_OWNER`, `DATA_STEWARD`, `DATA_GOVERNANCE_SPECIALIST`, `COMPLIANCE_RISK_OFFICER`, `PRIVACY_SECURITY_OFFICER`, `DATA_GOVERNANCE_ADMIN`, `DATA_CUSTODIAN`, and `SOURCE_SYSTEM_OWNER`.
+
 ## Authorization Behaviour
 
 - `/home` resolves the authenticated user's governance persona.
+- Explicit governance role keys resolve deterministically to the corresponding persona.
 - A user can open only the landing page matching that resolved persona.
 - A disabled matching landing page redirects to `/home/unavailable`.
 - Operational workspaces are protected by route-level layout guards.
 - `/dashboard` is the full technical governance workspace and is reserved for Data Governance Admin.
-- `/admin` requires administrator authority, with organization OWNER or ADMIN membership accepted as the administrative boundary.
-- Nested routes inherit the corresponding top-level workspace guard.
+- `/admin` requires organization OWNER or ADMIN authority and cannot be granted by governance persona.
+- A `MEMBER` with the Data Governance Admin persona remains unable to access `/admin`.
+- Nested admin routes inherit the top-level admin guard.
+- Organization OWNER or ADMIN privilege does not replace an explicitly assigned governance persona.
 
 ## UX Behaviour
 
-Persona navigation exposes only relevant capabilities. Examples:
+Persona navigation exposes only relevant governance capabilities. Organization administration links are driven separately by organization privilege.
 
-- Senior Leadership: Overview, Business Areas, Risks & Issues, Data Confidence, Reports, Actions.
-- Business User: Search & Explore, Business Glossary, Trusted Data, My Requests.
-- Data Owner: My Data Domains, Quality & Issues, Approvals, Lineage & Impact.
-- Data Steward: My Tasks, Data Quality, Metadata & Glossary, Issues.
-- Data Governance Admin: Platform Health, Connections, Roles & Permissions, Landing Pages, Audit.
+Examples:
+
+- Senior Leadership: enterprise confidence, material risk, business impact, trends, reports and actions.
+- Business User: trusted-data discovery, fitness for use and consumption issues.
+- Data Owner: domain confidence, critical issues, approvals, certification, lineage and business impact.
+- Data Product Owner: product trust, SLA, certification, adoption and consumer impact.
+- Data Steward: assigned issues, metadata gaps, classifications, findings and remediation.
+- Data Governance Specialist: policy/control coverage, ownership, maturity and adoption.
+- Compliance & Risk Officer: control failures, regulatory exposure, exceptions and evidence.
+- Privacy & Security Officer: sensitive data, classification gaps, privacy exposure and lineage.
+- Data Governance Admin: governance operational health and technical governance configuration, without inheriting organization administration.
+- Data Custodian / Technical Steward: source, pipeline, observability, profiling and technical remediation health.
+- Source System / Application Owner: source health, recurring defects, schema changes and upstream remediation.
 
 ## Persistence and Security
 
 Persona availability is stored in `governance.landing_page_settings` with organization scope.
 
+Governance roles are stored in `governance.access_roles` and user-to-project assignments in `governance.project_role_bindings`.
+
 Security hardening includes:
 
-- composite primary key `(organization_id, persona_slug)`
+- composite primary key `(organization_id, persona_slug)` on landing settings
 - foreign key to `app.organizations`
 - provenance foreign key from `updated_by` to `auth.users`
 - persona value constraint covering the eleven approved personas
-- RLS enabled
-- direct `anon` and `authenticated` privileges revoked
-- server-side writes using the service-role client only after OWNER or ADMIN verification
+- RLS enabled on landing settings
+- direct `anon` and `authenticated` landing-settings privileges revoked
+- server-side landing-setting writes only after OWNER or ADMIN verification
+- explicit `/admin` organization-privilege guard
+- Data Governance Admin removed as a source of organization-admin authorization
+- preservation of last-OWNER demotion protection
 
 ## Implementation Result
 
-The previous full Governance Workspaces dashboard remains useful as the technical administration workspace, but it is no longer a general landing page. Business and governance personas now enter through their role-aware `/home/<persona>` experience and are prevented from opening unauthorized workspaces by direct URL.
+The previous full Governance Workspaces dashboard remains useful as the technical governance workspace, but it is no longer a general landing page. Business and governance personas enter through their role-aware `/home/<persona>` experience and are prevented from opening unauthorized workspaces by direct URL.
 
-This decision should be treated as the baseline for future DataNexus modules: every new module must declare which personas can access it before the module is added to navigation.
+Persona landing pages now use role-specific evidence emphasis and decision framing while continuing to consume shared governed evidence rather than calculating independent governance meaning in the frontend.
+
+This decision should be treated as the baseline for future DataNexus modules: every new module must declare which personas can access it before the module is added to navigation, and organization-administration functionality must never be granted solely by a governance persona.
