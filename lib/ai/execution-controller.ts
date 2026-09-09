@@ -62,7 +62,11 @@ function applies(row: ExecutionControlRow, projectId: string, agentDefinitionId:
 }
 
 export class GovernedExecutionController {
-  constructor(private readonly persistence: ExecutionControlPersistence) {}
+  private readonly persistence: ExecutionControlPersistence
+
+  constructor(persistence: ExecutionControlPersistence) {
+    this.persistence = persistence
+  }
 
   async evaluate(request: ExecutionControlRequest): Promise<ExecutionControlDecision> {
     const projectId = requiredText(request.projectId, 'projectId')
