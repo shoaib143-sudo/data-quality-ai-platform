@@ -16,21 +16,21 @@ function requires(pattern, message) {
 }
 
 requires(/create table governance\.ai_model_pricing_versions/, 'pricing version table must exist');
-requires(/provider text not null/, 'provider identity must be required');
-requires(/model_id text not null/, 'model identity must be required');
-requires(/pricing_version text not null/, 'explicit pricing version must be required');
-requires(/currency text not null check \(currency ~ '\^\[a-z\]\{3\}\$'\)/, 'currency must be explicit and constrained');
+requires(/provider text not null check \( provider = lower\(btrim\(provider\)\)/, 'provider must be stored canonically');
+requires(/model_id text not null check \( model_id = btrim\(model_id\)/, 'model identity must be trimmed at the table boundary');
+requires(/pricing_version text not null check \( pricing_version = btrim\(pricing_version\)/, 'pricing version must be stored canonically');
+requires(/currency text not null check \( currency = upper\(btrim\(currency\)\) and currency ~ '\^\[a-z\]\{3\}\$' \)/, 'currency must be explicit and canonical');
 requires(/input_price_per_million_tokens numeric\(24,12\) not null/, 'input price must have an explicit per-million-token unit');
 requires(/output_price_per_million_tokens numeric\(24,12\) not null/, 'output price must have an explicit per-million-token unit');
 requires(/effective_from timestamptz not null/, 'effective-from authority must be recorded');
 requires(/effective_to timestamptz/, 'effective-to authority must be supported');
-requires(/source_reference text not null/, 'pricing source reference must be required');
+requires(/source_reference text not null check \( source_reference = btrim\(source_reference\)/, 'pricing source reference must be required and canonical');
 requires(/provenance jsonb not null/, 'structured provenance must be retained');
 requires(/reviewed_by uuid not null references auth\.users\(id\)/, 'human reviewer identity must be retained');
 requires(/reviewer_capability text not null default 'policy\.approve'/, 'review authority must be pinned');
-requires(/review_note text not null/, 'human review evidence must be required');
+requires(/review_note text not null check \( review_note = btrim\(review_note\)/, 'human review evidence must be required and canonical');
 requires(/created_by uuid not null references auth\.users\(id\)/, 'creator identity must be retained');
-requires(/unique \(project_id, provider, model_id, pricing_version\)/, 'pricing identity must be unique within a project');
+requires(/unique \(project_id, provider, model_id, currency, pricing_version\)/, 'currency-specific pricing identity must be unique within a project');
 
 requires(/create trigger ai_model_pricing_versions_immutable before update or delete/, 'pricing history must reject mutation');
 requires(/raise exception 'ai model pricing versions are append-only'/, 'immutable trigger must reject mutation');
