@@ -33,7 +33,7 @@ export default async function AICommandCenterTracesPage({ searchParams }: { sear
   return <main className="min-h-screen bg-slate-50 p-5 sm:p-8">
     <div className="mx-auto max-w-7xl space-y-6">
       <header className="rounded-3xl border bg-white p-7 shadow-sm">
-        <div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white"><Activity className="h-6 w-6"/></span><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">AI Observability Plane</p><h1 className="text-3xl font-black">Trace Timeline</h1><p className="mt-2 max-w-4xl text-sm text-slate-600">Read-only correlation of canonical AI telemetry carrying W3C trace IDs. Model invocation details are a whitelisted evidence projection only; this surface does not grant governance authority and does not assert that every upstream or downstream span has been observed.</p></div></div>
+        <div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white"><Activity className="h-6 w-6"/></span><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">AI Observability Plane</p><h1 className="text-3xl font-black">Trace Timeline</h1><p className="mt-2 max-w-4xl text-sm text-slate-600">Read-only correlation of canonical AI telemetry carrying W3C trace IDs. Model invocation details are a whitelisted evidence projection only; admission evidence describes execution accounting against resource-budget controls, not governance approval. This surface does not grant governance authority and does not assert that every upstream or downstream span has been observed.</p></div></div>
       </header>
 
       <form method="get" className="grid gap-4 rounded-2xl border bg-white p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
@@ -51,14 +51,18 @@ export default async function AICommandCenterTracesPage({ searchParams }: { sear
           <div className="grid gap-3 lg:grid-cols-[80px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
             <div className="text-xs font-bold text-slate-500">#{index + 1}</div>
             <div><p className="text-sm font-bold text-slate-950">{event.operation}</p><p className="mt-1 text-xs text-slate-500">{event.eventType} · {event.status} · {event.observedAt}</p></div>
-            <div className="text-xs text-slate-600"><p><span className="font-semibold">Provider:</span> {recorded(event.providerId)}</p><p><span className="font-semibold">Model:</span> {recorded(event.modelName)}</p><p><span className="font-semibold">Agent run:</span> {recorded(event.agentRunId)}</p></div>
+            <div className="text-xs text-slate-600"><p><span className="font-semibold">Provider:</span> {recorded(event.providerId)}</p><p><span className="font-semibold">Model:</span> {recorded(event.modelName)}</p><p><span className="font-semibold">Agent run:</span> {recorded(event.agentRunId)}</p><p><span className="font-semibold">Execution correlation:</span> <span className="font-mono">{recorded(event.correlationId)}</span></p></div>
             <div className="text-xs text-slate-600"><p><span className="font-semibold">Span:</span> <span className="font-mono">{recorded(event.spanId)}</span></p><p><span className="font-semibold">Parent:</span> <span className="font-mono">{recorded(event.parentSpanId)}</span></p><p><span className="font-semibold">Latency:</span> {recorded(event.latencyMs)} ms · <span className="font-semibold">Tokens:</span> {recorded(event.inputTokens)} / {recorded(event.outputTokens)}</p></div>
           </div>
           {event.eventType === 'MODEL_INVOCATION' && hasTraceInvocationEvidence(event.invocationEvidence) ? <div className="mt-4 grid gap-2 rounded-xl border bg-slate-50 p-4 text-xs text-slate-600 md:grid-cols-2 xl:grid-cols-4">
             <p><span className="font-semibold">Route:</span> {recorded(event.invocationEvidence.routeSource)} · {recorded(event.invocationEvidence.routeReason)}</p>
             <p><span className="font-semibold">Routing policy:</span> {recorded(event.invocationEvidence.routingPolicyId)} · {recorded(event.invocationEvidence.routingPolicyReason)}</p>
             <p><span className="font-semibold">Output ceiling:</span> caller {recorded(event.invocationEvidence.requestedMaxOutputTokens)} · governed {recorded(event.invocationEvidence.governanceMaxOutputTokens)} · effective {recorded(event.invocationEvidence.effectiveMaxOutputTokens)} · policy {recorded(event.invocationEvidence.resourceBudgetPolicyId)}</p>
-            <p><span className="font-semibold">Provider correlation:</span> {recorded(event.invocationEvidence.providerRequestId)} · HTTP {recorded(event.invocationEvidence.providerHttpStatus)} · <span className="font-semibold">Observed total:</span> {recorded(event.invocationEvidence.totalTokens)}</p>
+            <p><span className="font-semibold">Budget admission:</span> {recorded(event.invocationEvidence.resourceBudgetAdmissionReason)} · requests/min window {recorded(event.invocationEvidence.resourceBudgetRequestCountLastMinute)} · active concurrency {recorded(event.invocationEvidence.resourceBudgetActiveConcurrency)}</p>
+            <p><span className="font-semibold">Admission ID:</span> <span className="font-mono">{recorded(event.invocationEvidence.resourceBudgetAdmissionId)}</span></p>
+            <p><span className="font-semibold">Lease ID:</span> <span className="font-mono">{recorded(event.invocationEvidence.resourceBudgetLeaseId)}</span></p>
+            <p><span className="font-semibold">Provider correlation:</span> {recorded(event.invocationEvidence.providerRequestId)} · HTTP {recorded(event.invocationEvidence.providerHttpStatus)}</p>
+            <p><span className="font-semibold">Observed total tokens:</span> {recorded(event.invocationEvidence.totalTokens)}</p>
           </div> : null}
         </div>)}</div>
       </section>)}
