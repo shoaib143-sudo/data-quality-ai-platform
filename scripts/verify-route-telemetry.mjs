@@ -22,6 +22,9 @@ for (const token of [
   'outputTokens: result.usage?.outputTokens ?? null',
   'provider_request_id: result.providerRequestId ?? null',
   'total_tokens: result.usage?.totalTokens ?? null',
+  'modelName?: string | null',
+  'modelName: this.context.modelName ?? null',
+  'modelName: decision.evidence?.modelName ?? null',
   "error_name: error instanceof Error ? error.name : 'UnknownError'",
   "error.name !== 'ReasoningProviderHttpError'",
   'sanitizedProviderHttpFailure(error)',
@@ -66,4 +69,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(` - ${failure}`))
   process.exit(1)
 }
-console.log('ADR-006 route and runtime-decoupled sanitized model invocation telemetry contract passed.')
+console.log('ADR-006 route, routed model identity, and sanitized model invocation telemetry contract passed.')
