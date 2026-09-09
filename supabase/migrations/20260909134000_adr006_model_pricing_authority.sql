@@ -9,22 +9,36 @@
 create table governance.ai_model_pricing_versions (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references app.projects(id) on delete cascade,
-  provider text not null check (btrim(provider) <> '' and char_length(provider) <= 120),
-  model_id text not null check (btrim(model_id) <> '' and char_length(model_id) <= 300),
-  pricing_version text not null check (btrim(pricing_version) <> '' and char_length(pricing_version) <= 120),
+  provider text not null check (
+    provider = lower(btrim(provider)) and provider <> '' and char_length(provider) <= 120
+  ),
+  model_id text not null check (
+    model_id = btrim(model_id) and model_id <> '' and char_length(model_id) <= 300
+  ),
+  pricing_version text not null check (
+    pricing_version = btrim(pricing_version) and pricing_version <> '' and char_length(pricing_version) <= 120
+  ),
   supersedes_pricing_id uuid references governance.ai_model_pricing_versions(id),
-  currency text not null check (currency ~ '^[A-Z]{3}$'),
+  currency text not null check (
+    currency = upper(btrim(currency)) and currency ~ '^[A-Z]{3}$'
+  ),
   input_price_per_million_tokens numeric(24,12) not null check (input_price_per_million_tokens >= 0),
   output_price_per_million_tokens numeric(24,12) not null check (output_price_per_million_tokens >= 0),
   effective_from timestamptz not null,
   effective_to timestamptz,
-  source_reference text not null check (btrim(source_reference) <> '' and char_length(source_reference) <= 1000),
-  source_uri text check (source_uri is null or (btrim(source_uri) <> '' and char_length(source_uri) <= 2000)),
+  source_reference text not null check (
+    source_reference = btrim(source_reference) and source_reference <> '' and char_length(source_reference) <= 1000
+  ),
+  source_uri text check (
+    source_uri is null or (source_uri = btrim(source_uri) and source_uri <> '' and char_length(source_uri) <= 2000)
+  ),
   provenance jsonb not null default '{}'::jsonb check (jsonb_typeof(provenance) = 'object'),
   reviewed_by uuid not null references auth.users(id),
   reviewed_at timestamptz not null,
   reviewer_capability text not null default 'policy.approve' check (reviewer_capability = 'policy.approve'),
-  review_note text not null check (btrim(review_note) <> '' and char_length(review_note) <= 4000),
+  review_note text not null check (
+    review_note = btrim(review_note) and review_note <> '' and char_length(review_note) <= 4000
+  ),
   created_by uuid not null references auth.users(id),
   created_at timestamptz not null default now(),
   constraint ai_model_pricing_versions_effective_window_check
@@ -32,7 +46,7 @@ create table governance.ai_model_pricing_versions (
   constraint ai_model_pricing_versions_human_authority_check
     check (created_by = reviewed_by and reviewed_at <= created_at),
   constraint ai_model_pricing_versions_identity_unique
-    unique (project_id, provider, model_id, pricing_version)
+    unique (project_id, provider, model_id, currency, pricing_version)
 );
 
 create index ai_model_pricing_versions_effective_lookup_idx
