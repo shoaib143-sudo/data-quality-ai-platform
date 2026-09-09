@@ -11,6 +11,13 @@ export function createGovernanceResourceControlState() {
       if (error) throw new Error(`Unable to read effective AI resource budgets: ${error.message}`)
       return data ?? []
     },
+    async listEffectiveModelPricing(projectId) {
+      const { data, error } = await supabase.schema('governance').from('ai_model_pricing_effective')
+        .select('id,project_id,provider,model_id,pricing_version,currency,price_unit_tokens,input_price_per_million_tokens,output_price_per_million_tokens,effective_from,effective_to,source_reference,source_uri,reviewed_at,reviewer_capability,review_note')
+        .eq('project_id', projectId).order('provider').order('model_id').order('currency')
+      if (error) throw new Error(`Unable to read effective AI model pricing: ${error.message}`)
+      return data ?? []
+    },
     async listEffectiveExecutionControls(projectId) {
       const { data, error } = await supabase.schema('governance').from('ai_execution_control_effective')
         .select('id,project_id,scope_type,scope_key,control_action,effective_state,reason,actor_user_id,actor_capability,correlation_id,created_at')
