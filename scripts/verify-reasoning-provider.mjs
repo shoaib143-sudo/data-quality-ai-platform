@@ -10,6 +10,10 @@ function requireText(text, needle, label) {
 
 requireText(provider, 'export interface ReasoningProvider', 'replaceable reasoning provider interface')
 requireText(provider, 'generateJson(request: ReasoningRequest)', 'canonical structured reasoning operation')
+requireText(provider, 'maxOutputTokens?: number', 'optional caller-owned output ceiling')
+requireText(provider, 'maxOutputTokens must be a positive integer', 'output ceiling validation')
+requireText(provider, "{ max_tokens: maxOutputTokens }", 'provider-side OpenAI-compatible output ceiling')
+requireText(provider, 'This is not a budget-policy decision by itself', 'budget authority boundary')
 requireText(provider, 'export function createReasoningProvider', 'gateway-callable provider factory')
 requireText(provider, "readonly id = 'openai_compatible'", 'OpenAI-compatible adapter identity')
 requireText(provider, "process.env.AI_REASONING_PROVIDER ?? 'openai_compatible'", 'global provider fallback configuration')
@@ -33,5 +37,8 @@ if (investigation.includes('getModelGateway') || investigation.includes("from '.
 if (investigation.includes('/chat/completions') || investigation.includes('AI_MODEL_API_KEY')) {
   throw new Error('Profiling investigation must not bypass the governed model boundary.')
 }
+if (/maxOutputTokens\s*:\s*\d+/.test(investigation)) {
+  throw new Error('Profiling investigation must not invent a fixed output budget without canonical policy evidence.')
+}
 
-console.log('ADR-006 ReasoningProvider and profiling Intelligent Router boundary verified.')
+console.log('ADR-006 ReasoningProvider, provider-side output cap, and profiling Intelligent Router boundary verified.')
