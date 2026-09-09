@@ -80,6 +80,8 @@ const context = {
   assert.equal(events[1].inputTokens, 120)
   assert.equal(events[1].outputTokens, 30)
   assert.equal(events[1].latencyMs, 42)
+  assert.equal(events[1].attributes.routing_policy_id, 'policy-1')
+  assert.equal(events[1].attributes.routing_policy_reason, 'POLICY_ALLOWED')
   assert.equal(events[1].attributes.total_tokens, 150)
   assert.equal(events[1].attributes.provider_request_id, 'req-123')
   assert.deepEqual(events[1].traceContext, context.traceContext)
@@ -132,6 +134,8 @@ const context = {
   assert.equal(events[1].eventType, 'MODEL_INVOCATION')
   assert.equal(events[1].status, 'ERROR')
   assert.equal(events[1].modelName, null)
+  assert.equal(events[1].attributes.routing_policy_id, null)
+  assert.equal(events[1].attributes.routing_policy_reason, null)
   assert.equal(events[1].attributes.error_name, 'TypeError')
   assert.equal(events[1].attributes.provider_http_status, null)
   assert.equal(events[1].attributes.provider_request_id, null)
@@ -148,7 +152,13 @@ const context = {
           source: 'GOVERNED_REGISTRY',
           reason: 'ACTIVE_GOVERNED_CANDIDATE_SELECTED',
           provider: { id: 'openai_compatible', async generateJson() { throw providerError } },
-          evidence: { aiSystemId: 'system-a', aiSystemVersionId: 'version-a', modelName: 'model-a' },
+          evidence: {
+            aiSystemId: 'system-a',
+            aiSystemVersionId: 'version-a',
+            modelName: 'model-a',
+            routingPolicyId: 'policy-1',
+            routingPolicyReason: 'POLICY_ALLOWED',
+          },
         }
       },
     },
@@ -162,6 +172,8 @@ const context = {
   assert.equal(events.length, 2)
   assert.equal(events[1].status, 'ERROR')
   assert.equal(events[1].modelName, 'model-a')
+  assert.equal(events[1].attributes.routing_policy_id, 'policy-1')
+  assert.equal(events[1].attributes.routing_policy_reason, 'POLICY_ALLOWED')
   assert.equal(events[1].attributes.error_name, 'ReasoningProviderHttpError')
   assert.equal(events[1].attributes.provider_http_status, 429)
   assert.equal(events[1].attributes.provider_request_id, 'req-rate-limit-456')
@@ -203,4 +215,4 @@ const context = {
   assert.equal(result, decision, 'telemetry failure must not alter a fail-closed route decision')
 }
 
-console.log('ADR-006 Intelligent Router route, model identity, and sanitized model invocation telemetry behavior passed.')
+console.log('ADR-006 Intelligent Router route, routed policy/model identity, and sanitized model invocation telemetry behavior passed.')
