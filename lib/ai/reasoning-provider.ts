@@ -11,10 +11,19 @@ export type ReasoningRequest = {
   temperature?: number
 }
 
+export type ReasoningUsage = {
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+}
+
 export type ReasoningResult = {
   provider: string
   model: string
   result: Record<string, unknown>
+  latencyMs: number
+  usage?: ReasoningUsage
+  providerRequestId?: string
 }
 
 export interface ReasoningProvider {
@@ -33,10 +42,41 @@ type OpenAICompatibleConfig = {
   model: string
 }
 
+type OpenAICompatibleUsage = {
+  prompt_tokens?: unknown
+  completion_tokens?: unknown
+  total_tokens?: unknown
+}
+
 function extractJson(content: string) {
   const trimmed = content.trim()
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
   return JSON.parse(fenced ? fenced[1] : trimmed)
+}
+
+function observedTokenCount(value: unknown) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined
+}
+
+function observedUsage(value: OpenAICompatibleUsage | undefined): ReasoningUsage | undefined {
+  if (!value) return undefined
+  const inputTokens = observedTokenCount(value.prompt_tokens)
+  const outputTokens = observedTokenCount(value.completion_tokens)
+  const totalTokens = observedTokenCount(value.total_tokens)
+  if (inputTokens == null && outputTokens == null && totalTokens == null) return undefined
+  return {
+    ...(inputTokens != null ? { inputTokens } : {}),
+    ...(outputTokens != null ? { outputTokens } : {}),
+    ...(totalTokens != null ? { totalTokens } : {}),
+  }
+}
+
+function observedRequestId(response: Response) {
+  for (const header of ['x-request-id', 'request-id']) {
+    const value = response.headers.get(header)?.trim()
+    if (value) return value.slice(0, 256)
+  }
+  return undefined
 }
 
 export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
@@ -48,6 +88,7 @@ export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
   }
 
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
+    const startedAt = performance.now()
     const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -72,6 +113,7 @@ export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
 
     const payload = await response.json() as {
       choices?: Array<{ message?: { content?: string } }>
+      usage?: OpenAICompatibleUsage
     }
     const content = payload.choices?.[0]?.message?.content
     if (!content) throw new Error('AI reasoning provider returned no content.')
@@ -81,10 +123,16 @@ export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
       throw new Error('AI reasoning provider returned an invalid JSON object.')
     }
 
+    const usage = observedUsage(payload.usage)
+    const providerRequestId = observedRequestId(response)
+
     return {
       provider: this.id,
       model: this.config.model,
       result: result as Record<string, unknown>,
+      latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      ...(usage ? { usage } : {}),
+      ...(providerRequestId ? { providerRequestId } : {}),
     }
   }
 }
