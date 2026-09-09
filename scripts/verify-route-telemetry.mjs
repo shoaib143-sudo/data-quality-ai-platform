@@ -21,6 +21,7 @@ for (const token of [
   'evaluation_average_score',
   'inputTokens: result.usage?.inputTokens ?? null',
   'outputTokens: result.usage?.outputTokens ?? null',
+  'requested_max_output_tokens: request.maxOutputTokens ?? null',
   'provider_request_id: result.providerRequestId ?? null',
   'total_tokens: result.usage?.totalTokens ?? null',
   'modelName?: string | null',
@@ -44,8 +45,9 @@ for (const token of [
   "this.name = 'ReasoningProviderHttpError'",
   'readonly status: number',
   'readonly providerRequestId?: string',
+  'maxOutputTokens?: number',
   'new ReasoningProviderHttpError(response.status, observedRequestId(response))',
-]) if (!provider.includes(token)) failures.push(`missing sanitized provider failure contract token: ${token}`)
+]) if (!provider.includes(token)) failures.push(`missing sanitized provider failure/output contract token: ${token}`)
 
 for (const forbidden of [
   /prompt\s*:/i,
@@ -55,6 +57,8 @@ for (const forbidden of [
   /error_message\s*:/i,
 ]) if (forbidden.test(observable)) failures.push(`forbidden telemetry payload pattern: ${forbidden}`)
 
+if (observable.includes('budget_max_output_tokens')) failures.push('caller-requested output ceiling must not be represented as canonical budget-policy authority')
+if (observable.includes('enforced_max_output_tokens')) failures.push('telemetry must not claim caller-owned output ceilings were governance-policy enforced')
 if (!observable.includes("import type {\n  ReasoningProvider,")) failures.push('reasoning provider dependency must remain type-only in observable wrapper')
 if (observable.includes("import { ReasoningProviderHttpError")) failures.push('observable wrapper must not create a runtime import solely for provider failure correlation')
 if (provider.includes('response.text()')) failures.push('provider HTTP failure path must not read or expose raw upstream response bodies')
@@ -76,4 +80,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(` - ${failure}`))
   process.exit(1)
 }
-console.log('ADR-006 route, routed policy/model identity, and sanitized model invocation telemetry contract passed.')
+console.log('ADR-006 route, routed policy/model identity, caller output ceiling, and sanitized model invocation telemetry contract passed.')
