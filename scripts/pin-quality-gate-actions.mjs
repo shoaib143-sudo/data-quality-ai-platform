@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 
+// One-shot guarded migration of mutable action tags to immutable commit pins.
 const path = '.github/workflows/quality-gate.yml'
 const source = fs.readFileSync(path, 'utf8')
 const replacements = new Map([
