@@ -1,30 +1,24 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
-const allowedTransitions: Record<string, ReadonlySet<string>> = {
-  PENDING: new Set(['IN_REVIEW', 'CANCELLED']),
-  IN_REVIEW: new Set(['APPROVED', 'REJECTED', 'CANCELLED']),
-  APPROVED: new Set(),
-  REJECTED: new Set(),
-  CANCELLED: new Set(),
-}
+const validStatuses = new Set(['IN_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED'])
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ requestId: string }> },
 ) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const { requestId } = await params
     const admin = createAdminClient()
 
     const { data: certificationRequest, error: requestError } = await admin
       .schema('governance')
       .from('certification_requests')
-      .select('*')
+      .select('id,project_id,dataset_id')
       .eq('id', requestId)
       .maybeSingle()
 
@@ -39,68 +33,24 @@ export async function PATCH(
 
     const body = await request.json()
     const status = String(body.status ?? '').toUpperCase()
-    if (!Object.prototype.hasOwnProperty.call(allowedTransitions, status)) {
+    if (!validStatuses.has(status)) {
       return NextResponse.json({ error: 'Invalid certification status.' }, { status: 400 })
     }
 
-    const currentStatus = String(certificationRequest.status ?? '').toUpperCase()
-    const transitions = allowedTransitions[currentStatus]
-    if (!transitions) {
-      return NextResponse.json({ error: `Unknown current certification status: ${currentStatus}.` }, { status: 409 })
-    }
-    if (!transitions.has(status)) {
-      return NextResponse.json(
-        { error: `Certification cannot transition from ${currentStatus} to ${status}.` },
-        { status: 409 },
-      )
-    }
-
-    const decided = ['APPROVED', 'REJECTED', 'CANCELLED'].includes(status)
-    const decidedAt = decided ? new Date().toISOString() : null
     const { data, error } = await admin
       .schema('governance')
-      .from('certification_requests')
-      .update({
-        status,
-        decision_notes: typeof body.decisionNotes === 'string' ? body.decisionNotes : null,
-        assigned_to: body.assignedTo ?? certificationRequest.assigned_to,
-        decided_at: decidedAt,
+      .rpc('review_dataset_certification', {
+        p_request_id: requestId,
+        p_actor_user_id: user.id,
+        p_status: status,
+        p_decision_notes: typeof body.decisionNotes === 'string' ? body.decisionNotes : null,
+        p_assigned_to: body.assignedTo || null,
       })
-      .eq('id', requestId)
-      .eq('status', currentStatus)
-      .select('*')
-      .maybeSingle()
+      .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-    if (!data) {
-      return NextResponse.json(
-        { error: 'Certification request changed concurrently. Reload it and retry.' },
-        { status: 409 },
-      )
-    }
-
-    if (status === 'APPROVED' || status === 'REJECTED') {
-      const { error: catalogError } = await admin
-        .schema('governance')
-        .from('dataset_catalog')
-        .upsert(
-          {
-            dataset_id: certificationRequest.dataset_id,
-            project_id: certificationRequest.project_id,
-            certification_status: status === 'APPROVED' ? 'CERTIFIED' : 'REJECTED',
-            certified_at: status === 'APPROVED' ? decidedAt : null,
-            certified_by: status === 'APPROVED' ? user.id : null,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'dataset_id' },
-        )
-
-      if (catalogError) {
-        return NextResponse.json(
-          { error: `Certification decision was stored but catalog synchronization failed: ${catalogError.message}` },
-          { status: 500 },
-        )
-      }
+    if (error) {
+      const responseStatus = error.code === '23514' ? 409 : error.code === '42501' ? 403 : 400
+      return NextResponse.json({ error: error.message }, { status: responseStatus })
     }
 
     await writeGovernanceAudit({
