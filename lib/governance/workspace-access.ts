@@ -25,14 +25,14 @@ export type WorkspaceKey =
   | 'datasets'
 
 const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
-  'senior-leadership': ['catalog', 'issues', 'data-quality', 'stewardship', 'reports'],
-  'business-user': ['catalog', 'glossary', 'issues', 'data-quality'],
-  'data-owner': ['catalog', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'reports', 'classification'],
-  'data-product-owner': ['catalog', 'glossary', 'lineage', 'stewardship', 'issues', 'data-quality', 'reports'],
-  'data-steward': ['catalog', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'classification', 'reports'],
-  'data-governance-specialist': ['catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention'],
-  'compliance-risk-officer': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention'],
-  'privacy-security-officer': ['catalog', 'glossary', 'lineage', 'classification', 'classification-privacy', 'issues', 'audit', 'reports'],
+  'senior-leadership': ['catalog', 'issues', 'data-quality', 'stewardship', 'reports', 'profiling'],
+  'business-user': ['catalog', 'glossary', 'issues', 'data-quality', 'profiling'],
+  'data-owner': ['catalog', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'reports', 'classification', 'profiling'],
+  'data-product-owner': ['catalog', 'glossary', 'lineage', 'stewardship', 'issues', 'data-quality', 'reports', 'profiling'],
+  'data-steward': ['catalog', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'classification', 'reports', 'profiling'],
+  'data-governance-specialist': ['catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention', 'profiling'],
+  'compliance-risk-officer': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention', 'profiling'],
+  'privacy-security-officer': ['catalog', 'glossary', 'lineage', 'classification', 'classification-privacy', 'issues', 'audit', 'reports', 'profiling'],
   'data-governance-admin': ['dashboard', 'catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'audit', 'reports', 'retention', 'profiling', 'agents', 'datasets'],
   'data-custodian': ['catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'profiling', 'agents'],
   'source-system-owner': ['catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'profiling'],
