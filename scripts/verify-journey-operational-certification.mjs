@@ -21,7 +21,7 @@ const checks = [
   ['V6 reruns cumulative journeys', requiredJourneys.every((path) => v6.includes(path))],
   ['V6 verifies migration version uniqueness', v6.includes('verify-migration-version-uniqueness.mjs')],
   ['V6 performs clean Supabase reconstruction', v6.includes('supabase@2.117.0') && v6.includes('db reset --local') && v6.includes('supabase/migrations')],
-  ['V6 requires live database credentials', v6.includes('Require live governance database credentials') && v6.includes('SUPABASE_SERVICE_ROLE_KEY') && !v6.includes("if: ${{ env.NEXT_PUBLIC_SUPABASE_URL"))],
+  ['V6 requires live database credentials', v6.includes('Require live governance database credentials') && v6.includes('SUPABASE_SERVICE_ROLE_KEY') && !v6.includes("if: ${{ env.NEXT_PUBLIC_SUPABASE_URL")],
   ['V6 executes authenticated live database contracts', v6.includes('pnpm run verify:database')],
   ['V6 exercises provider failure/fallback behavior', v6.includes('pnpm run verify:provider-fallback')],
   ['V6 exercises worker isolation and capacity', v6.includes('pnpm run verify:worker-runtime')],
