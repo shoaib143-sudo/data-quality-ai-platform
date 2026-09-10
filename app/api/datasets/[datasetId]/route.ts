@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizeDataset, authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
@@ -16,7 +17,7 @@ function jdbcTableParts(sourceIdentifier: string, defaultSchema = 'public') {
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ datasetId: string }> }) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const { datasetId } = await params
     const body = await request.json()
     const name = text(body.name)
@@ -26,20 +27,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ da
     const sourceId = text(body.sourceId)
     if (!name || !sourceIdentifier || !sourceId) return NextResponse.json({ error: 'Dataset name, source, and source identifier are required.' }, { status: 400 })
 
+    const { dataset: authorizedDataset } = await authorizeDataset(user.id, datasetId, 'catalog.update')
     const admin = createAdminClient()
-    const { data: dataset } = await admin.schema('catalog').from('datasets').select('id, project_id, data_source_id, source_identifier, metadata').eq('id', datasetId).maybeSingle()
+    const { data: dataset, error: datasetError } = await admin.schema('catalog').from('datasets').select('id, project_id, data_source_id, source_identifier, metadata').eq('id', datasetId).eq('project_id', authorizedDataset.project_id).maybeSingle()
+    if (datasetError) throw new Error(`Unable to load dataset: ${datasetError.message}`)
     if (!dataset) return NextResponse.json({ error: 'Dataset not found.' }, { status: 404 })
 
-    const { data: project } = await admin.schema('app').from('projects').select('id, organization_id').eq('id', dataset.project_id).maybeSingle()
-    if (!project) return NextResponse.json({ error: 'Dataset not found.' }, { status: 404 })
-    const { data: membership } = await admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-    if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Dataset access denied.' }, { status: 403 })
-
-    const { data: duplicate } = await admin.schema('catalog').from('datasets').select('id').eq('project_id', dataset.project_id).eq('name', name).neq('id', datasetId).maybeSingle()
+    const { data: duplicate, error: duplicateError } = await admin.schema('catalog').from('datasets').select('id').eq('project_id', dataset.project_id).eq('name', name).neq('id', datasetId).maybeSingle()
+    if (duplicateError) throw new Error(`Unable to validate dataset name: ${duplicateError.message}`)
     if (duplicate) return NextResponse.json({ error: 'A dataset with this name already exists in the project.' }, { status: 409 })
 
-    const { data: source } = await admin.schema('catalog').from('data_sources').select('id, project_id, source_type, connection_metadata, status').eq('id', sourceId).eq('project_id', dataset.project_id).in('status', ['ACTIVE', 'CONFIGURED']).maybeSingle()
+    const { data: source, error: sourceError } = await admin.schema('catalog').from('data_sources').select('id, project_id, source_type, connection_metadata, status').eq('id', sourceId).eq('project_id', dataset.project_id).in('status', ['ACTIVE', 'CONFIGURED']).maybeSingle()
+    if (sourceError) throw new Error(`Unable to resolve source: ${sourceError.message}`)
     if (!source) return NextResponse.json({ error: 'The selected connection is unavailable.' }, { status: 404 })
+
+    const sourceBindingChanged = dataset.data_source_id !== source.id || String(dataset.source_identifier ?? '') !== sourceIdentifier
+    const sourceRequiresMutation = sourceBindingChanged || String(source.status).toUpperCase() === 'CONFIGURED'
+    if (sourceRequiresMutation) await authorizeProject(user.id, dataset.project_id, 'source.manage')
 
     const sourceType = String(source.source_type ?? '').trim().toLowerCase()
     const connectionMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? { ...(source.connection_metadata as Record<string, unknown>) } : {}
@@ -56,7 +60,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ da
     if (!sourceValidation.valid) return NextResponse.json({ error: 'The updated dataset source could not be validated.', source_validation: sourceValidation }, { status: 422 })
 
     if (String(source.status).toUpperCase() === 'CONFIGURED') {
-      const { error } = await admin.schema('catalog').from('data_sources').update({ connection_metadata: connectionMetadata, status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', source.id)
+      const { error } = await admin.schema('catalog').from('data_sources').update({ connection_metadata: connectionMetadata, status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', source.id).eq('project_id', dataset.project_id)
       if (error) throw new Error(`Unable to activate connection: ${error.message}`)
     }
 
@@ -68,7 +72,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ da
     const versionMetadata = latestVersion.metadata && typeof latestVersion.metadata === 'object' ? { ...(latestVersion.metadata as Record<string, unknown>) } : {}
     const executionType = ['file', 'csv'].includes(sourceType) ? 'FILE' : sourceType === 'jdbc' ? 'JDBC' : 'TABLE'
     const executionConfig = { ...connectionMetadata, source_id: source.id, source_type: source.source_type, connection_metadata: connectionMetadata, validation: sourceValidation }
-    const sourceBindingChanged = dataset.data_source_id !== source.id || String(dataset.source_identifier ?? '') !== sourceIdentifier
     let activeVersionId = latestVersion.id
     let createdVersionNumber: number | null = null
 
@@ -106,7 +109,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ da
         throw new Error(`Unable to create profiling source for the new dataset version: ${executionSourceError.message}`)
       }
 
-      const { error: datasetError } = await admin.schema('catalog').from('datasets').update({
+      const { error: updateDatasetError } = await admin.schema('catalog').from('datasets').update({
         data_source_id: source.id,
         name,
         description: description || null,
@@ -121,10 +124,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ da
           current_version_number: nextVersionNumber,
         },
         updated_at: now,
-      }).eq('id', datasetId)
-      if (datasetError) {
+      }).eq('id', datasetId).eq('project_id', dataset.project_id)
+      if (updateDatasetError) {
         await admin.schema('catalog').from('dataset_versions').delete().eq('id', activeVersionId)
-        throw new Error(`Unable to update dataset after version creation: ${datasetError.message}`)
+        throw new Error(`Unable to update dataset after version creation: ${updateDatasetError.message}`)
       }
 
       const { error: lineageError } = await admin.schema('governance').from('lineage_edges').insert({
@@ -145,18 +148,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ da
       })
       if (lineageError) console.error('[dataset-version-lineage]', lineageError.message)
     } else {
-      const { error: datasetError } = await admin.schema('catalog').from('datasets').update({
+      const { error: updateDatasetError } = await admin.schema('catalog').from('datasets').update({
         name,
         description: description || null,
         business_domain: businessDomain || null,
         metadata: { ...datasetMetadata, profiling_ready: true, source_validation: sourceValidation, registered_source_type: source.source_type },
         updated_at: now,
-      }).eq('id', datasetId)
-      if (datasetError) throw new Error(`Unable to update dataset: ${datasetError.message}`)
+      }).eq('id', datasetId).eq('project_id', dataset.project_id)
+      if (updateDatasetError) throw new Error(`Unable to update dataset: ${updateDatasetError.message}`)
 
       const { error: versionRefreshError } = await admin.schema('catalog').from('dataset_versions').update({
         metadata: { ...versionMetadata, profiling_ready: true, source_validation: sourceValidation, source_type: source.source_type },
-      }).eq('id', latestVersion.id)
+      }).eq('id', latestVersion.id).eq('dataset_id', datasetId)
       if (versionRefreshError) throw new Error(`Unable to refresh dataset version validation metadata: ${versionRefreshError.message}`)
 
       const { data: executionRows, error: executionLookupError } = await admin.schema('profiling').from('dataset_execution_sources')
@@ -172,7 +175,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ da
           execution_config: executionConfig,
           active: true,
           updated_at: now,
-        }).eq('id', existingExecution.id)
+        }).eq('id', existingExecution.id).eq('dataset_version_id', latestVersion.id)
         if (error) throw new Error(`Unable to refresh profiling source validation: ${error.message}`)
       } else {
         const { error } = await admin.schema('profiling').from('dataset_execution_sources').insert({
@@ -204,6 +207,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ da
 
     return NextResponse.json({ updated: true, profiling_ready: true, source_validation: sourceValidation, source_binding_changed: sourceBindingChanged, active_version_id: activeVersionId, created_version_number: createdVersionNumber })
   } catch (error) {
+    const authorization = authorizationErrorResponse(error)
+    if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Dataset update failed.' }, { status: 500 })
   }
 }
