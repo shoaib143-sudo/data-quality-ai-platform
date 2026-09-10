@@ -2,12 +2,17 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createGovernanceTelemetryProvider } from '@/lib/ai/governance-telemetry-provider'
 import { currentTelemetryTraceContext } from '@/lib/ai/telemetry-trace-context-store'
 import { ObservablePolicyDecisionProvider } from './observable-policy-decision-provider'
+import { OpaPolicyDecisionProvider } from './opa-policy-decision-provider'
 import {
   GovernedPolicyDecisionProvider,
   type PolicyDecisionPersistence,
   type PolicyDecisionPolicyRecord,
   type PolicyDecisionVersionRecord,
 } from './policy-decision-provider'
+
+function selectedPolicyProvider() {
+  return process.env.POLICY_DECISION_PROVIDER?.trim().toLowerCase() || 'governance'
+}
 
 export function createGovernancePolicyDecisionProvider() {
   const supabase = createAdminClient()
@@ -36,8 +41,21 @@ export function createGovernancePolicyDecisionProvider() {
   }
 
   const governed = new GovernedPolicyDecisionProvider(persistence)
+  const selection = selectedPolicyProvider()
+  if (selection !== 'governance' && selection !== 'opa') {
+    throw new Error(`Unsupported POLICY_DECISION_PROVIDER: ${selection}`)
+  }
+
+  const provider = selection === 'opa'
+    ? new OpaPolicyDecisionProvider(governed, {
+        endpoint: process.env.OPA_URL ?? null,
+        decisionPath: process.env.OPA_DECISION_PATH ?? null,
+        timeoutMs: process.env.OPA_TIMEOUT_MS ? Number(process.env.OPA_TIMEOUT_MS) : undefined,
+      })
+    : governed
+
   return new ObservablePolicyDecisionProvider(
-    governed,
+    provider,
     createGovernanceTelemetryProvider(),
     currentTelemetryTraceContext,
   )
