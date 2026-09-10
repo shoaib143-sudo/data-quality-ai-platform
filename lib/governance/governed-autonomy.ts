@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
+import { executeGovernedReprofileAction } from '@/lib/governance/governed-reprofile-action'
+import { invalidateGovernedActionOutcome } from '@/lib/governance/governed-action-outcomes'
 
 type RiskLevel = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type ActionStatus = 'PROPOSED' | 'AWAITING_APPROVAL' | 'APPROVED' | 'EXECUTING' | 'EXECUTED' | 'REJECTED' | 'BLOCKED' | 'FAILED' | 'ROLLED_BACK'
@@ -191,10 +193,11 @@ async function executeActionRow(action: Record<string, any>, actorUserId?: strin
   }
 
   try {
-    if (claimed.action_key !== 'CREATE_GOVERNANCE_ISSUE') {
-      throw new Error(`Autonomous execution is not implemented for ${claimed.action_key}; explicit governed execution remains required.`)
-    }
-    const executed = await executeCreateGovernanceIssue(claimed)
+    const executed = claimed.action_key === 'CREATE_GOVERNANCE_ISSUE'
+      ? await executeCreateGovernanceIssue(claimed)
+      : claimed.action_key === 'REQUEST_REPROFILE'
+        ? await executeGovernedReprofileAction(claimed)
+        : (() => { throw new Error(`Autonomous execution is not implemented for ${claimed.action_key}; explicit governed execution remains required.`) })()
     const { data: completed, error: completeError } = await admin.schema('governance').from('autonomy_actions').update({
       status: 'EXECUTED',
       result: executed,
@@ -219,7 +222,8 @@ async function executeActionRow(action: Record<string, any>, actorUserId?: strin
         confidence: claimed.confidence,
         result: executed,
         production_source_mutation: false,
-        reversible: true,
+        reversible: claimed.action_key === 'CREATE_GOVERNANCE_ISSUE',
+        outcome_verification_required: true,
       },
     })
     return completed
@@ -422,6 +426,13 @@ export async function rollbackGovernedAction(actionId: string, actorUserId: stri
   }).eq('id', action.id).select('*').single()
   if (actionUpdateError || !rolledBack) throw new Error(`Unable to persist autonomy rollback: ${actionUpdateError?.message ?? 'unknown error'}`)
 
+  await invalidateGovernedActionOutcome({
+    projectId: action.project_id,
+    actionId: action.id,
+    actorUserId,
+    reason: `Governed action ${action.id} was rolled back using ${policyRaw.rollback_strategy}.`,
+  })
+
   await writeGovernanceAudit({
     projectId: action.project_id,
     actorUserId,
@@ -499,11 +510,13 @@ export async function applyAllPredictiveRiskGovernedActions() {
 
 export async function listGovernedAutonomy(projectId: string) {
   const admin = createAdminClient()
-  const [policies, actions] = await Promise.all([
+  const [policies, actions, outcomes] = await Promise.all([
     admin.schema('governance').from('autonomy_policies').select('*').eq('project_id', projectId).order('action_key'),
     admin.schema('governance').from('autonomy_actions').select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
+    admin.schema('governance').from('autonomy_action_outcomes').select('*').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(100),
   ])
   if (policies.error) throw new Error(`Unable to list autonomy policies: ${policies.error.message}`)
   if (actions.error) throw new Error(`Unable to list autonomy actions: ${actions.error.message}`)
-  return { policies: policies.data ?? [], actions: actions.data ?? [] }
+  if (outcomes.error) throw new Error(`Unable to list autonomy action outcomes: ${outcomes.error.message}`)
+  return { policies: policies.data ?? [], actions: actions.data ?? [], outcomes: outcomes.data ?? [] }
 }
