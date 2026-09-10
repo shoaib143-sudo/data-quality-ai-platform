@@ -22,3 +22,5 @@ jobs:
           node-version: 24
       - name: Verify governed action learning journey
         run: node scripts/verify-journey-governed-action-learning.mjs
+      - name: Verify operational and immutable outcome authority
+        run: node scripts/verify-v5-outcome-authority-reconciliation.mjs
