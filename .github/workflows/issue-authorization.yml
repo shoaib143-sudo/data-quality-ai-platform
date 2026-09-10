@@ -1,0 +1,54 @@
+name: Issue Authorization Boundary
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/issues/**'
+      - 'lib/auth/**'
+      - 'lib/governance/instance-organization.ts'
+      - 'lib/profiling/request-input.ts'
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'scripts/test-issue-project-authorization.mjs'
+      - 'scripts/test-profiling-request-input.mjs'
+      - 'scripts/verify-single-organization-runtime.mjs'
+      - '.github/workflows/issue-authorization.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/api/issues/**'
+      - 'lib/auth/**'
+      - 'lib/governance/instance-organization.ts'
+      - 'lib/profiling/request-input.ts'
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'scripts/test-issue-project-authorization.mjs'
+      - 'scripts/test-profiling-request-input.mjs'
+      - 'scripts/verify-single-organization-runtime.mjs'
+      - '.github/workflows/issue-authorization.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  authorization-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify issue project authorization
+        run: node scripts/test-issue-project-authorization.mjs
+      - name: Verify profiling request trust boundary
+        run: node scripts/test-profiling-request-input.mjs
+      - name: Verify canonical organization authorization boundary
+        run: node scripts/verify-single-organization-runtime.mjs
