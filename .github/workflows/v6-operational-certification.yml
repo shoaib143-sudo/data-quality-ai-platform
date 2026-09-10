@@ -1,0 +1,165 @@
+name: V6 Operational Certification
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: V0 trusted governance baseline
+        run: node --experimental-strip-types scripts/verify-v0-trusted-governance-baseline.mjs
+      - name: V1 sensitive dataset governance journey
+        run: node scripts/verify-journey-sensitive-governance.mjs
+      - name: V2 DQ incident journey
+        run: node scripts/verify-journey-dq-incident.mjs
+      - name: V3 governed change-impact journey
+        run: node scripts/verify-journey-change-governance.mjs
+      - name: V4 governed investigation journey
+        run: node scripts/verify-journey-governed-investigation.mjs
+      - name: V5 governed outcome learning journey
+        run: node scripts/verify-journey-governed-outcome-learning.mjs
+      - name: Privileged API authorization adversarial gate
+        run: node scripts/audit-user-facing-admin-routes.mjs
+      - name: Worker isolation and capacity gate
+        run: pnpm run verify:worker-runtime
+      - name: Provider timeout and fallback gate
+        run: pnpm run verify:provider-fallback
+      - name: Governed model gateway gate
+        run: pnpm run verify:model-gateway
+      - name: Emergency execution controls gate
+        run: pnpm run verify:execution-controller
+      - name: Retrieval permission and grounding gate
+        run: pnpm run verify:retrieval-provider
+      - name: Evaluation evidence gate
+        run: pnpm run verify:evaluation-engine
+      - name: Migration version collision gate
+        run: node scripts/verify-migration-version-uniqueness.mjs
+      - name: Membership helper ACL replay contract
+        run: node scripts/verify-clean-membership-helper-acl-replay.mjs
+      - name: Synthetic rollback replay contract
+        run: node scripts/verify-clean-synthetic-rollback-replay.mjs
+      - name: V6 certification contract
+        run: node scripts/verify-journey-operational-certification.mjs
+      - name: Production build
+        run: pnpm run build
+      - name: Record live governance database verification state
+        shell: bash
+        run: |
+          if [[ -n "$NEXT_PUBLIC_SUPABASE_URL" && -n "$SUPABASE_SERVICE_ROLE_KEY" ]]; then
+            echo 'Live governance database credentials are available; authenticated database verification will run.'
+          else
+            {
+              echo '## Live governance database verification'
+              echo 'Status: NOT_MEASURED in CI because the required Supabase credentials are not configured for this workflow.'
+              echo 'This is not a PASS. Release evidence must include a separate authenticated live database validation.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Authenticated live database contracts
+        if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: pnpm run verify:database
+
+  runtime-slo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Production concurrency and latency SLO
+        env:
+          PRODUCTION_URL: https://data-quality-ai-platform.vercel.app
+          BENCHMARK_PATH: /login
+          BENCHMARK_REQUESTS: '50'
+          BENCHMARK_CONCURRENCY: '10'
+          BENCHMARK_MAX_P95_MS: '1500'
+          BENCHMARK_MAX_P99_MS: '3000'
+          BENCHMARK_MAX_ERROR_RATE: '0.01'
+          BENCHMARK_MIN_SUCCESSFUL_REQUESTS: '45'
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm run benchmark:production | tee "$RUNNER_TEMP/v6-runtime-slo.json"
+          {
+            echo '## V6 production runtime SLO'
+            echo '```json'
+            cat "$RUNNER_TEMP/v6-runtime-slo.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  clean-database-reconstruction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify migration collision baseline before replay
+        run: node scripts/verify-migration-version-uniqueness.mjs
+      - name: Reconstruct clean Supabase database from migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE"
+          WORK="$RUNNER_TEMP/datanexus-clean-reconstruction"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
+          cd "$WORK"
+          pnpm dlx supabase@2.117.0 init
+          SOURCE_MIGRATION_DIR="$ROOT/supabase/migrations" TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-migration-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-agent-status-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-audit-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-jdbc-fixture-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-observability-incident-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-lineage-legacy-constraint-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-remediation-knowledge-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-intelligence-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-policy-boundary-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-operational-policy-boundary-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-control-evidence-syntax-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-catalog-reconcile-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-membership-helper-acl-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-synthetic-suite-rollback-replay.mjs"
+          pnpm dlx supabase@2.117.0 start
+          trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
+          pnpm dlx supabase@2.117.0 db reset --local
+          pnpm dlx supabase@2.117.0 migration list --local

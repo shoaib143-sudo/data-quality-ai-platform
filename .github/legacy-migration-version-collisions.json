@@ -1,0 +1,15 @@
+{
+  "20260828000000": [
+    "20260828000000_add_job_termination_lifecycle.sql",
+    "20260828000000_job_monitor_operations.sql"
+  ],
+  "20260903000000": [
+    "20260903000000_expand_profiling_metric_contract.sql",
+    "20260903000000_harden_profiling_rls_and_public_grants.sql",
+    "20260903000000_sync_profiling_schema_hash.sql"
+  ],
+  "20260906090000": [
+    "20260906090000_govern_ai_lineage_suggestions.sql",
+    "20260906090000_harden_lineage_identity_and_runs.sql"
+  ]
+}

@@ -1,0 +1,198 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
+const targetDir = process.env.TARGET_MIGRATION_DIR
+if (!targetDir) throw new Error('TARGET_MIGRATION_DIR is required')
+if (!fs.existsSync(targetDir)) throw new Error(`TARGET_MIGRATION_DIR does not exist: ${targetDir}`)
+
+function writeRecoveredMigration(version, name, sql, reason) {
+  const replay = `${version}_${name}.sql`
+  const targetPath = path.join(targetDir, replay)
+  const collision = fs.readdirSync(targetDir).some((file) => file.startsWith(`${version}_`))
+  if (collision) throw new Error(`Recovered governance migration version collides with existing migration ${version}`)
+  fs.writeFileSync(targetPath, `${sql.trim()}\n`)
+  console.log(`RECONSTRUCTED ${replay}: ${reason}`)
+}
+
+writeRecoveredMigration(
+  '20260904205151',
+  'governance_knowledge_model_core',
+  `
+create table if not exists governance.knowledge_documents (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  document_key text not null,
+  document_type text not null check (document_type in ('POLICY','STANDARD','PROCEDURE','REGULATION','FRAMEWORK','GUIDANCE')),
+  title text not null,
+  summary text,
+  content text not null,
+  domain text,
+  jurisdiction text,
+  status text not null default 'ACTIVE' check (status in ('DRAFT','ACTIVE','RETIRED')),
+  effective_at timestamptz,
+  expires_at timestamptz,
+  source_kind text not null default 'SYNTHETIC' check (source_kind in ('SYNTHETIC','INTERNAL','EXTERNAL_REFERENCE')),
+  source_url text,
+  content_hash text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(project_id,document_key)
+);
+
+create table if not exists governance.knowledge_requirements (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  document_id uuid not null references governance.knowledge_documents(id) on delete cascade,
+  requirement_key text not null,
+  title text not null,
+  requirement_text text not null,
+  obligation_type text not null default 'CONTROL' check (obligation_type in ('PRINCIPLE','CONTROL','QUALITY_EXPECTATION','PROCESS','EVIDENCE')),
+  priority text not null default 'MEDIUM' check (priority in ('LOW','MEDIUM','HIGH','CRITICAL')),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(project_id,requirement_key)
+);
+
+create table if not exists governance.critical_data_elements (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  cde_key text not null,
+  name text not null,
+  definition text not null,
+  domain text not null,
+  criticality text not null default 'HIGH' check (criticality in ('MEDIUM','HIGH','CRITICAL')),
+  regulatory_relevance text[] not null default '{}'::text[],
+  classification_label_id uuid references governance.classification_labels(id) on delete set null,
+  owner_role text,
+  steward_role text,
+  status text not null default 'ACTIVE' check (status in ('DRAFT','ACTIVE','RETIRED')),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(project_id,cde_key)
+);
+
+create table if not exists governance.cde_mappings (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  cde_id uuid not null references governance.critical_data_elements(id) on delete cascade,
+  dataset_id uuid not null references catalog.datasets(id) on delete cascade,
+  column_name text,
+  confidence numeric check (confidence is null or (confidence >= 0 and confidence <= 1)),
+  status text not null default 'SUGGESTED' check (status in ('SUGGESTED','APPROVED','REJECTED')),
+  source text not null default 'KNOWLEDGE_BOOTSTRAP',
+  evidence jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(project_id,cde_id,dataset_id,column_name)
+);
+
+create table if not exists governance.knowledge_relationships (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  source_type text not null,
+  source_key text not null,
+  relationship_type text not null,
+  target_type text not null,
+  target_key text not null,
+  confidence numeric check (confidence is null or (confidence >= 0 and confidence <= 1)),
+  status text not null default 'ACTIVE' check (status in ('SUGGESTED','ACTIVE','REJECTED')),
+  evidence jsonb not null default '{}'::jsonb,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(project_id,source_type,source_key,relationship_type,target_type,target_key)
+);
+
+create index if not exists idx_knowledge_documents_project_type on governance.knowledge_documents(project_id,document_type,status);
+create index if not exists idx_knowledge_requirements_project_document on governance.knowledge_requirements(project_id,document_id);
+create index if not exists idx_cdes_project_domain on governance.critical_data_elements(project_id,domain,status);
+create index if not exists idx_cde_mappings_dataset on governance.cde_mappings(project_id,dataset_id,column_name);
+create index if not exists idx_knowledge_relationships_source on governance.knowledge_relationships(project_id,source_type,source_key);
+create index if not exists idx_knowledge_relationships_target on governance.knowledge_relationships(project_id,target_type,target_key);
+`,
+  'production history created these governance knowledge relations before later September 4 migrations reference them. Replay restores only structural prerequisites here because the committed 20260905050000 migration canonically owns their RLS policies, grants, and lexical-search RPC.'
+)
+
+writeRecoveredMigration(
+  '20260904210139',
+  'governance_knowledge_operational_domains',
+  `
+create table if not exists governance.regulatory_applicability (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  regulation_document_id uuid not null references governance.knowledge_documents(id) on delete cascade,
+  scope_type text not null check (scope_type in ('DATASET','COLUMN','CDE','DOMAIN')),
+  scope_key text not null,
+  applicability_status text not null default 'REVIEW_REQUIRED' check (applicability_status in ('APPLICABLE','NOT_APPLICABLE','REVIEW_REQUIRED')),
+  rationale text not null,
+  evidence jsonb not null default '{}'::jsonb,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(project_id,regulation_document_id,scope_type,scope_key)
+);
+
+create table if not exists governance.accountability_assignments (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  scope_type text not null check (scope_type in ('DATASET','CDE','DOMAIN')),
+  scope_key text not null,
+  assignment_type text not null check (assignment_type in ('BUSINESS_OWNER','TECHNICAL_OWNER','DATA_STEWARD')),
+  principal_type text not null default 'ROLE' check (principal_type in ('ROLE','USER')),
+  principal_key text not null,
+  principal_name text not null,
+  accountability text,
+  status text not null default 'ACTIVE' check (status in ('ACTIVE','INACTIVE')),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(project_id,scope_type,scope_key,assignment_type,principal_key)
+);
+
+create table if not exists governance.dataset_certifications (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  dataset_id uuid not null references catalog.datasets(id) on delete cascade,
+  certification_key text not null,
+  certification_status text not null check (certification_status in ('CERTIFIED','PROVISIONAL','EXPIRED')),
+  certification_level text not null default 'STANDARD' check (certification_level in ('STANDARD','CRITICAL','REGULATED')),
+  valid_from timestamptz,
+  valid_until timestamptz,
+  evidence jsonb not null default '{}'::jsonb,
+  decision_summary text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(project_id,certification_key)
+);
+
+create table if not exists governance.remediation_knowledge (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  dataset_id uuid references catalog.datasets(id) on delete set null,
+  issue_id uuid references governance.issues(id) on delete set null,
+  knowledge_key text not null,
+  problem_type text not null,
+  symptom text not null,
+  remediation_action text not null,
+  outcome_status text not null check (outcome_status in ('WORKED','PARTIAL','FAILED')),
+  before_evidence jsonb not null default '{}'::jsonb,
+  after_evidence jsonb not null default '{}'::jsonb,
+  reusable_guidance text not null,
+  confidence numeric check (confidence is null or (confidence >= 0 and confidence <= 1)),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(project_id,knowledge_key)
+);
+
+create index if not exists idx_regulatory_applicability_scope on governance.regulatory_applicability(project_id,scope_type,scope_key,applicability_status);
+create index if not exists idx_accountability_assignments_scope on governance.accountability_assignments(project_id,scope_type,scope_key,assignment_type,status);
+create index if not exists idx_dataset_certifications_dataset on governance.dataset_certifications(project_id,dataset_id,certification_status);
+create index if not exists idx_remediation_knowledge_problem on governance.remediation_knowledge(project_id,problem_type,outcome_status);
+`,
+  'production history created these governance operational-domain relations before downstream September 4 migrations reference them. Replay restores only structural prerequisites here because the committed 20260905052000 migration canonically owns their RLS policies and grants.'
+)
