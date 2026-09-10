@@ -50,6 +50,7 @@ export function createGovernancePolicyDecisionProvider() {
     ? new OpaPolicyDecisionProvider(governed, {
         endpoint: process.env.OPA_URL ?? null,
         decisionPath: process.env.OPA_DECISION_PATH ?? null,
+        authorizationToken: process.env.OPA_AUTH_TOKEN ?? null,
         timeoutMs: process.env.OPA_TIMEOUT_MS ? Number(process.env.OPA_TIMEOUT_MS) : undefined,
       })
     : governed
