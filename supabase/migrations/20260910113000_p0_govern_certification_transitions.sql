@@ -47,7 +47,7 @@ begin
   end if;
 
   select p.organization_id into v_organization_id
-  from catalog.projects p
+  from app.projects p
   where p.id = p_project_id;
   if v_organization_id is null then
     raise exception 'Project was not found.' using errcode = 'P0002';
@@ -132,7 +132,7 @@ begin
     raise exception 'Certification cannot transition from % to %.', v_request.status, v_target_status using errcode = '23514';
   end if;
 
-  select p.organization_id into v_organization_id from catalog.projects p where p.id = v_request.project_id;
+  select p.organization_id into v_organization_id from app.projects p where p.id = v_request.project_id;
   if p_assigned_to is not null and not exists (
     select 1 from app.organization_members om
     where om.organization_id = v_organization_id and om.user_id = p_assigned_to
