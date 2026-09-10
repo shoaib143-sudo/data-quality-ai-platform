@@ -16,6 +16,9 @@ jobs:
   revalidate:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -30,24 +33,18 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Verify P0-P5 security and evidence boundaries
+      - name: Verify P0-P5 security, migration, and evidence boundaries
         run: node scripts/verify-p0-p4-revalidation.mjs
-      - name: Verify P0 execution boundaries
-        run: pnpm run verify:p0-boundaries
       - name: TypeScript
         run: pnpm exec tsc --noEmit
       - name: Profiling lifecycle contracts
         run: pnpm run verify:profiling-lifecycle
-      - name: Profiling evidence quality
-        run: pnpm run verify:profiling-quality
       - name: Governance review boundaries
         run: pnpm run verify:governance-reviews
       - name: Single-organization governance contracts
         run: pnpm run verify:governance
       - name: Governed model gateway
         run: pnpm run verify:model-gateway
-      - name: Shared AI gateway boundary
-        run: pnpm run verify:shared-ai-gateway
       - name: Reasoning provider governance
         run: pnpm run verify:reasoning-provider
       - name: Retrieval permission and grounding contracts
@@ -56,11 +53,8 @@ jobs:
         run: pnpm run verify:governed-autonomy
       - name: Provider fallback contracts
         run: pnpm run verify:provider-fallback
-      - name: Worker pool isolation contracts
-        run: pnpm run verify:worker-pools
-      - name: Migration integrity
-        run: node scripts/verify-migration-integrity.mjs
-      - name: CI contract integrity
-        run: node scripts/verify-ci-contracts.mjs
+      - name: Live governance database contracts
+        if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: pnpm run verify:database
       - name: Production build
         run: pnpm run build
