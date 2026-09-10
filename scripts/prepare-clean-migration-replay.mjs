@@ -42,20 +42,9 @@ function writeReconstruction(version, suffix, sql, reason) {
   assignedVersions.add(version)
   const fileName = `${version}_${suffix}.sql`
   fs.writeFileSync(path.join(targetDir, fileName), sql)
-  manifest.push({
-    source: null,
-    replay: fileName,
-    normalized: false,
-    reconstructed: true,
-    transformed: false,
-    reason
-  })
+  manifest.push({ source: null, replay: fileName, normalized: false, reconstructed: true, transformed: false, reason })
 }
 
-// Replay-only compatibility transforms repair historical dependencies that no
-// longer exist in the canonical schema. Each transform is exact and fail-closed:
-// if the released source no longer contains the expected text, replay preparation
-// aborts rather than silently mutating an unknown migration.
 const replayTransforms = new Map([
   [
     '20260828000000_job_monitor_operations.sql',
@@ -81,15 +70,10 @@ using (
   ]
 ])
 
-// The live estate contains profiling.dataset_execution_sources, but the released
-// migration history starts by hardening that table and never records its original
-// creation. Keep released migrations immutable and make the historical gap explicit
-// only in the disposable clean-replay directory used by V6 certification.
 writeReconstruction(
   '20260825235959',
   'reconstruct_dataset_execution_sources',
   `begin;
-
 create table if not exists profiling.dataset_execution_sources (
   id uuid primary key default gen_random_uuid(),
   dataset_version_id uuid not null references catalog.dataset_versions(id) on delete cascade,
@@ -100,28 +84,17 @@ create table if not exists profiling.dataset_execution_sources (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
-create index if not exists idx_dataset_execution_sources_version
-  on profiling.dataset_execution_sources(dataset_version_id);
-
-create unique index if not exists dataset_execution_sources_one_active_per_version
-  on profiling.dataset_execution_sources(dataset_version_id)
-  where active = true;
-
+create index if not exists idx_dataset_execution_sources_version on profiling.dataset_execution_sources(dataset_version_id);
+create unique index if not exists dataset_execution_sources_one_active_per_version on profiling.dataset_execution_sources(dataset_version_id) where active = true;
 commit;
 `,
   'Released history hardens profiling.dataset_execution_sources before any recorded table creation; reconstruction matches the live table contract.'
 )
 
-// The live estate also contains profiling.data_quality_scores, while released
-// history first references it in the quality-score normalization migration. Rebuild
-// the missing canonical prerequisite immediately before that normalization so the
-// original migration remains immutable and still proves its intended behavior.
 writeReconstruction(
   '20260902021959',
   'reconstruct_data_quality_scores',
   `begin;
-
 create table if not exists profiling.data_quality_scores (
   id uuid primary key default gen_random_uuid(),
   profile_run_id uuid not null references profiling.profile_runs(id) on delete cascade,
@@ -133,10 +106,94 @@ create table if not exists profiling.data_quality_scores (
   created_at timestamptz not null default now(),
   constraint profile_quality_scores_unique_run unique (profile_run_id)
 );
-
 commit;
 `,
   'Released history normalizes profiling.data_quality_scores before any recorded table creation; reconstruction matches the live table contract.'
+)
+
+writeReconstruction(
+  '20260902041959',
+  'reconstruct_profile_execution_persistence_rpc',
+  `begin;
+create or replace function profiling.persist_profile_execution_result(
+  p_profile_run_id uuid,
+  p_metrics jsonb default '[]'::jsonb,
+  p_findings jsonb default '[]'::jsonb,
+  p_score jsonb default '{}'::jsonb,
+  p_status text default 'COMPLETED'::text
+) returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, profiling
+as $function$
+begin
+  insert into profiling.profile_metrics (
+    profile_run_id, metric_definition_id, profile_column_id, metric_key,
+    numeric_value, text_value, boolean_value, json_value
+  )
+  select
+    p_profile_run_id,
+    (m->>'metric_definition_id')::uuid,
+    nullif(m->>'profile_column_id','')::uuid,
+    m->>'metric_key',
+    nullif(m->>'numeric_value','')::numeric,
+    m->>'text_value',
+    nullif(m->>'boolean_value','')::boolean,
+    m->'json_value'
+  from jsonb_array_elements(p_metrics) m
+  on conflict (profile_run_id, profile_column_id, metric_key) do update set
+    numeric_value = excluded.numeric_value,
+    text_value = excluded.text_value,
+    boolean_value = excluded.boolean_value,
+    json_value = excluded.json_value;
+
+  insert into profiling.profile_findings (
+    profile_run_id, profile_column_id, finding_type, severity, title,
+    description, confidence, evidence, recommendation
+  )
+  select
+    p_profile_run_id,
+    nullif(f->>'profile_column_id','')::uuid,
+    f->>'finding_type',
+    f->>'severity',
+    f->>'title',
+    f->>'description',
+    nullif(f->>'confidence','')::numeric,
+    coalesce(f->'evidence','{}'::jsonb),
+    f->'recommendation'
+  from jsonb_array_elements(p_findings) f
+  where not exists (
+    select 1 from profiling.profile_findings existing
+    where existing.profile_run_id = p_profile_run_id
+      and existing.finding_type = f->>'finding_type'
+      and existing.title = f->>'title'
+  );
+
+  insert into profiling.data_quality_scores (
+    profile_run_id, completeness_score, uniqueness_score, validity_score, accuracy_score, overall_score
+  ) values (
+    p_profile_run_id,
+    nullif(p_score->>'completeness_score','')::numeric,
+    nullif(p_score->>'uniqueness_score','')::numeric,
+    nullif(p_score->>'validity_score','')::numeric,
+    nullif(p_score->>'accuracy_score','')::numeric,
+    nullif(p_score->>'overall_score','')::numeric
+  )
+  on conflict (profile_run_id) do update set
+    completeness_score = excluded.completeness_score,
+    uniqueness_score = excluded.uniqueness_score,
+    validity_score = excluded.validity_score,
+    accuracy_score = excluded.accuracy_score,
+    overall_score = excluded.overall_score;
+
+  update profiling.profile_runs
+  set status = p_status, completed_at = now()
+  where id = p_profile_run_id;
+end;
+$function$;
+commit;
+`,
+  'Released history hardens profiling.persist_profile_execution_result before any recorded function creation; reconstruction matches the live function contract.'
 )
 
 for (const file of files) {
@@ -153,25 +210,15 @@ for (const file of files) {
 
   if (transform) {
     const originalSql = fs.readFileSync(sourcePath, 'utf8')
-    if (!originalSql.includes(transform.expected)) {
-      throw new Error(`Replay compatibility transform no longer matches ${file}`)
-    }
-    const replaySql = originalSql.replace(transform.expected, transform.replacement)
-    fs.writeFileSync(targetPath, replaySql)
+    if (!originalSql.includes(transform.expected)) throw new Error(`Replay compatibility transform no longer matches ${file}`)
+    fs.writeFileSync(targetPath, originalSql.replace(transform.expected, transform.replacement))
     transformed = true
     transformReason = transform.reason
   } else {
     fs.copyFileSync(sourcePath, targetPath)
   }
 
-  manifest.push({
-    source: file,
-    replay: targetName,
-    normalized: replayVersion !== originalVersion,
-    reconstructed: false,
-    transformed,
-    reason: transformReason
-  })
+  manifest.push({ source: file, replay: targetName, normalized: replayVersion !== originalVersion, reconstructed: false, transformed, reason: transformReason })
 }
 
 fs.writeFileSync(path.join(targetDir, 'replay-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
