@@ -1,0 +1,31 @@
+name: JDBC Connector Timeout Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/connectors/jdbc.ts'
+      - 'scripts/verify-jdbc-connector-timeout-contract.mjs'
+      - '.github/workflows/jdbc-connector-timeout-contract.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/connectors/jdbc.ts'
+      - 'scripts/verify-jdbc-connector-timeout-contract.mjs'
+      - '.github/workflows/jdbc-connector-timeout-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify JDBC connector timeout contract
+        run: node scripts/verify-jdbc-connector-timeout-contract.mjs
