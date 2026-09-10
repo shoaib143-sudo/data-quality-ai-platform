@@ -145,6 +145,7 @@ jobs:
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-audit-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-jdbc-fixture-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-observability-incident-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-lineage-legacy-constraint-replay.mjs"
           pnpm dlx supabase@2.117.0 start
           trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
           pnpm dlx supabase@2.117.0 db reset --local
