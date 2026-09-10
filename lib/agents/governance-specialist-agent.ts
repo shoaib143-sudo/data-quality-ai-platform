@@ -4,6 +4,8 @@ import {
   GOVERNANCE_READ_AGENT_KEYS,
   type GovernanceReadAgentKey,
 } from '@/lib/agents/governance-read-agent'
+import { getGovernedAgentPolicy } from '@/lib/agents/governed-agent-registry'
+import { assertGovernedInvestigationGrounding, buildGovernedInvestigation } from '@/lib/agents/governed-investigation'
 
 const allowedKeys = new Set<string>(GOVERNANCE_READ_AGENT_KEYS)
 
@@ -357,6 +359,7 @@ function roleEvidence(agentKey: GovernanceReadAgentKey, ctx: SpecialistContext) 
       evidence: {
         incidents: ctx.incidents.slice(0, 30),
         issues: ctx.issues.slice(0, 30),
+        alerts: freshnessAlerts.slice(0, 50),
         anomalies: ctx.anomalies.slice(0, 50),
         failedRules: failedRules.slice(0, 50),
         remediationKnowledge: ctx.remediationKnowledge.slice(0, 30),
@@ -462,6 +465,17 @@ export async function executeGovernanceSpecialistAgent(input: {
 
     const graph = await loadGraph(admin, input.projectId, knowledgeMatches[0])
     const specialized = roleEvidence(agentKey, ctx)
+    const agentPolicy = getGovernedAgentPolicy(agentKey)
+    const investigation = assertGovernedInvestigationGrounding(buildGovernedInvestigation({
+      projectId: input.projectId,
+      organizationId: projectResult.data.organization_id,
+      agentKey,
+      question: suppliedQuestion,
+      context: ctx,
+      specialist: specialized as Record<string, unknown>,
+      knowledgeMatches,
+      graph,
+    }))
     const evidenceSources = [
       'app.projects', 'catalog.datasets', 'catalog.dataset_versions', 'profiling.profile_runs', 'profiling.quality_rule_runs',
       'profiling.profile_comparisons', 'profiling.profile_anomalies', 'profiling.observability_alerts',
@@ -475,7 +489,7 @@ export async function executeGovernanceSpecialistAgent(input: {
     const confidence = Math.max(0.45, Math.min(0.98, 0.55 + Math.min(0.25, evidenceCount / 200) + (graph.edges.length ? 0.08 : 0) + (knowledgeMatches.length ? 0.08 : 0)))
 
     const output = {
-      agent: { key: agentKey, name: definition.name, version: definition.version },
+      agent: { key: agentKey, name: definition.name, version: definition.version, policy: agentPolicy },
       question: suppliedQuestion,
       generatedAt: new Date().toISOString(),
       mode: 'deterministic_specialist_read_only',
@@ -487,6 +501,7 @@ export async function executeGovernanceSpecialistAgent(input: {
         knowledgeMatches: knowledgeMatches.length,
         graphAnchor: graph.anchor,
         graphEdges: graph.edges.length,
+        sharedInvestigation: investigation.queryPlan,
         historySignals: {
           profileRuns: ctx.profileRuns.length,
           qualityRuleRuns: ctx.ruleRuns.length,
@@ -506,9 +521,10 @@ export async function executeGovernanceSpecialistAgent(input: {
         matches: knowledgeMatches.slice(0, 20),
         graph: { anchor: graph.anchor, edges: graph.edges.slice(0, 100) },
       },
+      investigation,
       confidence,
       evidence_count: evidenceCount,
-      evidence_sources: evidenceSources,
+      evidence_sources: [...evidenceSources, 'governed_investigation.contract.v1'],
       approval_status: 'NOT_APPLICABLE_READ_ONLY',
       limitations: [
         'This run is deterministic and read-only; it does not execute governance mutations.',
@@ -516,6 +532,7 @@ export async function executeGovernanceSpecialistAgent(input: {
         'Graph context is bounded to five hops and 100 edges.',
         'Field-lineage evidence is bounded to the most recent 300 transformations/edges and 500 column mappings for a project.',
         'Freshness currently uses completed profiling observation time as a proxy until source-native watermark telemetry is available.',
+        'Shared investigation provenance is project scoped and unsupported claim evidence fails the run before success is persisted.',
       ],
     }
 
@@ -546,6 +563,10 @@ export async function executeGovernanceSpecialistAgent(input: {
         field_lineage_mapping_count: ctx.lineageColumnMappings.length,
         transformation_count: ctx.lineageTransformations.length,
         knowledge_match_count: knowledgeMatches.length,
+        investigation_contract_version: investigation.contractVersion,
+        investigation_grounding_status: investigation.grounding.status,
+        investigation_evidence_ref_count: investigation.grounding.evidenceRefCount,
+        investigation_referenced_evidence_count: investigation.grounding.referencedEvidenceCount,
       },
     })
 

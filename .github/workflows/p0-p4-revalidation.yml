@@ -41,6 +41,8 @@ jobs:
         run: node scripts/verify-journey-dq-incident.mjs
       - name: V3 governed change-impact journey
         run: node scripts/verify-journey-change-governance.mjs
+      - name: V4 governed investigation and eight-agent journey
+        run: node scripts/verify-journey-governed-investigation.mjs
       - name: Verify P0-P5 security, migration, and evidence boundaries
         run: node scripts/verify-p0-p4-revalidation.mjs
       - name: Worker isolation and capacity contracts
