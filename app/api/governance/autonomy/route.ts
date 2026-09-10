@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runWithTelemetryTraceContext } from '@/lib/ai/telemetry-trace-context-store'
@@ -11,6 +11,7 @@ import {
   rollbackGovernedAction,
 } from '@/lib/governance/governed-autonomy'
 import { executeApprovedAutonomyAction } from '@/lib/governance/approved-autonomy-execution'
+import { verifyGovernedActionOutcome } from '@/lib/governance/governed-action-outcomes'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -35,7 +36,7 @@ async function requireActionInProject(actionId: string, projectId: string) {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const projectId = new URL(request.url).searchParams.get('projectId')?.trim() ?? ''
     if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
     await authorizeProject(user.id, projectId, 'agent.execute')
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const body = await request.json().catch(() => null) as Record<string, unknown> | null
     const projectId = text(body?.projectId ?? body?.project_id)
     const operation = text(body?.operation).toUpperCase()
@@ -69,6 +70,14 @@ export async function POST(request: Request) {
         if (!(await requireActionInProject(actionId, projectId))) return NextResponse.json({ error: 'Autonomy action was not found in this project.' }, { status: 404 })
         const action = await executeApprovedAutonomyAction(actionId, user.id)
         return NextResponse.json({ accepted: true, action })
+      }
+
+      if (operation === 'VERIFY_OUTCOME') {
+        const actionId = text(body?.actionId ?? body?.action_id)
+        if (!actionId) return NextResponse.json({ error: 'actionId is required.' }, { status: 400 })
+        if (!(await requireActionInProject(actionId, projectId))) return NextResponse.json({ error: 'Autonomy action was not found in this project.' }, { status: 404 })
+        const verification = await verifyGovernedActionOutcome({ projectId, actionId, actorUserId: user.id })
+        return NextResponse.json({ accepted: true, verification })
       }
 
       if (operation === 'ROLLBACK') {
