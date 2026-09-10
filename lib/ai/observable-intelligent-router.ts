@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type {
   IntelligentModelRouter,
   IntelligentRouteContext,
@@ -8,6 +9,7 @@ import type {
   ReasoningRequest,
   ReasoningResult,
 } from './reasoning-provider'
+import type { ModelCostAccountingProvider, ModelCostAccountingRecord } from './cost-accounting'
 import type { ProjectReasoningBudget, ReasoningBudgetPolicyProvider } from './reasoning-budget-policy'
 import type { ProjectBudgetAdmission, ProjectBudgetAdmissionProvider } from './resource-budget-admission'
 import type { TelemetryProvider, TelemetryTraceContext } from './telemetry-provider'
@@ -103,6 +105,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
   private readonly context: ObservableReasoningContext
   private readonly budgetPolicy?: ReasoningBudgetPolicyProvider
   private readonly budgetAdmission?: ProjectBudgetAdmissionProvider
+  private readonly costAccounting?: ModelCostAccountingProvider
 
   constructor(
     provider: ReasoningProvider,
@@ -110,12 +113,14 @@ class ObservableReasoningProvider implements ReasoningProvider {
     context: ObservableReasoningContext,
     budgetPolicy?: ReasoningBudgetPolicyProvider,
     budgetAdmission?: ProjectBudgetAdmissionProvider,
+    costAccounting?: ModelCostAccountingProvider,
   ) {
     this.provider = provider
     this.telemetry = telemetry
     this.context = context
     this.budgetPolicy = budgetPolicy
     this.budgetAdmission = budgetAdmission
+    this.costAccounting = costAccounting
     this.id = provider.id
   }
 
@@ -124,6 +129,8 @@ class ObservableReasoningProvider implements ReasoningProvider {
     let budgetEvidence = applyProjectOutputBudget(request, null)
     let admission: ProjectBudgetAdmission | null = null
     let admissionCorrelationId: string | null = null
+    let invocationId: string | null = null
+    let costEvidence: ModelCostAccountingRecord | null = null
     try {
       let projectBudget: ProjectReasoningBudget | null = null
       if (this.budgetPolicy) {
@@ -142,6 +149,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
         if (!admission.admitted) throw admissionDeniedError(admission.reason)
       }
 
+      invocationId = randomUUID()
       let result: ReasoningResult
       try {
         result = await this.provider.generateJson(budgetEvidence.request)
@@ -158,6 +166,19 @@ class ObservableReasoningProvider implements ReasoningProvider {
             // evidence and must not rewrite a completed model result or mask the provider failure.
           }
         }
+      }
+
+      if (this.costAccounting) {
+        costEvidence = await this.costAccounting.recordInvocation({
+          invocationId,
+          projectId: this.context.projectId,
+          executionCorrelationId: this.context.executionCorrelationId ?? null,
+          providerRequestId: result.providerRequestId ?? null,
+          providerId: result.provider,
+          modelName: result.model,
+          usage: result.usage,
+          observedAt: new Date().toISOString(),
+        })
       }
 
       try {
@@ -181,6 +202,13 @@ class ObservableReasoningProvider implements ReasoningProvider {
             resource_budget_lease_id: admission?.leaseId ?? null,
             resource_budget_request_count_last_minute: admission?.requestCountLastMinute ?? null,
             resource_budget_active_concurrency: admission?.activeConcurrency ?? null,
+            invocation_id: invocationId,
+            cost_accounting_status: costEvidence?.accountingStatus ?? null,
+            cost_pricing_version_id: costEvidence?.pricingVersionId ?? null,
+            cost_currency: costEvidence?.currency ?? null,
+            canonical_input_cost: costEvidence?.inputCost ?? null,
+            canonical_output_cost: costEvidence?.outputCost ?? null,
+            canonical_total_cost: costEvidence?.totalCost ?? null,
             provider_request_id: result.providerRequestId ?? null, total_tokens: result.usage?.totalTokens ?? null,
           },
         })
@@ -210,6 +238,8 @@ class ObservableReasoningProvider implements ReasoningProvider {
             resource_budget_lease_id: admission?.leaseId ?? null,
             resource_budget_request_count_last_minute: admission?.requestCountLastMinute ?? null,
             resource_budget_active_concurrency: admission?.activeConcurrency ?? null,
+            invocation_id: invocationId,
+            cost_accounting_status: costEvidence?.accountingStatus ?? null,
             error_name: error instanceof Error ? error.name : 'UnknownError',
             provider_http_status: providerHttpError?.status ?? null,
             provider_request_id: providerHttpError?.providerRequestId ?? null,
@@ -228,17 +258,20 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
   private readonly telemetry: TelemetryProvider
   private readonly budgetPolicy?: ReasoningBudgetPolicyProvider
   private readonly budgetAdmission?: ProjectBudgetAdmissionProvider
+  private readonly costAccounting?: ModelCostAccountingProvider
 
   constructor(
     router: IntelligentModelRouter,
     telemetry: TelemetryProvider,
     budgetPolicy?: ReasoningBudgetPolicyProvider,
     budgetAdmission?: ProjectBudgetAdmissionProvider,
+    costAccounting?: ModelCostAccountingProvider,
   ) {
     this.router = router
     this.telemetry = telemetry
     this.budgetPolicy = budgetPolicy
     this.budgetAdmission = budgetAdmission
+    this.costAccounting = costAccounting
   }
 
   async route(context: IntelligentRouteContext): Promise<IntelligentRouteDecision> {
@@ -276,7 +309,7 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
         aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null, modelName: decision.evidence?.modelName ?? null,
         routingPolicyId: decision.evidence?.routingPolicyId ?? null, routingPolicyReason: decision.evidence?.routingPolicyReason ?? null,
         traceContext: context.traceContext ?? null, routeSource: decision.source, routeReason: decision.reason,
-      }, this.budgetPolicy, this.budgetAdmission),
+      }, this.budgetPolicy, this.budgetAdmission, this.costAccounting),
     }
   }
 }
