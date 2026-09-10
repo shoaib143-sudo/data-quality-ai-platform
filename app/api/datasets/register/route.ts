@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
@@ -17,18 +18,14 @@ export async function POST(request: Request) {
   let datasetId: string | null = null
   let versionId: string | null = null
   try {
-    const user = await requireUser()
-    const admin = createAdminClient()
+    const user = await requireApiUser()
     const body = await request.json()
     const projectId = text(body.projectId), sourceId = text(body.sourceId), name = text(body.name)
     const description = text(body.description), sourceIdentifier = text(body.sourceIdentifier), businessDomain = text(body.businessDomain)
     if (!projectId || !sourceId || !name || !sourceIdentifier) return NextResponse.json({ error: 'projectId, sourceId, name, and sourceIdentifier are required.' }, { status: 400 })
 
-    const { data: project, error: projectError } = await admin.schema('app').from('projects').select('id, organization_id').eq('id', projectId).maybeSingle()
-    if (projectError || !project) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
-    const { data: membership, error: membershipError } = await admin.schema('app').from('organization_members').select('organization_id, user_id, role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-    if (membershipError || !membership) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
-    if (!['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Your role cannot register datasets.' }, { status: 403 })
+    await authorizeProject(user.id, projectId, 'catalog.update')
+    const admin = createAdminClient()
 
     const { data: source, error: sourceError } = await admin.schema('catalog').from('data_sources').select('id, project_id, name, source_type, connection_metadata, status').eq('id', sourceId).eq('project_id', projectId).in('status', ['ACTIVE', 'CONFIGURED']).maybeSingle()
     if (sourceError || !source) return NextResponse.json({ error: 'The selected data source is unavailable.' }, { status: 404 })
@@ -48,10 +45,6 @@ export async function POST(request: Request) {
     let sourceValidation = await validateDataSourceForProfiling(admin, validationSource, sourceIdentifier)
     const sourceReady = sourceValidation.valid
 
-    // Dataset onboarding and source readiness are separate lifecycle steps. A configured
-    // JDBC source may be registered as a dataset before server-side credentials/connectivity
-    // are available. The dataset remains visible but is not profiling-ready until validation
-    // succeeds. Never mark an unvalidated source ACTIVE.
     if (!sourceReady && wasConfigured && sourceType === 'jdbc') {
       sourceValidation = {
         ...sourceValidation,
@@ -125,6 +118,8 @@ export async function POST(request: Request) {
     if (versionId) await admin.schema('profiling').from('dataset_execution_sources').delete().eq('dataset_version_id', versionId)
     if (versionId) await admin.schema('catalog').from('dataset_versions').delete().eq('id', versionId)
     if (datasetId) await admin.schema('catalog').from('datasets').delete().eq('id', datasetId)
+    const authError = authorizationErrorResponse(error)
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status })
     const message = error instanceof Error ? error.message : 'Dataset registration failed.'
     return NextResponse.json({ error: message }, { status: 500 })
   }
