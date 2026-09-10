@@ -33,6 +33,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: V0 trusted governance baseline
+        run: node --experimental-strip-types scripts/verify-v0-trusted-governance-baseline.mjs
       - name: Verify P0-P5 security, migration, and evidence boundaries
         run: node scripts/verify-p0-p4-revalidation.mjs
       - name: Worker isolation and capacity contracts

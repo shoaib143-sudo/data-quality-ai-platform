@@ -1,0 +1,66 @@
+{
+  "version": "v0",
+  "estateKey": "customer-orders-payments",
+  "description": "Deterministic reference estate for trusted operational governance journeys. This fixture is non-production and must never be mixed with customer evidence.",
+  "domains": ["CUSTOMER", "COMMERCE", "PAYMENTS", "ANALYTICS"],
+  "sources": [
+    {"id":"src-crm","name":"CRM","kind":"JDBC"},
+    {"id":"src-commerce","name":"Commerce","kind":"JDBC"},
+    {"id":"src-payments","name":"Payments","kind":"JDBC"},
+    {"id":"src-warehouse","name":"Warehouse","kind":"JDBC"}
+  ],
+  "datasets": [
+    {"id":"crm.customers","sourceId":"src-crm","domain":"CUSTOMER","criticality":"CRITICAL","sensitivity":"HIGH"},
+    {"id":"crm.contacts","sourceId":"src-crm","domain":"CUSTOMER","criticality":"HIGH","sensitivity":"HIGH"},
+    {"id":"commerce.orders","sourceId":"src-commerce","domain":"COMMERCE","criticality":"CRITICAL","sensitivity":"MEDIUM"},
+    {"id":"commerce.order_items","sourceId":"src-commerce","domain":"COMMERCE","criticality":"HIGH","sensitivity":"LOW"},
+    {"id":"payments.payments","sourceId":"src-payments","domain":"PAYMENTS","criticality":"CRITICAL","sensitivity":"HIGH"},
+    {"id":"payments.refunds","sourceId":"src-payments","domain":"PAYMENTS","criticality":"HIGH","sensitivity":"HIGH"},
+    {"id":"warehouse.dim_customer","sourceId":"src-warehouse","domain":"ANALYTICS","criticality":"CRITICAL","sensitivity":"HIGH"},
+    {"id":"warehouse.fact_orders","sourceId":"src-warehouse","domain":"ANALYTICS","criticality":"CRITICAL","sensitivity":"MEDIUM"},
+    {"id":"warehouse.fact_payments","sourceId":"src-warehouse","domain":"ANALYTICS","criticality":"CRITICAL","sensitivity":"HIGH"},
+    {"id":"analytics.revenue_daily","sourceId":"src-warehouse","domain":"ANALYTICS","criticality":"CRITICAL","sensitivity":"LOW"}
+  ],
+  "criticalDataElements": [
+    {"key":"CUSTOMER_IDENTIFIER","name":"Customer Identifier","criticality":"CRITICAL","fields":["crm.customers.customer_id","commerce.orders.customer_id","payments.payments.customer_id","warehouse.dim_customer.customer_key"]},
+    {"key":"CUSTOMER_EMAIL","name":"Customer Contact Email","criticality":"HIGH","fields":["crm.customers.email","crm.contacts.email","warehouse.dim_customer.email"]},
+    {"key":"PAYMENT_AMOUNT","name":"Payment Amount","criticality":"CRITICAL","fields":["payments.payments.amount","warehouse.fact_payments.amount"]},
+    {"key":"ORDER_AMOUNT","name":"Order Amount","criticality":"CRITICAL","fields":["commerce.orders.total_amount","warehouse.fact_orders.total_amount","analytics.revenue_daily.revenue_amount"]}
+  ],
+  "controls": [
+    {"key":"CDE_OWNER_REQUIRED","enforcementMode":"ENFORCE","appliesTo":"CRITICAL_DATA_ELEMENT"},
+    {"key":"SENSITIVE_CLASSIFICATION_REVIEW","enforcementMode":"ENFORCE","appliesTo":"SENSITIVE_FIELD"},
+    {"key":"CUSTOMER_ID_UNIQUENESS","enforcementMode":"ENFORCE","appliesTo":"CUSTOMER_IDENTIFIER"},
+    {"key":"CUSTOMER_EMAIL_COMPLETENESS","enforcementMode":"ADVISE","appliesTo":"CUSTOMER_EMAIL"},
+    {"key":"PAYMENT_ORDER_REFERENTIAL_INTEGRITY","enforcementMode":"ENFORCE","appliesTo":"PAYMENT_AMOUNT"},
+    {"key":"ORDER_FRESHNESS","enforcementMode":"ADVISE","appliesTo":"commerce.orders"},
+    {"key":"SENSITIVE_RETENTION_POLICY","enforcementMode":"ENFORCE","appliesTo":"HIGH_SENSITIVITY"}
+  ],
+  "businessContext": [
+    {"id":"process-order-fulfilment","type":"BUSINESS_PROCESS","name":"Order Fulfilment"},
+    {"id":"process-payment-settlement","type":"BUSINESS_PROCESS","name":"Payment Settlement"},
+    {"id":"report-executive-revenue","type":"REPORT","name":"Executive Revenue Report"}
+  ],
+  "lineage": [
+    {"from":"crm.customers.customer_id","to":"warehouse.dim_customer.customer_key","transformation":"CAST"},
+    {"from":"warehouse.dim_customer.customer_key","to":"warehouse.fact_orders.customer_key","transformation":"JOIN"},
+    {"from":"commerce.orders.total_amount","to":"warehouse.fact_orders.total_amount","transformation":"DIRECT"},
+    {"from":"payments.payments.amount","to":"warehouse.fact_payments.amount","transformation":"DIRECT"},
+    {"from":"warehouse.fact_orders.total_amount","to":"analytics.revenue_daily.revenue_amount","transformation":"AGGREGATION"}
+  ],
+  "scenarios": [
+    {"key":"clean-baseline","mode":"NORMAL","holdout":false,"expectedSignals":["PROFILE_COMPLETE","CONTROL_POSTURE_AVAILABLE"]},
+    {"key":"customer-email-null-regression","mode":"MUTATION","holdout":false,"expectedSignals":["DQ_FAIL","CDE_IMPACT","REMEDIATION_REQUIRED"]},
+    {"key":"duplicate-customer-id","mode":"MUTATION","holdout":false,"expectedSignals":["UNIQUENESS_FAIL","CRITICAL_CDE_IMPACT"]},
+    {"key":"orphan-payment","mode":"MUTATION","holdout":false,"expectedSignals":["REFERENTIAL_INTEGRITY_FAIL","PAYMENT_IMPACT"]},
+    {"key":"orders-freshness-breach","mode":"MUTATION","holdout":false,"expectedSignals":["FRESHNESS_FAIL","DOWNSTREAM_IMPACT"]},
+    {"key":"customer-id-type-change","mode":"MUTATION","holdout":false,"expectedSignals":["SCHEMA_CHANGE","FIELD_LINEAGE_IMPACT","CONTRACT_IMPACT"]},
+    {"key":"new-sensitive-field","mode":"MUTATION","holdout":false,"expectedSignals":["CLASSIFICATION_SUGGESTION","STEWARD_REVIEW_REQUIRED"]},
+    {"key":"expired-waiver","mode":"DEGRADED","holdout":false,"expectedSignals":["WAIVER_INVALID","CONTROL_REEVALUATION_REQUIRED"]},
+    {"key":"missing-steward","mode":"DEGRADED","holdout":false,"expectedSignals":["ACCOUNTABILITY_GAP"]},
+    {"key":"contract-breach","mode":"MUTATION","holdout":false,"expectedSignals":["CONTRACT_FAIL","CERTIFICATION_IMPACT"]},
+    {"key":"malicious-governance-document","mode":"ADVERSARIAL","holdout":true,"expectedSignals":["PROMPT_INJECTION_CONTAINED","NO_PERMISSION_ESCALATION"]},
+    {"key":"provider-timeout","mode":"DEGRADED","holdout":true,"expectedSignals":["PROVIDER_FALLBACK_OR_EXPLICIT_FAILURE","NO_FABRICATED_EVIDENCE"]},
+    {"key":"partial-profile","mode":"DEGRADED","holdout":true,"expectedSignals":["PARTIAL_OR_UNAVAILABLE","NO_FALSE_PASS"]}
+  ]
+}
