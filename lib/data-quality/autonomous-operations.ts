@@ -274,6 +274,7 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
   if (qualityRunsError) throw new Error(`Unable to load data quality outcomes: ${qualityRunsError.message}`)
 
   const typedRuns = (qualityRuns ?? []) as QualityRun[]
+  const noActiveControls = typedRuns.length === 0
   const failedRuns = typedRuns.filter((row) => row.status === 'FAILED')
   const ruleIds = [...new Set(failedRuns.map((row) => row.rule_definition_id))]
   const { data: rules, error: rulesError } = ruleIds.length
@@ -326,10 +327,16 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
   }
   const recommendations = [...recommendationMap.values()]
   const approvalRequired = recommendations.some((item) => item.approval_required === true)
-  const status = failedRuns.length ? (approvalRequired ? 'APPROVAL_REQUIRED' : 'ATTENTION_REQUIRED') : 'CONTROLLED'
+  const status = noActiveControls
+    ? 'NO_ACTIVE_CONTROLS'
+    : failedRuns.length
+      ? (approvalRequired ? 'APPROVAL_REQUIRED' : 'ATTENTION_REQUIRED')
+      : 'CONTROLLED'
 
   const evidence = {
     total_rule_runs: typedRuns.length,
+    active_controls_evaluated: typedRuns.length,
+    control_coverage: noActiveControls ? 'NONE' : 'EVALUATED',
     failed_rule_runs: failedRuns.length,
     failed_rule_definitions: failedRules.length,
     row_exceptions: exceptions?.length ?? 0,
@@ -349,12 +356,16 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
     })),
   }
 
-  const summary = failedRuns.length
-    ? `${failedRuns.length} data quality control outcome${failedRuns.length === 1 ? '' : 's'} failed across ${failedRules.length} governed rule${failedRules.length === 1 ? '' : 's'}. Highest severity is ${severity}.`
-    : 'All executed data quality controls passed. No remediation is required.'
-  const businessImpact = failedRuns.length
-    ? 'Failed controls can propagate invalid, incomplete, duplicate or anomalous records into downstream reporting, analytics, integrations and governed decisions.'
-    : 'No material quality-control impact was detected in this execution.'
+  const summary = noActiveControls
+    ? 'No active data quality controls were available for evaluation. Suggested controls may still require governed approval.'
+    : failedRuns.length
+      ? `${failedRuns.length} data quality control outcome${failedRuns.length === 1 ? '' : 's'} failed across ${failedRules.length} governed rule${failedRules.length === 1 ? '' : 's'}. Highest severity is ${severity}.`
+      : 'All executed data quality controls passed. No remediation is required.'
+  const businessImpact = noActiveControls
+    ? 'Data quality control effectiveness cannot be asserted because no active controls were evaluated.'
+    : failedRuns.length
+      ? 'Failed controls can propagate invalid, incomplete, duplicate or anomalous records into downstream reporting, analytics, integrations and governed decisions.'
+      : 'No material quality-control impact was detected in this execution.'
 
   const now = new Date().toISOString()
   const { data: investigation, error: investigationError } = await admin
@@ -371,7 +382,12 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
       summary,
       probable_root_causes: probableRootCauses,
       business_impact: businessImpact,
-      risk: { severity, failed_rule_runs: failedRuns.length, quarantined_records: quarantine?.length ?? 0 },
+      risk: {
+        severity,
+        failed_rule_runs: failedRuns.length,
+        quarantined_records: quarantine?.length ?? 0,
+        control_coverage: noActiveControls ? 'NONE' : 'EVALUATED',
+      },
       recommendations,
       approval_required: approvalRequired,
       evidence,
@@ -405,13 +421,20 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
     projectId: agentRun.project_id,
     actorUserId: userId,
     actorType: userId ? 'USER' : 'AGENT',
-    eventType: failedRuns.length ? 'DATA_QUALITY_INVESTIGATION_COMPLETED' : 'DATA_QUALITY_CONTROLS_VERIFIED',
+    eventType: noActiveControls
+      ? 'DATA_QUALITY_NO_ACTIVE_CONTROLS'
+      : failedRuns.length
+        ? 'DATA_QUALITY_INVESTIGATION_COMPLETED'
+        : 'DATA_QUALITY_CONTROLS_VERIFIED',
     entityType: 'DATA_QUALITY_RUN',
     entityId: input.agentRunId,
     correlationId: workflow?.instanceId ?? null,
     metadata: {
       investigation_id: investigation.id,
+      status,
       severity,
+      evaluated_rule_runs: typedRuns.length,
+      control_coverage: noActiveControls ? 'NONE' : 'EVALUATED',
       failed_rule_runs: failedRuns.length,
       failed_rule_definitions: failedRules.length,
       approval_required: approvalRequired,

@@ -23,6 +23,7 @@ type QualityRule = RuleSuggestion & {
   dataset_id: string
   dataset_version_id: string | null
   enabled: boolean
+  approval_status?: string | null
   rule_type?: string
   rule_config?: Record<string, unknown>
 }
@@ -370,12 +371,34 @@ export async function executeQualityAutomation(input: {
     if (!syncStep.alreadySucceeded) {
 
     const synced = await syncSuggestedQualityRules(datasetVersionId, profileRunId, userId)
+    const activeRuleCount = synced.rules.filter((rule) => rule.enabled).length
+    const pendingReviewCount = synced.rules.filter((rule) => !rule.enabled && rule.approval_status === 'PENDING').length
+    const inactiveRuleCount = synced.rules.length - activeRuleCount - pendingReviewCount
     await admin.schema('agent').from('agent_run_steps').update({
       status: 'SUCCEEDED',
-      output: { rule_count: synced.rules.length },
+      output: {
+        rule_count: synced.rules.length,
+        active_rule_count: activeRuleCount,
+        pending_review_count: pendingReviewCount,
+        inactive_rule_count: inactiveRuleCount,
+      },
       completed_at: new Date().toISOString(),
     }).eq('id', currentStepId)
-    await writeAgentRunLog({ agentRunId, agentRunStepId: currentStepId, level: 'TOOL', eventType: 'QUALITY_RULES_SYNCED', message: `${synced.rules.length} data quality rules are active for this dataset.`, details: { datasetVersionId, profileRunId, rule_count: synced.rules.length } })
+    await writeAgentRunLog({
+      agentRunId,
+      agentRunStepId: currentStepId,
+      level: 'TOOL',
+      eventType: 'QUALITY_RULES_SYNCED',
+      message: `${synced.rules.length} data quality rules synchronized; ${activeRuleCount} active, ${pendingReviewCount} awaiting governed review, ${inactiveRuleCount} otherwise inactive.`,
+      details: {
+        datasetVersionId,
+        profileRunId,
+        rule_count: synced.rules.length,
+        active_rule_count: activeRuleCount,
+        pending_review_count: pendingReviewCount,
+        inactive_rule_count: inactiveRuleCount,
+      },
+    })
     }
 
     const executeStep = await beginResumableRunStep(admin, {
@@ -571,15 +594,24 @@ export async function executeQualityAutomation(input: {
       rules_total: totalCount,
       rules_passed: passedCount,
       rules_failed: failedCount,
-      pass_rate: totalCount ? passedCount / totalCount : 1,
+      pass_rate: totalCount ? passedCount / totalCount : null,
       row_exceptions: exceptionCount,
       quarantined_records: quarantinedCount,
-      governance_status: failedCount ? 'ATTENTION_REQUIRED' : 'CONTROLLED',
+      governance_status: totalCount === 0 ? 'NO_ACTIVE_CONTROLS' : failedCount ? 'ATTENTION_REQUIRED' : 'CONTROLLED',
     }
     const completedAt = new Date().toISOString()
     await admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: summary, completed_at: completedAt }).eq('id', currentStepId)
     await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: summary, completed_at: completedAt }).eq('id', agentRunId)
-    await writeAgentRunLog({ agentRunId, agentRunStepId: currentStepId, level: 'LIFECYCLE', eventType: 'QUALITY_AUTOMATION_COMPLETED', message: `Data quality automation completed: ${passedCount} passed, ${failedCount} failed.`, details: summary })
+    await writeAgentRunLog({
+      agentRunId,
+      agentRunStepId: currentStepId,
+      level: 'LIFECYCLE',
+      eventType: 'QUALITY_AUTOMATION_COMPLETED',
+      message: totalCount === 0
+        ? 'Data quality automation completed with no active controls available for evaluation.'
+        : `Data quality automation completed: ${passedCount} passed, ${failedCount} failed.`,
+      details: summary,
+    })
 
     return { agentRunId, ...summary }
   } catch (error) {
