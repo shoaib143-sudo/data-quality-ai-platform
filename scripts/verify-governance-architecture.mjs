@@ -57,7 +57,6 @@ for (const path of requiredFiles) {
 }
 
 const checks = [
-  ['lib/auth/authorize.ts', /authorizeProject[\s\S]*has_project_capability/, 'central authorization'],
   ['lib/orchestration/queue.ts', /idempotency_key[\s\S]*capacity/i, 'durable idempotency and capacity'],
   ['lib/orchestration/outbox.ts', /claimOutboxEvents[\s\S]*processOutboxEvents/, 'transactional outbox consumer'],
   ['lib/profiling/sampling.ts', /FULL[\s\S]*FIXED[\s\S]*PERCENT/, 'configurable sampling modes'],
@@ -92,6 +91,15 @@ const checks = [
   ['supabase/migrations/20260904164500_audit_chain_v2_sequence.sql', /chain_version[\s\S]*chain_sequence[\s\S]*pg_advisory_xact_lock[\s\S]*order by chain_sequence desc/, 'deterministic sequence-based audit chain writes'],
   ['supabase/migrations/20260904164500_audit_chain_v2_sequence.sql', /legacy_events_checked[\s\S]*legacy_forks_observed[\s\S]*strict_events_checked[\s\S]*strict_failures/, 'version-aware immutable audit chain verification'],
 ]
+
+const authorizationSource = await readFile('lib/auth/authorize.ts', 'utf8')
+if (!/export async function authorizeProject/.test(authorizationSource)
+  || !/export async function hasProjectCapability/.test(authorizationSource)
+  || !/rpc\('has_project_capability'/.test(authorizationSource)
+  || !/hasProjectCapability\(userId, projectId, capability\)/.test(authorizationSource)) {
+  throw new Error('Governance architecture contract failed: central authorization is missing from lib/auth/authorize.ts')
+}
+console.log('PASS central authorization')
 
 for (const [path, pattern, label] of checks) {
   const content = await readFile(path, 'utf8')
