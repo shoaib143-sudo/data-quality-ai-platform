@@ -1,8 +1,101 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
-function text(v:unknown){return typeof v==='string'?v.trim():''}
-async function access(projectId:string,userId:string){const admin=createAdminClient();const {data:p}=await admin.schema('app').from('projects').select('organization_id').eq('id',projectId).maybeSingle();if(!p)return null;const {data:m}=await admin.schema('app').from('organization_members').select('role').eq('organization_id',p.organization_id).eq('user_id',userId).maybeSingle();return m?admin:null}
-export async function GET(request:Request){await requireUser();const url=new URL(request.url);const projectId=text(url.searchParams.get('projectId'));const admin=createAdminClient();let q=admin.schema('governance').from('issues').select('*,issue_comments(*)').order('created_at',{ascending:false});if(projectId)q=q.eq('project_id',projectId);const {data,error}=await q;return error?NextResponse.json({error:error.message},{status:500}):NextResponse.json({issues:data??[]})}
-export async function POST(request:Request){const user=await requireUser();const b=await request.json();const projectId=text(b.projectId),title=text(b.title);if(!projectId||!title)return NextResponse.json({error:'projectId and title are required.'},{status:400});const admin=await access(projectId,user.id);if(!admin)return NextResponse.json({error:'Project access denied.'},{status:403});const payload={project_id:projectId,dataset_id:b.datasetId||null,dataset_version_id:b.datasetVersionId||null,profile_run_id:b.profileRunId||null,finding_id:b.findingId||null,quality_rule_run_id:b.qualityRuleRunId||null,title,description:text(b.description)||null,severity:text(b.severity).toUpperCase()||'MEDIUM',status:'OPEN',owner_user_id:b.ownerUserId||null,due_at:b.dueAt||null,created_by:user.id};const {data,error}=await admin.schema('governance').from('issues').insert(payload).select('*').single();if(error)return NextResponse.json({error:error.message},{status:400});await writeGovernanceAudit({projectId,actorUserId:user.id,eventType:'ISSUE_CREATED',entityType:'ISSUE',entityId:data.id,metadata:{datasetId:payload.dataset_id,severity:payload.severity}});return NextResponse.json({issue:data},{status:201})}
+
+function text(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function authorizationResponse(error: unknown) {
+  if (error instanceof AuthorizationError) {
+    return NextResponse.json({ error: error.message }, { status: error.status })
+  }
+  return null
+}
+
+export async function GET(request: Request) {
+  try {
+    const user = await requireApiUser()
+    const url = new URL(request.url)
+    const projectId = text(url.searchParams.get('projectId'))
+    if (!projectId) {
+      return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
+    }
+
+    await authorizeProject(user.id, projectId, 'issues.manage')
+
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .schema('governance')
+      .from('issues')
+      .select('*,issue_comments(*)')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ issues: data ?? [] })
+  } catch (error) {
+    const response = authorizationResponse(error)
+    if (response) return response
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load issues.' }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const user = await requireApiUser()
+    const body = await request.json()
+    const projectId = text(body.projectId)
+    const title = text(body.title)
+    if (!projectId || !title) {
+      return NextResponse.json({ error: 'projectId and title are required.' }, { status: 400 })
+    }
+
+    await authorizeProject(user.id, projectId, 'issues.manage')
+
+    const admin = createAdminClient()
+    const payload = {
+      project_id: projectId,
+      dataset_id: body.datasetId || null,
+      dataset_version_id: body.datasetVersionId || null,
+      profile_run_id: body.profileRunId || null,
+      finding_id: body.findingId || null,
+      quality_rule_run_id: body.qualityRuleRunId || null,
+      title,
+      description: text(body.description) || null,
+      severity: text(body.severity).toUpperCase() || 'MEDIUM',
+      status: 'OPEN',
+      owner_user_id: body.ownerUserId || null,
+      due_at: body.dueAt || null,
+      created_by: user.id,
+    }
+
+    const { data, error } = await admin
+      .schema('governance')
+      .from('issues')
+      .insert(payload)
+      .select('*')
+      .single()
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    await writeGovernanceAudit({
+      projectId,
+      actorUserId: user.id,
+      eventType: 'ISSUE_CREATED',
+      entityType: 'ISSUE',
+      entityId: data.id,
+      metadata: { datasetId: payload.dataset_id, severity: payload.severity },
+    })
+    return NextResponse.json({ issue: data }, { status: 201 })
+  } catch (error) {
+    const response = authorizationResponse(error)
+    if (response) return response
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to create issue.' }, { status: 500 })
+  }
+}
