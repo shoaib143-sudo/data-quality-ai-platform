@@ -74,7 +74,9 @@ const checks = [
     'policyDecision.decision',
     'policy_version_id: policyDecision.policyVersionId',
     'policy_decision_provider: policyDecision.providerId',
-    "claimed.action_key !== 'CREATE_GOVERNANCE_ISSUE'",
+    "claimed.action_key === 'CREATE_GOVERNANCE_ISSUE'",
+    "claimed.action_key === 'REQUEST_REPROFILE'",
+    'Autonomous execution is not implemented for ${claimed.action_key}',
     "workflow.status !== 'APPROVED'",
     "policyRaw.rollback_strategy !== 'CLOSE_CREATED_ISSUE'",
     "idempotencyKey: `predictive-risk-review:${prediction.id}`",
@@ -105,6 +107,7 @@ const checks = [
     'executeApprovedAutonomyAction',
     "operation === 'APPLY_PREDICTIVE_RISK'",
     "operation === 'EXECUTE_APPROVED'",
+    "operation === 'VERIFY_OUTCOME'",
     "operation === 'ROLLBACK'",
     "operation === 'PROPOSE'",
     'telemetryTraceContextFromRequest(request)',
@@ -175,4 +178,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Governed autonomy safety, exact-version pinning, observable PDP, and ADR-006 PolicyDecisionProvider contracts verified.')
+console.log('Governed autonomy safety, exact-version pinning, governed reprofile execution, observable PDP, and ADR-006 PolicyDecisionProvider contracts verified.')
