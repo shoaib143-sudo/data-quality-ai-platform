@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
+import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
@@ -15,10 +16,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ al
     const admin = createAdminClient()
     const { data: alert, error: alertError } = await admin.schema('profiling').from('observability_alerts').select('id,project_id').eq('id', alertId).maybeSingle()
     if (alertError || !alert) return NextResponse.json({ error: 'Alert not found.' }, { status: 404 })
-    const { data: project } = await admin.schema('app').from('projects').select('id,organization_id').eq('id', alert.project_id).maybeSingle()
-    if (!project) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
-    const { data: membership } = await admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-    if (!membership || !['OWNER','ADMIN','MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
+
+    await authorizeProject(user.id, alert.project_id, 'observability.manage')
 
     const now = new Date().toISOString()
     const { data, error } = await admin.schema('profiling').from('observability_alerts').update({
@@ -29,6 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ al
     if (error) throw new Error(`Unable to update alert: ${error.message}`)
     return NextResponse.json({ alert: data })
   } catch (error) {
+    if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to update observability alert.' }, { status: 500 })
   }
 }
