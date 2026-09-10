@@ -18,6 +18,7 @@ export type WorkspaceKey =
   | 'schedules'
   | 'monitoring'
   | 'observability'
+  | 'observability-manage'
   | 'audit'
   | 'reports'
   | 'ai-capabilities'
@@ -36,9 +37,9 @@ const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
   'data-governance-specialist': ['catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'ai-capabilities', 'retention', 'profiling'],
   'compliance-risk-officer': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention', 'profiling'],
   'privacy-security-officer': ['catalog', 'glossary', 'lineage', 'classification', 'classification-privacy', 'issues', 'audit', 'reports', 'profiling'],
-  'data-governance-admin': ['dashboard', 'catalog', 'discovery', 'glossary', 'lineage', 'lineage-manage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'audit', 'reports', 'ai-capabilities', 'retention', 'profiling', 'agents', 'datasets'],
-  'data-custodian': ['catalog', 'discovery', 'datasets', 'lineage', 'lineage-manage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'profiling', 'agents', 'ai-capabilities'],
-  'source-system-owner': ['catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'profiling'],
+  'data-governance-admin': ['dashboard', 'catalog', 'discovery', 'glossary', 'lineage', 'lineage-manage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'audit', 'reports', 'ai-capabilities', 'retention', 'profiling', 'agents', 'datasets'],
+  'data-custodian': ['catalog', 'discovery', 'datasets', 'lineage', 'lineage-manage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'profiling', 'agents', 'ai-capabilities'],
+  'source-system-owner': ['catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'profiling'],
   'metadata-analyst': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'ai-capabilities', 'profiling'],
   'data-quality-analyst': ['catalog', 'issues', 'data-quality', 'observability', 'audit', 'reports', 'ai-capabilities', 'profiling', 'agents'],
 }
@@ -48,6 +49,7 @@ const workspacePrefixes: readonly [string, WorkspaceKey][] = [
   ['/catalog/discovery', 'discovery'],
   ['/lineage/ingest', 'lineage-manage'],
   ['/lineage/suggestions', 'lineage-manage'],
+  ['/observability/settings', 'observability-manage'],
   ['/ai-capabilities', 'ai-capabilities'],
   ['/data-quality', 'data-quality'],
   ['/profiling', 'profiling'],
