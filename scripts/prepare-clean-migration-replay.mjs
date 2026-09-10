@@ -1,9 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const sourceDir = path.join(process.cwd(), 'supabase', 'migrations')
+const sourceDir = process.env.SOURCE_MIGRATION_DIR || path.join(process.cwd(), 'supabase', 'migrations')
 const targetDir = process.env.TARGET_MIGRATION_DIR
 if (!targetDir) throw new Error('TARGET_MIGRATION_DIR is required')
+if (!fs.existsSync(sourceDir)) throw new Error(`SOURCE_MIGRATION_DIR does not exist: ${sourceDir}`)
 
 const files = fs.readdirSync(sourceDir).filter((name) => name.endsWith('.sql')).sort()
 const originalVersions = new Set(files.map((name) => name.slice(0, 14)))
