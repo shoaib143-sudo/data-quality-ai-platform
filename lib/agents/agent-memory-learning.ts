@@ -21,23 +21,34 @@ export async function enrichGovernedAgentWithMemory(input: {
   })
 
   const existingRecommendations = Array.isArray(input.output.recommendations) ? input.output.recommendations : []
+  const verifiedEpisodes = prior.verifiedEpisodes.map((episode) => ({
+    id: episode.id,
+    source_kind: episode.content.sourceKind ?? null,
+    problem_type: episode.content.problemType ?? null,
+    effectiveness: episode.content.effectiveness ?? null,
+    confidence: episode.content.confidence ?? null,
+    relevance: episode.relevance,
+    occurred_at: episode.occurredAt,
+    evidence_source: episode.evidence.source,
+    evidence_record_id: episode.evidence.recordId,
+    evidence_verified: episode.evidence.verified,
+  }))
+
   const enriched = {
     ...input.output,
     recommendations: existingRecommendations,
     memoryContext: {
       query,
       durableMemoryMatches: prior.memories.length,
-      verifiedEpisodeMatches: prior.verifiedEpisodes.length,
-      verifiedEpisodes: prior.verifiedEpisodes.map((episode) => ({
-        id: episode.id,
-        problem_type: episode.content.problemType ?? null,
-        source_kind: episode.content.sourceKind ?? null,
-        effectiveness: episode.content.effectiveness ?? null,
-        confidence: episode.content.confidence ?? null,
+      verifiedEpisodeMatches: verifiedEpisodes.length,
+      verifiedEpisodes,
+      influenceEvidence: verifiedEpisodes.map((episode) => ({
+        learning_case_id: episode.id,
+        source_kind: episode.source_kind,
+        evidence_source: episode.evidence_source,
+        evidence_record_id: episode.evidence_record_id,
+        verified: episode.evidence_verified,
         relevance: episode.relevance,
-        occurred_at: episode.occurredAt,
-        evidence_source: episode.evidence.source,
-        evidence_record_id: episode.evidence.recordId,
       })),
       durableMemories: prior.memories.slice(0, 5).map((memory) => ({
         id: memory.id,
@@ -53,12 +64,15 @@ export async function enrichGovernedAgentWithMemory(input: {
       reuse_prior_recommendation_prose: false,
       semantic_memory_requires_separate_authority_gate: true,
       human_validated_semantic_memory_required_for_high_risk_action: true,
-      note: 'Verified prior episodes provide context only. Prior AI recommendations are not recursively promoted or reused as recommendation truth.',
+      memory_never_authorizes_actions: true,
+      current_authorization_required_for_every_action: true,
+      current_policy_decision_required_for_every_action: true,
+      note: 'Verified prior episodes are provenance-bearing context only. Memory cannot authorize, approve, execute, or promote a new governance action; current deterministic authorization and policy controls remain independent.',
     },
   }
 
   const admin = createAdminClient()
-  const { error: updateError } = await admin.schema('agent').from('agent_runs').update({ output: enriched }).eq('id', input.agentRunId)
+  const { error: updateError } = await admin.schema('agent').from('agent_runs').update({ output: enriched }).eq('id', input.agentRunId).eq('project_id', input.projectId)
   if (updateError) throw new Error(`Unable to persist memory-informed agent output: ${updateError.message}`)
 
   await persistAgentWorkingMemory({
@@ -71,6 +85,11 @@ export async function enrichGovernedAgentWithMemory(input: {
       observations: observations.slice(0, 10),
       retrieved_memory_ids: prior.memories.map((memory) => memory.id),
       verified_episode_ids: prior.verifiedEpisodes.map((episode) => episode.id),
+      verified_episode_influence_evidence: verifiedEpisodes.map((episode) => ({
+        learning_case_id: episode.id,
+        evidence_source: episode.evidence_source,
+        evidence_record_id: episode.evidence_record_id,
+      })),
     },
   })
 
