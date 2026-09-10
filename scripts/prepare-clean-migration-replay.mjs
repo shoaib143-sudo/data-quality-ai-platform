@@ -218,6 +218,70 @@ $$;
   'Released history revokes public.create_file_dataset before its creation is represented; reconstruction uses the exact live signature and behavior in disposable replay.',
 )
 
+addReplayReconstruction(
+  '20260903225910',
+  'reconstruct_create_organization',
+  `create or replace function public.create_organization(p_name text, p_slug text)
+returns table(id uuid, name text, slug text, role app.member_role)
+language plpgsql
+security definer
+set search_path = pg_catalog, public, app, app_private
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_org_id uuid;
+begin
+  if v_user_id is null then raise exception using errcode = '28000', message = 'Authentication required'; end if;
+  if p_name is null or btrim(p_name) = '' or length(btrim(p_name)) > 120 then raise exception using errcode = '22023', message = 'Organization name must be 1-120 characters'; end if;
+  if p_slug is null or p_slug !~ '^[a-z0-9]+(?:-[a-z0-9]+)*$' or length(p_slug) > 63 then raise exception using errcode = '22023', message = 'Organization slug must be lowercase kebab-case'; end if;
+  insert into app.organizations(name, slug) values (btrim(p_name), p_slug) returning app.organizations.id into v_org_id;
+  insert into app.organization_members(organization_id, user_id, role) values (v_org_id, v_user_id, 'OWNER');
+  return query select o.id, o.name, o.slug, m.role from app.organizations o join app.organization_members m on m.organization_id = o.id where o.id = v_org_id and m.user_id = v_user_id;
+end;
+$$;
+`,
+  'Released history revokes public.create_organization before its creation is represented; reconstruction reproduces the exact live historical RPC only in disposable replay.',
+)
+
+addReplayReconstruction(
+  '20260903225920',
+  'reconstruct_create_project',
+  `create or replace function public.create_project(p_organization_id uuid, p_name text, p_slug text, p_description text default null)
+returns table(id uuid, organization_id uuid, name text, slug text, description text)
+language plpgsql
+security definer
+set search_path = pg_catalog, public, app, app_private
+as $$
+declare
+  v_project_id uuid;
+begin
+  if auth.uid() is null then raise exception using errcode = '28000', message = 'Authentication required'; end if;
+  if not app_private.is_org_admin(p_organization_id) then raise exception using errcode = '42501', message = 'Organization administrator access required'; end if;
+  if p_name is null or btrim(p_name) = '' or length(btrim(p_name)) > 120 then raise exception using errcode = '22023', message = 'Project name must be 1-120 characters'; end if;
+  if p_slug is null or p_slug !~ '^[a-z0-9]+(?:-[a-z0-9]+)*$' or length(p_slug) > 63 then raise exception using errcode = '22023', message = 'Project slug must be lowercase kebab-case'; end if;
+  insert into app.projects(organization_id, name, slug, description) values (p_organization_id, btrim(p_name), p_slug, nullif(btrim(coalesce(p_description,'')), '')) returning app.projects.id into v_project_id;
+  return query select p.id, p.organization_id, p.name, p.slug, p.description from app.projects p where p.id = v_project_id;
+end;
+$$;
+`,
+  'Released history revokes public.create_project before its creation is represented; reconstruction reproduces the exact live historical RPC only in disposable replay.',
+)
+
+addReplayReconstruction(
+  '20260903225930',
+  'reconstruct_get_dataset_version_for_profiling',
+  `create or replace function public.get_dataset_version_for_profiling(dataset_version_id uuid)
+returns setof catalog.dataset_versions
+language sql
+security definer
+set search_path = public
+as $$
+  select * from catalog.dataset_versions where id = dataset_version_id;
+$$;
+`,
+  'Released history revokes public.get_dataset_version_for_profiling before its creation is represented; reconstruction reproduces the exact live historical RPC only in disposable replay.',
+)
+
 for (const file of files) {
   if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(file)) throw new Error(`Malformed migration filename: ${file}`)
   const originalVersion = file.slice(0, 14)
