@@ -42,7 +42,9 @@ assert(certificationRuntimeFix.includes('from app.projects p'), 'Certification o
 assert(certificationRuntimeFix.includes('from app.organization_members om'), 'Certification reviewer validation must use the live membership table.')
 assert(!certificationRuntimeFix.includes('om.is_active'), 'Certification runtime must not reference a nonexistent organization membership state column.')
 assert(certificationRuntimeFix.includes('prior_certification_status'), 'Certification cancellation must preserve the pre-request catalog state.')
-assert(certificationRuntimeFix.includes("v_target_status = 'CANCELLED'"), 'Certification cancellation must explicitly restore prior catalog state.')
+assert(certificationRuntimeFix.includes("v_catalog_status := coalesce(v_request.prior_certification_status, 'UNCERTIFIED')"), 'Certification cancellation must restore the prior catalog status.')
+assert(certificationRuntimeFix.includes('v_catalog_certified_at := v_request.prior_certified_at'), 'Certification cancellation must restore prior certification time evidence.')
+assert(certificationRuntimeFix.includes('v_catalog_certified_by := v_request.prior_certified_by'), 'Certification cancellation must restore prior certification actor evidence.')
 assert(certificationRuntimeFix.includes('grant execute on function governance.request_dataset_certification'), 'Governed request RPC must explicitly grant service execution.')
 assert(certificationRuntimeFix.includes('grant execute on function governance.review_dataset_certification'), 'Governed review RPC must explicitly grant service execution.')
 
