@@ -18,11 +18,27 @@ const specializedMachineAuthMarkers = [
   'CRON_SECRET',
   'SCIM_TOKEN',
   'scimToken',
+  'requireScimDirectory(',
   'DATA_PLANE',
   'dataPlaneToken',
   'Bearer ',
   'timingSafeEqual',
 ]
+
+const approvedPrivilegedExceptions = new Map([
+  ['app/api/health/ready/route.ts', {
+    classification: 'PUBLIC_HEALTH_PROBE',
+    requiredMarkers: ['verify_database_api_security_posture', "headers: { 'Cache-Control': 'no-store' }"],
+  }],
+  ['app/api/scim/v2/Users/route.ts', {
+    classification: 'SCIM_DIRECTORY_AUTH',
+    requiredMarkers: ['requireScimDirectory('],
+  }],
+  ['app/api/scim/v2/Users/[userId]/route.ts', {
+    classification: 'SCIM_DIRECTORY_AUTH',
+    requiredMarkers: ['requireScimDirectory('],
+  }],
+])
 
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -37,6 +53,7 @@ async function walk(directory) {
 
 const routes = await walk(apiRoot)
 const privileged = []
+const invalidExceptions = []
 
 for (const absolute of routes) {
   const source = await readFile(absolute, 'utf8')
@@ -47,13 +64,22 @@ for (const absolute of routes) {
   const machineMarkers = specializedMachineAuthMarkers.filter(marker => source.includes(marker))
   const hasRequireUser = source.includes('requireUser(')
   const hasProjectCapability = source.includes('authorizeProject(') || source.includes('authorizeDataset(') || source.includes('authorizeDatasetVersion(')
-  const classification = interactiveMarkers.length > 0
-    ? 'INTERACTIVE_AUTH'
-    : machineMarkers.length > 0
-      ? 'SPECIALIZED_AUTH_REVIEW'
-      : hasRequireUser
-        ? 'LEGACY_INTERACTIVE_AUTH_REVIEW'
-        : 'UNCLASSIFIED_PRIVILEGED_REVIEW'
+  const exception = approvedPrivilegedExceptions.get(relative)
+
+  let classification
+  if (interactiveMarkers.length > 0) {
+    classification = 'INTERACTIVE_AUTH'
+  } else if (exception) {
+    const missingMarkers = exception.requiredMarkers.filter(marker => !source.includes(marker))
+    if (missingMarkers.length > 0) invalidExceptions.push({ relative, missingMarkers })
+    classification = missingMarkers.length > 0 ? 'INVALID_APPROVED_EXCEPTION_REVIEW' : exception.classification
+  } else if (machineMarkers.length > 0) {
+    classification = 'SPECIALIZED_AUTH_REVIEW'
+  } else if (hasRequireUser) {
+    classification = 'LEGACY_INTERACTIVE_AUTH_REVIEW'
+  } else {
+    classification = 'UNCLASSIFIED_PRIVILEGED_REVIEW'
+  }
 
   privileged.push({ relative, classification, interactiveMarkers, machineMarkers, hasRequireUser, hasProjectCapability })
 }
@@ -66,6 +92,11 @@ for (const route of privileged.sort((a, b) => a.relative.localeCompare(b.relativ
 const review = privileged.filter(route => route.classification.endsWith('_REVIEW'))
 console.log(`Routes requiring authorization review: ${review.length}`)
 
-// Inventory mode is intentionally non-blocking until every privileged route has been
-// classified and the legitimate machine-to-machine exceptions are captured explicitly.
-process.exitCode = 0
+if (invalidExceptions.length > 0) {
+  for (const invalid of invalidExceptions) console.error(`Invalid privileged-route exception ${invalid.relative}; missing: ${invalid.missingMarkers.join(', ')}`)
+}
+if (review.length > 0) {
+  for (const route of review) console.error(`Privileged route lacks an approved authorization boundary: ${route.relative}`)
+}
+
+if (invalidExceptions.length > 0 || review.length > 0) process.exitCode = 1
