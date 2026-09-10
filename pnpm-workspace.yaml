@@ -1,4 +1,8 @@
 allowBuilds:
   msw: true
 overrides:
+  "baseline-browser-mapping@>=2.0.0 <2.11.0": ">=2.11.0"
+  "browserslist@<=4.28.6": ">=4.28.7"
   hono: 4.12.25
+  "nanoid@<3.3.18": ">=3.3.18"
+  "sharp@<0.35.4": ">=0.35.4"

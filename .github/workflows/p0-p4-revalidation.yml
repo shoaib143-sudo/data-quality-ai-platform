@@ -47,6 +47,8 @@ jobs:
         run: node scripts/verify-journey-governed-outcome-learning.mjs
       - name: V5 operational action verification journey
         run: node scripts/verify-journey-governed-action-verification.mjs
+      - name: V6 operational certification contract
+        run: node scripts/verify-journey-operational-certification.mjs
       - name: Verify P0-P5 security, migration, and evidence boundaries
         run: node scripts/verify-p0-p4-revalidation.mjs
       - name: Worker isolation and capacity contracts
