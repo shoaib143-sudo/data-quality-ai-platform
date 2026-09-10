@@ -35,6 +35,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: V0 trusted governance baseline
         run: node --experimental-strip-types scripts/verify-v0-trusted-governance-baseline.mjs
+      - name: V1 sensitive dataset governance journey
+        run: node scripts/verify-journey-sensitive-governance.mjs
       - name: Verify P0-P5 security, migration, and evidence boundaries
         run: node scripts/verify-p0-p4-revalidation.mjs
       - name: Worker isolation and capacity contracts
