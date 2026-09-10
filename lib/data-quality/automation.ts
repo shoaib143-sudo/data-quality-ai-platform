@@ -386,6 +386,7 @@ export async function executeQualityAutomation(input: {
     })
     currentStepId = executeStep.id
 
+    let totalCount = Number(executeStep.output.total ?? 0)
     let passedCount = Number(executeStep.output.passed ?? 0)
     let failedCount = Number(executeStep.output.failed ?? 0)
     let errorCount = Number(executeStep.output.errors ?? 0)
@@ -484,6 +485,7 @@ export async function executeQualityAutomation(input: {
       persistedResults = (insertedResults ?? []) as Array<{id:string;rule_definition_id:string;status:string}>
     }
 
+    totalCount = results.length
     passedCount = results.filter((result) => result.status === 'PASSED').length
     failedCount = results.filter((result) => result.status === 'FAILED').length
     errorCount = results.filter((result) => result.status === 'ERROR').length
@@ -566,10 +568,10 @@ export async function executeQualityAutomation(input: {
       data_quality_job: true,
       dataset_version_id: datasetVersionId,
       profile_run_id: profileRunId,
-      rules_total: results.length,
+      rules_total: totalCount,
       rules_passed: passedCount,
       rules_failed: failedCount,
-      pass_rate: results.length ? passedCount / results.length : 1,
+      pass_rate: totalCount ? passedCount / totalCount : 1,
       row_exceptions: exceptionCount,
       quarantined_records: quarantinedCount,
       governance_status: failedCount ? 'ATTENTION_REQUIRED' : 'CONTROLLED',
