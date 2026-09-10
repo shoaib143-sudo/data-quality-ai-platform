@@ -38,6 +38,8 @@ test_rejects_unapproved_authority if {
 }
 
 test_rejects_missing_policy_version if {
-	missing_version := object.union(valid_input, {"canonical": object.remove(valid_input.canonical, {"policy_version_id"})})
+	canonical_without_version := object.remove(valid_input.canonical, {"policy_version_id"})
+	base_without_canonical := object.remove(valid_input, {"canonical"})
+	missing_version := object.union(base_without_canonical, {"canonical": canonical_without_version})
 	not decision with input as missing_version
 }
