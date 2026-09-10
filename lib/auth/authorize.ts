@@ -1,4 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  assertInstanceOrganizationId,
+  assertProjectBelongsToInstanceOrganization,
+  resolveInstanceOrganizationMembership,
+} from '@/lib/governance/instance-organization'
 
 export type AuthorizationCapability =
   | 'catalog.read'
@@ -53,6 +58,7 @@ export type ProjectAuthorization = {
 
 export async function hasProjectCapability(userId: string, projectId: string, capability: AuthorizationCapability): Promise<boolean> {
   if (!userId || !projectId) return false
+  await assertProjectBelongsToInstanceOrganization(projectId)
   const admin = createAdminClient()
   const { data, error } = await admin.schema('governance').rpc('has_project_capability', {
     p_project_id: projectId,
@@ -65,28 +71,25 @@ export async function hasProjectCapability(userId: string, projectId: string, ca
 
 export async function authorizeProject(userId: string, projectId: string, capability: AuthorizationCapability): Promise<ProjectAuthorization> {
   if (!userId || !projectId) throw new AuthorizationError('Authentication and project context are required.', 401)
-  const admin = createAdminClient()
 
-  const { data: project, error: projectError } = await admin
-    .schema('app')
-    .from('projects')
-    .select('id,organization_id')
-    .eq('id', projectId)
-    .maybeSingle()
-  if (projectError) throw new Error(`Unable to resolve project authorization context: ${projectError.message}`)
-  if (!project) throw new AuthorizationError('Project was not found.', 404)
+  let projectContext: { projectId: string; organizationId: string }
+  try {
+    projectContext = await assertProjectBelongsToInstanceOrganization(projectId)
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('was not found')) throw new AuthorizationError('Project was not found.', 404)
+    throw error
+  }
 
-  const [allowed, membershipResult] = await Promise.all([
+  const [allowed, membership] = await Promise.all([
     hasProjectCapability(userId, projectId, capability),
-    admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', userId).maybeSingle(),
+    resolveInstanceOrganizationMembership(userId),
   ])
-  if (membershipResult.error) throw new Error(`Unable to resolve organization membership: ${membershipResult.error.message}`)
   if (!allowed) throw new AuthorizationError(`You do not have permission to perform ${capability} in this project.`)
 
   return {
-    projectId,
-    organizationId: project.organization_id,
-    organizationRole: membershipResult.data?.role ? String(membershipResult.data.role) : null,
+    projectId: projectContext.projectId,
+    organizationId: projectContext.organizationId,
+    organizationRole: membership.organizationRole,
     capability,
   }
 }
@@ -120,21 +123,20 @@ export async function authorizeDatasetVersion(userId: string, datasetVersionId: 
 }
 
 export async function authorizeOrganizationAdmin(userId: string, organizationId: string, ownerRequired = false) {
-  const admin = createAdminClient()
-  const { data: membership, error } = await admin
-    .schema('app')
-    .from('organization_members')
-    .select('organization_id,user_id,role')
-    .eq('organization_id', organizationId)
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (error) throw new Error(`Unable to resolve organization authorization context: ${error.message}`)
-  if (!membership) throw new AuthorizationError('Organization access denied.')
-  const role = String(membership.role)
+  await assertInstanceOrganizationId(organizationId)
+  const membership = await resolveInstanceOrganizationMembership(userId)
+  const role = membership.organizationRole ?? ''
   if (ownerRequired ? role !== 'OWNER' : !['OWNER','ADMIN'].includes(role)) {
     throw new AuthorizationError(ownerRequired ? 'Organization OWNER access is required.' : 'Organization administrator access is required.')
   }
-  return { membership, role }
+  return {
+    membership: {
+      organization_id: membership.organizationId,
+      user_id: userId,
+      role,
+    },
+    role,
+  }
 }
 
 export function authorizationErrorResponse(error: unknown) {
