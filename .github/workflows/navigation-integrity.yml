@@ -4,20 +4,30 @@ on:
   pull_request:
     paths:
       - 'app/**'
+      - 'components/governance/**'
+      - 'lib/governance/personas.ts'
+      - 'lib/governance/workspace-access.ts'
+      - 'lib/governance/workspace-policy.ts'
       - 'lib/platform/canonical-routes.ts'
       - 'lib/platform/resource-route-contracts.mjs'
       - 'scripts/verify-agent-detail-route.mjs'
       - 'scripts/verify-navigation-integrity.mjs'
+      - 'scripts/verify-persona-workspace-policy.mjs'
       - 'scripts/test-canonical-routes.mjs'
       - '.github/workflows/navigation-integrity.yml'
   push:
     branches: [main]
     paths:
       - 'app/**'
+      - 'components/governance/**'
+      - 'lib/governance/personas.ts'
+      - 'lib/governance/workspace-access.ts'
+      - 'lib/governance/workspace-policy.ts'
       - 'lib/platform/canonical-routes.ts'
       - 'lib/platform/resource-route-contracts.mjs'
       - 'scripts/verify-agent-detail-route.mjs'
       - 'scripts/verify-navigation-integrity.mjs'
+      - 'scripts/verify-persona-workspace-policy.mjs'
       - 'scripts/test-canonical-routes.mjs'
       - '.github/workflows/navigation-integrity.yml'
 
@@ -37,5 +47,7 @@ jobs:
         run: node scripts/verify-agent-detail-route.mjs
       - name: Verify platform resource route contracts
         run: node scripts/verify-navigation-integrity.mjs
+      - name: Verify persona workspace policy
+        run: node --experimental-strip-types scripts/verify-persona-workspace-policy.mjs
       - name: Test canonical route builder
         run: node --experimental-strip-types scripts/test-canonical-routes.mjs
