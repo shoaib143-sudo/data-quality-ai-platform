@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ runId: string }> },
 ) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const { runId } = await context.params
     if (!runId) return NextResponse.json({ error: 'runId is required.' }, { status: 400 })
 
@@ -20,23 +21,7 @@ export async function GET(
       .single()
     if (runError || !run) return NextResponse.json({ error: 'Agent run not found.' }, { status: 404 })
 
-    const { data: project, error: projectError } = await admin
-      .schema('app')
-      .from('projects')
-      .select('id, organization_id')
-      .eq('id', run.project_id)
-      .single()
-    if (projectError || !project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
-
-    const { data: membership, error: membershipError } = await admin
-      .schema('app')
-      .from('organization_members')
-      .select('organization_id')
-      .eq('organization_id', project.organization_id)
-      .eq('user_id', user.id)
-      .maybeSingle()
-    if (membershipError) throw new Error(`Unable to verify project access: ${membershipError.message}`)
-    if (!membership) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
+    await authorizeProject(user.id, run.project_id, 'agent.execute')
 
     const [{ data: steps, error: stepsError }, { data: messages, error: messagesError }, { data: artifacts, error: artifactsError }] = await Promise.all([
       admin.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, input, output, started_at, completed_at, error_code, error_message, created_at').eq('agent_run_id', runId).order('step_order', { ascending: true }),
@@ -63,6 +48,8 @@ export async function GET(
     const level = new URL(request.url).searchParams.get('level')
     return NextResponse.json({ runId, run, steps: steps ?? [], messages: messages ?? [], artifacts: artifacts ?? [], logs: level ? timeline.filter((entry) => entry.level === level) : timeline, source: 'execution_lifecycle' })
   } catch (error) {
+    const authError = authorizationErrorResponse(error)
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load execution diagnostics.' }, { status: 500 })
   }
 }

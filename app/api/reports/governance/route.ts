@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
@@ -14,18 +15,18 @@ function csvCell(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const user=await requireUser()
+    const user=await requireApiUser()
     const url=new URL(request.url)
     const projectId=(url.searchParams.get('projectId')??'').trim()
     const format=(url.searchParams.get('format')??'csv').toLowerCase()
     if(!projectId) return NextResponse.json({error:'projectId is required.'},{status:400})
     if(!['csv','json'].includes(format)) return NextResponse.json({error:'format must be csv or json.'},{status:400})
 
+    await authorizeProject(user.id,projectId,'report.export')
     const admin=createAdminClient()
-    const {data:project,error:projectError}=await admin.schema('app').from('projects').select('id,name,organization_id').eq('id',projectId).maybeSingle()
-    if(projectError||!project) return NextResponse.json({error:'Project not found.'},{status:404})
-    const {data:membership,error:membershipError}=await admin.schema('app').from('organization_members').select('role').eq('organization_id',project.organization_id).eq('user_id',user.id).maybeSingle()
-    if(membershipError||!membership) return NextResponse.json({error:'Project access denied.'},{status:403})
+    const {data:project,error:projectError}=await admin.schema('app').from('projects').select('id,name').eq('id',projectId).maybeSingle()
+    if(projectError) throw new Error(`Unable to load project: ${projectError.message}`)
+    if(!project) return NextResponse.json({error:'Project not found.'},{status:404})
 
     const [{data:datasets,error:datasetsError},{data:sources,error:sourcesError}]=await Promise.all([
       admin.schema('catalog').from('datasets').select('id,project_id,name,business_domain,source_identifier,data_source_id').eq('project_id',projectId).order('name'),
@@ -197,6 +198,8 @@ export async function GET(request: Request) {
     const csv=[headers.map(csvCell).join(','),...reportRows.map((row)=>headers.map((header)=>csvCell((row as Record<string,unknown>)[header])).join(','))].join('\n')
     return new NextResponse(csv,{headers:{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':`attachment; filename="governance-report-${project.name.replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-${generatedAt.slice(0,10)}.csv"`}})
   } catch (error) {
+    const authorization=authorizationErrorResponse(error)
+    if(authorization) return NextResponse.json({error:authorization.error},{status:authorization.status})
     return NextResponse.json({error:error instanceof Error?error.message:'Unable to generate governance report.'},{status:500})
   }
 }
