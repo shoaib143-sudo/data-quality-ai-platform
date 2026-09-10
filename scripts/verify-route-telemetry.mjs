@@ -8,6 +8,7 @@ const budgetContract = fs.readFileSync('lib/ai/reasoning-budget-policy.ts', 'utf
 const admissionContract = fs.readFileSync('lib/ai/resource-budget-admission.ts', 'utf8')
 const admissionAdapter = fs.readFileSync('lib/ai/governance-resource-budget-admission.ts', 'utf8')
 const admissionMigration = fs.readFileSync('supabase/migrations/20260909112000_adr006_atomic_project_budget_admission.sql', 'utf8')
+const scopeMigration = fs.readFileSync('supabase/migrations/20260910185600_generalize_ai_budget_admission_scope.sql', 'utf8')
 const intelligentRouter = fs.readFileSync('lib/ai/intelligent-router.ts', 'utf8')
 const investigation = fs.readFileSync('lib/ai/investigation-model.ts', 'utf8')
 const investigationEngine = fs.readFileSync('lib/profiling/investigation-engine.ts', 'utf8')
@@ -20,23 +21,26 @@ for (const token of [
   "eventType: 'AI_ROUTE_DECISION'",
   "eventType: 'MODEL_INVOCATION'",
   'applyProjectOutputBudget',
-  'hasAdmissionLimits',
+  'configuredAdmissionPolicies',
   'Math.min(callerRequestedMaxOutputTokens, governanceMaxOutputTokens)',
-  'await this.budgetPolicy.resolveProjectBudget(this.context.projectId)',
+  'this.budgetPolicy.resolveBudget',
+  'aiSystemId: this.context.aiSystemId ?? null',
+  'agentDefinitionId: this.context.agentDefinitionId ?? null',
   'await this.budgetAdmission.acquire({',
-  'policyVersionId: projectBudget.policyId',
+  'policyVersionId: policy.policyId',
   'correlationId: admissionCorrelationId',
-  'if (!admission.admitted) throw admissionDeniedError(admission.reason)',
-  'await this.budgetAdmission.release({',
+  'await releaseAdmissionLeases()',
+  'throw admissionDeniedError(`${policy.scopeType}/${policy.scopeKey}:${admission.reason}`)',
   'this.provider.generateJson(budgetEvidence.request)',
   'correlationId: this.context.executionCorrelationId ?? null',
   'requested_max_output_tokens: budgetEvidence.callerRequestedMaxOutputTokens',
   'governance_max_output_tokens: budgetEvidence.governanceMaxOutputTokens',
   'effective_max_output_tokens: budgetEvidence.effectiveMaxOutputTokens',
-  'resource_budget_policy_id: budgetEvidence.budgetPolicyId',
-  'resource_budget_admission_reason: admission?.reason ?? null',
-  'resource_budget_admission_id: admission?.admissionId ?? null',
-  'resource_budget_lease_id: admission?.leaseId ?? null',
+  'resource_budget_policy_ids: budgetPolicyIds',
+  'resource_budget_admissions: admissions.map',
+  'policy_version_id: entry.policyVersionId',
+  'scope_type: entry.scopeType',
+  'scope_key: entry.scopeKey',
   "error_name: error instanceof Error ? error.name : 'UnknownError'",
   'provider_http_status: providerHttpError?.status ?? null',
 ]) if (!observable.includes(token)) failures.push(`missing governed invocation/admission token: ${token}`)
@@ -44,6 +48,9 @@ for (const token of [
 for (const token of [
   'export interface ReasoningBudgetPolicyProvider',
   'resolveProjectBudget(projectId: string)',
+  'resolveBudget?',
+  'ReasoningBudgetContext',
+  'ReasoningAdmissionPolicy',
   'maxOutputTokens: number | null',
   'maxRequestsPerMinute: number | null',
   'maxConcurrentExecutions: number | null',
@@ -51,11 +58,14 @@ for (const token of [
 
 for (const token of [
   "from('ai_resource_budget_policy_effective')",
-  ".eq('scope_type', 'PROJECT')",
-  ".eq('scope_key', 'PROJECT')",
-  "max_output_tokens_per_request,max_requests_per_minute,max_concurrent_executions",
-  'if (!data || !data.enabled) return null',
-]) if (!budgetPolicy.includes(token)) failures.push(`missing canonical project budget adapter token: ${token}`)
+  'scope_type',
+  'scope_key',
+  "row.scope_type === 'PROJECT'",
+  "row.scope_type === 'AI_SYSTEM'",
+  "row.scope_type === 'AGENT'",
+  'Math.min(...concrete)',
+  'admissionPolicies',
+]) if (!budgetPolicy.includes(token)) failures.push(`missing canonical composed budget adapter token: ${token}`)
 
 for (const token of [
   'export interface ProjectBudgetAdmissionProvider',
@@ -77,14 +87,15 @@ for (const token of [
   'governance.release_ai_project_resource_budget_lease',
   'pg_advisory_xact_lock',
   "grant execute on function governance.acquire_ai_project_resource_budget_admission",
-]) if (!admissionMigration.includes(token)) failures.push(`missing atomic admission migration token: ${token}`)
+]) if (!admissionMigration.includes(token) && !scopeMigration.includes(token)) failures.push(`missing atomic admission migration token: ${token}`)
 
-if (budgetPolicy.includes("'AI_SYSTEM'")) failures.push('project budget adapter must not invent AI_SYSTEM precedence')
-if (budgetPolicy.includes("'AGENT'")) failures.push('project budget adapter must not invent AGENT precedence')
+if (!scopeMigration.includes('effective.id = p_policy_version_id') || scopeMigration.includes("effective.scope_type = 'PROJECT'") || scopeMigration.includes("effective.scope_key = 'PROJECT'")) {
+  failures.push('scope admission migration must admit exact current policy versions without a PROJECT-only restriction')
+}
 if (!composition.includes('createGovernanceReasoningBudgetPolicyProvider()')) failures.push('governed Intelligent Router must compose canonical reasoning budget policy provider')
-if (!composition.includes('createGovernanceProjectBudgetAdmissionProvider()')) failures.push('governed Intelligent Router must compose atomic project budget admission provider')
+if (!composition.includes('createGovernanceProjectBudgetAdmissionProvider()')) failures.push('governed Intelligent Router must compose atomic budget admission provider')
 if (!composition.includes('new ObservableIntelligentRouter')) failures.push('governed router must remain observability-decorated')
-if (!observable.includes("import type { ProjectReasoningBudget, ReasoningBudgetPolicyProvider }")) failures.push('budget policy dependency must remain type-only in observable wrapper')
+if (!/import type \{[\s\S]*ReasoningBudgetPolicyProvider[\s\S]*\} from '\.\/reasoning-budget-policy'/.test(observable)) failures.push('budget policy dependency must remain type-only in observable wrapper')
 if (!observable.includes("import type { ProjectBudgetAdmission, ProjectBudgetAdmissionProvider }")) failures.push('admission dependency must remain type-only in observable wrapper')
 if (observable.includes("from './reasoning-budget-policy.ts'")) failures.push('observable wrapper must not introduce .ts runtime budget import coupling')
 if (observable.includes("from './resource-budget-admission.ts'")) failures.push('observable wrapper must not introduce .ts runtime admission import coupling')
@@ -99,6 +110,7 @@ for (const forbidden of [/prompt\s*:/i, /completion\s*:/i, /hidden[_\s-]*reason/
 }
 
 if (!intelligentRouter.includes('executionCorrelationId?: string | null')) failures.push('IntelligentRouteContext must carry a distinct execution correlation key')
+if (!intelligentRouter.includes('agentDefinitionId?: string | null')) failures.push('IntelligentRouteContext must carry explicit agent identity for AGENT budget matching')
 if (/correlationId:\s*(context\.)?traceContext/.test(observable)) failures.push('W3C trace context must not be repurposed as budget admission business identity')
 if (!observable.includes('ProjectBudgetExecutionCorrelationError')) failures.push('configured admission limits must fail closed without canonical UUID execution correlation')
 if (!observable.includes('Lease expiry is the bounded capacity backstop')) failures.push('lease release failure boundary must remain explicit')
@@ -115,8 +127,8 @@ if (!investigationEngine.includes('enrichInvestigationWithModel({')) failures.pu
 if (!profilingExecutor.includes("case 'investigate_profile':") || !profilingExecutor.includes('investigateProfilingRun(profilingRunId, datasetVersionId)')) failures.push('production profiling executor does not reach investigation engine')
 
 if (failures.length) {
-  console.error('ADR-006 route/budget admission telemetry contract failed:')
+  console.error('ADR-006/ADR-008 route and budget admission telemetry contract failed:')
   failures.forEach((failure) => console.error(` - ${failure}`))
   process.exit(1)
 }
-console.log('ADR-006 project output budget, atomic admission, and invocation telemetry contract passed.')
+console.log('ADR-006/ADR-008 composed output budget, multi-scope admission, and invocation telemetry contract passed.')
