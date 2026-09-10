@@ -60,7 +60,7 @@ jobs:
         run: pnpm run verify:retrieval-provider
       - name: Evaluation evidence gate
         run: pnpm run verify:evaluation-engine
-      - name: Migration version uniqueness gate
+      - name: Migration version collision gate
         run: node scripts/verify-migration-version-uniqueness.mjs
       - name: V6 certification contract
         run: node scripts/verify-journey-operational-certification.mjs
@@ -83,7 +83,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - name: Verify migration versions before replay
+      - name: Verify migration collision baseline before replay
         run: node scripts/verify-migration-version-uniqueness.mjs
       - name: Reconstruct clean Supabase database from migrations
         shell: bash
@@ -95,8 +95,7 @@ jobs:
           mkdir -p "$WORK"
           cd "$WORK"
           pnpm dlx supabase@2.117.0 init
-          rm -rf supabase/migrations
-          cp -R "$ROOT/supabase/migrations" supabase/migrations
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-migration-replay.mjs"
           pnpm dlx supabase@2.117.0 start
           trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
           pnpm dlx supabase@2.117.0 db reset --local
