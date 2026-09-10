@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { PersonaSlug } from './personas'
 import { resolvePersonaFromRoleLabels } from './resolve-persona'
-import { assertInstanceOrganizationId, resolveInstanceOrganizationMembership } from './instance-organization'
+import { assertInstanceOrganizationId, InstanceOrganizationIntegrityError, resolveInstanceOrganizationMembership } from './instance-organization'
 
 export type LandingAccessContext = {
   organizationId: string
@@ -41,7 +41,10 @@ export async function resolveLandingAccess(userId: string): Promise<LandingAcces
   return { organizationId, organizationRole, persona, enabled }
 }
 
-export async function isLandingPageEnabled(organizationId: string, persona: PersonaSlug): Promise<boolean> {
+export async function isLandingPageEnabled(organizationId: string | null, persona: PersonaSlug): Promise<boolean> {
+  if (!organizationId) {
+    throw new InstanceOrganizationIntegrityError('Organization context rejected: the DataNexus instance organization is required.')
+  }
   await assertInstanceOrganizationId(organizationId)
   const admin = createAdminClient()
   const result = await admin.schema('governance').from('landing_page_settings')
