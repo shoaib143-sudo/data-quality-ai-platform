@@ -164,6 +164,21 @@ addReplayReconstruction('20260904020500','reconstruct_lineage_edges',`create tab
 create index if not exists idx_lineage_project on governance.lineage_edges(project_id);
 `,'Released governance operations history indexes governance.lineage_edges before its creation is represented; reconstruction matches the live pre-transformation table contract for disposable replay.')
 
+addReplayReconstruction('20260904022510','reconstruct_audit_events',`create table if not exists governance.audit_events (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid,
+  actor_user_id uuid,
+  actor_type text not null,
+  event_type text not null,
+  entity_type text,
+  entity_id uuid,
+  correlation_id uuid,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_audit_project on governance.audit_events(project_id, created_at desc);
+`,'Released operational audit history enables RLS and writes governance.audit_events before its creation is represented; reconstruction matches the live pre-hash-chain table contract for disposable replay.')
+
 for (const file of files) {
   if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(file)) throw new Error(`Malformed migration filename: ${file}`)
   const originalVersion=file.slice(0,14)
