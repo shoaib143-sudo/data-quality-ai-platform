@@ -42,10 +42,6 @@ function addReplayReconstruction(version, name, sql, reason) {
   manifest.push({ source: null, replay, normalized: false, reconstructed: true, reason })
 }
 
-// The live estate contains profiling.dataset_execution_sources, but the released
-// migration history starts by hardening that table and never records its original
-// creation. Keep released migrations immutable and make the historical gap explicit
-// only in the disposable clean-replay directory used by V6 certification.
 addReplayReconstruction(
   '20260825235959',
   'reconstruct_dataset_execution_sources',
@@ -74,9 +70,6 @@ commit;
   'Released history hardens profiling.dataset_execution_sources before any recorded table creation; reconstruction matches the live table contract.',
 )
 
-// The live estate also contains profiling.data_quality_scores, while released
-// history first references it in the scale-normalization migration. Reconstruct
-// the exact live table shape before that historical reference, only for clean replay.
 addReplayReconstruction(
   '20260902021500',
   'reconstruct_data_quality_scores',
@@ -99,6 +92,77 @@ commit;
   'Released history normalizes profiling.data_quality_scores before any recorded table creation; reconstruction matches the live table and constraint contract.',
 )
 
+addReplayReconstruction(
+  '20260902041500',
+  'reconstruct_persist_profile_execution_result',
+  `create or replace function profiling.persist_profile_execution_result(
+  p_profile_run_id uuid,
+  p_metrics jsonb default '[]'::jsonb,
+  p_findings jsonb default '[]'::jsonb,
+  p_score jsonb default '{}'::jsonb,
+  p_status text default 'COMPLETED'
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, profiling
+as $$
+begin
+  insert into profiling.profile_metrics (
+    profile_run_id, metric_definition_id, profile_column_id, metric_key,
+    numeric_value, text_value, boolean_value, json_value
+  )
+  select p_profile_run_id, (m->>'metric_definition_id')::uuid,
+    nullif(m->>'profile_column_id','')::uuid, m->>'metric_key',
+    nullif(m->>'numeric_value','')::numeric, m->>'text_value',
+    nullif(m->>'boolean_value','')::boolean, m->'json_value'
+  from jsonb_array_elements(p_metrics) m
+  on conflict (profile_run_id, profile_column_id, metric_key) do update set
+    numeric_value=excluded.numeric_value, text_value=excluded.text_value,
+    boolean_value=excluded.boolean_value, json_value=excluded.json_value;
+
+  insert into profiling.profile_findings (
+    profile_run_id, profile_column_id, finding_type, severity, title,
+    description, confidence, evidence, recommendation
+  )
+  select p_profile_run_id, nullif(f->>'profile_column_id','')::uuid,
+    f->>'finding_type', f->>'severity', f->>'title', f->>'description',
+    nullif(f->>'confidence','')::numeric, coalesce(f->'evidence','{}'::jsonb),
+    f->'recommendation'
+  from jsonb_array_elements(p_findings) f
+  where not exists (
+    select 1 from profiling.profile_findings existing
+    where existing.profile_run_id=p_profile_run_id
+      and existing.finding_type=f->>'finding_type'
+      and existing.title=f->>'title'
+  );
+
+  insert into profiling.data_quality_scores (
+    profile_run_id, completeness_score, uniqueness_score, validity_score,
+    accuracy_score, overall_score
+  ) values (
+    p_profile_run_id,
+    nullif(p_score->>'completeness_score','')::numeric,
+    nullif(p_score->>'uniqueness_score','')::numeric,
+    nullif(p_score->>'validity_score','')::numeric,
+    nullif(p_score->>'accuracy_score','')::numeric,
+    nullif(p_score->>'overall_score','')::numeric
+  ) on conflict (profile_run_id) do update set
+    completeness_score=excluded.completeness_score,
+    uniqueness_score=excluded.uniqueness_score,
+    validity_score=excluded.validity_score,
+    accuracy_score=excluded.accuracy_score,
+    overall_score=excluded.overall_score;
+
+  update profiling.profile_runs
+  set status=p_status, completed_at=now()
+  where id=p_profile_run_id;
+end;
+$$;
+`,
+  'Released history revokes the profiling persistence RPC before its creation is represented; reconstruction uses the exact live signature and behavior so later hardening applies normally.',
+)
+
 for (const file of files) {
   if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(file)) throw new Error(`Malformed migration filename: ${file}`)
   const originalVersion = file.slice(0, 14)
@@ -109,11 +173,6 @@ for (const file of files) {
   const targetPath = path.join(targetDir, targetName)
   fs.copyFileSync(sourcePath, targetPath)
 
-  // The released job-monitor migration predates the canonical project-membership
-  // helper and references catalog.project_members, an obsolete table that is not
-  // part of the current or foundation schema. Rewrite only the disposable replay
-  // copy to the equivalent foundation helper. Released migration evidence remains
-  // byte-for-byte immutable.
   if (file === '20260828000000_job_monitor_operations.sql') {
     const originalSql = fs.readFileSync(targetPath, 'utf8')
     const legacyPolicy = `  exists (\n    select 1\n    from agent.agent_runs r\n    join catalog.project_members pm on pm.project_id = r.project_id\n    where r.id = agent_run_logs.agent_run_id\n      and pm.user_id = auth.uid()\n  )`
