@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
 import { queueDataQualityAutomation } from '@/lib/data-quality/queue'
@@ -10,7 +10,7 @@ function text(value: unknown) { return typeof value === 'string' ? value.trim() 
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const body = await request.json()
     const datasetVersionId = text(body.datasetVersionId)
     const rawIdempotencyKey = text(request.headers.get('idempotency-key') ?? body.idempotencyKey ?? body.idempotency_key)
