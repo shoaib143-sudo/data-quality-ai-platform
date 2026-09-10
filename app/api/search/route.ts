@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { createGovernanceRetrievalProvider } from '@/lib/ai/governance-retrieval-provider'
 import type { RetrievalMatch } from '@/lib/ai/retrieval-provider'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-policy'
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { createClient } from '@/lib/supabase/server'
 
 type SearchResult = {
@@ -48,12 +51,12 @@ function semanticResult(match: RetrievalMatch): SearchResult {
   const documentId = textMetadata(metadata, 'document_id')
   const fileName = textMetadata(metadata, 'file_name')
   let label = firstLine(match.content)
-  let href = '/dashboard'
+  let href = '/search'
 
   switch (match.objectType) {
     case 'DATASET':
       label = textMetadata(metadata, 'name') ?? label
-      href = `/catalog?dataset=${encodeURIComponent(objectId)}`
+      href = canonicalRoutes.governedDataset(objectId)
       break
     case 'COLUMN':
       label = datasetName && columnName ? `${datasetName}.${columnName}` : columnName ?? label
@@ -135,7 +138,8 @@ function mergeResults(lexical: SearchResult[], semantic: SearchResult[]) {
 }
 
 export async function GET(request: Request) {
-  await requireUser()
+  const user = await requireUser()
+  const context = await resolveLandingAccess(user.id)
   const url = new URL(request.url)
   const query = (url.searchParams.get('q') ?? '').trim()
   if (query.length < 2) return NextResponse.json({ query, count: 0, results: [], semantic: { status: 'SKIPPED' } })
@@ -180,16 +184,16 @@ export async function GET(request: Request) {
   }
 
   const lexical: SearchResult[] = [
-    ...(datasets.data ?? []).map((item) => ({ kind: 'DATASET', id: item.id, projectId: item.project_id, label: item.name, description: item.description ?? item.business_domain ?? item.source_identifier, href: `/catalog?dataset=${item.id}`, metadata: { domain: item.business_domain, source: item.source_identifier } })),
-    ...(terms.data ?? []).map((item) => ({ kind: 'GLOSSARY_TERM', id: item.id, projectId: item.project_id, label: item.term, description: item.definition, href: `/glossary?term=${item.id}`, metadata: { domain: item.domain, status: item.status } })),
-    ...(issues.data ?? []).map((item) => ({ kind: 'QUALITY_INCIDENT', id: item.id, projectId: item.project_id, label: item.title, description: item.description, href: `/issues?issue=${item.id}`, metadata: { status: item.status, severity: item.severity, dataset_id: item.dataset_id } })),
-    ...(labels.data ?? []).map((item) => ({ kind: 'CLASSIFICATION', id: item.id, projectId: item.project_id, label: item.name, description: item.description, href: `/classification?label=${item.id}`, metadata: { sensitivity_level: item.sensitivity_level } })),
-    ...(policies.data ?? []).map((item) => ({ kind: 'POLICY', id: item.id, projectId: item.project_id, label: item.name, description: item.description, href: `/classification?policy=${item.id}`, metadata: { required_controls: item.required_controls, retention_days: item.retention_days, encryption_required: item.encryption_required, masking_required: item.masking_required, approval_required: item.approval_required } })),
-    ...(contracts.data ?? []).map((item) => ({ kind: 'DATA_CONTRACT', id: item.id, projectId: item.project_id, label: item.name, description: `Contract v${item.current_version} · ${item.status}`, href: `/contracts?dataset=${item.dataset_id}`, metadata: { status: item.status, dataset_id: item.dataset_id, current_version: item.current_version } })),
-    ...(documents.data ?? []).map((item) => ({ kind: 'DOCUMENT', id: item.id, projectId: item.project_id, label: item.file_name ?? item.source_uri, description: `${item.file_type.toUpperCase()} · ${item.chunk_count} extracted chunks`, href: `/documents?document=${item.id}`, metadata: { dataset_id: item.dataset_id, file_type: item.file_type, source_uri: item.source_uri, extraction_method: item.extraction_method } })),
+    ...(datasets.data ?? []).map((item) => ({ kind: 'DATASET', id: item.id, projectId: item.project_id, label: item.name, description: item.description ?? item.business_domain ?? item.source_identifier, href: canonicalRoutes.governedDataset(item.id), metadata: { domain: item.business_domain, source: item.source_identifier } })),
+    ...(terms.data ?? []).map((item) => ({ kind: 'GLOSSARY_TERM', id: item.id, projectId: item.project_id, label: item.term, description: item.definition, href: `/glossary?term=${encodeURIComponent(item.id)}`, metadata: { domain: item.domain, status: item.status } })),
+    ...(issues.data ?? []).map((item) => ({ kind: 'QUALITY_INCIDENT', id: item.id, projectId: item.project_id, label: item.title, description: item.description, href: `/issues?issue=${encodeURIComponent(item.id)}`, metadata: { status: item.status, severity: item.severity, dataset_id: item.dataset_id } })),
+    ...(labels.data ?? []).map((item) => ({ kind: 'CLASSIFICATION', id: item.id, projectId: item.project_id, label: item.name, description: item.description, href: `/classification?label=${encodeURIComponent(item.id)}`, metadata: { sensitivity_level: item.sensitivity_level } })),
+    ...(policies.data ?? []).map((item) => ({ kind: 'POLICY', id: item.id, projectId: item.project_id, label: item.name, description: item.description, href: `/classification?policy=${encodeURIComponent(item.id)}`, metadata: { required_controls: item.required_controls, retention_days: item.retention_days, encryption_required: item.encryption_required, masking_required: item.masking_required, approval_required: item.approval_required } })),
+    ...(contracts.data ?? []).map((item) => ({ kind: 'DATA_CONTRACT', id: item.id, projectId: item.project_id, label: item.name, description: `Contract v${item.current_version} · ${item.status}`, href: `/contracts?dataset=${encodeURIComponent(item.dataset_id)}`, metadata: { status: item.status, dataset_id: item.dataset_id, current_version: item.current_version } })),
+    ...(documents.data ?? []).map((item) => ({ kind: 'DOCUMENT', id: item.id, projectId: item.project_id, label: item.file_name ?? item.source_uri, description: `${item.file_type.toUpperCase()} · ${item.chunk_count} extracted chunks`, href: `/documents?document=${encodeURIComponent(item.id)}`, metadata: { dataset_id: item.dataset_id, file_type: item.file_type, source_uri: item.source_uri, extraction_method: item.extraction_method } })),
     ...(documentChunks.data ?? []).map((item) => {
       const document = documentById.get(item.document_id)
-      return { kind: 'DOCUMENT_CHUNK', id: item.id, projectId: item.project_id, label: document?.file_name ? `${document.file_name} · chunk ${item.chunk_index}` : `Document chunk ${item.chunk_index}`, description: item.content, href: `/documents?document=${item.document_id}&chunk=${item.id}#chunk-${item.id}`, metadata: { document_id: item.document_id, dataset_id: document?.dataset_id ?? null, file_type: document?.file_type ?? null, chunk_index: item.chunk_index } }
+      return { kind: 'DOCUMENT_CHUNK', id: item.id, projectId: item.project_id, label: document?.file_name ? `${document.file_name} · chunk ${item.chunk_index}` : `Document chunk ${item.chunk_index}`, description: item.content, href: `/documents?document=${encodeURIComponent(item.document_id)}&chunk=${encodeURIComponent(item.id)}#chunk-${encodeURIComponent(item.id)}`, metadata: { document_id: item.document_id, dataset_id: document?.dataset_id ?? null, file_type: document?.file_type ?? null, chunk_index: item.chunk_index } }
     }),
   ].map((item) => ({ ...item, score: lexicalScore(item.label, item.description, query, item.kind) }))
 
@@ -209,13 +213,15 @@ export async function GET(request: Request) {
       threshold: 0.35,
     })
     semantic = retrieved.matches.map(semanticResult)
-    // Hybrid fallback remains mergeResults with NOT_CONFIGURED and UNAVAILABLE semantic states.
   } catch (error) {
     semanticStatus = error instanceof Error && error.name === 'EmbeddingProviderNotConfiguredError' ? 'NOT_CONFIGURED' : 'UNAVAILABLE'
     if (semanticStatus === 'UNAVAILABLE') console.error('Hybrid semantic search unavailable', error)
   }
 
-  const results = mergeResults(lexical, semantic)
+  const results = mergeResults(lexical, semantic).filter((item) =>
+    canAccessWorkspaceHref(context.persona, item.href, context.organizationRole),
+  )
+
   return NextResponse.json({
     query,
     count: results.length,
