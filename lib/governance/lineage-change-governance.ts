@@ -75,7 +75,7 @@ export async function assessGovernedLineageChange(input: {
 
   const cdeById = new Map(array(cdeResult.data).map((row) => [String(row.id), row]))
   const controlById = new Map(array(controlResult.data).map((row) => [String(row.id), row]))
-  const cdeImpact = cdeMappings.map((mapping) => ({ ...mapping, cde: cdeById.get(String(mapping.cde_id)) ?? null }))
+  const cdeImpact: JsonRecord[] = cdeMappings.map((mapping): JsonRecord => ({ ...mapping, cde: cdeById.get(String(mapping.cde_id)) ?? null }))
   const authoritativeCdeImpact = cdeImpact.filter((row) => ['APPROVED', 'ACTIVE'].includes(upper(row.status)))
   const proposedCdeImpact = cdeImpact.filter((row) => !authoritativeCdeImpact.includes(row))
 
