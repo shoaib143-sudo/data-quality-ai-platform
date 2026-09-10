@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
+import { assertGovernedActionReferencesInProject } from '@/lib/governance/governed-action-scope'
 
 type RiskLevel = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type ActionStatus = 'PROPOSED' | 'AWAITING_APPROVAL' | 'APPROVED' | 'EXECUTING' | 'EXECUTED' | 'REJECTED' | 'BLOCKED' | 'FAILED' | 'ROLLED_BACK'
@@ -240,6 +241,12 @@ export async function proposeGovernedAction(input: ProposedAction) {
   const targetType = input.targetType.trim().toUpperCase()
   const riskLevel = normalizeRisk(input.riskLevel)
   const confidence = clamp(input.confidence)
+  await assertGovernedActionReferencesInProject({
+    projectId: input.projectId,
+    targetType,
+    targetId: input.targetId ?? null,
+    sourceAgentRunId: input.sourceAgentRunId ?? null,
+  })
   const policy = await loadPolicy(input.projectId, actionKey)
   const policyDecision = await createGovernancePolicyDecisionProvider().decide({
     projectId: input.projectId,
@@ -499,11 +506,13 @@ export async function applyAllPredictiveRiskGovernedActions() {
 
 export async function listGovernedAutonomy(projectId: string) {
   const admin = createAdminClient()
-  const [policies, actions] = await Promise.all([
+  const [policies, actions, outcomes] = await Promise.all([
     admin.schema('governance').from('autonomy_policies').select('*').eq('project_id', projectId).order('action_key'),
     admin.schema('governance').from('autonomy_actions').select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
+    admin.schema('governance').from('governed_action_outcomes').select('*').eq('project_id', projectId).order('recorded_at', { ascending: false }).limit(100),
   ])
   if (policies.error) throw new Error(`Unable to list autonomy policies: ${policies.error.message}`)
   if (actions.error) throw new Error(`Unable to list autonomy actions: ${actions.error.message}`)
-  return { policies: policies.data ?? [], actions: actions.data ?? [] }
+  if (outcomes.error) throw new Error(`Unable to list governed action outcomes: ${outcomes.error.message}`)
+  return { policies: policies.data ?? [], actions: actions.data ?? [], outcomes: outcomes.data ?? [] }
 }
