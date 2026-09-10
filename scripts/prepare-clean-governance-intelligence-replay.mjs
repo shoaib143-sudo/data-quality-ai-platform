@@ -112,54 +112,8 @@ create index if not exists idx_cdes_project_domain on governance.critical_data_e
 create index if not exists idx_cde_mappings_dataset on governance.cde_mappings(project_id,dataset_id,column_name);
 create index if not exists idx_knowledge_relationships_source on governance.knowledge_relationships(project_id,source_type,source_key);
 create index if not exists idx_knowledge_relationships_target on governance.knowledge_relationships(project_id,target_type,target_key);
-
-alter table governance.knowledge_documents enable row level security;
-alter table governance.knowledge_requirements enable row level security;
-alter table governance.critical_data_elements enable row level security;
-alter table governance.cde_mappings enable row level security;
-alter table governance.knowledge_relationships enable row level security;
-
-do $$
-declare t text;
-begin
-  foreach t in array array['knowledge_documents','knowledge_requirements','critical_data_elements','cde_mappings','knowledge_relationships'] loop
-    execute format('create policy %I on governance.%I for select to authenticated using (app_private.is_project_member(project_id))', t || '_project_read', t);
-    execute format('create policy %I on governance.%I for insert to authenticated with check (app_private.is_project_member(project_id) and governance.has_project_capability(project_id, (select auth.uid()), ''catalog.update''))', t || '_project_insert', t);
-    execute format('create policy %I on governance.%I for update to authenticated using (app_private.is_project_member(project_id) and governance.has_project_capability(project_id, (select auth.uid()), ''catalog.update'')) with check (app_private.is_project_member(project_id) and governance.has_project_capability(project_id, (select auth.uid()), ''catalog.update''))', t || '_project_update', t);
-    execute format('create policy %I on governance.%I for delete to authenticated using (app_private.is_project_member(project_id) and governance.has_project_capability(project_id, (select auth.uid()), ''catalog.update''))', t || '_project_delete', t);
-  end loop;
-end $$;
-
-grant select,insert,update,delete on governance.knowledge_documents,governance.knowledge_requirements,governance.critical_data_elements,governance.cde_mappings,governance.knowledge_relationships to authenticated;
-grant all on governance.knowledge_documents,governance.knowledge_requirements,governance.critical_data_elements,governance.cde_mappings,governance.knowledge_relationships to service_role;
-
-create or replace function governance.search_governance_knowledge_lexical(p_project_id uuid,p_query text,p_limit integer default 25)
-returns table(object_type text,object_key text,title text,content text,metadata jsonb,relevance numeric)
-language sql stable security invoker set search_path=''
-as $$
-with q as (select nullif(trim(p_query),'') query), candidates(object_type,object_key,title,content,metadata,relevance) as (
- select 'KNOWLEDGE_DOCUMENT'::text,d.document_key,d.title,coalesce(d.summary,'')||E'\\n'||d.content,
-  jsonb_build_object('document_type',d.document_type,'domain',d.domain,'jurisdiction',d.jurisdiction,'source_url',d.source_url)||d.metadata,
-  (case when lower(d.title)=lower(q.query) then 1.0 when d.title ilike '%'||q.query||'%' then 0.9 when d.content ilike '%'||q.query||'%' then 0.7 else 0.0 end)::numeric
- from governance.knowledge_documents d cross join q where d.project_id=p_project_id and d.status='ACTIVE' and q.query is not null and (d.title ilike '%'||q.query||'%' or coalesce(d.summary,'') ilike '%'||q.query||'%' or d.content ilike '%'||q.query||'%')
- union all
- select 'KNOWLEDGE_REQUIREMENT',r.requirement_key,r.title,r.requirement_text,jsonb_build_object('obligation_type',r.obligation_type,'priority',r.priority,'document_id',r.document_id)||r.metadata,
-  (case when lower(r.title)=lower(q.query) then 1.0 when r.title ilike '%'||q.query||'%' then 0.9 else 0.75 end)::numeric
- from governance.knowledge_requirements r cross join q where r.project_id=p_project_id and q.query is not null and (r.title ilike '%'||q.query||'%' or r.requirement_text ilike '%'||q.query||'%')
- union all
- select 'GLOSSARY_TERM',g.id::text,g.term,g.definition,jsonb_build_object('domain',g.domain,'synonyms',g.synonyms,'status',g.status)||g.metadata,
-  (case when lower(g.term)=lower(q.query) then 1.0 when g.term ilike '%'||q.query||'%' then 0.95 else 0.72 end)::numeric
- from governance.glossary_terms g cross join q where g.project_id=p_project_id and g.status<>'DEPRECATED' and q.query is not null and (g.term ilike '%'||q.query||'%' or g.definition ilike '%'||q.query||'%' or array_to_string(g.synonyms,' ') ilike '%'||q.query||'%')
- union all
- select 'CRITICAL_DATA_ELEMENT',c.cde_key,c.name,c.definition,jsonb_build_object('domain',c.domain,'criticality',c.criticality,'regulatory_relevance',c.regulatory_relevance,'owner_role',c.owner_role,'steward_role',c.steward_role)||c.metadata,
-  (case when lower(c.name)=lower(q.query) then 1.0 when c.name ilike '%'||q.query||'%' then 0.95 else 0.74 end)::numeric
- from governance.critical_data_elements c cross join q where c.project_id=p_project_id and c.status='ACTIVE' and q.query is not null and (c.name ilike '%'||q.query||'%' or c.definition ilike '%'||q.query||'%' or c.cde_key ilike '%'||q.query||'%')
-) select object_type,object_key,title,content,metadata,relevance from candidates order by relevance desc,title limit greatest(1,least(coalesce(p_limit,25),100));
-$$;
-
-grant execute on function governance.search_governance_knowledge_lexical(uuid,text,integer) to authenticated,service_role;
 `,
-  'production migration history retains this migration but the repository does not; replay restores the authoritative live statement contract at its original version.'
+  'production history created these governance knowledge relations before later September 4 migrations reference them. Replay restores only structural prerequisites here because the committed 20260905050000 migration canonically owns their RLS policies, grants, and lexical-search RPC.'
 )
 
 writeRecoveredMigration(
@@ -259,5 +213,5 @@ end $$;
 grant select,insert,update,delete on governance.regulatory_applicability,governance.accountability_assignments,governance.dataset_certifications,governance.remediation_knowledge to authenticated;
 grant all on governance.regulatory_applicability,governance.accountability_assignments,governance.dataset_certifications,governance.remediation_knowledge to service_role;
 `,
-  'production migration history retains this migration but the repository does not; replay restores the authoritative live operational-domain contract at its original version.'
+  'production migration history retains this operational-domain migration but the repository does not; replay restores its authoritative live table, RLS, policy, index, and grant contract at the original version.'
 )
