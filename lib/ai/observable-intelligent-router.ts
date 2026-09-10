@@ -10,7 +10,11 @@ import type {
   ReasoningResult,
 } from './reasoning-provider'
 import type { ModelCostAccountingProvider, ModelCostAccountingRecord } from './cost-accounting'
-import type { ProjectReasoningBudget, ReasoningBudgetPolicyProvider } from './reasoning-budget-policy'
+import type {
+  ProjectReasoningBudget,
+  ReasoningAdmissionPolicy,
+  ReasoningBudgetPolicyProvider,
+} from './reasoning-budget-policy'
 import type { ProjectBudgetAdmission, ProjectBudgetAdmissionProvider } from './resource-budget-admission'
 import type { TelemetryProvider, TelemetryTraceContext } from './telemetry-provider'
 
@@ -19,6 +23,7 @@ type ObservableReasoningContext = {
   executionCorrelationId?: string | null
   aiSystemId?: string | null
   aiSystemVersionId?: string | null
+  agentDefinitionId?: string | null
   modelName?: string | null
   routingPolicyId?: string | null
   routingPolicyReason?: string | null
@@ -30,6 +35,12 @@ type ObservableReasoningContext = {
 type SanitizedProviderHttpFailure = {
   status: number
   providerRequestId?: string
+}
+
+type AdmissionEvidence = ProjectBudgetAdmission & {
+  policyVersionId: string
+  scopeType: string
+  scopeKey: string
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -57,6 +68,18 @@ function admissionDeniedError(reason: string) {
 
 function hasAdmissionLimits(budget: ProjectReasoningBudget) {
   return budget.maxRequestsPerMinute !== null || budget.maxConcurrentExecutions !== null
+}
+
+function configuredAdmissionPolicies(budget: ProjectReasoningBudget): ReasoningAdmissionPolicy[] {
+  if (budget.admissionPolicies) return budget.admissionPolicies
+  if (!hasAdmissionLimits(budget)) return []
+  return [{
+    policyId: budget.policyId,
+    scopeType: 'PROJECT',
+    scopeKey: 'PROJECT',
+    maxRequestsPerMinute: budget.maxRequestsPerMinute,
+    maxConcurrentExecutions: budget.maxConcurrentExecutions,
+  }]
 }
 
 function applyProjectOutputBudget(request: ReasoningRequest, budget: ProjectReasoningBudget | null) {
@@ -127,26 +150,65 @@ class ObservableReasoningProvider implements ReasoningProvider {
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
     const startedAt = Date.now()
     let budgetEvidence = applyProjectOutputBudget(request, null)
-    let admission: ProjectBudgetAdmission | null = null
+    let admissions: AdmissionEvidence[] = []
+    let budgetPolicyIds: string[] = []
     let admissionCorrelationId: string | null = null
     let invocationId: string | null = null
     let costEvidence: ModelCostAccountingRecord | null = null
+
+    const releaseAdmissionLeases = async () => {
+      if (!admissionCorrelationId || !this.budgetAdmission) return
+      for (const admission of admissions) {
+        if (!admission.leaseId) continue
+        try {
+          await this.budgetAdmission.release({
+            projectId: this.context.projectId,
+            leaseId: admission.leaseId,
+            correlationId: admissionCorrelationId,
+          })
+        } catch {
+          // Lease expiry is the bounded capacity backstop. A release failure is evidence,
+          // not authority to rewrite the provider result or bypass another scope.
+        }
+      }
+    }
+
     try {
       let projectBudget: ProjectReasoningBudget | null = null
       if (this.budgetPolicy) {
-        projectBudget = await this.budgetPolicy.resolveProjectBudget(this.context.projectId)
+        projectBudget = this.budgetPolicy.resolveBudget
+          ? await this.budgetPolicy.resolveBudget({
+              projectId: this.context.projectId,
+              aiSystemId: this.context.aiSystemId ?? null,
+              agentDefinitionId: this.context.agentDefinitionId ?? null,
+            })
+          : await this.budgetPolicy.resolveProjectBudget(this.context.projectId)
         budgetEvidence = applyProjectOutputBudget(request, projectBudget)
+        budgetPolicyIds = projectBudget?.policyIds ?? (projectBudget ? [projectBudget.policyId] : [])
       }
 
-      if (projectBudget && hasAdmissionLimits(projectBudget)) {
+      const admissionPolicies = projectBudget ? configuredAdmissionPolicies(projectBudget) : []
+      if (admissionPolicies.length) {
         if (!this.budgetAdmission) throw new Error('Project resource budget admission provider is required for configured rate or concurrency limits')
         admissionCorrelationId = requiredExecutionCorrelationId(this.context.executionCorrelationId)
-        admission = await this.budgetAdmission.acquire({
-          projectId: this.context.projectId,
-          policyVersionId: projectBudget.policyId,
-          correlationId: admissionCorrelationId,
-        })
-        if (!admission.admitted) throw admissionDeniedError(admission.reason)
+        for (const policy of admissionPolicies) {
+          const admission = await this.budgetAdmission.acquire({
+            projectId: this.context.projectId,
+            policyVersionId: policy.policyId,
+            correlationId: admissionCorrelationId,
+          })
+          const evidence: AdmissionEvidence = {
+            ...admission,
+            policyVersionId: policy.policyId,
+            scopeType: policy.scopeType,
+            scopeKey: policy.scopeKey,
+          }
+          admissions.push(evidence)
+          if (!admission.admitted) {
+            await releaseAdmissionLeases()
+            throw admissionDeniedError(`${policy.scopeType}/${policy.scopeKey}:${admission.reason}`)
+          }
+        }
       }
 
       invocationId = randomUUID()
@@ -154,18 +216,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
       try {
         result = await this.provider.generateJson(budgetEvidence.request)
       } finally {
-        if (admission?.leaseId && admissionCorrelationId && this.budgetAdmission) {
-          try {
-            await this.budgetAdmission.release({
-              projectId: this.context.projectId,
-              leaseId: admission.leaseId,
-              correlationId: admissionCorrelationId,
-            })
-          } catch {
-            // Lease expiry is the bounded capacity backstop. Release failure is execution-accounting
-            // evidence and must not rewrite a completed model result or mask the provider failure.
-          }
-        }
+        await releaseAdmissionLeases()
       }
 
       if (this.costAccounting) {
@@ -181,6 +232,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
         })
       }
 
+      const primaryAdmission = admissions[0] ?? null
       try {
         await this.telemetry.record({
           projectId: this.context.projectId,
@@ -197,11 +249,20 @@ class ObservableReasoningProvider implements ReasoningProvider {
             governance_max_output_tokens: budgetEvidence.governanceMaxOutputTokens,
             effective_max_output_tokens: budgetEvidence.effectiveMaxOutputTokens,
             resource_budget_policy_id: budgetEvidence.budgetPolicyId,
-            resource_budget_admission_reason: admission?.reason ?? null,
-            resource_budget_admission_id: admission?.admissionId ?? null,
-            resource_budget_lease_id: admission?.leaseId ?? null,
-            resource_budget_request_count_last_minute: admission?.requestCountLastMinute ?? null,
-            resource_budget_active_concurrency: admission?.activeConcurrency ?? null,
+            resource_budget_policy_ids: budgetPolicyIds,
+            resource_budget_admission_reason: primaryAdmission?.reason ?? null,
+            resource_budget_admission_id: primaryAdmission?.admissionId ?? null,
+            resource_budget_lease_id: primaryAdmission?.leaseId ?? null,
+            resource_budget_request_count_last_minute: primaryAdmission?.requestCountLastMinute ?? null,
+            resource_budget_active_concurrency: primaryAdmission?.activeConcurrency ?? null,
+            resource_budget_admissions: admissions.map((entry) => ({
+              policy_version_id: entry.policyVersionId,
+              scope_type: entry.scopeType,
+              scope_key: entry.scopeKey,
+              reason: entry.reason,
+              admission_id: entry.admissionId,
+              lease_id: entry.leaseId,
+            })),
             invocation_id: invocationId,
             cost_accounting_status: costEvidence?.accountingStatus ?? null,
             cost_pricing_version_id: costEvidence?.pricingVersionId ?? null,
@@ -219,6 +280,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
       return result
     } catch (error) {
       const providerHttpError = sanitizedProviderHttpFailure(error)
+      const primaryAdmission = admissions[0] ?? null
       try {
         await this.telemetry.record({
           projectId: this.context.projectId, eventType: 'MODEL_INVOCATION', operation: request.task, status: 'ERROR',
@@ -233,11 +295,20 @@ class ObservableReasoningProvider implements ReasoningProvider {
             governance_max_output_tokens: budgetEvidence.governanceMaxOutputTokens,
             effective_max_output_tokens: budgetEvidence.effectiveMaxOutputTokens,
             resource_budget_policy_id: budgetEvidence.budgetPolicyId,
-            resource_budget_admission_reason: admission?.reason ?? null,
-            resource_budget_admission_id: admission?.admissionId ?? null,
-            resource_budget_lease_id: admission?.leaseId ?? null,
-            resource_budget_request_count_last_minute: admission?.requestCountLastMinute ?? null,
-            resource_budget_active_concurrency: admission?.activeConcurrency ?? null,
+            resource_budget_policy_ids: budgetPolicyIds,
+            resource_budget_admission_reason: primaryAdmission?.reason ?? null,
+            resource_budget_admission_id: primaryAdmission?.admissionId ?? null,
+            resource_budget_lease_id: primaryAdmission?.leaseId ?? null,
+            resource_budget_request_count_last_minute: primaryAdmission?.requestCountLastMinute ?? null,
+            resource_budget_active_concurrency: primaryAdmission?.activeConcurrency ?? null,
+            resource_budget_admissions: admissions.map((entry) => ({
+              policy_version_id: entry.policyVersionId,
+              scope_type: entry.scopeType,
+              scope_key: entry.scopeKey,
+              reason: entry.reason,
+              admission_id: entry.admissionId,
+              lease_id: entry.leaseId,
+            })),
             invocation_id: invocationId,
             cost_accounting_status: costEvidence?.accountingStatus ?? null,
             error_name: error instanceof Error ? error.name : 'UnknownError',
@@ -306,7 +377,9 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
       provider: new ObservableReasoningProvider(decision.provider, this.telemetry, {
         projectId: context.projectId, executionCorrelationId: context.executionCorrelationId ?? null,
         aiSystemId: decision.evidence?.aiSystemId ?? null,
-        aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null, modelName: decision.evidence?.modelName ?? null,
+        aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null,
+        agentDefinitionId: context.agentDefinitionId ?? null,
+        modelName: decision.evidence?.modelName ?? null,
         routingPolicyId: decision.evidence?.routingPolicyId ?? null, routingPolicyReason: decision.evidence?.routingPolicyReason ?? null,
         traceContext: context.traceContext ?? null, routeSource: decision.source, routeReason: decision.reason,
       }, this.budgetPolicy, this.budgetAdmission, this.costAccounting),
