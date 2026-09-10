@@ -68,7 +68,7 @@ if (route.includes('requireUser()')) {
 }
 
 const specialist = fs.readFileSync(specialistPath, 'utf8')
-const route = fs.readFileSync(routePath, 'utf8')
+const patchedRoute = fs.readFileSync(routePath, 'utf8')
 for (const required of [
   'buildGovernedInvestigation',
   'assertGovernedInvestigationGrounding',
@@ -78,5 +78,5 @@ for (const required of [
 ]) {
   if (!specialist.includes(required)) throw new Error(`V4 specialist patch incomplete: ${required}`)
 }
-if (!route.includes('requireApiUser') || route.includes('requireUser()')) throw new Error('V4 governance route auth patch incomplete')
+if (!patchedRoute.includes('requireApiUser') || patchedRoute.includes('requireUser()')) throw new Error('V4 governance route auth patch incomplete')
 console.log('V4 shared investigation specialist patch applied.')
