@@ -22,7 +22,7 @@ function pageFiles(root = 'app') {
 }
 
 function routeForPage(file) {
-  const relative = file.replace(/^app\//, '').replace(/\/page\.tsx$/, '')
+  const relative = file.replace(/^app\//, '').replace(/(^|\/)page\.tsx$/, '')
   if (!relative) return '/'
   return `/${relative.replace(/\([^/]+\)\//g, '').replace(/\[(\.\.\.)?[^\]]+\]/g, ':param')}`
 }
@@ -37,6 +37,17 @@ function ancestorLayouts(file) {
     dir = path.dirname(dir)
   }
   return layouts
+}
+
+function isOrganizationAdminLayout(layout) {
+  const source = fs.readFileSync(layout, 'utf8')
+  const helperGuard = source.includes('requireOrganizationAdminAccess')
+  const inlineGuard = source.includes("schema('app')")
+    && source.includes("from('organization_members')")
+    && source.includes(".eq('user_id', user.id)")
+    && source.includes(".in('role', ['OWNER', 'ADMIN'])")
+    && source.includes("redirect('/home')")
+  return helperGuard || inlineGuard
 }
 
 check('exactly 13 supported governance personas', personaSlugs.length === 13)
@@ -64,7 +75,7 @@ for (const file of pageFiles()) {
   if (explicitlyNonWorkspaceRoutes.some(prefix => route === prefix || (prefix.endsWith('/:param') && route.startsWith(prefix.slice(0, -6))))) continue
   if (route.startsWith('/admin')) {
     const layouts = ancestorLayouts(file)
-    check(`${route} is protected by organization admin layout`, layouts.some(layout => fs.readFileSync(layout, 'utf8').includes('requireOrganizationAdminAccess')))
+    check(`${route} is protected by organization admin layout`, layouts.some(isOrganizationAdminLayout))
     continue
   }
 
