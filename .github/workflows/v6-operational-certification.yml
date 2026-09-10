@@ -142,6 +142,7 @@ jobs:
           cd "$WORK"
           pnpm dlx supabase@2.117.0 init
           SOURCE_MIGRATION_DIR="$ROOT/supabase/migrations" TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-migration-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-agent-status-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-audit-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-jdbc-fixture-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-observability-incident-replay.mjs"
