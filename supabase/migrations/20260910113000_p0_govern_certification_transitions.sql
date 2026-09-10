@@ -8,12 +8,20 @@ language plpgsql
 set search_path = pg_catalog, governance
 as $$
 begin
-  if (new.certification_status, new.certified_at, new.certified_by)
-       is distinct from
-     (old.certification_status, old.certified_at, old.certified_by)
-     and current_user <> 'postgres' then
-    raise exception 'Certification state must be changed through the governed certification workflow.'
-      using errcode = '42501';
+  if current_user <> 'postgres' then
+    if tg_op = 'INSERT' then
+      if new.certification_status <> 'UNCERTIFIED'
+         or new.certified_at is not null
+         or new.certified_by is not null then
+        raise exception 'Certification state must be changed through the governed certification workflow.'
+          using errcode = '42501';
+      end if;
+    elsif (new.certification_status, new.certified_at, new.certified_by)
+            is distinct from
+          (old.certification_status, old.certified_at, old.certified_by) then
+      raise exception 'Certification state must be changed through the governed certification workflow.'
+        using errcode = '42501';
+    end if;
   end if;
   return new;
 end;
@@ -23,7 +31,7 @@ revoke all on function governance.guard_dataset_catalog_certification_write() fr
 
 drop trigger if exists trg_guard_dataset_catalog_certification_write on governance.dataset_catalog;
 create trigger trg_guard_dataset_catalog_certification_write
-before update on governance.dataset_catalog
+before insert or update on governance.dataset_catalog
 for each row execute function governance.guard_dataset_catalog_certification_write();
 
 create or replace function governance.request_dataset_certification(
@@ -61,9 +69,11 @@ begin
 
   if p_assigned_to is not null and not exists (
     select 1 from app.organization_members om
-    where om.organization_id = v_organization_id and om.user_id = p_assigned_to
+    where om.organization_id = v_organization_id
+      and om.user_id = p_assigned_to
+      and om.is_active = true
   ) then
-    raise exception 'Assigned reviewer is not a member of the project organization.' using errcode = '23503';
+    raise exception 'Assigned reviewer is not an active member of the project organization.' using errcode = '23503';
   end if;
 
   if exists (
@@ -135,9 +145,11 @@ begin
   select p.organization_id into v_organization_id from app.projects p where p.id = v_request.project_id;
   if p_assigned_to is not null and not exists (
     select 1 from app.organization_members om
-    where om.organization_id = v_organization_id and om.user_id = p_assigned_to
+    where om.organization_id = v_organization_id
+      and om.user_id = p_assigned_to
+      and om.is_active = true
   ) then
-    raise exception 'Assigned reviewer is not a member of the project organization.' using errcode = '23503';
+    raise exception 'Assigned reviewer is not an active member of the project organization.' using errcode = '23503';
   end if;
 
   if v_target_status = 'APPROVED' and coalesce(v_request.evidence, '{}'::jsonb) = '{}'::jsonb then
@@ -149,8 +161,7 @@ begin
   set status = v_target_status,
       decision_notes = p_decision_notes,
       assigned_to = coalesce(p_assigned_to, assigned_to),
-      decided_at = v_decided_at,
-      updated_at = now()
+      decided_at = v_decided_at
   where id = p_request_id
   returning * into v_request;
 
