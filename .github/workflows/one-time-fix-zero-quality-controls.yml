@@ -1,0 +1,112 @@
+name: Fix zero-control quality semantics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-fix-zero-quality-controls.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch zero-control semantics
+        shell: python
+        run: |
+          from pathlib import Path
+
+          automation = Path('lib/data-quality/automation.ts')
+          text = automation.read_text()
+
+          old = """  enabled: boolean\n  rule_type?: string\n"""
+          new = """  enabled: boolean\n  approval_status?: string | null\n  rule_type?: string\n"""
+          if old not in text:
+              raise SystemExit('Unable to find QualityRule enabled block')
+          text = text.replace(old, new, 1)
+
+          old = """    const synced = await syncSuggestedQualityRules(datasetVersionId, profileRunId, userId)\n    await admin.schema('agent').from('agent_run_steps').update({\n      status: 'SUCCEEDED',\n      output: { rule_count: synced.rules.length },\n      completed_at: new Date().toISOString(),\n    }).eq('id', currentStepId)\n    await writeAgentRunLog({ agentRunId, agentRunStepId: currentStepId, level: 'TOOL', eventType: 'QUALITY_RULES_SYNCED', message: `${synced.rules.length} data quality rules are active for this dataset.`, details: { datasetVersionId, profileRunId, rule_count: synced.rules.length } })\n"""
+          new = """    const synced = await syncSuggestedQualityRules(datasetVersionId, profileRunId, userId)\n    const activeRuleCount = synced.rules.filter((rule) => rule.enabled).length\n    const pendingReviewCount = synced.rules.filter((rule) => !rule.enabled && rule.approval_status === 'PENDING').length\n    const inactiveRuleCount = synced.rules.length - activeRuleCount - pendingReviewCount\n    await admin.schema('agent').from('agent_run_steps').update({\n      status: 'SUCCEEDED',\n      output: {\n        rule_count: synced.rules.length,\n        active_rule_count: activeRuleCount,\n        pending_review_count: pendingReviewCount,\n        inactive_rule_count: inactiveRuleCount,\n      },\n      completed_at: new Date().toISOString(),\n    }).eq('id', currentStepId)\n    await writeAgentRunLog({\n      agentRunId,\n      agentRunStepId: currentStepId,\n      level: 'TOOL',\n      eventType: 'QUALITY_RULES_SYNCED',\n      message: `${synced.rules.length} data quality rules synchronized; ${activeRuleCount} active, ${pendingReviewCount} awaiting governed review, ${inactiveRuleCount} otherwise inactive.`,\n      details: {\n        datasetVersionId,\n        profileRunId,\n        rule_count: synced.rules.length,\n        active_rule_count: activeRuleCount,\n        pending_review_count: pendingReviewCount,\n        inactive_rule_count: inactiveRuleCount,\n      },\n    })\n"""
+          if old not in text:
+              raise SystemExit('Unable to find quality rule sync block')
+          text = text.replace(old, new, 1)
+
+          old = """      pass_rate: totalCount ? passedCount / totalCount : 1,\n      row_exceptions: exceptionCount,\n      quarantined_records: quarantinedCount,\n      governance_status: failedCount ? 'ATTENTION_REQUIRED' : 'CONTROLLED',\n"""
+          new = """      pass_rate: totalCount ? passedCount / totalCount : null,\n      row_exceptions: exceptionCount,\n      quarantined_records: quarantinedCount,\n      governance_status: totalCount === 0 ? 'NO_ACTIVE_CONTROLS' : failedCount ? 'ATTENTION_REQUIRED' : 'CONTROLLED',\n"""
+          if old not in text:
+              raise SystemExit('Unable to find quality summary semantics block')
+          text = text.replace(old, new, 1)
+
+          old = """    await writeAgentRunLog({ agentRunId, agentRunStepId: currentStepId, level: 'LIFECYCLE', eventType: 'QUALITY_AUTOMATION_COMPLETED', message: `Data quality automation completed: ${passedCount} passed, ${failedCount} failed.`, details: summary })\n"""
+          new = """    await writeAgentRunLog({\n      agentRunId,\n      agentRunStepId: currentStepId,\n      level: 'LIFECYCLE',\n      eventType: 'QUALITY_AUTOMATION_COMPLETED',\n      message: totalCount === 0\n        ? 'Data quality automation completed with no active controls available for evaluation.'\n        : `Data quality automation completed: ${passedCount} passed, ${failedCount} failed.`,\n      details: summary,\n    })\n"""
+          if old not in text:
+              raise SystemExit('Unable to find quality completion log block')
+          text = text.replace(old, new, 1)
+          automation.write_text(text)
+
+          operations = Path('lib/data-quality/autonomous-operations.ts')
+          text = operations.read_text()
+
+          old = """  const typedRuns = (qualityRuns ?? []) as QualityRun[]\n  const failedRuns = typedRuns.filter((row) => row.status === 'FAILED')\n"""
+          new = """  const typedRuns = (qualityRuns ?? []) as QualityRun[]\n  const noActiveControls = typedRuns.length === 0\n  const failedRuns = typedRuns.filter((row) => row.status === 'FAILED')\n"""
+          if old not in text:
+              raise SystemExit('Unable to find typed quality runs block')
+          text = text.replace(old, new, 1)
+
+          old = """  const approvalRequired = recommendations.some((item) => item.approval_required === true)\n  const status = failedRuns.length ? (approvalRequired ? 'APPROVAL_REQUIRED' : 'ATTENTION_REQUIRED') : 'CONTROLLED'\n"""
+          new = """  const approvalRequired = recommendations.some((item) => item.approval_required === true)\n  const status = noActiveControls\n    ? 'NO_ACTIVE_CONTROLS'\n    : failedRuns.length\n      ? (approvalRequired ? 'APPROVAL_REQUIRED' : 'ATTENTION_REQUIRED')\n      : 'CONTROLLED'\n"""
+          if old not in text:
+              raise SystemExit('Unable to find investigation status block')
+          text = text.replace(old, new, 1)
+
+          old = """    total_rule_runs: typedRuns.length,\n    failed_rule_runs: failedRuns.length,\n"""
+          new = """    total_rule_runs: typedRuns.length,\n    active_controls_evaluated: typedRuns.length,\n    control_coverage: noActiveControls ? 'NONE' : 'EVALUATED',\n    failed_rule_runs: failedRuns.length,\n"""
+          if old not in text:
+              raise SystemExit('Unable to find investigation evidence block')
+          text = text.replace(old, new, 1)
+
+          old = """  const summary = failedRuns.length\n    ? `${failedRuns.length} data quality control outcome${failedRuns.length === 1 ? '' : 's'} failed across ${failedRules.length} governed rule${failedRules.length === 1 ? '' : 's'}. Highest severity is ${severity}.`\n    : 'All executed data quality controls passed. No remediation is required.'\n  const businessImpact = failedRuns.length\n    ? 'Failed controls can propagate invalid, incomplete, duplicate or anomalous records into downstream reporting, analytics, integrations and governed decisions.'\n    : 'No material quality-control impact was detected in this execution.'\n"""
+          new = """  const summary = noActiveControls\n    ? 'No active data quality controls were available for evaluation. Suggested controls may still require governed approval.'\n    : failedRuns.length\n      ? `${failedRuns.length} data quality control outcome${failedRuns.length === 1 ? '' : 's'} failed across ${failedRules.length} governed rule${failedRules.length === 1 ? '' : 's'}. Highest severity is ${severity}.`\n      : 'All executed data quality controls passed. No remediation is required.'\n  const businessImpact = noActiveControls\n    ? 'Data quality control effectiveness cannot be asserted because no active controls were evaluated.'\n    : failedRuns.length\n      ? 'Failed controls can propagate invalid, incomplete, duplicate or anomalous records into downstream reporting, analytics, integrations and governed decisions.'\n      : 'No material quality-control impact was detected in this execution.'\n"""
+          if old not in text:
+              raise SystemExit('Unable to find investigation summary block')
+          text = text.replace(old, new, 1)
+
+          old = """      risk: { severity, failed_rule_runs: failedRuns.length, quarantined_records: quarantine?.length ?? 0 },\n"""
+          new = """      risk: {\n        severity,\n        failed_rule_runs: failedRuns.length,\n        quarantined_records: quarantine?.length ?? 0,\n        control_coverage: noActiveControls ? 'NONE' : 'EVALUATED',\n      },\n"""
+          if old not in text:
+              raise SystemExit('Unable to find investigation risk block')
+          text = text.replace(old, new, 1)
+
+          old = """    eventType: failedRuns.length ? 'DATA_QUALITY_INVESTIGATION_COMPLETED' : 'DATA_QUALITY_CONTROLS_VERIFIED',\n"""
+          new = """    eventType: noActiveControls\n      ? 'DATA_QUALITY_NO_ACTIVE_CONTROLS'\n      : failedRuns.length\n        ? 'DATA_QUALITY_INVESTIGATION_COMPLETED'\n        : 'DATA_QUALITY_CONTROLS_VERIFIED',\n"""
+          if old not in text:
+              raise SystemExit('Unable to find investigation audit event block')
+          text = text.replace(old, new, 1)
+
+          old = """      investigation_id: investigation.id,\n      severity,\n      failed_rule_runs: failedRuns.length,\n"""
+          new = """      investigation_id: investigation.id,\n      status,\n      severity,\n      evaluated_rule_runs: typedRuns.length,\n      control_coverage: noActiveControls ? 'NONE' : 'EVALUATED',\n      failed_rule_runs: failedRuns.length,\n"""
+          if old not in text:
+              raise SystemExit('Unable to find investigation audit metadata block')
+          text = text.replace(old, new, 1)
+          operations.write_text(text)
+
+          migration = Path('supabase/migrations/20260910060919_add_no_active_data_quality_controls_status.sql')
+          migration.write_text("""alter table governance.data_quality_investigations\n  drop constraint data_quality_investigations_status_check;\n\nalter table governance.data_quality_investigations\n  add constraint data_quality_investigations_status_check\n  check (status = any (array[\n    'CONTROLLED'::text,\n    'NO_ACTIVE_CONTROLS'::text,\n    'ATTENTION_REQUIRED'::text,\n    'APPROVAL_REQUIRED'::text,\n    'REMEDIATION_TRACKED'::text,\n    'VERIFIED'::text,\n    'VERIFICATION_FAILED'::text,\n    'ERROR'::text\n  ]));\n""")
+
+          Path('.github/workflows/one-time-fix-zero-quality-controls.yml').unlink()
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/data-quality/automation.ts lib/data-quality/autonomous-operations.ts supabase/migrations/20260910060919_add_no_active_data_quality_controls_status.sql .github/workflows/one-time-fix-zero-quality-controls.yml
+          git diff --cached --check
+          git commit -m "fix: distinguish data quality runs with no active controls"
+          git push origin HEAD:main
