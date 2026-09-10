@@ -1,9 +1,10 @@
-name: P0-P5 Revalidation
+name: P0-P4 Revalidation
 
 on:
   push:
     branches:
-      - implementation/p0-p5-revalidation-20260910
+      - main
+      - fix/p0-p4-revalidation-20260910
   pull_request:
     branches:
       - main
@@ -33,7 +34,7 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Verify P0-P5 security, migration, and evidence boundaries
+      - name: Verify P0-P4 security, migration, and evidence boundaries
         run: node scripts/verify-p0-p4-revalidation.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
