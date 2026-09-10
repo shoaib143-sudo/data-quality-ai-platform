@@ -21,11 +21,11 @@ const checks = [
   ['bridge links operational state to canonical outcome', bridge.includes('canonical_outcome_id: canonicalOutcome.id')],
   ['verified execution carries before and after evidence', bridge.includes('beforeEvidence: verified ? effectiveBefore : beforeState') && bridge.includes('afterEvidence: afterState')],
   ['future learning remains independently reauthorized', canonical.includes('future_action_reauthorization_required: true')],
-  ['API cannot call mutable verifier as final authority', route.includes('verifyAndCanonicalizeGovernedActionOutcome') && !route.includes("from '@/lib/governance/governed-action-outcomes'"))],
+  ['API cannot call mutable verifier as final authority', route.includes('verifyAndCanonicalizeGovernedActionOutcome') && !route.includes("from '@/lib/governance/governed-action-outcomes'")],
 ]
 
 const failures = checks.filter(([, passed]) => !passed)
-for (const [name, passed] of checks) console.log(`${passed ? 'PASS' : 'FAIL'} ${name}`)
+for (const [name, passed]) of checks) console.log(`${passed ? 'PASS' : 'FAIL'} ${name}`)
 if (failures.length) {
   console.error(`V5 outcome authority reconciliation failed: ${failures.map(([name]) => name).join(', ')}`)
   process.exit(1)
