@@ -83,6 +83,16 @@ $$;
 alter table governance.semantic_embeddings
   alter column embedding_space_id set not null;
 
+alter table governance.semantic_embeddings
+  drop constraint if exists semantic_embeddings_project_id_object_type_object_key_embed_key;
+
+alter table governance.semantic_embeddings
+  drop constraint if exists semantic_embeddings_project_object_space_key;
+
+alter table governance.semantic_embeddings
+  add constraint semantic_embeddings_project_object_space_key
+  unique (project_id, object_type, object_key, embedding_space_id);
+
 do $$
 begin
   if not exists (
