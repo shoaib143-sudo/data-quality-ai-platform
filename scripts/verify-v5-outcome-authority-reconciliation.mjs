@@ -25,7 +25,7 @@ const checks = [
 ]
 
 const failures = checks.filter(([, passed]) => !passed)
-for (const [name, passed]) of checks) console.log(`${passed ? 'PASS' : 'FAIL'} ${name}`)
+for (const [name, passed] of checks) console.log(`${passed ? 'PASS' : 'FAIL'} ${name}`)
 if (failures.length) {
   console.error(`V5 outcome authority reconciliation failed: ${failures.map(([name]) => name).join(', ')}`)
   process.exit(1)
