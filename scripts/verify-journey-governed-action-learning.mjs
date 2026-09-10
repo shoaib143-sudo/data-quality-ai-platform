@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const migration = fs.readFileSync('supabase/migrations/20260910225000_v5_governed_action_outcomes.sql', 'utf8')
 const autonomy = fs.readFileSync('lib/governance/governed-autonomy.ts', 'utf8')
+const scope = fs.readFileSync('lib/governance/governed-action-scope.ts', 'utf8')
 const reprofile = fs.readFileSync('lib/governance/governed-reprofile-action.ts', 'utf8')
 const outcomes = fs.readFileSync('lib/governance/governed-action-outcomes.ts', 'utf8')
 const route = fs.readFileSync('app/api/governance/autonomy/route.ts', 'utf8')
@@ -12,6 +13,13 @@ const checks = [
   ['execution and verified outcome are separate states', migration.includes("verification_status in ('PENDING','VERIFIED','FAILED','UNKNOWN')") && migration.includes('EXECUTED autonomy action state alone never implies VERIFIED outcome')],
   ['learning link requires verified measurable outcome', migration.includes('autonomy_action_outcomes_learning_verified_ck') && migration.includes("verification_status = 'VERIFIED'") && migration.includes('effectiveness is not null')],
   ['outcome ledger is service-role mutation only', migration.includes('revoke all on table governance.autonomy_action_outcomes from public, anon, authenticated') && migration.includes('to service_role')],
+  ['proposal validates source run and target project scope before policy execution', autonomy.includes('assertGovernedActionReferencesInProject') && autonomy.indexOf('assertGovernedActionReferencesInProject') < autonomy.indexOf('const policy = await loadPolicy')],
+  ['source agent run is explicitly project scoped', scope.includes("from('agent_runs')") && scope.includes(".eq('project_id', projectId)") && scope.includes('sourceAgentRunId does not belong to the requested project')],
+  ['project target cannot point at another project', scope.includes("targetType === 'PROJECT'") && scope.includes('targetId !== projectId')],
+  ['dataset target is explicitly project scoped', scope.includes("targetType === 'DATASET'") && scope.includes("from('datasets')") && scope.includes(".eq('project_id', projectId)"))],
+  ['dataset-version target resolves through a project-scoped dataset', scope.includes("targetType === 'DATASET_VERSION'") && scope.includes("from('dataset_versions')") && scope.includes('DATASET_VERSION target does not belong to the requested project')],
+  ['quality-rule target is explicitly project scoped', scope.includes("targetType === 'QUALITY_RULE'") && scope.includes("from('quality_rule_definitions')") && scope.includes(".eq('project_id', projectId)"))],
+  ['unknown governed target types fail closed', scope.includes('Unsupported governed action target type')],
   ['reprofile executor only accepts REQUEST_REPROFILE', reprofile.includes("action_key).toUpperCase() !== 'REQUEST_REPROFILE'")],
   ['reprofile executor requires DATASET_VERSION target', reprofile.includes("target_type).toUpperCase() !== 'DATASET_VERSION'")],
   ['reprofile target is project scoped', reprofile.includes(".eq('project_id', action.project_id)")],
