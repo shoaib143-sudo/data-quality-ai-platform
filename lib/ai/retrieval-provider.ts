@@ -1,3 +1,5 @@
+import { withNormalizedRetrievalMetadata } from './retrieval-metadata-normalization'
+
 export type RetrievalMode = 'lexical' | 'semantic' | 'graph' | 'temporal' | 'authority'
 
 export type RetrievalObjectType = string
@@ -145,7 +147,7 @@ export class SemanticProjectionRetrievalProvider implements RetrievalProvider {
         objectKey: match.object_key,
         objectId: match.object_id,
         content: match.content,
-        metadata: match.metadata ?? {},
+        metadata: withNormalizedRetrievalMetadata(match.metadata),
         score: Math.max(0, Math.min(1, Number(match.similarity) || 0)),
         mode: 'semantic',
         provenance: {
