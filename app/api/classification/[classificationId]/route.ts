@@ -3,7 +3,8 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const allowedStatuses = new Set(['SUGGESTED', 'APPROVED', 'REJECTED'])
+const allowedDecisions = new Set(['APPROVED', 'REJECTED'])
+function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
 export async function PATCH(
   request: Request,
@@ -25,27 +26,23 @@ export async function PATCH(
 
     await authorizeProject(user.id, item.project_id, 'classification.review')
 
-    const body = await request.json()
-    const status = String(body.status ?? item.status).toUpperCase()
-    if (!allowedStatuses.has(status)) {
-      return NextResponse.json({ error: 'Invalid status.' }, { status: 400 })
+    const body = await request.json() as Record<string, unknown>
+    const decision = text(body.decision ?? body.status).toUpperCase()
+    const comment = text(body.comment ?? body.reviewComment ?? body.decisionNotes)
+    if (!allowedDecisions.has(decision)) {
+      return NextResponse.json({ error: 'APPROVED or REJECTED decision is required.' }, { status: 400 })
     }
 
-    const { data, error } = await admin
-      .schema('governance')
-      .from('dataset_classifications')
-      .update({
-        status,
-        approved_by: status === 'APPROVED' ? user.id : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', classificationId)
-      .eq('project_id', item.project_id)
-      .select('*')
-      .single()
+    const { data, error } = await admin.schema('governance').rpc('review_dataset_classification', {
+      p_project_id: item.project_id,
+      p_classification_id: classificationId,
+      p_reviewer: user.id,
+      p_decision: decision,
+      p_comment: comment || null,
+    })
 
     return error
-      ? NextResponse.json({ error: error.message }, { status: 400 })
+      ? NextResponse.json({ error: error.message }, { status: error.code === '42501' ? 403 : error.code === '23514' ? 409 : 400 })
       : NextResponse.json({ classification: data })
   } catch (error) {
     const authError = authorizationErrorResponse(error)
