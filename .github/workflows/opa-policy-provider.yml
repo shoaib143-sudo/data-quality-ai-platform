@@ -38,4 +38,5 @@ jobs:
       - run: node scripts/verify-opa-policy-provider.mjs
       - run: node --experimental-strip-types scripts/test-opa-policy-decision-provider.mjs
       - run: bash infra/opa/render-build.sh
+      - run: bash infra/opa/test-runtime.sh
       - run: pnpm exec tsc --noEmit
