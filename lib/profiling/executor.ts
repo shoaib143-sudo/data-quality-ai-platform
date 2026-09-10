@@ -356,23 +356,24 @@ async function profileDataset(
     )
     : null
 
-  const summary = sourceRows && connector
-    ? buildSourceBackedDatasetProfileSummary(
-      datasetVersion,
-      connector,
-      sourceRows.rows,
-      sourceRows.rowCount,
+  if (!connector) {
+    throw new Error(
+      'Unable to profile dataset version: no trusted source-row connector is configured.',
     )
-    : buildDatasetProfileSummary(
-      datasetVersion,
-      connector
-        ? [
-          `Source connector ${connector.schema}.${connector.table} returned no rows; used metadata-only profile.`,
-        ]
-        : [
-          'No supported source-row connector was defined; used metadata-only profile.',
-        ],
+  }
+
+  if (!sourceRows || sourceRows.rows.length === 0) {
+    throw new Error(
+      `Unable to profile dataset version: trusted source ${connector.schema}.${connector.table} returned no rows. Metadata-only evidence is not accepted.`,
     )
+  }
+
+  const summary = buildSourceBackedDatasetProfileSummary(
+    datasetVersion,
+    connector,
+    sourceRows.rows,
+    sourceRows.rowCount,
+  )
 
   const schema = buildSchemaSnapshot(summary)
 

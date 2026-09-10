@@ -1,6 +1,69 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizeDataset, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
-async function access(projectId:string,userId:string){const admin=createAdminClient();const {data:p}=await admin.schema('app').from('projects').select('organization_id').eq('id',projectId).maybeSingle();if(!p)return null;const {data:m}=await admin.schema('app').from('organization_members').select('role').eq('organization_id',p.organization_id).eq('user_id',userId).maybeSingle();return m?admin:null}
-export async function POST(request:Request){const user=await requireUser();const b=await request.json();const projectId=String(b.projectId??''),datasetId=String(b.datasetId??'');if(!projectId||!datasetId)return NextResponse.json({error:'projectId and datasetId are required.'},{status:400});const admin=await access(projectId,user.id);if(!admin)return NextResponse.json({error:'Access denied.'},{status:403});const {data,error}=await admin.schema('governance').from('certification_requests').insert({project_id:projectId,dataset_id:datasetId,requested_by:user.id,assigned_to:b.assignedTo||null,status:'PENDING',evidence:b.evidence??{}}).select('*').single();if(error)return NextResponse.json({error:error.message},{status:400});await admin.schema('governance').from('dataset_catalog').upsert({dataset_id:datasetId,project_id:projectId,certification_status:'PENDING',updated_at:new Date().toISOString()},{onConflict:'dataset_id'});await writeGovernanceAudit({projectId,actorUserId:user.id,eventType:'CERTIFICATION_REQUESTED',entityType:'CERTIFICATION_REQUEST',entityId:data.id,metadata:{datasetId}});return NextResponse.json({request:data},{status:201})}
+
+type CertificationRequestRecord = {
+  id: string
+  project_id: string
+  dataset_id: string
+  requested_by: string
+  assigned_to: string | null
+  status: string
+  evidence: unknown
+  decision_notes: string | null
+  requested_at: string
+  decided_at: string | null
+}
+
+export async function POST(request: Request) {
+  try {
+    const user = await requireApiUser()
+    const body = await request.json()
+    const projectId = String(body.projectId ?? '')
+    const datasetId = String(body.datasetId ?? '')
+
+    if (!projectId || !datasetId) {
+      return NextResponse.json({ error: 'projectId and datasetId are required.' }, { status: 400 })
+    }
+
+    const { authorization, dataset } = await authorizeDataset(user.id, datasetId, 'certification.request')
+    if (authorization.projectId !== projectId || dataset.project_id !== projectId) {
+      return NextResponse.json({ error: 'Dataset does not belong to the requested project.' }, { status: 400 })
+    }
+
+    const admin = createAdminClient()
+    const { data: rawData, error } = await admin
+      .schema('governance')
+      .rpc('request_dataset_certification', {
+        p_project_id: projectId,
+        p_dataset_id: datasetId,
+        p_actor_user_id: user.id,
+        p_assigned_to: body.assignedTo || null,
+        p_evidence: body.evidence ?? {},
+      })
+      .single()
+
+    if (error) {
+      const status = error.code === '23505' ? 409 : error.code === '42501' ? 403 : 400
+      return NextResponse.json({ error: error.message }, { status })
+    }
+
+    const data = rawData as CertificationRequestRecord
+    await writeGovernanceAudit({
+      projectId,
+      actorUserId: user.id,
+      eventType: 'CERTIFICATION_REQUESTED',
+      entityType: 'CERTIFICATION_REQUEST',
+      entityId: data.id,
+      metadata: { datasetId },
+    })
+
+    return NextResponse.json({ request: data }, { status: 201 })
+  } catch (error) {
+    const authError = authorizationErrorResponse(error)
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status })
+    throw error
+  }
+}

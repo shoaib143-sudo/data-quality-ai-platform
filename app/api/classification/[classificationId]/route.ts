@@ -1,4 +1,55 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-export async function PATCH(request:Request,{params}:{params:Promise<{classificationId:string}>}){const user=await requireUser();const {classificationId}=await params;const admin=createAdminClient();const {data:item}=await admin.schema('governance').from('dataset_classifications').select('*').eq('id',classificationId).maybeSingle();if(!item)return NextResponse.json({error:'Classification not found.'},{status:404});const {data:p}=await admin.schema('app').from('projects').select('organization_id').eq('id',item.project_id).maybeSingle();const {data:m}=p?await admin.schema('app').from('organization_members').select('role').eq('organization_id',p.organization_id).eq('user_id',user.id).maybeSingle():{data:null};if(!m)return NextResponse.json({error:'Access denied.'},{status:403});const b=await request.json();const status=String(b.status??item.status).toUpperCase();if(!['SUGGESTED','APPROVED','REJECTED'].includes(status))return NextResponse.json({error:'Invalid status.'},{status:400});const {data,error}=await admin.schema('governance').from('dataset_classifications').update({status,approved_by:status==='APPROVED'?user.id:null,updated_at:new Date().toISOString()}).eq('id',classificationId).select('*').single();return error?NextResponse.json({error:error.message},{status:400}):NextResponse.json({classification:data})}
+
+const allowedStatuses = new Set(['SUGGESTED', 'APPROVED', 'REJECTED'])
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ classificationId: string }> },
+) {
+  try {
+    const user = await requireApiUser()
+    const { classificationId } = await params
+    const admin = createAdminClient()
+    const { data: item, error: itemError } = await admin
+      .schema('governance')
+      .from('dataset_classifications')
+      .select('id,project_id,status')
+      .eq('id', classificationId)
+      .maybeSingle()
+
+    if (itemError) return NextResponse.json({ error: itemError.message }, { status: 400 })
+    if (!item) return NextResponse.json({ error: 'Classification not found.' }, { status: 404 })
+
+    await authorizeProject(user.id, item.project_id, 'classification.review')
+
+    const body = await request.json()
+    const status = String(body.status ?? item.status).toUpperCase()
+    if (!allowedStatuses.has(status)) {
+      return NextResponse.json({ error: 'Invalid status.' }, { status: 400 })
+    }
+
+    const { data, error } = await admin
+      .schema('governance')
+      .from('dataset_classifications')
+      .update({
+        status,
+        approved_by: status === 'APPROVED' ? user.id : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', classificationId)
+      .eq('project_id', item.project_id)
+      .select('*')
+      .single()
+
+    return error
+      ? NextResponse.json({ error: error.message }, { status: 400 })
+      : NextResponse.json({ classification: data })
+  } catch (error) {
+    const authError = authorizationErrorResponse(error)
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status })
+    throw error
+  }
+}

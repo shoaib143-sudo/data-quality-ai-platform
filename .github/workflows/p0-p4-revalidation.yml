@@ -1,0 +1,60 @@
+name: P0-P5 Revalidation
+
+on:
+  push:
+    branches:
+      - implementation/p0-p5-revalidation-20260910
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  revalidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify P0-P5 security, migration, and evidence boundaries
+        run: node scripts/verify-p0-p4-revalidation.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
+      - name: Profiling lifecycle contracts
+        run: pnpm run verify:profiling-lifecycle
+      - name: Governance review boundaries
+        run: pnpm run verify:governance-reviews
+      - name: Single-organization governance contracts
+        run: pnpm run verify:governance
+      - name: Governed model gateway
+        run: pnpm run verify:model-gateway
+      - name: Reasoning provider governance
+        run: pnpm run verify:reasoning-provider
+      - name: Retrieval permission and grounding contracts
+        run: pnpm run verify:retrieval-provider
+      - name: Governed autonomy contracts
+        run: pnpm run verify:governed-autonomy
+      - name: Provider fallback contracts
+        run: pnpm run verify:provider-fallback
+      - name: Live governance database contracts
+        if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: pnpm run verify:database
+      - name: Production build
+        run: pnpm run build
