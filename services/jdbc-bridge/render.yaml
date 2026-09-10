@@ -3,7 +3,7 @@ services:
     name: datanexus-jdbc-bridge
     runtime: docker
     rootDir: services/jdbc-bridge
-    plan: free
+    plan: starter
     healthCheckPath: /health
     envVars:
       - key: JDBC_BRIDGE_TOKEN
