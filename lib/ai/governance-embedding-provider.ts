@@ -1,8 +1,21 @@
-import { embedGovernanceText } from '@/lib/governance/semantic-search'
-import { RuntimeEmbeddingProvider, type EmbeddingProvider } from './embedding-provider'
+import {
+  embedGovernanceTextWithEvidence,
+} from '@/lib/governance/semantic-search'
+import type { EmbeddingProvider } from './embedding-provider'
 
 export function createGovernanceEmbeddingProvider(): EmbeddingProvider {
-  return new RuntimeEmbeddingProvider('governance_embedding_runtime', {
-    embedText: embedGovernanceText,
-  })
+  return {
+    id: 'governance_embedding_runtime',
+    async embed(request) {
+      const evidence = await embedGovernanceTextWithEvidence(request.input, request.model ?? undefined)
+      return {
+        embedding: evidence.embedding,
+        providerId: evidence.identity.providerId,
+        model: evidence.identity.model,
+        modelRevision: evidence.identity.revision,
+        dimensions: evidence.identity.dimensions,
+        embeddingSpaceId: evidence.embeddingSpaceId,
+      }
+    },
+  }
 }
