@@ -29,7 +29,7 @@ const checks = [
   ['V6 exercises governed AI execution controls', v6.includes('pnpm run verify:execution-controller') && v6.includes('pnpm run verify:model-gateway')],
   ['V6 exercises retrieval grounding/evaluation', v6.includes('pnpm run verify:retrieval-provider') && v6.includes('pnpm run verify:evaluation-engine')],
   ['CodeQL is pinned to an immutable commit', codeql.includes('github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63') && codeql.includes('github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63')],
-  ['dependency review is pinned and blocks high severity additions', dependency.includes('actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294') && dependency.includes('fail-on-severity: high')],
+  ['dependency audit is lockfile-exact and blocks high severity vulnerabilities', dependency.includes('pnpm install --frozen-lockfile') && dependency.includes('pnpm audit --prod --audit-level high')],
   ['OpenSearch remains optional rather than a release dependency', Boolean(packageJson.scripts?.['bootstrap:opensearch']) && !Object.keys(packageJson.dependencies ?? {}).some((name) => name.toLowerCase().includes('opensearch'))],
   ['ClickHouse is not introduced without measured need', !Object.keys(packageJson.dependencies ?? {}).some((name) => name.toLowerCase().includes('clickhouse'))],
 ]
