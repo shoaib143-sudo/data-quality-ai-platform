@@ -3,7 +3,7 @@ import { GitBranch, Layers3 } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { hasProjectCapability, type AuthorizationCapability } from '@/lib/auth/authorize'
-import { WorkflowManagerV2 } from './workflow-manager-v2'
+import { WorkflowManagerV3 } from './workflow-manager-v3'
 
 type WorkflowsPageProps={searchParams:Promise<{instanceId?:string|string[]}>}
 
@@ -57,8 +57,8 @@ export default async function WorkflowsPage({searchParams}:WorkflowsPageProps){
   const issues=issueResults.flatMap(result=>result.data??[]).sort((left,right)=>new Date(right.updated_at??0).getTime()-new Date(left.updated_at??0).getTime()).slice(0,500)
 
   return <main className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-    <nav className="mb-6 flex items-center justify-between rounded-2xl border border-white/10 bg-[#0a1d33] px-5 py-3"><Link href="/home" className="flex items-center gap-3 font-bold text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600"><Layers3 className="h-5 w-5"/></span>DataNexus AI</Link><div className="flex gap-2"><Link href="/issues" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[.05]">Issues</Link><Link href="/profiling/explorer" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[.05]">Profiling evidence</Link><Link href="/reports" className="rounded-xl px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[.05]">Reports</Link></div></nav>
+    <nav className="mb-6 flex items-center justify-between rounded-2xl border border-white/10 bg-[#0a1d33] px-5 py-3"><Link href="/home" className="flex items-center gap-3 font-bold text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600"><Layers3 className="h-5 w-5"/></span>DataNexus AI</Link><div className="flex gap-2"><Link href="/issues" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[.05]">Issues</Link><Link href="/profiling/explorer" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[.05]">Profiling evidence</Link></div></nav>
     <header className="rounded-3xl border border-white/10 bg-[#0a1d33] p-7 shadow-[10px_10px_28px_rgba(0,0,0,.22)]"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-400/10 text-violet-300"><GitBranch className="h-6 w-6"/></span><div><p className="text-xs font-black uppercase tracking-[.16em] text-cyan-300">Governed orchestration</p><h1 className="mt-1 text-3xl font-black text-white">Governance Workflows</h1><p className="mt-1 text-sm text-slate-400">Versioned approvals, remediation tracking and verification. Each action appears only when the selected project grants the exact server-side capability.</p>{selectedInstance?<p className="mt-2 text-xs font-semibold text-violet-300">Focused workflow instance {selectedInstance.id}</p>:null}</div></div></header>
-    <WorkflowManagerV2 projects={orderedProjects} definitions={definitions.data??[]} instances={orderedInstances} outcomes={outcomes.data??[]} learning={learning.data??[]} issues={issues}/>
+    <WorkflowManagerV3 projects={orderedProjects} definitions={definitions.data??[]} instances={orderedInstances} outcomes={outcomes.data??[]} learning={learning.data??[]} issues={issues}/>
   </div></main>
 }
