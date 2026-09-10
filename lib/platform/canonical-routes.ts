@@ -28,6 +28,9 @@ export const canonicalRoutes = {
     return canonicalResourcePath('/agents/runs', runId)
   },
   datasets: '/datasets',
+  governedDataset(datasetId: string) {
+    return canonicalResourcePath('/catalog/dataset', datasetId)
+  },
   datasetEdit(datasetId: string) {
     return `${canonicalResourcePath('/datasets/dataset', datasetId)}/edit`
   },
