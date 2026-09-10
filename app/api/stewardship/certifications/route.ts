@@ -4,6 +4,19 @@ import { authorizeDataset, authorizationErrorResponse } from '@/lib/auth/authori
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
+type CertificationRequestRecord = {
+  id: string
+  project_id: string
+  dataset_id: string
+  requested_by: string
+  assigned_to: string | null
+  status: string
+  evidence: unknown
+  decision_notes: string | null
+  requested_at: string
+  decided_at: string | null
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireApiUser()
@@ -21,7 +34,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient()
-    const { data, error } = await admin
+    const { data: rawData, error } = await admin
       .schema('governance')
       .rpc('request_dataset_certification', {
         p_project_id: projectId,
@@ -37,6 +50,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status })
     }
 
+    const data = rawData as CertificationRequestRecord
     await writeGovernanceAudit({
       projectId,
       actorUserId: user.id,
