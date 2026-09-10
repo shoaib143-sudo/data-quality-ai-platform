@@ -40,7 +40,7 @@ export async function executeProfilingExecutor(operation: string, input: any, co
         if (!profilingRunId) throw new Error('profilingRunId is required for execute_metrics')
         // Metric evidence must always come from the registered execution source.
         // Never forward caller supplied rows, metric values, findings, or scores.
-        result = await executeProfilingMetrics(datasetVersionId, profilingRunId, {}); break
+        result = await executeProfilingMetrics(datasetVersionId, profilingRunId); break
       case 'investigate_profile':
         if (!profilingRunId) throw new Error('profilingRunId is required for investigate_profile')
         result = await investigateProfilingRun(profilingRunId, datasetVersionId); break

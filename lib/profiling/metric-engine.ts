@@ -289,7 +289,7 @@ export async function loadProfilingRows(supabase: ReturnType<typeof createAdminC
   return sampledResult((data ?? []) as Row[], count ?? 0, { source_type: 'TABLE', schema, table, warnings: [] })
 }
 
-export async function executeProfilingMetrics(datasetVersionId: string, profilingRunId: string, input: Record<string, unknown> = {}) {
+export async function executeProfilingMetrics(datasetVersionId: string, profilingRunId: string) {
   const supabase = createAdminClient()
   const { data: activeRun, error: activeRunError } = await supabase.schema('profiling').from('profile_runs').select('id, dataset_version_id, status, summary').eq('id', profilingRunId).maybeSingle()
   if (activeRunError) throw new Error(`Unable to verify profiling run: ${activeRunError.message}`)
@@ -297,8 +297,9 @@ export async function executeProfilingMetrics(datasetVersionId: string, profilin
   if (activeRun.dataset_version_id !== datasetVersionId) throw new Error(`Profiling run ${profilingRunId} does not belong to dataset version ${datasetVersionId}.`)
   if (activeRun.status === 'CANCELLED') throw new Error(`Profiling run ${profilingRunId} has been cancelled.`)
 
-  const inputRows = Array.isArray(input.rows) ? input.rows.filter((row): row is Row => !!row && typeof row === 'object' && !Array.isArray(row)) : null
-  const loaded = inputRows ? { rowCount: inputRows.length, rows: inputRows } : await loadProfilingRows(supabase, datasetVersionId, 1000)
+  // Metric evidence is always loaded from the registered execution source.
+  // Callers cannot supply rows, findings, metric values, or scores.
+  const loaded = await loadProfilingRows(supabase, datasetVersionId, 1000)
   const rows = loaded.rows
 
   const { data: profileColumns, error: columnsError } = await supabase.schema('profiling').from('profile_columns').select('id, column_name').eq('profile_run_id', profilingRunId).order('column_name')
