@@ -1,0 +1,111 @@
+{
+  "captured_at": "2026-09-10T12:56:00Z",
+  "scope": "V0 current-state profile for trusted operational governance implementation",
+  "environment": "connected Supabase production project and GitHub main branch",
+  "live_activation_counts": {
+    "governance.glossary_terms": 30,
+    "governance.critical_data_elements": 8,
+    "governance.cde_mappings": 8,
+    "governance.stewardship_assignments": 3,
+    "governance.control_definitions": 5,
+    "governance.control_scope_bindings": 5,
+    "governance.control_evaluations": 0,
+    "governance.retention_policies": 0,
+    "governance.data_contracts": 1,
+    "governance.certification_requests": 1,
+    "governance.lineage_column_mappings": 0,
+    "governance.lineage_transformations": 52,
+    "governance.ai_evaluation_results": 0,
+    "profiling.quality_rule_definitions": 163,
+    "profiling.quality_rule_versions": 212,
+    "profiling.quality_rule_runs": 133,
+    "profiling.quality_rule_exceptions": 0,
+    "profiling.profile_anomalies": 0,
+    "profiling.profile_comparisons": 27,
+    "governance.data_quality_remediation_outcomes": 1,
+    "governance.data_quality_recommendation_learning": 1
+  },
+  "current_profile_findings": [
+    {
+      "key": "CONTROL_EVALUATION_ACTIVATION",
+      "state": "GAP",
+      "evidence": "Control definitions and scope bindings exist, but no live control evaluations are persisted."
+    },
+    {
+      "key": "AI_EVALUATION_ACTIVATION",
+      "state": "GAP",
+      "evidence": "AI evaluation schema exists, but no live evaluation results are persisted."
+    },
+    {
+      "key": "RETENTION_POLICY_ACTIVATION",
+      "state": "GAP",
+      "evidence": "Retention policy schema exists, but no live retention policy is configured."
+    },
+    {
+      "key": "FIELD_LINEAGE_ACTIVATION",
+      "state": "GAP",
+      "evidence": "Transformation evidence exists, but live lineage_column_mappings is empty."
+    },
+    {
+      "key": "DQ_EXCEPTION_EXERCISE",
+      "state": "GAP",
+      "evidence": "Quality rule definitions, versions and runs are populated, but no governed quality-rule exception is exercised."
+    },
+    {
+      "key": "ANOMALY_ACTIVATION",
+      "state": "GAP",
+      "evidence": "Profile comparison history exists, but no live profile anomaly evidence is persisted."
+    },
+    {
+      "key": "GOVERNANCE_KNOWLEDGE_BASE",
+      "state": "ACTIVE",
+      "evidence": "Glossary terms, CDEs, CDE mappings, stewardship assignments and control definitions are populated."
+    },
+    {
+      "key": "DQ_BASE",
+      "state": "ACTIVE",
+      "evidence": "Quality rule definitions, versions and execution history are populated, with canonical result-state hardening present on main."
+    }
+  ],
+  "security_advisor_snapshot": {
+    "review_required": [
+      {
+        "lint": "authenticated_security_definer_function_executable",
+        "count": 4,
+        "note": "Membership helper functions in app_private are SECURITY DEFINER and executable by authenticated. Confirm this is intentional and minimally scoped before V1 closure."
+      },
+      {
+        "lint": "auth_leaked_password_protection",
+        "count": 1,
+        "note": "Leaked password protection is disabled and should be reviewed as part of secure-release posture."
+      }
+    ],
+    "informational": [
+      {
+        "lint": "rls_enabled_no_policy",
+        "count": 6,
+        "note": "Several internal/service-oriented tables have RLS enabled with no policies. Verify they are intentionally service-only rather than automatically adding permissive policies."
+      }
+    ]
+  },
+  "performance_advisor_snapshot": {
+    "informational": [
+      {
+        "lint": "no_primary_key",
+        "count": 2,
+        "note": "The findings are in jdbc_test.customer_data and profiling_validation.synthetic_customers; review as test-fixture hygiene rather than production-domain blockers."
+      },
+      {
+        "lint": "unused_index",
+        "count": 214,
+        "note": "Do not remove indexes based on a single low-usage snapshot. Reassess only with representative workload evidence."
+      }
+    ]
+  },
+  "repository_release_posture": {
+    "main_branch_protected": false,
+    "state": "GAP",
+    "note": "Secure release governance should require protected main and required checks before final trusted-platform certification."
+  },
+  "interpretation": "V0 confirms that DataNexus already has broad governance schema and execution substrate. The implementation program should activate and integrate existing capabilities rather than create parallel infrastructure."
+}
