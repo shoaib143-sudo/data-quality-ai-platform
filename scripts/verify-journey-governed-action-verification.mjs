@@ -32,8 +32,8 @@ const checks = [
   ['completed reprofile requires linked quality score', verifier.includes("from('data_quality_scores')") && verifier.includes("reason: 'QUALITY_SCORE_MISSING'")],
   ['completed reprofile records prior and after evidence', verifier.includes('priorCompletedProfile') && verifier.includes('beforeEvidence') && verifier.includes('afterEvidence: { profile_run: profileRun, quality_score: score }')],
   ['reprofile verifier never claims quality improvement', verifier.includes('quality_improvement_claimed: false')],
-  ['verified outcome writes through canonical database authority', verifier.includes('recordGovernedActionOutcome') && outcome.includes("rpc('record_governed_action_outcome'"))],
-  ['learning promotion uses canonical verified-only RPC', verifier.includes('promoteVerifiedGovernedActionOutcome') && outcome.includes("rpc('promote_verified_governed_action_outcome'"))],
+  ['verified outcome writes through canonical database authority', verifier.includes('recordGovernedActionOutcome') && outcome.includes("rpc('record_governed_action_outcome'")],
+  ['learning promotion uses canonical verified-only RPC', verifier.includes('promoteVerifiedGovernedActionOutcome') && outcome.includes("rpc('promote_verified_governed_action_outcome'")],
   ['learning requires source-agent provenance', verifier.includes("reason: 'SOURCE_AGENT_RUN_REQUIRED'")],
   ['autonomy posture exposes canonical outcome evidence', autonomy.includes("from('governed_action_outcomes')") && autonomy.includes('outcomes: outcomes.data ?? []')],
 ]
