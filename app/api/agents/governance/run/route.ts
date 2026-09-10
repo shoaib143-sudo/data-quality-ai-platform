@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GOVERNANCE_READ_AGENT_KEYS } from '@/lib/agents/governance-read-agent'
@@ -46,7 +46,7 @@ async function recordStage(input: {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const projectId = new URL(request.url).searchParams.get('projectId')?.trim()
     if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
     await authorizeProject(user.id, projectId, 'agent.execute')
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const body = await request.json().catch(() => null) as Record<string, unknown> | null
     const projectId = text(body?.projectId ?? body?.project_id)
     const agentDefinitionId = text(body?.agentDefinitionId ?? body?.agent_definition_id)
