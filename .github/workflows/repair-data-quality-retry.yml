@@ -17,73 +17,28 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply resumable retry patch
+      - name: Finalize resumable retry patch
         shell: python
         run: |
           from pathlib import Path
-          import re
 
           path = Path('lib/data-quality/automation.ts')
           text = path.read_text()
 
-          def replace_once(pattern, replacement, label, flags=0):
-              global text
-              text, count = re.subn(pattern, replacement, text, count=1, flags=flags)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected one replacement, got {count}')
+          old = """    let passedCount = Number(executeStep.output.passed ?? 0)\n    let failedCount = Number(executeStep.output.failed ?? 0)\n    let errorCount = Number(executeStep.output.errors ?? 0)\n    let exceptionCount = Number(executeStep.output.row_exceptions ?? 0)\n    let quarantinedCount = Number(executeStep.output.quarantined_records ?? 0)\n"""
+          new = """    let totalCount = Number(executeStep.output.total ?? 0)\n    let passedCount = Number(executeStep.output.passed ?? 0)\n    let failedCount = Number(executeStep.output.failed ?? 0)\n    let errorCount = Number(executeStep.output.errors ?? 0)\n    let exceptionCount = Number(executeStep.output.row_exceptions ?? 0)\n    let quarantinedCount = Number(executeStep.output.quarantined_records ?? 0)\n"""
+          if old not in text:
+              raise SystemExit('Unable to find resumable counter block')
+          text = text.replace(old, new, 1)
 
-          if "@/lib/agents/resumable-run-step" not in text:
-              replace_once(
-                  r"(import \{ writeAgentRunLog \} from '@/lib/agents/run-log'\n)",
-                  r"\1import { beginResumableRunStep } from '@/lib/agents/resumable-run-step'\n",
-                  'resumable step import',
-              )
+          old = """    passedCount = results.filter((result) => result.status === 'PASSED').length\n    failedCount = results.filter((result) => result.status === 'FAILED').length\n    errorCount = results.filter((result) => result.status === 'ERROR').length\n"""
+          new = """    totalCount = results.length\n    passedCount = results.filter((result) => result.status === 'PASSED').length\n    failedCount = results.filter((result) => result.status === 'FAILED').length\n    errorCount = results.filter((result) => result.status === 'ERROR').length\n"""
+          if old not in text:
+              raise SystemExit('Unable to find quality result counter block')
+          text = text.replace(old, new, 1)
 
-          replace_once(
-              r"\.update\(\{ status: 'RUNNING', started_at: now \}\)\.eq\('id', existingAgentRunId\)\.eq\('status', 'QUEUED'\)",
-              ".update({ status: 'RUNNING', started_at: now, completed_at: null, error_code: null, error_message: null }).eq('id', existingAgentRunId).in('status', ['QUEUED', 'FAILED', 'RUNNING'])",
-              'agent run resume',
-          )
-
-          replace_once(
-              r"const \{ data: syncStep, error: syncStepError \} = await admin\.schema\('agent'\)\.from\('agent_run_steps'\)\.insert\(\{\n\s+agent_run_id: agentRunId,\n\s+step_name: 'sync_quality_rules',\n\s+step_order: 1,\n\s+status: 'RUNNING',\n\s+input: \{ datasetVersionId, profileRunId \},\n\s+started_at: now,\n\s+\}\)\.select\('id'\)\.single\(\)\n\s+if \(syncStepError \|\| !syncStep\) throw new Error\(`Unable to create quality rule sync step: \$\{syncStepError\?\.message \?\? 'unknown error'\}`\)\n\s+currentStepId = syncStep\.id",
-              "const syncStep = await beginResumableRunStep(admin, {\n      agentRunId,\n      stepName: 'sync_quality_rules',\n      stepOrder: 1,\n      input: { datasetVersionId, profileRunId },\n    })\n    currentStepId = syncStep.id",
-              'sync step creation',
-          )
-
-          replace_once(
-              r"(\n\s+const synced = await syncSuggestedQualityRules\(datasetVersionId, profileRunId, userId\).*?\n\s+await writeAgentRunLog\(\{ agentRunId, agentRunStepId: currentStepId, level: 'TOOL', eventType: 'QUALITY_RULES_SYNCED', message: `\$\{synced\.rules\.length\} data quality rules are active for this dataset\.`, details: \{ datasetVersionId, profileRunId, rule_count: synced\.rules\.length \} \}\))",
-              lambda m: "\n    if (!syncStep.alreadySucceeded) {" + m.group(1) + "\n    }",
-              'sync step execution guard',
-              re.S,
-          )
-
-          replace_once(
-              r"const \{ data: executeStep, error: executeStepError \} = await admin\.schema\('agent'\)\.from\('agent_run_steps'\)\.insert\(\{\n\s+agent_run_id: agentRunId,\n\s+step_name: 'execute_quality_rules',\n\s+step_order: 2,\n\s+status: 'RUNNING',\n\s+input: \{ datasetVersionId, profileRunId \},\n\s+started_at: new Date\(\)\.toISOString\(\),\n\s+\}\)\.select\('id'\)\.single\(\)\n\s+if \(executeStepError \|\| !executeStep\) throw new Error\(`Unable to create quality execution step: \$\{executeStepError\?\.message \?\? 'unknown error'\}`\)\n\s+currentStepId = executeStep\.id",
-              "const executeStep = await beginResumableRunStep(admin, {\n      agentRunId,\n      stepName: 'execute_quality_rules',\n      stepOrder: 2,\n      input: { datasetVersionId, profileRunId },\n    })\n    currentStepId = executeStep.id\n\n    let passedCount = Number(executeStep.output.passed ?? 0)\n    let failedCount = Number(executeStep.output.failed ?? 0)\n    let errorCount = Number(executeStep.output.errors ?? 0)\n    let exceptionCount = Number(executeStep.output.row_exceptions ?? 0)\n    let quarantinedCount = Number(executeStep.output.quarantined_records ?? 0)\n\n    if (!executeStep.alreadySucceeded) {",
-              'execute step creation',
-          )
-
-          for old, new, label in [
-              (r"const passedCount = results\.filter\(\(result\) => result\.status === 'PASSED'\)\.length", "passedCount = results.filter((result) => result.status === 'PASSED').length", 'passed count'),
-              (r"const failedCount = results\.filter\(\(result\) => result\.status === 'FAILED'\)\.length", "failedCount = results.filter((result) => result.status === 'FAILED').length", 'failed count'),
-              (r"const errorCount = results\.filter\(\(result\) => result\.status === 'ERROR'\)\.length", "errorCount = results.filter((result) => result.status === 'ERROR').length", 'error count'),
-              (r"let exceptionCount = 0", "exceptionCount = 0", 'exception count'),
-              (r"let quarantinedCount = 0", "quarantinedCount = 0", 'quarantine count'),
-          ]:
-              replace_once(old, new, label)
-
-          replace_once(
-              r"(\n\s+if \(errorCount\) throw new Error\(`\$\{errorCount\} data quality rules could not be evaluated because required metrics were missing\.`\))\n\n\s+const \{ data: publishStep",
-              r"\1\n    }\n\n    const { data: publishStep",
-              'execute step guard close',
-          )
-
-          replace_once(
-              r"const \{ data: publishStep, error: publishStepError \} = await admin\.schema\('agent'\)\.from\('agent_run_steps'\)\.insert\(\{\n\s+agent_run_id: agentRunId,\n\s+step_name: 'publish_quality_results',\n\s+step_order: 3,\n\s+status: 'RUNNING',\n\s+input: \{ datasetVersionId, profileRunId \},\n\s+started_at: new Date\(\)\.toISOString\(\),\n\s+\}\)\.select\('id'\)\.single\(\)\n\s+if \(publishStepError \|\| !publishStep\) throw new Error\(`Unable to create quality publish step: \$\{publishStepError\?\.message \?\? 'unknown error'\}`\)\n\s+currentStepId = publishStep\.id",
-              "const publishStep = await beginResumableRunStep(admin, {\n      agentRunId,\n      stepName: 'publish_quality_results',\n      stepOrder: 3,\n      input: { datasetVersionId, profileRunId },\n    })\n    currentStepId = publishStep.id",
-              'publish step creation',
-          )
+          text = text.replace('rules_total: results.length,', 'rules_total: totalCount,', 1)
+          text = text.replace('pass_rate: results.length ? passedCount / results.length : 1,', 'pass_rate: totalCount ? passedCount / totalCount : 1,', 1)
 
           path.write_text(text)
       - name: Commit repair
@@ -92,5 +47,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib/data-quality/automation.ts
           git diff --cached --check
-          git commit -m "fix: make data quality retries resumable"
+          git commit -m "fix: finalize resumable data quality retry state"
           git push origin HEAD:main
