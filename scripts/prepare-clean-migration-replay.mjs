@@ -33,12 +33,8 @@ function nextReplayVersion(original) {
 }
 
 function writeReconstruction(version, suffix, sql, reason) {
-  if (originalVersions.has(version)) {
-    throw new Error(`Clean replay reconstruction version collides with released migration ${version}`)
-  }
-  if (assignedVersions.has(version)) {
-    throw new Error(`Clean replay reconstruction version collides with another replay migration ${version}`)
-  }
+  if (originalVersions.has(version)) throw new Error(`Clean replay reconstruction version collides with released migration ${version}`)
+  if (assignedVersions.has(version)) throw new Error(`Clean replay reconstruction version collides with another replay migration ${version}`)
   assignedVersions.add(version)
   const fileName = `${version}_${suffix}.sql`
   fs.writeFileSync(path.join(targetDir, fileName), sql)
@@ -131,69 +127,93 @@ begin
     profile_run_id, metric_definition_id, profile_column_id, metric_key,
     numeric_value, text_value, boolean_value, json_value
   )
-  select
-    p_profile_run_id,
-    (m->>'metric_definition_id')::uuid,
-    nullif(m->>'profile_column_id','')::uuid,
-    m->>'metric_key',
-    nullif(m->>'numeric_value','')::numeric,
-    m->>'text_value',
-    nullif(m->>'boolean_value','')::boolean,
-    m->'json_value'
+  select p_profile_run_id,(m->>'metric_definition_id')::uuid,nullif(m->>'profile_column_id','')::uuid,m->>'metric_key',
+    nullif(m->>'numeric_value','')::numeric,m->>'text_value',nullif(m->>'boolean_value','')::boolean,m->'json_value'
   from jsonb_array_elements(p_metrics) m
   on conflict (profile_run_id, profile_column_id, metric_key) do update set
-    numeric_value = excluded.numeric_value,
-    text_value = excluded.text_value,
-    boolean_value = excluded.boolean_value,
-    json_value = excluded.json_value;
+    numeric_value=excluded.numeric_value,text_value=excluded.text_value,boolean_value=excluded.boolean_value,json_value=excluded.json_value;
 
   insert into profiling.profile_findings (
-    profile_run_id, profile_column_id, finding_type, severity, title,
-    description, confidence, evidence, recommendation
+    profile_run_id, profile_column_id, finding_type, severity, title, description, confidence, evidence, recommendation
   )
-  select
-    p_profile_run_id,
-    nullif(f->>'profile_column_id','')::uuid,
-    f->>'finding_type',
-    f->>'severity',
-    f->>'title',
-    f->>'description',
-    nullif(f->>'confidence','')::numeric,
-    coalesce(f->'evidence','{}'::jsonb),
-    f->'recommendation'
+  select p_profile_run_id,nullif(f->>'profile_column_id','')::uuid,f->>'finding_type',f->>'severity',f->>'title',f->>'description',
+    nullif(f->>'confidence','')::numeric,coalesce(f->'evidence','{}'::jsonb),f->'recommendation'
   from jsonb_array_elements(p_findings) f
   where not exists (
     select 1 from profiling.profile_findings existing
-    where existing.profile_run_id = p_profile_run_id
-      and existing.finding_type = f->>'finding_type'
-      and existing.title = f->>'title'
+    where existing.profile_run_id=p_profile_run_id and existing.finding_type=f->>'finding_type' and existing.title=f->>'title'
   );
 
   insert into profiling.data_quality_scores (
     profile_run_id, completeness_score, uniqueness_score, validity_score, accuracy_score, overall_score
   ) values (
-    p_profile_run_id,
-    nullif(p_score->>'completeness_score','')::numeric,
-    nullif(p_score->>'uniqueness_score','')::numeric,
-    nullif(p_score->>'validity_score','')::numeric,
-    nullif(p_score->>'accuracy_score','')::numeric,
-    nullif(p_score->>'overall_score','')::numeric
+    p_profile_run_id,nullif(p_score->>'completeness_score','')::numeric,nullif(p_score->>'uniqueness_score','')::numeric,
+    nullif(p_score->>'validity_score','')::numeric,nullif(p_score->>'accuracy_score','')::numeric,nullif(p_score->>'overall_score','')::numeric
   )
   on conflict (profile_run_id) do update set
-    completeness_score = excluded.completeness_score,
-    uniqueness_score = excluded.uniqueness_score,
-    validity_score = excluded.validity_score,
-    accuracy_score = excluded.accuracy_score,
-    overall_score = excluded.overall_score;
+    completeness_score=excluded.completeness_score,uniqueness_score=excluded.uniqueness_score,validity_score=excluded.validity_score,
+    accuracy_score=excluded.accuracy_score,overall_score=excluded.overall_score;
 
-  update profiling.profile_runs
-  set status = p_status, completed_at = now()
-  where id = p_profile_run_id;
+  update profiling.profile_runs set status=p_status,completed_at=now() where id=p_profile_run_id;
 end;
 $function$;
 commit;
 `,
   'Released history hardens profiling.persist_profile_execution_result before any recorded function creation; reconstruction matches the live function contract.'
+)
+
+writeReconstruction(
+  '20260903005959',
+  'reconstruct_run_profile_rpc',
+  `begin;
+create or replace function profiling.run_profile(p_dataset_version_id uuid)
+returns uuid
+language plpgsql
+set search_path = pg_catalog, profiling
+as $function$
+declare
+  v_profile_run_id uuid;
+  v_snapshot_id uuid;
+begin
+  select ss.id into v_snapshot_id
+  from profiling.schema_snapshots ss
+  where ss.dataset_version_id = p_dataset_version_id
+  order by ss.created_at desc, ss.id desc
+  limit 1;
+
+  if v_snapshot_id is null then
+    raise exception 'No schema snapshot is available for dataset version %', p_dataset_version_id;
+  end if;
+
+  insert into profiling.profile_runs(dataset_version_id,status,engine_name,engine_version,sampling_mode,started_at)
+  values(p_dataset_version_id,'RUNNING','profiling-engine','1.1','FULL',now())
+  returning id into v_profile_run_id;
+
+  insert into profiling.profile_columns(profile_run_id,column_name,ordinal_position,source_type,inferred_type)
+  select v_profile_run_id,c->>'name',ordinality,'schema',c->>'type'
+  from profiling.schema_snapshots ss
+  cross join lateral jsonb_array_elements(ss.schema->'columns') with ordinality as cols(c, ordinality)
+  where ss.id = v_snapshot_id;
+
+  perform profiling.execute_metrics(v_profile_run_id);
+  perform profiling.generate_findings(v_profile_run_id);
+
+  insert into profiling.data_quality_scores(profile_run_id,completeness_score,uniqueness_score,validity_score,accuracy_score)
+  values(v_profile_run_id,0,0,0,0)
+  on conflict do nothing;
+
+  perform profiling.calculate_quality_score(v_profile_run_id);
+
+  update profiling.profile_runs set status='COMPLETED',completed_at=now() where id=v_profile_run_id;
+  return v_profile_run_id;
+exception when others then
+  update profiling.profile_runs set status='FAILED',completed_at=now() where id=v_profile_run_id;
+  raise;
+end;
+$function$;
+commit;
+`,
+  'Released history hardens profiling.run_profile before any recorded function creation; reconstruction matches the live function contract.'
 )
 
 for (const file of files) {
