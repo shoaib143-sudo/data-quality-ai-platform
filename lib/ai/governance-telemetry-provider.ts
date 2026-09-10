@@ -1,9 +1,19 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
+  ExportingTelemetryProvider,
+  OtlpHttpJsonTelemetryExporter,
+} from './otlp-telemetry-exporter'
+import {
   DurableTelemetryProvider,
   type TelemetryPersistence,
   type TelemetryProvider,
 } from './telemetry-provider'
+
+function configuredOtlpEndpoint() {
+  return process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?.trim()
+    || process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim()
+    || null
+}
 
 export function createGovernanceTelemetryProvider(): TelemetryProvider {
   const supabase = createAdminClient()
@@ -23,5 +33,19 @@ export function createGovernanceTelemetryProvider(): TelemetryProvider {
     },
   }
 
-  return new DurableTelemetryProvider(persistence)
+  const canonical = new DurableTelemetryProvider(persistence)
+  const endpoint = configuredOtlpEndpoint()
+  if (!endpoint) return canonical
+
+  return new ExportingTelemetryProvider(
+    canonical,
+    new OtlpHttpJsonTelemetryExporter({
+      endpoint,
+      headers: process.env.OTEL_EXPORTER_OTLP_HEADERS ?? null,
+      timeoutMs: process.env.OTEL_EXPORTER_OTLP_TIMEOUT
+        ? Number(process.env.OTEL_EXPORTER_OTLP_TIMEOUT)
+        : undefined,
+      serviceName: process.env.OTEL_SERVICE_NAME?.trim() || 'datanexus-ai',
+    }),
+  )
 }
