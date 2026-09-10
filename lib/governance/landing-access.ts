@@ -1,9 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { PersonaSlug } from './personas'
 import { resolvePersonaFromRoleLabels } from './resolve-persona'
+import { assertInstanceOrganizationId, InstanceOrganizationIntegrityError, resolveInstanceOrganizationMembership } from './instance-organization'
 
 export type LandingAccessContext = {
-  organizationId: string | null
+  organizationId: string
   organizationRole: string | null
   persona: PersonaSlug
   enabled: boolean
@@ -11,52 +12,40 @@ export type LandingAccessContext = {
 
 export async function resolveLandingAccess(userId: string): Promise<LandingAccessContext> {
   const admin = createAdminClient()
-  const membershipResult = await admin.schema('app').from('organization_members')
-    .select('organization_id,role')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  const { organizationId, organizationRole } = await resolveInstanceOrganizationMembership(userId)
 
-  if (membershipResult.error) throw new Error(`Unable to resolve organization membership: ${membershipResult.error.message}`)
-
-  const organizationId = membershipResult.data?.organization_id ?? null
-  const organizationRole = membershipResult.data?.role ? String(membershipResult.data.role) : null
+  const projectsResult = await admin.schema('app').from('projects').select('id').eq('organization_id', organizationId)
+  if (projectsResult.error) throw new Error(`Unable to resolve organization projects: ${projectsResult.error.message}`)
+  const projectIds = (projectsResult.data ?? []).map(row => row.id)
 
   let roleKeys: string[] = []
-  if (organizationId) {
-    const projectsResult = await admin.schema('app').from('projects').select('id').eq('organization_id', organizationId)
-    if (projectsResult.error) throw new Error(`Unable to resolve organization projects: ${projectsResult.error.message}`)
-    const projectIds = (projectsResult.data ?? []).map(row => row.id)
-
-    if (projectIds.length) {
-      const bindingsResult = await admin.schema('governance').from('project_role_bindings')
-        .select('role_key')
-        .eq('user_id', userId)
-        .eq('active', true)
-        .in('project_id', projectIds)
-      if (bindingsResult.error) throw new Error(`Unable to resolve governance roles: ${bindingsResult.error.message}`)
-      roleKeys = (bindingsResult.data ?? []).map(row => String(row.role_key))
-    }
+  if (projectIds.length) {
+    const bindingsResult = await admin.schema('governance').from('project_role_bindings')
+      .select('role_key')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .in('project_id', projectIds)
+    if (bindingsResult.error) throw new Error(`Unable to resolve governance roles: ${bindingsResult.error.message}`)
+    roleKeys = (bindingsResult.data ?? []).map(row => String(row.role_key))
   }
 
   const persona = resolvePersonaFromRoleLabels(roleKeys, organizationRole)
-  let enabled = true
-  if (organizationId) {
-    const settingResult = await admin.schema('governance').from('landing_page_settings')
-      .select('enabled')
-      .eq('organization_id', organizationId)
-      .eq('persona_slug', persona)
-      .maybeSingle()
-    if (settingResult.error) throw new Error(`Unable to resolve landing page setting: ${settingResult.error.message}`)
-    enabled = settingResult.data?.enabled ?? true
-  }
+  const settingResult = await admin.schema('governance').from('landing_page_settings')
+    .select('enabled')
+    .eq('organization_id', organizationId)
+    .eq('persona_slug', persona)
+    .maybeSingle()
+  if (settingResult.error) throw new Error(`Unable to resolve landing page setting: ${settingResult.error.message}`)
+  const enabled = settingResult.data?.enabled ?? true
 
   return { organizationId, organizationRole, persona, enabled }
 }
 
 export async function isLandingPageEnabled(organizationId: string | null, persona: PersonaSlug): Promise<boolean> {
-  if (!organizationId) return true
+  if (!organizationId) {
+    throw new InstanceOrganizationIntegrityError('Organization context rejected: the DataNexus instance organization is required.')
+  }
+  await assertInstanceOrganizationId(organizationId)
   const admin = createAdminClient()
   const result = await admin.schema('governance').from('landing_page_settings')
     .select('enabled')
