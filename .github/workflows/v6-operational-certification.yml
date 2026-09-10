@@ -29,11 +29,6 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Require live governance database credentials
-        shell: bash
-        run: |
-          test -n "$NEXT_PUBLIC_SUPABASE_URL" || { echo 'NEXT_PUBLIC_SUPABASE_URL is required for V6 certification'; exit 1; }
-          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo 'SUPABASE_SERVICE_ROLE_KEY is required for V6 certification'; exit 1; }
       - name: V0 trusted governance baseline
         run: node --experimental-strip-types scripts/verify-v0-trusted-governance-baseline.mjs
       - name: V1 sensitive dataset governance journey
@@ -64,10 +59,53 @@ jobs:
         run: node scripts/verify-migration-version-uniqueness.mjs
       - name: V6 certification contract
         run: node scripts/verify-journey-operational-certification.mjs
-      - name: Authenticated live database contracts
-        run: pnpm run verify:database
       - name: Production build
         run: pnpm run build
+      - name: Require live governance database credentials
+        shell: bash
+        run: |
+          test -n "$NEXT_PUBLIC_SUPABASE_URL" || { echo 'NEXT_PUBLIC_SUPABASE_URL is required for V6 certification'; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo 'SUPABASE_SERVICE_ROLE_KEY is required for V6 certification'; exit 1; }
+      - name: Authenticated live database contracts
+        run: pnpm run verify:database
+
+  runtime-slo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Production concurrency and latency SLO
+        env:
+          PRODUCTION_URL: https://data-quality-ai-platform.vercel.app
+          BENCHMARK_PATH: /login
+          BENCHMARK_REQUESTS: '50'
+          BENCHMARK_CONCURRENCY: '10'
+          BENCHMARK_MAX_P95_MS: '1500'
+          BENCHMARK_MAX_P99_MS: '3000'
+          BENCHMARK_MAX_ERROR_RATE: '0.01'
+          BENCHMARK_MIN_SUCCESSFUL_REQUESTS: '45'
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm run benchmark:production | tee "$RUNNER_TEMP/v6-runtime-slo.json"
+          {
+            echo '## V6 production runtime SLO'
+            echo '```json'
+            cat "$RUNNER_TEMP/v6-runtime-slo.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   clean-database-reconstruction:
     runs-on: ubuntu-latest
