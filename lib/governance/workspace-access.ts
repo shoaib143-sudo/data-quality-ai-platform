@@ -40,6 +40,28 @@ const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
   'data-quality-analyst': ['catalog', 'issues', 'data-quality', 'observability', 'audit', 'reports', 'profiling', 'agents'],
 }
 
+const workspacePrefixes: readonly [string, WorkspaceKey][] = [
+  ['/classification-privacy', 'classification-privacy'],
+  ['/data-quality', 'data-quality'],
+  ['/profiling', 'profiling'],
+  ['/observability', 'observability'],
+  ['/monitoring', 'monitoring'],
+  ['/stewardship', 'stewardship'],
+  ['/classification', 'classification'],
+  ['/catalog', 'catalog'],
+  ['/glossary', 'glossary'],
+  ['/lineage', 'lineage'],
+  ['/issues', 'issues'],
+  ['/reports', 'reports'],
+  ['/schedules', 'schedules'],
+  ['/retention', 'retention'],
+  ['/agents', 'agents'],
+  ['/datasets', 'datasets'],
+  ['/dashboard', 'dashboard'],
+  ['/audit', 'audit'],
+  ['/admin', 'admin'],
+]
+
 export function canAccessWorkspace(persona: PersonaSlug, workspace: WorkspaceKey, organizationRole?: string | null) {
   if (workspace === 'admin') return Boolean(organizationRole && /^(OWNER|ADMIN)$/i.test(organizationRole))
   return access[persona].includes(workspace)
@@ -47,6 +69,19 @@ export function canAccessWorkspace(persona: PersonaSlug, workspace: WorkspaceKey
 
 export function workspacesForPersona(persona: PersonaSlug) {
   return access[persona]
+}
+
+export function workspaceForHref(href: string): WorkspaceKey | null {
+  const pathname = href.split(/[?#]/, 1)[0] || '/'
+  const match = workspacePrefixes.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  return match?.[1] ?? null
+}
+
+export function canAccessWorkspaceHref(persona: PersonaSlug, href: string, organizationRole?: string | null) {
+  if (href === '/home' || href.startsWith('/home/')) return true
+  if (href === '/ai-insights' || href.startsWith('/ai-insights?')) return true
+  const workspace = workspaceForHref(href)
+  return workspace ? canAccessWorkspace(persona, workspace, organizationRole) : false
 }
 
 export async function requireWorkspaceAccess(workspace: WorkspaceKey) {
