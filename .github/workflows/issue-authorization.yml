@@ -1,0 +1,47 @@
+name: Issue Authorization Boundary
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/issues/**'
+      - 'lib/auth/**'
+      - 'lib/governance/instance-organization.ts'
+      - 'lib/profiling/request-input.ts'
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'scripts/test-issue-project-authorization.mjs'
+      - 'scripts/test-profiling-request-input.mjs'
+      - 'scripts/verify-single-organization-runtime.mjs'
+      - '.github/workflows/issue-authorization.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/api/issues/**'
+      - 'lib/auth/**'
+      - 'lib/governance/instance-organization.ts'
+      - 'lib/profiling/request-input.ts'
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'scripts/test-issue-project-authorization.mjs'
+      - 'scripts/test-profiling-request-input.mjs'
+      - 'scripts/verify-single-organization-runtime.mjs'
+      - '.github/workflows/issue-authorization.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  authorization-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify issue project authorization
+        run: node scripts/test-issue-project-authorization.mjs
+      - name: Verify profiling request trust boundary
+        run: node scripts/test-profiling-request-input.mjs
+      - name: Verify canonical organization authorization boundary
+        run: node scripts/verify-single-organization-runtime.mjs
