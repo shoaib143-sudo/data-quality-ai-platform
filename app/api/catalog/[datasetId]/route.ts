@@ -4,7 +4,7 @@ import { authorizeDataset, authorizationErrorResponse } from '@/lib/auth/authori
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
-const allowedLifecycleStatuses = new Set(['ACTIVE', 'DEPRECATED', 'ARCHIVED'])
+const allowedLifecycleStatuses = new Set(['DRAFT', 'ACTIVE', 'DEPRECATED', 'RETIRED'])
 const allowedCriticalities = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
 
 export async function PATCH(
