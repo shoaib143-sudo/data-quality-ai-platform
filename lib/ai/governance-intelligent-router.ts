@@ -1,4 +1,5 @@
 import { EnvironmentModelGateway } from './model-gateway'
+import { createGovernanceModelCostAccountingProvider } from './governance-cost-accounting'
 import { createGovernanceModelRegistry } from './governance-model-registry'
 import { createGovernanceReasoningBudgetPolicyProvider } from './governance-reasoning-budget-policy'
 import { createGovernanceProjectBudgetAdmissionProvider } from './governance-resource-budget-admission'
@@ -23,5 +24,6 @@ export function createGovernanceIntelligentRouter(): IntelligentModelRouter {
     createGovernanceTelemetryProvider(),
     createGovernanceReasoningBudgetPolicyProvider(),
     createGovernanceProjectBudgetAdmissionProvider(),
+    createGovernanceModelCostAccountingProvider(),
   )
 }
