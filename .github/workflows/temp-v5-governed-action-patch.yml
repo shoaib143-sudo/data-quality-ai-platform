@@ -1,0 +1,33 @@
+name: Temporary V5 Governed Action Patch
+
+on:
+  push:
+    branches:
+      - implementation/v5-governed-action-learning-20260910
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: implementation/v5-governed-action-learning-20260910
+      - name: Apply V5 integration patch
+        run: node scripts/patch-v5-governed-action.mjs
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No patch changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/governance/governed-autonomy.ts app/api/governance/autonomy/route.ts
+          git commit -m "feat(v5): wire verified outcomes into governed autonomy"
+          git push origin HEAD:implementation/v5-governed-action-learning-20260910
