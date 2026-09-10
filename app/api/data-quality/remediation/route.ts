@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
@@ -18,7 +18,7 @@ function severity(priority: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const body = await request.json()
     const workflowInstanceId = text(body.workflowInstanceId)
     if (!workflowInstanceId) return NextResponse.json({ error: 'workflowInstanceId is required.' }, { status: 400 })
