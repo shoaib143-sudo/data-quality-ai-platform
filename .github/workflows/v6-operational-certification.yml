@@ -57,6 +57,8 @@ jobs:
         run: pnpm run verify:evaluation-engine
       - name: Migration version collision gate
         run: node scripts/verify-migration-version-uniqueness.mjs
+      - name: Membership helper ACL replay contract
+        run: node scripts/verify-clean-membership-helper-acl-replay.mjs
       - name: V6 certification contract
         run: node scripts/verify-journey-operational-certification.mjs
       - name: Production build
@@ -153,6 +155,7 @@ jobs:
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-operational-policy-boundary-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-control-evidence-syntax-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-catalog-reconcile-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-membership-helper-acl-replay.mjs"
           pnpm dlx supabase@2.117.0 start
           trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
           pnpm dlx supabase@2.117.0 db reset --local
