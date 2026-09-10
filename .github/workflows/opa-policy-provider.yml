@@ -6,6 +6,7 @@ on:
     paths:
       - 'lib/governance/opa-policy-decision-provider.ts'
       - 'lib/governance/governance-policy-decision-provider.ts'
+      - 'infra/opa/**'
       - 'scripts/verify-opa-policy-provider.mjs'
       - 'scripts/test-opa-policy-decision-provider.mjs'
       - '.github/workflows/opa-policy-provider.yml'
@@ -13,6 +14,7 @@ on:
     paths:
       - 'lib/governance/opa-policy-decision-provider.ts'
       - 'lib/governance/governance-policy-decision-provider.ts'
+      - 'infra/opa/**'
       - 'scripts/verify-opa-policy-provider.mjs'
       - 'scripts/test-opa-policy-decision-provider.mjs'
       - '.github/workflows/opa-policy-provider.yml'
@@ -35,4 +37,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node scripts/verify-opa-policy-provider.mjs
       - run: node --experimental-strip-types scripts/test-opa-policy-decision-provider.mjs
+      - run: bash infra/opa/render-build.sh
       - run: pnpm exec tsc --noEmit
