@@ -9,10 +9,10 @@ const provider = new SemanticProjectionRetrievalProvider({
   embedQuery: async (query) => {
     embedCalls += 1
     assert.equal(query, 'customer policy')
-    return [1, 0, 0]
+    return { embedding: [1, 0, 0], embeddingSpaceId: 'space-v1' }
   },
-  searchProject: async ({ projectId, embedding, objectTypes, threshold, limit }) => {
-    searchedProjects.push({ projectId, embedding, objectTypes, threshold, limit })
+  searchProject: async ({ projectId, embedding, embeddingSpaceId, objectTypes, threshold, limit }) => {
+    searchedProjects.push({ projectId, embedding, embeddingSpaceId, objectTypes, threshold, limit })
     return projectId === 'project-a'
       ? [{ id: 'embedding-a', object_type: 'POLICY', object_key: 'policy-a', object_id: 'a', content: 'Policy A', metadata: { authority: 'approved' }, similarity: 0.8 }]
       : [{ id: 'embedding-b', object_type: 'DOCUMENT_CHUNK', object_key: 'chunk-b', object_id: 'b', content: 'Evidence B', metadata: {}, similarity: 0.9 }]
@@ -31,6 +31,7 @@ const response = await provider.retrieve({
 assert.equal(embedCalls, 1)
 assert.equal(searchedProjects.length, 2)
 assert.deepEqual(searchedProjects.map((entry) => entry.projectId).sort(), ['project-a', 'project-b'])
+assert.ok(searchedProjects.every((entry) => entry.embeddingSpaceId === 'space-v1'))
 assert.deepEqual(response.modesApplied, ['semantic'])
 assert.equal(response.capabilities.semantic, true)
 assert.equal(response.capabilities.lexical, false)
@@ -40,6 +41,7 @@ assert.equal(response.matches[0].objectId, 'b')
 assert.equal(response.matches[0].score, 0.9)
 assert.equal(response.matches[0].provenance.source, 'governance.semantic_embeddings')
 assert.equal(response.matches[0].provenance.projection, true)
+assert.equal(response.matches[0].provenance.embeddingSpaceId, 'space-v1')
 
 await assert.rejects(
   provider.retrieve({ query: 'customer policy', projectIds: ['project-a'], modes: ['lexical'] }),
@@ -54,17 +56,26 @@ const noProjects = await provider.retrieve({ query: 'customer policy', projectId
 assert.deepEqual(noProjects.matches, [])
 assert.equal(embedCalls, 1)
 
+const invalidSpaceProvider = new SemanticProjectionRetrievalProvider({
+  embedQuery: async () => ({ embedding: [1, 0, 0], embeddingSpaceId: '' }),
+  searchProject: async () => [],
+})
+await assert.rejects(
+  invalidSpaceProvider.retrieve({ query: 'customer policy', projectIds: ['project-a'], modes: ['semantic'] }),
+  /requires an exact embeddingSpaceId/,
+)
+
 const reranker = new DeterministicRelevanceReranker()
 const candidates = [
   {
     projectId: 'project-a', projectionId: 'semantic-high', objectType: 'DOCUMENT_CHUNK', objectKey: 'high', objectId: 'high',
     content: 'Unrelated evidence about retention schedules', metadata: {}, score: 0.9, mode: 'semantic',
-    provenance: { source: 'governance.semantic_embeddings', projection: true },
+    provenance: { source: 'governance.semantic_embeddings', projection: true, embeddingSpaceId: 'space-v1' },
   },
   {
     projectId: 'project-a', projectionId: 'query-match', objectType: 'POLICY', objectKey: 'match', objectId: 'match',
     content: 'Customer policy requirements and customer policy controls', metadata: {}, score: 0.8, mode: 'semantic',
-    provenance: { source: 'governance.semantic_embeddings', projection: true },
+    provenance: { source: 'governance.semantic_embeddings', projection: true, embeddingSpaceId: 'space-v1' },
   },
 ]
 const reranked = await reranker.rerank({ query: 'customer policy', candidates, limit: 2 })
@@ -94,4 +105,4 @@ assert.equal(wrappedResponse.matches.length, 2)
 assert.equal(wrappedResponse.matches[0].projectionId, 'query-match')
 assert.equal(wrapped.capabilities.semantic, true)
 
-console.log('ADR-006 RetrievalProvider and dedicated RerankerProvider behavior verified.')
+console.log('ADR-006 RetrievalProvider, embedding-space isolation, and dedicated RerankerProvider behavior verified.')

@@ -69,7 +69,7 @@ const checks = [
   [containsAll(files.reindexRoute, ['reindexProjectSemanticObjects', 'reindexProjectDocumentSemanticObjects', 'groups']), 'combined governance and document semantic reindex'],
   [/SEMANTIC_PROJECT_CONCURRENCY\s*=\s*4/.test(files.retrievalProvider), 'bounded semantic project concurrency owned by RetrievalProvider'],
   [containsAll(files.retrievalProvider, ['mapWithConcurrency', 'searchProject', "source: 'governance.semantic_embeddings'", 'projection: true']), 'bounded semantic projection fan-out and provenance'],
-  [containsAll(files.governanceEmbeddingProvider, ['embedGovernanceText', 'RuntimeEmbeddingProvider']), 'EmbeddingProvider adapter reuses governed semantic runtime'],
+  [containsAll(files.governanceEmbeddingProvider, ['embedGovernanceTextWithEvidence', 'embeddingSpaceId', 'modelRevision']), 'EmbeddingProvider adapter preserves governed embedding-space evidence'],
   [containsAll(files.governanceRetrievalProvider, ['createGovernanceEmbeddingProvider', 'semanticSearchByEmbedding']), 'RetrievalProvider composes EmbeddingProvider with governed pgvector search'],
   [!files.governanceRetrievalProvider.includes('embedGovernanceText'), 'RetrievalProvider does not bypass EmbeddingProvider'],
   [containsAll(files.globalSearch, ['createGovernanceRetrievalProvider', "modes: ['semantic']", 'retrieved.matches.map(semanticResult)']), 'global search uses RetrievalProvider boundary'],

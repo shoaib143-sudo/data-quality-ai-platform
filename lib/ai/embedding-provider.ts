@@ -10,7 +10,9 @@ export type EmbeddingResult = {
   embedding: number[]
   providerId: string
   model: string | null
+  modelRevision?: string | null
   dimensions: number
+  embeddingSpaceId?: string | null
 }
 
 export interface EmbeddingProvider {

@@ -27,6 +27,7 @@ export type RetrievalMatch = {
   provenance: {
     source: string
     projection: boolean
+    embeddingSpaceId?: string
     rerankedBy?: string
   }
 }
@@ -55,11 +56,17 @@ export type SemanticProjectionMatch = {
   similarity: number
 }
 
+export type SemanticQueryEmbedding = {
+  embedding: number[]
+  embeddingSpaceId: string
+}
+
 export type SemanticRetrievalDependencies = {
-  embedQuery(query: string): Promise<number[]>
+  embedQuery(query: string): Promise<SemanticQueryEmbedding>
   searchProject(input: {
     projectId: string
     embedding: number[]
+    embeddingSpaceId: string
     objectTypes?: string[] | null
     threshold?: number
     limit?: number
@@ -110,7 +117,12 @@ export class SemanticProjectionRetrievalProvider implements RetrievalProvider {
     const projectIds = [...new Set(request.projectIds.filter(Boolean))]
     if (!projectIds.length) return { matches: [], modesApplied: modes, capabilities: this.capabilities }
 
-    const embedding = await this.dependencies.embedQuery(query)
+    const queryEmbedding = await this.dependencies.embedQuery(query)
+    if (!queryEmbedding.embeddingSpaceId?.trim()) {
+      throw new Error('Semantic retrieval requires an exact embeddingSpaceId')
+    }
+    const embedding = queryEmbedding.embedding
+    const embeddingSpaceId = queryEmbedding.embeddingSpaceId.trim()
     const totalLimit = Math.max(1, Math.min(100, request.limit ?? 75))
     const perProjectLimit = Math.max(5, Math.ceil(totalLimit / projectIds.length))
     const groups = await mapWithConcurrency(projectIds, SEMANTIC_PROJECT_CONCURRENCY, async (projectId) => ({
@@ -118,6 +130,7 @@ export class SemanticProjectionRetrievalProvider implements RetrievalProvider {
       matches: await this.dependencies.searchProject({
         projectId,
         embedding,
+        embeddingSpaceId,
         objectTypes: request.objectTypes,
         threshold: request.threshold,
         limit: perProjectLimit,
@@ -138,6 +151,7 @@ export class SemanticProjectionRetrievalProvider implements RetrievalProvider {
         provenance: {
           source: 'governance.semantic_embeddings',
           projection: true,
+          embeddingSpaceId,
         },
       })))
       .sort((a, b) => b.score - a.score)
