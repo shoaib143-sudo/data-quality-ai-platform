@@ -55,7 +55,7 @@ check('organization admin is not granted by governance persona alone', personaSl
 check('workspace prefixes are unique', new Set(workspacePrefixes.map(([prefix]) => prefix)).size === workspacePrefixes.length)
 
 const explicitlyNonWorkspaceRoutes = [
-  '/', '/login', '/forgot-password', '/reset-password', '/home', '/home/:param', '/home/unavailable',
+  '/', '/login', '/signup', '/forgot-password', '/reset-password', '/home', '/home/:param', '/home/unavailable',
   '/ai-insights',
 ]
 
