@@ -34,7 +34,7 @@ const checks = [
   ['reprofile verifier never claims quality improvement', verifier.includes('quality_improvement_claimed: false')],
   ['verified outcome writes through canonical database authority', verifier.includes('recordGovernedActionOutcome') && outcome.includes("rpc('record_governed_action_outcome'")],
   ['learning promotion uses canonical verified-only RPC', verifier.includes('promoteVerifiedGovernedActionOutcome') && outcome.includes("rpc('promote_verified_governed_action_outcome'")],
-  ['learning requires source-agent provenance', verifier.includes("reason: 'SOURCE_AGENT_RUN_REQUIRED'")],
+  ['learning requires source-agent provenance', verifier.includes('SOURCE_AGENT_RUN_REQUIRED') && verifier.includes('outcome.source_agent_run_id')],
   ['autonomy posture exposes canonical outcome evidence', autonomy.includes("from('governed_action_outcomes')") && autonomy.includes('outcomes: outcomes.data ?? []')],
 ]
 
