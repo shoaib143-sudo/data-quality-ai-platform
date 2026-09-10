@@ -143,6 +143,7 @@ jobs:
           pnpm dlx supabase@2.117.0 init
           SOURCE_MIGRATION_DIR="$ROOT/supabase/migrations" TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-migration-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-audit-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-jdbc-fixture-replay.mjs"
           pnpm dlx supabase@2.117.0 start
           trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
           pnpm dlx supabase@2.117.0 db reset --local
