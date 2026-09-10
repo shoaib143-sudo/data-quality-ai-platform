@@ -9,7 +9,8 @@ const certificationRequest = read('app/api/stewardship/certifications/route.ts')
 const certificationReview = read('app/api/stewardship/certifications/[requestId]/route.ts')
 const catalogRoute = read('app/api/catalog/[datasetId]/route.ts')
 const catalogUi = read('app/catalog/catalog-manager.tsx')
-const profilingExecutor = read('lib/agents/executors/profiling-executor.ts')
+const agentProfilingExecutor = read('lib/agents/executors/profiling-executor.ts')
+const profilingExecutor = read('lib/profiling/executor.ts')
 const metricEngine = read('lib/profiling/metric-engine.ts')
 const migration = read('supabase/migrations/20260910113000_p0_govern_certification_transitions.sql')
 
@@ -32,9 +33,11 @@ assert(migration.includes('om.is_active = true'), 'Certification reviewer member
 assert(migration.includes('grant execute on function governance.request_dataset_certification'), 'Governed request RPC must explicitly grant service execution.')
 assert(migration.includes('grant execute on function governance.review_dataset_certification'), 'Governed review RPC must explicitly grant service execution.')
 
-assert(profilingExecutor.includes('executeProfilingMetrics(datasetVersionId, profilingRunId, {})'), 'Metric executor must discard caller-supplied evidence rows.')
-assert(profilingExecutor.includes('Never forward caller supplied rows'), 'Profiling executor must document the caller-evidence boundary.')
+assert(agentProfilingExecutor.includes('executeProfilingMetrics(datasetVersionId, profilingRunId, {})'), 'Metric executor must discard caller-supplied evidence rows.')
+assert(agentProfilingExecutor.includes('Never forward caller supplied rows'), 'Profiling executor must document the caller-evidence boundary.')
 assert(metricEngine.includes('dataset_execution_sources'), 'Metric engine must resolve a registered execution source.')
 assert(metricEngine.includes('loadProfilingRows'), 'Metric execution must load evidence from trusted source access.')
+assert(profilingExecutor.includes('Metadata-only evidence is not accepted.'), 'Profile execution must reject metadata-only evidence.')
+assert(!profilingExecutor.includes('used metadata-only profile.'), 'Metadata-only profile fallback must remain removed.')
 
 console.log('P0-P4 revalidation source-boundary checks passed.')
