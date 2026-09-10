@@ -9,7 +9,7 @@ const start = fs.readFileSync('infra/otel/render-start.sh', 'utf8')
 
 const required = [
   [exporter, 'class OtlpHttpJsonTelemetryExporter', 'OTLP HTTP JSON exporter'],
-  [exporter, "`${normalized}/v1/traces`", 'standard traces endpoint'],
+  [exporter, '`${normalized}/v1/traces`', 'standard traces endpoint'],
   [exporter, "'content-type': 'application/json'", 'OTLP JSON transport'],
   [exporter, 'resourceSpans', 'OTLP resource spans envelope'],
   [exporter, 'scopeSpans', 'OTLP scope spans envelope'],
@@ -27,12 +27,17 @@ const required = [
   [collector, 'verbosity: basic', 'non-payload debug receipt sink'],
   [collector, 'traces:', 'trace pipeline'],
   [install, 'OTELCOL_VERSION:-0.160.0', 'pinned collector release'],
-  [install, 'sha256sum --check', 'collector checksum verification'],
+  [install, 'expected_hash=', 'upstream collector checksum read'],
+  [install, 'sha256sum "$archive"', 'collector checksum calculation'],
+  [install, 'Checksum mismatch for ${archive}', 'collector checksum mismatch failure'],
   [build, 'otelcol-contrib validate', 'collector configuration validation'],
   [start, ': "${OTEL_AUTH_TOKEN:?OTEL_AUTH_TOKEN is required}"', 'fail-closed collector credential requirement'],
 ]
 
-const failures = required.filter(([source, token]) => !source.includes(token)).map(([, , label]) => `missing ${label}`)
+const failures = required
+  .filter(([source, token]) => !source.includes(token))
+  .map(([, , label]) => `missing ${label}`)
+
 for (const forbidden of ['event.attributes', 'JSON.stringify(event)', 'prompt', 'completion', 'reasoning']) {
   if (exporter.includes(forbidden)) failures.push(`external exporter must not forward free-form/sensitive payload: ${forbidden}`)
 }
@@ -43,4 +48,4 @@ if (failures.length) {
   failures.forEach((failure) => console.error(`- ${failure}`))
   process.exit(1)
 }
-console.log('OTLP exporter, authenticated collector deployment, W3C propagation, and canonical persistence ordering verified.')
+console.log('OTLP exporter, authenticated collector deployment, checksum, W3C propagation, and canonical persistence ordering verified.')
