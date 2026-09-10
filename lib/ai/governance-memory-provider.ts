@@ -5,6 +5,12 @@ import {
   type MemoryProvider,
 } from './memory-provider'
 
+function hasGovernedOutcomeEvidence(evidence: unknown) {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) return false
+  const outcomeId = (evidence as Record<string, unknown>).governed_action_outcome_id
+  return typeof outcomeId === 'string' && outcomeId.trim().length > 0
+}
+
 export function createGovernanceMemoryProvider(): MemoryProvider {
   const supabase = createAdminClient()
 
@@ -33,12 +39,13 @@ export function createGovernanceMemoryProvider(): MemoryProvider {
         .eq('status', 'ACTIVE')
         .eq('decision_status', 'VERIFIED')
         .eq('outcome_status', 'VERIFIED')
+        .eq('source_kind', 'GOVERNED_ACTION_OUTCOME')
         .not('source_agent_run_id', 'is', null)
         .order('occurred_at', { ascending: false, nullsFirst: false })
         .limit(limit)
 
       if (error) throw new Error(`Unable to read episodic memory: ${error.message}`)
-      return data ?? []
+      return (data ?? []).filter((row) => hasGovernedOutcomeEvidence(row.evidence))
     },
   }
 

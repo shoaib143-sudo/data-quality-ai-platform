@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 
 const migration = fs.readFileSync('supabase/migrations/20260910144000_v5_governed_action_outcome_learning.sql', 'utf8')
+const consumptionHardening = fs.readFileSync('supabase/migrations/20260911022000_v5_require_governed_outcome_learning_consumption.sql', 'utf8')
 const outcome = fs.readFileSync('lib/governance/governed-outcome-learning.ts', 'utf8')
 const autonomy = fs.readFileSync('lib/governance/governed-autonomy.ts', 'utf8')
 const learning = fs.readFileSync('lib/agents/agent-memory-learning.ts', 'utf8')
@@ -20,7 +21,8 @@ const checks = [
   ['promotion requires source agent provenance', migration.includes("if v_outcome.source_agent_run_id is null then raise exception 'learning promotion requires source agent provenance'" )],
   ['promoted case preserves outcome/action/policy provenance', ['governed_action_outcome_id','autonomy_action_id','policy_id','policy_version_id','verification_agent_run_id','verification_key'].every((token) => migration.includes(`'${token}'`))],
   ['promoted cases are explicitly verified', migration.includes("'VERIFIED','VERIFIED',v_outcome.effectiveness")],
-  ['generic learning search excludes unverified cases', migration.includes("lc.decision_status='VERIFIED'") && migration.includes("lc.outcome_status='VERIFIED'") && migration.includes('lc.source_agent_run_id is not null')],
+  ['generic learning search excludes unverified cases', consumptionHardening.includes("lc.decision_status='VERIFIED'") && consumptionHardening.includes("lc.outcome_status='VERIFIED'") && consumptionHardening.includes('lc.source_agent_run_id is not null')],
+  ['generic learning search only consumes governed outcome projections', consumptionHardening.includes("lc.source_kind='GOVERNED_ACTION_OUTCOME'") && consumptionHardening.includes("lc.evidence->>'governed_action_outcome_id'")],
   ['application records through canonical RPC', outcome.includes("rpc('record_governed_action_outcome'")],
   ['application promotes through canonical RPC', outcome.includes("rpc('promote_verified_governed_action_outcome'")],
   ['outcome evaluation is durable and versioned', outcome.includes("evaluator_type: 'GOVERNED_OUTCOME'") && outcome.includes("evaluator_version: '1.0'")],
@@ -29,6 +31,7 @@ const checks = [
   ['memory cannot authorize future actions', learning.includes('memory_never_authorizes_actions: true') && learning.includes('current_authorization_required_for_every_action: true') && learning.includes('current_policy_decision_required_for_every_action: true')],
   ['learning influence preserves case provenance', learning.includes('influenceEvidence') && learning.includes('evidence_record_id') && learning.includes('evidence_verified')],
   ['canonical episodic provider independently requires verified decision and outcome', memory.includes(".eq('decision_status', 'VERIFIED')") && memory.includes(".eq('outcome_status', 'VERIFIED')")],
+  ['canonical episodic provider rejects legacy verified cases', memory.includes(".eq('source_kind', 'GOVERNED_ACTION_OUTCOME')") && memory.includes('hasGovernedOutcomeEvidence(row.evidence)')],
 ]
 
 const failures = checks.filter(([, passed]) => !passed)
