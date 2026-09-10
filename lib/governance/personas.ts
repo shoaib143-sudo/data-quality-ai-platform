@@ -69,7 +69,7 @@ export const personas: Record<PersonaSlug, PersonaDefinition> = {
       { label: 'Home', href: '/home/business-user' },
       { label: 'Search & Explore', href: '/catalog' },
       { label: 'Business Glossary', href: '/glossary' },
-      { label: 'Trusted Data', href: '/datasets' },
+      { label: 'Trusted Data', href: '/catalog?q=CERTIFIED' },
       { label: 'Known Issues', href: '/issues' },
     ],
     labels: { ...common, confidence: 'Trusted data available', exposure: 'Known data concerns', attention: 'Use with caution', progress: 'Recently trusted' },
