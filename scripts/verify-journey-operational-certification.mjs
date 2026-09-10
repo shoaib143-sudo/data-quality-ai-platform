@@ -7,6 +7,7 @@ const v6 = read('.github/workflows/v6-operational-certification.yml')
 const codeql = read('.github/workflows/codeql-security.yml')
 const dependency = read('.github/workflows/dependency-review.yml')
 const packageJson = JSON.parse(read('package.json'))
+const syntheticAuthorityMigration = read('supabase/migrations/20260910190500_align_synthetic_governance_suite_with_contract_authority.sql')
 const requiredJourneys = [
   'scripts/verify-v0-trusted-governance-baseline.mjs',
   'scripts/verify-journey-sensitive-governance.mjs',
@@ -32,6 +33,8 @@ const checks = [
   ['V6 retains an isolated recovery drill implementation', packageJson.scripts?.['recovery:drill'] === 'node scripts/recovery-drill.mjs' && exists('scripts/recovery-drill.mjs')],
   ['CodeQL is pinned to an immutable commit', codeql.includes('github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63') && codeql.includes('github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63')],
   ['dependency audit is lockfile-exact and blocks high severity vulnerabilities', dependency.includes('pnpm install --frozen-lockfile') && dependency.includes('pnpm audit --prod --audit-level high')],
+  ['synthetic contract remains non-authoritative', syntheticAuthorityMigration.includes("'DRAFT','UNVERIFIED',null") && syntheticAuthorityMigration.includes("'data_contract_authority_fail_closed',true") && syntheticAuthorityMigration.includes("v_contract_result->>'status'='NO_CONTRACT'")],
+  ['synthetic suite does not manufacture contract approval evidence', !syntheticAuthorityMigration.includes('approved_by=p_reviewer') && !syntheticAuthorityMigration.includes("authority_status='APPROVED'") && syntheticAuthorityMigration.includes('never manufacture human approval evidence')],
   ['OpenSearch remains optional rather than a release dependency', Boolean(packageJson.scripts?.['bootstrap:opensearch']) && !Object.keys(packageJson.dependencies ?? {}).some((name) => name.toLowerCase().includes('opensearch'))],
   ['ClickHouse is not introduced without measured need', !Object.keys(packageJson.dependencies ?? {}).some((name) => name.toLowerCase().includes('clickhouse'))],
 ]
