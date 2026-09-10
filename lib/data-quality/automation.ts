@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createHash } from 'node:crypto'
 import { writeAgentRunLog } from '@/lib/agents/run-log'
+import { beginResumableRunStep } from '@/lib/agents/resumable-run-step'
 import { loadProfilingRows } from '@/lib/profiling/metric-engine'
 
 type RuleSuggestion = {
@@ -340,7 +341,7 @@ export async function executeQualityAutomation(input: {
     const { data: existingRun, error: existingRunError } = await admin.schema('agent').from('agent_runs').select('id,agent_definition_id,project_id,dataset_id,dataset_version_id,status').eq('id', existingAgentRunId).maybeSingle()
     if (existingRunError || !existingRun) throw new Error(`Unable to resolve queued data quality job: ${existingRunError?.message ?? 'not found'}`)
     if (existingRun.agent_definition_id !== agentDefinition.id || existingRun.project_id !== dataset.project_id || existingRun.dataset_version_id !== version.id) throw new Error('Queued data quality job does not match the requested dataset and agent.')
-    const { error: startError } = await admin.schema('agent').from('agent_runs').update({ status: 'RUNNING', started_at: now }).eq('id', existingAgentRunId).eq('status', 'QUEUED')
+    const { error: startError } = await admin.schema('agent').from('agent_runs').update({ status: 'RUNNING', started_at: now, completed_at: null, error_code: null, error_message: null }).eq('id', existingAgentRunId).in('status', ['QUEUED', 'FAILED', 'RUNNING'])
     if (startError) throw new Error(`Unable to start queued data quality job: ${startError.message}`)
     agentRunId = existingAgentRunId
   } else {
@@ -359,16 +360,14 @@ export async function executeQualityAutomation(input: {
   }
   let currentStepId: string | null = null
   try {
-    const { data: syncStep, error: syncStepError } = await admin.schema('agent').from('agent_run_steps').insert({
-      agent_run_id: agentRunId,
-      step_name: 'sync_quality_rules',
-      step_order: 1,
-      status: 'RUNNING',
+    const syncStep = await beginResumableRunStep(admin, {
+      agentRunId,
+      stepName: 'sync_quality_rules',
+      stepOrder: 1,
       input: { datasetVersionId, profileRunId },
-      started_at: now,
-    }).select('id').single()
-    if (syncStepError || !syncStep) throw new Error(`Unable to create quality rule sync step: ${syncStepError?.message ?? 'unknown error'}`)
+    })
     currentStepId = syncStep.id
+    if (!syncStep.alreadySucceeded) {
 
     const synced = await syncSuggestedQualityRules(datasetVersionId, profileRunId, userId)
     await admin.schema('agent').from('agent_run_steps').update({
@@ -377,17 +376,23 @@ export async function executeQualityAutomation(input: {
       completed_at: new Date().toISOString(),
     }).eq('id', currentStepId)
     await writeAgentRunLog({ agentRunId, agentRunStepId: currentStepId, level: 'TOOL', eventType: 'QUALITY_RULES_SYNCED', message: `${synced.rules.length} data quality rules are active for this dataset.`, details: { datasetVersionId, profileRunId, rule_count: synced.rules.length } })
+    }
 
-    const { data: executeStep, error: executeStepError } = await admin.schema('agent').from('agent_run_steps').insert({
-      agent_run_id: agentRunId,
-      step_name: 'execute_quality_rules',
-      step_order: 2,
-      status: 'RUNNING',
+    const executeStep = await beginResumableRunStep(admin, {
+      agentRunId,
+      stepName: 'execute_quality_rules',
+      stepOrder: 2,
       input: { datasetVersionId, profileRunId },
-      started_at: new Date().toISOString(),
-    }).select('id').single()
-    if (executeStepError || !executeStep) throw new Error(`Unable to create quality execution step: ${executeStepError?.message ?? 'unknown error'}`)
+    })
     currentStepId = executeStep.id
+
+    let passedCount = Number(executeStep.output.passed ?? 0)
+    let failedCount = Number(executeStep.output.failed ?? 0)
+    let errorCount = Number(executeStep.output.errors ?? 0)
+    let exceptionCount = Number(executeStep.output.row_exceptions ?? 0)
+    let quarantinedCount = Number(executeStep.output.quarantined_records ?? 0)
+
+    if (!executeStep.alreadySucceeded) {
 
     const [{ data: rules, error: rulesError }, { data: columns, error: columnsError }, { data: metrics, error: metricsError }] = await Promise.all([
       admin.schema('profiling').from('quality_rule_definitions').select('*').eq('dataset_id', dataset.id).eq('enabled', true).order('severity'),
@@ -479,12 +484,12 @@ export async function executeQualityAutomation(input: {
       persistedResults = (insertedResults ?? []) as Array<{id:string;rule_definition_id:string;status:string}>
     }
 
-    const passedCount = results.filter((result) => result.status === 'PASSED').length
-    const failedCount = results.filter((result) => result.status === 'FAILED').length
-    const errorCount = results.filter((result) => result.status === 'ERROR').length
+    passedCount = results.filter((result) => result.status === 'PASSED').length
+    failedCount = results.filter((result) => result.status === 'FAILED').length
+    errorCount = results.filter((result) => result.status === 'ERROR').length
 
-    let exceptionCount = 0
-    let quarantinedCount = 0
+    exceptionCount = 0
+    quarantinedCount = 0
     if (failedCount > 0) {
       const persistedRunByRule = new Map(persistedResults.map((result) => [result.rule_definition_id, result.id]))
       const ruleById = new Map((rules ?? []).map((rule) => [rule.id, rule as QualityRule]))
@@ -546,16 +551,14 @@ export async function executeQualityAutomation(input: {
     }).eq('id', currentStepId)
 
     if (errorCount) throw new Error(`${errorCount} data quality rules could not be evaluated because required metrics were missing.`)
+    }
 
-    const { data: publishStep, error: publishStepError } = await admin.schema('agent').from('agent_run_steps').insert({
-      agent_run_id: agentRunId,
-      step_name: 'publish_quality_results',
-      step_order: 3,
-      status: 'RUNNING',
+    const publishStep = await beginResumableRunStep(admin, {
+      agentRunId,
+      stepName: 'publish_quality_results',
+      stepOrder: 3,
       input: { datasetVersionId, profileRunId },
-      started_at: new Date().toISOString(),
-    }).select('id').single()
-    if (publishStepError || !publishStep) throw new Error(`Unable to create quality publish step: ${publishStepError?.message ?? 'unknown error'}`)
+    })
     currentStepId = publishStep.id
 
     const summary = {
