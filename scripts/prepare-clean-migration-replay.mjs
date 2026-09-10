@@ -163,6 +163,60 @@ $$;
   'Released history revokes the profiling persistence RPC before its creation is represented; reconstruction uses the exact live signature and behavior so later hardening applies normally.',
 )
 
+addReplayReconstruction(
+  '20260903005500',
+  'reconstruct_run_profile',
+  `create or replace function profiling.run_profile(p_dataset_version_id uuid)
+returns uuid
+language plpgsql
+set search_path = pg_catalog, profiling
+as $$
+declare
+  v_profile_run_id uuid;
+  v_snapshot_id uuid;
+begin
+  select ss.id into v_snapshot_id
+  from profiling.schema_snapshots ss
+  where ss.dataset_version_id = p_dataset_version_id
+  order by ss.created_at desc, ss.id desc
+  limit 1;
+
+  if v_snapshot_id is null then
+    raise exception 'No schema snapshot is available for dataset version %', p_dataset_version_id;
+  end if;
+
+  insert into profiling.profile_runs(dataset_version_id,status,engine_name,engine_version,sampling_mode,started_at)
+  values(p_dataset_version_id,'RUNNING','profiling-engine','1.1','FULL',now())
+  returning id into v_profile_run_id;
+
+  insert into profiling.profile_columns(profile_run_id,column_name,ordinal_position,source_type,inferred_type)
+  select v_profile_run_id,c->>'name',ordinality,'schema',c->>'type'
+  from profiling.schema_snapshots ss
+  cross join lateral jsonb_array_elements(ss.schema->'columns') with ordinality as cols(c, ordinality)
+  where ss.id = v_snapshot_id;
+
+  perform profiling.execute_metrics(v_profile_run_id);
+  perform profiling.generate_findings(v_profile_run_id);
+
+  insert into profiling.data_quality_scores(profile_run_id,completeness_score,uniqueness_score,validity_score,accuracy_score)
+  values(v_profile_run_id,0,0,0,0)
+  on conflict do nothing;
+
+  perform profiling.calculate_quality_score(v_profile_run_id);
+
+  update profiling.profile_runs set status='COMPLETED',completed_at=now()
+  where id=v_profile_run_id;
+  return v_profile_run_id;
+exception when others then
+  update profiling.profile_runs set status='FAILED',completed_at=now()
+  where id=v_profile_run_id;
+  raise;
+end;
+$$;
+`,
+  'Released history hardens profiling.run_profile before its creation is represented; reconstruction uses the exact live function contract so subsequent migrations can harden and replace it.',
+)
+
 for (const file of files) {
   if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(file)) throw new Error(`Malformed migration filename: ${file}`)
   const originalVersion = file.slice(0, 14)
