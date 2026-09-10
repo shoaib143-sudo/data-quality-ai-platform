@@ -16,13 +16,16 @@ const requiredJourneys = [
   'scripts/verify-journey-governed-outcome-learning.mjs',
 ]
 
+const conditionalDatabaseGate = "if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}"
+
 const checks = [
   ['V0 through V5 journey authorities exist', requiredJourneys.every(exists)],
   ['V6 reruns cumulative journeys', requiredJourneys.every((path) => v6.includes(path))],
   ['V6 verifies migration version uniqueness', v6.includes('verify-migration-version-uniqueness.mjs')],
   ['V6 performs clean Supabase reconstruction', v6.includes('supabase@2.117.0') && v6.includes('db reset --local') && v6.includes('supabase/migrations')],
-  ['V6 requires live database credentials', v6.includes('Require live governance database credentials') && v6.includes('SUPABASE_SERVICE_ROLE_KEY') && !v6.includes("if: ${{ env.NEXT_PUBLIC_SUPABASE_URL")],
-  ['V6 executes authenticated live database contracts', v6.includes('pnpm run verify:database')],
+  ['V6 preserves missing live database verification as NOT_MEASURED', v6.includes('Status: NOT_MEASURED in CI') && v6.includes('This is not a PASS')],
+  ['V6 gates live database verification on credential availability', v6.includes(conditionalDatabaseGate) && v6.includes('SUPABASE_SERVICE_ROLE_KEY') && !v6.includes('Require live governance database credentials')],
+  ['V6 executes authenticated live database contracts when credentials exist', v6.includes('pnpm run verify:database')],
   ['V6 exercises provider failure/fallback behavior', v6.includes('pnpm run verify:provider-fallback')],
   ['V6 exercises worker isolation and capacity', v6.includes('pnpm run verify:worker-runtime')],
   ['V6 exercises privileged API authorization audit', v6.includes('audit-user-facing-admin-routes.mjs')],

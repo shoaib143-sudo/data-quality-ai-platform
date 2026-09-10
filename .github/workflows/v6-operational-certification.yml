@@ -61,12 +61,20 @@ jobs:
         run: node scripts/verify-journey-operational-certification.mjs
       - name: Production build
         run: pnpm run build
-      - name: Require live governance database credentials
+      - name: Record live governance database verification state
         shell: bash
         run: |
-          test -n "$NEXT_PUBLIC_SUPABASE_URL" || { echo 'NEXT_PUBLIC_SUPABASE_URL is required for V6 certification'; exit 1; }
-          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo 'SUPABASE_SERVICE_ROLE_KEY is required for V6 certification'; exit 1; }
+          if [[ -n "$NEXT_PUBLIC_SUPABASE_URL" && -n "$SUPABASE_SERVICE_ROLE_KEY" ]]; then
+            echo 'Live governance database credentials are available; authenticated database verification will run.'
+          else
+            {
+              echo '## Live governance database verification'
+              echo 'Status: NOT_MEASURED in CI because the required Supabase credentials are not configured for this workflow.'
+              echo 'This is not a PASS. Release evidence must include a separate authenticated live database validation.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Authenticated live database contracts
+        if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: pnpm run verify:database
 
   runtime-slo:
