@@ -8,6 +8,7 @@ import type {
 export type OpaPolicyDecisionProviderOptions = {
   endpoint: string | null
   decisionPath?: string | null
+  authorizationToken?: string | null
   timeoutMs?: number
   fetchImpl?: typeof fetch
 }
@@ -65,6 +66,7 @@ export class OpaPolicyDecisionProvider implements PolicyDecisionProvider {
   private readonly canonical: PolicyDecisionProvider
   private readonly endpoint: string | null
   private readonly decisionPath: string
+  private readonly authorizationToken: string | null
   private readonly timeoutMs: number
   private readonly fetchImpl: typeof fetch
 
@@ -72,6 +74,7 @@ export class OpaPolicyDecisionProvider implements PolicyDecisionProvider {
     this.canonical = canonical
     this.endpoint = options.endpoint?.trim().replace(/\/$/, '') || null
     this.decisionPath = `/${(options.decisionPath?.trim() || 'v1/data/datanexus/autonomy/decision').replace(/^\/+/, '')}`
+    this.authorizationToken = options.authorizationToken?.trim() || null
     this.timeoutMs = Math.max(250, Math.min(10_000, options.timeoutMs ?? 2_000))
     this.fetchImpl = options.fetchImpl ?? fetch
   }
@@ -87,13 +90,19 @@ export class OpaPolicyDecisionProvider implements PolicyDecisionProvider {
     if (!this.endpoint) {
       return blockedResult(canonical, 'OPA enforcement is selected but no OPA endpoint is configured.')
     }
+    if (!this.authorizationToken) {
+      return blockedResult(canonical, 'OPA enforcement is selected but no OPA authentication token is configured.')
+    }
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
     try {
       const response = await this.fetchImpl(`${this.endpoint}${this.decisionPath}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${this.authorizationToken}`,
+        },
         body: JSON.stringify({
           input: {
             request: {
