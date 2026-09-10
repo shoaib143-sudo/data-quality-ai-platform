@@ -149,9 +149,9 @@ begin
   if p_observed_at is null then
     raise exception 'observed_at is required' using errcode = '22023';
   end if;
-  if p_input_tokens is not null and p_input_tokens < 0
-     or p_output_tokens is not null and p_output_tokens < 0
-     or p_total_tokens is not null and p_total_tokens < 0 then
+  if (p_input_tokens is not null and p_input_tokens < 0)
+     or (p_output_tokens is not null and p_output_tokens < 0)
+     or (p_total_tokens is not null and p_total_tokens < 0) then
     raise exception 'Observed token counts must be non-negative' using errcode = '22023';
   end if;
 
@@ -174,8 +174,7 @@ begin
   if p_input_tokens is null or p_output_tokens is null then
     status := 'USAGE_UNAVAILABLE';
   else
-    select count(*), max(id)
-      into pricing_matches, pricing.id
+    select count(*) into pricing_matches
     from governance.ai_model_pricing_versions
     where provider_id = btrim(p_provider_id)
       and model_name = btrim(p_model_name)
@@ -187,11 +186,13 @@ begin
         using errcode = '23000';
     elsif pricing_matches = 0 then
       status := 'PRICE_UNAVAILABLE';
-      pricing.id := null;
     else
-      select * into pricing
+      select * into strict pricing
       from governance.ai_model_pricing_versions
-      where id = pricing.id;
+      where provider_id = btrim(p_provider_id)
+        and model_name = btrim(p_model_name)
+        and effective_from <= p_observed_at
+        and (effective_to is null or effective_to > p_observed_at);
       status := 'PRICED';
       calculated_input_cost := round((p_input_tokens::numeric / 1000000::numeric) * pricing.input_cost_per_million_tokens, 10);
       calculated_output_cost := round((p_output_tokens::numeric / 1000000::numeric) * pricing.output_cost_per_million_tokens, 10);
