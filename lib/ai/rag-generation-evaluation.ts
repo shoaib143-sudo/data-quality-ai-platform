@@ -1,3 +1,5 @@
+import type { EvaluationEngine } from './evaluation-engine'
+
 export type RagAuthorityLevel = 'UNVERIFIED' | 'REFERENCE' | 'APPROVED' | 'AUTHORITATIVE'
 
 export type RagCitation = {
@@ -202,4 +204,61 @@ export function summarizeRagGenerationEvaluation(results: RagGenerationEvaluatio
     temporalValidity: average('temporalValidity'),
     refusalCorrectness: average('refusalCorrectness'),
   }
+}
+
+export async function recordRagGenerationEvaluation(input: {
+  engine: EvaluationEngine
+  projectId: string
+  providerId: string
+  modelName: string
+  results: RagGenerationEvaluationResult[]
+  evidenceRefs: string[]
+  benchmarkSuiteVersion: string
+  evaluatorVersion?: string
+  aiSystemId?: string | null
+  aiSystemVersionId?: string | null
+}) {
+  const summary = summarizeRagGenerationEvaluation(input.results)
+  const common = {
+    projectId: requiredText(input.projectId, 'projectId'),
+    evaluationType: 'RAG_GENERATION_GROUNDING',
+    capability: 'rag_generation',
+    evaluatorType: 'DETERMINISTIC_RAG_GENERATION',
+    evaluatorVersion: input.evaluatorVersion ?? '1',
+    evidenceRefs: input.evidenceRefs,
+    aiSystemId: input.aiSystemId ?? null,
+    aiSystemVersionId: input.aiSystemVersionId ?? null,
+    dimensions: {
+      benchmark_suite_version: requiredText(input.benchmarkSuiteVersion, 'benchmarkSuiteVersion'),
+      case_count: summary.caseCount,
+      provider_id: requiredText(input.providerId, 'providerId'),
+      model_name: requiredText(input.modelName, 'modelName'),
+    },
+    metadata: {
+      case_ids: input.results.map((result) => result.caseId),
+      failed_case_ids: input.results.filter((result) => !result.passed).map((result) => result.caseId),
+    },
+  }
+
+  const metrics = [
+    ['CASE_PASS_RATE', summary.passRate],
+    ['CITATION_PRECISION', summary.citationPrecision],
+    ['CITATION_COMPLETENESS', summary.citationCompleteness],
+    ['GROUNDED_CLAIM_RATE', summary.groundedClaimRate],
+    ['AUTHORITY_VALIDITY', summary.authorityValidity],
+    ['TEMPORAL_VALIDITY', summary.temporalValidity],
+    ['REFUSAL_CORRECTNESS', summary.refusalCorrectness],
+  ] as const
+
+  const receipts = []
+  for (const [metricName, score] of metrics) {
+    receipts.push(await input.engine.record({
+      ...common,
+      metricName,
+      score,
+      pass: score === 1,
+    }))
+  }
+
+  return { summary, receipts }
 }
