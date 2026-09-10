@@ -127,16 +127,16 @@ export async function loadDatasetGovernancePosture(projectId: string, datasetId:
   const contractVersions = new Map(array(versionsResult.data).map((row) => [String(row.id), row]))
   const latestEvaluations = latestBy(array(evaluationsResult.data), (row) => `${row.control_id}:${row.scope_binding_id ?? 'PROJECT'}`, 'evaluated_at')
 
-  const classificationItems = classifications.map((row) => ({ ...row, label: labels.get(String(row.label_id)) ?? null }))
+  const classificationItems: JsonRecord[] = classifications.map((row): JsonRecord => ({ ...row, label: labels.get(String(row.label_id)) ?? null }))
   const authoritativeClassifications = classificationItems.filter((row) => upper(row.status) === 'APPROVED' && upper(row.authority_state) === 'AUTHORITATIVE' && upper(row.target_state) === 'CURRENT')
   const proposedClassifications = classificationItems.filter((row) => !authoritativeClassifications.includes(row))
 
-  const cdeItems = cdeMappings.map((row) => ({ ...row, cde: cdes.get(String(row.cde_id)) ?? null }))
+  const cdeItems: JsonRecord[] = cdeMappings.map((row): JsonRecord => ({ ...row, cde: cdes.get(String(row.cde_id)) ?? null }))
   const approvedCdeMappings = cdeItems.filter((row) => ['APPROVED', 'ACTIVE'].includes(upper(row.status)))
   const proposedCdeMappings = cdeItems.filter((row) => !approvedCdeMappings.includes(row))
 
   const stewardshipItems = stewardship.filter((row) => row.active === true && upper(row.status) === 'ACTIVE' && upper(row.target_state) === 'CURRENT')
-  const glossaryItems = glossaryMappings.map((row) => ({ ...row, term: terms.get(String(row.term_id)) ?? null }))
+  const glossaryItems: JsonRecord[] = glossaryMappings.map((row): JsonRecord => ({ ...row, term: terms.get(String(row.term_id)) ?? null }))
   const approvedGlossaryMappings = glossaryItems.filter((row) => row.approved === true && upper(row.mapping_status) === 'APPROVED' && upper(row.validation_state) !== 'UNVERIFIED')
   const proposedGlossaryMappings = glossaryItems.filter((row) => !approvedGlossaryMappings.includes(row))
 
