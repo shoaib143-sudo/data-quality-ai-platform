@@ -32,6 +32,8 @@ export async function POST(request: Request) {
 
     const sourceType = String(source.source_type ?? '').trim().toLowerCase()
     const wasConfigured = String(source.status ?? '').toUpperCase() === 'CONFIGURED'
+    if (wasConfigured) await authorizeProject(user.id, projectId, 'source.manage')
+
     const connectionMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? { ...(source.connection_metadata as Record<string, unknown>) } : {}
     if (wasConfigured && sourceType === 'jdbc') {
       const defaultSchema = typeof connectionMetadata.schema === 'string' && connectionMetadata.schema.trim() ? connectionMetadata.schema.trim() : 'public'
