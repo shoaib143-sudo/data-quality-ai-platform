@@ -3,6 +3,7 @@ import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
 import { executeGovernedReprofileAction } from '@/lib/governance/governed-reprofile-action'
 import { invalidateGovernedActionOutcome } from '@/lib/governance/governed-action-outcomes'
+import { assertGovernedActionReferencesInProject } from '@/lib/governance/governed-action-scope'
 
 type RiskLevel = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type ActionStatus = 'PROPOSED' | 'AWAITING_APPROVAL' | 'APPROVED' | 'EXECUTING' | 'EXECUTED' | 'REJECTED' | 'BLOCKED' | 'FAILED' | 'ROLLED_BACK'
@@ -244,6 +245,12 @@ export async function proposeGovernedAction(input: ProposedAction) {
   const targetType = input.targetType.trim().toUpperCase()
   const riskLevel = normalizeRisk(input.riskLevel)
   const confidence = clamp(input.confidence)
+  await assertGovernedActionReferencesInProject({
+    projectId: input.projectId,
+    targetType,
+    targetId: input.targetId ?? null,
+    sourceAgentRunId: input.sourceAgentRunId ?? null,
+  })
   const policy = await loadPolicy(input.projectId, actionKey)
   const policyDecision = await createGovernancePolicyDecisionProvider().decide({
     projectId: input.projectId,
