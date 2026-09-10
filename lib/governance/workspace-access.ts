@@ -9,6 +9,7 @@ export type WorkspaceKey =
   | 'discovery'
   | 'glossary'
   | 'lineage'
+  | 'lineage-manage'
   | 'stewardship'
   | 'classification'
   | 'classification-privacy'
@@ -28,14 +29,14 @@ export type WorkspaceKey =
 const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
   'senior-leadership': ['catalog', 'issues', 'data-quality', 'stewardship', 'reports', 'profiling'],
   'business-user': ['catalog', 'glossary', 'issues', 'data-quality', 'profiling'],
-  'data-owner': ['catalog', 'discovery', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'reports', 'classification', 'profiling'],
+  'data-owner': ['catalog', 'discovery', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'lineage-manage', 'reports', 'classification', 'profiling'],
   'data-product-owner': ['catalog', 'glossary', 'lineage', 'stewardship', 'issues', 'data-quality', 'reports', 'profiling'],
-  'data-steward': ['catalog', 'discovery', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'classification', 'reports', 'profiling'],
+  'data-steward': ['catalog', 'discovery', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'lineage-manage', 'classification', 'reports', 'profiling'],
   'data-governance-specialist': ['catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention', 'profiling'],
   'compliance-risk-officer': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention', 'profiling'],
   'privacy-security-officer': ['catalog', 'glossary', 'lineage', 'classification', 'classification-privacy', 'issues', 'audit', 'reports', 'profiling'],
-  'data-governance-admin': ['dashboard', 'catalog', 'discovery', 'glossary', 'lineage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'audit', 'reports', 'retention', 'profiling', 'agents', 'datasets'],
-  'data-custodian': ['catalog', 'discovery', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'profiling', 'agents'],
+  'data-governance-admin': ['dashboard', 'catalog', 'discovery', 'glossary', 'lineage', 'lineage-manage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'audit', 'reports', 'retention', 'profiling', 'agents', 'datasets'],
+  'data-custodian': ['catalog', 'discovery', 'datasets', 'lineage', 'lineage-manage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'profiling', 'agents'],
   'source-system-owner': ['catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'profiling'],
   'metadata-analyst': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'profiling'],
   'data-quality-analyst': ['catalog', 'issues', 'data-quality', 'observability', 'audit', 'reports', 'profiling', 'agents'],
@@ -44,6 +45,8 @@ const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
 const workspacePrefixes: readonly [string, WorkspaceKey][] = [
   ['/classification-privacy', 'classification-privacy'],
   ['/catalog/discovery', 'discovery'],
+  ['/lineage/ingest', 'lineage-manage'],
+  ['/lineage/suggestions', 'lineage-manage'],
   ['/data-quality', 'data-quality'],
   ['/profiling', 'profiling'],
   ['/observability', 'observability'],
