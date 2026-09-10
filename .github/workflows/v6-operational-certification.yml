@@ -59,6 +59,8 @@ jobs:
         run: node scripts/verify-migration-version-uniqueness.mjs
       - name: Membership helper ACL replay contract
         run: node scripts/verify-clean-membership-helper-acl-replay.mjs
+      - name: Synthetic rollback replay contract
+        run: node scripts/verify-clean-synthetic-rollback-replay.mjs
       - name: V6 certification contract
         run: node scripts/verify-journey-operational-certification.mjs
       - name: Production build
