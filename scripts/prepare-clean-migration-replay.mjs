@@ -32,17 +32,24 @@ function nextReplayVersion(original) {
   }
 }
 
+function addReplayReconstruction(version, name, sql, reason) {
+  if (originalVersions.has(version) || assignedVersions.has(version)) {
+    throw new Error(`Clean replay reconstruction version collides with released/assigned migration ${version}`)
+  }
+  assignedVersions.add(version)
+  const replay = `${version}_${name}.sql`
+  fs.writeFileSync(path.join(targetDir, replay), sql)
+  manifest.push({ source: null, replay, normalized: false, reconstructed: true, reason })
+}
+
 // The live estate contains profiling.dataset_execution_sources, but the released
 // migration history starts by hardening that table and never records its original
 // creation. Keep released migrations immutable and make the historical gap explicit
 // only in the disposable clean-replay directory used by V6 certification.
-const reconstructionVersion = '20260825235959'
-const reconstructionName = `${reconstructionVersion}_reconstruct_dataset_execution_sources.sql`
-if (originalVersions.has(reconstructionVersion)) {
-  throw new Error(`Clean replay reconstruction version collides with released migration ${reconstructionVersion}`)
-}
-assignedVersions.add(reconstructionVersion)
-const reconstructionSql = `begin;
+addReplayReconstruction(
+  '20260825235959',
+  'reconstruct_dataset_execution_sources',
+  `begin;
 
 create table if not exists profiling.dataset_execution_sources (
   id uuid primary key default gen_random_uuid(),
@@ -63,15 +70,34 @@ create unique index if not exists dataset_execution_sources_one_active_per_versi
   where active = true;
 
 commit;
-`
-fs.writeFileSync(path.join(targetDir, reconstructionName), reconstructionSql)
-manifest.push({
-  source: null,
-  replay: reconstructionName,
-  normalized: false,
-  reconstructed: true,
-  reason: 'Released history hardens profiling.dataset_execution_sources before any recorded table creation; reconstruction matches the live table contract.'
-})
+`,
+  'Released history hardens profiling.dataset_execution_sources before any recorded table creation; reconstruction matches the live table contract.',
+)
+
+// The live estate also contains profiling.data_quality_scores, while released
+// history first references it in the scale-normalization migration. Reconstruct
+// the exact live table shape before that historical reference, only for clean replay.
+addReplayReconstruction(
+  '20260902021500',
+  'reconstruct_data_quality_scores',
+  `begin;
+
+create table if not exists profiling.data_quality_scores (
+  id uuid primary key default gen_random_uuid(),
+  profile_run_id uuid not null references profiling.profile_runs(id) on delete cascade,
+  completeness_score numeric,
+  uniqueness_score numeric,
+  validity_score numeric,
+  accuracy_score numeric,
+  overall_score numeric,
+  created_at timestamptz not null default now(),
+  constraint profile_quality_scores_unique_run unique (profile_run_id)
+);
+
+commit;
+`,
+  'Released history normalizes profiling.data_quality_scores before any recorded table creation; reconstruction matches the live table and constraint contract.',
+)
 
 for (const file of files) {
   if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(file)) throw new Error(`Malformed migration filename: ${file}`)
