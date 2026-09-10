@@ -21,11 +21,23 @@ requireText(provider, 'projectionId: match.id ?? null', 'projection identity map
 requireText(provider, 'lexical: false', 'no false lexical support claim')
 requireText(provider, 'semantic: true', 'semantic projection support')
 requireText(provider, 'graph: false', 'no false graph support claim')
-requireText(provider, 'temporal: false', 'no false temporal support claim')
-requireText(provider, 'authority: false', 'no false authority weighting claim')
+requireText(provider, 'temporal: true', 'temporal evidence filtering support')
+requireText(provider, 'authority: true', 'governed authority evidence filtering support')
+requireText(provider, 'asOf?: string', 'explicit temporal as-of request')
+requireText(provider, 'classifyRetrievalAuthority', 'explicit authority classifier')
+requireText(provider, "authority: 'GOVERNED'", 'governed authority state')
+requireText(provider, "authority: 'OBSERVATION'", 'observation authority state')
+requireText(provider, "authority: 'UNVERIFIED'", 'unverified authority state')
+requireText(provider, "authority.authority !== 'GOVERNED'", 'fail-closed authority filtering')
+requireText(provider, 'resolveRetrievalTemporalEvidence', 'temporal evidence resolver')
+requireText(provider, 'Temporal retrieval requires an asOf timestamp', 'temporal mode requires as-of')
+requireText(provider, 'Temporal retrieval requires a valid asOf timestamp', 'temporal mode rejects malformed as-of')
+requireText(provider, 'if (requiresTemporal && !temporal) return []', 'temporal evidence fail-closed filtering')
 requireText(provider, 'governance.semantic_embeddings', 'semantic projection provenance')
 requireText(provider, 'projection: true', 'retrieval projection truth boundary')
 requireText(provider, 'does not support requested modes', 'fail-closed unsupported channel behavior')
+requireText(provider, "const AUTHORITY_REFERENCE_KEYS = ['approved_by', 'certified_by', 'reviewed_by', 'decision_id', 'workflow_id', 'policy_version_id']", 'authority provenance references')
+requireText(provider, "const AUTHORITY_STATUS_KEYS = ['approval_status', 'certification_status', 'review_status']", 'governed status evidence')
 
 requireText(reranker, 'export interface RerankerProvider', 'stable reranker provider interface')
 requireText(reranker, 'DeterministicRelevanceReranker', 'deterministic initial reranker')
@@ -80,4 +92,4 @@ for (const forbidden of ['metadata.authority', "metadata['authority']", 'authori
   }
 }
 
-console.log('ADR-006 RetrievalProvider, dedicated RerankerProvider, and search integration contracts verified.')
+console.log('ADR-006 RetrievalProvider authority, temporal, RerankerProvider, and search integration contracts verified.')
