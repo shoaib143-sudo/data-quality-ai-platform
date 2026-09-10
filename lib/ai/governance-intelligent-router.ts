@@ -6,6 +6,7 @@ import { createGovernanceProjectBudgetAdmissionProvider } from './governance-res
 import { createGovernanceRoutingPolicyProvider } from './governance-routing-policy'
 import { createGovernanceTelemetryProvider } from './governance-telemetry-provider'
 import { ObservableIntelligentRouter } from './observable-intelligent-router'
+import { OutputValidatedIntelligentRouter } from './output-validated-intelligent-router'
 import { createReasoningProvider } from './reasoning-provider'
 import { evaluateModelAgainstRoutingPolicy } from './routing-policy'
 import { EvaluationAwareIntelligentRouter, type IntelligentModelRouter } from './intelligent-router'
@@ -18,12 +19,16 @@ export function createGovernanceIntelligentRouter(): IntelligentModelRouter {
     fallbackGateway: new EnvironmentModelGateway(),
     createProvider: createReasoningProvider,
   })
-
-  return new ObservableIntelligentRouter(
+  const telemetry = createGovernanceTelemetryProvider()
+  const observable = new ObservableIntelligentRouter(
     router,
-    createGovernanceTelemetryProvider(),
+    telemetry,
     createGovernanceReasoningBudgetPolicyProvider(),
     createGovernanceProjectBudgetAdmissionProvider(),
     createGovernanceModelCostAccountingProvider(),
   )
+
+  // All governed reasoning exits through task-specific output validation after
+  // routing, budget admission, provider invocation, cost accounting, and invocation telemetry.
+  return new OutputValidatedIntelligentRouter(observable, telemetry)
 }
