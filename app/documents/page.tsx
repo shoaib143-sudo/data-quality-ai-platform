@@ -1,127 +1,33 @@
 import Link from 'next/link'
+import { FileText, Layers3 } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 
-type DocumentSearchParams = Promise<{
-  document?: string
-  chunk?: string
-}>
-
-function value(value: unknown) {
-  return value === null || value === undefined || value === '' ? 'N/A' : String(value)
-}
+type DocumentSearchParams = Promise<{ document?: string; chunk?: string }>
+function value(value: unknown) { return value === null || value === undefined || value === '' ? 'N/A' : String(value) }
+const surface='rounded-[22px] border border-white/10 bg-[#0a1d33] shadow-[10px_10px_28px_rgba(0,0,0,.22)]'
 
 export default async function DocumentsPage({ searchParams }: { searchParams: DocumentSearchParams }) {
   await requireUser()
   const requested = await searchParams
   const supabase = await createClient()
-
-  const { data: documents, error: documentsError } = await supabase
-    .schema('governance')
-    .from('documents')
-    .select('id,project_id,dataset_id,dataset_version_id,profile_run_id,source_uri,file_name,file_type,content_type,content_hash,extraction_method,character_count,chunk_count,metadata,updated_at')
-    .order('updated_at', { ascending: false })
-    .limit(100)
+  const { data: documents, error: documentsError } = await supabase.schema('governance').from('documents').select('id,project_id,dataset_id,dataset_version_id,profile_run_id,source_uri,file_name,file_type,content_type,content_hash,extraction_method,character_count,chunk_count,metadata,updated_at').order('updated_at', { ascending: false }).limit(100)
   if (documentsError) throw new Error(`Unable to load governed documents: ${documentsError.message}`)
-
   const requestedDocumentId = requested.document?.trim() || null
-  const selected = requestedDocumentId
-    ? (documents ?? []).find((document) => document.id === requestedDocumentId) ?? null
-    : documents?.[0] ?? null
-
-  const chunks = selected
-    ? await supabase
-        .schema('governance')
-        .from('document_chunks')
-        .select('id,chunk_index,content,content_hash,character_count,metadata')
-        .eq('document_id', selected.id)
-        .order('chunk_index')
-        .limit(2000)
-    : { data: [], error: null }
+  const selected = requestedDocumentId ? (documents ?? []).find(document => document.id === requestedDocumentId) ?? null : documents?.[0] ?? null
+  const chunks = selected ? await supabase.schema('governance').from('document_chunks').select('id,chunk_index,content,content_hash,character_count,metadata').eq('document_id', selected.id).order('chunk_index').limit(2000) : { data: [], error: null }
   if (chunks.error) throw new Error(`Unable to load governed document chunks: ${chunks.error.message}`)
-
   const focusedChunkId = requested.chunk?.trim() || null
 
-  return (
-    <main className="min-h-screen p-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div>
-          <h1 className="text-3xl font-semibold">Governed Documents</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Persisted extracted content used by profiling evidence and semantic governance search.</p>
-        </div>
+  return <main className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <nav className="mb-6 flex items-center justify-between rounded-2xl border border-white/10 bg-[#0a1d33] px-5 py-3"><Link href="/home" className="flex items-center gap-3 font-bold text-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600"><Layers3 className="h-5 w-5"/></span>DataNexus AI</Link><div className="flex gap-2"><Link href="/catalog" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[.05]">Catalog</Link><Link href="/search" className="rounded-xl px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[.05]">Search</Link></div></nav>
+    <header className={`${surface} p-6`}><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-400/10 text-violet-300"><FileText className="h-5 w-5"/></span><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Governed evidence</p><h1 className="mt-1 text-3xl font-black text-white">Governed Documents</h1><p className="mt-1 text-sm text-slate-400">Persisted extracted content used by profiling evidence and semantic governance search.</p></div></div></header>
 
-        <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="rounded-xl border p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="font-semibold">Documents</h2>
-              <span className="text-xs text-muted-foreground">{documents?.length ?? 0}</span>
-            </div>
-            <div className="mt-3 max-h-[70vh] space-y-2 overflow-auto">
-              {(documents ?? []).map((document) => (
-                <Link
-                  key={document.id}
-                  href={`/documents?document=${encodeURIComponent(document.id)}`}
-                  className={`block rounded-lg border p-3 text-sm transition hover:bg-muted ${selected?.id === document.id ? 'bg-muted' : ''}`}
-                >
-                  <div className="font-medium">{document.file_name ?? document.source_uri}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{document.file_type.toUpperCase()} · {document.chunk_count} chunks</div>
-                </Link>
-              ))}
-              {!documents?.length ? <p className="text-sm text-muted-foreground">No governed document content has been persisted yet.</p> : null}
-            </div>
-          </aside>
-
-          <section className="rounded-xl border p-5">
-            {selected ? (
-              <>
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-semibold">{selected.file_name ?? 'Governed document'}</h2>
-                    <p className="mt-1 break-all text-xs text-muted-foreground">{selected.source_uri}</p>
-                  </div>
-                  <Link href={`/catalog?dataset=${encodeURIComponent(selected.dataset_id)}`} className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted">Open dataset</Link>
-                </div>
-
-                <dl className="mt-5 grid gap-3 rounded-lg bg-muted/40 p-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                  <div><dt className="text-xs text-muted-foreground">Type</dt><dd className="mt-1 font-medium">{selected.file_type.toUpperCase()}</dd></div>
-                  <div><dt className="text-xs text-muted-foreground">Extraction</dt><dd className="mt-1 font-medium">{value(selected.extraction_method)}</dd></div>
-                  <div><dt className="text-xs text-muted-foreground">Characters</dt><dd className="mt-1 font-medium">{selected.character_count}</dd></div>
-                  <div><dt className="text-xs text-muted-foreground">Chunks</dt><dd className="mt-1 font-medium">{selected.chunk_count}</dd></div>
-                </dl>
-
-                {selected.profile_run_id ? (
-                  <div className="mt-4">
-                    <Link href={`/profiling/explorer?runId=${encodeURIComponent(selected.profile_run_id)}`} className="text-sm font-medium underline">Open profiling run</Link>
-                  </div>
-                ) : null}
-
-                <div className="mt-6 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-semibold">Extracted Content</h3>
-                    <span className="text-xs text-muted-foreground">{chunks.data?.length ?? 0} loaded chunks</span>
-                  </div>
-                  {(chunks.data ?? []).map((chunk) => (
-                    <article
-                      id={`chunk-${chunk.id}`}
-                      key={chunk.id}
-                      className={`rounded-lg border p-4 ${focusedChunkId === chunk.id ? 'ring-2 ring-violet-400' : ''}`}
-                    >
-                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                        <span>Chunk {chunk.chunk_index}</span>
-                        <span>{chunk.character_count} characters</span>
-                      </div>
-                      <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6">{chunk.content}</p>
-                    </article>
-                  ))}
-                  {!chunks.data?.length ? <p className="text-sm text-muted-foreground">No readable extracted text was available for this document.</p> : null}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">Select a governed document to inspect its extracted content.</p>
-            )}
-          </section>
-        </div>
-      </div>
-    </main>
-  )
+    <div className="mt-5 grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]"><aside className={`${surface} p-4`}><div className="flex items-center justify-between"><h2 className="font-black text-white">Documents</h2><span className="text-xs text-slate-500">{documents?.length??0}</span></div><div className="mt-3 max-h-[70vh] space-y-2 overflow-auto">{(documents??[]).map(document=><Link key={document.id} href={`/documents?document=${encodeURIComponent(document.id)}`} className={`block rounded-xl border p-3 text-sm transition ${selected?.id===document.id?'border-cyan-400/30 bg-cyan-400/10':'border-white/10 bg-[#08182b] hover:border-cyan-400/30'}`}><div className="font-bold text-slate-200">{document.file_name??document.source_uri}</div><div className="mt-1 text-xs text-slate-500">{document.file_type.toUpperCase()} · {document.chunk_count} chunks</div></Link>)}{!documents?.length?<p className="text-sm text-slate-500">No governed document content has been persisted yet.</p>:null}</div></aside>
+      <section className={`${surface} p-5`}>{selected?<><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-black text-white">{selected.file_name??'Governed document'}</h2><p className="mt-1 break-all text-xs text-slate-500">{selected.source_uri}</p></div><div className="flex flex-wrap gap-2"><Link href={canonicalRoutes.governedDataset(selected.dataset_id)} className="rounded-xl border border-white/10 px-3 py-2 text-sm font-bold text-cyan-300 hover:bg-white/[.05]">Open dataset</Link>{selected.profile_run_id?<Link href={`/profiling/explorer?runId=${encodeURIComponent(selected.profile_run_id)}`} className="rounded-xl border border-white/10 px-3 py-2 text-sm font-bold text-violet-300 hover:bg-white/[.05]">Profiling evidence</Link>:null}</div></div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[['Type',selected.file_type.toUpperCase()],['Extraction',value(selected.extraction_method)],['Characters',selected.character_count],['Chunks',selected.chunk_count]].map(([label,item])=><Link key={String(label)} href={canonicalRoutes.governedDataset(selected.dataset_id)} className="rounded-xl border border-white/10 bg-[#08182b] p-4 hover:border-cyan-400/30"><p className="text-xs font-bold text-slate-500">{label}</p><p className="mt-1 font-black text-slate-200">{String(item)}</p></Link>)}</div>
+        <div className="mt-6 space-y-3"><div className="flex items-center justify-between"><h3 className="font-black text-white">Extracted content</h3><span className="text-xs text-slate-500">{chunks.data?.length??0} loaded chunks</span></div>{(chunks.data??[]).map(chunk=><article id={`chunk-${chunk.id}`} key={chunk.id} className={`rounded-xl border bg-[#08182b] p-4 ${focusedChunkId===chunk.id?'border-violet-400/50 ring-1 ring-violet-400/30':'border-white/10'}`}><div className="flex items-center justify-between text-xs text-slate-500"><span>Chunk {chunk.chunk_index}</span><span>{chunk.character_count} characters</span></div><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-300">{chunk.content}</p><div className="mt-3 flex justify-end"><Link href={`/documents?document=${encodeURIComponent(selected.id)}&chunk=${encodeURIComponent(chunk.id)}#chunk-${encodeURIComponent(chunk.id)}`} className="text-xs font-bold text-cyan-300">Focus chunk</Link></div></article>)}{!chunks.data?.length?<p className="text-sm text-slate-500">No readable extracted text was available for this document.</p>:null}</div></>:<p className="text-sm text-slate-500">Select a governed document to inspect its extracted content.</p>}</section>
+    </div>
+  </div></main>
 }
