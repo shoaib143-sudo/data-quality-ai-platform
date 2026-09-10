@@ -16,6 +16,8 @@ const agentStatusReplayPath = 'scripts/prepare-clean-agent-status-replay.mjs'
 const agentStatusReplay = read(agentStatusReplayPath)
 const catalogReconcileReplayPath = 'scripts/prepare-clean-catalog-reconcile-replay.mjs'
 const catalogReconcileReplay = read(catalogReconcileReplayPath)
+const syntheticRollbackReplayPath = 'scripts/prepare-clean-synthetic-suite-rollback-replay.mjs'
+const syntheticRollbackReplay = read(syntheticRollbackReplayPath)
 const operationalMarker = "writeRecoveredMigration(\n  '20260904210139'"
 const operationalStart = governanceIntelligenceReplay.indexOf(operationalMarker)
 const coreReplay = operationalStart >= 0 ? governanceIntelligenceReplay.slice(0, operationalStart) : governanceIntelligenceReplay
@@ -36,6 +38,7 @@ const checks = [
   ['V6 performs clean Supabase reconstruction', v6.includes('supabase@2.117.0') && v6.includes('db reset --local') && v6.includes('supabase/migrations')],
   ['V6 restores missing production agent status migration in disposable replay', exists(agentStatusReplayPath) && v6.includes('prepare-clean-agent-status-replay.mjs') && agentStatusReplay.includes("20260902015029") && agentStatusReplay.includes("alter type agent.run_status add value if not exists 'SUCCEEDED'") && agentStatusReplay.includes("alter type agent.step_status add value if not exists 'SUCCEEDED'")],
   ['V6 restores missing production catalog reconcile RPC in disposable replay', exists(catalogReconcileReplayPath) && v6.includes('prepare-clean-catalog-reconcile-replay.mjs') && catalogReconcileReplay.includes('20260905163658') && catalogReconcileReplay.includes('catalog.reconcile_discovered_assets') && catalogReconcileReplay.includes("p_assets must be a JSON array")],
+  ['V6 normalizes synthetic rollback patch only in disposable replay', exists(syntheticRollbackReplayPath) && v6.includes('prepare-clean-synthetic-suite-rollback-replay.mjs') && syntheticRollbackReplay.includes('20260911192000_make_synthetic_suite_rollback_safe.sql') && syntheticRollbackReplay.includes('Expected exactly one compact synthetic rollback needle of each type') && syntheticRollbackReplay.includes('production migration history and released migrations remain unchanged')],
   ['V6 reconstructs missing governance intelligence prerequisites', exists(governanceIntelligenceReplayPath) && v6.includes('prepare-clean-governance-intelligence-replay.mjs') && ['governance.critical_data_elements','governance.cde_mappings','governance.dataset_certifications','governance.knowledge_requirements','governance.regulatory_applicability'].every((token) => governanceIntelligenceReplay.includes(token))],
   ['recovered core replay leaves canonical policy/RPC ownership to September 5 migration', !coreReplay.includes('create policy') && !coreReplay.includes('grant select') && !coreReplay.includes('search_governance_knowledge_lexical')],
   ['recovered operational replay leaves canonical policy/grant ownership to September 5 migration', operationalStart >= 0 && !operationalReplay.includes('create policy') && !operationalReplay.includes('grant select') && !operationalReplay.includes('enable row level security')],
