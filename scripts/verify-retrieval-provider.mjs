@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { execFileSync } from 'node:child_process'
 
 const provider = fs.readFileSync('lib/ai/retrieval-provider.ts', 'utf8')
 const reranker = fs.readFileSync('lib/ai/reranker-provider.ts', 'utf8')
@@ -21,11 +22,17 @@ requireText(provider, 'projectionId: match.id ?? null', 'projection identity map
 requireText(provider, 'lexical: false', 'no false lexical support claim')
 requireText(provider, 'semantic: true', 'semantic projection support')
 requireText(provider, 'graph: false', 'no false graph support claim')
-requireText(provider, 'temporal: false', 'no false temporal support claim')
+requireText(provider, 'temporal: false', 'no false temporal weighting claim')
 requireText(provider, 'authority: false', 'no false authority weighting claim')
 requireText(provider, 'governance.semantic_embeddings', 'semantic projection provenance')
 requireText(provider, 'projection: true', 'retrieval projection truth boundary')
 requireText(provider, 'does not support requested modes', 'fail-closed unsupported channel behavior')
+requireText(provider, 'withNormalizedRetrievalMetadata(match.metadata)', 'canonical retrieval metadata normalization')
+requireText(provider, "authorityClass: 'UNKNOWN'", 'unknown authority remains explicit')
+requireText(provider, "temporalStatus: 'MISSING'", 'missing temporal evidence remains explicit')
+requireText(provider, "temporalStatus: 'INVALID'", 'invalid temporal evidence remains explicit')
+requireText(provider, "temporalStatus: 'FUTURE'", 'future temporal evidence remains explicit')
+requireText(provider, 'retrieval_normalization:', 'normalized metadata projection namespace')
 
 requireText(reranker, 'export interface RerankerProvider', 'stable reranker provider interface')
 requireText(reranker, 'DeterministicRelevanceReranker', 'deterministic initial reranker')
@@ -80,4 +87,5 @@ for (const forbidden of ['metadata.authority', "metadata['authority']", 'authori
   }
 }
 
-console.log('ADR-006 RetrievalProvider, dedicated RerankerProvider, and search integration contracts verified.')
+execFileSync(process.execPath, ['--experimental-strip-types', 'scripts/test-retrieval-metadata-normalization.mjs'], { stdio: 'inherit' })
+console.log('ADR-006 RetrievalProvider, normalized metadata projection, dedicated RerankerProvider, and search integration contracts verified.')
