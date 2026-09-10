@@ -104,7 +104,7 @@ await assert.rejects(
 
 const noProjects = await provider.retrieve({ query: 'customer policy', projectIds: [], modes: ['semantic'] })
 assert.deepEqual(noProjects.matches, [])
-assert.equal(embedCalls, 5, 'empty project retrieval must not embed another query')
+assert.equal(embedCalls, 4, 'empty project retrieval must not embed another query')
 
 const invalidSpaceProvider = new SemanticProjectionRetrievalProvider({
   embedQuery: async () => ({ embedding: [1, 0, 0], embeddingSpaceId: '' }),
