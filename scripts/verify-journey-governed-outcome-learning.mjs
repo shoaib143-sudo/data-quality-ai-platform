@@ -28,7 +28,7 @@ const checks = [
   ['future actions still pass governed policy decision provider', autonomy.includes('createGovernancePolicyDecisionProvider().decide')],
   ['memory cannot authorize future actions', learning.includes('memory_never_authorizes_actions: true') && learning.includes('current_authorization_required_for_every_action: true') && learning.includes('current_policy_decision_required_for_every_action: true')],
   ['learning influence preserves case provenance', learning.includes('influenceEvidence') && learning.includes('evidence_record_id') && learning.includes('evidence_verified')],
-  ['canonical episodic provider independently requires verified decision and outcome', memory.includes(".eq('decision_status', 'VERIFIED')") && memory.includes(".eq('outcome_status', 'VERIFIED')")),
+  ['canonical episodic provider independently requires verified decision and outcome', memory.includes(".eq('decision_status', 'VERIFIED')") && memory.includes(".eq('outcome_status', 'VERIFIED')")],
 ]
 
 const failures = checks.filter(([, passed]) => !passed)
