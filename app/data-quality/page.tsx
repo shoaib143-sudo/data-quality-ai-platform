@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, CheckCircle2, CircleAlert, Gauge, Layers3, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Gauge, Layers3, ShieldCheck, Sparkles } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { QualityRunButton } from './quality-run-button'
@@ -22,52 +22,49 @@ type Finding = { id: string; profile_run_id: string; finding_type: string; sever
 type QualityRule = { id: string; dataset_id: string; dataset_version_id: string | null; column_name: string | null; rule_key: string; name: string; dimension: string; severity: string; metric_key: string; operator: string; threshold: number | null; enabled: boolean }
 type QualityRuleRun = { id: string; rule_definition_id: string; profile_run_id: string | null; status: string; passed: boolean | null; observed_value: number | null; threshold: number | null; completed_at: string | null }
 
+const surface = 'rounded-[22px] border border-white/10 bg-[#0a1d33] shadow-[10px_10px_28px_rgba(0,0,0,.24),-7px_-7px_22px_rgba(30,74,114,.08)]'
+const inset = 'rounded-2xl border border-white/[0.07] bg-[#08182b]'
+const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#061426]'
+const interactive = `${focus} transition hover:-translate-y-0.5 hover:border-cyan-400/30 hover:bg-white/[0.04] active:translate-y-0`
+
 function asRecord(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
-function formatScore(value: number | null | undefined) { return typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : 'Not available' }
+function formatScore(value: number | null | undefined) { return typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : 'N/A' }
 function scoreTone(value: number | null | undefined) {
   if (typeof value !== 'number') return 'text-slate-400'
-  if (value >= 0.9) return 'text-emerald-600'
-  if (value >= 0.75) return 'text-blue-600'
-  if (value >= 0.6) return 'text-amber-600'
-  return 'text-red-600'
+  if (value >= 0.9) return 'text-emerald-300'
+  if (value >= 0.75) return 'text-cyan-300'
+  if (value >= 0.6) return 'text-amber-300'
+  return 'text-rose-300'
 }
 function severityTone(value: string) {
   const severity = value.toUpperCase()
-  if (severity === 'CRITICAL' || severity === 'HIGH') return 'border-red-200 bg-red-50 text-red-700'
-  if (severity === 'MEDIUM') return 'border-amber-200 bg-amber-50 text-amber-700'
-  return 'border-slate-200 bg-slate-50 text-slate-600'
-}
-function impactForFinding(finding: Finding) {
-  const text = `${finding.finding_type} ${finding.title} ${finding.description}`.toLowerCase()
-  if (text.includes('null') || text.includes('missing')) return 'Incomplete information can lead to missed customers, reporting gaps and manual rework.'
-  if (text.includes('duplicate')) return 'Duplicate records can inflate volumes, create duplicate actions and weaken the customer view.'
-  if (text.includes('valid') || text.includes('format')) return 'Invalid values can disrupt reporting, integrations and business rules.'
-  if (text.includes('outlier') || text.includes('range')) return 'Unexpected values can distort KPIs, forecasts and operational decisions.'
-  return 'Recurring data issues reduce confidence in decisions and increase remediation effort.'
+  if (severity === 'CRITICAL' || severity === 'HIGH') return 'bg-rose-400/10 text-rose-300'
+  if (severity === 'MEDIUM') return 'bg-amber-400/10 text-amber-300'
+  return 'bg-slate-400/10 text-slate-300'
 }
 
 export default async function DataQualityPage() {
   await requireUser()
   const supabase = await createClient()
 
-  const { data: profileRuns, error: runsError } = await supabase.schema('profiling').from('profile_runs').select('id, dataset_version_id, status, row_count, column_count, summary, started_at, completed_at, error_code').order('started_at', { ascending: false }).limit(20)
+  const { data: profileRuns, error: runsError } = await supabase.schema('profiling').from('profile_runs').select('id,dataset_version_id,status,row_count,column_count,summary,started_at,completed_at,error_code').order('started_at', { ascending: false }).limit(30)
   if (runsError) throw new Error(`Unable to load profiling runs: ${runsError.message}`)
 
   const runs = (profileRuns ?? []) as ProfileRun[]
   const runIds = runs.map(run => run.id)
-  const versionIds = runs.map(run => run.dataset_version_id)
+  const versionIds = [...new Set(runs.map(run => run.dataset_version_id))]
   const [scoresResult, findingsResult, versionsResult] = await Promise.all([
-    runIds.length ? supabase.schema('profiling').from('data_quality_scores').select('profile_run_id, completeness_score, uniqueness_score, validity_score, accuracy_score, overall_score').in('profile_run_id', runIds) : Promise.resolve({ data: [], error: null }),
-    runIds.length ? supabase.schema('profiling').from('profile_findings').select('id, profile_run_id, finding_type, severity, title, description, confidence, recommendation').in('profile_run_id', runIds).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
-    versionIds.length ? supabase.schema('catalog').from('dataset_versions').select('id, dataset_id, version_number').in('id', versionIds) : Promise.resolve({ data: [], error: null }),
+    runIds.length ? supabase.schema('profiling').from('data_quality_scores').select('profile_run_id,completeness_score,uniqueness_score,validity_score,accuracy_score,overall_score').in('profile_run_id', runIds) : Promise.resolve({ data: [], error: null }),
+    runIds.length ? supabase.schema('profiling').from('profile_findings').select('id,profile_run_id,finding_type,severity,title,description,confidence,recommendation').in('profile_run_id', runIds).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
+    versionIds.length ? supabase.schema('catalog').from('dataset_versions').select('id,dataset_id,version_number').in('id', versionIds) : Promise.resolve({ data: [], error: null }),
   ])
   if (scoresResult.error) throw new Error(`Unable to load quality scores: ${scoresResult.error.message}`)
   if (findingsResult.error) throw new Error(`Unable to load quality findings: ${findingsResult.error.message}`)
   if (versionsResult.error) throw new Error(`Unable to load dataset versions: ${versionsResult.error.message}`)
 
   const versions = (versionsResult.data ?? []) as DatasetVersion[]
-  const datasetIds = versions.map(version => version.dataset_id)
-  const { data: datasetRows, error: datasetsError } = datasetIds.length ? await supabase.schema('catalog').from('datasets').select('id, project_id, name').in('id', datasetIds) : { data: [], error: null }
+  const datasetIds = [...new Set(versions.map(version => version.dataset_id))]
+  const { data: datasetRows, error: datasetsError } = datasetIds.length ? await supabase.schema('catalog').from('datasets').select('id,project_id,name').in('id', datasetIds) : { data: [], error: null }
   if (datasetsError) throw new Error(`Unable to load datasets: ${datasetsError.message}`)
 
   const { data: qualityRuleRows, error: qualityRulesError } = datasetIds.length
@@ -80,114 +77,71 @@ export default async function DataQualityPage() {
     ? await supabase.schema('profiling').from('quality_rule_runs').select('id,rule_definition_id,profile_run_id,status,passed,observed_value,threshold,completed_at').in('rule_definition_id', qualityRuleIds).order('started_at', { ascending: false }).limit(500)
     : { data: [], error: null }
   if (qualityRunsError) throw new Error(`Unable to load quality rule executions: ${qualityRunsError.message}`)
-  const qualityRuleRuns = (qualityRunRows ?? []) as QualityRuleRun[]
 
   const scores = (scoresResult.data ?? []) as Score[]
   const findings = (findingsResult.data ?? []) as Finding[]
+  const qualityRuleRuns = (qualityRunRows ?? []) as QualityRuleRun[]
   const versionsById = new Map(versions.map(version => [version.id, version]))
   const datasetsById = new Map((datasetRows ?? []).map(dataset => [dataset.id, dataset as Dataset]))
   const scoresByRunId = new Map(scores.map(score => [score.profile_run_id, score]))
   const findingsByRunId = new Map<string, Finding[]>()
   for (const finding of findings) findingsByRunId.set(finding.profile_run_id, [...(findingsByRunId.get(finding.profile_run_id) ?? []), finding])
 
-  const completedRuns = runs.filter(run => run.status === 'COMPLETED')
+  const completedRuns = runs.filter(run => String(run.status).toUpperCase() === 'COMPLETED')
   const scoredRuns = completedRuns.filter(run => typeof scoresByRunId.get(run.id)?.overall_score === 'number')
-  const averageScore = scoredRuns.length ? scoredRuns.reduce((sum, run) => sum + (scoresByRunId.get(run.id)?.overall_score ?? 0), 0) / scoredRuns.length : null
-  const criticalCount = findings.filter(finding => ['CRITICAL', 'HIGH'].includes(String(finding.severity).toUpperCase())).length
-  const mediumCount = findings.filter(finding => String(finding.severity).toUpperCase() === 'MEDIUM').length
+  const averageScore = scoredRuns.length ? scoredRuns.reduce((sum, run) => sum + Number(scoresByRunId.get(run.id)?.overall_score ?? 0), 0) / scoredRuns.length : null
+  const criticalFindings = findings.filter(finding => ['CRITICAL', 'HIGH'].includes(String(finding.severity).toUpperCase()))
   const latestQualityRunByRule = new Map<string, QualityRuleRun>()
   for (const result of qualityRuleRuns) if (!latestQualityRunByRule.has(result.rule_definition_id)) latestQualityRunByRule.set(result.rule_definition_id, result)
   const enabledQualityRules = qualityRules.filter(rule => rule.enabled)
-  const failedQualityRules = enabledQualityRules.filter(rule => latestQualityRunByRule.get(rule.id)?.status === 'FAILED')
+  const failedQualityRules = enabledQualityRules.filter(rule => { const latest = latestQualityRunByRule.get(rule.id); return latest?.passed === false || String(latest?.status ?? '').toUpperCase() === 'FAILED' })
   const latestCompletedRunByVersion = new Map<string, ProfileRun>()
   for (const run of completedRuns) if (!latestCompletedRunByVersion.has(run.dataset_version_id)) latestCompletedRunByVersion.set(run.dataset_version_id, run)
 
-  return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_4%_0%,_rgba(219,234,254,0.82),_transparent_30%),radial-gradient(circle_at_96%_3%,_rgba(243,232,255,0.78),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_48%,_#f8fafc_100%)] text-slate-950">
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-        <nav className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/80 bg-white/90 px-5 py-3 shadow-sm backdrop-blur">
-          <Link href="/dashboard" className="flex items-center gap-3 text-sm font-bold text-slate-800 hover:text-blue-700"><span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5" /></span>Data Governance PowerHouse</Link>
-          <div className="flex flex-wrap gap-2"><Link href="/datasets" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-700">Datasets</Link><Link href="/profiling" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-700">Profiling</Link><Link href="/observability" className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Observability</Link></div>
-        </nav>
+  const recentDatasetRuns = completedRuns.slice(0, 8).map(run => {
+    const version = versionsById.get(run.dataset_version_id)
+    const dataset = version ? datasetsById.get(version.dataset_id) : undefined
+    return { run, version, dataset, score: scoresByRunId.get(run.id) }
+  }).filter(item => item.version && item.dataset)
 
-        <section className="relative overflow-hidden rounded-3xl border border-blue-100 bg-white/95 p-7 shadow-[0_24px_80px_rgba(37,99,235,0.10)] sm:p-9">
-          <div className="absolute -right-24 -top-28 h-72 w-72 rounded-full bg-blue-100/70 blur-3xl" /><div className="absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-purple-100/60 blur-3xl" />
-          <div className="relative grid gap-7 lg:grid-cols-[1fr_260px] lg:items-center">
-            <div><div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700"><Sparkles className="h-3.5 w-3.5" /> Business quality intelligence</div><h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Can the organisation trust its data for decisions?</h1><p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">This workspace turns profiling evidence into a practical view of data quality, business exposure and the actions needed to restore confidence.</p></div>
-            <div className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-6 text-center"><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-white shadow-sm"><Gauge className={`h-8 w-8 ${scoreTone(averageScore)}`} /></div><p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500">Average quality</p><p className={`mt-1 text-4xl font-black ${scoreTone(averageScore)}`}>{formatScore(averageScore)}</p><p className="mt-1 text-xs text-slate-500">Across scored completed runs</p></div>
-          </div>
-        </section>
+  return <main className="min-h-screen bg-[#061426] text-slate-100">
+    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+      <nav className={`${surface} mb-6 flex flex-wrap items-center justify-between gap-4 px-5 py-3`}>
+        <Link href="/home" className={`flex items-center gap-3 text-sm font-bold text-white ${focus}`}><span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600"><Layers3 className="h-5 w-5" /></span>DataNexus AI</Link>
+        <div className="flex flex-wrap gap-2"><Link href="/profiling/explorer" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Profiling Explorer</Link><Link href="/data-quality/rules" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Quality Rules</Link><Link href="/observability" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Observability</Link></div>
+      </nav>
 
-        <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Evidence</p><p className="mt-2 text-3xl font-black">{completedRuns.length}</p><p className="text-sm text-slate-500">Completed profiling runs</p></div>
-          <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wider text-red-500">Priority exposure</p><p className="mt-2 text-3xl font-black text-red-600">{criticalCount}</p><p className="text-sm text-slate-500">High or critical findings</p></div>
-          <div className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wider text-amber-600">Attention</p><p className="mt-2 text-3xl font-black text-amber-600">{mediumCount}</p><p className="text-sm text-slate-500">Medium findings</p></div>
-          <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Decision confidence</p><p className="mt-2 text-3xl font-black text-emerald-600">{averageScore !== null && averageScore >= 0.8 ? 'Strong' : averageScore !== null ? 'Review' : 'Building'}</p><p className="text-sm text-slate-500">Based on persisted evidence</p></div>
-        </section>
+      <header className={`${surface} p-6 sm:p-7`}><div className="flex flex-wrap items-start justify-between gap-5"><div><div className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-300"><Sparkles className="h-3.5 w-3.5" />Evidence-backed data quality</div><h1 className="mt-4 text-3xl font-black tracking-tight text-white">Data Quality</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Understand current quality, open the evidence behind a score, investigate findings, and run governed controls. Business impact is shown only when persisted governance evidence provides it.</p></div><Link href="/profiling/explorer" className={`rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-500 ${focus}`}>Open profiling evidence <ArrowRight className="ml-1 inline h-4 w-4" /></Link></div></header>
 
-        <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-blue-600" /><h2 className="text-xl font-bold">What the findings mean for the business</h2></div><p className="mt-1 text-sm text-slate-500">Use these signals to prioritise remediation by business consequence, not just technical severity.</p></div><Link href="/dashboard" className="inline-flex items-center gap-1 text-sm font-bold text-blue-600">Executive view <ArrowRight className="h-4 w-4" /></Link></div>
-          <div className="mt-5 grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-5"><div className="flex items-center gap-2 font-bold text-slate-800"><TrendingDown className="h-5 w-5 text-orange-600" /> Financial decisions</div><p className="mt-2 text-sm leading-6 text-slate-600">Poor completeness or validity can distort reporting, forecasting, pricing and revenue operations.</p></div>
-            <div className="rounded-2xl border border-pink-100 bg-pink-50/70 p-5"><div className="flex items-center gap-2 font-bold text-slate-800"><CircleAlert className="h-5 w-5 text-pink-600" /> Customer outcomes</div><p className="mt-2 text-sm leading-6 text-slate-600">Duplicates and missing information can create service friction, inaccurate customer views and repeat work.</p></div>
-            <div className="rounded-2xl border border-purple-100 bg-purple-50/70 p-5"><div className="flex items-center gap-2 font-bold text-slate-800"><TrendingUp className="h-5 w-5 text-purple-600" /> Operational confidence</div><p className="mt-2 text-sm leading-6 text-slate-600">Unreliable data can slow processes, weaken controls and increase the cost of manual reconciliation.</p></div>
-          </div>
-        </section>
+      <section className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Link href="/profiling/explorer" className={`${surface} ${interactive} p-5`}><Gauge className={`h-5 w-5 ${scoreTone(averageScore)}`} /><p className="mt-3 text-3xl font-black text-white">{formatScore(averageScore)}</p><p className="mt-1 text-sm font-bold text-slate-200">Average quality</p><p className="mt-1 text-xs text-slate-500">Across scored completed runs</p></Link>
+        <Link href="/issues" className={`${surface} ${interactive} p-5`}><AlertTriangle className="h-5 w-5 text-rose-300"/><p className="mt-3 text-3xl font-black text-white">{criticalFindings.length}</p><p className="mt-1 text-sm font-bold text-slate-200">High-priority findings</p><p className="mt-1 text-xs text-slate-500">Critical and high persisted findings</p></Link>
+        <Link href="/data-quality/rules" className={`${surface} ${interactive} p-5`}><ShieldCheck className="h-5 w-5 text-cyan-300"/><p className="mt-3 text-3xl font-black text-white">{enabledQualityRules.length}</p><p className="mt-1 text-sm font-bold text-slate-200">Enabled controls</p><p className="mt-1 text-xs text-slate-500">Governed deterministic quality rules</p></Link>
+        <Link href="/monitoring" className={`${surface} ${interactive} p-5`}><CheckCircle2 className="h-5 w-5 text-amber-300"/><p className="mt-3 text-3xl font-black text-white">{failedQualityRules.length}</p><p className="mt-1 text-sm font-bold text-slate-200">Current control failures</p><p className="mt-1 text-xs text-slate-500">Latest failed or non-passing executions</p></Link>
+      </section>
 
-        <section className="mt-6 rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div><div className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" /><h2 className="text-xl font-bold">Automated quality controls</h2></div><p className="mt-1 text-sm text-slate-500">Suggested controls are generated from persisted profiling evidence, executed deterministically, and recorded as auditable jobs.</p></div>
-            <Link href="/monitoring" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:border-blue-200 hover:bg-blue-50">Open Job Monitor <ArrowRight className="h-4 w-4" /></Link>
-          </div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl bg-emerald-50 p-4"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Enabled controls</p><p className="mt-1 text-3xl font-black text-emerald-700">{enabledQualityRules.length}</p></div>
-            <div className="rounded-2xl bg-red-50 p-4"><p className="text-xs font-bold uppercase tracking-wider text-red-700">Current failures</p><p className="mt-1 text-3xl font-black text-red-700">{failedQualityRules.length}</p></div>
-            <div className="rounded-2xl bg-blue-50 p-4"><p className="text-xs font-bold uppercase tracking-wider text-blue-700">Executions persisted</p><p className="mt-1 text-3xl font-black text-blue-700">{qualityRuleRuns.length}</p></div>
-          </div>
-          <div className="mt-5 grid gap-3">
-            {versions.slice(0, 10).map(version => {
-              const dataset = datasetsById.get(version.dataset_id)
-              const latestProfile = latestCompletedRunByVersion.get(version.id)
-              const datasetRules = enabledQualityRules.filter(rule => rule.dataset_id === version.dataset_id)
-              if (!dataset || !latestProfile) return null
-              return <div key={version.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div><div className="font-bold text-slate-800">{dataset.name} <span className="text-xs font-semibold text-slate-400">v{version.version_number}</span></div><p className="mt-1 text-xs text-slate-500">{datasetRules.length} enabled controls · latest evidence {latestProfile.id.slice(0,8)}</p></div>
-                <QualityRunButton datasetVersionId={version.id} profileRunId={latestProfile.id} />
-              </div>
-            })}
-          </div>
-          {enabledQualityRules.length > 0 && <div className="mt-6 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b text-xs uppercase tracking-wider text-slate-400"><th className="px-3 py-2">Rule</th><th className="px-3 py-2">Column</th><th className="px-3 py-2">Dimension</th><th className="px-3 py-2">Control</th><th className="px-3 py-2">Latest</th></tr></thead><tbody>{enabledQualityRules.slice(0, 30).map(rule => { const latest = latestQualityRunByRule.get(rule.id); return <tr key={rule.id} className="border-b border-slate-100"><td className="px-3 py-3 font-semibold">{rule.name}</td><td className="px-3 py-3 text-slate-500">{rule.column_name ?? 'Dataset'}</td><td className="px-3 py-3 text-slate-500">{rule.dimension}</td><td className="px-3 py-3 font-mono text-xs">{rule.metric_key} {rule.operator} {rule.threshold ?? 'N/A'}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${latest?.status === 'PASSED' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : latest?.status === 'FAILED' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-500'}`}>{latest?.status ?? 'NOT RUN'}</span></td></tr> })}</tbody></table></div>}
-        </section>
+      <section className="mt-5 grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
+        <article className={`${surface} p-5`}><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Dataset evidence</p><h2 className="mt-1 text-xl font-black text-white">Latest scored datasets</h2></div><Link href="/profiling/explorer" className={`text-xs font-bold text-blue-300 ${focus}`}>View all</Link></div><div className="mt-4 space-y-2">{recentDatasetRuns.map(({run,version,dataset,score}) => <Link key={run.id} href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className={`${inset} ${interactive} flex items-center gap-3 p-4`}><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-400/10 text-blue-300"><Gauge className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-slate-200">{dataset?.name}</span><span className="mt-0.5 block text-xs text-slate-500">Version {version?.version_number} · {run.row_count ?? 'N/A'} rows · {run.column_count ?? 'N/A'} columns</span></span><span className={`text-lg font-black ${scoreTone(score?.overall_score)}`}>{formatScore(score?.overall_score)}</span><ArrowRight className="h-4 w-4 text-slate-500" /></Link>)}{recentDatasetRuns.length===0?<p className={`${inset} p-5 text-sm text-slate-500`}>No completed profiling evidence is available yet.</p>:null}</div></article>
 
-        {runs.length === 0 ? <section className="mt-6 rounded-3xl border border-blue-100 bg-white p-10 text-center shadow-sm"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Gauge className="h-7 w-7" /></div><h2 className="mt-4 text-xl font-bold">No quality evidence yet</h2><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Register a dataset, make it ready and run profiling to establish the evidence base for data quality decisions.</p><Link href="/datasets" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">Prepare a dataset <ArrowRight className="h-4 w-4" /></Link></section> : (
-          <section className="mt-6 space-y-5">
-            {runs.map(run => {
-              const version = versionsById.get(run.dataset_version_id)
-              const dataset = version ? datasetsById.get(version.dataset_id) : undefined
-              const score = scoresByRunId.get(run.id)
-              const runFindings = findingsByRunId.get(run.id) ?? []
-              const investigation = asRecord(asRecord(run.summary).investigation)
-              const recommendations = Array.isArray(investigation.recommendations) ? investigation.recommendations : []
-              const rootCauses = Array.isArray(investigation.probable_root_causes) ? investigation.probable_root_causes : []
-              const businessImpact = typeof investigation.business_impact === 'string' ? investigation.business_impact : null
-              return <article key={run.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-100 bg-gradient-to-r from-white via-blue-50/40 to-purple-50/30 p-6 sm:p-7"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold">{dataset?.name ?? 'Unknown dataset'}</h2>{version && <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">v{version.version_number}</span>}<span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600">{run.status}</span></div><p className="mt-2 text-xs text-slate-400">Profile run {run.id}</p></div><div className="text-right"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Overall quality</p><p className={`text-3xl font-black ${scoreTone(score?.overall_score)}`}>{formatScore(score?.overall_score)}</p></div></div>
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[['Completeness', score?.completeness_score], ['Validity', score?.validity_score], ['Uniqueness', score?.uniqueness_score], ['Accuracy', score?.accuracy_score], ['Rows / columns', `${run.row_count ?? 'N/A'} / ${run.column_count ?? 'N/A'}`]].map(([name, value]) => <div key={String(name)} className="rounded-2xl border border-white bg-white/80 p-4 shadow-sm"><p className="text-xs font-semibold text-slate-400">{name}</p><p className="mt-1 text-lg font-black">{typeof value === 'number' ? formatScore(value) : String(value)}</p></div>)}</div>
-                </div>
-                <div className="p-6 sm:p-7">
-                  {businessImpact && <div className="rounded-2xl border border-purple-100 bg-purple-50/60 p-5"><p className="text-xs font-bold uppercase tracking-wider text-purple-700">Business impact</p><p className="mt-2 text-sm leading-6 text-slate-700">{businessImpact}</p></div>}
-                  {runFindings.length > 0 && <div className="mt-6"><div className="flex items-center justify-between gap-3"><h3 className="text-lg font-bold">Findings requiring attention</h3><span className="text-xs font-semibold text-slate-400">{runFindings.length} total</span></div><div className="mt-4 grid gap-3 md:grid-cols-2">{runFindings.map(finding => <div key={finding.id} className="rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between gap-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${severityTone(finding.severity)}`}>{finding.severity}</span><span className="text-xs text-slate-400">{finding.finding_type}</span></div><h4 className="mt-3 font-bold">{finding.title}</h4><p className="mt-2 text-sm leading-6 text-slate-600">{finding.description}</p><div className="mt-3 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-800">Business consequence:</strong> {impactForFinding(finding)}</div>{typeof finding.confidence === 'number' && <p className="mt-3 text-xs font-semibold text-slate-400">Evidence confidence {formatScore(finding.confidence)}</p>}</div>)}</div></div>}
-                  {investigation && <div className="mt-6 grid gap-4 lg:grid-cols-2"><div className="rounded-2xl border border-slate-200 p-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Issue interpretation</p><p className="mt-2 text-sm leading-6 text-slate-700">{String(investigation.business_issue ?? investigation.technical_summary ?? 'Evidence interpretation is not available.')}</p></div><div className="rounded-2xl border border-slate-200 p-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Risk</p><p className="mt-2 text-sm leading-6 text-slate-700">{String(investigation.risk ?? 'Not classified')}</p><p className="mt-3 text-xs text-slate-400">Confidence {formatScore(typeof investigation.confidence === 'number' ? investigation.confidence : null)}</p></div></div>}
-                  {(rootCauses.length > 0 || recommendations.length > 0) && <div className="mt-6 grid gap-4 lg:grid-cols-2"><div className="rounded-2xl border border-slate-200 p-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Probable root causes</p><ul className="mt-3 space-y-2 text-sm text-slate-600">{rootCauses.slice(0, 5).map((cause, index) => <li key={index} className="rounded-xl bg-slate-50 p-3">{typeof cause === 'string' ? cause : JSON.stringify(cause)}</li>)}</ul></div><div className="rounded-2xl border border-slate-200 p-5"><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Recommended next actions</p><ul className="mt-3 space-y-2 text-sm text-slate-600">{recommendations.slice(0, 5).map((recommendation, index) => <li key={index} className="rounded-xl bg-blue-50/60 p-3">{typeof recommendation === 'string' ? recommendation : JSON.stringify(recommendation)}</li>)}</ul></div></div>}
-                  {run.error_code && <div className="mt-6 flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertTriangle className="h-5 w-5" />{run.error_code}</div>}
-                </div>
-              </article>
-            })}
-          </section>
-        )}
+        <article className={`${surface} p-5`}><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.15em] text-rose-300">Needs investigation</p><h2 className="mt-1 text-xl font-black text-white">Latest findings</h2></div><Link href="/issues" className={`text-xs font-bold text-blue-300 ${focus}`}>Open issues</Link></div><div className="mt-4 space-y-2">{findings.slice(0,8).map(finding => <Link key={finding.id} href={`/profiling/explorer?runId=${encodeURIComponent(finding.profile_run_id)}&findingId=${encodeURIComponent(finding.id)}`} className={`${inset} ${interactive} flex items-start gap-3 p-4`}><span className={`rounded-lg px-2 py-1 text-[10px] font-black ${severityTone(finding.severity)}`}>{finding.severity}</span><span className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-200">{finding.title}</span><span className="mt-1 line-clamp-2 block text-xs leading-5 text-slate-500">{finding.description}</span></span><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" /></Link>)}{findings.length===0?<p className={`${inset} p-5 text-sm text-slate-500`}>No persisted findings are available.</p>:null}</div></article>
+      </section>
 
-        <div className="flex items-center gap-2 pb-4 text-xs text-slate-400"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Quality observations are based on persisted profiling evidence. Production changes remain approval gated.</div>
-      </div>
-    </main>
-  )
+      <section className={`${surface} mt-5 p-5`}><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.15em] text-emerald-300">Governed execution</p><h2 className="mt-1 text-xl font-black text-white">Automated quality controls</h2><p className="mt-1 text-sm text-slate-500">Run approved controls against persisted profiling evidence and retain the result for audit.</p></div><Link href="/data-quality/rules" className={`rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold text-slate-200 hover:bg-white/[0.05] ${focus}`}>Manage rules <ArrowRight className="ml-1 inline h-4 w-4" /></Link></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3"><Link href="/data-quality/rules" className={`${inset} ${interactive} p-4`}><p className="text-xs font-bold text-slate-500">Enabled controls</p><p className="mt-1 text-2xl font-black text-emerald-300">{enabledQualityRules.length}</p></Link><Link href="/monitoring" className={`${inset} ${interactive} p-4`}><p className="text-xs font-bold text-slate-500">Current failures</p><p className="mt-1 text-2xl font-black text-rose-300">{failedQualityRules.length}</p></Link><Link href="/monitoring" className={`${inset} ${interactive} p-4`}><p className="text-xs font-bold text-slate-500">Persisted executions</p><p className="mt-1 text-2xl font-black text-cyan-300">{qualityRuleRuns.length}</p></Link></div>
+        <div className="mt-4 grid gap-2">{versions.slice(0,10).map(version => { const dataset=datasetsById.get(version.dataset_id); const latestProfile=latestCompletedRunByVersion.get(version.id); const datasetRules=enabledQualityRules.filter(rule=>rule.dataset_id===version.dataset_id); if(!dataset||!latestProfile)return null; return <div key={version.id} className={`${inset} flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between`}><Link href={`/profiling/explorer?runId=${encodeURIComponent(latestProfile.id)}`} className={`min-w-0 flex-1 rounded-xl ${focus}`}><span className="block truncate text-sm font-bold text-slate-200">{dataset.name} <span className="text-xs text-slate-500">v{version.version_number}</span></span><span className="mt-1 block text-xs text-slate-500">{datasetRules.length} enabled controls · open latest evidence</span></Link><QualityRunButton datasetVersionId={version.id} profileRunId={latestProfile.id}/></div>})}</div>
+      </section>
+
+      <section className="mt-5 space-y-4">{runs.slice(0,8).map(run => {
+        const version=versionsById.get(run.dataset_version_id); const dataset=version?datasetsById.get(version.dataset_id):undefined; const score=scoresByRunId.get(run.id); const runFindings=findingsByRunId.get(run.id)??[]; const investigation=asRecord(asRecord(run.summary).investigation); const businessImpact=typeof investigation.business_impact==='string'?investigation.business_impact:null; const recommendations=Array.isArray(investigation.recommendations)?investigation.recommendations:[]
+        return <article key={run.id} className={`${surface} overflow-hidden`}><div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.07] p-5"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-black text-white">{dataset?.name??'Unknown dataset'}</h2>{version?<span className="rounded-lg bg-blue-400/10 px-2 py-1 text-xs font-bold text-blue-300">v{version.version_number}</span>:null}<span className="rounded-lg bg-white/[0.05] px-2 py-1 text-xs font-bold text-slate-400">{run.status}</span></div><Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className={`mt-2 inline-flex items-center gap-1 text-xs font-bold text-cyan-300 ${focus}`}>Open run evidence <ArrowRight className="h-3 w-3" /></Link></div><p className={`text-3xl font-black ${scoreTone(score?.overall_score)}`}>{formatScore(score?.overall_score)}</p></div>
+          <div className="p-5"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{[['Completeness',score?.completeness_score],['Validity',score?.validity_score],['Uniqueness',score?.uniqueness_score],['Accuracy',score?.accuracy_score],['Rows / columns',`${run.row_count??'N/A'} / ${run.column_count??'N/A'}`]].map(([name,value])=><Link key={String(name)} href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className={`${inset} ${interactive} p-3`}><p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">{name}</p><p className="mt-1 text-lg font-black text-slate-200">{typeof value==='number'?formatScore(value):String(value)}</p></Link>)}</div>
+          {businessImpact?<Link href="/lineage" className={`${inset} ${interactive} mt-4 block p-4`}><p className="text-xs font-black uppercase tracking-wide text-violet-300">Persisted business impact</p><p className="mt-2 text-sm leading-6 text-slate-300">{businessImpact}</p><p className="mt-2 text-xs font-bold text-blue-300">Review impact and lineage →</p></Link>:null}
+          {runFindings.length?<div className="mt-4 flex flex-wrap gap-2">{runFindings.slice(0,6).map(finding=><Link key={finding.id} href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}&findingId=${encodeURIComponent(finding.id)}`} className={`rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-cyan-400/30 hover:text-white ${focus}`}>{finding.severity}: {finding.title}</Link>)}</div>:null}
+          {recommendations.length?<div className="mt-4"><p className="text-xs font-black uppercase tracking-wide text-slate-500">Persisted recommendations</p><div className="mt-2 grid gap-2 md:grid-cols-2">{recommendations.slice(0,4).map((recommendation,index)=><Link key={index} href="/issues" className={`${inset} ${interactive} p-3 text-xs leading-5 text-slate-300`}>{typeof recommendation==='string'?recommendation:JSON.stringify(recommendation)} <ArrowRight className="ml-1 inline h-3 w-3 text-blue-300" /></Link>)}</div></div>:null}
+          {run.error_code?<div className="mt-4 flex items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-300"><AlertTriangle className="h-4 w-4" />{run.error_code}</div>:null}</div></article>
+      })}</section>
+
+      {runs.length===0?<section className={`${surface} mt-5 p-9 text-center`}><Gauge className="mx-auto h-8 w-8 text-cyan-300"/><h2 className="mt-3 text-xl font-black text-white">No quality evidence yet</h2><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Prepare a dataset and run profiling to establish the evidence base for quality decisions.</p><Link href="/datasets" className={`mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white ${focus}`}>Prepare a dataset <ArrowRight className="ml-2 h-4 w-4" /></Link></section>:null}
+    </div>
+  </main>
 }
