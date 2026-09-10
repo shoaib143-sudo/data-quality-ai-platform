@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function refPart(value: string) { return value.replace(/[^A-Za-z0-9]/g, '_') }
@@ -55,7 +56,7 @@ async function storeViaBridge(
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const body = await request.json()
     const projectId = text(body.projectId)
     const sourceId = text(body.sourceId)
@@ -65,11 +66,8 @@ export async function POST(request: Request) {
     const jdbcUrl = text(body.jdbcUrl)
     if (!projectId || !username || !password) return NextResponse.json({ error: 'Project, username, and password are required.' }, { status: 400 })
 
+    await authorizeProject(user.id, projectId, 'source.manage')
     const admin = createAdminClient()
-    const { data: project } = await admin.schema('app').from('projects').select('id, organization_id').eq('id', projectId).maybeSingle()
-    if (!project) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
-    const { data: membership } = await admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-    if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) return NextResponse.json({ error: 'Project access denied.' }, { status: 403 })
     if (sourceId) {
       const { data: source } = await admin.schema('catalog').from('data_sources').select('id').eq('id', sourceId).eq('project_id', projectId).maybeSingle()
       if (!source) return NextResponse.json({ error: 'Connection access denied.' }, { status: 403 })
@@ -98,6 +96,8 @@ export async function POST(request: Request) {
       code: 'CONNECTOR_UNAVAILABLE',
     }, { status: 503 })
   } catch (error) {
+    const authError = authorizationErrorResponse(error)
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to configure connection credentials.' }, { status: 500 })
   }
 }
