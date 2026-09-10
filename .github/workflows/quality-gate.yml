@@ -54,6 +54,8 @@ jobs:
         run: pnpm run verify:route-telemetry
       - name: Verify ADR-006 emergency execution controller enforcement
         run: pnpm run verify:execution-controller
+      - name: Verify ADR-006 canonical AI cost accounting
+        run: node scripts/verify-adr006-cost-accounting.mjs
       - name: Verify investigation and prediction
         run: pnpm run verify:investigation-prediction
       - name: Verify governed autonomy safety
