@@ -10,6 +10,8 @@ import type { TelemetryTraceContext } from './telemetry-provider'
 export type IntelligentRouteContext = ReasoningRouteContext & {
   projectId: string
   executionCorrelationId?: string | null
+  /** Explicit immutable agent-definition identity for ADR-008 AGENT budget scope matching. */
+  agentDefinitionId?: string | null
   traceContext?: TelemetryTraceContext | null
 }
 
