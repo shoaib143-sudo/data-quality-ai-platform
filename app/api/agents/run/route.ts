@@ -1,6 +1,6 @@
 import { after, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
 import { sanitizeProfilingRequestInput } from '@/lib/profiling/request-input'
@@ -21,7 +21,7 @@ function text(value: unknown) { return typeof value === 'string' ? value.trim() 
 export async function POST(request: Request) {
   let agentRunId: string | null = null
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const admin = createAdminClient()
     const rawInput = await request.json() as Record<string, unknown>
     const requestInput = sanitizeProfilingRequestInput(rawInput)
