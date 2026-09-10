@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 
+// One-shot guarded patch used to remove the metadata-only profiling fallback.
 const path = 'lib/profiling/executor.ts'
 const source = fs.readFileSync(path, 'utf8')
 const before = `  const summary = sourceRows && connector
