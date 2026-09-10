@@ -28,6 +28,8 @@ const checks = [
   ['V6 exercises privileged API authorization audit', v6.includes('audit-user-facing-admin-routes.mjs')],
   ['V6 exercises governed AI execution controls', v6.includes('pnpm run verify:execution-controller') && v6.includes('pnpm run verify:model-gateway')],
   ['V6 exercises retrieval grounding/evaluation', v6.includes('pnpm run verify:retrieval-provider') && v6.includes('pnpm run verify:evaluation-engine')],
+  ['V6 measures live production concurrency and latency', v6.includes('runtime-slo:') && v6.includes('pnpm run benchmark:production') && v6.includes("BENCHMARK_CONCURRENCY: '10'")],
+  ['V6 retains an isolated recovery drill implementation', packageJson.scripts?.['recovery:drill'] === 'node scripts/recovery-drill.mjs' && exists('scripts/recovery-drill.mjs')],
   ['CodeQL is pinned to an immutable commit', codeql.includes('github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63') && codeql.includes('github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63')],
   ['dependency audit is lockfile-exact and blocks high severity vulnerabilities', dependency.includes('pnpm install --frozen-lockfile') && dependency.includes('pnpm audit --prod --audit-level high')],
   ['OpenSearch remains optional rather than a release dependency', Boolean(packageJson.scripts?.['bootstrap:opensearch']) && !Object.keys(packageJson.dependencies ?? {}).some((name) => name.toLowerCase().includes('opensearch'))],
