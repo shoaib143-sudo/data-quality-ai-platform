@@ -10,6 +10,7 @@ const packageJson = JSON.parse(read('package.json'))
 const syntheticAuthorityMigration = read('supabase/migrations/20260910190500_align_synthetic_governance_suite_with_contract_authority.sql')
 const governanceIntelligenceReplayPath = 'scripts/prepare-clean-governance-intelligence-replay.mjs'
 const governanceIntelligenceReplay = read(governanceIntelligenceReplayPath)
+const coreReplay = governanceIntelligenceReplay.split("writeRecoveredMigration(\n  '20260904210139'")[0]
 const requiredJourneys = [
   'scripts/verify-v0-trusted-governance-baseline.mjs',
   'scripts/verify-journey-sensitive-governance.mjs',
@@ -25,6 +26,7 @@ const checks = [
   ['V6 verifies migration version uniqueness', v6.includes('verify-migration-version-uniqueness.mjs')],
   ['V6 performs clean Supabase reconstruction', v6.includes('supabase@2.117.0') && v6.includes('db reset --local') && v6.includes('supabase/migrations')],
   ['V6 reconstructs missing governance intelligence prerequisites', exists(governanceIntelligenceReplayPath) && v6.includes('prepare-clean-governance-intelligence-replay.mjs') && ['governance.critical_data_elements','governance.cde_mappings','governance.dataset_certifications','governance.knowledge_requirements','governance.regulatory_applicability'].every((token) => governanceIntelligenceReplay.includes(token))],
+  ['recovered core replay leaves canonical policy/RPC ownership to September 5 migration', !coreReplay.includes('create policy') && !coreReplay.includes('grant select') && !coreReplay.includes('search_governance_knowledge_lexical')],
   ['governance intelligence replay preserves later review migration ownership', !governanceIntelligenceReplay.includes('reviewed_by uuid') && !governanceIntelligenceReplay.includes('reviewed_at timestamptz') && !governanceIntelligenceReplay.includes('review_comment text')],
   ['V6 preserves unavailable live database evidence as NOT_MEASURED', v6.includes('Record live governance database verification state') && v6.includes('Status: NOT_MEASURED in CI') && v6.includes("if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}")],
   ['V6 executes authenticated live database contracts when credentials exist', v6.includes('pnpm run verify:database') && v6.includes('SUPABASE_SERVICE_ROLE_KEY')],
