@@ -32,6 +32,26 @@ function nextReplayVersion(original) {
   }
 }
 
+function writeReconstruction(version, suffix, sql, reason) {
+  if (originalVersions.has(version)) {
+    throw new Error(`Clean replay reconstruction version collides with released migration ${version}`)
+  }
+  if (assignedVersions.has(version)) {
+    throw new Error(`Clean replay reconstruction version collides with another replay migration ${version}`)
+  }
+  assignedVersions.add(version)
+  const fileName = `${version}_${suffix}.sql`
+  fs.writeFileSync(path.join(targetDir, fileName), sql)
+  manifest.push({
+    source: null,
+    replay: fileName,
+    normalized: false,
+    reconstructed: true,
+    transformed: false,
+    reason
+  })
+}
+
 // Replay-only compatibility transforms repair historical dependencies that no
 // longer exist in the canonical schema. Each transform is exact and fail-closed:
 // if the released source no longer contains the expected text, replay preparation
@@ -65,13 +85,10 @@ using (
 // migration history starts by hardening that table and never records its original
 // creation. Keep released migrations immutable and make the historical gap explicit
 // only in the disposable clean-replay directory used by V6 certification.
-const reconstructionVersion = '20260825235959'
-const reconstructionName = `${reconstructionVersion}_reconstruct_dataset_execution_sources.sql`
-if (originalVersions.has(reconstructionVersion)) {
-  throw new Error(`Clean replay reconstruction version collides with released migration ${reconstructionVersion}`)
-}
-assignedVersions.add(reconstructionVersion)
-const reconstructionSql = `begin;
+writeReconstruction(
+  '20260825235959',
+  'reconstruct_dataset_execution_sources',
+  `begin;
 
 create table if not exists profiling.dataset_execution_sources (
   id uuid primary key default gen_random_uuid(),
@@ -92,16 +109,35 @@ create unique index if not exists dataset_execution_sources_one_active_per_versi
   where active = true;
 
 commit;
-`
-fs.writeFileSync(path.join(targetDir, reconstructionName), reconstructionSql)
-manifest.push({
-  source: null,
-  replay: reconstructionName,
-  normalized: false,
-  reconstructed: true,
-  transformed: false,
-  reason: 'Released history hardens profiling.dataset_execution_sources before any recorded table creation; reconstruction matches the live table contract.'
-})
+`,
+  'Released history hardens profiling.dataset_execution_sources before any recorded table creation; reconstruction matches the live table contract.'
+)
+
+// The live estate also contains profiling.data_quality_scores, while released
+// history first references it in the quality-score normalization migration. Rebuild
+// the missing canonical prerequisite immediately before that normalization so the
+// original migration remains immutable and still proves its intended behavior.
+writeReconstruction(
+  '20260902021959',
+  'reconstruct_data_quality_scores',
+  `begin;
+
+create table if not exists profiling.data_quality_scores (
+  id uuid primary key default gen_random_uuid(),
+  profile_run_id uuid not null references profiling.profile_runs(id) on delete cascade,
+  completeness_score numeric,
+  uniqueness_score numeric,
+  validity_score numeric,
+  accuracy_score numeric,
+  overall_score numeric,
+  created_at timestamptz not null default now(),
+  constraint profile_quality_scores_unique_run unique (profile_run_id)
+);
+
+commit;
+`,
+  'Released history normalizes profiling.data_quality_scores before any recorded table creation; reconstruction matches the live table contract.'
+)
 
 for (const file of files) {
   if (!/^\d{14}_[a-z0-9_]+\.sql$/.test(file)) throw new Error(`Malformed migration filename: ${file}`)
@@ -142,7 +178,7 @@ fs.writeFileSync(path.join(targetDir, 'replay-manifest.json'), `${JSON.stringify
 const normalized = manifest.filter((entry) => entry.normalized)
 const reconstructed = manifest.filter((entry) => entry.reconstructed)
 const transformed = manifest.filter((entry) => entry.transformed)
-console.log(`Prepared ${manifest.length} replay migrations; normalized ${normalized.length} legacy colliding files, reconstructed ${reconstructed.length} historical prerequisite, and transformed ${transformed.length} obsolete dependency.`)
+console.log(`Prepared ${manifest.length} replay migrations; normalized ${normalized.length} legacy colliding files, reconstructed ${reconstructed.length} historical prerequisites, and transformed ${transformed.length} obsolete dependencies.`)
 for (const entry of reconstructed) console.log(`RECONSTRUCTED ${entry.replay}: ${entry.reason}`)
 for (const entry of transformed) console.log(`TRANSFORMED ${entry.source} -> ${entry.replay}: ${entry.reason}`)
 for (const entry of normalized) console.log(`NORMALIZED ${entry.source} -> ${entry.replay}`)
