@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { analyzeLineageImpact } from '@/lib/governance/lineage-impact'
@@ -16,7 +16,7 @@ function number(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const url = new URL(request.url)
     const projectId = text(url.searchParams.get('projectId'))
     const analysisId = text(url.searchParams.get('analysisId'))
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const body = await request.json()
     const projectId = text(body.projectId)
     const rootAssetType = text(body.rootAssetType).toUpperCase() || 'DATASET'
