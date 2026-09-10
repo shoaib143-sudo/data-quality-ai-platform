@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-const { normalizeRetrievalMetadata, withNormalizedRetrievalMetadata } = await import('../lib/ai/retrieval-metadata-normalization.ts')
+const { normalizeRetrievalMetadata, withNormalizedRetrievalMetadata } = await import('../lib/ai/retrieval-provider.ts')
 
 const now = new Date('2026-09-11T00:00:00.000Z')
 
