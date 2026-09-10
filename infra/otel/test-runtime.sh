@@ -43,8 +43,11 @@ if [[ "$authorized_status" != "200" ]]; then
   exit 1
 fi
 
+# The debug exporter intentionally stays at basic verbosity. Current Collector
+# releases emit a one-line JSON summary such as \"spans\": 1; retain legacy
+# patterns as compatibility guards without requiring detailed span payloads.
 for _ in $(seq 1 20); do
-  if grep -Eq 'Spans[[:space:]]*[:=][[:space:]]*1|Number of spans:[[:space:]]*1' "$log_file"; then
+  if grep -Eq '"spans"[[:space:]]*:[[:space:]]*1|Spans[[:space:]]*[:=][[:space:]]*1|Number of spans:[[:space:]]*1' "$log_file"; then
     echo "OTLP runtime bearer authentication and external debug sink verified."
     exit 0
   fi
