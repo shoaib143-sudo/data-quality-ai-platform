@@ -47,7 +47,7 @@ const pinnedInteractiveBoundaries = new Map([
   ['app/api/classification/policies/route.ts', ['requireApiUser(', "'classification.review'"]],
   ['app/api/datasets/[datasetId]/route.ts', ['requireApiUser(', "'catalog.update'", "'source.manage'"]],
   ['app/api/datasets/create-project/route.ts', ['requireApiUser(', 'authorizeOrganizationAdmin(']],
-  ['app/api/datasets/register/route.ts', ['requireApiUser(', "'catalog.update'"]],
+  ['app/api/datasets/register/route.ts', ['requireApiUser(', "'catalog.update'", "'source.manage'"]],
   ['app/api/datasets/source/[sourceId]/route.ts', ['requireApiUser(', "'source.manage'"]],
   ['app/api/datasets/source/credentials/route.ts', ['requireApiUser(', "'source.manage'"]],
   ['app/api/lineage/suggestions/route.ts', ['requireApiUser(', "'lineage.read'", "'lineage.manage'"]],
