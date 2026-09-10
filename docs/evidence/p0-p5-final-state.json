@@ -1,0 +1,20 @@
+{
+  "date": "2026-09-10",
+  "module": "P0-P5",
+  "status": "PASS",
+  "phases": {
+    "P0": "PASS",
+    "P1": "PASS",
+    "P2": "PASS",
+    "P3": "PASS",
+    "P4": "PASS",
+    "P5": "PASS"
+  },
+  "p5": {
+    "claimRpc": "orchestration.claim_jobs_by_pool",
+    "pools": ["CORE", "SEMANTIC", "GOVERNANCE"],
+    "capacityEnforced": true,
+    "invalidPoolFailsClosed": true,
+    "measuredEvidence": "docs/evidence/p5-worker-pool-benchmark-20260910.json"
+  }
+}
