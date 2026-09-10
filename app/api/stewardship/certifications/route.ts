@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeDataset, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const body = await request.json()
     const projectId = String(body.projectId ?? '')
     const datasetId = String(body.datasetId ?? '')
@@ -23,35 +23,18 @@ export async function POST(request: Request) {
     const admin = createAdminClient()
     const { data, error } = await admin
       .schema('governance')
-      .from('certification_requests')
-      .insert({
-        project_id: projectId,
-        dataset_id: datasetId,
-        requested_by: user.id,
-        assigned_to: body.assignedTo || null,
-        status: 'PENDING',
-        evidence: body.evidence ?? {},
+      .rpc('request_dataset_certification', {
+        p_project_id: projectId,
+        p_dataset_id: datasetId,
+        p_actor_user_id: user.id,
+        p_assigned_to: body.assignedTo || null,
+        p_evidence: body.evidence ?? {},
       })
-      .select('*')
       .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-
-    const { error: catalogError } = await admin
-      .schema('governance')
-      .from('dataset_catalog')
-      .upsert(
-        {
-          dataset_id: datasetId,
-          project_id: projectId,
-          certification_status: 'PENDING',
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'dataset_id' },
-      )
-
-    if (catalogError) {
-      return NextResponse.json({ error: `Certification was created but catalog synchronization failed: ${catalogError.message}` }, { status: 500 })
+    if (error) {
+      const status = error.code === '23505' ? 409 : error.code === '42501' ? 403 : 400
+      return NextResponse.json({ error: error.message }, { status })
     }
 
     await writeGovernanceAudit({
