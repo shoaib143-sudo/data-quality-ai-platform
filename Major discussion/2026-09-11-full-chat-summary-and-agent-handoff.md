@@ -3,6 +3,7 @@
 **Date:** 2026-09-11  
 **Repository:** `shoaib143-sudo/data-quality-ai-platform`  
 **Supabase project:** `tvjnavjxuehpesxcfvrx`  
+**Implementation baseline before these documentation-only commits:** `main` at `0f8a76034960f3110b444f820863287abc95a38b`  
 **Purpose:** Preserve the full implementation history, architectural decisions, trust model, current repository state, and an executable handoff prompt for the next agent.
 
 ---
@@ -230,18 +231,18 @@ The key trust principle discovered during V5 is:
 
 ## 7. Current V5 implementation state at handoff
 
-### Current repository state
+### Repository state
 
-At handoff time:
+Implementation baseline before the documentation-only handoff commits:
 
 - `main` SHA: `0f8a76034960f3110b444f820863287abc95a38b`
 - active V5 branch: `implementation/v5-governed-action-learning-20260910`
 - V5 branch SHA: `bf3856a8ef5840a79589ec398e838bec9bf0c169`
-- branch status relative to main: **diverged**
+- branch status relative to that baseline: **diverged**
 - ahead by: **15 commits**
 - behind by: **2 commits**
 
-The next agent must reconcile/rebase carefully before release. Do not overwrite user work.
+The next agent must fetch current refs first, because these handoff documents themselves advance `main`. Reconcile/rebase carefully before release and do not overwrite user work.
 
 ### Important V5 discoveries
 
@@ -273,7 +274,7 @@ This boundary must not be widened.
 
 ### V5 files currently added/modified on the branch
 
-Current compare against main shows these substantive changes:
+Current compare against the implementation baseline shows these substantive changes:
 
 - `.github/workflows/p0-p4-revalidation.yml`
 - `app/api/governance/autonomy/route.ts`
@@ -321,7 +322,7 @@ At this handoff point, do **not** claim V5 complete.
 
 The following remain unfinished:
 
-- reconcile/rebase V5 branch with latest main
+- fetch current main and reconcile/rebase V5 safely
 - remove all temporary V5 patch workflow/helper artifacts
 - inspect final diff for accidental or stale changes
 - apply the forward V5 migration to live Supabase
@@ -375,10 +376,10 @@ You are continuing active implementation work on DataNexus AI / Data Governance 
 
 Repository: shoaib143-sudo/data-quality-ai-platform
 Supabase project: tvjnavjxuehpesxcfvrx
-Current main SHA at handoff: 0f8a76034960f3110b444f820863287abc95a38b
-Current V5 branch: implementation/v5-governed-action-learning-20260910
-Current V5 branch SHA at handoff: bf3856a8ef5840a79589ec398e838bec9bf0c169
-Branch currently diverges from main: 15 commits ahead, 2 commits behind.
+Implementation baseline before handoff documentation commits: main 0f8a76034960f3110b444f820863287abc95a38b
+Current V5 branch at handoff: implementation/v5-governed-action-learning-20260910
+V5 branch SHA at handoff: bf3856a8ef5840a79589ec398e838bec9bf0c169
+At that implementation baseline the branch diverged from main: 15 commits ahead and 2 commits behind. Fetch current refs first because handoff documentation commits may have advanced main.
 
 Mission:
 Continue and finish V5 - Governed Action + Outcome Learning - while preserving all permanent P0-P5/V0-V4 trust invariants.
@@ -447,7 +448,7 @@ Known temporary artifacts still on the branch and expected to be removed before 
 - scripts/patch-v5-action-scope.mjs
 
 First actions:
-1. Inspect current main and current V5 branch. Reconcile/rebase safely because the branch is behind main by 2 commits. Preserve all V5 work and all newer main work.
+1. Fetch current main and current V5 refs. Reconcile/rebase safely because the branch was behind main. Preserve all V5 work and all newer main work.
 2. Inspect the exact diff. Remove temporary V5 patch workflow/helper artifacts after confirming their changes are already represented in production files.
 3. Re-read the V5 migration and service code against the live Supabase schema before applying it. Never edit previously released migrations.
 4. Verify action/project/target scoping so an action cannot reference another project's dataset version, agent run, profile run, or learning case.
