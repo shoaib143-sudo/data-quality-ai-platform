@@ -22,7 +22,16 @@ curl --fail --silent --show-error --location "$base_url" --output "$install_dir/
 curl --fail --silent --show-error --location "${base_url}.sha256" --output "$install_dir/${archive}.sha256"
 (
   cd "$install_dir"
-  sha256sum --check "${archive}.sha256"
+  expected_hash="$(awk '{print $1; exit}' "${archive}.sha256")"
+  if [[ ! "$expected_hash" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+    echo "Invalid upstream checksum for ${archive}" >&2
+    exit 1
+  fi
+  actual_hash="$(sha256sum "$archive" | awk '{print $1}')"
+  if [[ "${actual_hash,,}" != "${expected_hash,,}" ]]; then
+    echo "Checksum mismatch for ${archive}" >&2
+    exit 1
+  fi
   tar --extract --gzip --file "$archive" otelcol-contrib
 )
 chmod 0755 "$install_dir/otelcol-contrib"
