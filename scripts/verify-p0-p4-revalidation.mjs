@@ -9,6 +9,7 @@ const certificationRequest = read('app/api/stewardship/certifications/route.ts')
 const certificationReview = read('app/api/stewardship/certifications/[requestId]/route.ts')
 const catalogRoute = read('app/api/catalog/[datasetId]/route.ts')
 const catalogUi = read('app/catalog/catalog-manager.tsx')
+const classificationReview = read('app/api/classification/[classificationId]/route.ts')
 const agentProfilingExecutor = read('lib/agents/executors/profiling-executor.ts')
 const profilingExecutor = read('lib/profiling/executor.ts')
 const metricEngine = read('lib/profiling/metric-engine.ts')
@@ -25,6 +26,10 @@ assert(catalogRoute.includes("'certificationStatus' in body"), 'Catalog API must
 assert(!catalogRoute.includes('certification_status:'), 'Catalog metadata payload must not set certification status.')
 assert(!catalogRoute.includes('certified_by:'), 'Catalog metadata payload must not set certification actor.')
 assert(!catalogUi.includes('name="certificationStatus"'), 'Catalog UI must not expose editable certification status.')
+
+assert(classificationReview.includes('requireApiUser'), 'Classification review API must use API-safe authentication.')
+assert(classificationReview.includes("authorizeProject(user.id, item.project_id, 'classification.review')"), 'Classification review must require the explicit project capability.')
+assert(!classificationReview.includes("from('organization_members')"), 'Classification review must not authorize any organization member directly.')
 
 assert(migration.includes('before insert or update on governance.dataset_catalog'), 'Dataset catalog certification guard must cover inserts and updates.')
 assert(migration.includes("current_user <> 'postgres'"), 'Certification state guard must reject untrusted direct writers.')
