@@ -21,7 +21,16 @@ curl --fail --silent --show-error --location "$base_url" --output "$install_dir/
 curl --fail --silent --show-error --location "${base_url}.sha256" --output "$install_dir/${artifact}.sha256"
 (
   cd "$install_dir"
-  sha256sum --check "${artifact}.sha256"
+  expected_hash="$(awk '{print $1; exit}' "${artifact}.sha256")"
+  if [[ ! "$expected_hash" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+    echo "Invalid upstream checksum for ${artifact}" >&2
+    exit 1
+  fi
+  actual_hash="$(sha256sum "$artifact" | awk '{print $1}')"
+  if [[ "${actual_hash,,}" != "${expected_hash,,}" ]]; then
+    echo "Checksum mismatch for ${artifact}" >&2
+    exit 1
+  fi
 )
 mv "$install_dir/$artifact" "$install_dir/opa"
 chmod 0755 "$install_dir/opa"
