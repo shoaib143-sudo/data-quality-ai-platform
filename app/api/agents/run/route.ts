@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
+import { sanitizeProfilingRequestInput } from '@/lib/profiling/request-input'
 import { claimDurableJobByAgentRun, enqueueDurableJob } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
 import { dispatchAdaptiveRounds } from '@/lib/orchestration/adaptive-dispatch'
@@ -22,11 +23,12 @@ export async function POST(request: Request) {
   try {
     const user = await requireUser()
     const admin = createAdminClient()
-    const input = await request.json() as Record<string, unknown>
-    const requestedProjectId = text(input.projectId ?? input.project_id)
-    const datasetVersionId = text(input.datasetVersionId ?? input.dataset_version_id)
-    const agentDefinitionId = text(input.agentDefinitionId ?? input.agent_definition_id)
-    const rawIdempotencyKey = text(request.headers.get('idempotency-key') ?? input.idempotencyKey ?? input.idempotency_key)
+    const rawInput = await request.json() as Record<string, unknown>
+    const requestInput = sanitizeProfilingRequestInput(rawInput)
+    const requestedProjectId = text(rawInput.projectId ?? rawInput.project_id)
+    const datasetVersionId = text(rawInput.datasetVersionId ?? rawInput.dataset_version_id)
+    const agentDefinitionId = text(rawInput.agentDefinitionId ?? rawInput.agent_definition_id)
+    const rawIdempotencyKey = text(request.headers.get('idempotency-key') ?? rawInput.idempotencyKey ?? rawInput.idempotency_key)
     const idempotencyKey = rawIdempotencyKey ? `profiling:${rawIdempotencyKey}` : null
 
     if (!requestedProjectId || !datasetVersionId || !agentDefinitionId) {
@@ -109,13 +111,20 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString()
+    const persistedRequestInput = {
+      projectId,
+      datasetVersionId,
+      agentDefinitionId: agentDefinition.id,
+      ...requestInput,
+      idempotencyKey: rawIdempotencyKey || null,
+    }
     const runInsert = await admin.schema('agent').from('agent_runs').insert({
       agent_definition_id: agentDefinition.id,
       project_id: projectId,
       dataset_id: dataset.id,
       dataset_version_id: datasetVersionId,
       status: 'QUEUED',
-      input: { ...input, idempotencyKey: rawIdempotencyKey || null },
+      input: persistedRequestInput,
     }).select('id').single()
     if (runInsert.error || !runInsert.data) throw new Error(`Unable to create agent run: ${runInsert.error?.message ?? 'unknown error'}`)
     agentRunId = runInsert.data.id
@@ -163,7 +172,7 @@ export async function POST(request: Request) {
           agentVersion: agentDefinition.version,
           agentRunId: activeAgentRunId,
           profilingRunId,
-          requestInput: input,
+          requestInput,
         },
         maxAttempts: 3,
       })
