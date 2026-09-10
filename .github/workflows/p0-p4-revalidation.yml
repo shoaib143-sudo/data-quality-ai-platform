@@ -15,7 +15,7 @@ permissions:
 jobs:
   revalidate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -40,5 +40,15 @@ jobs:
         run: pnpm run verify:governance-reviews
       - name: Single-organization governance contracts
         run: pnpm run verify:governance
+      - name: Governed model gateway
+        run: pnpm run verify:model-gateway
+      - name: Reasoning provider governance
+        run: pnpm run verify:reasoning-provider
+      - name: Retrieval permission and grounding contracts
+        run: pnpm run verify:retrieval-provider
+      - name: Governed autonomy contracts
+        run: pnpm run verify:governed-autonomy
+      - name: Provider fallback contracts
+        run: pnpm run verify:provider-fallback
       - name: Production build
         run: pnpm run build
