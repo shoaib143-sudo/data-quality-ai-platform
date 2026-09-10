@@ -193,25 +193,6 @@ create index if not exists idx_regulatory_applicability_scope on governance.regu
 create index if not exists idx_accountability_assignments_scope on governance.accountability_assignments(project_id,scope_type,scope_key,assignment_type,status);
 create index if not exists idx_dataset_certifications_dataset on governance.dataset_certifications(project_id,dataset_id,certification_status);
 create index if not exists idx_remediation_knowledge_problem on governance.remediation_knowledge(project_id,problem_type,outcome_status);
-
-alter table governance.regulatory_applicability enable row level security;
-alter table governance.accountability_assignments enable row level security;
-alter table governance.dataset_certifications enable row level security;
-alter table governance.remediation_knowledge enable row level security;
-
-do $$
-declare t text;
-begin
-  foreach t in array array['regulatory_applicability','accountability_assignments','dataset_certifications','remediation_knowledge'] loop
-    execute format('create policy %I on governance.%I for select to authenticated using (app_private.is_project_member(project_id))', t || '_project_read', t);
-    execute format('create policy %I on governance.%I for insert to authenticated with check (app_private.is_project_member(project_id) and governance.has_project_capability(project_id, (select auth.uid()), ''catalog.update''))', t || '_project_insert', t);
-    execute format('create policy %I on governance.%I for update to authenticated using (app_private.is_project_member(project_id) and governance.has_project_capability(project_id, (select auth.uid()), ''catalog.update'')) with check (app_private.is_project_member(project_id) and governance.has_project_capability(project_id, (select auth.uid()), ''catalog.update''))', t || '_project_update', t);
-    execute format('create policy %I on governance.%I for delete to authenticated using (app_private.is_project_member(project_id) and governance.has_project_capability(project_id, (select auth.uid()), ''catalog.update''))', t || '_project_delete', t);
-  end loop;
-end $$;
-
-grant select,insert,update,delete on governance.regulatory_applicability,governance.accountability_assignments,governance.dataset_certifications,governance.remediation_knowledge to authenticated;
-grant all on governance.regulatory_applicability,governance.accountability_assignments,governance.dataset_certifications,governance.remediation_knowledge to service_role;
 `,
-  'production migration history retains this operational-domain migration but the repository does not; replay restores its authoritative live table, RLS, policy, index, and grant contract at the original version.'
+  'production history created these governance operational-domain relations before downstream September 4 migrations reference them. Replay restores only structural prerequisites here because the committed 20260905052000 migration canonically owns their RLS policies and grants.'
 )
