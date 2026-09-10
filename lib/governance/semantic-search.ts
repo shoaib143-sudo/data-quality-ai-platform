@@ -8,6 +8,21 @@ export const DEFAULT_GATEWAY_EMBEDDING_MODEL = 'openai/text-embedding-3-small'
 export const VERCEL_AI_GATEWAY_EMBEDDING_URL = 'https://ai-gateway.vercel.sh/v1/embeddings'
 export const EMBEDDING_DIMENSIONS = 384
 
+export type GovernanceEmbeddingSpaceIdentity = {
+  providerId: string
+  model: string
+  revision: string
+  dimensions: number
+  distanceMetric: 'COSINE'
+  normalization: 'L2'
+}
+
+export type GovernanceEmbeddingEvidence = {
+  embedding: number[]
+  embeddingSpaceId: string
+  identity: GovernanceEmbeddingSpaceIdentity
+}
+
 type SupabaseLike = {
   schema(name: string): {
     rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message: string } | null }>
@@ -79,6 +94,23 @@ function embeddingModel(model?: string) {
   return process.env.GOVERNANCE_EMBEDDING_MODEL?.trim() || DEFAULT_GATEWAY_EMBEDDING_MODEL
 }
 
+function embeddingProviderId() {
+  if (embeddingProviderUrl()) return process.env.GOVERNANCE_EMBEDDING_PROVIDER_ID?.trim() || 'custom_http'
+  if (supabaseNativeEmbeddingConfigured()) return 'supabase_ai'
+  return 'vercel_ai_gateway'
+}
+
+export function governanceEmbeddingSpaceIdentity(model?: string, revision?: string): GovernanceEmbeddingSpaceIdentity {
+  return {
+    providerId: embeddingProviderId(),
+    model: embeddingModel(model),
+    revision: revision?.trim() || process.env.GOVERNANCE_EMBEDDING_REVISION?.trim() || '1',
+    dimensions: EMBEDDING_DIMENSIONS,
+    distanceMetric: 'COSINE',
+    normalization: 'L2',
+  }
+}
+
 function parseEmbeddingPayload(payload: unknown): number[] {
   if (Array.isArray(payload)) return payload.map(Number)
 
@@ -133,16 +165,16 @@ async function embedWithSupabaseNative(input: string) {
   return normalizeEmbedding(parseEmbeddingPayload(data))
 }
 
-export async function embedGovernanceText(text: string, model?: string) {
+async function generateGovernanceEmbedding(text: string, model?: string, revision?: string) {
   const input = text.trim()
   if (!input) throw new Error('Text is required for embedding')
+  const identity = governanceEmbeddingSpaceIdentity(model, revision)
 
   const customUrl = embeddingProviderUrl()
   if (!customUrl && supabaseNativeEmbeddingConfigured()) {
-    return embedWithSupabaseNative(input)
+    return { embedding: await embedWithSupabaseNative(input), identity }
   }
 
-  const selectedModel = embeddingModel(model)
   let url: string
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   let body: Record<string, unknown>
@@ -151,7 +183,7 @@ export async function embedGovernanceText(text: string, model?: string) {
     url = customUrl
     const apiKey = process.env.GOVERNANCE_EMBEDDING_API_KEY?.trim()
     if (apiKey) headers.authorization = `Bearer ${apiKey}`
-    body = { input, model: selectedModel, text: input }
+    body = { input, model: identity.model, text: input }
   } else {
     const apiKey = await gatewayApiKey()
     if (!apiKey) {
@@ -163,8 +195,8 @@ export async function embedGovernanceText(text: string, model?: string) {
     headers.authorization = `Bearer ${apiKey}`
     body = {
       input,
-      model: selectedModel,
-      dimensions: EMBEDDING_DIMENSIONS,
+      model: identity.model,
+      dimensions: identity.dimensions,
       encoding_format: 'float',
     }
   }
@@ -181,7 +213,59 @@ export async function embedGovernanceText(text: string, model?: string) {
     throw new Error(`Embedding provider failed with HTTP ${response.status}${providerMessage ? `: ${providerMessage}` : ''}`)
   }
 
-  return normalizeEmbedding(parseEmbeddingPayload(await response.json()))
+  return { embedding: normalizeEmbedding(parseEmbeddingPayload(await response.json())), identity }
+}
+
+export async function ensureGovernanceEmbeddingSpace(identity: GovernanceEmbeddingSpaceIdentity) {
+  const admin = createAdminClient()
+  const find = () => admin
+    .schema('governance')
+    .from('embedding_spaces')
+    .select('id')
+    .eq('provider_id', identity.providerId)
+    .eq('model_name', identity.model)
+    .eq('model_revision', identity.revision)
+    .eq('dimensions', identity.dimensions)
+    .eq('distance_metric', identity.distanceMetric)
+    .eq('normalization', identity.normalization)
+    .maybeSingle()
+
+  const existing = await find()
+  if (existing.error) throw new Error(`Unable to resolve embedding space: ${existing.error.message}`)
+  if (existing.data?.id) return String(existing.data.id)
+
+  const inserted = await admin
+    .schema('governance')
+    .from('embedding_spaces')
+    .insert({
+      provider_id: identity.providerId,
+      model_name: identity.model,
+      model_revision: identity.revision,
+      dimensions: identity.dimensions,
+      distance_metric: identity.distanceMetric,
+      normalization: identity.normalization,
+      evidence: { authority: 'runtime_declared_embedding_identity' },
+    })
+    .select('id')
+    .single()
+
+  if (!inserted.error && inserted.data?.id) return String(inserted.data.id)
+
+  const raced = await find()
+  if (raced.error || !raced.data?.id) {
+    throw new Error(`Unable to register embedding space: ${inserted.error?.message ?? raced.error?.message ?? 'unknown error'}`)
+  }
+  return String(raced.data.id)
+}
+
+export async function embedGovernanceText(text: string, model?: string) {
+  return (await generateGovernanceEmbedding(text, model)).embedding
+}
+
+export async function embedGovernanceTextWithEvidence(text: string, model?: string, revision?: string): Promise<GovernanceEmbeddingEvidence> {
+  const generated = await generateGovernanceEmbedding(text, model, revision)
+  const embeddingSpaceId = await ensureGovernanceEmbeddingSpace(generated.identity)
+  return { ...generated, embeddingSpaceId }
 }
 
 export async function semanticSearchByEmbedding(
@@ -189,15 +273,19 @@ export async function semanticSearchByEmbedding(
   input: {
     projectId: string
     embedding: number[]
+    embeddingSpaceId: string
     objectTypes?: SemanticObjectType[] | null
     threshold?: number
     limit?: number
   },
 ): Promise<SemanticMatch[]> {
+  const embeddingSpaceId = input.embeddingSpaceId.trim()
+  if (!embeddingSpaceId) throw new Error('embeddingSpaceId is required for semantic search')
   const threshold = Math.max(-1, Math.min(1, input.threshold ?? 0.35))
   const limit = Math.max(1, Math.min(100, input.limit ?? 25))
-  const { data, error } = await supabase.schema('governance').rpc('match_semantic_embeddings', {
+  const { data, error } = await supabase.schema('governance').rpc('match_semantic_embeddings_in_space', {
     p_project_id: input.projectId,
+    p_embedding_space_id: embeddingSpaceId,
     p_query_embedding: toPgVectorLiteral(input.embedding),
     p_object_types: input.objectTypes?.length ? input.objectTypes : null,
     p_match_threshold: threshold,
@@ -218,8 +306,12 @@ export async function semanticSearch(
     limit?: number
   },
 ): Promise<SemanticMatch[]> {
-  const embedding = await embedGovernanceText(input.query)
-  return semanticSearchByEmbedding(supabase, { ...input, embedding })
+  const evidence = await embedGovernanceTextWithEvidence(input.query)
+  return semanticSearchByEmbedding(supabase, {
+    ...input,
+    embedding: evidence.embedding,
+    embeddingSpaceId: evidence.embeddingSpaceId,
+  })
 }
 
 export async function indexSemanticObject(input: SemanticIndexInput) {
@@ -227,18 +319,18 @@ export async function indexSemanticObject(input: SemanticIndexInput) {
   if (!content) throw new Error('Semantic object content is required')
 
   const model = embeddingModel(input.embeddingModel)
-  const version = input.embeddingVersion?.trim() || '1'
+  const version = input.embeddingVersion?.trim() || process.env.GOVERNANCE_EMBEDDING_REVISION?.trim() || '1'
   const contentHash = createHash('sha256').update(content).digest('hex')
+  const evidence = await embedGovernanceTextWithEvidence(content, model, version)
   const admin = createAdminClient()
   const existing = await admin
     .schema('governance')
     .from('semantic_embeddings')
-    .select('id,project_id,object_type,object_key,object_id,content_hash,embedding_model,embedding_version,updated_at')
+    .select('id,project_id,object_type,object_key,object_id,content_hash,embedding_model,embedding_version,embedding_space_id,updated_at')
     .eq('project_id', input.projectId)
     .eq('object_type', input.objectType)
     .eq('object_key', input.objectKey)
-    .eq('embedding_model', model)
-    .eq('embedding_version', version)
+    .eq('embedding_space_id', evidence.embeddingSpaceId)
     .maybeSingle()
 
   if (existing.error) throw new Error(`Unable to inspect semantic object: ${existing.error.message}`)
@@ -254,13 +346,12 @@ export async function indexSemanticObject(input: SemanticIndexInput) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.data.id)
-      .select('id,project_id,object_type,object_key,object_id,content_hash,embedding_model,embedding_version,updated_at')
+      .select('id,project_id,object_type,object_key,object_id,content_hash,embedding_model,embedding_version,embedding_space_id,updated_at')
       .single()
     if (error) throw new Error(`Unable to refresh unchanged semantic object: ${error.message}`)
     return { ...data, unchanged: true as const }
   }
 
-  const vector = await embedGovernanceText(content, model)
   const { data, error } = await admin
     .schema('governance')
     .from('semantic_embeddings')
@@ -272,15 +363,16 @@ export async function indexSemanticObject(input: SemanticIndexInput) {
         object_id: input.objectId ?? null,
         content,
         content_hash: contentHash,
-        embedding: toPgVectorLiteral(vector),
-        embedding_model: model,
-        embedding_version: version,
+        embedding: toPgVectorLiteral(evidence.embedding),
+        embedding_model: evidence.identity.model,
+        embedding_version: evidence.identity.revision,
+        embedding_space_id: evidence.embeddingSpaceId,
         metadata: input.metadata ?? {},
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'project_id,object_type,object_key,embedding_model,embedding_version' },
+      { onConflict: 'project_id,object_type,object_key,embedding_space_id' },
     )
-    .select('id,project_id,object_type,object_key,object_id,content_hash,embedding_model,embedding_version,updated_at')
+    .select('id,project_id,object_type,object_key,object_id,content_hash,embedding_model,embedding_version,embedding_space_id,updated_at')
     .single()
 
   if (error) throw new Error(`Unable to index semantic object: ${error.message}`)
