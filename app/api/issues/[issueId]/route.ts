@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
@@ -9,7 +9,7 @@ import { verifyObservabilityIncidentResponseFromIssue } from '@/lib/observabilit
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ issueId: string }> }) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const { issueId } = await params
     const admin = createAdminClient()
 
