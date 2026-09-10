@@ -7,19 +7,20 @@
     "samplesPerPool": 30,
     "syntheticJobs": true,
     "syntheticPriority": -2147483648,
-    "cleanup": "Each synthetic job was deleted immediately after its claim; the test left no queued or running fixtures.",
+    "transactionalCleanup": "All synthetic jobs and capacity fixtures were created inside one transaction and rolled back after measurement.",
     "invalidPoolCheck": "INVALID pool rejected with SQLSTATE 22023.",
-    "capacityCheck": "Filled the selected project's configured max_concurrent_jobs slots with synthetic RUNNING jobs, then verified a fifth CORE claim remained blocked. Synthetic fixtures were deleted in the same test call."
+    "capacityCheck": "Filled the selected project's configured max_concurrent_jobs slots with four synthetic RUNNING jobs, then verified an additional CORE claim returned zero rows."
   },
   "latencyMs": {
-    "CORE": { "samples": 30, "average": 0.847, "p95": 1.145, "max": 12.225 },
-    "SEMANTIC": { "samples": 30, "average": 0.366, "p95": 0.377, "max": 1.080 },
-    "GOVERNANCE": { "samples": 30, "average": 0.366, "p95": 0.395, "max": 0.408 }
+    "CORE": { "samples": 30, "average": 0.652, "p95": 1.095, "max": 6.898 },
+    "SEMANTIC": { "samples": 30, "average": 0.327, "p95": 0.371, "max": 0.393 },
+    "GOVERNANCE": { "samples": 30, "average": 0.351, "p95": 0.404, "max": 0.423 }
   },
   "capacity": {
     "configuredMaxConcurrentJobs": 4,
     "syntheticRunningJobs": 4,
     "additionalClaimBlocked": true
   },
+  "invalidPoolFailsClosed": true,
   "result": "PASS"
 }
