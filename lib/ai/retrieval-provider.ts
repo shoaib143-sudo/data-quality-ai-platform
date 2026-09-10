@@ -114,11 +114,15 @@ export function classifyRetrievalAuthority(metadata: Record<string, unknown>): {
 } {
   const referenceKeys = AUTHORITY_REFERENCE_KEYS.filter((key) => nonEmpty(metadata[key]))
   const statusKeys = AUTHORITY_STATUS_KEYS.filter((key) => GOVERNED_STATUS_VALUES.has(normalized(metadata[key])))
-  const explicitGoverned = metadata.governed === true || ['GOVERNED', 'AUTHORITATIVE'].includes(normalized(metadata.authority))
+  const explicitEvidenceKeys = [
+    ...(metadata.governed === true ? ['governed'] : []),
+    ...(['GOVERNED', 'AUTHORITATIVE'].includes(normalized(metadata.authority)) ? ['authority'] : []),
+  ]
+  const explicitGoverned = explicitEvidenceKeys.length > 0
   const humanReviewed = metadata.human_reviewed === true && nonEmpty(metadata.reviewed_by)
 
   if (referenceKeys.length && (statusKeys.length || explicitGoverned || humanReviewed)) {
-    const evidenceKeys = [...new Set([...referenceKeys, ...statusKeys, ...(explicitGoverned ? ['authority'] : []), ...(humanReviewed ? ['human_reviewed'] : [])])]
+    const evidenceKeys = [...new Set([...referenceKeys, ...statusKeys, ...explicitEvidenceKeys, ...(humanReviewed ? ['human_reviewed'] : [])])]
     return { authority: 'GOVERNED', evidenceKeys }
   }
 
