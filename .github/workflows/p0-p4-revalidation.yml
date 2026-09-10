@@ -35,6 +35,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Verify P0-P5 security, migration, and evidence boundaries
         run: node scripts/verify-p0-p4-revalidation.mjs
+      - name: Worker isolation and capacity contracts
+        run: pnpm run verify:worker-runtime
       - name: TypeScript
         run: pnpm exec tsc --noEmit
       - name: Profiling lifecycle contracts

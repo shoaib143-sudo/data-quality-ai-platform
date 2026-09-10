@@ -1,0 +1,25 @@
+{
+  "evidenceType": "P5_WORKER_POOL_CLAIM_SLO",
+  "measuredAt": "2026-09-10",
+  "database": "Supabase PostgreSQL",
+  "scope": "orchestration.claim_jobs_by_pool",
+  "method": {
+    "samplesPerPool": 30,
+    "syntheticJobs": true,
+    "syntheticPriority": -2147483648,
+    "cleanup": "Each synthetic job was deleted immediately after its claim; the test left no queued or running fixtures.",
+    "invalidPoolCheck": "INVALID pool rejected with SQLSTATE 22023.",
+    "capacityCheck": "Filled the selected project's configured max_concurrent_jobs slots with synthetic RUNNING jobs, then verified a fifth CORE claim remained blocked. Synthetic fixtures were deleted in the same test call."
+  },
+  "latencyMs": {
+    "CORE": { "samples": 30, "average": 0.847, "p95": 1.145, "max": 12.225 },
+    "SEMANTIC": { "samples": 30, "average": 0.366, "p95": 0.377, "max": 1.080 },
+    "GOVERNANCE": { "samples": 30, "average": 0.366, "p95": 0.395, "max": 0.408 }
+  },
+  "capacity": {
+    "configuredMaxConcurrentJobs": 4,
+    "syntheticRunningJobs": 4,
+    "additionalClaimBlocked": true
+  },
+  "result": "PASS"
+}

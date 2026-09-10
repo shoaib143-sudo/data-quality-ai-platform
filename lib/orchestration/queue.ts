@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { recordSourceConcurrencyOutcome } from '@/lib/orchestration/source-concurrency'
 
 export type DurableJobType = 'PROFILING' | 'DATA_QUALITY' | 'NOTIFICATION' | 'OBSERVABILITY' | 'DISCOVERY' | 'LINEAGE_ENRICHMENT' | 'SEMANTIC_INDEX' | 'GOVERNANCE_AGENT'
+export type DurableWorkloadPool = 'CORE' | 'SEMANTIC' | 'GOVERNANCE'
 export type DurableJobDependencyType = 'SUCCESS' | 'TERMINAL'
 export type DurableJobDependency = { jobId: string; dependencyType?: DurableJobDependencyType }
 
@@ -162,15 +163,37 @@ export async function enqueueDurableJob(input: {
   return data
 }
 
-export async function claimDurableJobs(workerId: string, limit = 2) {
+function configuredWorkloadPools(poolOverride?: DurableWorkloadPool) {
+  if (poolOverride) return [poolOverride]
+  const configured = process.env.ORCHESTRATION_WORKLOAD_POOL?.trim().toUpperCase()
+  if (configured === 'CORE' || configured === 'SEMANTIC' || configured === 'GOVERNANCE') {
+    return [configured as DurableWorkloadPool]
+  }
+  return ['CORE', 'SEMANTIC', 'GOVERNANCE'] satisfies DurableWorkloadPool[]
+}
+
+export async function claimDurableJobs(workerId: string, limit = 2, poolOverride?: DurableWorkloadPool) {
   const admin = createAdminClient()
   await admin.schema('orchestration').rpc('release_stale_jobs')
-  const { data, error } = await admin.schema('orchestration').rpc('claim_jobs', {
-    p_worker: workerId,
-    p_limit: limit,
-  })
-  if (error) throw new Error(`Unable to claim durable jobs: ${error.message}`)
-  const jobs = (data ?? []) as DurableJob[]
+
+  const boundedLimit = Math.max(1, Math.min(Math.floor(limit), 16))
+  const pools = configuredWorkloadPools(poolOverride)
+  const jobs: DurableJob[] = []
+
+  for (let index = 0; index < pools.length && jobs.length < boundedLimit; index += 1) {
+    const remaining = boundedLimit - jobs.length
+    const remainingPools = pools.length - index
+    const poolLimit = Math.max(1, Math.ceil(remaining / remainingPools))
+    const pool = pools[index]
+    const { data, error } = await admin.schema('orchestration').rpc('claim_jobs_by_pool', {
+      p_worker: `${workerId}:${pool.toLowerCase()}`,
+      p_pool: pool,
+      p_limit: poolLimit,
+    })
+    if (error) throw new Error(`Unable to claim durable jobs for ${pool} pool: ${error.message}`)
+    jobs.push(...((data ?? []) as DurableJob[]))
+  }
+
   await recordClaimTelemetry(jobs)
   return jobs
 }
