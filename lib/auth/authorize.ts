@@ -51,6 +51,18 @@ export type ProjectAuthorization = {
   capability: AuthorizationCapability
 }
 
+export async function hasProjectCapability(userId: string, projectId: string, capability: AuthorizationCapability): Promise<boolean> {
+  if (!userId || !projectId) return false
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('governance').rpc('has_project_capability', {
+    p_project_id: projectId,
+    p_user_id: userId,
+    p_capability: capability,
+  })
+  if (error) throw new Error(`Unable to evaluate project capability: ${error.message}`)
+  return data === true
+}
+
 export async function authorizeProject(userId: string, projectId: string, capability: AuthorizationCapability): Promise<ProjectAuthorization> {
   if (!userId || !projectId) throw new AuthorizationError('Authentication and project context are required.', 401)
   const admin = createAdminClient()
@@ -64,22 +76,17 @@ export async function authorizeProject(userId: string, projectId: string, capabi
   if (projectError) throw new Error(`Unable to resolve project authorization context: ${projectError.message}`)
   if (!project) throw new AuthorizationError('Project was not found.', 404)
 
-  const [{ data: allowed, error: capabilityError }, { data: membership, error: membershipError }] = await Promise.all([
-    admin.schema('governance').rpc('has_project_capability', {
-      p_project_id: projectId,
-      p_user_id: userId,
-      p_capability: capability,
-    }),
+  const [allowed, membershipResult] = await Promise.all([
+    hasProjectCapability(userId, projectId, capability),
     admin.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', userId).maybeSingle(),
   ])
-  if (capabilityError) throw new Error(`Unable to evaluate project capability: ${capabilityError.message}`)
-  if (membershipError) throw new Error(`Unable to resolve organization membership: ${membershipError.message}`)
-  if (allowed !== true) throw new AuthorizationError(`You do not have permission to perform ${capability} in this project.`)
+  if (membershipResult.error) throw new Error(`Unable to resolve organization membership: ${membershipResult.error.message}`)
+  if (!allowed) throw new AuthorizationError(`You do not have permission to perform ${capability} in this project.`)
 
   return {
     projectId,
     organizationId: project.organization_id,
-    organizationRole: membership?.role ? String(membership.role) : null,
+    organizationRole: membershipResult.data?.role ? String(membershipResult.data.role) : null,
     capability,
   }
 }
