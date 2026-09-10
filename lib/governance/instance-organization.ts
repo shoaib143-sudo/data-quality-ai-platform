@@ -83,3 +83,31 @@ export async function assertInstanceOrganizationId(organizationId: string): Prom
     )
   }
 }
+
+/**
+ * Resolves a project only after proving that its organization is the canonical
+ * organization owned by this DataNexus instance. This is the reusable boundary
+ * for server-side project context, including authorization, search and AI flows.
+ */
+export async function assertProjectBelongsToInstanceOrganization(projectId: string): Promise<{ projectId: string; organizationId: string }> {
+  if (!projectId) {
+    throw new InstanceOrganizationIntegrityError('Project context is required.')
+  }
+
+  const admin = createAdminClient()
+  const projectResult = await admin.schema('app').from('projects')
+    .select('id,organization_id')
+    .eq('id', projectId)
+    .maybeSingle()
+
+  if (projectResult.error) {
+    throw new InstanceOrganizationIntegrityError(`Unable to resolve project organization context: ${projectResult.error.message}`)
+  }
+  if (!projectResult.data) {
+    throw new InstanceOrganizationIntegrityError(`Project context rejected: project ${projectId} was not found.`)
+  }
+
+  const organizationId = String(projectResult.data.organization_id)
+  await assertInstanceOrganizationId(organizationId)
+  return { projectId: String(projectResult.data.id), organizationId }
+}
