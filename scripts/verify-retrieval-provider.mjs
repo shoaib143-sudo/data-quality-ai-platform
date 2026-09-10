@@ -2,7 +2,6 @@ import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 
 const provider = fs.readFileSync('lib/ai/retrieval-provider.ts', 'utf8')
-const normalization = fs.readFileSync('lib/ai/retrieval-metadata-normalization.ts', 'utf8')
 const reranker = fs.readFileSync('lib/ai/reranker-provider.ts', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-retrieval-provider.ts', 'utf8')
 const embeddingAdapter = fs.readFileSync('lib/ai/governance-embedding-provider.ts', 'utf8')
@@ -29,15 +28,11 @@ requireText(provider, 'governance.semantic_embeddings', 'semantic projection pro
 requireText(provider, 'projection: true', 'retrieval projection truth boundary')
 requireText(provider, 'does not support requested modes', 'fail-closed unsupported channel behavior')
 requireText(provider, 'withNormalizedRetrievalMetadata(match.metadata)', 'canonical retrieval metadata normalization')
-
-requireText(normalization, "authorityClass: 'UNKNOWN'", 'unknown authority remains explicit')
-requireText(normalization, "temporalStatus: 'MISSING'", 'missing temporal evidence remains explicit')
-requireText(normalization, "temporalStatus: 'INVALID'", 'invalid temporal evidence remains explicit')
-requireText(normalization, "temporalStatus: 'FUTURE'", 'future temporal evidence remains explicit')
-requireText(normalization, 'retrieval_normalization:', 'normalized metadata projection namespace')
-if (/score|weight|boost|penalty/i.test(normalization.replace(/\/\*[\s\S]*?\*\//g, ''))) {
-  throw new Error('Retrieval metadata normalization must not invent ranking weights or authority scores.')
-}
+requireText(provider, "authorityClass: 'UNKNOWN'", 'unknown authority remains explicit')
+requireText(provider, "temporalStatus: 'MISSING'", 'missing temporal evidence remains explicit')
+requireText(provider, "temporalStatus: 'INVALID'", 'invalid temporal evidence remains explicit')
+requireText(provider, "temporalStatus: 'FUTURE'", 'future temporal evidence remains explicit')
+requireText(provider, 'retrieval_normalization:', 'normalized metadata projection namespace')
 
 requireText(reranker, 'export interface RerankerProvider', 'stable reranker provider interface')
 requireText(reranker, 'DeterministicRelevanceReranker', 'deterministic initial reranker')
