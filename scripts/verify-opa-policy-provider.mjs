@@ -29,7 +29,7 @@ const required = [
   [decision, '"policy_version_id": canonical.policy_version_id', 'OPA result exact version echo'],
   [install, 'OPA_VERSION:-v1.20.2', 'pinned OPA release'],
   [install, 'sha256sum --check', 'OPA binary checksum verification'],
-  [build, 'opa test infra/opa/policy', 'Rego behavior tests'],
+  [build, 'test infra/opa/policy', 'Rego behavior tests'],
   [build, 'bundle.tar.gz', 'OPA policy bundle build'],
   [start, '--authentication=token', 'OPA token authentication'],
   [start, '--authorization=basic', 'OPA API authorization policy'],
