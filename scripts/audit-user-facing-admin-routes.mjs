@@ -40,6 +40,22 @@ const approvedPrivilegedExceptions = new Map([
   }],
 ])
 
+const pinnedInteractiveBoundaries = new Map([
+  ['app/api/admin/members/route.ts', ['requireApiUser(', 'authorizeOrganizationAdmin(']],
+  ['app/api/agents/runs/[runId]/logs/route.ts', ['requireApiUser(', "'agent.execute'"]],
+  ['app/api/agents/runs/[runId]/terminate/route.ts', ['requireApiUser(', "'agent.execute'"]],
+  ['app/api/classification/policies/route.ts', ['requireApiUser(', "'classification.review'"]],
+  ['app/api/datasets/[datasetId]/route.ts', ['requireApiUser(', "'catalog.update'", "'source.manage'"]],
+  ['app/api/datasets/create-project/route.ts', ['requireApiUser(', 'authorizeOrganizationAdmin(']],
+  ['app/api/datasets/register/route.ts', ['requireApiUser(', "'catalog.update'"]],
+  ['app/api/datasets/source/[sourceId]/route.ts', ['requireApiUser(', "'source.manage'"]],
+  ['app/api/datasets/source/credentials/route.ts', ['requireApiUser(', "'source.manage'"]],
+  ['app/api/lineage/suggestions/route.ts', ['requireApiUser(', "'lineage.read'", "'lineage.manage'"]],
+  ['app/api/profiling/compare/route.ts', ['requireApiUser(', "'profiling.read'"]],
+  ['app/api/reports/governance/route.ts', ['requireApiUser(', "'report.export'"]],
+  ['app/api/schedules/[scheduleId]/route.ts', ['requireApiUser(', "'schedule.manage'"]],
+])
+
 async function walk(directory) {
   const entries = await readdir(directory, { withFileTypes: true })
   const files = []
@@ -54,6 +70,7 @@ async function walk(directory) {
 const routes = await walk(apiRoot)
 const privileged = []
 const invalidExceptions = []
+const invalidPinnedBoundaries = []
 
 for (const absolute of routes) {
   const source = await readFile(absolute, 'utf8')
@@ -65,6 +82,12 @@ for (const absolute of routes) {
   const hasRequireUser = source.includes('requireUser(')
   const hasProjectCapability = source.includes('authorizeProject(') || source.includes('authorizeDataset(') || source.includes('authorizeDatasetVersion(')
   const exception = approvedPrivilegedExceptions.get(relative)
+  const pinnedMarkers = pinnedInteractiveBoundaries.get(relative)
+
+  if (pinnedMarkers) {
+    const missingMarkers = pinnedMarkers.filter(marker => !source.includes(marker))
+    if (missingMarkers.length > 0) invalidPinnedBoundaries.push({ relative, missingMarkers })
+  }
 
   let classification
   if (interactiveMarkers.length > 0) {
@@ -91,12 +114,16 @@ for (const route of privileged.sort((a, b) => a.relative.localeCompare(b.relativ
 
 const review = privileged.filter(route => route.classification.endsWith('_REVIEW'))
 console.log(`Routes requiring authorization review: ${review.length}`)
+console.log(`Pinned interactive boundaries verified: ${pinnedInteractiveBoundaries.size - invalidPinnedBoundaries.length}/${pinnedInteractiveBoundaries.size}`)
 
 if (invalidExceptions.length > 0) {
   for (const invalid of invalidExceptions) console.error(`Invalid privileged-route exception ${invalid.relative}; missing: ${invalid.missingMarkers.join(', ')}`)
+}
+if (invalidPinnedBoundaries.length > 0) {
+  for (const invalid of invalidPinnedBoundaries) console.error(`Pinned privileged-route authorization regressed ${invalid.relative}; missing: ${invalid.missingMarkers.join(', ')}`)
 }
 if (review.length > 0) {
   for (const route of review) console.error(`Privileged route lacks an approved authorization boundary: ${route.relative}`)
 }
 
-if (invalidExceptions.length > 0 || review.length > 0) process.exitCode = 1
+if (invalidExceptions.length > 0 || invalidPinnedBoundaries.length > 0 || review.length > 0) process.exitCode = 1
