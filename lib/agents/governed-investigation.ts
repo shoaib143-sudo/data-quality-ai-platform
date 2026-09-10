@@ -192,27 +192,6 @@ function sourceRows(context: SpecialistContextLike): Array<[string, JsonRecord[]
   ]
 }
 
-function buildProvenance(context: SpecialistContextLike) {
-  const refs: InvestigationEvidenceRef[] = []
-  const counts: Record<string, number> = {}
-  for (const [source, sourceData] of sourceRows(context)) {
-    counts[source] = sourceData.length
-    for (const row of sourceData.slice(0, SOURCE_ROWS_PER_DOMAIN)) {
-      const id = text(row.id)
-      if (!id) continue
-      refs.push({
-        ref: `${source}:${id}`,
-        source,
-        id,
-        authority: authorityFor(source, row),
-        observedAt: observedAt(row),
-      })
-      if (refs.length >= MAX_PROVENANCE_REFS) return { refs, counts }
-    }
-  }
-  return { refs, counts }
-}
-
 function collectClaimEvidenceIds(value: unknown, output: Set<string>) {
   if (!value || typeof value !== 'object') return
   if (Array.isArray(value)) {
@@ -229,6 +208,35 @@ function collectClaimEvidenceIds(value: unknown, output: Set<string>) {
     }
     if (['recommendations', 'hypotheses', 'priorities'].includes(key)) collectClaimEvidenceIds(child, output)
   }
+}
+
+function buildProvenance(context: SpecialistContextLike, requiredEvidenceIds: ReadonlySet<string>) {
+  const refs: InvestigationEvidenceRef[] = []
+  const counts: Record<string, number> = {}
+  const seenRefs = new Set<string>()
+
+  for (const [source, sourceData] of sourceRows(context)) {
+    counts[source] = sourceData.length
+    for (let index = 0; index < sourceData.length; index += 1) {
+      const row = sourceData[index]
+      const id = text(row.id)
+      if (!id) continue
+      if (index >= SOURCE_ROWS_PER_DOMAIN && !requiredEvidenceIds.has(id)) continue
+
+      const ref = `${source}:${id}`
+      if (seenRefs.has(ref)) continue
+      seenRefs.add(ref)
+      refs.push({
+        ref,
+        source,
+        id,
+        authority: authorityFor(source, row),
+        observedAt: observedAt(row),
+      })
+      if (refs.length >= MAX_PROVENANCE_REFS) return { refs, counts }
+    }
+  }
+  return { refs, counts }
 }
 
 function authorityCounts(provenance: InvestigationEvidenceRef[]) {
@@ -253,10 +261,10 @@ export function buildGovernedInvestigation(input: {
   graph: GraphLike
 }): GovernedInvestigation {
   const policy = getGovernedAgentPolicy(input.agentKey)
-  const provenanceResult = buildProvenance(input.context)
-  const evidenceIds = new Set(provenanceResult.refs.map((ref) => ref.id))
   const referencedEvidence = new Set<string>()
   collectClaimEvidenceIds(input.specialist, referencedEvidence)
+  const provenanceResult = buildProvenance(input.context, referencedEvidence)
+  const evidenceIds = new Set(provenanceResult.refs.map((ref) => ref.id))
   const unsupportedEvidenceIds = [...referencedEvidence].filter((id) => !evidenceIds.has(id)).sort()
   const datasetIds = [...new Set(rows(input.context.datasets).map((row) => text(row.id)).filter(Boolean))]
 
