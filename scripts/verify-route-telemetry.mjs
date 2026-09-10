@@ -89,8 +89,8 @@ for (const token of [
   "grant execute on function governance.acquire_ai_project_resource_budget_admission",
 ]) if (!admissionMigration.includes(token) && !scopeMigration.includes(token)) failures.push(`missing atomic admission migration token: ${token}`)
 
-if (!scopeMigration.includes("scope_type = 'PROJECT'") || !scopeMigration.includes("scope_type in ('PROJECT', 'AI_SYSTEM', 'AGENT')")) {
-  failures.push('scope admission migration must preserve PROJECT compatibility and allow exact governed scope policies')
+if (!scopeMigration.includes('effective.id = p_policy_version_id') || scopeMigration.includes("effective.scope_type = 'PROJECT'") || scopeMigration.includes("effective.scope_key = 'PROJECT'")) {
+  failures.push('scope admission migration must admit exact current policy versions without a PROJECT-only restriction')
 }
 if (!composition.includes('createGovernanceReasoningBudgetPolicyProvider()')) failures.push('governed Intelligent Router must compose canonical reasoning budget policy provider')
 if (!composition.includes('createGovernanceProjectBudgetAdmissionProvider()')) failures.push('governed Intelligent Router must compose atomic budget admission provider')
