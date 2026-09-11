@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DataNexus Recovery Scope Map",
+  "type": "object",
+  "required": ["schemaVersion", "scopes"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "scopes": {
+      "type": "object",
+      "required": ["DATABASE", "STORAGE", "IDENTITY_CONFIG", "APPLICATION_CONFIG", "EDGE_RUNTIME", "DEPENDENCIES", "SERVICE_VALIDATION"]
+    }
+  }
+}
