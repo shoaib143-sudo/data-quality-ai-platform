@@ -5,6 +5,7 @@ const lifecycle = readFileSync('lib/agents/runtime/native-agent-lifecycle.ts', '
 const dataQualityQueue = readFileSync('lib/data-quality/queue.ts', 'utf8')
 const profilingExecutor = readFileSync('lib/agents/executors/profiling-executor.ts', 'utf8')
 const specialistExecutor = readFileSync('lib/agents/governance-specialist-agent.ts', 'utf8')
+const governedRegistry = readFileSync('lib/agents/governed-agent-registry.ts', 'utf8')
 
 function contains(source, token, label) {
   assert.ok(source.includes(token), `${label} is missing: ${token}`)
@@ -30,13 +31,25 @@ contains(profilingExecutor, 'admitNativeToolInvocation', 'Profiling native tool 
 contains(profilingExecutor, 'completeNativeToolInvocation', 'Profiling native tool completion')
 contains(profilingExecutor, 'failNativeToolInvocation', 'Profiling native tool failure evidence')
 
-// This verifier intentionally keeps the remaining specialist gap explicit until the
-// specialist executor itself pins the runtime before evidence collection and admits a
-// truthful specialist tool contract. Post-execution pinning is not accepted as adoption.
-assert.equal(
-  specialistExecutor.includes('startNativeAgentLifecycle'),
-  false,
-  'Remove this assertion only when specialist runtime adoption is implemented inside the executor',
+contains(specialistExecutor, 'startNativeAgentLifecycle', 'specialist native runtime lifecycle')
+contains(specialistExecutor, 'admitNativeToolInvocation', 'specialist native tool admission')
+contains(specialistExecutor, 'completeNativeToolInvocation', 'specialist native tool completion')
+contains(specialistExecutor, 'failNativeToolInvocation', 'specialist native tool failure evidence')
+contains(specialistExecutor, "toolKey: 'governance_specialist_investigate'", 'specialist pinned tool key')
+contains(specialistExecutor, "expectedExecutor: 'governance-specialist-agent'", 'specialist exact executor binding')
+assert.ok(
+  specialistExecutor.indexOf('await startNativeAgentLifecycle') < specialistExecutor.indexOf('await admitNativeToolInvocation'),
+  'Specialist runtime lifecycle must be pinned before native tool admission',
+)
+assert.ok(
+  specialistExecutor.indexOf('await admitNativeToolInvocation') < specialistExecutor.indexOf('const [projectResult, ctx, knowledgeMatches] = await Promise.all'),
+  'Specialist native tool admission must happen before evidence collection',
 )
 
-console.log('Native runtime adoption foundation verified: profiling guarded, Data Quality pinned before queue, specialist gap remains explicit.')
+const specialistToolOccurrences = governedRegistry.match(/governance_specialist_investigate/g) ?? []
+assert.equal(specialistToolOccurrences.length, 6, 'All six governance specialist allowlists must include the pinned specialist tool')
+for (const toolKey of ['sync_quality_rules', 'execute_quality_rules', 'publish_quality_results']) {
+  contains(governedRegistry, `'${toolKey}'`, `Data Quality governed allowlist ${toolKey}`)
+}
+
+console.log('Native runtime adoption verified: profiling guarded, Data Quality pinned before queue, and all six governance specialists admitted before evidence collection.')
