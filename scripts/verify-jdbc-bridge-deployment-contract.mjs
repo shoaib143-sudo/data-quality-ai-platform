@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 const repositoryRoot = resolve(import.meta.dirname, '..')
 const blueprintPaths = [
+  'render.yaml',
   'services/jdbc-bridge/render.yaml',
   'services/jdbc-bridge/render-environment.yaml',
 ]
@@ -27,4 +28,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('JDBC bridge deployment contract passed: both Render blueprints are always-on and health-checked.')
+console.log('JDBC bridge deployment contract passed: every Render blueprint is always-on and health-checked.')
