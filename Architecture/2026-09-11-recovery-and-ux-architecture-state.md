@@ -377,21 +377,13 @@ Database state and Auth platform configuration must be treated separately. Provi
 
 ## Current PR integration boundary
 
-PR #261 contains the portable-backup and local-restore implementation.
-
-Its original exact head passed the required quality/security/revalidation/certification checks and clean database reconstruction.
-
-However, current `main` advanced through PR #262, which introduced native agent runtime and tool-contract pinning. The repository therefore correctly rejected the stale #261 merge under protected-branch enforcement.
+PR #261 contained the portable-backup and local-restore implementation. Its original exact head passed the required quality, security, revalidation, certification and clean reconstruction checks, but `main` later advanced through the native runtime work. The stale merge was correctly rejected by protected-branch enforcement.
 
 Architecture rule:
 
-**Recovery work must be rebased/synchronized onto the latest runtime contract state before merge. Do not bypass protected checks using evidence from an older base.**
+**Recovery work must be synchronized onto the latest runtime contract state before merge. Do not bypass protected checks using evidence from an older base.**
 
-At this checkpoint:
-
-- current `main`: `edf99a8db32fc93a9813a64a203005a8a26f594a`
-- #261 head: `b1d1629eb21e6d35b750abcf2598da0ad11d0555`
-- #261 is behind current `main` and must be synchronized before merge
+The branch was subsequently synchronized with current `main`. The synchronized head `4292c027a1a0ddc0dcaa36fb1ab32925e052c54e` passed the protected gates and Recovery Assurance, and PR #261 merged as `e985d59f22801092e8f6de5d705e2b4c54131e2a`. Portable backup and loopback-only local restore are now canonical repository capabilities.
 
 ## External evidence architecture
 
