@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, CheckCircle2, Circle, Compass, Database, Gauge, Radar, ShieldCheck, Wrench } from 'lucide-react'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { JourneyViewTelemetry, TrackedJourneyLink } from '@/components/app-shell/journey-telemetry'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { requireUser } from '@/lib/supabase/auth'
@@ -148,7 +149,9 @@ export default async function JourneysPage() {
     ]
 
     const nextStep = steps.find(step => !step.complete) ?? null
-    return { project, steps, nextStep, completed: steps.filter(step => step.complete).length }
+    const completed = steps.filter(step => step.complete).length
+    const telemetryStage = (nextStep?.key ?? 'complete').toUpperCase() as 'CONNECT' | 'DISCOVER' | 'PROFILE' | 'REMEDIATE' | 'VERIFY' | 'COMPLETE'
+    return { project, steps, nextStep, completed, telemetryStage }
   })
 
   return (
@@ -163,8 +166,9 @@ export default async function JourneysPage() {
         </header>
 
         <section className="mt-6 space-y-5">
-          {journeys.length ? journeys.map(({ project, steps, nextStep, completed }) => (
+          {journeys.length ? journeys.map(({ project, steps, nextStep, completed, telemetryStage }) => (
             <article key={project.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+              <JourneyViewTelemetry projectId={project.id} stage={telemetryStage} completedStages={completed} />
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Project journey</p>
@@ -172,9 +176,9 @@ export default async function JourneysPage() {
                   <p className="mt-2 text-sm text-slate-500">{completed} of {steps.length} evidence stages currently satisfied.</p>
                 </div>
                 {nextStep ? (
-                  <Link href={nextStep.href} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                  <TrackedJourneyLink projectId={project.id} stage={telemetryStage} completedStages={completed} href={nextStep.href} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
                     Next: {nextStep.action} <ArrowRight className="h-4 w-4" />
-                  </Link>
+                  </TrackedJourneyLink>
                 ) : (
                   <Link href={safeHref('/scorecards', '/reports')} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
                     Review governance evidence <ArrowRight className="h-4 w-4" />

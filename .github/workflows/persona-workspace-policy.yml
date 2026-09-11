@@ -24,3 +24,5 @@ jobs:
         run: node --experimental-strip-types scripts/verify-persona-workspace-policy.mjs
       - name: Verify shared DataNexus UX foundation
         run: node scripts/verify-ux-foundation.mjs
+      - name: Verify UX product telemetry contract
+        run: node scripts/verify-ux-product-telemetry.mjs
