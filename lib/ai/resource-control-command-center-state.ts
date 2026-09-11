@@ -132,6 +132,11 @@ export class GovernedResourceControlState {
     const budgetAdmissions = admissionsRaw.filter((row) => row.project_id === projectId)
     const budgetConcurrencyLeases = leasesRaw.filter((row) => row.project_id === projectId)
     const modelPricingAuthorities = pricingRaw.filter((row) => row.project_id === projectId)
+    const projectBudget = budgets.find((row) => row.scope_type === 'PROJECT' && row.scope_key === 'PROJECT') ?? null
+    const runtimeCostEnforcementEnabled = Boolean(
+      projectBudget?.enabled
+      && (projectBudget.max_cost_usd_per_request != null || projectBudget.max_cost_usd_per_day != null),
+    )
     const now = Date.now()
     const activeBudgetConcurrencyLeases = budgetConcurrencyLeases.filter((row) => {
       const expiresAt = Date.parse(row.expires_at)
@@ -164,7 +169,7 @@ export class GovernedResourceControlState {
         emergencyMutationEnabled: false as const,
         admissionMutationEnabled: false as const,
         pricingMutationEnabled: false as const,
-        runtimeCostEnforcementEnabled: false as const,
+        runtimeCostEnforcementEnabled,
       },
     }
   }

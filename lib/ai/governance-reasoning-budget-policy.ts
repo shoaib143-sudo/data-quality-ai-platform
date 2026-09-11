@@ -14,6 +14,13 @@ function optionalPositiveInteger(value: unknown, label: string) {
   return normalized
 }
 
+function optionalPositiveAmount(value: unknown, label: string) {
+  if (value == null) return null
+  const normalized = Number(value)
+  if (!Number.isFinite(normalized) || normalized <= 0) throw new Error(`${label} is invalid`)
+  return normalized
+}
+
 function minimum(values: Array<number | null>) {
   const concrete = values.filter((value): value is number => value !== null)
   return concrete.length ? Math.min(...concrete) : null
@@ -25,6 +32,8 @@ type BudgetRow = {
   scope_key: string
   enabled: boolean
   max_output_tokens_per_request: unknown
+  max_cost_usd_per_request: unknown
+  max_cost_usd_per_day: unknown
   max_requests_per_minute: unknown
   max_concurrent_executions: unknown
 }
@@ -42,17 +51,37 @@ function composeBudget(rows: BudgetRow[]): ProjectReasoningBudget | null {
   const limits = rows.map((row) => ({
     row,
     maxOutputTokens: optionalPositiveInteger(row.max_output_tokens_per_request, `${row.scope_type}/${row.scope_key} max_output_tokens_per_request`),
+    maxCostUsdPerRequest: optionalPositiveAmount(row.max_cost_usd_per_request, `${row.scope_type}/${row.scope_key} max_cost_usd_per_request`),
+    maxCostUsdPerDay: optionalPositiveAmount(row.max_cost_usd_per_day, `${row.scope_type}/${row.scope_key} max_cost_usd_per_day`),
     maxRequestsPerMinute: optionalPositiveInteger(row.max_requests_per_minute, `${row.scope_type}/${row.scope_key} max_requests_per_minute`),
     maxConcurrentExecutions: optionalPositiveInteger(row.max_concurrent_executions, `${row.scope_type}/${row.scope_key} max_concurrent_executions`),
   }))
+
+  const unsupportedScopedCost = limits.find((entry) =>
+    entry.row.scope_type !== 'PROJECT'
+    && (entry.maxCostUsdPerRequest !== null || entry.maxCostUsdPerDay !== null),
+  )
+  if (unsupportedScopedCost) {
+    const error = new Error(`Scoped cost evidence unavailable for ${unsupportedScopedCost.row.scope_type}/${unsupportedScopedCost.row.scope_key}`)
+    error.name = 'ScopedCostEvidenceUnavailableError'
+    throw error
+  }
+
   const admissionPolicies: ReasoningAdmissionPolicy[] = limits
-    .filter((entry) => entry.maxRequestsPerMinute !== null || entry.maxConcurrentExecutions !== null)
+    .filter((entry) =>
+      entry.maxRequestsPerMinute !== null
+      || entry.maxConcurrentExecutions !== null
+      || entry.maxCostUsdPerRequest !== null
+      || entry.maxCostUsdPerDay !== null,
+    )
     .map((entry) => ({
       policyId: entry.row.id,
       scopeType: entry.row.scope_type,
       scopeKey: entry.row.scope_key,
       maxRequestsPerMinute: entry.maxRequestsPerMinute,
       maxConcurrentExecutions: entry.maxConcurrentExecutions,
+      maxCostUsdPerRequest: entry.maxCostUsdPerRequest,
+      maxCostUsdPerDay: entry.maxCostUsdPerDay,
     }))
   const project = limits.find((entry) => entry.row.scope_type === 'PROJECT')
   const primary = project ?? limits[0]
@@ -63,6 +92,8 @@ function composeBudget(rows: BudgetRow[]): ProjectReasoningBudget | null {
     maxOutputTokens: minimum(limits.map((entry) => entry.maxOutputTokens)),
     maxRequestsPerMinute: minimum(limits.map((entry) => entry.maxRequestsPerMinute)),
     maxConcurrentExecutions: minimum(limits.map((entry) => entry.maxConcurrentExecutions)),
+    maxCostUsdPerRequest: project?.maxCostUsdPerRequest ?? null,
+    maxCostUsdPerDay: project?.maxCostUsdPerDay ?? null,
   }
 }
 
@@ -79,7 +110,7 @@ export function createGovernanceReasoningBudgetPolicyProvider(): ReasoningBudget
     }
 
     const { data, error } = await admin.schema('governance').from('ai_resource_budget_policy_effective')
-      .select('id,scope_type,scope_key,enabled,max_output_tokens_per_request,max_requests_per_minute,max_concurrent_executions')
+      .select('id,scope_type,scope_key,enabled,max_output_tokens_per_request,max_cost_usd_per_request,max_cost_usd_per_day,max_requests_per_minute,max_concurrent_executions')
       .eq('project_id', normalizedProjectId)
     if (error) throw new Error(`Unable to resolve AI reasoning budgets: ${error.message}`)
 

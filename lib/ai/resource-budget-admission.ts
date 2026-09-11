@@ -5,6 +5,9 @@ export type ProjectBudgetAdmissionReason =
   | 'POLICY_DISABLED'
   | 'RATE_LIMIT'
   | 'CONCURRENCY_LIMIT'
+  | 'COST_EVIDENCE_INCOMPLETE'
+  | 'COST_CURRENCY_UNSUPPORTED'
+  | 'DAILY_COST_LIMIT'
 
 export type ProjectBudgetAdmission = {
   admitted: boolean

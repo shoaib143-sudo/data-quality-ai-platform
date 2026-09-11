@@ -66,6 +66,10 @@ function mapRecord(row: Record<string, unknown>): ModelCostAccountingRecord {
   }
 }
 
+function hasHardCostLimit(row: Record<string, unknown>) {
+  return row.max_cost_usd_per_request != null || row.max_cost_usd_per_day != null
+}
+
 export function createGovernanceModelCostAccountingProvider(): ModelCostAccountingProvider {
   const admin = createAdminClient()
   return {
@@ -95,7 +99,36 @@ export function createGovernanceModelCostAccountingProvider(): ModelCostAccounti
       if (!data) throw new Error('Canonical AI model cost accounting returned no evidence')
       const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | undefined
       if (!row) throw new Error('Canonical AI model cost accounting returned an empty result')
-      return mapRecord(row)
+      const record = mapRecord(row)
+
+      const { data: policyData, error: policyError } = await admin.schema('governance').from('ai_resource_budget_policy_effective')
+        .select('id,enabled,max_cost_usd_per_request,max_cost_usd_per_day')
+        .eq('project_id', projectId)
+        .eq('scope_type', 'PROJECT')
+        .eq('scope_key', 'PROJECT')
+        .maybeSingle()
+      if (policyError) throw new Error(`Unable to resolve governed runtime cost policy: ${policyError.message}`)
+      const policy = policyData as Record<string, unknown> | null
+      if (!policy || !policy.enabled || !hasHardCostLimit(policy)) return record
+
+      const policyVersionId = requiredUuid(String(policy.id), 'runtime cost policy version')
+      const { data: decisionData, error: decisionError } = await admin.schema('governance').rpc('evaluate_ai_project_runtime_cost', {
+        p_project_id: projectId,
+        p_cost_event_id: requiredUuid(record.id, 'cost evidence id'),
+        p_policy_version_id: policyVersionId,
+      })
+      if (decisionError) throw new Error(`Unable to evaluate governed runtime cost: ${decisionError.message}`)
+      const decision = (Array.isArray(decisionData) ? decisionData[0] : decisionData) as Record<string, unknown> | null
+      if (!decision || typeof decision.allowed !== 'boolean' || typeof decision.reason !== 'string') {
+        throw new Error('Governed runtime cost enforcement returned an invalid decision')
+      }
+      if (!decision.allowed) {
+        const enforcementError = new Error(`Governed runtime cost enforcement denied result consumption: ${decision.reason}`)
+        enforcementError.name = 'RuntimeCostEnforcementDeniedError'
+        throw enforcementError
+      }
+
+      return record
     },
   }
 }
