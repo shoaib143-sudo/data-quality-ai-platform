@@ -58,6 +58,7 @@ export const workspacePrefixes: readonly [string, WorkspaceKey][] = [
   ['/profiling', 'profiling'],
   ['/observability', 'observability'],
   ['/monitoring', 'monitoring'],
+  ['/recovery', 'monitoring'],
   ['/stewardship', 'stewardship'],
   ['/classification', 'classification'],
   ['/contracts', 'contracts'],
