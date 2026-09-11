@@ -1,0 +1,38 @@
+name: Native Supervisor Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'lib/agents/runtime/native-autonomy-runtime.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'app/api/agents/supervisor/run/route.ts'
+      - 'supabase/migrations/**native_supervisor**'
+      - 'scripts/verify-native-supervisor-production.mjs'
+      - '.github/workflows/native-supervisor-production.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'lib/agents/runtime/native-autonomy-runtime.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'app/api/agents/supervisor/run/route.ts'
+      - 'supabase/migrations/**native_supervisor**'
+      - 'scripts/verify-native-supervisor-production.mjs'
+      - '.github/workflows/native-supervisor-production.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify native supervisor production entrypoint
+        run: node scripts/verify-native-supervisor-production.mjs

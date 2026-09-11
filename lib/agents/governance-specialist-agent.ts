@@ -440,6 +440,8 @@ export async function executeGovernanceSpecialistAgent(input: {
   agentDefinitionId: string
   actorUserId: string
   question?: string | null
+  existingAgentRunId?: string | null
+  nativeAttempt?: number
 }) {
   const admin = createAdminClient()
   const suppliedQuestion = input.question?.trim().slice(0, 1000) || null
@@ -456,14 +458,42 @@ export async function executeGovernanceSpecialistAgent(input: {
   const agentKey = String(definition.agent_key) as GovernanceReadAgentKey
   const query = suppliedQuestion || defaultQuestion(agentKey)
 
-  const { data: run, error: runError } = await admin.schema('agent').from('agent_runs').insert({
-    agent_definition_id: definition.id,
-    project_id: input.projectId,
-    status: 'RUNNING',
-    input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'deterministic_specialist_read_only' },
-    started_at: new Date().toISOString(),
-  }).select('id').single()
-  if (runError || !run) throw new Error(`Unable to create specialist agent run: ${runError?.message ?? 'unknown error'}`)
+  let run: { id: string }
+  if (input.existingAgentRunId) {
+    const { data: existingRun, error: existingRunError } = await admin.schema('agent').from('agent_runs')
+      .select('id,agent_definition_id,project_id,status')
+      .eq('id', input.existingAgentRunId)
+      .maybeSingle()
+    if (existingRunError || !existingRun) {
+      throw new Error(`Unable to resolve supervisor-bound specialist run: ${existingRunError?.message ?? 'not found'}`)
+    }
+    if (existingRun.agent_definition_id !== definition.id || existingRun.project_id !== input.projectId) {
+      throw new Error('Supervisor-bound specialist run does not match the planned agent and project.')
+    }
+    if (!['QUEUED', 'FAILED', 'RUNNING'].includes(String(existingRun.status).toUpperCase())) {
+      throw new Error(`Supervisor-bound specialist run is not executable from status ${existingRun.status}.`)
+    }
+    const { error: startError } = await admin.schema('agent').from('agent_runs').update({
+      status: 'RUNNING',
+      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'native_supervisor_specialist_read_only' },
+      started_at: new Date().toISOString(),
+      completed_at: null,
+      error_code: null,
+      error_message: null,
+    }).eq('id', existingRun.id)
+    if (startError) throw new Error(`Unable to start supervisor-bound specialist run: ${startError.message}`)
+    run = { id: existingRun.id }
+  } else {
+    const { data: createdRun, error: runError } = await admin.schema('agent').from('agent_runs').insert({
+      agent_definition_id: definition.id,
+      project_id: input.projectId,
+      status: 'RUNNING',
+      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'deterministic_specialist_read_only' },
+      started_at: new Date().toISOString(),
+    }).select('id').single()
+    if (runError || !createdRun) throw new Error(`Unable to create specialist agent run: ${runError?.message ?? 'unknown error'}`)
+    run = createdRun
+  }
 
   let lifecycle: NativeAgentLifecycle | null = null
   let admission: Awaited<ReturnType<typeof admitNativeToolInvocation>> | null = null
@@ -486,7 +516,7 @@ export async function executeGovernanceSpecialistAgent(input: {
         projectId: input.projectId,
         ...(suppliedQuestion ? { question: suppliedQuestion } : {}),
       },
-      idempotencyKey: `governance-specialist:${run.id}:investigate`,
+      idempotencyKey: `governance-specialist:${run.id}:investigate:attempt:${Math.max(1, input.nativeAttempt ?? 1)}`,
     })
 
     const [projectResult, ctx, knowledgeMatches] = await Promise.all([
