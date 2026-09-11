@@ -18,8 +18,10 @@ on:
     branches: [main]
     paths:
       - 'lib/agents/runtime/native-autonomy-kernel.ts'
+      - 'lib/agents/runtime/native-rollback-contract.ts'
       - 'lib/agents/runtime/native-recovery-v2.ts'
       - 'scripts/test-native-autonomy-kernel.mjs'
+      - 'scripts/test-native-rollback-contracts.mjs'
       - 'scripts/verify-native-autonomy-kernel.mjs'
       - 'scripts/verify-native-recovery-v2.mjs'
       - 'scripts/verify-native-rollback-contracts.mjs'
