@@ -49,11 +49,14 @@ create table if not exists orchestration.recovery_actions (
 
 create index if not exists recovery_actions_case_idx
   on orchestration.recovery_actions(recovery_case_id, created_at desc);
+create unique index if not exists recovery_actions_one_retry_per_case_idx
+  on orchestration.recovery_actions(recovery_case_id)
+  where action_type = 'RETRY' and status in ('QUEUED', 'EXECUTED');
 
 comment on table orchestration.recovery_cases is
   'Canonical evidence-backed recovery cases created from terminal durable job failures; no synthetic failure evidence.';
 comment on table orchestration.recovery_actions is
-  'Append-only operator/system recovery action ledger. Rollback is review-only unless a separately governed implementation exists.';
+  'Governed recovery action history. Retry is capped at one operator-approved extra attempt per case; rollback remains review-only.';
 
 alter table orchestration.recovery_cases enable row level security;
 alter table orchestration.recovery_actions enable row level security;
@@ -89,7 +92,7 @@ as $function$
 declare
   v_error text := lower(coalesce(p_last_error, ''));
   v_job_type text := upper(coalesce(p_job_type, ''));
-  v_retry_safe boolean := v_job_type in ('PROFILING', 'OBSERVABILITY', 'NOTIFICATION', 'DISCOVERY', 'LINEAGE_ENRICHMENT', 'SEMANTIC_INDEX', 'GOVERNANCE_AGENT');
+  v_retry_safe boolean := v_job_type in ('PROFILING', 'OBSERVABILITY', 'DISCOVERY', 'LINEAGE_ENRICHMENT', 'SEMANTIC_INDEX', 'GOVERNANCE_AGENT');
 begin
   if v_error ~ '(permission|not authorized|authorization|forbidden|access denied)' then
     return jsonb_build_object('classification', 'AUTHORIZATION', 'recommended_action', 'MANUAL_REVIEW');
@@ -102,7 +105,7 @@ begin
     );
   end if;
 
-  if v_error ~ '(payload is incomplete|configuration|config is incomplete|required configuration|missing .*id)' then
+  if v_error ~ '(payload is incomplete|configuration|config is incomplete|required configuration|missing .*id|credentialref|credential mode|unknown credential)' then
     return jsonb_build_object('classification', 'CONFIGURATION', 'recommended_action', 'MANUAL_REVIEW');
   end if;
 
@@ -113,7 +116,7 @@ begin
     );
   end if;
 
-  if v_error ~ '(jdbc|connection|connect timeout|connection reset|temporar|timed out|timeout|network|econnreset|econnrefused|fetch failed|socket)' then
+  if v_error ~ '(connection timeout|connect timeout|connection reset|temporar|timed out|timeout|network|econnreset|econnrefused|fetch failed|socket)' then
     return jsonb_build_object(
       'classification', 'TRANSIENT_EXTERNAL',
       'recommended_action', case when v_retry_safe then 'RETRY' else 'MANUAL_REVIEW' end
@@ -123,6 +126,9 @@ begin
   return jsonb_build_object('classification', 'UNKNOWN', 'recommended_action', 'MANUAL_REVIEW');
 end;
 $function$;
+
+comment on function orchestration.execution_recovery_classification(text, text) is
+  'Conservative deterministic recovery classifier. Generic JDBC failures do not qualify for retry without a concrete transient signal.';
 
 create or replace function orchestration.capture_terminal_recovery_case()
 returns trigger
@@ -243,6 +249,8 @@ for each row
 when (new.status = 'SUCCEEDED')
 execute function orchestration.enforce_profiling_job_success_integrity();
 
+-- Internal mutation primitive. It is intentionally not executable by browser roles;
+-- the externally callable wrapper below adds project-admin consent enforcement.
 create or replace function orchestration.request_execution_recovery_action(
   p_case_id uuid,
   p_action text
@@ -351,8 +359,165 @@ begin
 end;
 $function$;
 
-revoke all on function orchestration.request_execution_recovery_action(uuid, text) from public, anon;
-grant execute on function orchestration.request_execution_recovery_action(uuid, text) to authenticated;
+revoke all on function orchestration.request_execution_recovery_action(uuid, text) from public, anon, authenticated;
+
+create or replace function orchestration.request_execution_recovery_action_admin(
+  p_case_id uuid,
+  p_action text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_project_id uuid;
+  v_action text := upper(trim(coalesce(p_action, '')));
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication is required.' using errcode = '42501';
+  end if;
+
+  select project_id into v_project_id
+  from orchestration.recovery_cases
+  where id = p_case_id;
+
+  if not found then
+    raise exception 'Recovery case not found.' using errcode = 'P0002';
+  end if;
+
+  if not app_private.is_project_admin(v_project_id) then
+    raise exception 'Recovery actions require project administrator approval.' using errcode = '42501';
+  end if;
+
+  if v_action = 'RETRY' and exists (
+    select 1
+    from orchestration.recovery_actions a
+    where a.recovery_case_id = p_case_id
+      and a.action_type = 'RETRY'
+      and a.status in ('QUEUED', 'EXECUTED')
+  ) then
+    raise exception 'A governed retry has already been approved for this recovery case.' using errcode = '55000';
+  end if;
+
+  return orchestration.request_execution_recovery_action(p_case_id, v_action);
+end;
+$function$;
+
+comment on function orchestration.request_execution_recovery_action_admin(uuid, text) is
+  'Project-admin-only operator boundary for governed recovery actions; each case can receive at most one additional durable retry.';
+
+revoke all on function orchestration.request_execution_recovery_action_admin(uuid, text) from public, anon, authenticated;
+grant execute on function orchestration.request_execution_recovery_action_admin(uuid, text) to authenticated;
+
+create or replace function orchestration.resolve_execution_recovery_after_success()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_case_id uuid;
+  v_action_id uuid;
+begin
+  if new.status <> 'SUCCEEDED' or old.status is not distinct from 'SUCCEEDED' then
+    return new;
+  end if;
+
+  select id into v_case_id
+  from orchestration.recovery_cases
+  where durable_job_id = new.id
+    and status = 'RETRY_QUEUED'
+  for update;
+
+  if not found then
+    return new;
+  end if;
+
+  update orchestration.recovery_actions
+     set status = 'EXECUTED',
+         executed_at = now(),
+         outcome = coalesce(outcome, '{}'::jsonb) || jsonb_build_object(
+           'durable_job_status', 'SUCCEEDED',
+           'resolved_at', now()
+         )
+   where id = (
+     select id
+     from orchestration.recovery_actions
+     where recovery_case_id = v_case_id
+       and action_type = 'RETRY'
+       and status = 'QUEUED'
+     order by requested_at desc
+     limit 1
+   )
+  returning id into v_action_id;
+
+  if v_action_id is null then
+    raise exception 'Recovery case % cannot resolve without its queued retry action evidence.', v_case_id using errcode = '23514';
+  end if;
+
+  update orchestration.recovery_cases
+     set status = 'RESOLVED',
+         resolved_at = now(),
+         updated_at = now()
+   where id = v_case_id;
+
+  return new;
+end;
+$function$;
+
+drop trigger if exists trg_resolve_execution_recovery_after_success on orchestration.job_queue;
+create trigger trg_resolve_execution_recovery_after_success
+after update of status on orchestration.job_queue
+for each row
+when (new.status = 'SUCCEEDED')
+execute function orchestration.resolve_execution_recovery_after_success();
+
+create or replace function orchestration.enforce_recovery_retry_ceiling()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_case_id uuid;
+begin
+  if new.status <> 'DEAD' or old.status is not distinct from 'DEAD' then
+    return new;
+  end if;
+
+  select id into v_case_id
+  from orchestration.recovery_cases
+  where durable_job_id = new.id;
+
+  if v_case_id is null then
+    return new;
+  end if;
+
+  if exists (
+    select 1
+    from orchestration.recovery_actions a
+    where a.recovery_case_id = v_case_id
+      and a.action_type = 'RETRY'
+      and a.status in ('QUEUED', 'EXECUTED')
+  ) then
+    update orchestration.recovery_cases
+       set recommended_action = 'MANUAL_REVIEW',
+           status = 'AWAITING_MANUAL_REVIEW',
+           updated_at = now()
+     where id = v_case_id;
+  end if;
+
+  return new;
+end;
+$function$;
+
+drop trigger if exists trg_enforce_recovery_retry_ceiling on orchestration.job_queue;
+create trigger trg_enforce_recovery_retry_ceiling
+after update of status on orchestration.job_queue
+for each row
+when (new.status = 'DEAD')
+execute function orchestration.enforce_recovery_retry_ceiling();
 
 -- Backfill only real persisted terminal jobs. This is evidence promotion, not
 -- synthetic execution. Re-running the migration is idempotent by durable_job_id.
