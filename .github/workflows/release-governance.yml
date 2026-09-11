@@ -1,0 +1,49 @@
+name: Release Governance
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  release-governance:
+    name: release-governance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify governance files
+        run: |
+          test -f .github/CODEOWNERS
+          test -f .github/pull_request_template.md
+          test -f docs/release-governance.md
+
+      - name: Enforce forward-only released migrations
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          violations="$(git diff --name-status "$BASE_SHA" "$HEAD_SHA" -- 'supabase/migrations/*.sql' | awk '$1 != "A" {print}')"
+          if [ -n "$violations" ]; then
+            echo "Released Supabase migrations are immutable. Add a new forward migration instead of modifying, deleting, or renaming an existing migration."
+            echo "$violations"
+            exit 1
+          fi
+
+      - name: Verify protected release policy contract
+        run: |
+          grep -q '^# Release Governance' docs/release-governance.md
+          grep -q 'Release Governance / release-governance' docs/release-governance.md
+          grep -q 'Quality Gate / build' docs/release-governance.md
+          grep -q 'CodeQL Security / analyze' docs/release-governance.md
+          grep -q 'P0-P5 Revalidation / revalidate' docs/release-governance.md
+          grep -q 'V6 Operational Certification / certify' docs/release-governance.md
