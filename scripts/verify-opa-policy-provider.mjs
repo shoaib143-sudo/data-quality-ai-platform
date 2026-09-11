@@ -13,7 +13,10 @@ const required = [
   [provider, 'const canonical = await this.canonical.decide(request)', 'canonical decision first'],
   [provider, "if (canonical.decision === 'DENY') return canonical", 'canonical deny cannot be relaxed'],
   [provider, 'authorizationToken', 'OPA bearer credential option'],
-  [provider, 'Bearer ${this.authorizationToken}', 'OPA bearer credential forwarding'],
+  [provider, 'export function opaAuthorizationHeaders', 'shared OPA authorization header helper'],
+  [provider, 'authorization: `Bearer ${token}`', 'OPA bearer credential construction'],
+  [provider, 'this.authorizationHeaders = opaAuthorizationHeaders(options.authorizationToken)', 'OPA credential normalization'],
+  [provider, '...this.authorizationHeaders', 'OPA bearer credential forwarding'],
   [provider, 'policy_version_id: canonical.policyVersionId', 'exact policy version sent to OPA'],
   [provider, 'opa.policy_version_id !== canonical.policyVersionId', 'stale OPA version rejected'],
   [provider, 'DECISION_RANK[opa.decision] < DECISION_RANK[canonical.decision]', 'OPA cannot weaken canonical decision'],
@@ -54,4 +57,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('OPA policy provider, authenticated deployment, bundle, checksum, and fail-closed authority contracts verified.')
+console.log('OPA policy provider, shared auth normalization, authenticated deployment, bundle, checksum, and fail-closed authority contracts verified.')
