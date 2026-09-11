@@ -22,3 +22,5 @@ jobs:
           node-version: 24
       - name: Verify all persona landing and workspace routes
         run: node --experimental-strip-types scripts/verify-persona-workspace-policy.mjs
+      - name: Verify shared DataNexus UX foundation
+        run: node scripts/verify-ux-foundation.mjs
