@@ -4,6 +4,7 @@ const provider = fs.readFileSync('lib/governance/opa-policy-decision-provider.ts
 const factory = fs.readFileSync('lib/governance/governance-policy-decision-provider.ts', 'utf8')
 const authz = fs.readFileSync('infra/opa/policy/authz.rego', 'utf8')
 const decision = fs.readFileSync('infra/opa/policy/decision.rego', 'utf8')
+const decisionTests = fs.readFileSync('infra/opa/policy/decision_test.rego', 'utf8')
 const install = fs.readFileSync('infra/opa/install-opa.sh', 'utf8')
 const build = fs.readFileSync('infra/opa/render-build.sh', 'utf8')
 const start = fs.readFileSync('infra/opa/render-start.sh', 'utf8')
@@ -28,8 +29,10 @@ const required = [
   [authz, 'default allow := false', 'OPA API deny-by-default authorization'],
   [authz, 'input.path == ["v1", "data", "datanexus", "autonomy", "decision"]', 'single authorized policy endpoint'],
   [authz, 'opa.runtime().env.OPA_AUTH_TOKEN', 'runtime-only OPA credential comparison'],
-  [decision, 'canonical.authority_status == "APPROVED"', 'governed authority requirement'],
+  [decision, 'canonical.authority_status in {"SYSTEM_BASELINE", "APPROVED"}', 'closed canonical authority allowlist'],
   [decision, '"policy_version_id": canonical.policy_version_id', 'OPA result exact version echo'],
+  [decisionTests, 'test_preserves_system_baseline_decision', 'system baseline OPA behavior test'],
+  [decisionTests, '"authority_status": "DRAFT"', 'non-authoritative OPA rejection test'],
   [install, 'OPA_VERSION:-v1.20.2', 'pinned OPA release'],
   [install, 'expected_hash=', 'upstream OPA checksum read'],
   [install, 'sha256sum "$artifact"', 'OPA binary checksum calculation'],
@@ -51,10 +54,13 @@ if (/authorizationToken\s*:\s*['"][^'"]+['"]/.test(factory)) {
 if (/OPA_AUTH_TOKEN\s*[:=]\s*['"][^'"]+['"]/.test(authz)) {
   failures.push('OPA credential must not be embedded in Rego')
 }
+if (/canonical\.authority_status\s*==\s*["']APPROVED["']/.test(decision)) {
+  failures.push('OPA must not reject valid SYSTEM_BASELINE canonical authority')
+}
 if (failures.length) {
   console.error('OPA policy provider verification failed:')
   failures.forEach((failure) => console.error(`- ${failure}`))
   process.exit(1)
 }
 
-console.log('OPA policy provider, shared auth normalization, authenticated deployment, bundle, checksum, and fail-closed authority contracts verified.')
+console.log('OPA policy provider, canonical authority allowlist, shared auth normalization, authenticated deployment, bundle, checksum, and fail-closed authority contracts verified.')
