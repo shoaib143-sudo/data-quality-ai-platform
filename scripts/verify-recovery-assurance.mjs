@@ -3,9 +3,16 @@ import { constants } from 'node:fs'
 
 const requiredFiles = [
   'docs/recovery-assurance-v2.md',
+  'docs/recovery-business-impact-analysis.md',
   'infra/recovery/platform-manifest.json',
+  'infra/recovery/migration-history-aliases.json',
   'scripts/recovery-drill.mjs',
   'scripts/test-recovery-assurance.mjs',
+  'scripts/verify-recovery-source-authority.mjs',
+  'supabase/config.toml',
+  'supabase/functions/profiling-executor/index.ts',
+  'supabase/functions/profiling-executor/deno.json',
+  'supabase/functions/connection-health-check/index.ts',
   'supabase/migrations/20260912000000_recovery_assurance_v2.sql',
   '.github/workflows/recovery-assurance.yml',
 ]
@@ -94,4 +101,5 @@ if (manifest.secretPolicy?.storeSecretValuesInRepository !== false) {
 console.log('PASS recoverable production platform manifest')
 
 await import('./test-recovery-assurance.mjs')
+await import('./verify-recovery-source-authority.mjs')
 console.log('Recovery Assurance v2 static and behavioral verification completed.')

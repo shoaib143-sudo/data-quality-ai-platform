@@ -5,8 +5,12 @@ on:
     paths:
       - 'scripts/recovery-drill.mjs'
       - 'scripts/verify-recovery-assurance.mjs'
+      - 'scripts/verify-recovery-source-authority.mjs'
       - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
       - 'docs/recovery-assurance-v2.md'
+      - 'docs/recovery-business-impact-analysis.md'
       - '.github/workflows/recovery-assurance.yml'
       - 'infra/**'
       - 'vercel.json'

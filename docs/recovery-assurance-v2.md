@@ -4,12 +4,25 @@ This document defines the production recovery contract for DataNexus AI. Recover
 
 ## Recovery principles
 
-- Prefer managed Supabase backup/PITR for operational recovery when available.
+- Prefer managed Supabase backup/PITR for operational recovery when it is actually available and funded.
 - Maintain a portable logical database export for provider-independent recovery and forensic validation.
 - Never restore destructively into the production database during a rehearsal.
 - Treat deployment rollback as distinct from disaster recovery.
 - Recovery evidence must survive loss of the source database, so every drill must produce an external evidence artifact in addition to durable governance records.
 - Recovery readiness fails closed when any required scope is stale, missing, failed, or outside its RPO/RTO objective.
+
+## Current zero-additional-cost posture
+
+The current Supabase organization is on the Free plan and no paid recovery branch or PITR add-on is authorized. The operational recovery package therefore uses a zero-additional-cost posture until that constraint changes:
+
+- portable logical exports are the database portability mechanism;
+- source-controlled migrations, Edge Functions and platform configuration are the reconstruction authority;
+- clean database reconstruction remains valid reconstruction evidence but is not a restored production-data backup;
+- no workflow may claim managed PITR, `RESTORED`, or `READY` evidence without a real supported recovery event;
+- the 60-minute RPO remains the target even when the current backup cadence cannot yet prove it;
+- the recovery system must report that gap rather than weakening the target.
+
+The portable backup contract is defined in `infra/recovery/portable-backup-contract.json`. Database exports must be kept outside the repository, encrypted at rest, integrity checked, and retained independently of the Supabase project. Storage object bytes are a separate recovery boundary and are never inferred from database backup success.
 
 ## Required recovery scopes
 
@@ -69,7 +82,11 @@ Do not store secret values, access tokens, database credentials, OAuth client se
 
 ### Supabase
 
-Operational recovery should exercise the same managed backup/PITR mechanism intended for an incident. The logical export remains a portability and verification fallback. A database-only recovery does not prove recovery of Storage object bytes, Edge Functions, Auth configuration, Realtime configuration, or external project settings.
+Operational recovery should exercise the same managed backup/PITR mechanism intended for an incident when that mechanism is available. On the current Free-plan posture, a portable logical export plus version-controlled reconstruction is the available zero-additional-cost path. A logical export remains portability evidence and does not become managed PITR evidence by naming convention.
+
+A database-only recovery does not prove recovery of Storage object bytes, Edge Functions, Auth configuration, Realtime configuration, or external project settings.
+
+Supabase Edge Functions must have source authority in `supabase/functions` and security/dependency configuration in `supabase/config.toml`. A live Dashboard-only function is a recovery gap because Dashboard edits are not a version-control system.
 
 ### Vercel
 
@@ -79,18 +96,25 @@ Vercel deployment rollback is an application rollback mechanism, not a database 
 
 Render service rollback or redeploy is not sufficient for stateful recovery. Service topology and non-secret configuration should be reproducible from version-controlled infrastructure definitions where practical. Secret values remain outside source control but their required names and ownership must be documented.
 
+## Migration history reconciliation
+
+Repository migration filenames and the live Supabase migration registry can differ when a migration is applied through management tooling that records an application timestamp. Known, verified aliases are recorded in `infra/recovery/migration-history-aliases.json`.
+
+Do not rename an already shipped repository migration merely to match a live timestamp and do not rewrite production migration history for cosmetic alignment. Recovery tooling must recognize the documented alias and continue forward-only from the canonical repository migration set.
+
 ## Rehearsal cadence
 
 - Run a full recovery assurance drill at least every 90 days unless a stricter project policy applies.
 - Re-run affected scopes after material database, storage, authentication, infrastructure, or architecture changes.
 - Run the static recovery-assurance contract on every pull request that changes recovery-sensitive files.
 - Keep a manual workflow entry point for controlled rehearsals.
+- Static contract verification is not a substitute for an actual backup/export cadence capable of meeting the 60-minute RPO.
 
 ## Incident decision tree
 
 1. Classify failure: bad application release, bad migration, data loss/corruption, provider outage, secret/config loss, or dependency outage.
 2. Use deployment rollback only when state is healthy and the incident is isolated to application code/deployment.
-3. Use managed database PITR/backup recovery for data loss or corruption where applicable.
+3. Use managed database PITR/backup recovery for data loss or corruption where applicable and available.
 4. Use portable export recovery when provider-independent restoration is required or managed recovery is unavailable.
 5. Reconstruct configuration and runtime scopes.
 6. Run service-validation checks before cutover.
