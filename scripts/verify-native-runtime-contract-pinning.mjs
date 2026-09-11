@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const migrationPath = path.join(root, 'supabase/migrations/20260911134000_native_runtime_contract_pinning.sql')
+const migrationPath = path.join(root, 'supabase/migrations/20260911205000_native_runtime_contract_pinning.sql')
 const contractsPath = path.join(root, 'lib/agents/runtime/native-tool-contracts.ts')
 const runtimePath = path.join(root, 'lib/agents/runtime/native-agent-runtime-state.ts')
 const executorPath = path.join(root, 'lib/agents/executors/profiling-executor.ts')
