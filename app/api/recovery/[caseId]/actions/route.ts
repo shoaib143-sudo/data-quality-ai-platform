@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 
 import { requireApiUser } from '@/lib/auth/require-api-user'
-import { authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createClient } from '@/lib/supabase/server'
 
 const ALLOWED_ACTIONS = new Set(['RETRY', 'ACKNOWLEDGE', 'ROLLBACK_REVIEW'])
 
 export async function POST(request: Request, context: { params: Promise<{ caseId: string }> }) {
   try {
-    await requireApiUser()
+    const user = await requireApiUser()
     const { caseId } = await context.params
     if (!caseId) return NextResponse.json({ error: 'caseId is required.' }, { status: 400 })
 
@@ -19,6 +19,16 @@ export async function POST(request: Request, context: { params: Promise<{ caseId
     }
 
     const supabase = await createClient()
+    const { data: recoveryCase, error: caseError } = await supabase
+      .schema('orchestration')
+      .from('recovery_cases')
+      .select('id,project_id')
+      .eq('id', caseId)
+      .maybeSingle()
+    if (caseError || !recoveryCase) return NextResponse.json({ error: 'Recovery case not found.' }, { status: 404 })
+
+    await authorizeProject(user.id, recoveryCase.project_id, 'agent.execute')
+
     const { data, error } = await supabase.schema('orchestration').rpc('request_execution_recovery_action', {
       p_case_id: caseId,
       p_action: action,
