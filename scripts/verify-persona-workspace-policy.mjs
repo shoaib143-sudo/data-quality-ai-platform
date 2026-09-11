@@ -67,7 +67,7 @@ check('workspace prefixes are unique', new Set(workspacePrefixes.map(([prefix]) 
 
 const explicitlyNonWorkspaceRoutes = [
   '/', '/login', '/signup', '/forgot-password', '/reset-password', '/home', '/home/:param', '/home/unavailable',
-  '/ai-insights',
+  '/access-denied', '/ai-insights',
 ]
 
 for (const file of pageFiles()) {
