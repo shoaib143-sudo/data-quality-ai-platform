@@ -108,7 +108,7 @@ export async function collectRecoveryIntegrity(databaseUrl) {
       from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
       where ${ownedSchemaFilter}
-      order by n.nspname, p.proname, p.oid
+      order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)
     `),
     triggers: await hashQuery(databaseUrl, `
       select concat_ws('|', n.nspname, c.relname, t.tgname, pg_get_triggerdef(t.oid, true))
