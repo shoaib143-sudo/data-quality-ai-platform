@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Bell, Search } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import type { ReactNode } from 'react'
 
 export type LandingMetric = {
@@ -48,28 +49,7 @@ export default function RoleLandingShell({ roleLabel, eyebrow, title, subtitle, 
   return (
     <main className="min-h-screen bg-[#eef3f9] text-slate-950">
       <div className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#eef3f9] text-blue-700 shadow-[6px_6px_14px_rgba(148,163,184,0.24),_-6px_-6px_14px_rgba(255,255,255,0.9)]">
-              <span className="text-lg font-black">DN</span>
-            </div>
-            <div>
-              <div className="font-black tracking-tight">DataNexus</div>
-              <div className="text-xs text-slate-500">Trusted data. Better decisions.</div>
-            </div>
-          </Link>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden items-center gap-2 rounded-2xl bg-[#eef3f9] px-4 py-2 text-sm text-slate-500 shadow-[inset_3px_3px_8px_rgba(148,163,184,0.16),_inset_-3px_-3px_8px_rgba(255,255,255,0.85)] md:flex">
-              <Search className="h-4 w-4" />
-              Search DataNexus
-            </div>
-            <button className="grid h-10 w-10 place-items-center rounded-2xl bg-[#eef3f9] text-slate-600 shadow-[5px_5px_12px_rgba(148,163,184,0.2),_-5px_-5px_12px_rgba(255,255,255,0.9)]" aria-label="Notifications">
-              <Bell className="h-4 w-4" />
-            </button>
-            <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">{roleLabel}</span>
-          </div>
-        </header>
+        <GlobalUtilityBar roleLabel={roleLabel} contextLabel="Governance workspace" />
 
         <SoftCard className="overflow-hidden p-7 sm:p-9">
           <div className="grid gap-7 lg:grid-cols-[1fr_auto] lg:items-end">
