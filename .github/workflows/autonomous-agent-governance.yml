@@ -7,6 +7,7 @@ on:
       - 'supabase/migrations/**'
       - 'lib/agents/run-result-artifact.ts'
       - 'lib/agents/run-profiling-job.ts'
+      - 'lib/agents/executors/**'
       - 'lib/agents/runtime/**'
       - 'lib/orchestration/worker.ts'
       - 'app/api/agents/governance/run/route.ts'
@@ -18,6 +19,7 @@ on:
       - 'scripts/verify-agent-run-artifacts.mjs'
       - 'scripts/verify-execution-recovery-agent.mjs'
       - 'scripts/verify-native-agent-runtime-state.mjs'
+      - 'scripts/verify-native-runtime-contract-pinning.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
   pull_request:
@@ -26,6 +28,7 @@ on:
       - 'supabase/migrations/**'
       - 'lib/agents/run-result-artifact.ts'
       - 'lib/agents/run-profiling-job.ts'
+      - 'lib/agents/executors/**'
       - 'lib/agents/runtime/**'
       - 'lib/orchestration/worker.ts'
       - 'app/api/agents/governance/run/route.ts'
@@ -37,6 +40,7 @@ on:
       - 'scripts/verify-agent-run-artifacts.mjs'
       - 'scripts/verify-execution-recovery-agent.mjs'
       - 'scripts/verify-native-agent-runtime-state.mjs'
+      - 'scripts/verify-native-runtime-contract-pinning.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
 
@@ -60,3 +64,5 @@ jobs:
         run: node scripts/verify-execution-recovery-agent.mjs
       - name: Verify native agent runtime state
         run: node scripts/verify-native-agent-runtime-state.mjs
+      - name: Verify native runtime contract pinning
+        run: node scripts/verify-native-runtime-contract-pinning.mjs
