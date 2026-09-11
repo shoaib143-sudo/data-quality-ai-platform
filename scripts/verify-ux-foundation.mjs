@@ -21,6 +21,10 @@ const required = [
   'app/observability/error.tsx',
   'app/monitoring/error.tsx',
   'app/inbox/error.tsx',
+  'app/journeys/page.tsx',
+  'app/journeys/layout.tsx',
+  'app/journeys/loading.tsx',
+  'app/journeys/error.tsx',
 ]
 
 for (const path of required) {
@@ -31,6 +35,7 @@ for (const path of required) {
 const shell = await readFile('components/app-shell/global-utility-bar.tsx', 'utf8')
 for (const [pattern, label] of [
   [/href="\/search"/, 'real global search entry point'],
+  [/href="\/journeys"/, 'guided governance journey entry point'],
   [/href="\/inbox"/, 'governance inbox entry point'],
   [/aria-label="Primary"/, 'semantic primary navigation'],
   [/focus-visible:ring-2/, 'visible keyboard focus treatment'],
@@ -97,6 +102,23 @@ for (const path of ['app/issues','app/workflows','app/observability','app/monito
   if (!/WorkspaceLoadingState/.test(loading)) throw new Error(`${path} must use shared loading state.`)
 }
 console.log('PASS priority governance workspaces use shared loading states')
+
+const journey = await readFile('app/journeys/page.tsx', 'utf8')
+for (const [pattern, label] of [
+  [/source_operational_readiness/, 'discovery evidence in guided journey'],
+  [/profile_runs/, 'profiling evidence in guided journey'],
+  [/profile_findings/, 'finding evidence in guided journey'],
+  [/quality_rule_runs/, 'quality-control evidence in guided journey'],
+  [/steps\.find\(step => !step\.complete\)/, 'evidence-derived next action'],
+  [/without claiming certification or completion that has not been proven/, 'truth-boundary copy'],
+]) {
+  if (!pattern.test(journey)) throw new Error(`Guided journey missing ${label}`)
+  console.log(`PASS ${label}`)
+}
+
+const journeyLayout = await readFile('app/journeys/layout.tsx', 'utf8')
+if (!/requireWorkspaceAccess\('journeys'\)/.test(journeyLayout)) throw new Error('Guided journey must use workspace authorization.')
+console.log('PASS guided journey is workspace-authorized')
 
 const inbox = await readFile('app/inbox/page.tsx', 'utf8')
 for (const [pattern, label] of [
