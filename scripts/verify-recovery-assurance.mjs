@@ -6,7 +6,7 @@ const requiredFiles = [
   'infra/recovery/platform-manifest.json',
   'scripts/recovery-drill.mjs',
   'scripts/test-recovery-assurance.mjs',
-  'supabase/migrations/20260911190000_recovery_assurance_v2.sql',
+  'supabase/migrations/20260912000000_recovery_assurance_v2.sql',
   '.github/workflows/recovery-assurance.yml',
 ]
 
@@ -15,7 +15,7 @@ for (const path of requiredFiles) {
   console.log(`PASS required recovery artifact ${path}`)
 }
 
-const migration = await readFile('supabase/migrations/20260911190000_recovery_assurance_v2.sql', 'utf8')
+const migration = await readFile('supabase/migrations/20260912000000_recovery_assurance_v2.sql', 'utf8')
 for (const [pattern, label] of [
   [/required_scopes[\s\S]*DATABASE[\s\S]*STORAGE[\s\S]*IDENTITY_CONFIG[\s\S]*APPLICATION_CONFIG[\s\S]*EDGE_RUNTIME[\s\S]*DEPENDENCIES[\s\S]*SERVICE_VALIDATION/, 'required full-platform recovery scopes'],
   [/scope_results jsonb/, 'scope-level recovery evidence'],
