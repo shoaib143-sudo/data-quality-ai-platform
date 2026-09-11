@@ -38,7 +38,7 @@ function parseConfiguredHeaders(value?: string | null) {
 }
 
 function unixNano(date: Date) {
-  return (BigInt(date.getTime()) * BigInt(1_000_000)).toString()
+  return `${Math.trunc(date.getTime())}000000`
 }
 
 function spanIdFromReceipt(receipt: TelemetryReceipt) {
