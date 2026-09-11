@@ -32,21 +32,22 @@ export type WorkspaceKey =
   | 'platform'
   | 'search'
   | 'journeys'
+  | 'experience-insights'
 
 const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
-  'senior-leadership': ['catalog', 'issues', 'data-quality', 'stewardship', 'reports', 'profiling', 'scorecards', 'search', 'inbox', 'journeys'],
-  'business-user': ['catalog', 'glossary', 'issues', 'data-quality', 'profiling', 'search', 'inbox', 'journeys'],
-  'data-owner': ['catalog', 'discovery', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'lineage-manage', 'reports', 'classification', 'profiling', 'contracts', 'scorecards', 'workflows', 'search', 'inbox', 'journeys'],
-  'data-product-owner': ['catalog', 'glossary', 'lineage', 'stewardship', 'issues', 'data-quality', 'reports', 'profiling', 'contracts', 'scorecards', 'workflows', 'search', 'inbox', 'journeys'],
-  'data-steward': ['catalog', 'discovery', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'lineage-manage', 'classification', 'reports', 'profiling', 'contracts', 'scorecards', 'workflows', 'search', 'inbox', 'journeys'],
-  'data-governance-specialist': ['catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'ai-capabilities', 'retention', 'profiling', 'contracts', 'scorecards', 'workflows', 'search', 'inbox', 'journeys'],
-  'compliance-risk-officer': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention', 'profiling', 'contracts', 'documents', 'scorecards', 'workflows', 'search', 'inbox', 'journeys'],
-  'privacy-security-officer': ['catalog', 'glossary', 'lineage', 'classification', 'classification-privacy', 'issues', 'audit', 'reports', 'profiling', 'documents', 'workflows', 'search', 'inbox', 'journeys'],
-  'data-governance-admin': ['dashboard', 'catalog', 'discovery', 'glossary', 'lineage', 'lineage-manage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'audit', 'reports', 'ai-capabilities', 'retention', 'profiling', 'agents', 'datasets', 'contracts', 'documents', 'scorecards', 'workflows', 'platform', 'search', 'inbox', 'journeys'],
-  'data-custodian': ['catalog', 'discovery', 'datasets', 'lineage', 'lineage-manage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'profiling', 'agents', 'ai-capabilities', 'contracts', 'documents', 'workflows', 'search', 'inbox', 'journeys'],
-  'source-system-owner': ['catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'profiling', 'contracts', 'workflows', 'search', 'inbox', 'journeys'],
-  'metadata-analyst': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'ai-capabilities', 'profiling', 'contracts', 'documents', 'scorecards', 'search', 'inbox', 'journeys'],
-  'data-quality-analyst': ['catalog', 'issues', 'data-quality', 'observability', 'audit', 'reports', 'ai-capabilities', 'profiling', 'agents', 'contracts', 'documents', 'scorecards', 'workflows', 'search', 'inbox', 'journeys'],
+  'senior-leadership': ['catalog', 'issues', 'data-quality', 'stewardship', 'reports', 'profiling', 'scorecards', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'business-user': ['catalog', 'glossary', 'issues', 'data-quality', 'profiling', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'data-owner': ['catalog', 'discovery', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'lineage-manage', 'reports', 'classification', 'profiling', 'contracts', 'scorecards', 'workflows', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'data-product-owner': ['catalog', 'glossary', 'lineage', 'stewardship', 'issues', 'data-quality', 'reports', 'profiling', 'contracts', 'scorecards', 'workflows', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'data-steward': ['catalog', 'discovery', 'glossary', 'data-quality', 'stewardship', 'issues', 'lineage', 'lineage-manage', 'classification', 'reports', 'profiling', 'contracts', 'scorecards', 'workflows', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'data-governance-specialist': ['catalog', 'glossary', 'lineage', 'stewardship', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'ai-capabilities', 'retention', 'profiling', 'contracts', 'scorecards', 'workflows', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'compliance-risk-officer': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'retention', 'profiling', 'contracts', 'documents', 'scorecards', 'workflows', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'privacy-security-officer': ['catalog', 'glossary', 'lineage', 'classification', 'classification-privacy', 'issues', 'audit', 'reports', 'profiling', 'documents', 'workflows', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'data-governance-admin': ['dashboard', 'catalog', 'discovery', 'glossary', 'lineage', 'lineage-manage', 'stewardship', 'classification', 'classification-privacy', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'audit', 'reports', 'ai-capabilities', 'retention', 'profiling', 'agents', 'datasets', 'contracts', 'documents', 'scorecards', 'workflows', 'platform', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'data-custodian': ['catalog', 'discovery', 'datasets', 'lineage', 'lineage-manage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'profiling', 'agents', 'ai-capabilities', 'contracts', 'documents', 'workflows', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'source-system-owner': ['catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'profiling', 'contracts', 'workflows', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'metadata-analyst': ['catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'ai-capabilities', 'profiling', 'contracts', 'documents', 'scorecards', 'search', 'inbox', 'journeys', 'experience-insights'],
+  'data-quality-analyst': ['catalog', 'issues', 'data-quality', 'observability', 'audit', 'reports', 'ai-capabilities', 'profiling', 'agents', 'contracts', 'documents', 'scorecards', 'workflows', 'search', 'inbox', 'journeys', 'experience-insights'],
 }
 
 export const workspacePrefixes: readonly [string, WorkspaceKey][] = [
@@ -68,6 +69,7 @@ export const workspacePrefixes: readonly [string, WorkspaceKey][] = [
   ['/scorecards', 'scorecards'],
   ['/workflows', 'workflows'],
   ['/platform', 'platform'],
+  ['/experience-insights', 'experience-insights'],
   ['/journeys', 'journeys'],
   ['/search', 'search'],
   ['/catalog', 'catalog'],
