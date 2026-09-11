@@ -1,0 +1,26 @@
+name: Data Quality Native Replay
+
+on:
+  pull_request:
+    paths:
+      - 'lib/data-quality/automation.ts'
+      - 'lib/agents/resumable-run-step.ts'
+      - 'lib/agents/runtime/native-autonomy-kernel.ts'
+      - 'supabase/migrations/20260911235000_data_quality_native_replay_certification.sql'
+      - 'scripts/verify-data-quality-native-replay.mjs'
+      - '.github/workflows/data-quality-native-replay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-data-quality-native-replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Data Quality native replay guardrails
+        run: node scripts/verify-data-quality-native-replay.mjs
