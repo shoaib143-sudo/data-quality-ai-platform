@@ -6,6 +6,16 @@ import {
 } from '@/lib/agents/governance-read-agent'
 import { getGovernedAgentPolicy } from '@/lib/agents/governed-agent-registry'
 import { assertGovernedInvestigationGrounding, buildGovernedInvestigation } from '@/lib/agents/governed-investigation'
+import {
+  finishNativeAgentLifecycle,
+  startNativeAgentLifecycle,
+  type NativeAgentLifecycle,
+} from '@/lib/agents/runtime/native-agent-lifecycle'
+import {
+  admitNativeToolInvocation,
+  completeNativeToolInvocation,
+  failNativeToolInvocation,
+} from '@/lib/agents/runtime/native-tool-contracts'
 
 const allowedKeys = new Set<string>(GOVERNANCE_READ_AGENT_KEYS)
 
@@ -455,7 +465,30 @@ export async function executeGovernanceSpecialistAgent(input: {
   }).select('id').single()
   if (runError || !run) throw new Error(`Unable to create specialist agent run: ${runError?.message ?? 'unknown error'}`)
 
+  let lifecycle: NativeAgentLifecycle | null = null
+  let admission: Awaited<ReturnType<typeof admitNativeToolInvocation>> | null = null
+  let invocationCompleted = false
+  let lifecycleFinished = false
+
   try {
+    lifecycle = await startNativeAgentLifecycle({
+      agentRunId: run.id,
+      phase: 'RUNTIME_READY',
+      summary: `${agentKey} native runtime is pinned before specialist evidence collection.`,
+      evidenceRefs: [{ domain: 'project', id: input.projectId }],
+    })
+
+    admission = await admitNativeToolInvocation({
+      agentRunId: run.id,
+      toolKey: 'governance_specialist_investigate',
+      expectedExecutor: 'governance-specialist-agent',
+      toolInput: {
+        projectId: input.projectId,
+        ...(suppliedQuestion ? { question: suppliedQuestion } : {}),
+      },
+      idempotencyKey: `governance-specialist:${run.id}:investigate`,
+    })
+
     const [projectResult, ctx, knowledgeMatches] = await Promise.all([
       admin.schema('app').from('projects').select('id,name,organization_id').eq('id', input.projectId).maybeSingle(),
       loadContext(admin, input.projectId),
@@ -536,6 +569,13 @@ export async function executeGovernanceSpecialistAgent(input: {
       ],
     }
 
+    await completeNativeToolInvocation({
+      invocationId: admission.invocationId,
+      contract: admission.contract,
+      output,
+    })
+    invocationCompleted = true
+
     const { error: completeError } = await admin.schema('agent').from('agent_runs').update({
       status: 'SUCCEEDED',
       output,
@@ -544,6 +584,15 @@ export async function executeGovernanceSpecialistAgent(input: {
       error_message: null,
     }).eq('id', run.id)
     if (completeError) throw new Error(`Unable to persist specialist agent output: ${completeError.message}`)
+
+    await finishNativeAgentLifecycle({
+      lifecycle,
+      phase: 'SUCCEEDED',
+      summary: `${agentKey} completed through its pinned native specialist tool contract.`,
+      output,
+      evidenceRefs: [{ domain: 'native_tool_invocation', id: admission.invocationId }],
+    })
+    lifecycleFinished = true
 
     await writeGovernanceAudit({
       projectId: input.projectId,
@@ -567,18 +616,46 @@ export async function executeGovernanceSpecialistAgent(input: {
         investigation_grounding_status: investigation.grounding.status,
         investigation_evidence_ref_count: investigation.grounding.evidenceRefCount,
         investigation_referenced_evidence_count: investigation.grounding.referencedEvidenceCount,
+        native_tool_invocation_id: admission.invocationId,
       },
     })
 
     return { runId: run.id, output }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Governance specialist agent execution failed.'
+
+    if (admission && !invocationCompleted) {
+      try {
+        await failNativeToolInvocation({
+          invocationId: admission.invocationId,
+          errorCode: 'GOVERNANCE_SPECIALIST_AGENT_FAILED',
+          error,
+        })
+      } catch (invocationError) {
+        console.error('[governance-specialist-agent] unable to persist native tool failure', invocationError)
+      }
+    }
+
     await admin.schema('agent').from('agent_runs').update({
       status: 'FAILED',
       error_code: 'GOVERNANCE_SPECIALIST_AGENT_FAILED',
       error_message: message.slice(0, 2000),
       completed_at: new Date().toISOString(),
     }).eq('id', run.id)
+
+    if (lifecycle && !lifecycleFinished) {
+      try {
+        await finishNativeAgentLifecycle({
+          lifecycle,
+          phase: 'FAILED',
+          summary: `${agentKey} failed after native runtime admission.`,
+          evidenceRefs: admission ? [{ domain: 'native_tool_invocation', id: admission.invocationId }] : undefined,
+        })
+      } catch (checkpointError) {
+        console.error('[governance-specialist-agent] unable to persist terminal native runtime checkpoint', checkpointError)
+      }
+    }
+
     throw error
   }
 }

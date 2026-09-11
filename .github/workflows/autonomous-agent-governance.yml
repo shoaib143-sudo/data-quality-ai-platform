@@ -5,6 +5,8 @@ on:
     branches: [main, governed-autonomy-evidence]
     paths:
       - 'supabase/migrations/**'
+      - 'lib/agents/governed-agent-registry.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
       - 'lib/agents/run-result-artifact.ts'
       - 'lib/agents/run-profiling-job.ts'
       - 'lib/agents/executors/**'
@@ -30,6 +32,8 @@ on:
     branches: [main]
     paths:
       - 'supabase/migrations/**'
+      - 'lib/agents/governed-agent-registry.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
       - 'lib/agents/run-result-artifact.ts'
       - 'lib/agents/run-profiling-job.ts'
       - 'lib/agents/executors/**'
