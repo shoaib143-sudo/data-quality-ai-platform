@@ -1,6 +1,6 @@
 # DataNexus UX Foundation
 
-This is the first implementation increment of the shared DataNexus product shell.
+This document tracks the shared DataNexus product experience foundation.
 
 ## Goals
 
@@ -24,19 +24,18 @@ It provides direct access to:
 - Quality
 - Agents
 - Global Search
-- Governance Work Queue
+- Governance Inbox
+- Guided Governance Journey
 
-The dashboard now has an error boundary that offers retry and safe navigation without exposing raw provider errors.
+The dashboard and priority governance workspaces now use shared loading and recoverable error states. The Governance Inbox aggregates persisted approvals, issues, alerts, and execution attention. The guided journey derives project progress and the next recommended action from persisted source, discovery, profiling, remediation, and quality-control evidence.
 
 ## Next increments
 
 The foundation is intentionally incremental. Remaining UX work includes:
 
 - project and organization switching once multi-context switching is supported by the runtime;
-- a true unified governance inbox spanning approvals, failures, alerts and deadlines;
-- consistent async job status components;
-- shared loading, empty, partial-data and policy-denied states;
-- task-based journeys spanning source onboarding, discovery, profiling, remediation and certification;
+- policy-denied states that clearly explain unavailable actions without leaking authorization detail;
+- deeper task-based journeys beyond the initial connect → discover → profile → remediate → verify path;
 - accessibility review against WCAG 2.2 AA;
 - responsive treatment for dense governance tables and lineage;
 - product telemetry for time-to-value and journey completion.
