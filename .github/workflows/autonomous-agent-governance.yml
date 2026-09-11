@@ -24,6 +24,7 @@ on:
       - 'scripts/verify-native-agent-runtime-state.mjs'
       - 'scripts/verify-native-runtime-contract-pinning.mjs'
       - 'scripts/verify-native-autonomy-kernel.mjs'
+      - 'scripts/verify-native-recovery-v2.mjs'
       - 'scripts/verify-all-agent-native-runtime-adoption.mjs'
       - 'scripts/test-native-autonomy-kernel.mjs'
       - 'package.json'
@@ -51,6 +52,7 @@ on:
       - 'scripts/verify-native-agent-runtime-state.mjs'
       - 'scripts/verify-native-runtime-contract-pinning.mjs'
       - 'scripts/verify-native-autonomy-kernel.mjs'
+      - 'scripts/verify-native-recovery-v2.mjs'
       - 'scripts/verify-all-agent-native-runtime-adoption.mjs'
       - 'scripts/test-native-autonomy-kernel.mjs'
       - 'package.json'
@@ -80,5 +82,7 @@ jobs:
         run: node scripts/verify-native-runtime-contract-pinning.mjs
       - name: Verify native autonomous execution kernel
         run: node scripts/verify-native-autonomy-kernel.mjs
+      - name: Verify native Recovery V2
+        run: node scripts/verify-native-recovery-v2.mjs
       - name: Verify shared native runtime adoption
         run: node scripts/verify-all-agent-native-runtime-adoption.mjs

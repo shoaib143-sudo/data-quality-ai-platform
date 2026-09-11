@@ -1,0 +1,63 @@
+import assert from 'node:assert/strict'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
+
+const recovery = readFileSync('lib/agents/runtime/native-recovery-v2.ts', 'utf8')
+
+function contains(source, token, label) {
+  assert.ok(source.includes(token), `${label} is missing: ${token}`)
+}
+
+contains(recovery, 'executeNativeClosedLoopV2', 'Recovery V2 closed loop')
+contains(recovery, 'recoverNativeStepV2', 'Recovery V2 step recovery')
+contains(recovery, 'retryable_error_codes', 'explicit retry error certification')
+contains(recovery, 'replayCertifiedFromPinnedContract', 'pinned replay certification derivation')
+contains(recovery, "'FAILED_STEP_CONTRACT_HASH_MISSING'", 'missing contract hash fail closed')
+contains(recovery, "'FAILED_STEP_CONTRACT_DRIFT'", 'failed-step contract drift guard')
+contains(recovery, "'FAILED_STEP_EXECUTOR_DRIFT'", 'failed-step executor drift guard')
+contains(recovery, 'validateNativeBoundedPlan', 'compensation plan validation')
+contains(recovery, 'admitNativeToolInvocation', 'native compensation admission')
+contains(recovery, 'completeNativeToolInvocation', 'native compensation completion')
+contains(recovery, 'verifyCompensationInvocation', 'compensation evidence verification')
+contains(recovery, "'COMPENSATION_REPLAY_CONTRACT_DRIFT'", 'compensation replay contract drift guard')
+contains(recovery, "'COMPENSATION_REPLAY_INPUT_DRIFT'", 'compensation replay input drift guard')
+contains(recovery, "'COMPENSATION_ALREADY_IN_FLIGHT'", 'in-flight compensation replay guard')
+contains(recovery, "'COMPENSATION_PREVIOUSLY_FAILED'", 'failed compensation replay guard')
+contains(recovery, '.select(\'id,agent_run_id,tool_key,contract_hash,input_hash,status,output_hash\')', 'verified compensation evidence fields')
+contains(recovery, 'hashNativeRuntimeValue(toolInput)', 'compensation input hash binding')
+contains(recovery, "'RECOVERY_ENGINE_FAILED'", 'recovery engine fail-closed result')
+contains(recovery, "'STEP_FAILED_VERIFIED_COMPENSATION'", 'verified compensation terminal result')
+
+assert.equal(
+  /recover\?\s*\([^)]*\).*NativeRecoveryDecision/s.test(recovery),
+  false,
+  'Recovery V2 must not accept the legacy caller-supplied recovery decision callback',
+)
+
+function sourceFiles(root) {
+  const output = []
+  for (const name of readdirSync(root)) {
+    const path = join(root, name)
+    const stat = statSync(path)
+    if (stat.isDirectory()) output.push(...sourceFiles(path))
+    else if (/\.(?:ts|tsx)$/.test(name)) output.push(path)
+  }
+  return output
+}
+
+const legacyCallers = []
+for (const root of ['lib', 'app']) {
+  for (const path of sourceFiles(root)) {
+    const repoPath = relative('.', path).replaceAll('\\', '/')
+    if (repoPath === 'lib/agents/runtime/native-autonomy-kernel.ts') continue
+    const source = readFileSync(path, 'utf8')
+    if (/\bexecuteNativeClosedLoop\s*\(/.test(source)) legacyCallers.push(repoPath)
+  }
+}
+assert.deepEqual(
+  legacyCallers,
+  [],
+  `Legacy native recovery loop must not gain production callers: ${legacyCallers.join(', ')}`,
+)
+
+console.log('Native Recovery V2 governance contracts verified.')
