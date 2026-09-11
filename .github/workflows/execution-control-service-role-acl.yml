@@ -1,0 +1,28 @@
+name: Execution Control Service Role ACL
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-execution-control-service-role-acl.mjs'
+      - '.github/workflows/execution-control-service-role-acl.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/verify-execution-control-service-role-acl.mjs'
+      - '.github/workflows/execution-control-service-role-acl.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify execution-control service-role ACL
+        run: node scripts/verify-execution-control-service-role-acl.mjs
