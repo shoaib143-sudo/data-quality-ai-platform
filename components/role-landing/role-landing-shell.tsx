@@ -47,7 +47,7 @@ export function InsetPanel({ children, className = '' }: { children: ReactNode; 
 
 export default function RoleLandingShell({ roleLabel, eyebrow, title, subtitle, metrics, sections, primaryAction, secondaryAction }: Props) {
   return (
-    <main className="min-h-screen bg-[#eef3f9] text-slate-950">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#eef3f9] text-slate-950">
       <div className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar roleLabel={roleLabel} contextLabel="Governance workspace" />
 
