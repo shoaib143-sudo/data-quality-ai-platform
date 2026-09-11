@@ -4,7 +4,7 @@ import path from 'node:path';
 const root = process.cwd();
 const migrationPath = path.join(
   root,
-  'supabase/migrations/20260911083000_run_scoped_ai_capability_e2e_evidence.sql',
+  'supabase/migrations/20260911005515_run_scoped_ai_capability_e2e_evidence.sql',
 );
 const workflowPath = path.join(root, '.github/workflows/ai-capability-e2e-ledger.yml');
 
