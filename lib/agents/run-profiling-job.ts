@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-executor'
+import { persistAgentRunResultArtifact } from '@/lib/agents/run-result-artifact'
 import { validateProfilingRun } from '@/lib/profiling/run-validation'
 import { recordProfileFailureAlert } from '@/lib/observability/evaluate'
 import type { ToolExecutionContext } from '@/lib/agents/types'
@@ -207,8 +208,12 @@ export async function executePreparedProfilingJob(input: {
         reuse: reuseDecision,
         validation,
       }
-      const { error: finalReuseError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: reusedAt }).eq('id', agentRunId).eq('status', 'RUNNING')
-      if (finalReuseError) throw new Error(`Unable to finalize reused agent run: ${finalReuseError.message}`)
+      await persistAgentRunResultArtifact({
+        agentRunId,
+        output: result,
+        name: 'Profiling agent result',
+        completedAt: reusedAt,
+      })
       return
     }
 
@@ -264,8 +269,12 @@ export async function executePreparedProfilingJob(input: {
       investigation: investigationResult,
       validation,
     }
-    const { error: finalRunError } = await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: result, completed_at: completedAt }).eq('id', agentRunId).eq('status', 'RUNNING')
-    if (finalRunError) throw new Error(`Unable to finalize agent run: ${finalRunError.message}`)
+    await persistAgentRunResultArtifact({
+      agentRunId,
+      output: result,
+      name: 'Profiling agent result',
+      completedAt,
+    })
 
   } catch (error) {
     const message = errorMessage(error, 'Unknown profiling execution error')
