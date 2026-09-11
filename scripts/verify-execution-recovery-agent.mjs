@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-const migration = fs.readFileSync('supabase/migrations/20260911192000_execution_recovery_agent.sql', 'utf8')
+const migration = fs.readFileSync('supabase/migrations/20260911194000_execution_recovery_agent.sql', 'utf8')
 const worker = fs.readFileSync('lib/orchestration/worker.ts', 'utf8')
 const api = fs.readFileSync('app/api/recovery/[caseId]/actions/route.ts', 'utf8')
 const page = fs.readFileSync('app/recovery/page.tsx', 'utf8')
