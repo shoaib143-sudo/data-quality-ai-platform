@@ -1,6 +1,4 @@
 extensions:
-  bearertokenauth/server:
-    token: "${env:OTEL_AUTH_TOKEN}"
   health_check:
     endpoint: 127.0.0.1:13133
 
@@ -8,9 +6,7 @@ receivers:
   otlp:
     protocols:
       http:
-        endpoint: "0.0.0.0:${env:PORT}"
-        auth:
-          authenticator: bearertokenauth/server
+        endpoint: "127.0.0.1:${env:OTLP_COLLECTOR_PORT}"
 
 processors:
   batch:
@@ -23,7 +19,7 @@ exporters:
     verbosity: basic
 
 service:
-  extensions: [bearertokenauth/server, health_check]
+  extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]
