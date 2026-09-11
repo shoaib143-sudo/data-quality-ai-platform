@@ -46,6 +46,24 @@ function parseAdmissionRow(row: Record<string, unknown>): ProjectBudgetAdmission
   }
 }
 
+function deniedCostPreflight(row: Record<string, unknown>): ProjectBudgetAdmission | null {
+  if (row.allowed === true) return null
+  if (row.allowed !== false) throw new Error('Canonical runtime cost admission status is invalid')
+  const reason = typeof row.reason === 'string' && ADMISSION_REASONS.has(row.reason as ProjectBudgetAdmissionReason)
+    ? row.reason as ProjectBudgetAdmissionReason
+    : null
+  if (!reason) throw new Error('Canonical runtime cost admission denial reason is invalid')
+  return {
+    admitted: false,
+    reason,
+    admissionId: null,
+    leaseId: null,
+    requestCountLastMinute: 0,
+    activeConcurrency: 0,
+    leaseExpiresAt: null,
+  }
+}
+
 export function createGovernanceProjectBudgetAdmissionProvider(): ProjectBudgetAdmissionProvider {
   const admin = createAdminClient()
   return {
@@ -57,6 +75,16 @@ export function createGovernanceProjectBudgetAdmissionProvider(): ProjectBudgetA
       if (!Number.isSafeInteger(leaseTtlSeconds) || leaseTtlSeconds < 1 || leaseTtlSeconds > 3600) {
         throw new Error('leaseTtlSeconds must be between 1 and 3600')
       }
+
+      const { data: costData, error: costError } = await admin.schema('governance').rpc('check_ai_project_runtime_cost_admission', {
+        p_project_id: projectId,
+        p_policy_version_id: policyVersionId,
+      })
+      if (costError) throw new Error(`Unable to check governed runtime cost admission: ${costError.message}`)
+      const costRow = Array.isArray(costData) ? costData[0] : costData
+      if (!costRow || typeof costRow !== 'object') throw new Error('Governed runtime cost admission returned no decision')
+      const costDenial = deniedCostPreflight(costRow as Record<string, unknown>)
+      if (costDenial) return costDenial
 
       const { data, error } = await admin.schema('governance').rpc('acquire_ai_project_resource_budget_admission', {
         p_project_id: projectId,
