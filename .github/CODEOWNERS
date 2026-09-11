@@ -1,0 +1,13 @@
+# Repository ownership metadata.
+# Branch protection should require pull requests and CI, but not code-owner approval
+# while this repository has a single active owner.
+
+* @shoaib143-sudo
+
+# Security-sensitive and release-critical surfaces.
+/.github/ @shoaib143-sudo
+/supabase/migrations/ @shoaib143-sudo
+/infra/ @shoaib143-sudo
+/app/api/ @shoaib143-sudo
+/lib/governance/ @shoaib143-sudo
+/lib/ai/ @shoaib143-sudo
