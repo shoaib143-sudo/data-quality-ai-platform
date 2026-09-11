@@ -7,6 +7,7 @@ on:
       - 'lib/agents/resumable-run-step.ts'
       - 'lib/agents/runtime/native-autonomy-kernel.ts'
       - 'supabase/migrations/20260911235000_data_quality_native_replay_certification.sql'
+      - 'supabase/migrations/20260911235500_data_quality_replay_index_inference.sql'
       - 'scripts/verify-data-quality-native-replay.mjs'
       - '.github/workflows/data-quality-native-replay.yml'
   workflow_dispatch:
