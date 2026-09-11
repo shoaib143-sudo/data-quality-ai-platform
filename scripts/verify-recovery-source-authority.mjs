@@ -4,7 +4,21 @@ import { constants } from 'node:fs'
 const manifest = JSON.parse(await readFile('infra/recovery/platform-manifest.json', 'utf8'))
 const config = await readFile('supabase/config.toml', 'utf8')
 
-for (const functionName of manifest.supabase.requiredEdgeFunctions ?? []) {
+if (!new RegExp(`project_id\\s*=\\s*["']${manifest.supabase.projectRef}["']`).test(config)) {
+  throw new Error('supabase/config.toml project_id must match the recovery platform manifest Supabase projectRef.')
+}
+console.log('PASS Supabase project identity is consistent across recovery sources')
+
+const requiredFunctions = new Set(manifest.supabase.requiredEdgeFunctions ?? [])
+const functionEntries = await readdir('supabase/functions', { withFileTypes: true })
+for (const entry of functionEntries) {
+  if (!entry.isDirectory() || entry.name.startsWith('_')) continue
+  if (!requiredFunctions.has(entry.name)) {
+    throw new Error(`Source-controlled Edge Function ${entry.name} is missing from the recovery platform manifest.`)
+  }
+}
+
+for (const functionName of requiredFunctions) {
   const entrypoint = `supabase/functions/${functionName}/index.ts`
   await access(entrypoint, constants.R_OK)
 
@@ -56,6 +70,21 @@ for (const alias of aliases.aliases ?? []) {
   console.log(`PASS migration history alias ${alias.logicalName}: repo ${alias.repositoryVersion}, live ${alias.observedProductionVersion}`)
 }
 
+const backup = JSON.parse(await readFile('infra/recovery/portable-backup-contract.json', 'utf8'))
+if (backup.schemaVersion !== 1 || backup.mechanism !== 'PORTABLE_LOGICAL_EXPORT') {
+  throw new Error('Portable backup contract must identify PORTABLE_LOGICAL_EXPORT as its mechanism.')
+}
+if (backup.targetRpoMinutes !== 60 || backup.rpoCurrentlyProven !== false) {
+  throw new Error('Portable backup contract must retain the 60-minute target while truthfully recording that it is not yet proven.')
+}
+if (backup.security?.plaintextBackupMayBeCommitted !== false || backup.security?.offProviderCopyRequired !== true || backup.security?.encryptionAtRestRequired !== true || backup.security?.integrityHashRequired !== true) {
+  throw new Error('Portable backup contract must prohibit committed plaintext and require off-provider encrypted integrity-checked copies.')
+}
+if (backup.scopeBoundaries?.storageObjectBytes?.toLowerCase().includes('not included') !== true) {
+  throw new Error('Portable backup contract must explicitly keep Storage object bytes outside database-backup evidence.')
+}
+console.log('PASS zero-cost portable backup security and evidence boundaries')
+
 const bia = await readFile('docs/recovery-business-impact-analysis.md', 'utf8')
 for (const [pattern, label] of [
   [/target RPO:\s*60 minutes/i, '60-minute RPO objective'],
@@ -67,5 +96,14 @@ for (const [pattern, label] of [
   if (!pattern.test(bia)) throw new Error(`Recovery BIA contract failed: ${label} is missing.`)
   console.log(`PASS Recovery BIA ${label}`)
 }
+
+const runbook = await readFile('docs/recovery-assurance-v2.md', 'utf8')
+if (!/current Supabase organization is on the Free plan/i.test(runbook)) {
+  throw new Error('Recovery runbook must document the current zero-additional-cost Supabase posture.')
+}
+if (!/no workflow may claim managed PITR, `RESTORED`, or `READY`/i.test(runbook)) {
+  throw new Error('Recovery runbook must fail closed on unsupported managed recovery claims.')
+}
+console.log('PASS zero-cost recovery posture remains explicit and fail closed')
 
 console.log('Recovery source-authority verification completed.')
