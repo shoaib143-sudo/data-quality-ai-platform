@@ -26,3 +26,5 @@ jobs:
         run: node scripts/verify-ux-foundation.mjs
       - name: Verify UX product telemetry contract
         run: node scripts/verify-ux-product-telemetry.mjs
+      - name: Verify policy-denied UX contract
+        run: node scripts/verify-ux-policy-denied-state.mjs
