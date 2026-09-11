@@ -6,6 +6,7 @@ type StepOutput = Record<string, unknown>
 
 export type ResumableRunStep = {
   id: string
+  attempt: number
   alreadySucceeded: boolean
   output: StepOutput
 }
@@ -25,7 +26,7 @@ export async function beginResumableRunStep(admin: AdminClient, input: {
   const { data: existing, error: existingError } = await admin
     .schema('agent')
     .from('agent_run_steps')
-    .select('id,status,output')
+    .select('id,status,attempt,output')
     .eq('agent_run_id', input.agentRunId)
     .eq('step_order', input.stepOrder)
     .maybeSingle()
@@ -37,6 +38,7 @@ export async function beginResumableRunStep(admin: AdminClient, input: {
   if (existing?.status === 'SUCCEEDED') {
     return {
       id: existing.id,
+      attempt: Number(existing.attempt ?? 1),
       alreadySucceeded: true,
       output: objectOutput(existing.output),
     } satisfies ResumableRunStep
@@ -44,12 +46,14 @@ export async function beginResumableRunStep(admin: AdminClient, input: {
 
   const now = new Date().toISOString()
   if (existing) {
+    const attempt = Number(existing.attempt ?? 1) + 1
     const { data: resumed, error: resumeError } = await admin
       .schema('agent')
       .from('agent_run_steps')
       .update({
         step_name: input.stepName,
         status: 'RUNNING',
+        attempt,
         input: input.input,
         output: null,
         error_code: null,
@@ -58,7 +62,7 @@ export async function beginResumableRunStep(admin: AdminClient, input: {
         completed_at: null,
       })
       .eq('id', existing.id)
-      .select('id,status,output')
+      .select('id,status,attempt,output')
       .single()
 
     if (resumeError || !resumed) {
@@ -67,6 +71,7 @@ export async function beginResumableRunStep(admin: AdminClient, input: {
 
     return {
       id: resumed.id,
+      attempt: Number(resumed.attempt ?? attempt),
       alreadySucceeded: false,
       output: objectOutput(resumed.output),
     } satisfies ResumableRunStep
@@ -80,10 +85,11 @@ export async function beginResumableRunStep(admin: AdminClient, input: {
       step_name: input.stepName,
       step_order: input.stepOrder,
       status: 'RUNNING',
+      attempt: 1,
       input: input.input,
       started_at: now,
     })
-    .select('id,status,output')
+    .select('id,status,attempt,output')
     .single()
 
   if (createError || !created) {
@@ -92,6 +98,7 @@ export async function beginResumableRunStep(admin: AdminClient, input: {
 
   return {
     id: created.id,
+    attempt: Number(created.attempt ?? 1),
     alreadySucceeded: false,
     output: objectOutput(created.output),
   } satisfies ResumableRunStep

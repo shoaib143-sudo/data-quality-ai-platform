@@ -200,7 +200,8 @@ function classifyExecution(
 
   const tier2Approved = policy.allowTier2AutomaticExecution
     && (policy.approvedTier2Tools ?? []).includes(certification.toolKey)
-    && (certification.reversible || certification.compensatable)
+    && certification.idempotent
+    && certification.replayCertified
 
   if (tier2Approved) return { decision: 'AUTO_TIER_2_PREAPPROVED', riskTier: 2 }
 
