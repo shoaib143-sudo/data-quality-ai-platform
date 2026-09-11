@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, CheckCircle2, Circle, Compass, Database, Gauge, Radar, ShieldCheck, Wrench } from 'lucide-react'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { WorkspaceEmptyState } from '@/components/app-shell/workspace-empty'
 import { JourneyViewTelemetry, TrackedJourneyLink } from '@/components/app-shell/journey-telemetry'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
@@ -204,11 +205,15 @@ export default async function JourneysPage() {
               </div>
             </article>
           )) : (
-            <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
-              <Compass className="mx-auto h-9 w-9 text-slate-400" />
-              <h2 className="mt-4 text-xl font-black">No accessible project journey yet</h2>
-              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">A governed project must exist before DataNexus can derive task progress from source, discovery, profiling, remediation, and control evidence.</p>
-            </section>
+            <WorkspaceEmptyState
+              title="No accessible project journey yet"
+              detail="A governed project must exist before DataNexus can derive task progress from source, discovery, profiling, remediation, and control evidence."
+              actionHref={safeHref('/catalog/discovery')}
+              actionLabel="Open governed discovery"
+              secondaryHref="/inbox"
+              secondaryLabel="Open governance inbox"
+              icon={Compass}
+            />
           )}
         </section>
       </div>
