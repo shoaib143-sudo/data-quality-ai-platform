@@ -116,19 +116,19 @@ export function BoundedLineageNavigator({projects}:{projects:Project[]}){
   }
 
   return <>
-    <button type="button" onClick={()=>setOpen(true)} className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-700 px-4 py-3 text-sm font-black text-white shadow-xl shadow-violet-200/60 transition hover:bg-violet-800">
+    <button type="button" onClick={()=>setOpen(true)} className="fixed bottom-4 right-4 z-40 inline-flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-violet-200 bg-violet-700 px-4 py-3 text-sm font-black text-white shadow-xl shadow-violet-200/60 transition hover:bg-violet-800 sm:bottom-6 sm:right-6">
       <GitBranch className="h-4 w-4"/>Bounded lineage
     </button>
 
-    {open?<div className="fixed inset-0 z-50 bg-slate-950/35 p-3 sm:p-6" onMouseDown={event=>{if(event.currentTarget===event.target)setOpen(false)}}>
-      <section className="ml-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+    {open?<div className="fixed inset-0 z-50 bg-slate-950/35 p-2 sm:p-6" onMouseDown={event=>{if(event.currentTarget===event.target)setOpen(false)}}>
+      <section className="ml-auto flex h-full max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl">
         <header className="flex items-start justify-between gap-4 border-b px-5 py-4">
           <div><div className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700"><GitBranch className="h-3.5 w-3.5"/>GraphProvider traversal</div><h2 className="mt-2 text-xl font-black text-slate-900">Bounded lineage neighborhood</h2><p className="mt-1 text-sm text-slate-500">Anchor-driven traversal only. Click any returned node to continue exploring without loading the whole estate.</p></div>
           <button type="button" onClick={()=>setOpen(false)} className="rounded-xl border p-2 text-slate-500 hover:bg-slate-50"><X className="h-4 w-4"/></button>
         </header>
 
-        <div className="grid min-h-0 flex-1 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="overflow-y-auto border-r bg-slate-50/60 p-4">
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:grid-rows-1 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="overflow-y-auto border-b bg-slate-50/60 p-4 lg:border-b-0 lg:border-r">
             <label className="text-[11px] font-black uppercase tracking-wide text-slate-400">Project</label>
             <select value={projectId} onChange={event=>chooseProject(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-violet-300">
               {projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}
@@ -143,7 +143,7 @@ export function BoundedLineageNavigator({projects}:{projects:Project[]}){
             </div>
           </aside>
 
-          <main className="min-w-0 overflow-y-auto p-5">
+          <main className="min-w-0 overflow-y-auto p-4 sm:p-5">
             {anchor?<>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div><p className="text-[10px] font-black uppercase tracking-wide text-violet-600">{anchor.type}</p><h3 className="text-lg font-black text-slate-900">{anchor.label}</h3>{anchor.subtitle?<p className="mt-0.5 text-[10px] font-semibold text-slate-400">{anchor.subtitle}</p>:null}</div>
