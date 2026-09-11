@@ -26,6 +26,9 @@ const required = [
   'app/journeys/layout.tsx',
   'app/journeys/loading.tsx',
   'app/journeys/error.tsx',
+  'app/reports/experience/page.tsx',
+  'app/reports/experience/loading.tsx',
+  'app/reports/experience/error.tsx',
 ]
 
 for (const path of required) {
@@ -120,6 +123,25 @@ for (const [pattern, label] of [
 const journeyLayout = await readFile('app/journeys/layout.tsx', 'utf8')
 if (!/requireWorkspaceAccess\('journeys'\)/.test(journeyLayout)) throw new Error('Guided journey must use workspace authorization.')
 console.log('PASS guided journey is workspace-authorized')
+
+const experienceReport = await readFile('app/reports/experience/page.tsx', 'utf8')
+for (const [pattern, label] of [
+  [/orchestration'\)\.from\('analytics_events'\)/, 'service-only interaction telemetry source'],
+  [/createAdminClient\(\)/, 'server-side analytics access'],
+  [/projectIds/, 'telemetry constrained to accessible projects'],
+  [/source_operational_readiness/, 'governed source outcome evidence'],
+  [/profile_runs/, 'governed profiling outcome evidence'],
+  [/quality_rule_runs/, 'governed control outcome evidence'],
+  [/Interaction telemetry helps explain adoption and friction/, 'analytics-versus-governance truth boundary'],
+  [/Evidence complete/, 'explicit evidence-completion reporting state'],
+]) {
+  if (!pattern.test(experienceReport)) throw new Error(`Experience insights report missing ${label}`)
+  console.log(`PASS ${label}`)
+}
+
+const reportsPage = await readFile('app/reports/page.tsx', 'utf8')
+if (!/href="\/reports\/experience"/.test(reportsPage)) throw new Error('Governance reports must link to experience insights.')
+console.log('PASS governance reports link to experience insights')
 
 const skipLink = await readFile('components/app-shell/skip-to-content.tsx', 'utf8')
 for (const [pattern, label] of [
