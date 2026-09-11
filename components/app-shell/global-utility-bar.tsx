@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Bell, Compass, Database, Layers3, Search, ShieldCheck, Sparkles } from 'lucide-react'
+import { BarChart3, Bell, Compass, Database, Layers3, Search, ShieldCheck, Sparkles } from 'lucide-react'
 import { SkipToContent } from '@/components/app-shell/skip-to-content'
 
 type Props = {
@@ -11,6 +11,7 @@ type Props = {
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Layers3 },
   { href: '/journeys', label: 'Journey', icon: Compass },
+  { href: '/experience-insights', label: 'Insights', icon: BarChart3 },
   { href: '/catalog', label: 'Catalog', icon: Database },
   { href: '/data-quality', label: 'Quality', icon: ShieldCheck },
   { href: '/agents', label: 'Agents', icon: Sparkles },
