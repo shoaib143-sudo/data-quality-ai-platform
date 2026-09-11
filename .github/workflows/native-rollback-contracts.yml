@@ -1,0 +1,44 @@
+name: Native Rollback Contracts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-autonomy-kernel.ts'
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'scripts/test-native-autonomy-kernel.mjs'
+      - 'scripts/verify-native-autonomy-kernel.mjs'
+      - 'scripts/verify-native-recovery-v2.mjs'
+      - 'scripts/verify-native-rollback-contracts.mjs'
+      - 'supabase/migrations/**native_rollback**'
+      - '.github/workflows/native-rollback-contracts.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-autonomy-kernel.ts'
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'scripts/test-native-autonomy-kernel.mjs'
+      - 'scripts/verify-native-autonomy-kernel.mjs'
+      - 'scripts/verify-native-recovery-v2.mjs'
+      - 'scripts/verify-native-rollback-contracts.mjs'
+      - 'supabase/migrations/**native_rollback**'
+      - '.github/workflows/native-rollback-contracts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify native rollback and compensation contracts
+        run: node scripts/verify-native-rollback-contracts.mjs
+      - name: Run native autonomy kernel regression tests
+        run: node --experimental-strip-types scripts/test-native-autonomy-kernel.mjs
+      - name: Verify native Recovery V2
+        run: node scripts/verify-native-recovery-v2.mjs
