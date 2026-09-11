@@ -29,7 +29,7 @@ export async function POST(request: Request, context: { params: Promise<{ caseId
 
     await authorizeProject(user.id, recoveryCase.project_id, 'agent.execute')
 
-    const { data, error } = await supabase.schema('orchestration').rpc('request_execution_recovery_action', {
+    const { data, error } = await supabase.schema('orchestration').rpc('request_execution_recovery_action_admin', {
       p_case_id: caseId,
       p_action: action,
     })
@@ -37,7 +37,7 @@ export async function POST(request: Request, context: { params: Promise<{ caseId
     if (error) {
       const retryConflict = /not classified as safe|not in a retryable terminal state/i.test(error.message)
       const missing = /not found/i.test(error.message)
-      const forbidden = /outside the current project scope|authentication is required/i.test(error.message)
+      const forbidden = /outside the current project scope|authentication is required|administrator approval/i.test(error.message)
       return NextResponse.json(
         { error: error.message },
         { status: forbidden ? 403 : missing ? 404 : retryConflict ? 409 : 400 },
