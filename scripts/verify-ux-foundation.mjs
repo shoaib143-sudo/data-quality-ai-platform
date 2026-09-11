@@ -8,6 +8,10 @@ const required = [
   'app/dashboard/error.tsx',
   'app/search/page.tsx',
   'app/inbox/page.tsx',
+  'app/inbox/loading.tsx',
+  'app/monitoring/loading.tsx',
+  'components/app-shell/execution-status.tsx',
+  'components/app-shell/workspace-state.tsx',
 ]
 
 for (const path of required) {
@@ -40,6 +44,28 @@ for (const pattern of [/reset/, /Retry dashboard/, /View observability/]) {
   if (!pattern.test(errorState)) throw new Error('Dashboard error state must remain recoverable and actionable.')
 }
 console.log('PASS dashboard has a recoverable error state')
+
+const executionStatus = await readFile('components/app-shell/execution-status.tsx', 'utf8')
+for (const [pattern, label] of [
+  [/RUNNING.*QUEUED.*PENDING/s, 'active async status vocabulary'],
+  [/SUCCEEDED.*COMPLETED/s, 'completed async status vocabulary'],
+  [/FAILED.*ERROR.*CANCELLED/s, 'failed async status vocabulary'],
+  [/motion-reduce:animate-none/, 'reduced-motion safe activity indicator'],
+]) {
+  if (!pattern.test(executionStatus)) throw new Error(`Shared async status missing ${label}`)
+  console.log(`PASS ${label}`)
+}
+
+const monitor = await readFile('app/monitoring/job-monitor.tsx', 'utf8')
+if (!/ExecutionStatusBadge/.test(monitor)) throw new Error('Job Monitor must use the shared execution status component.')
+console.log('PASS Job Monitor uses shared async execution status')
+
+const inboxLoading = await readFile('app/inbox/loading.tsx', 'utf8')
+const monitoringLoading = await readFile('app/monitoring/loading.tsx', 'utf8')
+if (!/WorkspaceLoadingState/.test(inboxLoading) || !/WorkspaceLoadingState/.test(monitoringLoading)) {
+  throw new Error('Inbox and monitoring must use shared loading states.')
+}
+console.log('PASS async workspaces use shared loading states')
 
 const inbox = await readFile('app/inbox/page.tsx', 'utf8')
 for (const [pattern, label] of [
