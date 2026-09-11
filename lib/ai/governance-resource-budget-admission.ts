@@ -12,6 +12,9 @@ const ADMISSION_REASONS = new Set<ProjectBudgetAdmissionReason>([
   'POLICY_DISABLED',
   'RATE_LIMIT',
   'CONCURRENCY_LIMIT',
+  'COST_EVIDENCE_INCOMPLETE',
+  'COST_CURRENCY_UNSUPPORTED',
+  'DAILY_COST_LIMIT',
 ])
 
 function requiredText(value: string, label: string) {
