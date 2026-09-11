@@ -1,0 +1,34 @@
+name: Durable Queue Readiness
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/health/ready/route.ts'
+      - 'lib/observability/queue-readiness.ts'
+      - 'scripts/test-queue-readiness.mjs'
+      - 'scripts/verify-queue-readiness.mjs'
+      - '.github/workflows/durable-queue-readiness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/api/health/ready/route.ts'
+      - 'lib/observability/queue-readiness.ts'
+      - 'scripts/test-queue-readiness.mjs'
+      - 'scripts/verify-queue-readiness.mjs'
+      - '.github/workflows/durable-queue-readiness.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify queue readiness integration
+        run: node scripts/verify-queue-readiness.mjs
+      - name: Test recovered queue readiness semantics
+        run: node --experimental-strip-types scripts/test-queue-readiness.mjs
