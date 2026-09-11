@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { ensureNativeRuntimeManifest } from '@/lib/agents/runtime/native-tool-contracts'
 
 export type NativeRuntimeCheckpointKind =
   | 'STEP_BOUNDARY'
@@ -131,6 +132,7 @@ export async function createNativeRuntimeCheckpoint(input: {
   assertUuidish(input.agentRunId, 'agentRunId')
   if (input.parentCheckpointId) assertUuidish(input.parentCheckpointId, 'parentCheckpointId')
   if (input.replaySourceCheckpointId) assertUuidish(input.replaySourceCheckpointId, 'replaySourceCheckpointId')
+  await ensureNativeRuntimeManifest({ agentRunId: input.agentRunId })
   const state = normalizeState(input.state)
   const admin = createAdminClient()
   const { data, error } = await admin.schema('agent').rpc('create_runtime_checkpoint_internal', {
@@ -166,6 +168,7 @@ export async function requestNativeRuntimeInterrupt(input: {
   if (input.idempotencyKey) boundedText(input.idempotencyKey, 'idempotencyKey', 300)
   if (input.expiresAt && Number.isNaN(Date.parse(input.expiresAt))) throw new Error('expiresAt must be an ISO timestamp')
 
+  await ensureNativeRuntimeManifest({ agentRunId: input.agentRunId })
   const state = normalizeState(input.state)
   const admin = createAdminClient()
   const { data, error } = await admin.schema('agent').rpc('request_runtime_interrupt_internal', {
@@ -190,8 +193,17 @@ export async function resumeNativeRuntimeInterrupt(input: {
   state: NativeAgentRuntimeStateV1
 }) {
   assertUuidish(input.interruptId, 'interruptId')
-  const state = normalizeState(input.state)
   const admin = createAdminClient()
+  const { data: interrupt, error: interruptError } = await admin
+    .schema('agent')
+    .from('agent_run_interrupts')
+    .select('agent_run_id')
+    .eq('id', input.interruptId)
+    .maybeSingle()
+  if (interruptError || !interrupt) throw new Error(`Unable to resolve runtime interrupt: ${interruptError?.message ?? 'not found'}`)
+  await ensureNativeRuntimeManifest({ agentRunId: interrupt.agent_run_id })
+
+  const state = normalizeState(input.state)
   const { data, error } = await admin.schema('agent').rpc('resume_runtime_interrupt_internal', {
     p_interrupt_id: input.interruptId,
     p_state_version: input.state.version,
@@ -215,6 +227,7 @@ export async function createNativeRuntimeReplay(input: {
   if (input.requestedBy) assertUuidish(input.requestedBy, 'requestedBy')
   const reason = boundedText(input.reason, 'reason', 2000)
   if (input.idempotencyKey) boundedText(input.idempotencyKey, 'idempotencyKey', 300)
+  await ensureNativeRuntimeManifest({ agentRunId: input.sourceAgentRunId })
   const admin = createAdminClient()
   const { data, error } = await admin.schema('agent').rpc('create_runtime_replay_internal', {
     p_source_agent_run_id: input.sourceAgentRunId,
