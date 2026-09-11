@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-const migrationPath = 'supabase/migrations/20260911045603_grant_service_role_governance_control_definitions_read.sql'
+const migrationPath = 'supabase/migrations/20260911050028_grant_service_role_governance_control_definitions_read.sql'
 const failures = []
 
 if (!fs.existsSync(migrationPath)) {
@@ -24,4 +24,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Governance-agent service-role control-definition read contract verified.')
+console.log('Governance-agent service-role control-definition read contract and live migration version verified.')
