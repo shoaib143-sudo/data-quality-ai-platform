@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 
 const migration = fs.readFileSync('supabase/migrations/20260911192000_execution_recovery_agent.sql', 'utf8')
-const hardeningMigration = fs.readFileSync('supabase/migrations/20260911193000_execution_recovery_action_hardening.sql', 'utf8')
 const worker = fs.readFileSync('lib/orchestration/worker.ts', 'utf8')
 const api = fs.readFileSync('app/api/recovery/[caseId]/actions/route.ts', 'utf8')
 const page = fs.readFileSync('app/recovery/page.tsx', 'utf8')
@@ -14,14 +13,24 @@ function requireText(source, token, label) {
   if (!source.includes(token)) throw new Error(`Missing ${label}: ${token}`)
 }
 
+function rejectText(source, token, label) {
+  if (source.includes(token)) throw new Error(`Forbidden ${label}: ${token}`)
+}
+
 requireText(migration, 'create table if not exists orchestration.recovery_cases', 'recovery case ledger')
 requireText(migration, 'constraint recovery_cases_durable_job_key unique (durable_job_id)', 'canonical terminal-job case identity')
-requireText(migration, 'create table if not exists orchestration.recovery_actions', 'append-only recovery action ledger')
+requireText(migration, 'create table if not exists orchestration.recovery_actions', 'governed recovery action history')
+requireText(migration, 'recovery_actions_one_retry_per_case_idx', 'one governed retry per case uniqueness')
 requireText(migration, "new.status <> 'DEAD'", 'terminal-failure-only recovery capture')
 requireText(migration, 'execution_recovery_classification', 'deterministic root-cause classification')
 requireText(migration, "'TRANSIENT_EXTERNAL'", 'transient external classification')
 requireText(migration, "'DEPLOYMENT_SCHEMA'", 'deployment/schema classification')
 requireText(migration, "'DATA_CONTRACT'", 'data contract classification')
+requireText(migration, "'CONFIGURATION'", 'configuration classification')
+requireText(migration, 'credentialref', 'credential configuration classification')
+requireText(migration, "v_retry_safe boolean := v_job_type in ('PROFILING', 'OBSERVABILITY', 'DISCOVERY', 'LINEAGE_ENRICHMENT', 'SEMANTIC_INDEX', 'GOVERNANCE_AGENT')", 'side-effect-aware retry-safe job allowlist')
+rejectText(migration, "if v_error ~ '(jdbc|", 'generic JDBC retry classification')
+requireText(migration, 'Generic JDBC failures do not qualify for retry without a concrete transient signal.', 'generic JDBC manual-review contract')
 requireText(migration, 'consent_requirement', 'operator consent boundary')
 requireText(migration, "v_case.recommended_action <> 'RETRY'", 'retry policy enforcement')
 requireText(migration, 'max_attempts = greatest(max_attempts, attempts + 1)', 'single additional durable retry budget')
@@ -30,12 +39,15 @@ requireText(migration, "where q.status = 'DEAD'", 'real terminal-job backfill sc
 requireText(migration, 'trg_enforce_profiling_job_success_integrity', 'profiling durable success evidence guard')
 requireText(migration, "a.artifact_type = 'AGENT_RUN_RESULT'", 'profiling canonical artifact requirement')
 requireText(migration, 'app_private.is_project_member(project_id)', 'project-scoped recovery reads')
-
-requireText(hardeningMigration, 'request_execution_recovery_action_admin', 'project-admin recovery action boundary')
-requireText(hardeningMigration, 'app_private.is_project_admin(v_project_id)', 'project-admin consent enforcement')
-requireText(hardeningMigration, 'revoke execute on function orchestration.request_execution_recovery_action(uuid, text) from authenticated', 'direct member action revocation')
-requireText(hardeningMigration, 'trg_resolve_execution_recovery_after_success', 'retry outcome reconciliation')
-requireText(hardeningMigration, "status = 'RESOLVED'", 'successful recovery resolution')
+requireText(migration, 'request_execution_recovery_action_admin', 'project-admin recovery action boundary')
+requireText(migration, 'app_private.is_project_admin(v_project_id)', 'project-admin consent enforcement')
+requireText(migration, 'revoke all on function orchestration.request_execution_recovery_action(uuid, text) from public, anon, authenticated', 'internal recovery mutation revocation')
+requireText(migration, 'A governed retry has already been approved for this recovery case.', 'repeat retry rejection')
+requireText(migration, 'trg_resolve_execution_recovery_after_success', 'retry outcome reconciliation')
+requireText(migration, 'cannot resolve without its queued retry action evidence', 'fail-closed recovery resolution evidence')
+requireText(migration, "status = 'RESOLVED'", 'successful recovery resolution')
+requireText(migration, 'trg_enforce_recovery_retry_ceiling', 'post-retry failure ceiling')
+requireText(migration, "recommended_action = 'MANUAL_REVIEW'", 'post-retry manual review escalation')
 
 requireText(api, 'requireApiUser()', 'authenticated recovery action API')
 requireText(api, "authorizeProject(user.id, recoveryCase.project_id, 'agent.execute')", 'execution permission preflight')
