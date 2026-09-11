@@ -2,6 +2,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createHash } from 'node:crypto'
 import { writeAgentRunLog } from '@/lib/agents/run-log'
 import { beginResumableRunStep } from '@/lib/agents/resumable-run-step'
+import {
+  admitNativeToolInvocation,
+  assertNativeJsonContract,
+  completeNativeToolInvocation,
+  failNativeToolInvocation,
+} from '@/lib/agents/runtime/native-tool-contracts'
 import { loadProfilingRows } from '@/lib/profiling/metric-engine'
 
 type RuleSuggestion = {
@@ -52,6 +58,10 @@ function canonical(value: unknown): string {
     return JSON.stringify(Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a],[b]) => a.localeCompare(b)).map(([key,item]) => [key, canonical(item)])))
   }
   return String(value)
+}
+
+function materialPayloadMatches(existing: Record<string, unknown>, payload: Record<string, unknown>) {
+  return Object.entries(payload).every(([key, value]) => canonical(existing[key]) === canonical(value))
 }
 
 function hashRecord(row: Record<string, unknown>) {
@@ -277,7 +287,7 @@ export async function syncSuggestedQualityRules(datasetVersionId: string, profil
 
   const persisted: QualityRule[] = []
   for (const suggestion of suggestions) {
-    let query = admin.schema('profiling').from('quality_rule_definitions').select('id').eq('dataset_id', dataset.id).eq('rule_key', suggestion.rule_key)
+    let query = admin.schema('profiling').from('quality_rule_definitions').select('*').eq('dataset_id', dataset.id).eq('rule_key', suggestion.rule_key)
     query = suggestion.column_name ? query.eq('column_name', suggestion.column_name) : query.is('column_name', null)
     const { data: existing, error: existingError } = await query.maybeSingle()
     if (existingError) throw new Error(`Unable to resolve existing quality rule: ${existingError.message}`)
@@ -298,16 +308,25 @@ export async function syncSuggestedQualityRules(datasetVersionId: string, profil
       enabled: true,
       origin: 'SUGGESTED',
       metadata: suggestion.metadata ?? {},
-      created_by: createdBy ?? null,
-      updated_at: new Date().toISOString(),
     }
 
     if (existing) {
-      const { data, error } = await admin.schema('profiling').from('quality_rule_definitions').update(payload).eq('id', existing.id).select('*').single()
+      if (materialPayloadMatches(existing as Record<string, unknown>, payload)) {
+        persisted.push(existing as QualityRule)
+        continue
+      }
+      const { data, error } = await admin.schema('profiling').from('quality_rule_definitions').update({
+        ...payload,
+        updated_at: new Date().toISOString(),
+      }).eq('id', existing.id).select('*').single()
       if (error || !data) throw new Error(`Unable to update suggested quality rule: ${error?.message ?? 'unknown error'}`)
       persisted.push(data as QualityRule)
     } else {
-      const { data, error } = await admin.schema('profiling').from('quality_rule_definitions').insert(payload).select('*').single()
+      const { data, error } = await admin.schema('profiling').from('quality_rule_definitions').insert({
+        ...payload,
+        created_by: createdBy ?? null,
+        updated_at: new Date().toISOString(),
+      }).select('*').single()
       if (error || !data) throw new Error(`Unable to create suggested quality rule: ${error?.message ?? 'unknown error'}`)
       persisted.push(data as QualityRule)
     }
@@ -360,45 +379,60 @@ export async function executeQualityAutomation(input: {
     agentRunId = agentRun.id
   }
   let currentStepId: string | null = null
+  let currentInvocation: Awaited<ReturnType<typeof admitNativeToolInvocation>> | null = null
   try {
     const syncStep = await beginResumableRunStep(admin, {
       agentRunId,
       stepName: 'sync_quality_rules',
       stepOrder: 1,
-      input: { datasetVersionId, profileRunId },
+      input: { datasetVersionId, profileRunId, userId },
     })
     currentStepId = syncStep.id
     if (!syncStep.alreadySucceeded) {
+      currentInvocation = await admitNativeToolInvocation({
+        agentRunId,
+        toolKey: 'sync_quality_rules',
+        expectedExecutor: 'data_quality',
+        toolInput: { datasetVersionId, profileRunId, userId },
+        idempotencyKey: `${syncStep.id}:attempt:${syncStep.attempt}`,
+      })
 
-    const synced = await syncSuggestedQualityRules(datasetVersionId, profileRunId, userId)
-    const activeRuleCount = synced.rules.filter((rule) => rule.enabled).length
-    const pendingReviewCount = synced.rules.filter((rule) => !rule.enabled && rule.approval_status === 'PENDING').length
-    const inactiveRuleCount = synced.rules.length - activeRuleCount - pendingReviewCount
-    await admin.schema('agent').from('agent_run_steps').update({
-      status: 'SUCCEEDED',
-      output: {
+      const synced = await syncSuggestedQualityRules(datasetVersionId, profileRunId, userId)
+      const activeRuleCount = synced.rules.filter((rule) => rule.enabled).length
+      const pendingReviewCount = synced.rules.filter((rule) => !rule.enabled && rule.approval_status === 'PENDING').length
+      const inactiveRuleCount = synced.rules.length - activeRuleCount - pendingReviewCount
+      const syncOutput = {
         rule_count: synced.rules.length,
         active_rule_count: activeRuleCount,
         pending_review_count: pendingReviewCount,
         inactive_rule_count: inactiveRuleCount,
-      },
-      completed_at: new Date().toISOString(),
-    }).eq('id', currentStepId)
-    await writeAgentRunLog({
-      agentRunId,
-      agentRunStepId: currentStepId,
-      level: 'TOOL',
-      eventType: 'QUALITY_RULES_SYNCED',
-      message: `${synced.rules.length} data quality rules synchronized; ${activeRuleCount} active, ${pendingReviewCount} awaiting governed review, ${inactiveRuleCount} otherwise inactive.`,
-      details: {
-        datasetVersionId,
-        profileRunId,
-        rule_count: synced.rules.length,
-        active_rule_count: activeRuleCount,
-        pending_review_count: pendingReviewCount,
-        inactive_rule_count: inactiveRuleCount,
-      },
-    })
+      }
+      await completeNativeToolInvocation({
+        invocationId: currentInvocation.invocationId,
+        contract: currentInvocation.contract,
+        output: syncOutput,
+      })
+      currentInvocation = null
+      await admin.schema('agent').from('agent_run_steps').update({
+        status: 'SUCCEEDED',
+        output: syncOutput,
+        completed_at: new Date().toISOString(),
+      }).eq('id', currentStepId)
+      await writeAgentRunLog({
+        agentRunId,
+        agentRunStepId: currentStepId,
+        level: 'TOOL',
+        eventType: 'QUALITY_RULES_SYNCED',
+        message: `${synced.rules.length} data quality rules synchronized; ${activeRuleCount} active, ${pendingReviewCount} awaiting governed review, ${inactiveRuleCount} otherwise inactive.`,
+        details: {
+          datasetVersionId,
+          profileRunId,
+          rule_count: synced.rules.length,
+          active_rule_count: activeRuleCount,
+          pending_review_count: pendingReviewCount,
+          inactive_rule_count: inactiveRuleCount,
+        },
+      })
     }
 
     const executeStep = await beginResumableRunStep(admin, {
@@ -417,35 +451,82 @@ export async function executeQualityAutomation(input: {
     let quarantinedCount = Number(executeStep.output.quarantined_records ?? 0)
 
     if (!executeStep.alreadySucceeded) {
+      currentInvocation = await admitNativeToolInvocation({
+        agentRunId,
+        toolKey: 'execute_quality_rules',
+        expectedExecutor: 'data_quality',
+        toolInput: { datasetVersionId, profileRunId },
+        idempotencyKey: `${executeStep.id}:attempt:${executeStep.attempt}`,
+      })
 
-    const [{ data: rules, error: rulesError }, { data: columns, error: columnsError }, { data: metrics, error: metricsError }] = await Promise.all([
-      admin.schema('profiling').from('quality_rule_definitions').select('*').eq('dataset_id', dataset.id).eq('enabled', true).order('severity'),
-      admin.schema('profiling').from('profile_columns').select('id,column_name').eq('profile_run_id', profileRunId),
-      admin.schema('profiling').from('profile_metrics').select('profile_column_id,metric_key,numeric_value').eq('profile_run_id', profileRunId),
-    ])
-    if (rulesError) throw new Error(`Unable to load quality rules: ${rulesError.message}`)
-    if (columnsError) throw new Error(`Unable to load quality rule columns: ${columnsError.message}`)
-    if (metricsError) throw new Error(`Unable to load quality rule metrics: ${metricsError.message}`)
+      const [{ data: rules, error: rulesError }, { data: columns, error: columnsError }, { data: metrics, error: metricsError }] = await Promise.all([
+        admin.schema('profiling').from('quality_rule_definitions').select('*').eq('dataset_id', dataset.id).eq('enabled', true).order('severity'),
+        admin.schema('profiling').from('profile_columns').select('id,column_name').eq('profile_run_id', profileRunId),
+        admin.schema('profiling').from('profile_metrics').select('profile_column_id,metric_key,numeric_value').eq('profile_run_id', profileRunId),
+      ])
+      if (rulesError) throw new Error(`Unable to load quality rules: ${rulesError.message}`)
+      if (columnsError) throw new Error(`Unable to load quality rule columns: ${columnsError.message}`)
+      if (metricsError) throw new Error(`Unable to load quality rule metrics: ${metricsError.message}`)
 
-    const columnNames = new Map((columns ?? []).map((column) => [column.id, column.column_name]))
-    const metricValues = new Map<string, number>()
-    for (const metric of (metrics ?? []) as MetricRow[]) {
-      if (typeof metric.numeric_value !== 'number') continue
-      const columnName = metric.profile_column_id ? columnNames.get(metric.profile_column_id) ?? null : null
-      metricValues.set(metricIdentity(columnName, metric.metric_key), metric.numeric_value)
-    }
+      const columnNames = new Map((columns ?? []).map((column) => [column.id, column.column_name]))
+      const metricValues = new Map<string, number>()
+      for (const metric of (metrics ?? []) as MetricRow[]) {
+        if (typeof metric.numeric_value !== 'number') continue
+        const columnName = metric.profile_column_id ? columnNames.get(metric.profile_column_id) ?? null : null
+        metricValues.set(metricIdentity(columnName, metric.metric_key), metric.numeric_value)
+      }
 
-    const loadedRows = await loadProfilingRows(admin, datasetVersionId, 1000)
-    const sourceRows = loadedRows.rows as Record<string, unknown>[]
+      const loadedRows = await loadProfilingRows(admin, datasetVersionId, 1000)
+      const sourceRows = loadedRows.rows as Record<string, unknown>[]
 
-    const results = (rules ?? []).map((rule) => {
-      const typedRule = rule as QualityRule
-      const ruleType = String(typedRule.rule_type ?? 'METRIC_THRESHOLD').toUpperCase()
+      const results = (rules ?? []).map((rule) => {
+        const typedRule = rule as QualityRule
+        const ruleType = String(typedRule.rule_type ?? 'METRIC_THRESHOLD').toUpperCase()
 
-      if (ruleType !== 'METRIC_THRESHOLD') {
-        const failures = rowFailures(typedRule, sourceRows)
-        const observedFailureRate = sourceRows.length ? failures.length / sourceRows.length : 0
-        const passed = failures.length === 0
+        if (ruleType !== 'METRIC_THRESHOLD') {
+          const failures = rowFailures(typedRule, sourceRows)
+          const observedFailureRate = sourceRows.length ? failures.length / sourceRows.length : 0
+          const passed = failures.length === 0
+          return {
+            rule_definition_id: typedRule.id,
+            agent_run_id: agentRunId,
+            dataset_version_id: datasetVersionId,
+            profile_run_id: profileRunId,
+            status: passed ? 'PASSED' : 'FAILED',
+            passed,
+            observed_value: observedFailureRate,
+            threshold: 0,
+            evidence: {
+              rule_type: ruleType,
+              column_name: typedRule.column_name,
+              sampled_rows: sourceRows.length,
+              source_row_count: loadedRows.rowCount,
+              row_failure_count: failures.length,
+              sampled_failure_rate: observedFailureRate,
+              source_access: loadedRows.sourceAccess ?? null,
+            },
+            error_message: null,
+            completed_at: new Date().toISOString(),
+          }
+        }
+
+        const observedValue = metricValues.get(metricIdentity(typedRule.column_name, typedRule.metric_key))
+        if (observedValue === undefined || typedRule.threshold === null || typedRule.threshold === undefined) {
+          return {
+            rule_definition_id: typedRule.id,
+            agent_run_id: agentRunId,
+            dataset_version_id: datasetVersionId,
+            profile_run_id: profileRunId,
+            status: 'ERROR',
+            passed: null,
+            observed_value: null,
+            threshold: typedRule.threshold,
+            evidence: { metric_key: typedRule.metric_key, column_name: typedRule.column_name, reason: 'Required profiling metric was not persisted.' },
+            error_message: 'Required profiling metric was not persisted.',
+            completed_at: new Date().toISOString(),
+          }
+        }
+        const passed = passes(typedRule.operator, observedValue, Number(typedRule.threshold))
         return {
           rule_definition_id: typedRule.id,
           agent_run_id: agentRunId,
@@ -453,129 +534,113 @@ export async function executeQualityAutomation(input: {
           profile_run_id: profileRunId,
           status: passed ? 'PASSED' : 'FAILED',
           passed,
-          observed_value: observedFailureRate,
-          threshold: 0,
-          evidence: {
-            rule_type: ruleType,
-            column_name: typedRule.column_name,
-            sampled_rows: sourceRows.length,
-            source_row_count: loadedRows.rowCount,
-            row_failure_count: failures.length,
-            sampled_failure_rate: observedFailureRate,
-            source_access: loadedRows.sourceAccess ?? null,
-          },
+          observed_value: observedValue,
+          threshold: typedRule.threshold,
+          evidence: { metric_key: typedRule.metric_key, column_name: typedRule.column_name, operator: typedRule.operator, dimension: typedRule.dimension, severity: typedRule.severity },
           error_message: null,
           completed_at: new Date().toISOString(),
         }
+      })
+
+      let persistedResults: Array<{id:string;rule_definition_id:string;status:string}> = []
+      if (results.length) {
+        const { data: insertedResults, error: resultError } = await admin.schema('profiling').from('quality_rule_runs').upsert(results, {
+          onConflict: 'agent_run_id,rule_definition_id,profile_run_id',
+        }).select('id,rule_definition_id,status')
+        if (resultError) throw new Error(`Unable to persist quality rule outcomes: ${resultError.message}`)
+        persistedResults = (insertedResults ?? []) as Array<{id:string;rule_definition_id:string;status:string}>
       }
 
-      const observedValue = metricValues.get(metricIdentity(typedRule.column_name, typedRule.metric_key))
-      if (observedValue === undefined || typedRule.threshold === null || typedRule.threshold === undefined) {
-        return {
-          rule_definition_id: typedRule.id,
-          agent_run_id: agentRunId,
-          dataset_version_id: datasetVersionId,
-          profile_run_id: profileRunId,
-          status: 'ERROR',
-          passed: null,
-          observed_value: null,
-          threshold: typedRule.threshold,
-          evidence: { metric_key: typedRule.metric_key, column_name: typedRule.column_name, reason: 'Required profiling metric was not persisted.' },
-          error_message: 'Required profiling metric was not persisted.',
-          completed_at: new Date().toISOString(),
+      totalCount = results.length
+      passedCount = results.filter((result) => result.status === 'PASSED').length
+      failedCount = results.filter((result) => result.status === 'FAILED').length
+      errorCount = results.filter((result) => result.status === 'ERROR').length
+
+      exceptionCount = 0
+      quarantinedCount = 0
+      if (failedCount > 0) {
+        const persistedRunByRule = new Map(persistedResults.map((result) => [result.rule_definition_id, result.id]))
+        const ruleById = new Map((rules ?? []).map((rule) => [rule.id, rule as QualityRule]))
+        const exceptionRows: Record<string, unknown>[] = []
+        const quarantineRows: Record<string, unknown>[] = []
+        for (const failedResult of results.filter((result) => result.status === 'FAILED')) {
+          const rule = ruleById.get(String(failedResult.rule_definition_id))
+          const qualityRuleRunId = persistedRunByRule.get(String(failedResult.rule_definition_id))
+          if (!rule || !qualityRuleRunId) continue
+          const failures = rowFailures(rule, sourceRows).slice(0, 250)
+          for (const failure of failures) {
+            const recordHash = hashRecord(failure.row)
+            const key = recordKey(failure.row)
+            const sample = safeSample(failure.row)
+            exceptionRows.push({
+              quality_rule_run_id: qualityRuleRunId,
+              rule_definition_id: rule.id,
+              dataset_version_id: datasetVersionId,
+              profile_run_id: profileRunId,
+              record_key: key,
+              record_hash: recordHash,
+              column_name: rule.column_name,
+              observed_value: failure.observed.slice(0, 500),
+              reason: failure.reason,
+              sample,
+            })
+            quarantineRows.push({
+              project_id: dataset.project_id,
+              dataset_id: dataset.id,
+              dataset_version_id: datasetVersionId,
+              rule_definition_id: rule.id,
+              quality_rule_run_id: qualityRuleRunId,
+              record_hash: recordHash,
+              record_key: key,
+              reason: failure.reason,
+              sample,
+              status: 'QUARANTINED',
+            })
+          }
+        }
+        if (exceptionRows.length) {
+          const { error: exceptionError } = await admin.schema('profiling').from('quality_rule_exceptions').upsert(exceptionRows, {
+            onConflict: 'quality_rule_run_id,record_hash,column_name',
+          })
+          if (exceptionError) throw new Error(`Unable to persist row-level quality exceptions: ${exceptionError.message}`)
+          exceptionCount = exceptionRows.length
+        }
+        if (quarantineRows.length) {
+          const { error: quarantineError } = await admin.schema('profiling').from('quality_quarantine_records').upsert(quarantineRows, {
+            onConflict: 'quality_rule_run_id,record_hash',
+          })
+          if (quarantineError) throw new Error(`Unable to persist quarantine records: ${quarantineError.message}`)
+          quarantinedCount = quarantineRows.length
         }
       }
-      const passed = passes(typedRule.operator, observedValue, Number(typedRule.threshold))
-      return {
-        rule_definition_id: typedRule.id,
-        agent_run_id: agentRunId,
-        dataset_version_id: datasetVersionId,
-        profile_run_id: profileRunId,
-        status: passed ? 'PASSED' : 'FAILED',
-        passed,
-        observed_value: observedValue,
-        threshold: typedRule.threshold,
-        evidence: { metric_key: typedRule.metric_key, column_name: typedRule.column_name, operator: typedRule.operator, dimension: typedRule.dimension, severity: typedRule.severity },
-        error_message: null,
+
+      const executeOutput = {
+        total: results.length,
+        passed: passedCount,
+        failed: failedCount,
+        errors: errorCount,
+        row_exceptions: exceptionCount,
+        quarantined_records: quarantinedCount,
+      }
+
+      if (!errorCount) {
+        await completeNativeToolInvocation({
+          invocationId: currentInvocation.invocationId,
+          contract: currentInvocation.contract,
+          output: executeOutput,
+        })
+        currentInvocation = null
+      }
+
+      await admin.schema('agent').from('agent_run_steps').update({
+        status: errorCount ? 'FAILED' : 'SUCCEEDED',
+        output: executeOutput,
+        error_code: errorCount ? 'QUALITY_METRIC_MISSING' : null,
+        error_message: errorCount ? `${errorCount} rules could not be evaluated because required metrics were missing.` : null,
         completed_at: new Date().toISOString(),
-      }
-    })
+      }).eq('id', currentStepId)
 
-    let persistedResults: Array<{id:string;rule_definition_id:string;status:string}> = []
-    if (results.length) {
-      const { data: insertedResults, error: resultError } = await admin.schema('profiling').from('quality_rule_runs').insert(results).select('id,rule_definition_id,status')
-      if (resultError) throw new Error(`Unable to persist quality rule outcomes: ${resultError.message}`)
-      persistedResults = (insertedResults ?? []) as Array<{id:string;rule_definition_id:string;status:string}>
-    }
-
-    totalCount = results.length
-    passedCount = results.filter((result) => result.status === 'PASSED').length
-    failedCount = results.filter((result) => result.status === 'FAILED').length
-    errorCount = results.filter((result) => result.status === 'ERROR').length
-
-    exceptionCount = 0
-    quarantinedCount = 0
-    if (failedCount > 0) {
-      const persistedRunByRule = new Map(persistedResults.map((result) => [result.rule_definition_id, result.id]))
-      const ruleById = new Map((rules ?? []).map((rule) => [rule.id, rule as QualityRule]))
-      const exceptionRows: Record<string, unknown>[] = []
-      const quarantineRows: Record<string, unknown>[] = []
-      for (const failedResult of results.filter((result) => result.status === 'FAILED')) {
-        const rule = ruleById.get(String(failedResult.rule_definition_id))
-        const qualityRuleRunId = persistedRunByRule.get(String(failedResult.rule_definition_id))
-        if (!rule || !qualityRuleRunId) continue
-        const failures = rowFailures(rule, sourceRows).slice(0, 250)
-        for (const failure of failures) {
-          const recordHash = hashRecord(failure.row)
-          const key = recordKey(failure.row)
-          const sample = safeSample(failure.row)
-          exceptionRows.push({
-            quality_rule_run_id: qualityRuleRunId,
-            rule_definition_id: rule.id,
-            dataset_version_id: datasetVersionId,
-            profile_run_id: profileRunId,
-            record_key: key,
-            record_hash: recordHash,
-            column_name: rule.column_name,
-            observed_value: failure.observed.slice(0, 500),
-            reason: failure.reason,
-            sample,
-          })
-          quarantineRows.push({
-            project_id: dataset.project_id,
-            dataset_id: dataset.id,
-            dataset_version_id: datasetVersionId,
-            rule_definition_id: rule.id,
-            quality_rule_run_id: qualityRuleRunId,
-            record_hash: recordHash,
-            record_key: key,
-            reason: failure.reason,
-            sample,
-            status: 'QUARANTINED',
-          })
-        }
-      }
-      if (exceptionRows.length) {
-        const { error: exceptionError } = await admin.schema('profiling').from('quality_rule_exceptions').insert(exceptionRows)
-        if (exceptionError) throw new Error(`Unable to persist row-level quality exceptions: ${exceptionError.message}`)
-        exceptionCount = exceptionRows.length
-      }
-      if (quarantineRows.length) {
-        const { error: quarantineError } = await admin.schema('profiling').from('quality_quarantine_records').insert(quarantineRows)
-        if (quarantineError) throw new Error(`Unable to persist quarantine records: ${quarantineError.message}`)
-        quarantinedCount = quarantineRows.length
-      }
-    }
-
-    await admin.schema('agent').from('agent_run_steps').update({
-      status: errorCount ? 'FAILED' : 'SUCCEEDED',
-      output: { total: results.length, passed: passedCount, failed: failedCount, errors: errorCount, row_exceptions: exceptionCount, quarantined_records: quarantinedCount },
-      error_code: errorCount ? 'QUALITY_METRIC_MISSING' : null,
-      error_message: errorCount ? `${errorCount} rules could not be evaluated because required metrics were missing.` : null,
-      completed_at: new Date().toISOString(),
-    }).eq('id', currentStepId)
-
-    if (errorCount) throw new Error(`${errorCount} data quality rules could not be evaluated because required metrics were missing.`)
+      if (errorCount) throw new Error(`${errorCount} data quality rules could not be evaluated because required metrics were missing.`)
     }
 
     const publishStep = await beginResumableRunStep(admin, {
@@ -600,21 +665,50 @@ export async function executeQualityAutomation(input: {
       governance_status: totalCount === 0 ? 'NO_ACTIVE_CONTROLS' : failedCount ? 'ATTENTION_REQUIRED' : 'CONTROLLED',
     }
     const completedAt = new Date().toISOString()
-    await admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: summary, completed_at: completedAt }).eq('id', currentStepId)
-    await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: summary, completed_at: completedAt }).eq('id', agentRunId)
-    await writeAgentRunLog({
-      agentRunId,
-      agentRunStepId: currentStepId,
-      level: 'LIFECYCLE',
-      eventType: 'QUALITY_AUTOMATION_COMPLETED',
-      message: totalCount === 0
-        ? 'Data quality automation completed with no active controls available for evaluation.'
-        : `Data quality automation completed: ${passedCount} passed, ${failedCount} failed.`,
-      details: summary,
-    })
+
+    if (!publishStep.alreadySucceeded) {
+      currentInvocation = await admitNativeToolInvocation({
+        agentRunId,
+        toolKey: 'publish_quality_results',
+        expectedExecutor: 'data_quality',
+        toolInput: { datasetVersionId, profileRunId },
+        idempotencyKey: `${publishStep.id}:attempt:${publishStep.attempt}`,
+      })
+      assertNativeJsonContract(currentInvocation.contract.output_schema, summary, 'publish_quality_results output')
+      await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: summary, completed_at: completedAt }).eq('id', agentRunId)
+      await completeNativeToolInvocation({
+        invocationId: currentInvocation.invocationId,
+        contract: currentInvocation.contract,
+        output: summary,
+      })
+      currentInvocation = null
+      await admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: summary, completed_at: completedAt }).eq('id', currentStepId)
+      await writeAgentRunLog({
+        agentRunId,
+        agentRunStepId: currentStepId,
+        level: 'LIFECYCLE',
+        eventType: 'QUALITY_AUTOMATION_COMPLETED',
+        message: totalCount === 0
+          ? 'Data quality automation completed with no active controls available for evaluation.'
+          : `Data quality automation completed: ${passedCount} passed, ${failedCount} failed.`,
+        details: summary,
+      })
+    } else {
+      await admin.schema('agent').from('agent_runs').update({ status: 'SUCCEEDED', output: summary, completed_at: completedAt }).eq('id', agentRunId)
+    }
 
     return { agentRunId, ...summary }
   } catch (error) {
+    if (currentInvocation) {
+      try {
+        await failNativeToolInvocation({
+          invocationId: currentInvocation.invocationId,
+          errorCode: 'DATA_QUALITY_EXECUTION_FAILED',
+          error,
+        })
+      } catch {}
+      currentInvocation = null
+    }
     const message = error instanceof Error ? error.message : 'Data quality automation failed.'
     const completedAt = new Date().toISOString()
     if (currentStepId) await admin.schema('agent').from('agent_run_steps').update({ status: 'FAILED', error_code: 'DATA_QUALITY_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', currentStepId).eq('status', 'RUNNING')
