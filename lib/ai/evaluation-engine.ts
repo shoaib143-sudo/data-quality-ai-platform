@@ -42,6 +42,8 @@ export type EvaluationScorecardMetric = {
   passCount: number
   failCount: number
   averageScore: number | null
+  evidenceResultIds: string[]
+  lastObservedAt: string | null
 }
 
 export interface EvaluationEngine {
@@ -80,6 +82,8 @@ export type EvaluationScorecardRow = {
   pass_count: number | string
   fail_count: number | string
   average_score: number | string | null
+  evidence_result_ids: string[] | null
+  last_observed_at: string | null
 }
 
 export type EvaluationPersistence = {
@@ -213,6 +217,8 @@ export class DurableEvaluationEngine implements EvaluationEngine {
       passCount: numeric(row.pass_count, 'pass_count'),
       failCount: numeric(row.fail_count, 'fail_count'),
       averageScore: row.average_score == null ? null : numeric(row.average_score, 'average_score'),
+      evidenceResultIds: [...new Set(row.evidence_result_ids ?? [])],
+      lastObservedAt: row.last_observed_at,
     }))
   }
 }
