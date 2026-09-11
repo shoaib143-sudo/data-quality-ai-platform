@@ -20,6 +20,12 @@ const engine = new DurableEvaluationEngine({
       pass_count: '9',
       fail_count: '1',
       average_score: '0.92',
+      evidence_result_ids: [
+        '33333333-3333-4333-8333-333333333333',
+        '33333333-3333-4333-8333-333333333333',
+        '44444444-4444-4444-8444-444444444444',
+      ],
+      last_observed_at: '2026-09-08T15:05:00Z',
     }]
   },
 })
@@ -70,6 +76,11 @@ assert.deepEqual(scorecard[0], {
   passCount: 9,
   failCount: 1,
   averageScore: 0.92,
+  evidenceResultIds: [
+    '33333333-3333-4333-8333-333333333333',
+    '44444444-4444-4444-8444-444444444444',
+  ],
+  lastObservedAt: '2026-09-08T15:05:00Z',
 })
 
 await assert.rejects(

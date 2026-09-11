@@ -145,9 +145,17 @@ requireText('lib/ai/routing-policy.ts', [
   'NO_ACTIVE_POLICY',
   'POLICY_DISABLED',
   'AI_SYSTEM_NOT_ALLOWED',
-  'INSUFFICIENT_EVALUATION_SCORE',
-  'INSUFFICIENT_EVALUATION_EVIDENCE',
+  'evaluationType',
+  'evaluationMetricName',
+  'evaluationMaxAgeSeconds',
   'POLICY_ALLOWED',
+])
+requireText('lib/ai/intelligent-router.ts', [
+  'INSUFFICIENT_EVALUATION_EVIDENCE',
+  'EVALUATION_SCORE_BELOW_POLICY_THRESHOLD',
+  'STALE_EVALUATION_EVIDENCE',
+  'DETERMINISTIC_FALLBACK',
+  'CANONICAL_EVALUATION',
 ])
 requireText('app/admin/page.tsx', ["href=\"/admin/ai-command-center\""])
 
