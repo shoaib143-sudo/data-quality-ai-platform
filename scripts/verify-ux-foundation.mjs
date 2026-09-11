@@ -30,6 +30,8 @@ const required = [
   'app/reports/experience/layout.tsx',
   'app/reports/experience/loading.tsx',
   'app/reports/experience/error.tsx',
+  'scripts/verify-ux-responsive-governance-controls.mjs',
+  'docs/ux-responsive-governance-controls.md',
 ]
 
 for (const path of required) {
@@ -180,5 +182,11 @@ for (const [pattern, label] of [
   if (!pattern.test(inbox)) throw new Error(`Governance inbox missing ${label}`)
   console.log(`PASS ${label}`)
 }
+
+const responsiveVerifier = await readFile('scripts/verify-ux-responsive-governance-controls.mjs', 'utf8')
+for (const path of ['app/data-quality/rules/rule-manager.tsx','app/workflows/workflow-manager-v3.tsx','app/scorecards/scorecard-manager-v2.tsx','app/reports/report-manager.tsx']) {
+  if (!responsiveVerifier.includes(path)) throw new Error(`Responsive governance verifier must cover ${path}`)
+}
+console.log('PASS responsive governance controls are covered by a dedicated CI contract')
 
 console.log('DataNexus UX Foundation verification completed.')
