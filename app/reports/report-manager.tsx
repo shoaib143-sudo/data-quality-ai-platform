@@ -15,7 +15,7 @@ export function ReportManager({projects}:{projects:ReportProject[]}) {
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Governance evidence export</p><h2 className="mt-1 text-2xl font-black">Project governance report</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Exports persisted catalog, certification, profiling, quality control, observability, classification, stewardship, remediation and governed source observation evidence. No synthetic metrics are added.</p></div>
-        <label className="min-w-72 text-sm font-semibold text-slate-700">Project
+        <label className="w-full text-sm font-semibold text-slate-700 sm:w-auto sm:min-w-72">Project
           <select value={projectId} onChange={(event)=>setProjectId(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
             {projects.map((project)=><option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
