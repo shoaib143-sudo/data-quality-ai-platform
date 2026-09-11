@@ -25,6 +25,19 @@ const DECISION_RANK: Record<PolicyDecision, number> = {
   DENY: 2,
 }
 
+export function normalizeOpaEndpoint(value: string | null | undefined) {
+  return value?.trim().replace(/\/$/, '') || null
+}
+
+export function normalizeOpaDecisionPath(value: string | null | undefined) {
+  return `/${(value?.trim() || 'v1/data/datanexus/autonomy/decision').replace(/^\/+/, '')}`
+}
+
+export function opaAuthorizationHeaders(value: string | null | undefined): Record<string, string> | null {
+  const token = value?.trim() || null
+  return token ? { authorization: `Bearer ${token}` } : null
+}
+
 function blockedResult(canonical: PolicyDecisionResult, reason: string): PolicyDecisionResult {
   return {
     ...canonical,
@@ -66,15 +79,15 @@ export class OpaPolicyDecisionProvider implements PolicyDecisionProvider {
   private readonly canonical: PolicyDecisionProvider
   private readonly endpoint: string | null
   private readonly decisionPath: string
-  private readonly authorizationToken: string | null
+  private readonly authorizationHeaders: Record<string, string> | null
   private readonly timeoutMs: number
   private readonly fetchImpl: typeof fetch
 
   constructor(canonical: PolicyDecisionProvider, options: OpaPolicyDecisionProviderOptions) {
     this.canonical = canonical
-    this.endpoint = options.endpoint?.trim().replace(/\/$/, '') || null
-    this.decisionPath = `/${(options.decisionPath?.trim() || 'v1/data/datanexus/autonomy/decision').replace(/^\/+/, '')}`
-    this.authorizationToken = options.authorizationToken?.trim() || null
+    this.endpoint = normalizeOpaEndpoint(options.endpoint)
+    this.decisionPath = normalizeOpaDecisionPath(options.decisionPath)
+    this.authorizationHeaders = opaAuthorizationHeaders(options.authorizationToken)
     this.timeoutMs = Math.max(250, Math.min(10_000, options.timeoutMs ?? 2_000))
     this.fetchImpl = options.fetchImpl ?? fetch
   }
@@ -90,7 +103,7 @@ export class OpaPolicyDecisionProvider implements PolicyDecisionProvider {
     if (!this.endpoint) {
       return blockedResult(canonical, 'OPA enforcement is selected but no OPA endpoint is configured.')
     }
-    if (!this.authorizationToken) {
+    if (!this.authorizationHeaders) {
       return blockedResult(canonical, 'OPA enforcement is selected but no OPA authentication token is configured.')
     }
 
@@ -101,7 +114,7 @@ export class OpaPolicyDecisionProvider implements PolicyDecisionProvider {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${this.authorizationToken}`,
+          ...this.authorizationHeaders,
         },
         body: JSON.stringify({
           input: {
