@@ -8,9 +8,14 @@ function requireText(text, needle, label) {
   if (!text.includes(needle)) throw new Error(`AI governance due diligence contract missing: ${label}`)
 }
 
+function rejectText(text, needle, label) {
+  if (text.includes(needle)) throw new Error(`AI governance due diligence contract violation: ${label}`)
+}
+
 const worker = read('lib/agents/governance-job-worker.ts')
 const scheduledWorker = read('app/api/jobs/worker/route.ts')
 const directAgentRoute = read('app/api/agents/governance/run/route.ts')
+const runResultArtifact = read('lib/agents/run-result-artifact.ts')
 const handoffRoute = read('app/api/agents/governance/handoff/route.ts')
 const semanticJobs = read('lib/governance/semantic-jobs.ts')
 const fieldLineage = read('supabase/migrations/20260905000510_synthetic_field_lineage_integration_suite.sql')
@@ -40,7 +45,9 @@ requireText(worker, 'persistInvestigatorRiskAssessment', 'durable investigator r
 requireText(worker, 'enrichOutputWithAIGovernanceIntelligence', 'durable agent certification/ROI intelligence enrichment')
 
 requireText(directAgentRoute, 'enrichOutputWithAIGovernanceIntelligence', 'direct agent certification/ROI intelligence enrichment')
-requireText(directAgentRoute, ".from('agent_runs').update({ output })", 'direct agent enriched output persistence')
+requireText(directAgentRoute, 'persistAgentRunResultArtifact', 'direct agent governed enriched output persistence')
+requireText(runResultArtifact, ".schema('agent').rpc('persist_agent_run_result'", 'direct agent durable persistence RPC boundary')
+rejectText(directAgentRoute, ".from('agent_runs').update({ output })", 'direct agent route must not bypass governed result persistence')
 requireText(handoffRoute, 'enrichOutputWithAIGovernanceIntelligence', 'handoff certification/ROI intelligence enrichment')
 requireText(handoffRoute, 'output,', 'handoff enriched output persistence')
 requireText(scheduledWorker, 'refreshAllAIGovernanceIntelligence', 'scheduled certification/ROI intelligence refresh')
