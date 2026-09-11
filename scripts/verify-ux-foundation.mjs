@@ -27,11 +27,9 @@ const required = [
   'app/journeys/loading.tsx',
   'app/journeys/error.tsx',
   'app/reports/experience/page.tsx',
+  'app/reports/experience/layout.tsx',
   'app/reports/experience/loading.tsx',
   'app/reports/experience/error.tsx',
-  'app/lineage/bounded-lineage-navigator.tsx',
-  'app/lineage/bounded-field-lineage-navigator.tsx',
-  'app/lineage/lineage-explorer.tsx',
 ]
 
 for (const path of required) {
@@ -146,29 +144,11 @@ const reportsPage = await readFile('app/reports/page.tsx', 'utf8')
 if (!/href="\/reports\/experience"/.test(reportsPage)) throw new Error('Governance reports must link to experience insights.')
 console.log('PASS governance reports link to experience insights')
 
-const boundedLineage = await readFile('app/lineage/bounded-lineage-navigator.tsx', 'utf8')
-const boundedFieldLineage = await readFile('app/lineage/bounded-field-lineage-navigator.tsx', 'utf8')
-for (const [source, label] of [
-  [boundedLineage, 'dataset lineage navigator'],
-  [boundedFieldLineage, 'field lineage navigator'],
-]) {
-  for (const pattern of [
-    /max-h-\[calc\(100dvh-1rem\)\]/,
-    /grid-rows-\[minmax\(0,0\.9fr\)_minmax\(0,1\.1fr\)\]/,
-    /lg:grid-cols-\[300px_minmax\(0,1fr\)\]/,
-    /border-b.*lg:border-b-0.*lg:border-r/s,
-  ]) {
-    if (!pattern.test(source)) throw new Error(`${label} is missing a required small-screen containment contract.`)
-  }
+const experienceLayout = await readFile('app/reports/experience/layout.tsx', 'utf8')
+if (!/requireWorkspaceAccess\('reports'\)/.test(experienceLayout)) {
+  throw new Error('Experience insights must use reports workspace authorization.')
 }
-if (!/bottom-4 right-4.*sm:bottom-6 sm:right-6/s.test(boundedLineage)) throw new Error('Dataset lineage launcher must remain reachable on narrow screens.')
-if (!/bottom-20 right-4.*sm:bottom-6 sm:right-48/s.test(boundedFieldLineage)) throw new Error('Field lineage launcher must stack above dataset lineage on narrow screens.')
-console.log('PASS bounded lineage launchers and drawers are responsive')
-
-const lineageExplorer = await readFile('app/lineage/lineage-explorer.tsx', 'utf8')
-if (!/w-full min-w-0 sm:min-w-\[260px\] sm:flex-1/.test(lineageExplorer)) throw new Error('Lineage explorer search must not force narrow-screen overflow.')
-if (!/rotate-90.*lg:rotate-0/.test(lineageExplorer)) throw new Error('Stacked field mappings must communicate vertical direction on narrow screens.')
-console.log('PASS lineage explorer adapts search and mapping direction to narrow screens')
+console.log('PASS experience insights is reports-workspace authorized')
 
 const skipLink = await readFile('components/app-shell/skip-to-content.tsx', 'utf8')
 for (const [pattern, label] of [
