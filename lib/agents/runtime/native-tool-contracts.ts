@@ -38,6 +38,7 @@ export type NativePinnedToolContract = {
 type NativeToolAdmission = {
   invocationId: string
   contract: NativePinnedToolContract
+  toolInput: Record<string, unknown>
 }
 
 function canonicalize(value: unknown): unknown {
@@ -176,6 +177,40 @@ export function assertNativeJsonContract(schema: Record<string, unknown>, value:
   if (errors.length) throw new Error(`${label} contract violation: ${errors.slice(0, 8).join('; ')}`)
 }
 
+function snakeToCamel(value: string) {
+  return value.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+}
+
+function camelToSnake(value: string) {
+  return value.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+}
+
+/**
+ * Native execution is stricter than permissive JSON Schema defaults: when a contract
+ * declares properties, the executor receives only those properties. This prevents an
+ * unregistered caller field from influencing production behavior. Exact names win;
+ * snake_case/camelCase aliases are accepted only to bridge existing typed contracts.
+ */
+export function normalizeNativeToolContractInput(
+  contract: NativePinnedToolContract,
+  rawInput: Record<string, unknown>,
+) {
+  const properties = isRecord(contract.input_schema.properties) ? contract.input_schema.properties : null
+  if (!properties) {
+    assertNativeJsonContract(contract.input_schema, rawInput, `${contract.tool_key} input`)
+    return rawInput
+  }
+
+  const normalized: Record<string, unknown> = {}
+  for (const key of Object.keys(properties)) {
+    const candidates = Array.from(new Set([key, snakeToCamel(key), camelToSnake(key)]))
+    const match = candidates.find((candidate) => Object.prototype.hasOwnProperty.call(rawInput, candidate))
+    if (match) normalized[key] = rawInput[match]
+  }
+  assertNativeJsonContract(contract.input_schema, normalized, `${contract.tool_key} input`)
+  return normalized
+}
+
 export async function ensureNativeRuntimeManifest(input: {
   agentRunId: string
   runtimeVersion?: string
@@ -206,12 +241,26 @@ export async function getNativePinnedToolContract(agentRunId: string, toolKey: s
   const contract = contracts[toolKey]
   if (!isRecord(contract)) throw new Error(`Tool ${toolKey} is not pinned to agent run ${agentRunId}`)
   if (!SHA256_PATTERN.test(String(contract.contract_hash ?? ''))) throw new Error(`Pinned tool ${toolKey} has an invalid contract hash`)
-  return contract as NativePinnedToolContract
+  return contract as unknown as NativePinnedToolContract
 }
 
 export async function getNativePinnedToolContracts(agentRunId: string, toolKeys: string[]) {
-  const entries = await Promise.all(toolKeys.map(async (toolKey) => [toolKey, await getNativePinnedToolContract(agentRunId, toolKey)] as const))
-  return new Map(entries)
+  await ensureNativeRuntimeManifest({ agentRunId })
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .schema('agent')
+    .from('agent_run_runtime_manifests')
+    .select('tool_contracts')
+    .eq('agent_run_id', agentRunId)
+    .maybeSingle()
+  if (error || !data) throw new Error(`Unable to load pinned runtime manifest: ${error?.message ?? 'not found'}`)
+  const contracts = isRecord(data.tool_contracts) ? data.tool_contracts : {}
+  return new Map(toolKeys.map((toolKey) => {
+    const contract = contracts[toolKey]
+    if (!isRecord(contract)) throw new Error(`Tool ${toolKey} is not pinned to agent run ${agentRunId}`)
+    if (!SHA256_PATTERN.test(String(contract.contract_hash ?? ''))) throw new Error(`Pinned tool ${toolKey} has an invalid contract hash`)
+    return [toolKey, contract as unknown as NativePinnedToolContract] as const
+  }))
 }
 
 export async function admitNativeToolInvocation(input: {
@@ -223,8 +272,8 @@ export async function admitNativeToolInvocation(input: {
   approvalInterruptId?: string | null
 }): Promise<NativeToolAdmission> {
   const contract = await getNativePinnedToolContract(input.agentRunId, input.toolKey)
-  assertNativeJsonContract(contract.input_schema, input.toolInput, `${input.toolKey} input`)
-  const inputHash = hashNativeRuntimeValue(input.toolInput)
+  const toolInput = normalizeNativeToolContractInput(contract, input.toolInput)
+  const inputHash = hashNativeRuntimeValue(toolInput)
 
   const admin = createAdminClient()
   const { data, error } = await admin.schema('agent').rpc('admit_tool_invocation_internal', {
@@ -241,7 +290,7 @@ export async function admitNativeToolInvocation(input: {
   if (data.reused === true) {
     throw new Error(`Tool ${input.toolKey} idempotency key was already admitted with status ${String(data.status ?? 'UNKNOWN')}; duplicate execution is blocked`)
   }
-  return { invocationId, contract }
+  return { invocationId, contract, toolInput }
 }
 
 export async function completeNativeToolInvocation(input: {
