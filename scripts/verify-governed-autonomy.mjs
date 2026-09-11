@@ -12,6 +12,15 @@ const checks = [
     "'DELETE_DATA',false,'BLOCKED'",
     "'CLOSE_CREATED_ISSUE'",
   ]],
+  ['supabase/migrations/20260911031730_governed_agent_policy_admission.sql', [
+    'create or replace function governance.seed_default_autonomy_policies',
+    "'RUN_GOVERNANCE_AGENT',true,'AUTO',1.0,'LOW',true",
+    "'DISCARD_NON_AUTHORITATIVE_AGENT_OUTPUT'",
+    "array['GOVERNANCE_AGENT']",
+    "'production_source_mutation',false",
+    "'authoritative_governance_mutation',false",
+    'governance.seed_all_default_autonomy_policies()',
+  ]],
   ['supabase/migrations/20260904225741_governed_autonomy_scope_guards.sql', [
     'governance.validate_autonomy_action_scope',
     'Autonomy policy belongs to another project',
@@ -110,6 +119,20 @@ const checks = [
     'telemetryTraceContextFromRequest(request)',
     'runWithTelemetryTraceContext(traceContext',
   ]],
+  ['app/api/agents/governance/run/route.ts', [
+    "authorizeProject(user.id, projectId, 'agent.execute')",
+    "const GOVERNED_AGENT_ACTION_KEY = 'RUN_GOVERNANCE_AGENT'",
+    "const GOVERNED_AGENT_TARGET_TYPE = 'GOVERNANCE_AGENT'",
+    'createGovernanceExecutionController().assertAllowed',
+    'createGovernancePolicyDecisionProvider().decide',
+    'runWithTelemetryTraceContext',
+    "riskLevel: 'LOW'",
+    'confidence: 1',
+    "operation: 'governed_agent_policy_preflight'",
+    "code: 'GOVERNED_AGENT_POLICY_BLOCKED'",
+    "policyDecision.decision !== 'ALLOW'",
+    'executeGovernanceSpecialistAgent',
+  ]],
   ['app/api/jobs/worker/route.ts', [
     'refreshAllPredictiveRisk',
     'applyAllPredictiveRiskGovernedActions',
@@ -159,6 +182,18 @@ const authAt = autonomyRoute.indexOf("authorizeProject(user.id, projectId, 'issu
 const traceAt = autonomyRoute.indexOf('telemetryTraceContextFromRequest(request)')
 if (authAt < 0 || traceAt < 0 || traceAt <= authAt) failures.push('Autonomy request trace context must be established only after project authorization.')
 
+const agentRoute = fs.readFileSync('app/api/agents/governance/run/route.ts', 'utf8')
+const agentAuthAt = agentRoute.indexOf("authorizeProject(user.id, projectId, 'agent.execute')")
+const executionControlAt = agentRoute.indexOf('createGovernanceExecutionController().assertAllowed')
+const policyDecisionAt = agentRoute.indexOf('createGovernancePolicyDecisionProvider().decide')
+const specialistExecutionAt = agentRoute.indexOf('executeGovernanceSpecialistAgent({')
+if (agentAuthAt < 0 || executionControlAt <= agentAuthAt) failures.push('Governed agent execution control must run after project authorization.')
+if (policyDecisionAt <= executionControlAt) failures.push('Governed agent policy decision must run after execution-control preflight.')
+if (specialistExecutionAt <= policyDecisionAt) failures.push('Governed agent policy decision must run before specialist execution.')
+if (/body\?\.(actionKey|action_key|targetType|target_type|riskLevel|risk_level|confidence)/.test(agentRoute)) {
+  failures.push('Governed agent policy authority inputs must not be accepted from the request body.')
+}
+
 const autonomy = fs.readFileSync('lib/governance/governed-autonomy.ts', 'utf8')
 for (const forbidden of ['function riskRank(', 'function allowedTarget(', 'const autoEligible =']) {
   if (autonomy.includes(forbidden)) failures.push(`governed autonomy must not duplicate PDP decision logic: ${forbidden}`)
@@ -175,4 +210,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Governed autonomy safety, exact-version pinning, observable PDP, and ADR-006 PolicyDecisionProvider contracts verified.')
+console.log('Governed autonomy safety, exact-version pinning, governed-agent admission, observable PDP, and ADR-006 PolicyDecisionProvider contracts verified.')

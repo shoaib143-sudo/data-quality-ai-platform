@@ -8,11 +8,16 @@ import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learnin
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
+import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
 import { createGovernanceTelemetryProvider } from '@/lib/ai/governance-telemetry-provider'
 import { createGovernanceExecutionController } from '@/lib/ai/governance-execution-controller'
 import { isExecutionControlDeniedError } from '@/lib/ai/execution-controller'
+import { runWithTelemetryTraceContext } from '@/lib/ai/telemetry-trace-context-store'
 import { telemetryTraceContextFromRequest } from '@/lib/ai/w3c-trace-context'
 import type { TelemetryProvider, TelemetryTraceContext } from '@/lib/ai/telemetry-provider'
+
+const GOVERNED_AGENT_ACTION_KEY = 'RUN_GOVERNANCE_AGENT'
+const GOVERNED_AGENT_TARGET_TYPE = 'GOVERNANCE_AGENT'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -94,6 +99,43 @@ export async function POST(request: Request) {
       startedAt: controlStartedAt,
       attributes: { decision: executionControl.decision, agent_definition_id: agentDefinitionId },
     })
+
+    const policyStartedAt = Date.now()
+    const policyDecision = await runWithTelemetryTraceContext(
+      traceContext,
+      () => createGovernancePolicyDecisionProvider().decide({
+        projectId,
+        actionKey: GOVERNED_AGENT_ACTION_KEY,
+        targetType: GOVERNED_AGENT_TARGET_TYPE,
+        riskLevel: 'LOW',
+        confidence: 1,
+      }),
+    )
+    await recordStage({
+      telemetry,
+      traceContext,
+      projectId,
+      operation: 'governed_agent_policy_preflight',
+      startedAt: policyStartedAt,
+      attributes: {
+        decision: policyDecision.decision,
+        provider: policyDecision.providerId,
+        policy_id: policyDecision.policyId,
+        policy_version_id: policyDecision.policyVersionId,
+        action_key: GOVERNED_AGENT_ACTION_KEY,
+        target_type: GOVERNED_AGENT_TARGET_TYPE,
+        agent_definition_id: agentDefinitionId,
+      },
+    })
+    if (policyDecision.decision !== 'ALLOW') {
+      return NextResponse.json({
+        error: policyDecision.reason,
+        code: 'GOVERNED_AGENT_POLICY_BLOCKED',
+        decision: policyDecision.decision,
+        provider: policyDecision.providerId,
+        policyVersionId: policyDecision.policyVersionId,
+      }, { status: policyDecision.decision === 'REQUIRE_APPROVAL' ? 409 : 403 })
+    }
 
     const specialistStartedAt = Date.now()
     const result = await executeGovernanceSpecialistAgent({
