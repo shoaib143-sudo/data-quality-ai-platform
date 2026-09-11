@@ -247,7 +247,7 @@ export async function persistGovernedDocumentContent(
         metadata: persistedMetadata,
         updated_at: now,
       }, { onConflict: 'project_id,dataset_version_id,source_uri' })
-      .select('id,project_id,dataset_id,dataset_version_id,profile_run_id,source_uri,file_name,file_type,content_hash,chunk_count,character_count')
+      .select('id,project_id,dataset_id,dataset_version_id,profile_run_id,source_uri,file_name,file_type,content_type,content_hash,extraction_method,character_count,chunk_count,metadata')
       .single()
 
     if (documentError) throw new Error(`Unable to persist governed document: ${documentError.message}`)
