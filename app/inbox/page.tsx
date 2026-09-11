@@ -100,7 +100,7 @@ export default async function InboxPage() {
   const overdueIssues = issues.filter((issue) => issue.due_at && new Date(issue.due_at).getTime() < Date.now())
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar contextLabel="Governance inbox" />
 

@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 
 const required = [
   'components/app-shell/global-utility-bar.tsx',
+  'components/app-shell/skip-to-content.tsx',
   'components/role-landing/role-landing-shell.tsx',
   'app/dashboard/page.tsx',
   'app/dashboard/error.tsx',
@@ -119,6 +120,24 @@ for (const [pattern, label] of [
 const journeyLayout = await readFile('app/journeys/layout.tsx', 'utf8')
 if (!/requireWorkspaceAccess\('journeys'\)/.test(journeyLayout)) throw new Error('Guided journey must use workspace authorization.')
 console.log('PASS guided journey is workspace-authorized')
+
+const skipLink = await readFile('components/app-shell/skip-to-content.tsx', 'utf8')
+for (const [pattern, label] of [
+  [/href={\`#\$\{targetId\}\`}/, 'keyboard skip destination'],
+  [/focus:not-sr-only/, 'skip link becomes visible on focus'],
+  [/Skip to main content/, 'clear skip-link label'],
+]) {
+  if (!pattern.test(skipLink)) throw new Error(`Accessibility foundation missing ${label}`)
+  console.log(`PASS ${label}`)
+}
+
+for (const path of ['app/dashboard/page.tsx','app/inbox/page.tsx','app/journeys/page.tsx','components/role-landing/role-landing-shell.tsx']) {
+  const source = await readFile(path, 'utf8')
+  if (!/id="main-content"/.test(source) || !/tabIndex={-1}/.test(source)) {
+    throw new Error(`${path} must expose a keyboard-focusable main-content target.`)
+  }
+}
+console.log('PASS shared-shell surfaces expose keyboard main-content targets')
 
 const inbox = await readFile('app/inbox/page.tsx', 'utf8')
 for (const [pattern, label] of [
