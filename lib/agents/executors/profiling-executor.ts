@@ -1,10 +1,11 @@
 import type { ToolExecutionContext, ToolExecutionResult } from '../types'
-import { compareProfiles, detectDuplicates, detectOutliers, detectPatterns, detectSensitiveColumns, inferCandidateKeys } from '@/lib/profiling/derived-tools'
+import { detectDuplicates, detectOutliers, detectPatterns, detectSensitiveColumns, inferCandidateKeys } from '@/lib/profiling/derived-tools'
 import { executeProfilingMetrics } from '@/lib/profiling/metric-engine'
 import { investigateProfilingRun } from '@/lib/profiling/investigation-engine'
 import { executeProfilingTool } from '@/lib/profiling/executor'
 import { executeJdbcProfileDataset } from '@/lib/profiling/jdbc-profile'
 import { executeFileProfileDataset } from '@/lib/profiling/file-profile'
+import { compareProfilesReplaySafe } from '@/lib/profiling/replay-safe-comparison'
 import {
   completeProfileRunReplaySafe,
   persistProfileSnapshotReplaySafe,
@@ -95,7 +96,7 @@ export async function executeProfilingExecutor(operation: string, input: any, co
         const targetProfileRunId = toolInput.targetProfileRunId ?? toolInput.target_profile_run_id ?? toolInput.current_profile_run_id
         if (!baselineProfileRunId) throw new Error('baselineProfileRunId is required for compare_profiles')
         if (!targetProfileRunId) throw new Error('targetProfileRunId is required for compare_profiles')
-        result = await compareProfiles(baselineProfileRunId, targetProfileRunId); break
+        result = await compareProfilesReplaySafe({ baselineProfileRunId, targetProfileRunId }); break
       }
       default:
         result = await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input: toolInput })
