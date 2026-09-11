@@ -64,6 +64,7 @@ export default async function ExperienceInsightsPage() {
   }
 
   const admin = createAdminClient()
+  // Project ids come only from the caller's RLS-scoped project query above. The service client is used solely because analytics_events is service-only by design.
 
   const [
     telemetryResult,
