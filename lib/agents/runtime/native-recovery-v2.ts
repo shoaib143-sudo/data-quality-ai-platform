@@ -56,8 +56,17 @@ export type NativeRecoveryV2Runtime = {
 }
 
 export type NativeRecoveryV2Context = {
-  agentRunId: string
+  agentRunId?: string
+  resolveAgentRunId?: (step: NativeValidatedStep) => string
   policy?: Partial<NativeAutonomyPolicy>
+}
+
+function resolveAgentRunId(context: NativeRecoveryV2Context, step: NativeValidatedStep) {
+  const value = context.resolveAgentRunId?.(step) ?? context.agentRunId
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`${step.id}: Recovery V2 has no pinned child agent run binding`)
+  }
+  return value.trim()
 }
 
 function errorCode(error: unknown) {
@@ -146,14 +155,14 @@ async function loadCompensationInvocationByIdempotency(input: {
 }
 
 async function resolvePriorCompensation(input: {
-  context: NativeRecoveryV2Context
+  agentRunId: string
   compensationKey: string
   contract: NativePinnedToolContract
   inputHash: string
   idempotencyKey: string
 }): Promise<NativeRecoveryV2Outcome | null> {
   const prior = await loadCompensationInvocationByIdempotency({
-    agentRunId: input.context.agentRunId,
+    agentRunId: input.agentRunId,
     toolKey: input.compensationKey,
     idempotencyKey: input.idempotencyKey,
   })
@@ -166,7 +175,7 @@ async function resolvePriorCompensation(input: {
   }
   if (prior.status === 'SUCCEEDED') {
     const compensation = await verifyCompensationInvocation({
-      agentRunId: input.context.agentRunId,
+      agentRunId: input.agentRunId,
       invocationId: prior.id,
       toolKey: input.compensationKey,
       contractHash: input.contract.contract_hash,
@@ -181,6 +190,7 @@ async function resolvePriorCompensation(input: {
 async function executeVerifiedCompensation(input: {
   context: NativeRecoveryV2Context
   runtime: NativeRecoveryV2Runtime
+  agentRunId: string
   failedStep: NativeValidatedStep
   failedContract: NativePinnedToolContract
   error: unknown
@@ -192,7 +202,7 @@ async function executeVerifiedCompensation(input: {
     return { decision: 'ESCALATE', code: 'COMPENSATION_EXECUTOR_UNAVAILABLE' }
   }
 
-  const contract = await getNativePinnedToolContract(input.context.agentRunId, compensationKey)
+  const contract = await getNativePinnedToolContract(input.agentRunId, compensationKey)
   const certification = certifyNativePinnedToolContract(contract)
   const rawToolInput = await input.runtime.buildCompensationInput({
     failedStep: input.failedStep,
@@ -225,7 +235,7 @@ async function executeVerifiedCompensation(input: {
   const idempotencyKey = `recovery:${input.failedStep.id}:${input.attempt}:${compensationKey}`
   const inputHash = hashNativeRuntimeValue(toolInput)
   const prior = await resolvePriorCompensation({
-    context: input.context,
+    agentRunId: input.agentRunId,
     compensationKey,
     contract,
     inputHash,
@@ -236,7 +246,7 @@ async function executeVerifiedCompensation(input: {
   let admission
   try {
     admission = await admitNativeToolInvocation({
-      agentRunId: input.context.agentRunId,
+      agentRunId: input.agentRunId,
       toolKey: compensationKey,
       expectedExecutor: compensationStep.executorKey ?? certification.executorKey ?? '',
       toolInput,
@@ -244,7 +254,7 @@ async function executeVerifiedCompensation(input: {
     })
   } catch (error) {
     const raced = await resolvePriorCompensation({
-      context: input.context,
+      agentRunId: input.agentRunId,
       compensationKey,
       contract,
       inputHash,
@@ -268,7 +278,7 @@ async function executeVerifiedCompensation(input: {
       output,
     })
     const compensation = await verifyCompensationInvocation({
-      agentRunId: input.context.agentRunId,
+      agentRunId: input.agentRunId,
       invocationId: admission.invocationId,
       toolKey: compensationKey,
       contractHash: admission.contract.contract_hash,
@@ -296,7 +306,8 @@ export async function recoverNativeStepV2(input: {
   attempt: number
   error: unknown
 }): Promise<NativeRecoveryV2Outcome> {
-  const contract = await getNativePinnedToolContract(input.context.agentRunId, input.step.toolKey)
+  const agentRunId = resolveAgentRunId(input.context, input.step)
+  const contract = await getNativePinnedToolContract(agentRunId, input.step.toolKey)
   if (!input.step.contractHash) return { decision: 'FAIL', code: 'FAILED_STEP_CONTRACT_HASH_MISSING' }
   if (contract.contract_hash !== input.step.contractHash) {
     return { decision: 'FAIL', code: 'FAILED_STEP_CONTRACT_DRIFT' }
@@ -321,6 +332,7 @@ export async function recoverNativeStepV2(input: {
     return executeVerifiedCompensation({
       context: input.context,
       runtime: input.runtime,
+      agentRunId,
       failedStep: input.step,
       failedContract: contract,
       error: input.error,
