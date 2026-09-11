@@ -1,6 +1,7 @@
 import type { ToolExecutionContext, ToolExecutionResult } from '../types'
 import { detectDuplicates, detectOutliers, detectPatterns, detectSensitiveColumns, inferCandidateKeys } from '@/lib/profiling/derived-tools'
 import { executeProfilingMetrics } from '@/lib/profiling/metric-engine'
+import { executeProfilingMetricsReplaySafe } from '@/lib/profiling/metric-replay'
 import { investigateProfilingRun } from '@/lib/profiling/investigation-engine'
 import { investigateProfilingRunReplaySafe } from '@/lib/profiling/investigation-replay'
 import { executeProfilingTool } from '@/lib/profiling/executor'
@@ -69,7 +70,13 @@ export async function executeProfilingExecutor(operation: string, input: any, co
         if (!profilingRunId) throw new Error('profilingRunId is required for execute_metrics')
         // Metric evidence must always come from the registered execution source.
         // Never forward caller supplied rows, metric values, findings, or scores.
-        result = await executeProfilingMetrics(datasetVersionId, profilingRunId, {}); break
+        // The replay wrapper claims execution before source loading, and completed
+        // replays return durable evidence without rewriting metrics/findings/scores.
+        result = await executeProfilingMetricsReplaySafe({
+          datasetVersionId,
+          profilingRunId,
+          execute: () => executeProfilingMetrics(datasetVersionId, profilingRunId, {}),
+        }); break
       case 'investigate_profile':
         if (!profilingRunId) throw new Error('profilingRunId is required for investigate_profile')
         result = await investigateProfilingRunReplaySafe({
