@@ -26,6 +26,12 @@ export class GovernanceRoutingPolicyProvider implements RoutingPolicyProvider {
       risk: row.risk,
       enabled: Boolean(row.enabled),
       allowedAiSystemIds: Array.isArray(row.allowed_ai_system_ids) ? row.allowed_ai_system_ids : [],
+      evaluationMetricName: typeof row.evaluation_metric_name === 'string' && row.evaluation_metric_name.trim()
+        ? row.evaluation_metric_name.trim()
+        : null,
+      evaluationMaxAgeSeconds: row.evaluation_max_age_seconds === null || row.evaluation_max_age_seconds === undefined
+        ? null
+        : Number(row.evaluation_max_age_seconds),
       minEvaluationScore: row.min_evaluation_score === null || row.min_evaluation_score === undefined
         ? null
         : Number(row.min_evaluation_score),
