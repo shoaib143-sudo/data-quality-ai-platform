@@ -53,6 +53,7 @@
     "verify:autonomous": "node scripts/verify-autonomous-governance-operations.mjs",
     "verify:lineage-governance": "node scripts/verify-lineage-change-governance.mjs",
     "verify:lineage-explorer": "node scripts/verify-lineage-explorer.mjs",
+    "verify:recovery-assurance": "node scripts/verify-recovery-assurance.mjs",
     "verify:database": "node scripts/verify-governance-database.mjs",
     "verify:production": "node scripts/verify-production.mjs",
     "benchmark:production": "node scripts/benchmark-production.mjs",
