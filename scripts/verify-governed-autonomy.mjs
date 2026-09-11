@@ -133,6 +133,16 @@ const checks = [
     "policyDecision.decision !== 'ALLOW'",
     'executeGovernanceSpecialistAgent',
   ]],
+  ['lib/agents/governance-job-worker.ts', [
+    "const GOVERNED_AGENT_ACTION_KEY = 'RUN_GOVERNANCE_AGENT'",
+    "const GOVERNED_AGENT_TARGET_TYPE = 'GOVERNANCE_AGENT'",
+    'createGovernanceExecutionController().assertAllowed',
+    'createGovernancePolicyDecisionProvider().decide',
+    "riskLevel: 'LOW'",
+    'confidence: 1',
+    "policyDecision.decision !== 'ALLOW'",
+    'executeGovernanceSpecialistAgent',
+  ]],
   ['app/api/jobs/worker/route.ts', [
     'refreshAllPredictiveRisk',
     'applyAllPredictiveRiskGovernedActions',
@@ -194,6 +204,17 @@ if (/body\?\.(actionKey|action_key|targetType|target_type|riskLevel|risk_level|c
   failures.push('Governed agent policy authority inputs must not be accepted from the request body.')
 }
 
+const governanceJobWorker = fs.readFileSync('lib/agents/governance-job-worker.ts', 'utf8')
+const durableExecutionControlAt = governanceJobWorker.indexOf('createGovernanceExecutionController().assertAllowed')
+const durablePolicyDecisionAt = governanceJobWorker.indexOf('createGovernancePolicyDecisionProvider().decide')
+const durableSpecialistExecutionAt = governanceJobWorker.indexOf('executeGovernanceSpecialistAgent({')
+if (durableExecutionControlAt < 0) failures.push('Durable governed agent execution must enforce execution-control preflight.')
+if (durablePolicyDecisionAt <= durableExecutionControlAt) failures.push('Durable governed agent policy decision must run after execution-control preflight.')
+if (durableSpecialistExecutionAt <= durablePolicyDecisionAt) failures.push('Durable governed agent policy decision must run before specialist execution.')
+if (/payload\?\.(actionKey|action_key|targetType|target_type|riskLevel|risk_level|confidence)/.test(governanceJobWorker)) {
+  failures.push('Durable governed agent policy authority inputs must not be accepted from the job payload.')
+}
+
 const autonomy = fs.readFileSync('lib/governance/governed-autonomy.ts', 'utf8')
 for (const forbidden of ['function riskRank(', 'function allowedTarget(', 'const autoEligible =']) {
   if (autonomy.includes(forbidden)) failures.push(`governed autonomy must not duplicate PDP decision logic: ${forbidden}`)
@@ -210,4 +231,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Governed autonomy safety, exact-version pinning, governed-agent admission, observable PDP, and ADR-006 PolicyDecisionProvider contracts verified.')
+console.log('Governed autonomy safety, exact-version pinning, governed-agent route and durable admission, observable PDP, and ADR-006 PolicyDecisionProvider contracts verified.')
