@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { persistProfileDatasetEvidenceReplaySafe } from '@/lib/profiling/profile-dataset-replay'
 import { compareProfiles, detectDuplicates, detectOutliers, detectPatterns, detectSensitiveColumns, inferCandidateKeys } from '@/lib/profiling/derived-tools'
 
 const ALLOWED_TOOLS = new Set([
@@ -374,47 +375,28 @@ async function profileDataset(
     sourceRows.rows,
     sourceRows.rowCount,
   )
-
   const schema = buildSchemaSnapshot(summary)
 
-  await persistProfileColumns(
-    supabase,
-    profilingRunId,
-    summary.columns,
-  )
-
-  await persistProfileDatasetMetrics(
-    supabase,
-    profilingRunId,
-    summary,
-  )
-
-  await upsertProfileSchemaSnapshot(
-    supabase,
-    profilingRunId,
+  return persistProfileDatasetEvidenceReplaySafe({
     datasetVersionId,
-    summary.schema_hash,
-    schema,
-  )
-
-  const profileRun = await updateProfileRunSummary(
-    supabase,
     profilingRunId,
-    summary,
-  )
-
-  return {
-    tool: 'profile_dataset',
-    profiling_run_id: profilingRunId,
-    dataset_version_id: datasetVersionId,
-    status: 'COMPLETED',
-    row_count: summary.row_count,
-    column_count: summary.column_count,
-    anomalies_found: 0,
-    schema_hash: summary.schema_hash,
-    source_access: summary.source_access,
-    profile_run: profileRun,
-  }
+    rowCount: summary.row_count,
+    columnCount: summary.column_count,
+    schemaHash: summary.schema_hash,
+    columns: summary.columns,
+    schema,
+    summary: {
+      row_count: summary.row_count,
+      column_count: summary.column_count,
+      schema_hash: summary.schema_hash,
+      source_access: summary.source_access,
+      columns: summary.columns.map((column) => ({
+        name: column.name,
+        type: column.inferred_type,
+      })),
+    },
+    markRunCompleted: true,
+  })
 }
 
 function buildDatasetProfileSummary(

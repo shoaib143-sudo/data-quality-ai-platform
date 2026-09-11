@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { persistProfileDatasetEvidenceReplaySafe } from '@/lib/profiling/profile-dataset-replay'
 import { persistGovernedDocumentContent } from '@/lib/governance/document-content'
 import { loadGovernedFileSource } from '@/lib/profiling/governed-file-source'
 import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
@@ -124,40 +125,14 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
   const schemaSnapshot = { row_count: sampled.sourceRowCount, column_count: columns.length, source_access: sourceAccess, columns }
   const schemaHash = stableHash(columns.map((column) => ({ name: column.name, ordinal_position: column.ordinal_position, source_type: column.source_type, inferred_type: column.inferred_type })))
 
-  const { error: deleteError } = await supabase.schema('profiling').from('profile_columns').delete().eq('profile_run_id', profilingRunId)
-  if (deleteError) throw new Error(`Unable to reset FILE profile columns: ${deleteError.message}`)
-  if (columns.length) {
-    const { error: insertError } = await supabase.schema('profiling').from('profile_columns').insert(columns.map((column) => ({
-      profile_run_id: profilingRunId,
-      column_name: column.name,
-      ordinal_position: column.ordinal_position,
-      source_type: column.source_type,
-      inferred_type: column.inferred_type,
-      total_count: column.total_count,
-      non_null_count: column.non_null_count,
-      null_count: column.null_count,
-      blank_count: column.blank_count,
-      zero_count: column.zero_count,
-      distinct_count: column.distinct_count,
-      distinct_percentage: column.distinct_percentage,
-      metadata: column.metadata,
-    })))
-    if (insertError) throw new Error(`Unable to persist FILE profile columns: ${insertError.message}`)
-  }
-
-  const { data: snapshot, error: snapshotError } = await supabase.schema('profiling').from('schema_snapshots').upsert({
-    profile_run_id: profilingRunId,
-    dataset_version_id: datasetVersionId,
-    schema_hash: schemaHash,
+  return persistProfileDatasetEvidenceReplaySafe({
+    datasetVersionId,
+    profilingRunId,
+    rowCount: sampled.sourceRowCount,
+    columnCount: columns.length,
+    schemaHash,
+    columns,
     schema: schemaSnapshot,
-  }, { onConflict: 'profile_run_id' }).select().single()
-  if (snapshotError) throw new Error(`Unable to persist FILE schema snapshot: ${snapshotError.message}`)
-
-  const { data: run, error: runError } = await supabase.schema('profiling').from('profile_runs').update({
-    row_count: sampled.sourceRowCount,
-    column_count: columns.length,
-    content_hash: loaded.contentHash,
-    schema_hash: schemaHash,
     summary: {
       row_count: sampled.sourceRowCount,
       column_count: columns.length,
@@ -167,21 +142,6 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
       governed_document: sourceAccess.governed_document,
       columns: columns.map((column) => ({ name: column.name, type: column.inferred_type })),
     },
-  }).eq('id', profilingRunId).select().single()
-  if (runError) throw new Error(`Unable to update FILE profile run summary: ${runError.message}`)
-
-  return {
-    tool: 'profile_dataset',
-    connector: 'file',
-    profiling_run_id: profilingRunId,
-    dataset_version_id: datasetVersionId,
-    status: 'COMPLETED',
-    row_count: sampled.sourceRowCount,
-    column_count: columns.length,
-    schema_hash: schemaHash,
-    source_access: sourceAccess,
-    governed_document: sourceAccess.governed_document,
-    snapshot,
-    profile_run: run,
-  }
+    contentHash: loaded.contentHash,
+  })
 }
