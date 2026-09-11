@@ -16,6 +16,8 @@ export type RoutingPolicy = {
   risk: ModelRisk | 'ANY'
   enabled: boolean
   allowedAiSystemIds: string[]
+  evaluationMetricName: string | null
+  evaluationMaxAgeSeconds: number | null
   minEvaluationScore: number | null
   minScoredCount: number
   allowEnvironmentFallback: boolean
@@ -32,29 +34,20 @@ export type RoutingPolicyEvaluation = {
     | 'NO_ACTIVE_POLICY'
     | 'POLICY_DISABLED'
     | 'AI_SYSTEM_NOT_ALLOWED'
-    | 'INSUFFICIENT_EVALUATION_SCORE'
-    | 'INSUFFICIENT_EVALUATION_EVIDENCE'
     | 'POLICY_ALLOWED'
 }
 
 export type RoutingPolicyEvaluator = (
   model: RegisteredModelVersion,
   policy: RoutingPolicy | null,
-  evidence: { averageScore: number | null; scoredCount: number },
 ) => RoutingPolicyEvaluation
 
-export const evaluateModelAgainstRoutingPolicy: RoutingPolicyEvaluator = (model, policy, evidence) => {
+export const evaluateModelAgainstRoutingPolicy: RoutingPolicyEvaluator = (model, policy) => {
   if (!policy) return { allowed: true, reason: 'NO_ACTIVE_POLICY' }
   if (!policy.enabled) return { allowed: true, reason: 'POLICY_DISABLED' }
 
   if (policy.allowedAiSystemIds.length > 0 && !policy.allowedAiSystemIds.includes(model.aiSystemId)) {
     return { allowed: false, reason: 'AI_SYSTEM_NOT_ALLOWED' }
-  }
-  if (evidence.scoredCount < policy.minScoredCount) {
-    return { allowed: false, reason: 'INSUFFICIENT_EVALUATION_EVIDENCE' }
-  }
-  if (policy.minEvaluationScore !== null && (evidence.averageScore === null || evidence.averageScore < policy.minEvaluationScore)) {
-    return { allowed: false, reason: 'INSUFFICIENT_EVALUATION_SCORE' }
   }
   return { allowed: true, reason: 'POLICY_ALLOWED' }
 }
