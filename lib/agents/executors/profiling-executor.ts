@@ -11,7 +11,6 @@ import {
   admitNativeToolInvocation,
   completeNativeToolInvocation,
   failNativeToolInvocation,
-  type NativePinnedToolContract,
 } from '@/lib/agents/runtime/native-tool-contracts'
 
 const PRODUCTION_AGENT_VERSION = '2.0'
@@ -21,13 +20,12 @@ export async function executeProfilingExecutor(operation: string, input: any, co
   const { agentRunId, stepId, projectId, agentDefinitionId, agentVersion } = context
   if (!agentDefinitionId || !agentVersion) throw new Error('Profiling executor requires an agent definition and version')
   if (agentVersion !== PRODUCTION_AGENT_VERSION) throw new Error(`Profiling Agent ${agentVersion} is disabled for execution; production version is ${PRODUCTION_AGENT_VERSION}`)
-  const datasetVersionId = input?.datasetVersionId ?? input?.dataset_version_id
-  const profilingRunId = input?.profilingRunId ?? input?.profiling_run_id
-  if (!['compare_profiles'].includes(operation) && !datasetVersionId) throw new Error('datasetVersionId is required for profiling execution')
+  const suppliedDatasetVersionId = input?.datasetVersionId ?? input?.dataset_version_id
+  const suppliedProfilingRunId = input?.profilingRunId ?? input?.profiling_run_id
+  if (!['compare_profiles'].includes(operation) && !suppliedDatasetVersionId) throw new Error('datasetVersionId is required for profiling execution')
 
   let invocationId: string | null = null
-  let pinnedContract: NativePinnedToolContract | null = null
-  await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: 'LIFECYCLE', eventType: 'PROFILING_EXECUTION_STARTED', message: `Profiling Agent ${PRODUCTION_AGENT_VERSION} started ${operation}.`, details: { operation, projectId, datasetVersionId, profilingRunId, agentDefinitionId, agentVersion } })
+  await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: 'LIFECYCLE', eventType: 'PROFILING_EXECUTION_STARTED', message: `Profiling Agent ${PRODUCTION_AGENT_VERSION} started ${operation}.`, details: { operation, projectId, datasetVersionId: suppliedDatasetVersionId, profilingRunId: suppliedProfilingRunId, agentDefinitionId, agentVersion } })
   try {
     const admission = await admitNativeToolInvocation({
       agentRunId,
@@ -36,7 +34,9 @@ export async function executeProfilingExecutor(operation: string, input: any, co
       toolInput: input as Record<string, unknown>,
     })
     invocationId = admission.invocationId
-    pinnedContract = admission.contract
+    const toolInput = admission.toolInput as Record<string, any>
+    const datasetVersionId = toolInput.datasetVersionId ?? toolInput.dataset_version_id
+    const profilingRunId = toolInput.profilingRunId ?? toolInput.profiling_run_id
 
     let result: unknown
     switch (operation) {
@@ -51,7 +51,7 @@ export async function executeProfilingExecutor(operation: string, input: any, co
         const sourceType = String(source?.source_type ?? '').trim().toLowerCase()
         if (sourceType === 'jdbc') result = await executeJdbcProfileDataset(datasetVersionId, profilingRunId)
         else if (sourceType === 'file' || sourceType === 'csv') result = await executeFileProfileDataset(datasetVersionId, profilingRunId)
-        else result = await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input })
+        else result = await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input: toolInput })
         break
       }
       case 'execute_metrics':
@@ -77,19 +77,19 @@ export async function executeProfilingExecutor(operation: string, input: any, co
       case 'detect_duplicates':
         if (!profilingRunId) throw new Error('profilingRunId is required for detect_duplicates')
         result = await detectDuplicates(profilingRunId); break
-      case 'compare_profiles':
-        if (!input?.baselineProfileRunId && !input?.baseline_profile_run_id) throw new Error('baselineProfileRunId is required for compare_profiles')
-        if (!input?.targetProfileRunId && !input?.target_profile_run_id && !input?.current_profile_run_id) throw new Error('targetProfileRunId is required for compare_profiles')
-        result = await compareProfiles(
-          input?.baselineProfileRunId ?? input?.baseline_profile_run_id,
-          input?.targetProfileRunId ?? input?.target_profile_run_id ?? input?.current_profile_run_id,
-        ); break
+      case 'compare_profiles': {
+        const baselineProfileRunId = toolInput.baselineProfileRunId ?? toolInput.baseline_profile_run_id
+        const targetProfileRunId = toolInput.targetProfileRunId ?? toolInput.target_profile_run_id ?? toolInput.current_profile_run_id
+        if (!baselineProfileRunId) throw new Error('baselineProfileRunId is required for compare_profiles')
+        if (!targetProfileRunId) throw new Error('targetProfileRunId is required for compare_profiles')
+        result = await compareProfiles(baselineProfileRunId, targetProfileRunId); break
+      }
       default:
-        result = await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input })
+        result = await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input: toolInput })
     }
 
-    await completeNativeToolInvocation({ invocationId, contract: pinnedContract, output: result })
-    await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: operation === 'execute_metrics' ? 'METRIC' : 'TOOL', eventType: operation === 'execute_metrics' ? 'PROFILING_METRICS_COMPLETED' : 'PROFILING_TOOL_COMPLETED', message: `Profiling operation ${operation} completed.`, details: { operation, datasetVersionId, profilingRunId, invocationId, contractHash: pinnedContract.contract_hash } })
+    await completeNativeToolInvocation({ invocationId: admission.invocationId, contract: admission.contract, output: result })
+    await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: operation === 'execute_metrics' ? 'METRIC' : 'TOOL', eventType: operation === 'execute_metrics' ? 'PROFILING_METRICS_COMPLETED' : 'PROFILING_TOOL_COMPLETED', message: `Profiling operation ${operation} completed.`, details: { operation, datasetVersionId, profilingRunId, invocationId: admission.invocationId, contractHash: admission.contract.contract_hash } })
     return { output: { execution_completed: true, agent_run_id: agentRunId, step_id: stepId, project_id: projectId, operation, result: result as Record<string, unknown> } }
   } catch (error) {
     if (invocationId) {
@@ -99,7 +99,7 @@ export async function executeProfilingExecutor(operation: string, input: any, co
         console.error('[profiling-executor] unable to persist tool failure evidence', evidenceError)
       }
     }
-    await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: 'ERROR', eventType: 'PROFILING_EXECUTION_FAILED', message: error instanceof Error ? error.message : 'Profiling execution failed.', details: { operation, datasetVersionId, profilingRunId, invocationId } })
+    await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: 'ERROR', eventType: 'PROFILING_EXECUTION_FAILED', message: error instanceof Error ? error.message : 'Profiling execution failed.', details: { operation, datasetVersionId: suppliedDatasetVersionId, profilingRunId: suppliedProfilingRunId, invocationId } })
     throw error
   }
 }
