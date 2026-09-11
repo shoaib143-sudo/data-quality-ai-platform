@@ -199,9 +199,10 @@ export async function executeNativeBoundRuntimePlan(input: {
     attempt: number
   }): Promise<Record<string, unknown>> | Record<string, unknown>
   approvalExpiresAt?: string | null
+  initialCheckpointId?: string | null
 }): Promise<NativeClosedLoopResult> {
   const { supervisorAgentRunId, boundPlan } = input
-  let lastCheckpointId: string | null = null
+  let lastCheckpointId: string | null = input.initialCheckpointId ?? null
 
   const getBinding = (step: NativeValidatedStep) => {
     const binding = boundPlan.bindings.get(step.id)
