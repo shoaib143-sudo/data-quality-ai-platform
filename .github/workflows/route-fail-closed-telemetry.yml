@@ -1,0 +1,25 @@
+name: Route Fail Closed Telemetry
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify route telemetry contract
+        run: node scripts/verify-route-telemetry.mjs
+      - name: Verify fail closed route telemetry behavior
+        run: node --experimental-strip-types scripts/test-route-fail-closed-telemetry.mjs
