@@ -26,6 +26,7 @@ on:
       - 'scripts/verify-native-autonomy-kernel.mjs'
       - 'scripts/verify-native-recovery-v2.mjs'
       - 'scripts/verify-all-agent-native-runtime-adoption.mjs'
+      - 'scripts/verify-specialist-read-replay-certification.mjs'
       - 'scripts/test-native-autonomy-kernel.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
@@ -54,6 +55,7 @@ on:
       - 'scripts/verify-native-autonomy-kernel.mjs'
       - 'scripts/verify-native-recovery-v2.mjs'
       - 'scripts/verify-all-agent-native-runtime-adoption.mjs'
+      - 'scripts/verify-specialist-read-replay-certification.mjs'
       - 'scripts/test-native-autonomy-kernel.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
@@ -86,3 +88,5 @@ jobs:
         run: node scripts/verify-native-recovery-v2.mjs
       - name: Verify shared native runtime adoption
         run: node scripts/verify-all-agent-native-runtime-adoption.mjs
+      - name: Verify specialist read-only replay certification
+        run: node scripts/verify-specialist-read-replay-certification.mjs
