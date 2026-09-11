@@ -20,6 +20,8 @@ on:
       - 'scripts/verify-execution-recovery-agent.mjs'
       - 'scripts/verify-native-agent-runtime-state.mjs'
       - 'scripts/verify-native-runtime-contract-pinning.mjs'
+      - 'scripts/verify-native-autonomy-kernel.mjs'
+      - 'scripts/test-native-autonomy-kernel.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
   pull_request:
@@ -41,6 +43,8 @@ on:
       - 'scripts/verify-execution-recovery-agent.mjs'
       - 'scripts/verify-native-agent-runtime-state.mjs'
       - 'scripts/verify-native-runtime-contract-pinning.mjs'
+      - 'scripts/verify-native-autonomy-kernel.mjs'
+      - 'scripts/test-native-autonomy-kernel.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
 
@@ -66,3 +70,5 @@ jobs:
         run: node scripts/verify-native-agent-runtime-state.mjs
       - name: Verify native runtime contract pinning
         run: node scripts/verify-native-runtime-contract-pinning.mjs
+      - name: Verify native autonomous execution kernel
+        run: node scripts/verify-native-autonomy-kernel.mjs
