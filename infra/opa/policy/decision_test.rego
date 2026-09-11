@@ -26,6 +26,13 @@ test_preserves_canonical_decision if {
 	result.policy_version_id == "version-7"
 }
 
+test_preserves_system_baseline_decision if {
+	baseline := object.union(valid_input, {"canonical": object.union(valid_input.canonical, {"authority_status": "SYSTEM_BASELINE"})})
+	result := decision with input as baseline
+	result.decision == "ALLOW"
+	result.policy_version_id == "version-7"
+}
+
 test_preserves_approval_requirement if {
 	approval := object.union(valid_input, {"canonical": object.union(valid_input.canonical, {"decision": "REQUIRE_APPROVAL"})})
 	result := decision with input as approval
