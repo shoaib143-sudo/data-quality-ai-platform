@@ -12,6 +12,7 @@
     "verify:agent-portfolio": "node scripts/verify-governed-agent-portfolio.mjs",
     "verify:agent-specialization": "node scripts/verify-agent-specialization.mjs",
     "verify:agent-memory-learning": "node scripts/verify-agent-memory-learning.mjs",
+    "verify:agent-run-artifacts": "node scripts/verify-agent-run-artifacts.mjs",
     "verify:reasoning-provider": "node scripts/verify-reasoning-provider.mjs && node --experimental-strip-types scripts/test-reasoning-provider.mjs",
     "verify:model-gateway": "node scripts/verify-model-gateway.mjs && node scripts/test-model-gateway.mjs",
     "verify:embedding-provider": "node scripts/verify-embedding-provider.mjs && node --experimental-strip-types scripts/test-embedding-provider.mjs",
