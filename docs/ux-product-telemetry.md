@@ -9,7 +9,7 @@ The telemetry answers product questions without becoming governance authority:
 - which governed projects reach each guided-journey stage;
 - where users most often need a next action;
 - whether users progress from Connect through Verify Controls;
-- elapsed time between the first observed journey interaction and later journey completion when enough events exist.
+- elapsed time between the first observed journey interaction and later journey completion only when both a COMPLETE interaction and the governed evidence-completion boundary are observed.
 
 ## Events
 
@@ -53,3 +53,8 @@ Time-to-value and funnel metrics must therefore distinguish:
 ## Privacy boundary
 
 The initial contract intentionally avoids free-form user-entered content and sensitive business payloads. Any future event field must be allow-listed, documented, authorized, and reviewed before collection.
+
+
+## Experience insights
+
+The authorized reporting surface at `/reports/experience` combines the bounded interaction events with governed domain evidence. Completion timing is intentionally conservative: the report emits a duration only when the project satisfies the reporting evidence boundary and a `UX_JOURNEY_VIEWED` event with stage `COMPLETE` has been observed. A telemetry-only COMPLETE event is insufficient.

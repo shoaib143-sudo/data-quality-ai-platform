@@ -135,6 +135,7 @@ for (const [pattern, label] of [
   [/quality_rule_runs/, 'governed control outcome evidence'],
   [/Interaction telemetry helps explain adoption and friction/, 'analytics-versus-governance truth boundary'],
   [/Evidence complete/, 'explicit evidence-completion reporting state'],
+  [/evidenceComplete && firstInteraction && firstCompleteTelemetry/, 'completion timing requires governed evidence and interaction telemetry'],
 ]) {
   if (!pattern.test(experienceReport)) throw new Error(`Experience insights report missing ${label}`)
   console.log(`PASS ${label}`)

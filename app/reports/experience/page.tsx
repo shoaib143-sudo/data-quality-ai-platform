@@ -64,6 +64,7 @@ export default async function ExperienceInsightsPage() {
   }
 
   const admin = createAdminClient()
+  // Project ids come only from the caller's RLS-scoped project query above. The service client is used solely because analytics_events is service-only by design.
 
   const [
     telemetryResult,
@@ -161,7 +162,7 @@ export default async function ExperienceInsightsPage() {
       passingRules === projectRules.length
 
     const firstCompleteTelemetry = journeyViews.find(event => upper(event.payload?.stage) === 'COMPLETE')?.occurred_at ?? null
-    const timeToObservedComplete = firstInteraction && firstCompleteTelemetry
+    const timeToObservedComplete = evidenceComplete && firstInteraction && firstCompleteTelemetry
       ? new Date(firstCompleteTelemetry).getTime() - new Date(firstInteraction).getTime()
       : null
 
@@ -277,7 +278,7 @@ export default async function ExperienceInsightsPage() {
         </section>
 
         <p className="mt-5 text-xs leading-5 text-slate-500">
-          “Evidence complete” is a reporting convenience, not a certification state. It requires at least one registered source, observed-ready source evidence, a dataset, a completed profile, and all currently enabled quality controls to have passing latest evidence. Remediation issues remain visible separately.
+          “Evidence complete” is a reporting convenience, not a certification state. It requires at least one registered source, observed-ready source evidence, a dataset, a completed profile, and all currently enabled quality controls to have passing latest evidence. Remediation issues remain visible separately. “Observed time to complete” is shown only when both that governed evidence boundary and a COMPLETE journey interaction have been observed.
         </p>
       </div>
     </main>
