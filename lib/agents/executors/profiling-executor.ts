@@ -5,6 +5,10 @@ import { investigateProfilingRun } from '@/lib/profiling/investigation-engine'
 import { executeProfilingTool } from '@/lib/profiling/executor'
 import { executeJdbcProfileDataset } from '@/lib/profiling/jdbc-profile'
 import { executeFileProfileDataset } from '@/lib/profiling/file-profile'
+import {
+  completeProfileRunReplaySafe,
+  persistProfileSnapshotReplaySafe,
+} from '@/lib/profiling/replay-safe-tools'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeAgentRunLog } from '@/lib/agents/run-log'
 import {
@@ -15,6 +19,11 @@ import {
 
 const PRODUCTION_AGENT_VERSION = '2.0'
 const EXECUTOR_KEY = 'profiling-executor'
+const DATASET_VERSION_OPTIONAL_OPERATIONS = new Set([
+  'compare_profiles',
+  'persist_profile_snapshot',
+  'complete_profile_run',
+])
 
 export async function executeProfilingExecutor(operation: string, input: any, context: ToolExecutionContext): Promise<ToolExecutionResult> {
   const { agentRunId, stepId, projectId, agentDefinitionId, agentVersion } = context
@@ -22,7 +31,7 @@ export async function executeProfilingExecutor(operation: string, input: any, co
   if (agentVersion !== PRODUCTION_AGENT_VERSION) throw new Error(`Profiling Agent ${agentVersion} is disabled for execution; production version is ${PRODUCTION_AGENT_VERSION}`)
   const suppliedDatasetVersionId = input?.datasetVersionId ?? input?.dataset_version_id
   const suppliedProfilingRunId = input?.profilingRunId ?? input?.profiling_run_id
-  if (!['compare_profiles'].includes(operation) && !suppliedDatasetVersionId) throw new Error('datasetVersionId is required for profiling execution')
+  if (!DATASET_VERSION_OPTIONAL_OPERATIONS.has(operation) && !suppliedDatasetVersionId) throw new Error('datasetVersionId is required for profiling execution')
 
   let invocationId: string | null = null
   await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: 'LIFECYCLE', eventType: 'PROFILING_EXECUTION_STARTED', message: `Profiling Agent ${PRODUCTION_AGENT_VERSION} started ${operation}.`, details: { operation, projectId, datasetVersionId: suppliedDatasetVersionId, profilingRunId: suppliedProfilingRunId, agentDefinitionId, agentVersion } })
@@ -62,6 +71,10 @@ export async function executeProfilingExecutor(operation: string, input: any, co
       case 'investigate_profile':
         if (!profilingRunId) throw new Error('profilingRunId is required for investigate_profile')
         result = await investigateProfilingRun(profilingRunId, datasetVersionId); break
+      case 'persist_profile_snapshot':
+        result = await persistProfileSnapshotReplaySafe(toolInput); break
+      case 'complete_profile_run':
+        result = await completeProfileRunReplaySafe(toolInput); break
       case 'detect_patterns':
         if (!profilingRunId) throw new Error('profilingRunId is required for detect_patterns')
         result = await detectPatterns(profilingRunId); break

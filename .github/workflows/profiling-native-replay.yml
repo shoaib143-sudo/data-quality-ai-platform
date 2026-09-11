@@ -1,0 +1,42 @@
+name: Profiling Native Replay
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'lib/profiling/derived-tools.ts'
+      - 'lib/profiling/executor.ts'
+      - 'lib/profiling/replay-safe-tools.ts'
+      - 'supabase/migrations/**profiling**'
+      - 'scripts/verify-profiling-native-replay.mjs'
+      - 'scripts/verify-profiling-safe-mutation-replay.mjs'
+      - '.github/workflows/profiling-native-replay.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'lib/profiling/derived-tools.ts'
+      - 'lib/profiling/executor.ts'
+      - 'lib/profiling/replay-safe-tools.ts'
+      - 'supabase/migrations/**profiling**'
+      - 'scripts/verify-profiling-native-replay.mjs'
+      - 'scripts/verify-profiling-safe-mutation-replay.mjs'
+      - '.github/workflows/profiling-native-replay.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify profiling native read-only replay certification
+        run: node scripts/verify-profiling-native-replay.mjs
+      - name: Verify profiling replay-safe mutations
+        run: node scripts/verify-profiling-safe-mutation-replay.mjs

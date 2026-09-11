@@ -1,13 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   certifyNativePinnedToolContract,
-  executeNativeClosedLoop,
   validateNativeBoundedPlan,
   type NativeAutonomyPolicy,
   type NativeBoundedPlan,
   type NativeClosedLoopEvent,
   type NativeClosedLoopResult,
-  type NativeRecoveryDecision,
   type NativeStepValidationResult,
   type NativeToolSafetyCertification,
   type NativeValidatedPlan,
@@ -20,8 +18,12 @@ import {
   type NativeRuntimeEvidenceRef,
 } from '@/lib/agents/runtime/native-agent-runtime-state'
 import {
+  executeNativeClosedLoopV2,
+} from '@/lib/agents/runtime/native-recovery-v2'
+import {
   getNativePinnedToolContract,
   hashNativeRuntimeValue,
+  type NativePinnedToolContract,
 } from '@/lib/agents/runtime/native-tool-contracts'
 
 export type NativeStepRuntimeBinding = {
@@ -37,6 +39,7 @@ export type NativeBoundRuntimePlan = {
   plan: NativeValidatedPlan
   planHash: string
   bindings: ReadonlyMap<string, NativeStepRuntimeBinding>
+  policy: NativeAutonomyPolicy
 }
 
 async function loadRuntimeBinding(input: {
@@ -94,6 +97,10 @@ export async function bindNativePlanToPinnedRuntime(input: {
 }): Promise<NativeBoundRuntimePlan> {
   const certifications = new Map<string, NativeToolSafetyCertification>()
   const bindings = new Map<string, NativeStepRuntimeBinding>()
+  const policy: NativeAutonomyPolicy = {
+    allowTier2AutomaticExecution: input.policy?.allowTier2AutomaticExecution ?? false,
+    approvedTier2Tools: input.policy?.approvedTier2Tools ?? [],
+  }
 
   for (const step of input.plan.steps) {
     const agentRunId = input.stepAgentRunIds.get(step.id)
@@ -114,11 +121,12 @@ export async function bindNativePlanToPinnedRuntime(input: {
     bindings.set(step.id, loaded.binding)
   }
 
-  const plan = validateNativeBoundedPlan({ plan: input.plan, certifications, policy: input.policy })
+  const plan = validateNativeBoundedPlan({ plan: input.plan, certifications, policy })
   return {
     plan,
     planHash: hashNativeRuntimeValue(plan),
     bindings,
+    policy,
   }
 }
 
@@ -131,7 +139,7 @@ export async function recordNativeSupervisorEvent(input: {
   const step = event.step
   const inputHash = step ? hashNativeRuntimeValue(step.input) : null
   const outputHash = event.output === undefined ? null : hashNativeRuntimeValue(event.output)
-  const errorCode = event.code?.slice(0, 160) ?? null
+  const detailCode = event.code?.slice(0, 160) ?? event.recoveryDecision ?? null
   const admin = createAdminClient()
   const { data, error } = await admin.schema('agent').rpc('record_supervisor_event_internal', {
     p_agent_run_id: input.supervisorAgentRunId,
@@ -147,7 +155,7 @@ export async function recordNativeSupervisorEvent(input: {
     p_execution_decision: step?.decision ?? null,
     p_risk_tier: step?.riskTier ?? null,
     p_attempt: event.attempt ?? null,
-    p_detail_code: event.recoveryDecision ?? errorCode,
+    p_detail_code: detailCode,
   })
   if (error || typeof data !== 'string') {
     throw new Error(`Unable to persist native supervisor event: ${error?.message ?? 'invalid event id'}`)
@@ -175,13 +183,21 @@ export async function executeNativeBoundRuntimePlan(input: {
     attempt: number
     output: unknown
   }): Promise<NativeStepValidationResult>
-  recover?(args: {
-    step: NativeValidatedStep
+  executeCompensation?(args: {
+    failedStep: NativeValidatedStep
     binding: NativeStepRuntimeBinding
-    stepOrder: number
+    compensationToolKey: string
+    contract: NativePinnedToolContract
+    toolInput: Record<string, unknown>
     attempt: number
+  }): Promise<unknown>
+  buildCompensationInput?(args: {
+    failedStep: NativeValidatedStep
+    binding: NativeStepRuntimeBinding
+    compensationToolKey: string
     error: unknown
-  }): Promise<NativeRecoveryDecision>
+    attempt: number
+  }): Promise<Record<string, unknown>> | Record<string, unknown>
   approvalExpiresAt?: string | null
 }): Promise<NativeClosedLoopResult> {
   const { supervisorAgentRunId, boundPlan } = input
@@ -195,7 +211,11 @@ export async function executeNativeBoundRuntimePlan(input: {
     return binding
   }
 
-  const result = await executeNativeClosedLoop({
+  const result = await executeNativeClosedLoopV2({
+    context: {
+      resolveAgentRunId: (step) => getBinding(step).agentRunId,
+      policy: boundPlan.policy,
+    },
     plan: boundPlan.plan,
     runtime: {
       executeStep: async ({ step, stepOrder, attempt }) => input.executeStep({
@@ -211,13 +231,23 @@ export async function executeNativeBoundRuntimePlan(input: {
         attempt,
         output,
       }),
-      recover: input.recover
-        ? async ({ step, stepOrder, attempt, error }) => input.recover!({
-            step,
-            binding: getBinding(step),
-            stepOrder,
+      executeCompensation: input.executeCompensation
+        ? async ({ failedStep, compensationToolKey, contract, toolInput, attempt }) => input.executeCompensation!({
+            failedStep,
+            binding: getBinding(failedStep),
+            compensationToolKey,
+            contract,
+            toolInput,
             attempt,
+          })
+        : undefined,
+      buildCompensationInput: input.buildCompensationInput
+        ? async ({ failedStep, compensationToolKey, error, attempt }) => input.buildCompensationInput!({
+            failedStep,
+            binding: getBinding(failedStep),
+            compensationToolKey,
             error,
+            attempt,
           })
         : undefined,
       requestApproval: async ({ step, stepOrder }) => {
