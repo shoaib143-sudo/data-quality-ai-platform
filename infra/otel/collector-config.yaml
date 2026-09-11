@@ -1,0 +1,31 @@
+extensions:
+  bearertokenauth/server:
+    token: "${env:OTEL_AUTH_TOKEN}"
+  health_check:
+    endpoint: 127.0.0.1:13133
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: "0.0.0.0:${env:PORT}"
+        auth:
+          authenticator: bearertokenauth/server
+
+processors:
+  batch:
+
+exporters:
+  # Canonical telemetry is already durable in PostgreSQL. The collector is an
+  # external observation sink only; basic verbosity proves receipt in Render
+  # logs without printing span attributes or application payloads.
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [bearertokenauth/server, health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
