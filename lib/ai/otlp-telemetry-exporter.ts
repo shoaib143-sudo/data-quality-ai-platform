@@ -14,13 +14,13 @@ export interface TelemetryExporter {
   export(event: TelemetryEvent, receipt: TelemetryReceipt): Promise<void>
 }
 
-function tracesEndpoint(endpoint: string) {
+export function resolveOtlpTracesEndpoint(endpoint: string) {
   const normalized = endpoint.trim().replace(/\/$/, '')
   if (!normalized) throw new Error('OTLP endpoint is required')
   return /\/v1\/traces$/i.test(normalized) ? normalized : `${normalized}/v1/traces`
 }
 
-function parseConfiguredHeaders(value?: string | null) {
+export function parseOtlpConfiguredHeaders(value?: string | null) {
   const headers: Record<string, string> = {}
   for (const item of value?.split(',') ?? []) {
     const separator = item.indexOf('=')
@@ -90,8 +90,8 @@ export class OtlpHttpJsonTelemetryExporter implements TelemetryExporter {
   private readonly fetchImpl: typeof fetch
 
   constructor(options: OtlpTelemetryExporterOptions) {
-    this.endpoint = tracesEndpoint(options.endpoint)
-    this.headers = parseConfiguredHeaders(options.headers)
+    this.endpoint = resolveOtlpTracesEndpoint(options.endpoint)
+    this.headers = parseOtlpConfiguredHeaders(options.headers)
     this.timeoutMs = Math.max(250, Math.min(10_000, options.timeoutMs ?? 2_000))
     this.serviceName = options.serviceName?.trim() || 'datanexus-ai'
     this.fetchImpl = options.fetchImpl ?? fetch
