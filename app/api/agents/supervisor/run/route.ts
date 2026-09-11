@@ -38,8 +38,12 @@ export async function POST(request: Request) {
           ? worker as Record<string, unknown>
           : {}
         return {
+          workerId: text(value.workerId ?? value.worker_id) || null,
           agentDefinitionId: text(value.agentDefinitionId ?? value.agent_definition_id),
           question: text(value.question) || null,
+          dependsOn: Array.isArray(value.dependsOn ?? value.depends_on)
+            ? (value.dependsOn ?? value.depends_on) as string[]
+            : [],
         }
       }),
     })

@@ -15,6 +15,7 @@ import {
   admitNativeToolInvocation,
   completeNativeToolInvocation,
   failNativeToolInvocation,
+  hashNativeRuntimeValue,
 } from '@/lib/agents/runtime/native-tool-contracts'
 
 const allowedKeys = new Set<string>(GOVERNANCE_READ_AGENT_KEYS)
@@ -440,6 +441,11 @@ export async function executeGovernanceSpecialistAgent(input: {
   agentDefinitionId: string
   actorUserId: string
   question?: string | null
+  handoffRefs?: Array<{
+    sourceStepId: string
+    sourceAgentKey: GovernanceReadAgentKey
+    sourceRunId: string
+  }>
   existingAgentRunId?: string | null
   nativeAttempt?: number
 }) {
@@ -456,7 +462,14 @@ export async function executeGovernanceSpecialistAgent(input: {
   if (definitionError) throw new Error(`Unable to resolve specialist agent definition: ${definitionError.message}`)
   if (!definition || !allowedKeys.has(String(definition.agent_key))) throw new Error('Agent definition is not an enabled governed specialist agent.')
   const agentKey = String(definition.agent_key) as GovernanceReadAgentKey
-  const query = suppliedQuestion || defaultQuestion(agentKey)
+  const agentPolicy = getGovernedAgentPolicy(agentKey)
+  const handoffRefs = (input.handoffRefs ?? []).slice(0, 5)
+  for (const ref of handoffRefs) {
+    if (!getGovernedAgentPolicy(ref.sourceAgentKey).handoffTargets.includes(agentKey)) {
+      throw new Error(`Handoff ${ref.sourceAgentKey} -> ${agentKey} is not allowed by the governed agent registry`)
+    }
+  }
+  let query = suppliedQuestion || defaultQuestion(agentKey)
 
   let run: { id: string }
   if (input.existingAgentRunId) {
@@ -515,9 +528,60 @@ export async function executeGovernanceSpecialistAgent(input: {
       toolInput: {
         projectId: input.projectId,
         ...(suppliedQuestion ? { question: suppliedQuestion } : {}),
+        ...(handoffRefs.length ? { handoffRefs } : {}),
       },
       idempotencyKey: `governance-specialist:${run.id}:investigate:attempt:${Math.max(1, input.nativeAttempt ?? 1)}`,
     })
+
+    const handoffContext: Array<{
+      sourceStepId: string
+      sourceAgentKey: GovernanceReadAgentKey
+      sourceRunId: string
+      outputHash: string
+      findings: string[]
+    }> = []
+    for (const ref of handoffRefs) {
+      const { data: sourceRun, error: sourceRunError } = await admin.schema('agent').from('agent_runs')
+        .select('id,parent_run_id,project_id,status,output')
+        .eq('id', ref.sourceRunId)
+        .eq('project_id', input.projectId)
+        .maybeSingle()
+      if (sourceRunError || !sourceRun || sourceRun.status !== 'SUCCEEDED' || !sourceRun.output) {
+        throw new Error(`Validated handoff source ${ref.sourceStepId} is unavailable`)
+      }
+      if (input.existingAgentRunId && sourceRun.parent_run_id) {
+        const { data: currentRun } = await admin.schema('agent').from('agent_runs')
+          .select('parent_run_id')
+          .eq('id', input.existingAgentRunId)
+          .maybeSingle()
+        if (!currentRun?.parent_run_id || currentRun.parent_run_id !== sourceRun.parent_run_id) {
+          throw new Error(`Handoff source ${ref.sourceStepId} is outside the current supervisor run`)
+        }
+      }
+      const output = sourceRun.output as Record<string, unknown>
+      const findings = ['observations', 'recommendations', 'hypotheses', 'priorities']
+        .flatMap((key) => Array.isArray(output[key]) ? output[key] as unknown[] : [])
+        .map((value) => {
+          if (typeof value === 'string') return value.trim().slice(0, 320)
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+          const row = value as Record<string, unknown>
+          for (const key of ['title', 'summary', 'description', 'finding', 'recommendation', 'observation', 'priority']) {
+            if (typeof row[key] === 'string' && row[key].trim()) return row[key].trim().slice(0, 320)
+          }
+          return ''
+        })
+        .filter(Boolean)
+      handoffContext.push({
+        ...ref,
+        outputHash: hashNativeRuntimeValue(sourceRun.output),
+        findings: Array.from(new Set(findings)).slice(0, 6),
+      })
+    }
+    if (handoffContext.length) {
+      query = `${query}\n\nValidated predecessor handoffs:\n${handoffContext.map((handoff) =>
+        `- ${handoff.sourceAgentKey} [${handoff.outputHash.slice(0, 12)}]: ${handoff.findings.join(' | ') || 'No bounded finding text supplied.'}`
+      ).join('\n')}`
+    }
 
     const [projectResult, ctx, knowledgeMatches] = await Promise.all([
       admin.schema('app').from('projects').select('id,name,organization_id').eq('id', input.projectId).maybeSingle(),
@@ -528,7 +592,6 @@ export async function executeGovernanceSpecialistAgent(input: {
 
     const graph = await loadGraph(admin, input.projectId, knowledgeMatches[0])
     const specialized = roleEvidence(agentKey, ctx)
-    const agentPolicy = getGovernedAgentPolicy(agentKey)
     const investigation = assertGovernedInvestigationGrounding(buildGovernedInvestigation({
       projectId: input.projectId,
       organizationId: projectResult.data.organization_id,
