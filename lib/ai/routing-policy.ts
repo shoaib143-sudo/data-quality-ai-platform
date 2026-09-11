@@ -16,6 +16,7 @@ export type RoutingPolicy = {
   risk: ModelRisk | 'ANY'
   enabled: boolean
   allowedAiSystemIds: string[]
+  evaluationType: string | null
   evaluationMetricName: string | null
   evaluationMaxAgeSeconds: number | null
   minEvaluationScore: number | null
