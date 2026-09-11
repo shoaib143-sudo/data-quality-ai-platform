@@ -131,6 +131,8 @@ export async function runNativeSpecialistSupervisor(input: {
   }
 
   let lifecycle
+  const childRunIds: string[] = []
+  const workerByStepId = new Map<string, (typeof resolvedWorkers)[number]>()
   try {
     lifecycle = await startNativeAgentLifecycle({
       agentRunId: supervisorRun.id,
@@ -139,7 +141,6 @@ export async function runNativeSpecialistSupervisor(input: {
       evidenceRefs: [{ domain: 'project', id: projectId }],
     })
 
-    const childRunIds: string[] = []
     const stepAgentRunIds = new Map<string, string>()
     const steps: NativeBoundedPlan['steps'] = []
 
@@ -163,6 +164,7 @@ export async function runNativeSpecialistSupervisor(input: {
 
       childRunIds.push(childRun.id)
       stepAgentRunIds.set(stepId, childRun.id)
+      workerByStepId.set(stepId, worker)
       steps.push({
         id: stepId,
         agentKey: worker.agentKey,
@@ -197,8 +199,10 @@ export async function runNativeSpecialistSupervisor(input: {
       boundPlan,
       initialCheckpointId: lifecycle.checkpointId,
       executeStep: async ({ step, binding, attempt }) => {
-        const worker = resolvedWorkers.find((candidate) => candidate.agentKey === step.agentKey && binding.agentRunId === stepAgentRunIds.get(step.id))
-        if (!worker) throw new Error(`${step.id}: supervisor worker binding disappeared`)
+        const worker = workerByStepId.get(step.id)
+        if (!worker || worker.agentKey !== step.agentKey || binding.agentRunId !== stepAgentRunIds.get(step.id)) {
+          throw new Error(`${step.id}: supervisor worker binding disappeared`)
+        }
         const executed = await executeGovernanceSpecialistAgent({
           projectId,
           agentDefinitionId: worker.agentDefinitionId,
@@ -280,6 +284,18 @@ export async function runNativeSpecialistSupervisor(input: {
       code: result.code,
     }
   } catch (error) {
+    if (childRunIds.length) {
+      try {
+        await admin.schema('agent').from('agent_runs').update({
+          status: 'FAILED',
+          error_code: 'NATIVE_SUPERVISOR_ABORTED',
+          error_message: 'Parent native supervisor stopped before child execution completed.',
+          completed_at: new Date().toISOString(),
+        }).in('id', childRunIds).in('status', ['QUEUED', 'RUNNING'])
+      } catch {
+        // Preserve the original supervisor failure if child cleanup also fails.
+      }
+    }
     try {
       await updateSupervisorRun({
         supervisorRunId: supervisorRun.id,
