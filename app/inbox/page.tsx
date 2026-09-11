@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Activity, AlertTriangle, CheckCircle2, Clock3, GitBranch, ShieldAlert, Wrench } from 'lucide-react'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { ExecutionStatusBadge } from '@/components/app-shell/execution-status'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -226,7 +227,7 @@ export default async function InboxPage() {
                 <Link key={job.id} href={`/monitoring?run=${encodeURIComponent(job.id)}`} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-200 hover:bg-blue-50">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-bold">{job.status === 'FAILED' ? 'Agent run failed' : 'Agent run in progress'}</span>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${job.status === 'FAILED' ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-700'}`}>{job.status}</span>
+                    <ExecutionStatusBadge status={job.status} />
                   </div>
                   <p className="mt-2 text-xs text-slate-500">{job.error_code ? `Error ${job.error_code} · ` : ''}{when(job.started_at ?? job.created_at)}</p>
                 </Link>
