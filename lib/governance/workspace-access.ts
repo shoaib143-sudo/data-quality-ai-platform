@@ -17,7 +17,7 @@ export async function requireWorkspaceAccess(workspace: WorkspaceKey) {
   const context = await resolveLandingAccess(user.id)
 
   if (!canAccessWorkspace(context.persona, workspace, context.organizationRole)) {
-    redirect(context.enabled ? `/home/${context.persona}` : '/home/unavailable')
+    redirect(context.enabled ? '/access-denied' : '/home/unavailable')
   }
 
   return context
