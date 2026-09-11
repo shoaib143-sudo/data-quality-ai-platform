@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { checkExternalIntegrationBoundaries } from '@/lib/observability/external-integration-readiness'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -136,9 +137,18 @@ export async function GET() {
     criticalFailure = true
   }
 
-  components.semantic_embeddings = await checkSemanticEmbeddingProvider(admin)
-  components.databricks_connector = await checkDatabricksConnector(admin)
-  components.jdbc_bridge = await checkJdbcBridge()
+  const [semanticEmbeddings, databricksConnector, jdbcBridge, externalIntegrations] = await Promise.all([
+    checkSemanticEmbeddingProvider(admin),
+    checkDatabricksConnector(admin),
+    checkJdbcBridge(),
+    checkExternalIntegrationBoundaries(),
+  ])
+  components.semantic_embeddings = semanticEmbeddings
+  components.databricks_connector = databricksConnector
+  components.jdbc_bridge = jdbcBridge
+  components.opa_enforcement = externalIntegrations.opa_enforcement
+  components.otlp_export = externalIntegrations.otlp_export
+  if (externalIntegrations.opa_enforcement.status === 'UNAVAILABLE') criticalFailure = true
 
   try {
     const cutoff = new Date(Date.now() - 30 * 60_000).toISOString()
