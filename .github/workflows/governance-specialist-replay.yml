@@ -1,0 +1,36 @@
+name: Governance Specialist Replay
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'lib/agents/governed-agent-registry.ts'
+      - 'app/api/agents/governance/run/route.ts'
+      - 'supabase/migrations/**governance_specialist**'
+      - 'scripts/verify-governance-specialist-replay.mjs'
+      - '.github/workflows/governance-specialist-replay.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'lib/agents/governed-agent-registry.ts'
+      - 'app/api/agents/governance/run/route.ts'
+      - 'supabase/migrations/**governance_specialist**'
+      - 'scripts/verify-governance-specialist-replay.mjs'
+      - '.github/workflows/governance-specialist-replay.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify governance specialist replay certification
+        run: node scripts/verify-governance-specialist-replay.mjs
