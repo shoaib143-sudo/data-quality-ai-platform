@@ -14,4 +14,4 @@ exec .render/opa/opa run \
   --authentication=token \
   --authorization=basic \
   --addr "0.0.0.0:${PORT}" \
-  --disable-telemetry
+  --skip-version-check
