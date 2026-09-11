@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const kernel = readFileSync('lib/agents/runtime/native-autonomy-kernel.ts','utf8')
+const rollback = readFileSync('lib/agents/runtime/native-rollback-contract.ts','utf8')
 const recovery = readFileSync('lib/agents/runtime/native-recovery-v2.ts','utf8')
 const migration = readFileSync('supabase/migrations/20260912033000_native_rollback_compensation_contracts.sql','utf8')
 
@@ -9,12 +10,13 @@ function contains(source, token, label) {
   assert.ok(source.includes(token), `${label} is missing: ${token}`)
 }
 
-contains(kernel, "export type NativeRollbackStrategy = 'NOT_APPLICABLE' | 'COMPENSATION_TOOL' | 'ESCALATE_ONLY'", 'rollback strategy vocabulary')
-contains(kernel, "contractOptionalString(config, toolKey, 'rollback_strategy')", 'pinned rollback strategy binding')
-contains(kernel, "mutating tool requires rollback_strategy COMPENSATION_TOOL or ESCALATE_ONLY", 'missing mutation rollback fail closed')
-contains(kernel, "COMPENSATION_TOOL requires compensation_tool_key", 'compensation tool requirement')
-contains(kernel, "COMPENSATION_TOOL requires compensatable=true", 'compensatable requirement')
-contains(kernel, "ESCALATE_ONLY cannot claim reversible/compensatable execution or a compensation tool", 'escalation contradiction guard')
+contains(rollback, "export type NativeRollbackStrategy = 'NOT_APPLICABLE' | 'COMPENSATION_TOOL' | 'ESCALATE_ONLY'", 'rollback strategy vocabulary')
+contains(rollback, "optionalString(config, toolKey, 'rollback_strategy')", 'pinned rollback strategy binding')
+contains(rollback, "mutating tool requires rollback_strategy COMPENSATION_TOOL or ESCALATE_ONLY", 'missing mutation rollback fail closed')
+contains(rollback, "COMPENSATION_TOOL requires compensation_tool_key", 'compensation tool requirement')
+contains(rollback, "COMPENSATION_TOOL requires compensatable=true", 'compensatable requirement')
+contains(rollback, "ESCALATE_ONLY cannot claim reversible/compensatable execution or a compensation tool", 'escalation contradiction guard')
+contains(kernel, 'certifyNativeRollbackContract', 'kernel rollback contract integration')
 contains(kernel, "certification.rollbackStrategy === 'COMPENSATION_TOOL'", 'Tier 1 compensation contract gate')
 
 contains(recovery, "certification.rollbackStrategy === 'COMPENSATION_TOOL'", 'Recovery V2 compensation strategy routing')
