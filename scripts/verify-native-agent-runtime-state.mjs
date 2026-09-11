@@ -48,16 +48,16 @@ for (const snippet of requiredMigrationSnippets) {
 }
 
 const forbiddenMigrationPatterns = [
-  /GRANT\s+(?:ALL|INSERT|UPDATE|DELETE).*agent_run_checkpoints.*authenticated/is,
-  /GRANT\s+(?:ALL|INSERT|UPDATE|DELETE).*agent_run_interrupts.*authenticated/is,
-  /GRANT\s+(?:ALL|INSERT|UPDATE|DELETE).*agent_run_replays.*authenticated/is,
+  /GRANT\s+(?:ALL|INSERT|UPDATE|DELETE)[^;]*agent_run_checkpoints[^;]*TO\s+authenticated/is,
+  /GRANT\s+(?:ALL|INSERT|UPDATE|DELETE)[^;]*agent_run_interrupts[^;]*TO\s+authenticated/is,
+  /GRANT\s+(?:ALL|INSERT|UPDATE|DELETE)[^;]*agent_run_replays[^;]*TO\s+authenticated/is,
 ]
 for (const pattern of forbiddenMigrationPatterns) {
   if (pattern.test(migration)) throw new Error(`Native runtime migration exposes a browser mutation grant: ${pattern}`)
 }
 
 const requiredRuntimeSnippets = [
-  "export type NativeAgentRuntimeStateV1",
+  'export type NativeAgentRuntimeStateV1',
   "version: '1.0'",
   'evidenceRefs?: NativeRuntimeEvidenceRef[]',
   'memoryRefs?: string[]',
@@ -69,12 +69,15 @@ const requiredRuntimeSnippets = [
   'resumeNativeRuntimeInterrupt',
   'createNativeRuntimeReplay',
   'getNativeRuntimeCheckpointHistory',
-  "HUMAN_APPROVAL requires an exact action payload hash",
+  'HUMAN_APPROVAL requires an exact action payload hash',
 ]
 for (const snippet of requiredRuntimeSnippets) {
   if (!runtime.includes(snippet)) throw new Error(`Native runtime TypeScript contract is missing: ${snippet}`)
 }
 
+const stateTypeStart = runtime.indexOf('export type NativeAgentRuntimeStateV1')
+const stateTypeEnd = runtime.indexOf('\n}\n', stateTypeStart)
+const stateType = runtime.slice(stateTypeStart, stateTypeEnd + 3)
 const forbiddenStateKeys = [
   'chainOfThought',
   'chain_of_thought',
@@ -85,16 +88,13 @@ const forbiddenStateKeys = [
   'connectionString',
 ]
 for (const key of forbiddenStateKeys) {
-  const stateTypeStart = runtime.indexOf('export type NativeAgentRuntimeStateV1')
-  const stateTypeEnd = runtime.indexOf('\n}\n', stateTypeStart)
-  const stateType = runtime.slice(stateTypeStart, stateTypeEnd + 3)
   if (stateType.includes(key)) throw new Error(`Checkpoint state must not expose forbidden field: ${key}`)
 }
 
 const requiredRouteSnippets = [
   'requireApiUser()',
   "authorizeProject(user.id, agentRun.project_id, 'agent.execute')",
-  "decision must be APPROVED or REJECTED",
+  'decision must be APPROVED or REJECTED',
   'Approval payload does not match the pending action',
   "rpc('resolve_runtime_interrupt'",
 ]
