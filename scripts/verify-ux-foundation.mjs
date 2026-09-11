@@ -18,7 +18,7 @@ for (const path of required) {
 const shell = await readFile('components/app-shell/global-utility-bar.tsx', 'utf8')
 for (const [pattern, label] of [
   [/href="\/search"/, 'real global search entry point'],
-  [/href="\/issues"/, 'governance work queue entry point'],
+  [/href="\/inbox"/, 'governance inbox entry point'],
   [/aria-label="Primary"/, 'semantic primary navigation'],
   [/focus-visible:ring-2/, 'visible keyboard focus treatment'],
 ]) {
