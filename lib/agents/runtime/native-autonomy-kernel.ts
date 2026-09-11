@@ -1,4 +1,8 @@
 import {
+  certifyNativeRollbackContract,
+  type NativeRollbackStrategy,
+} from './native-rollback-contract'
+import {
   getGovernedAgentPolicy,
   isGovernedAgentKey,
   type GovernedAgentKey,
@@ -30,8 +34,6 @@ export type NativePinnedToolContractSnapshot = {
   contract_hash: string
   execution_config: Record<string, unknown>
 }
-
-export type NativeRollbackStrategy = 'NOT_APPLICABLE' | 'COMPENSATION_TOOL' | 'ESCALATE_ONLY'
 
 export type NativeToolSafetyCertification = {
   toolKey: string
@@ -116,56 +118,6 @@ function contractFlag(config: Record<string, unknown>, toolKey: string, ...keys:
   return false
 }
 
-function contractOptionalString(config: Record<string, unknown>, toolKey: string, key: string) {
-  const value = config[key]
-  if (value === undefined || value === null || value === '') return undefined
-  if (typeof value !== 'string' || !value.trim()) {
-    throw new NativePlanValidationError([`${toolKey}: execution_config.${key} must be a non-empty string`])
-  }
-  return value.trim()
-}
-
-function rollbackContract(
-  config: Record<string, unknown>,
-  toolKey: string,
-  flags: { readOnly: boolean; reversible: boolean; compensatable: boolean },
-): { rollbackStrategy: NativeRollbackStrategy; compensationToolKey?: string } {
-  const rawStrategy = contractOptionalString(config, toolKey, 'rollback_strategy')
-  const compensationToolKey = contractOptionalString(config, toolKey, 'compensation_tool_key')
-
-  if (flags.readOnly) {
-    if (rawStrategy && rawStrategy !== 'NOT_APPLICABLE') {
-      throw new NativePlanValidationError([`${toolKey}: read-only tools must use NOT_APPLICABLE rollback strategy`])
-    }
-    if (compensationToolKey) {
-      throw new NativePlanValidationError([`${toolKey}: read-only tools cannot declare a compensation tool`])
-    }
-    return { rollbackStrategy: 'NOT_APPLICABLE' }
-  }
-
-  if (rawStrategy !== 'COMPENSATION_TOOL' && rawStrategy !== 'ESCALATE_ONLY') {
-    throw new NativePlanValidationError([
-      `${toolKey}: mutating tool requires rollback_strategy COMPENSATION_TOOL or ESCALATE_ONLY`,
-    ])
-  }
-
-  if (rawStrategy === 'COMPENSATION_TOOL') {
-    if (!compensationToolKey) {
-      throw new NativePlanValidationError([`${toolKey}: COMPENSATION_TOOL requires compensation_tool_key`])
-    }
-    if (!flags.compensatable) {
-      throw new NativePlanValidationError([`${toolKey}: COMPENSATION_TOOL requires compensatable=true`])
-    }
-    return { rollbackStrategy: rawStrategy, compensationToolKey }
-  }
-
-  if (compensationToolKey || flags.compensatable || flags.reversible) {
-    throw new NativePlanValidationError([
-      `${toolKey}: ESCALATE_ONLY cannot claim reversible/compensatable execution or a compensation tool`,
-    ])
-  }
-  return { rollbackStrategy: rawStrategy }
-}
 /**
  * Safety classification is derived only from the immutable pinned tool contract.
  * Missing safety capabilities are false. Nothing is inferred from names, prompts,
@@ -193,7 +145,20 @@ export function certifyNativePinnedToolContract(
   const readOnly = contractFlag(config, contract.tool_key, 'read_only', 'readOnly')
   const reversible = contractFlag(config, contract.tool_key, 'reversible')
   const compensatable = contractFlag(config, contract.tool_key, 'compensatable')
-  const rollback = rollbackContract(config, contract.tool_key, { readOnly, reversible, compensatable })
+  let rollback
+  try {
+    rollback = certifyNativeRollbackContract({
+      config,
+      toolKey: contract.tool_key,
+      readOnly,
+      reversible,
+      compensatable,
+    })
+  } catch (error) {
+    throw new NativePlanValidationError([
+      error instanceof Error ? error.message : `${contract.tool_key}: invalid rollback contract`,
+    ])
+  }
 
   const certification: NativeToolSafetyCertification = {
     toolKey: contract.tool_key,
