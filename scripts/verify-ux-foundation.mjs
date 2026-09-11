@@ -12,6 +12,15 @@ const required = [
   'app/monitoring/loading.tsx',
   'components/app-shell/execution-status.tsx',
   'components/app-shell/workspace-state.tsx',
+  'components/app-shell/workspace-error.tsx',
+  'app/issues/loading.tsx',
+  'app/issues/error.tsx',
+  'app/workflows/loading.tsx',
+  'app/workflows/error.tsx',
+  'app/observability/loading.tsx',
+  'app/observability/error.tsx',
+  'app/monitoring/error.tsx',
+  'app/inbox/error.tsx',
 ]
 
 for (const path of required) {
@@ -66,6 +75,28 @@ if (!/WorkspaceLoadingState/.test(inboxLoading) || !/WorkspaceLoadingState/.test
   throw new Error('Inbox and monitoring must use shared loading states.')
 }
 console.log('PASS async workspaces use shared loading states')
+
+const workspaceError = await readFile('components/app-shell/workspace-error.tsx', 'utf8')
+for (const [pattern, label] of [
+  [/onClick={reset}/, 'retry action in shared workspace error'],
+  [/error\.digest/, 'non-sensitive error reference'],
+  [/No data was changed/, 'safe mutation boundary messaging'],
+]) {
+  if (!pattern.test(workspaceError)) throw new Error(`Shared workspace error state missing ${label}`)
+  console.log(`PASS ${label}`)
+}
+
+for (const path of ['app/issues','app/workflows','app/observability','app/monitoring','app/inbox']) {
+  const error = await readFile(`${path}/error.tsx`, 'utf8')
+  if (!/WorkspaceErrorState/.test(error)) throw new Error(`${path} must use shared recoverable error state.`)
+}
+console.log('PASS priority governance workspaces use shared recoverable errors')
+
+for (const path of ['app/issues','app/workflows','app/observability','app/monitoring','app/inbox']) {
+  const loading = await readFile(`${path}/loading.tsx`, 'utf8')
+  if (!/WorkspaceLoadingState/.test(loading)) throw new Error(`${path} must use shared loading state.`)
+}
+console.log('PASS priority governance workspaces use shared loading states')
 
 const inbox = await readFile('app/inbox/page.tsx', 'utf8')
 for (const [pattern, label] of [
