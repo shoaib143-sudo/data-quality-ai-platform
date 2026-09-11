@@ -187,6 +187,7 @@ async function main() {
     const checks = await validateRecovery(recoveryRaw, sourceSnapshot)
     const completedAt = new Date().toISOString()
     const databaseRestoreMinutes = Math.max(0, Math.ceil((Date.now() - startedAtMs) / 60_000))
+    const measuredRtoMinutes = null
     const scopeResults = {
       DATABASE: {
         status: 'PASSED',
@@ -198,6 +199,7 @@ async function main() {
     evidence = {
       ...evidence,
       databaseRestoreMinutes,
+      measuredRtoMinutes,
       checks,
       parity: { status: 'PASSED', compared: Object.keys(sourceSnapshot) },
       scopeResults,
@@ -215,6 +217,7 @@ async function main() {
       recoveryMechanism: 'PORTABLE_LOGICAL_EXPORT',
       durationSeconds: Math.round((Date.now() - startedAtMs) / 1000),
       databaseRestoreMinutes,
+      measuredRtoMinutes,
       platformRpoMeasured: false,
       platformRtoMeasured: false,
       source: fingerprint(source),
@@ -235,7 +238,7 @@ async function main() {
       await persistDrillEvidence({
         sourceRaw, projectId, status: 'FAILED', startedAt, completedAt, recoveryPointAt: authoritativeRecoveryPointAt,
         externalEvidenceRef, scopeResults,
-        evidence: { ...evidence, databaseRestoreMinutes, scopeResults, failure: { message } },
+        evidence: { ...evidence, databaseRestoreMinutes, measuredRtoMinutes: null, scopeResults, failure: { message } },
         notes: 'Portable logical database recovery rehearsal failed. Review evidence before retrying.',
       })
     } catch (registryError) {
