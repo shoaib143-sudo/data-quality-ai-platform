@@ -315,6 +315,11 @@ begin
 end;
 $function$;
 
+-- Target the unique enabled logical tool for the production Profiling Agent.
+-- Older released history used a production-specific definition UUID when upgrading
+-- this tool from v1.0 to v2.0, so clean reconstruction may legitimately still hold
+-- the same enabled logical tool at v1.0. The current uniqueness invariant and the
+-- exact-count postcondition below make the logical identity the safe migration key.
 update agent.tool_definitions t
 set version = '2.1',
     execution_config = t.execution_config || jsonb_build_object(
@@ -333,7 +338,6 @@ from agent.agent_definitions d
 where t.agent_definition_id = d.id
   and d.agent_key = 'profiling_agent'
   and d.version = '2.0'
-  and t.version = '2.0'
   and t.enabled
   and t.tool_key = 'investigate_profile';
 
