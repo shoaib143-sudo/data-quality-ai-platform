@@ -8,6 +8,7 @@ const page = fs.readFileSync('app/recovery/page.tsx', 'utf8')
 const actions = fs.readFileSync('app/recovery/recovery-actions.tsx', 'utf8')
 const layout = fs.readFileSync('app/recovery/layout.tsx', 'utf8')
 const workspacePolicy = fs.readFileSync('lib/governance/workspace-policy.ts', 'utf8')
+const monitoringPage = fs.readFileSync('app/monitoring/page.tsx', 'utf8')
 
 function requireText(source, token, label) {
   if (!source.includes(token)) throw new Error(`Missing ${label}: ${token}`)
@@ -49,6 +50,8 @@ requireText(actions, 'Request rollback review', 'rollback review control')
 requireText(actions, 'it does not mutate source data or schemas', 'rollback safety disclosure')
 requireText(workspacePolicy, "['/recovery', 'monitoring']", 'recovery route workspace mapping')
 requireText(layout, "requireWorkspaceAccess('monitoring')", 'recovery monitoring workspace guard')
+requireText(monitoringPage, 'href="/recovery"', 'Job Monitor recovery navigation')
+requireText(monitoringPage, 'Execution Recovery', 'Job Monitor recovery label')
 
 // The pre-existing worker shortcut is guarded in the database until its code path
 // is removed; durable profiling success itself must still be impossible without
