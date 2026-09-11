@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 
 const requiredFiles = [
   'docs/recovery-assurance-v2.md',
+  'infra/recovery/platform-manifest.json',
   'scripts/recovery-drill.mjs',
   'supabase/migrations/20260911190000_recovery_assurance_v2.sql',
   '.github/workflows/recovery-assurance.yml',
@@ -18,11 +19,13 @@ for (const [pattern, label] of [
   [/required_scopes[\s\S]*DATABASE[\s\S]*STORAGE[\s\S]*IDENTITY_CONFIG[\s\S]*APPLICATION_CONFIG[\s\S]*EDGE_RUNTIME[\s\S]*DEPENDENCIES[\s\S]*SERVICE_VALIDATION/, 'required full-platform recovery scopes'],
   [/scope_results jsonb/, 'scope-level recovery evidence'],
   [/external_evidence_ref/, 'independent recovery evidence reference'],
-  [/recovery_point_at[\s\S]*incident_at/, 'authoritative recovery-point inputs'],
+  [/incident_at[\s\S]*recovery_point_at/, 'authoritative recovery-point inputs'],
   [/service_ready_at/, 'service-ready RTO boundary'],
   [/recovery_scope_coverage/, 'scope coverage evaluation'],
   [/SCOPE_COVERAGE_INCOMPLETE/, 'fail-closed incomplete coverage state'],
   [/EXTERNAL_EVIDENCE_REQUIRED/, 'fail-closed external evidence state'],
+  [/TIMING_EVIDENCE_REQUIRED/, 'fail-closed authoritative timing state'],
+  [/new\.measured_rpo_minutes := greatest[\s\S]*new\.measured_rto_minutes := greatest/, 'database-derived RPO and RTO'],
   [/recovery_mechanism[\s\S]*MANAGED_PITR[\s\S]*MANAGED_BACKUP[\s\S]*PORTABLE_LOGICAL_EXPORT/, 'explicit recovery mechanism evidence'],
 ]) {
   if (!pattern.test(migration)) throw new Error(`Recovery Assurance v2 contract failed: ${label} is missing from migration.`)
@@ -41,6 +44,8 @@ for (const [pattern, label] of [
   [/storageObjects/, 'storage metadata parity'],
   [/scope_results|scopeResults/, 'scope-level drill evidence'],
   [/PORTABLE_LOGICAL_EXPORT/, 'explicit logical-export recovery mechanism'],
+  [/platformRpoMeasured:\s*false/, 'no synthetic platform RPO'],
+  [/platformRtoMeasured:\s*false/, 'no synthetic platform RTO'],
 ]) {
   if (!pattern.test(drill)) throw new Error(`Recovery drill v2 contract failed: ${label} is missing.`)
   console.log(`PASS ${label}`)
@@ -52,6 +57,7 @@ for (const [pattern, label] of [
   [/schedule:/, 'scheduled recovery contract verification'],
   [/verify:recovery-assurance/, 'recovery assurance verification execution'],
   [/upload-artifact/, 'independent workflow evidence artifact'],
+  [/RECOVERY_EXTERNAL_EVIDENCE_REF/, 'workflow evidence reference propagation'],
 ]) {
   if (!pattern.test(workflow)) throw new Error(`Recovery workflow contract failed: ${label} is missing.`)
   console.log(`PASS ${label}`)
@@ -69,5 +75,21 @@ for (const [pattern, label] of [
   if (!pattern.test(runbook)) throw new Error(`Recovery runbook contract failed: ${label} is missing.`)
   console.log(`PASS ${label}`)
 }
+
+const manifest = JSON.parse(await readFile('infra/recovery/platform-manifest.json', 'utf8'))
+if (manifest.schemaVersion !== 1) throw new Error('Recovery platform manifest must use schemaVersion 1.')
+if (!manifest.supabase?.projectRef || !Array.isArray(manifest.supabase.requiredEdgeFunctions) || manifest.supabase.requiredEdgeFunctions.length === 0) {
+  throw new Error('Recovery platform manifest must identify Supabase project topology and required Edge Functions.')
+}
+if (!manifest.vercel?.projectId || !Array.isArray(manifest.vercel.requiredDomains) || manifest.vercel.requiredDomains.length === 0) {
+  throw new Error('Recovery platform manifest must identify Vercel project topology and domains.')
+}
+if (!Array.isArray(manifest.render?.requiredServices) || manifest.render.requiredServices.length < 3) {
+  throw new Error('Recovery platform manifest must identify all required Render services.')
+}
+if (manifest.secretPolicy?.storeSecretValuesInRepository !== false) {
+  throw new Error('Recovery platform manifest must explicitly prohibit secret values in the repository.')
+}
+console.log('PASS recoverable production platform manifest')
 
 console.log('Recovery Assurance v2 static verification completed.')
