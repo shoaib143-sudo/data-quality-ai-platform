@@ -1,0 +1,36 @@
+name: Native Supervisor Tier 2 Profiling
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-supervisor-tier2-profiling.ts'
+      - 'app/api/agents/supervisor/tier2/profiling-snapshot/route.ts'
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'lib/profiling/replay-safe-tools.ts'
+      - 'scripts/verify-native-supervisor-tier2-profiling.mjs'
+      - '.github/workflows/native-supervisor-tier2-profiling.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-supervisor-tier2-profiling.ts'
+      - 'app/api/agents/supervisor/tier2/profiling-snapshot/route.ts'
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'lib/profiling/replay-safe-tools.ts'
+      - 'scripts/verify-native-supervisor-tier2-profiling.mjs'
+      - '.github/workflows/native-supervisor-tier2-profiling.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify controlled Tier 2 profiling supervisor
+        run: node scripts/verify-native-supervisor-tier2-profiling.mjs
