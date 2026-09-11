@@ -16,7 +16,7 @@ The most important conclusions were:
 - No paid Supabase recovery branch or other billable DR environment will be created without explicit approval. The current recovery direction is zero-additional-cost wherever possible.
 - Recovery Assurance v2 is now a formal platform capability with policy, evidence, scope coverage, drill state, and RTO/RPO truth boundaries.
 - PR #258 was merged to establish recovery source authority, including previously live-only Edge Function source and governed migration-history aliasing.
-- PR #261 implements encrypted portable backup and local isolated restore tooling, but it is not yet merged. Its first merge attempt was correctly blocked because `main` advanced after another PR merged, which made #261 stale relative to protected branch checks.
+- PR #261, **Add encrypted portable backup and local recovery rehearsal**, has now been synchronized with the protected `main` branch, rerun through the required gates, and merged. The portable backup and zero-cost local isolated restore tooling are therefore part of the canonical repository.
 - Main branch protection continues to require four gates: `build`, `analyze`, `revalidate`, and `certify`.
 - The next major product concern is no longer only backend capability. From a user-experience perspective, DataNexus now needs a unified shell, task-based workflows, global search, a governance inbox, clearer project context, stronger async-job UX, consistent empty/error/loading states, and more coherent cross-module journeys.
 - Two external-data blockers remain intentionally open: genuine field-level lineage transformation metadata and a genuine approved enterprise governance corpus. These will not be fabricated.
@@ -144,7 +144,7 @@ Security and truth boundaries remain explicit:
 - no paid recovery environment is created
 - the PR does not claim PITR, an authoritative recovery point, achieved 60-minute RPO, service-level 240-minute RTO, Storage object-byte recovery, off-provider copy completion, or full-platform `READY`
 
-### Current #261 status at this discussion checkpoint
+### Final #261 status
 
 The exact-head CI for #261 had passed Recovery Assurance, CodeQL, P0-P5 revalidation, V6 certification, Quality Gate, and clean database reconstruction.
 
@@ -176,7 +176,7 @@ A local restore must not be overstated as a complete cloud-platform recovery. It
 
 ## Remaining recovery work after #261
 
-Once #261 is synchronized and merged, the next operational recovery steps are:
+With #261 merged, the next operational recovery steps are:
 
 1. Run the first trusted encrypted production backup outside a GitHub-hosted runner.
 2. Place an encrypted copy off-provider and retain checksum/provenance evidence.
@@ -270,9 +270,9 @@ The operating rule remains: no protected merge should be forced merely because a
 
 ## Immediate next actions
 
-1. Synchronize PR #261 with current `main` while preserving the changes introduced by #262.
-2. Re-run and verify all four protected checks plus Recovery Assurance and clean reconstruction on the new #261 head.
-3. Merge #261 only after the synchronized exact head is green.
+1. Execute the first real encrypted portable production backup from a trusted operator environment or approved self-hosted runner.
+2. Copy the encrypted artifact and evidence sidecar to an approved off-provider location.
+3. Restore the artifact into the loopback-only local Supabase/Docker recovery target and validate deterministic fingerprints plus the governance audit chain.
 4. Perform the first trusted encrypted backup and local isolated database recovery rehearsal.
 5. Begin the DataNexus UX Foundation increment, starting with unified shell, project context, global search, governance inbox, and consistent application states.
 6. Keep the two external evidence blockers open until genuine source artifacts are supplied.
