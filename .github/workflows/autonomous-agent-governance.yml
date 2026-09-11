@@ -7,14 +7,17 @@ on:
       - 'supabase/migrations/**'
       - 'lib/agents/run-result-artifact.ts'
       - 'lib/agents/run-profiling-job.ts'
+      - 'lib/agents/runtime/**'
       - 'lib/orchestration/worker.ts'
       - 'app/api/agents/governance/run/route.ts'
+      - 'app/api/agents/runtime/**'
       - 'app/api/recovery/**'
       - 'app/agents/runs/**'
       - 'app/recovery/**'
       - 'scripts/verify-autonomous-agent-governance.mjs'
       - 'scripts/verify-agent-run-artifacts.mjs'
       - 'scripts/verify-execution-recovery-agent.mjs'
+      - 'scripts/verify-native-agent-runtime-state.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
   pull_request:
@@ -23,14 +26,17 @@ on:
       - 'supabase/migrations/**'
       - 'lib/agents/run-result-artifact.ts'
       - 'lib/agents/run-profiling-job.ts'
+      - 'lib/agents/runtime/**'
       - 'lib/orchestration/worker.ts'
       - 'app/api/agents/governance/run/route.ts'
+      - 'app/api/agents/runtime/**'
       - 'app/api/recovery/**'
       - 'app/agents/runs/**'
       - 'app/recovery/**'
       - 'scripts/verify-autonomous-agent-governance.mjs'
       - 'scripts/verify-agent-run-artifacts.mjs'
       - 'scripts/verify-execution-recovery-agent.mjs'
+      - 'scripts/verify-native-agent-runtime-state.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
 
@@ -52,3 +58,5 @@ jobs:
         run: node scripts/verify-agent-run-artifacts.mjs
       - name: Verify governed execution recovery
         run: node scripts/verify-execution-recovery-agent.mjs
+      - name: Verify native agent runtime state
+        run: node scripts/verify-native-agent-runtime-state.mjs
