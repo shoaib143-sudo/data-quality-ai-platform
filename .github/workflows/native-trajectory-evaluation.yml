@@ -1,0 +1,33 @@
+name: Native Trajectory Evaluation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-trajectory-evaluation.ts'
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'app/api/agents/runs/[runId]/evaluation/route.ts'
+      - 'scripts/verify-native-trajectory-evaluation.mjs'
+      - '.github/workflows/native-trajectory-evaluation.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-trajectory-evaluation.ts'
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'app/api/agents/runs/[runId]/evaluation/route.ts'
+      - 'scripts/verify-native-trajectory-evaluation.mjs'
+      - '.github/workflows/native-trajectory-evaluation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/verify-native-trajectory-evaluation.mjs

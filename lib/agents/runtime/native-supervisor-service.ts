@@ -12,6 +12,7 @@ import {
 import type { NativeBoundedPlan } from '@/lib/agents/runtime/native-autonomy-kernel'
 import { startNativeAgentLifecycle } from '@/lib/agents/runtime/native-agent-lifecycle'
 import { hashNativeRuntimeValue } from '@/lib/agents/runtime/native-tool-contracts'
+import { evaluateNativeSupervisorTrajectory } from '@/lib/agents/runtime/native-trajectory-evaluation'
 
 export type NativeSupervisorWorkerRequest = {
   workerId?: string | null
@@ -319,6 +320,7 @@ export async function runNativeSpecialistSupervisor(input: {
     })
 
     if (result.status === 'SUCCEEDED') {
+      const trajectoryEvaluation = await evaluateNativeSupervisorTrajectory(supervisorRun.id)
       await updateSupervisorRun({
         supervisorRunId: supervisorRun.id,
         status: 'SUCCEEDED',
@@ -327,6 +329,8 @@ export async function runNativeSpecialistSupervisor(input: {
           completed_step_ids: result.completedStepIds,
           child_run_ids: childRunIds,
           execution_mode: 'native_supervisor_specialist_v1',
+          trajectory_evaluation_id: trajectoryEvaluation.id,
+          trajectory_score: trajectoryEvaluation.score,
         },
       })
       return {
@@ -349,6 +353,7 @@ export async function runNativeSpecialistSupervisor(input: {
       }
     }
 
+    const trajectoryEvaluation = await evaluateNativeSupervisorTrajectory(supervisorRun.id)
     await updateSupervisorRun({
       supervisorRunId: supervisorRun.id,
       status: 'FAILED',
@@ -357,6 +362,8 @@ export async function runNativeSpecialistSupervisor(input: {
         completed_step_ids: result.completedStepIds,
         child_run_ids: childRunIds,
         execution_mode: 'native_supervisor_specialist_v1',
+        trajectory_evaluation_id: trajectoryEvaluation.id,
+        trajectory_score: trajectoryEvaluation.score,
       },
       errorCode: result.code,
       errorMessage: `Native supervisor stopped at ${result.stepId ?? 'plan'} with ${result.code}.`,
