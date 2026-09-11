@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "policy": "DO_NOT_REWRITE_PRODUCTION_HISTORY",
+  "aliases": [
+    {
+      "logicalName": "recovery_assurance_v2",
+      "repositoryVersion": "20260912000000",
+      "observedProductionVersion": "20260911112344",
+      "reason": "Recovery Assurance v2 was applied to the live Supabase project through the management migration API after merge, which registered the application timestamp as the live migration version. The repository filename remains the immutable source migration identifier. Production migration history must not be rewritten to cosmetically match the repository filename.",
+      "observedVia": "Supabase list_migrations"
+    }
+  ]
+}

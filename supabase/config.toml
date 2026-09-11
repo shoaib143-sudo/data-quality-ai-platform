@@ -1,0 +1,20 @@
+project_id = "tvjnavjxuehpesxcfvrx"
+
+[functions.profiling-executor]
+verify_jwt = true
+import_map = './functions/profiling-executor/deno.json'
+
+[functions.connection-health-check]
+verify_jwt = true
+
+[functions.dgp-postgres-connector]
+verify_jwt = true
+
+[functions.governance-embed]
+verify_jwt = true
+
+[functions.dgp-databricks-connector]
+verify_jwt = true
+
+[functions.dgp-native-hierarchy-connector]
+verify_jwt = true

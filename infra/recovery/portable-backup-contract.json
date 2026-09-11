@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "mechanism": "PORTABLE_LOGICAL_EXPORT",
+  "currentProviderPlan": "free",
+  "targetRpoMinutes": 60,
+  "rpoCurrentlyProven": false,
+  "tooling": {
+    "preferred": "supabase db dump",
+    "databaseEngine": "PostgreSQL 17",
+    "artifacts": [
+      "roles.sql",
+      "schema.sql",
+      "data.sql",
+      "history_schema.sql",
+      "history_data.sql"
+    ],
+    "dataDumpExclusions": [
+      "storage.buckets_vectors",
+      "storage.vector_indexes"
+    ]
+  },
+  "security": {
+    "plaintextBackupMayBeCommitted": false,
+    "secretValuesMayBeStoredInManifest": false,
+    "offProviderCopyRequired": true,
+    "encryptionAtRestRequired": true,
+    "integrityHashRequired": true
+  },
+  "scopeBoundaries": {
+    "database": "covered only after a real export and isolated restore pass",
+    "storageMetadata": "database evidence only",
+    "storageObjectBytes": "separate recovery scope; not included in database backup",
+    "edgeFunctions": "reconstructed from source-controlled supabase/functions and supabase/config.toml",
+    "identityProviderConfiguration": "separate configuration inventory and validation required",
+    "managedPitr": "not available in the current zero-additional-cost posture"
+  },
+  "readinessRule": "This contract documents the portable backup mechanism. It does not by itself satisfy DATABASE, STORAGE, RPO, RTO, RESTORED, or READY evidence."
+}
