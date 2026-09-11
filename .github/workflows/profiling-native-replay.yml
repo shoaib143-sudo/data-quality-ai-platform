@@ -8,6 +8,8 @@ on:
       - 'lib/profiling/derived-tools.ts'
       - 'lib/profiling/executor.ts'
       - 'lib/profiling/investigation-replay.ts'
+      - 'lib/profiling/metric-replay.ts'
+      - 'lib/profiling/profile-dataset-replay.ts'
       - 'lib/profiling/replay-safe-tools.ts'
       - 'lib/profiling/replay-safe-comparison.ts'
       - 'supabase/migrations/**profiling**'
@@ -15,6 +17,8 @@ on:
       - 'scripts/verify-profiling-safe-mutation-replay.mjs'
       - 'scripts/verify-profiling-compare-replay.mjs'
       - 'scripts/verify-profiling-investigation-replay.mjs'
+      - 'scripts/verify-profiling-metric-replay.mjs'
+      - 'scripts/verify-profiling-dataset-replay.mjs'
       - '.github/workflows/profiling-native-replay.yml'
   pull_request:
     branches: [main]
@@ -23,6 +27,8 @@ on:
       - 'lib/profiling/derived-tools.ts'
       - 'lib/profiling/executor.ts'
       - 'lib/profiling/investigation-replay.ts'
+      - 'lib/profiling/metric-replay.ts'
+      - 'lib/profiling/profile-dataset-replay.ts'
       - 'lib/profiling/replay-safe-tools.ts'
       - 'lib/profiling/replay-safe-comparison.ts'
       - 'supabase/migrations/**profiling**'
@@ -30,6 +36,8 @@ on:
       - 'scripts/verify-profiling-safe-mutation-replay.mjs'
       - 'scripts/verify-profiling-compare-replay.mjs'
       - 'scripts/verify-profiling-investigation-replay.mjs'
+      - 'scripts/verify-profiling-metric-replay.mjs'
+      - 'scripts/verify-profiling-dataset-replay.mjs'
       - '.github/workflows/profiling-native-replay.yml'
 
 permissions:
@@ -52,3 +60,7 @@ jobs:
         run: node scripts/verify-profiling-compare-replay.mjs
       - name: Verify profiling replay-safe investigation
         run: node scripts/verify-profiling-investigation-replay.mjs
+      - name: Verify profiling replay-safe metric execution
+        run: node scripts/verify-profiling-metric-replay.mjs
+      - name: Verify profiling replay-safe dataset execution
+        run: node scripts/verify-profiling-dataset-replay.mjs

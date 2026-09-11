@@ -1,6 +1,8 @@
 import type { ToolExecutionContext, ToolExecutionResult } from '../types'
 import { detectDuplicates, detectOutliers, detectPatterns, detectSensitiveColumns, inferCandidateKeys } from '@/lib/profiling/derived-tools'
 import { executeProfilingMetrics } from '@/lib/profiling/metric-engine'
+import { executeProfilingMetricsReplaySafe } from '@/lib/profiling/metric-replay'
+import { executeProfileDatasetReplaySafe } from '@/lib/profiling/profile-dataset-replay'
 import { investigateProfilingRun } from '@/lib/profiling/investigation-engine'
 import { investigateProfilingRunReplaySafe } from '@/lib/profiling/investigation-replay'
 import { executeProfilingTool } from '@/lib/profiling/executor'
@@ -53,23 +55,35 @@ export async function executeProfilingExecutor(operation: string, input: any, co
     switch (operation) {
       case 'profile_dataset': {
         if (!profilingRunId) throw new Error('profilingRunId is required for profile_dataset')
-        const admin = createAdminClient()
-        const { data: version, error } = await admin.schema('catalog').from('dataset_versions').select('id, datasets(source_identifier, data_sources(source_type))').eq('id', datasetVersionId).single()
-        if (error || !version) throw new Error(`Unable to resolve dataset version for profile execution: ${error?.message ?? 'not found'}`)
-        const dataset = Array.isArray(version.datasets) ? version.datasets[0] : version.datasets
-        const sources = dataset?.data_sources
-        const source = Array.isArray(sources) ? sources[0] : sources
-        const sourceType = String(source?.source_type ?? '').trim().toLowerCase()
-        if (sourceType === 'jdbc') result = await executeJdbcProfileDataset(datasetVersionId, profilingRunId)
-        else if (sourceType === 'file' || sourceType === 'csv') result = await executeFileProfileDataset(datasetVersionId, profilingRunId)
-        else result = await executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input: toolInput })
+        result = await executeProfileDatasetReplaySafe({
+          datasetVersionId,
+          profilingRunId,
+          execute: async () => {
+            const admin = createAdminClient()
+            const { data: version, error } = await admin.schema('catalog').from('dataset_versions').select('id, datasets(source_identifier, data_sources(source_type))').eq('id', datasetVersionId).single()
+            if (error || !version) throw new Error(`Unable to resolve dataset version for profile execution: ${error?.message ?? 'not found'}`)
+            const dataset = Array.isArray(version.datasets) ? version.datasets[0] : version.datasets
+            const sources = dataset?.data_sources
+            const source = Array.isArray(sources) ? sources[0] : sources
+            const sourceType = String(source?.source_type ?? '').trim().toLowerCase()
+            if (sourceType === 'jdbc') return executeJdbcProfileDataset(datasetVersionId, profilingRunId)
+            if (sourceType === 'file' || sourceType === 'csv') return executeFileProfileDataset(datasetVersionId, profilingRunId)
+            return executeProfilingTool({ toolKey: operation, datasetVersionId, profilingRunId, input: toolInput })
+          },
+        })
         break
       }
       case 'execute_metrics':
         if (!profilingRunId) throw new Error('profilingRunId is required for execute_metrics')
         // Metric evidence must always come from the registered execution source.
         // Never forward caller supplied rows, metric values, findings, or scores.
-        result = await executeProfilingMetrics(datasetVersionId, profilingRunId, {}); break
+        // The replay wrapper claims execution before source loading, and completed
+        // replays return durable evidence without rewriting metrics/findings/scores.
+        result = await executeProfilingMetricsReplaySafe({
+          datasetVersionId,
+          profilingRunId,
+          execute: () => executeProfilingMetrics(datasetVersionId, profilingRunId, {}),
+        }); break
       case 'investigate_profile':
         if (!profilingRunId) throw new Error('profilingRunId is required for investigate_profile')
         result = await investigateProfilingRunReplaySafe({
