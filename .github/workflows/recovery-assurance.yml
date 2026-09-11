@@ -4,13 +4,16 @@ on:
   pull_request:
     paths:
       - 'scripts/recovery-drill.mjs'
+      - 'scripts/recovery/**'
       - 'scripts/verify-recovery-assurance.mjs'
       - 'scripts/verify-recovery-source-authority.mjs'
+      - 'scripts/verify-portable-recovery.mjs'
       - 'supabase/migrations/**'
       - 'supabase/functions/**'
       - 'supabase/config.toml'
       - 'docs/recovery-assurance-v2.md'
       - 'docs/recovery-business-impact-analysis.md'
+      - 'docs/recovery-portable-backup-and-local-restore.md'
       - '.github/workflows/recovery-assurance.yml'
       - 'infra/**'
       - 'vercel.json'
