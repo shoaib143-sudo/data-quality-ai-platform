@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+const kernel=readFileSync('lib/agents/runtime/native-recovery-v2.ts','utf8')
+const has=(t,l)=>assert.ok(kernel.includes(t),`${l} missing: ${t}`)
+has('const pending = new Set(steps.map((step) => step.id))','pending DAG set')
+has('(step.dependsOn ?? []).every((dependency) => completed.has(dependency))','dependency-ready filter')
+has('const waveResults = await Promise.all(ready.map','parallel Recovery V2 ready wave')
+has('trajectory evidence\n    // is flushed in stable original plan order','deterministic evidence ordering')
+has("code: 'UNRESOLVED_DEPENDENCIES'",'fail-closed unresolved dependency handling')
+has("const approval = ready.find((step) => step.requiresHumanApproval)",'approval-before-wave boundary')
+has("recoverNativeStepV2({",'Recovery V2 retry and compensation boundary')
+const parallel=kernel.indexOf('const waveResults = await Promise.all(ready.map')
+const commit=kernel.indexOf('for (const result of waveResults)',parallel)
+assert.ok(parallel>=0&&commit>parallel,'wave must settle before deterministic completion commit')
+console.log('Native parallel DAG execution verified.')

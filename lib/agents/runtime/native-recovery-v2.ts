@@ -3,7 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   NATIVE_AUTONOMY_MAX_ATTEMPTS,
   certifyNativePinnedToolContract,
-  getNativeDeterministicExecutionOrder,
   validateNativeBoundedPlan,
   type NativeAutonomyPolicy,
   type NativeClosedLoopEvent,
@@ -360,77 +359,126 @@ export async function executeNativeClosedLoopV2(input: {
   plan: NativeValidatedPlan
   runtime: NativeRecoveryV2Runtime
 }): Promise<NativeClosedLoopResult> {
-  const ordered = getNativeDeterministicExecutionOrder(input.plan.steps)
+  const steps = input.plan.steps
+  const pending = new Set(steps.map((step) => step.id))
+  const completed = new Set<string>()
   const completedStepIds: string[] = []
+  const originalIndex = new Map(steps.map((step, index) => [step.id, index]))
   await emit(input.runtime, { type: 'PLAN_STARTED' })
 
-  for (let index = 0; index < ordered.length; index += 1) {
-    const step = ordered[index]
-    const stepOrder = index + 1
+  while (pending.size) {
+    const ready = steps
+      .filter((step) => pending.has(step.id))
+      .filter((step) => (step.dependsOn ?? []).every((dependency) => completed.has(dependency)))
+      .sort((left, right) => (originalIndex.get(left.id) ?? 0) - (originalIndex.get(right.id) ?? 0))
 
-    if (step.decision === 'PROHIBITED') {
-      await emit(input.runtime, { type: 'PLAN_FAILED', step, stepOrder, code: 'PROHIBITED_STEP' })
-      return { status: 'FAILED', completedStepIds, stepId: step.id, code: 'PROHIBITED_STEP' }
-    }
-    if (step.requiresHumanApproval) {
-      const interruptId = await input.runtime.requestApproval?.({ step, stepOrder })
-      await emit(input.runtime, { type: 'APPROVAL_REQUIRED', step, stepOrder })
-      return { status: 'WAITING_APPROVAL', completedStepIds, stepId: step.id, interruptId }
+    if (!ready.length) {
+      await emit(input.runtime, { type: 'PLAN_FAILED', code: 'UNRESOLVED_DEPENDENCIES' })
+      return { status: 'FAILED', completedStepIds, code: 'UNRESOLVED_DEPENDENCIES' }
     }
 
-    let attempt = 1
-    while (attempt <= NATIVE_AUTONOMY_MAX_ATTEMPTS) {
-      await emit(input.runtime, { type: 'STEP_STARTED', step, stepOrder, attempt })
-      try {
-        const output = await input.runtime.executeStep({ step, stepOrder, attempt })
-        await emit(input.runtime, { type: 'STEP_EXECUTED', step, stepOrder, attempt, output })
-        const validation = await input.runtime.validateOutcome({ step, stepOrder, attempt, output })
-        if (validation.valid) {
-          await emit(input.runtime, { type: 'STEP_VALIDATED', step, stepOrder, attempt, output, code: validation.code })
-          completedStepIds.push(step.id)
-          break
-        }
-        throw Object.assign(new Error(`Step ${step.id} outcome validation failed`), {
-          code: validation.code ?? 'OUTCOME_VALIDATION_FAILED',
-        })
-      } catch (error) {
-        const failedCode = errorCode(error)
-        await emit(input.runtime, { type: 'STEP_FAILED', step, stepOrder, attempt, error, code: failedCode })
+    const prohibited = ready.find((step) => step.decision === 'PROHIBITED')
+    if (prohibited) {
+      const stepOrder = (originalIndex.get(prohibited.id) ?? 0) + 1
+      await emit(input.runtime, { type: 'PLAN_FAILED', step: prohibited, stepOrder, code: 'PROHIBITED_STEP' })
+      return { status: 'FAILED', completedStepIds, stepId: prohibited.id, code: 'PROHIBITED_STEP' }
+    }
 
-        let recovery: NativeRecoveryV2Outcome
+    const approval = ready.find((step) => step.requiresHumanApproval)
+    if (approval) {
+      const stepOrder = (originalIndex.get(approval.id) ?? 0) + 1
+      const interruptId = await input.runtime.requestApproval?.({ step: approval, stepOrder })
+      await emit(input.runtime, { type: 'APPROVAL_REQUIRED', step: approval, stepOrder })
+      return { status: 'WAITING_APPROVAL', completedStepIds, stepId: approval.id, interruptId }
+    }
+
+    const waveResults = await Promise.all(ready.map(async (step) => {
+      const stepOrder = (originalIndex.get(step.id) ?? 0) + 1
+      const events: Array<NativeClosedLoopEvent & { recovery?: NativeRecoveryV2Outcome }> = []
+      const record = async (event: NativeClosedLoopEvent & { recovery?: NativeRecoveryV2Outcome }) => {
+        events.push(event)
+      }
+
+      let attempt = 1
+      while (attempt <= NATIVE_AUTONOMY_MAX_ATTEMPTS) {
+        await record({ type: 'STEP_STARTED', step, stepOrder, attempt })
         try {
-          recovery = await recoverNativeStepV2({
-            context: input.context,
-            runtime: input.runtime,
+          const output = await input.runtime.executeStep({ step, stepOrder, attempt })
+          await record({ type: 'STEP_EXECUTED', step, stepOrder, attempt, output })
+          const validation = await input.runtime.validateOutcome({ step, stepOrder, attempt, output })
+          if (validation.valid) {
+            await record({ type: 'STEP_VALIDATED', step, stepOrder, attempt, output, code: validation.code })
+            return { step, events, success: true as const }
+          }
+          throw Object.assign(new Error(`Step ${step.id} outcome validation failed`), {
+            code: validation.code ?? 'OUTCOME_VALIDATION_FAILED',
+          })
+        } catch (error) {
+          const failedCode = errorCode(error)
+          await record({ type: 'STEP_FAILED', step, stepOrder, attempt, error, code: failedCode })
+
+          let recovery: NativeRecoveryV2Outcome
+          try {
+            recovery = await recoverNativeStepV2({
+              context: input.context,
+              runtime: input.runtime,
+              step,
+              attempt,
+              error,
+            })
+          } catch {
+            recovery = { decision: 'FAIL', code: 'RECOVERY_ENGINE_FAILED' }
+          }
+
+          await record({
+            type: 'RECOVERY_DECIDED',
             step,
+            stepOrder,
             attempt,
             error,
+            code: recovery.code,
+            recoveryDecision: recovery.decision,
+            recovery,
           })
-        } catch {
-          recovery = { decision: 'FAIL', code: 'RECOVERY_ENGINE_FAILED' }
+
+          if (recovery.decision === 'RETRY') {
+            attempt += 1
+            continue
+          }
+
+          const terminalCode = recovery.decision === 'COMPENSATED'
+            ? 'STEP_FAILED_VERIFIED_COMPENSATION'
+            : recovery.code
+          await record({ type: 'PLAN_FAILED', step, stepOrder, attempt, error, code: terminalCode, recovery })
+          return { step, events, success: false as const, code: terminalCode }
         }
+      }
 
-        await emit(input.runtime, {
-          type: 'RECOVERY_DECIDED',
-          step,
-          stepOrder,
-          attempt,
-          error,
-          code: recovery.code,
-          recoveryDecision: recovery.decision,
-          recovery,
-        })
+      const terminalCode = 'ATTEMPT_LIMIT_EXHAUSTED'
+      await record({ type: 'PLAN_FAILED', step, stepOrder, attempt: NATIVE_AUTONOMY_MAX_ATTEMPTS, code: terminalCode })
+      return { step, events, success: false as const, code: terminalCode }
+    }))
 
-        if (recovery.decision === 'RETRY') {
-          attempt += 1
-          continue
-        }
+    // Execution inside a ready wave is concurrent, but externally visible trajectory evidence
+    // is flushed in stable original plan order after every sibling has settled.
+    let firstFailure: { step: NativeValidatedStep; code: string } | null = null
+    for (const result of waveResults) {
+      for (const event of result.events) await emit(input.runtime, event)
+      if (result.success) {
+        pending.delete(result.step.id)
+        completed.add(result.step.id)
+        completedStepIds.push(result.step.id)
+      } else if (!firstFailure) {
+        firstFailure = { step: result.step, code: result.code }
+      }
+    }
 
-        const terminalCode = recovery.decision === 'COMPENSATED'
-          ? 'STEP_FAILED_VERIFIED_COMPENSATION'
-          : recovery.code
-        await emit(input.runtime, { type: 'PLAN_FAILED', step, stepOrder, attempt, error, code: terminalCode, recovery })
-        return { status: 'FAILED', completedStepIds, stepId: step.id, code: terminalCode }
+    if (firstFailure) {
+      return {
+        status: 'FAILED',
+        completedStepIds,
+        stepId: firstFailure.step.id,
+        code: firstFailure.code,
       }
     }
   }
