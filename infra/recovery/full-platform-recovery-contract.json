@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "requiredScopes": {
+    "STORAGE": {
+      "reconstructFrom": ["supabase migrations", "storage bucket metadata", "storage policies"],
+      "restoreEvidenceRequired": ["object byte inventory", "object integrity evidence", "bucket policy validation"],
+      "currentZeroObjectOptimizationAllowed": true,
+      "zeroObjectsMaySatisfyObjectByteRestoreOnlyWhenAuthoritativeInventoryShowsZero": true
+    },
+    "IDENTITY_CONFIG": {
+      "reconstructFrom": ["auth database state", "source-controlled redirect/config inventory", "secret-name inventory"],
+      "restoreEvidenceRequired": ["auth user validation", "provider configuration presence", "redirect configuration", "smtp dependency status", "key inventory presence"],
+      "secretValuesInRepository": false
+    },
+    "APPLICATION_CONFIG": {
+      "reconstructFrom": ["infra/recovery/platform-manifest.json", "vercel.json", "version-controlled Render scripts/config"],
+      "restoreEvidenceRequired": ["Vercel project/domain/runtime validation", "Render service topology validation", "required environment variable name validation"],
+      "deploymentRollbackIsDisasterRecovery": false
+    },
+    "EDGE_RUNTIME": {
+      "reconstructFrom": ["supabase/functions", "supabase/config.toml"],
+      "restoreEvidenceRequired": ["required function presence", "JWT policy match", "dependency/import-map match", "post-deploy invocation validation"]
+    },
+    "DEPENDENCIES": {
+      "reconstructFrom": ["platform manifest", "dependency source configuration", "secret-name inventory"],
+      "restoreEvidenceRequired": ["OPA health", "OTEL health", "JDBC health", "AI provider reachability or governed fallback", "identity/email dependency status"]
+    },
+    "SERVICE_VALIDATION": {
+      "reconstructFrom": ["application routes", "production smoke contracts"],
+      "restoreEvidenceRequired": ["health", "authentication", "catalog", "profiling", "worker", "governance", "AI routing"],
+      "serviceReadyAtAllowedOnlyAfterAllChecksPass": true
+    }
+  },
+  "timingTruth": {
+    "targetRpoMinutes": 60,
+    "targetRtoMinutes": 240,
+    "authoritativeRecoveryPointRequiredForRpo": true,
+    "serviceReadyTimestampRequiredForRto": true,
+    "databaseRestoreDurationIsPlatformRto": false
+  },
+  "evidenceRules": {
+    "failClosed": true,
+    "secretValuesAllowed": false,
+    "independentEvidenceRequired": true,
+    "staticReconstructionEvidenceMayClaimRestored": false,
+    "staticReconstructionEvidenceMayClaimReady": false
+  }
+}

@@ -5,9 +5,11 @@ const requiredFiles = [
   'docs/recovery-assurance-v2.md',
   'docs/recovery-business-impact-analysis.md',
   'docs/recovery-portable-backup-and-local-restore.md',
+  'docs/recovery-full-platform-scopes.md',
   'infra/recovery/platform-manifest.json',
   'infra/recovery/migration-history-aliases.json',
   'infra/recovery/portable-backup-contract.json',
+  'infra/recovery/full-platform-recovery-contract.json',
   'scripts/recovery-drill.mjs',
   'scripts/recovery/recovery-integrity.mjs',
   'scripts/recovery/create-portable-backup.mjs',
@@ -15,6 +17,7 @@ const requiredFiles = [
   'scripts/test-recovery-assurance.mjs',
   'scripts/verify-recovery-source-authority.mjs',
   'scripts/verify-portable-recovery.mjs',
+  'scripts/verify-full-platform-recovery-scopes.mjs',
   'supabase/config.toml',
   'supabase/functions/profiling-executor/index.ts',
   'supabase/functions/profiling-executor/deno.json',
@@ -109,4 +112,5 @@ console.log('PASS recoverable production platform manifest')
 await import('./test-recovery-assurance.mjs')
 await import('./verify-recovery-source-authority.mjs')
 await import('./verify-portable-recovery.mjs')
+await import('./verify-full-platform-recovery-scopes.mjs')
 console.log('Recovery Assurance v2 static and behavioral verification completed.')
