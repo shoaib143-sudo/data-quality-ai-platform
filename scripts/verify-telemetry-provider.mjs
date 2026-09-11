@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const provider = fs.readFileSync('lib/ai/telemetry-provider.ts', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-telemetry-provider.ts', 'utf8')
+const exporter = fs.readFileSync('lib/ai/otlp-telemetry-exporter.ts', 'utf8')
 const traceParser = fs.readFileSync('lib/ai/w3c-trace-context.ts', 'utf8')
 const governedAgentRoute = fs.readFileSync('app/api/agents/governance/run/route.ts', 'utf8')
 const governedHandoffRoute = fs.readFileSync('app/api/agents/governance/handoff/route.ts', 'utf8')
@@ -38,6 +39,10 @@ requireText(provider, 'rawoutput', 'raw output guard')
 requireText(adapter, 'createAdminClient', 'server-side privileged persistence')
 requireText(adapter, "schema('governance')", 'governance schema persistence')
 requireText(adapter, "from('ai_telemetry_events')", 'canonical telemetry ledger persistence')
+requireText(exporter, "readonly id = 'otlp_http_json'", 'OTLP HTTP exporter identity')
+requireText(exporter, 'startTimeUnixNano: unixNano(start)', 'OTLP start timestamp')
+requireText(exporter, 'endTimeUnixNano: unixNano(end)', 'OTLP end timestamp')
+requireText(exporter, "return `${Math.trunc(date.getTime())}000000`", 'ES2019-safe exact millisecond-to-nanosecond conversion')
 requireText(migration, 'create table governance.ai_telemetry_events', 'canonical PostgreSQL telemetry ledger')
 requireText(migration, 'enable row level security', 'RLS enabled')
 requireText(migration, 'app_private.is_project_member(project_id)', 'project-scoped authenticated read')
@@ -74,6 +79,9 @@ requireText(governedHandoffRoute, "operation: 'handoff_memory_enrichment'", 'han
 requireText(governedHandoffRoute, "operation: 'handoff_memory_evaluation'", 'handoff evaluation stage')
 requireText(governedHandoffRoute, 'Telemetry is observability evidence only.', 'handoff telemetry authority boundary')
 
+if (/\bBigInt\s*\(|\d+n\b/.test(exporter)) {
+  throw new Error('OTLP telemetry exporter must remain compatible with the project pre-ES2020 TypeScript target.')
+}
 if (/grant\s+insert[^;]+authenticated/i.test(migration)) {
   throw new Error('Authenticated clients must not receive direct telemetry insert authority.')
 }
