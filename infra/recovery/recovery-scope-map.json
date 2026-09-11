@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "scopes": {
+    "DATABASE": ["supabase-postgres", "governance-audit-chain", "pgvector"],
+    "STORAGE": ["supabase-storage-metadata", "supabase-storage-object-bytes"],
+    "IDENTITY_CONFIG": ["supabase-auth", "sso-oauth", "smtp", "jwt-api-keys"],
+    "APPLICATION_CONFIG": ["vercel-project", "vercel-domains", "vercel-cron", "render-services"],
+    "EDGE_RUNTIME": ["supabase-edge-functions"],
+    "DEPENDENCIES": ["opa", "otel", "jdbc-bridge", "ai-model-providers", "retrieval-search", "email-identity"],
+    "SERVICE_VALIDATION": ["health", "auth", "catalog", "profiling", "queue-worker", "governance", "ai-routing"]
+  }
+}
