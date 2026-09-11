@@ -31,7 +31,7 @@ The dashboard and priority governance workspaces now use shared loading and reco
 
 The guided journey emits a deliberately small, privacy-minimized product telemetry vocabulary for journey views and primary next-action selections. Events are authenticated, project-authorized, persisted to the existing service-only `orchestration.analytics_events` fallback store, and cannot mutate governance state. Interaction telemetry remains distinct from governed outcome evidence.
 
-Denied workspace navigation now resolves to an explicit authenticated UX state instead of silently returning users to their role home. The denied state confirms that no data or permissions were changed, offers safe recovery destinations, and intentionally does not disclose internal capability names, policy rules, or authorization detail.
+Denied workspace navigation now resolves to an explicit authenticated UX state instead of silently returning users to their role home. The denied state confirms that no data or permissions were changed, offers safe recovery destinations, and intentionally does not disclose internal capability names, policy rules, or authorization detail. Governance reporting now includes an experience-insights view that combines privacy-minimized interaction telemetry with authoritative source, profiling, remediation, and quality-control evidence while keeping analytics explicitly non-authoritative.
 
 ## Next increments
 
@@ -41,6 +41,5 @@ The foundation is intentionally incremental. Remaining UX work includes:
 - deeper task-based journeys beyond the initial connect → discover → profile → remediate → verify path;
 - full browser-assisted and manual accessibility review against WCAG 2.2 AA, including contrast, screen-reader semantics, zoom, tables, graphs, and touch targets;
 - responsive treatment for dense governance tables and lineage;
-- product reporting that combines interaction telemetry with authoritative outcome evidence without treating analytics as governance truth.
 
 The shell must not imply capabilities that the backend does not yet authorize.
