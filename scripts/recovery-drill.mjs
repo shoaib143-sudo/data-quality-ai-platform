@@ -13,6 +13,10 @@ function required(name) {
   return value
 }
 
+function optional(name) {
+  return process.env[name]?.trim() || null
+}
+
 function safeUrl(raw, label) {
   const url = new URL(raw)
   if (!['postgres:', 'postgresql:'].includes(url.protocol)) throw new Error(`${label} must be a PostgreSQL URL`)
@@ -25,14 +29,6 @@ function fingerprint(url) {
 
 function assertUuid(value, label) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) throw new Error(`${label} must be a UUID`)
-  return value
-}
-
-function optionalNonNegativeInteger(name) {
-  const raw = process.env[name]?.trim()
-  if (!raw) return null
-  const value = Number(raw)
-  if (!Number.isInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer`)
   return value
 }
 
@@ -108,23 +104,39 @@ async function toolVersion(binary) {
   return stdout
 }
 
-async function persistDrillEvidence({ sourceRaw, projectId, status, startedAt, completedAt, measuredRpoMinutes, measuredRtoMinutes, evidence, notes }) {
+async function persistDrillEvidence({
+  sourceRaw,
+  projectId,
+  status,
+  startedAt,
+  completedAt,
+  recoveryPointAt,
+  measuredRpoMinutes,
+  measuredRtoMinutes,
+  externalEvidenceRef,
+  scopeResults,
+  evidence,
+  notes,
+}) {
   const sql = `
     insert into governance.backup_restore_drills(
       project_id,drill_type,status,environment,evidence,notes,started_at,completed_at,
+      incident_at,recovery_point_at,recovery_mechanism,scope_results,external_evidence_ref,
       measured_rpo_minutes,measured_rto_minutes
     ) values (
       :'project_id'::uuid,'RESTORE_REHEARSAL',:'status','isolated-recovery',:'evidence'::jsonb,
       nullif(:'notes',''),:'started_at'::timestamptz,:'completed_at'::timestamptz,
-      nullif(:'measured_rpo_minutes','')::integer,:'measured_rto_minutes'::integer
+      :'started_at'::timestamptz,:'recovery_point_at'::timestamptz,'PORTABLE_LOGICAL_EXPORT',
+      :'scope_results'::jsonb,:'external_evidence_ref',:'measured_rpo_minutes'::integer,:'measured_rto_minutes'::integer
     ) returning id::text || ':' || policy_result;
   `
   const { stdout } = await command('psql', [
     sourceRaw,'-X','-A','-t','-v','ON_ERROR_STOP=1',
     '-v',`project_id=${projectId}`,'-v',`status=${status}`,'-v',`evidence=${JSON.stringify(evidence)}`,
     '-v',`notes=${notes ?? ''}`,'-v',`started_at=${startedAt}`,'-v',`completed_at=${completedAt}`,
-    '-v',`measured_rpo_minutes=${measuredRpoMinutes ?? ''}`,'-v',`measured_rto_minutes=${measuredRtoMinutes}`,
-    '-c',sql,
+    '-v',`recovery_point_at=${recoveryPointAt}`,'-v',`scope_results=${JSON.stringify(scopeResults)}`,
+    '-v',`external_evidence_ref=${externalEvidenceRef}`,'-v',`measured_rpo_minutes=${measuredRpoMinutes}`,
+    '-v',`measured_rto_minutes=${measuredRtoMinutes}`,'-c',sql,
   ])
   return stdout.trim()
 }
@@ -133,7 +145,7 @@ async function main() {
   const sourceRaw = required('SOURCE_DATABASE_URL')
   const recoveryRaw = required('RECOVERY_DATABASE_URL')
   const projectId = assertUuid(required('RECOVERY_PROJECT_ID'), 'RECOVERY_PROJECT_ID')
-  const measuredRpoMinutes = optionalNonNegativeInteger('RECOVERY_MEASURED_RPO_MINUTES')
+  const externalEvidenceRef = required('RECOVERY_EXTERNAL_EVIDENCE_REF')
   const source = safeUrl(sourceRaw, 'SOURCE_DATABASE_URL')
   const recovery = safeUrl(recoveryRaw, 'RECOVERY_DATABASE_URL')
   assertIsolated(source, recovery)
@@ -142,7 +154,18 @@ async function main() {
   const startedAt = new Date(startedAtMs).toISOString()
   const workdir = await mkdtemp(join(tmpdir(), 'dgp-recovery-'))
   const dumpPath = join(workdir, 'database.dump')
-  let evidence = { source: fingerprint(source), recovery: fingerprint(recovery), projectId, scope: 'database' }
+  const provenance = {
+    commitSha: optional('RECOVERY_COMMIT_SHA'),
+    workflowRunId: optional('RECOVERY_WORKFLOW_RUN_ID'),
+  }
+  let recoveryPointAt = startedAt
+  let evidence = {
+    source: fingerprint(source),
+    recovery: fingerprint(recovery),
+    projectId,
+    recoveryMechanism: 'PORTABLE_LOGICAL_EXPORT',
+    provenance,
+  }
 
   try {
     const [pgDumpVersion, pgRestoreVersion, psqlVersion, sourceSnapshot] = await Promise.all([
@@ -150,42 +173,73 @@ async function main() {
     ])
     evidence = { ...evidence, tools: { pgDumpVersion, pgRestoreVersion, psqlVersion }, sourceSnapshot }
 
-    console.log('Creating logical backup from source database')
+    console.log('Creating portable logical backup from source database')
     await command('pg_dump', [sourceRaw,'--format=custom','--no-owner','--no-privileges','--file',dumpPath])
+    recoveryPointAt = new Date().toISOString()
     const dumpStat = await stat(dumpPath)
-    evidence = { ...evidence, backup: { format: 'custom', bytes: dumpStat.size, sha256: await sha256File(dumpPath) } }
+    evidence = { ...evidence, backup: { format: 'custom', createdAt: recoveryPointAt, bytes: dumpStat.size, sha256: await sha256File(dumpPath) } }
 
     console.log('Resetting isolated recovery database schema')
     await command('psql', [recoveryRaw,'-X','-v','ON_ERROR_STOP=1','-c','drop schema if exists public cascade; create schema public;'])
 
-    console.log('Restoring backup into isolated recovery database')
+    console.log('Restoring portable backup into isolated recovery database')
     await command('pg_restore', ['--dbname',recoveryRaw,'--no-owner','--no-privileges','--clean','--if-exists',dumpPath])
 
-    console.log('Running recovery integrity and parity checks')
+    console.log('Running database integrity and parity checks')
     const checks = await validateRecovery(recoveryRaw, sourceSnapshot)
     const completedAt = new Date().toISOString()
     const measuredRtoMinutes = Math.max(0, Math.ceil((Date.now() - startedAtMs) / 60_000))
-    evidence = { ...evidence, checks, parity: { status: 'PASSED', compared: Object.keys(sourceSnapshot) } }
+    const measuredRpoMinutes = Math.max(0, Math.ceil((new Date(startedAt).getTime() - new Date(recoveryPointAt).getTime()) / 60_000))
+    const scopeResults = {
+      DATABASE: {
+        status: 'PASSED',
+        completedAt,
+        parity: 'PASSED',
+        auditChainValid: checks.auditChainValid === 'true',
+      },
+    }
+    evidence = {
+      ...evidence,
+      checks,
+      parity: { status: 'PASSED', compared: Object.keys(sourceSnapshot) },
+      scopeResults,
+      limitation: 'This rehearsal validates DATABASE and Supabase Storage metadata only. Full recovery readiness also requires Storage object bytes, identity/platform configuration, edge runtime, dependencies, and service validation.',
+    }
 
     const registryResult = await persistDrillEvidence({
-      sourceRaw, projectId, status: 'PASSED', startedAt, completedAt, measuredRpoMinutes, measuredRtoMinutes, evidence,
-      notes: 'Automated isolated database restore rehearsal completed successfully with source/recovery parity validation.',
+      sourceRaw, projectId, status: 'PASSED', startedAt, completedAt, recoveryPointAt, measuredRpoMinutes,
+      measuredRtoMinutes, externalEvidenceRef, scopeResults, evidence,
+      notes: 'Portable logical database recovery rehearsal passed. Full-platform recovery readiness remains fail-closed until all required scopes pass.',
     })
 
     console.log(JSON.stringify({
-      status: 'PASSED', durationSeconds: Math.round((Date.now() - startedAtMs) / 1000), measuredRpoMinutes, measuredRtoMinutes,
-      source: fingerprint(source), recovery: fingerprint(recovery), sourceSnapshot, checks, registryResult,
-      note: 'Database and Supabase Storage metadata recovery validated. Storage object bytes, Edge Functions, and external configuration require separate recovery validation.',
+      status: 'PASSED',
+      recoveryMechanism: 'PORTABLE_LOGICAL_EXPORT',
+      durationSeconds: Math.round((Date.now() - startedAtMs) / 1000),
+      measuredRpoMinutes,
+      measuredDatabaseRestoreMinutes: measuredRtoMinutes,
+      platformRtoMeasured: false,
+      source: fingerprint(source),
+      recovery: fingerprint(recovery),
+      sourceSnapshot,
+      checks,
+      scopeResults,
+      externalEvidenceRef,
+      registryResult,
+      note: 'Database scope passed. This result must not be interpreted as full-platform READY.',
     }, null, 2))
   } catch (error) {
     const completedAt = new Date().toISOString()
     const measuredRtoMinutes = Math.max(0, Math.ceil((Date.now() - startedAtMs) / 60_000))
+    const measuredRpoMinutes = Math.max(0, Math.ceil((new Date(startedAt).getTime() - new Date(recoveryPointAt).getTime()) / 60_000))
     const message = error instanceof Error ? error.message : String(error)
+    const scopeResults = { DATABASE: { status: 'FAILED', completedAt, error: message } }
     try {
       await persistDrillEvidence({
-        sourceRaw, projectId, status: 'FAILED', startedAt, completedAt, measuredRpoMinutes, measuredRtoMinutes,
-        evidence: { ...evidence, failure: { message } },
-        notes: 'Automated isolated database restore rehearsal failed. Review evidence before retrying.',
+        sourceRaw, projectId, status: 'FAILED', startedAt, completedAt, recoveryPointAt, measuredRpoMinutes,
+        measuredRtoMinutes, externalEvidenceRef, scopeResults,
+        evidence: { ...evidence, scopeResults, failure: { message } },
+        notes: 'Portable logical database recovery rehearsal failed. Review evidence before retrying.',
       })
     } catch (registryError) {
       console.error(JSON.stringify({ status: 'EVIDENCE_PERSISTENCE_FAILED', error: registryError instanceof Error ? registryError.message : String(registryError) }))
