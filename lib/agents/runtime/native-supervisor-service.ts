@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import {
   GOVERNANCE_SPECIALIST_AGENT_KEYS,
+  getGovernedAgentPolicy,
   type GovernanceSpecialistAgentKey,
 } from '@/lib/agents/governed-agent-registry'
 import {
@@ -13,8 +14,16 @@ import { startNativeAgentLifecycle } from '@/lib/agents/runtime/native-agent-lif
 import { hashNativeRuntimeValue } from '@/lib/agents/runtime/native-tool-contracts'
 
 export type NativeSupervisorWorkerRequest = {
+  workerId?: string | null
   agentDefinitionId: string
   question?: string | null
+  dependsOn?: string[]
+}
+
+export type NativeSupervisorHandoffRef = {
+  sourceStepId: string
+  sourceAgentKey: GovernanceSpecialistAgentKey
+  sourceRunId: string
 }
 
 export type NativeSupervisorRunResult = {
@@ -43,6 +52,22 @@ function optionalQuestion(value: unknown) {
   if (!normalized) return null
   if (normalized.length > 1000) throw new Error('worker question must be 1000 characters or fewer')
   return normalized
+}
+
+function optionalWorkerId(value: unknown, fallback: string) {
+  if (value == null || value === '') return fallback
+  if (typeof value !== 'string') throw new Error('workerId must be a string')
+  const normalized = value.trim()
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(normalized)) {
+    throw new Error('workerId must contain 1 to 80 safe identifier characters')
+  }
+  return normalized
+}
+
+function dependencyIds(value: unknown) {
+  if (value == null) return [] as string[]
+  if (!Array.isArray(value) || value.length > 5) throw new Error('dependsOn must contain at most 5 worker ids')
+  return value.map((item) => optionalWorkerId(item, ''))
 }
 
 async function updateSupervisorRun(input: {
@@ -76,10 +101,23 @@ export async function runNativeSpecialistSupervisor(input: {
     throw new Error('workers must contain between 1 and 6 specialist requests')
   }
 
-  const workers = input.workers.map((worker) => ({
+  const workers = input.workers.map((worker, index) => ({
+    workerId: optionalWorkerId(worker.workerId, `worker-${index + 1}`),
     agentDefinitionId: boundedText(worker.agentDefinitionId, 200, 'agentDefinitionId'),
     question: optionalQuestion(worker.question),
+    dependsOn: dependencyIds(worker.dependsOn),
   }))
+  const workerIds = new Set<string>()
+  for (const worker of workers) {
+    if (workerIds.has(worker.workerId)) throw new Error(`Duplicate workerId: ${worker.workerId}`)
+    workerIds.add(worker.workerId)
+  }
+  for (const worker of workers) {
+    for (const dependencyId of worker.dependsOn) {
+      if (!workerIds.has(dependencyId)) throw new Error(`${worker.workerId} depends on unknown worker ${dependencyId}`)
+      if (dependencyId === worker.workerId) throw new Error(`${worker.workerId} cannot depend on itself`)
+    }
+  }
 
   const admin = createAdminClient()
   const [{ data: supervisorDefinition, error: supervisorError }, { data: workerDefinitions, error: workersError }] = await Promise.all([
@@ -113,6 +151,16 @@ export async function runNativeSpecialistSupervisor(input: {
       agentKey: agentKey as GovernanceSpecialistAgentKey,
     }
   })
+  const resolvedByWorkerId = new Map(resolvedWorkers.map((worker) => [worker.workerId, worker]))
+  for (const worker of resolvedWorkers) {
+    for (const dependencyId of worker.dependsOn) {
+      const source = resolvedByWorkerId.get(dependencyId)
+      if (!source) throw new Error(`${worker.workerId}: dependency ${dependencyId} disappeared after resolution`)
+      if (!getGovernedAgentPolicy(source.agentKey).handoffTargets.includes(worker.agentKey)) {
+        throw new Error(`Handoff ${source.agentKey} -> ${worker.agentKey} is not allowed by the governed agent registry`)
+      }
+    }
+  }
 
   const goalHash = hashNativeRuntimeValue({ goal })
   const { data: supervisorRun, error: supervisorRunError } = await admin.schema('agent').from('agent_runs').insert({
@@ -143,10 +191,20 @@ export async function runNativeSpecialistSupervisor(input: {
 
     const stepAgentRunIds = new Map<string, string>()
     const steps: NativeBoundedPlan['steps'] = []
+    const stepIdByWorkerId = new Map(resolvedWorkers.map((worker, index) => [
+      worker.workerId,
+      `specialist-${index + 1}-${worker.agentKey}-${worker.workerId}`,
+    ]))
 
     for (let index = 0; index < resolvedWorkers.length; index += 1) {
       const worker = resolvedWorkers[index]
-      const stepId = `specialist-${index + 1}-${worker.agentKey}`
+      const stepId = stepIdByWorkerId.get(worker.workerId)
+      if (!stepId) throw new Error(`${worker.workerId}: supervisor step identity is unavailable`)
+      const dependencyStepIds = worker.dependsOn.map((dependencyId) => {
+        const dependencyStepId = stepIdByWorkerId.get(dependencyId)
+        if (!dependencyStepId) throw new Error(`${worker.workerId}: dependency step ${dependencyId} is unavailable`)
+        return dependencyStepId
+      })
       const { data: childRun, error: childRunError } = await admin.schema('agent').from('agent_runs').insert({
         agent_definition_id: worker.agentDefinitionId,
         project_id: projectId,
@@ -155,6 +213,7 @@ export async function runNativeSpecialistSupervisor(input: {
         input: {
           question: worker.question,
           supervisor_goal_hash: goalHash,
+          depends_on_step_ids: dependencyStepIds,
           execution_mode: 'native_supervisor_specialist_read_only',
         },
       }).select('id').single()
@@ -165,6 +224,16 @@ export async function runNativeSpecialistSupervisor(input: {
       childRunIds.push(childRun.id)
       stepAgentRunIds.set(stepId, childRun.id)
       workerByStepId.set(stepId, worker)
+    }
+
+    for (const worker of resolvedWorkers) {
+      const stepId = stepIdByWorkerId.get(worker.workerId)
+      if (!stepId) throw new Error(`${worker.workerId}: supervisor step identity is unavailable`)
+      const dependencyStepIds = worker.dependsOn.map((dependencyId) => {
+        const dependencyStepId = stepIdByWorkerId.get(dependencyId)
+        if (!dependencyStepId) throw new Error(`${worker.workerId}: dependency step ${dependencyId} is unavailable`)
+        return dependencyStepId
+      })
       steps.push({
         id: stepId,
         agentKey: worker.agentKey,
@@ -173,7 +242,22 @@ export async function runNativeSpecialistSupervisor(input: {
         input: {
           projectId,
           ...(worker.question ? { question: worker.question } : {}),
+          ...(dependencyStepIds.length ? {
+            handoffRefs: dependencyStepIds.map((dependencyStepId) => {
+              const dependencyBindingRunId = stepAgentRunIds.get(dependencyStepId)
+              const dependencyWorker = resolvedWorkers.find((candidate) => stepIdByWorkerId.get(candidate.workerId) === dependencyStepId)
+              if (!dependencyBindingRunId || !dependencyWorker) {
+                throw new Error(`${worker.workerId}: dependency binding ${dependencyStepId} is unavailable`)
+              }
+              return {
+                sourceStepId: dependencyStepId,
+                sourceAgentKey: dependencyWorker.agentKey,
+                sourceRunId: dependencyBindingRunId,
+              }
+            }),
+          } : {}),
         },
+        ...(dependencyStepIds.length ? { dependsOn: dependencyStepIds } : {}),
         expectedOutcome: 'Governed read-only specialist investigation completes through the pinned native tool contract.',
       })
     }
@@ -203,11 +287,14 @@ export async function runNativeSpecialistSupervisor(input: {
         if (!worker || worker.agentKey !== step.agentKey || binding.agentRunId !== stepAgentRunIds.get(step.id)) {
           throw new Error(`${step.id}: supervisor worker binding disappeared`)
         }
+        const handoffRefs = (step.input.handoffRefs ?? []) as NativeSupervisorHandoffRef[]
+
         const executed = await executeGovernanceSpecialistAgent({
           projectId,
           agentDefinitionId: worker.agentDefinitionId,
           actorUserId,
           question: worker.question,
+          handoffRefs,
           existingAgentRunId: binding.agentRunId,
           nativeAttempt: attempt,
         })
