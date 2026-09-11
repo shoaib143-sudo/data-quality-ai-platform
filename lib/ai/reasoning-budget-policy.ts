@@ -6,6 +6,8 @@ export type ReasoningAdmissionPolicy = {
   scopeKey: string
   maxRequestsPerMinute: number | null
   maxConcurrentExecutions: number | null
+  maxCostUsdPerRequest: number | null
+  maxCostUsdPerDay: number | null
 }
 
 export type ProjectReasoningBudget = {
@@ -14,6 +16,8 @@ export type ProjectReasoningBudget = {
   maxOutputTokens: number | null
   maxRequestsPerMinute: number | null
   maxConcurrentExecutions: number | null
+  maxCostUsdPerRequest: number | null
+  maxCostUsdPerDay: number | null
   policyIds?: string[]
   admissionPolicies?: ReasoningAdmissionPolicy[]
 }
