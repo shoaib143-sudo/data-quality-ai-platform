@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Bell, Database, Layers3, Search, ShieldCheck, Sparkles } from 'lucide-react'
+import { Bell, Compass, Database, Layers3, Search, ShieldCheck, Sparkles } from 'lucide-react'
 
 type Props = {
   roleLabel?: string
@@ -9,6 +9,7 @@ type Props = {
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Layers3 },
+  { href: '/journeys', label: 'Journey', icon: Compass },
   { href: '/catalog', label: 'Catalog', icon: Database },
   { href: '/data-quality', label: 'Quality', icon: ShieldCheck },
   { href: '/agents', label: 'Agents', icon: Sparkles },
