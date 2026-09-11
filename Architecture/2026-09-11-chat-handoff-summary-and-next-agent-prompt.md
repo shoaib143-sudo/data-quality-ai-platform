@@ -1,276 +1,340 @@
-# DataNexus AI — Chat Handoff Summary and Next-Agent Prompt
+# DataNexus AI — Current Chat Handoff Summary and Continuation State
 
 Date: 2026-09-11
 
 ## Purpose
 
-This document captures the implementation decisions, completed change sets, production validations, active constraints, and current continuation point established across this chat. It is intended to let another implementation agent continue without reopening settled architecture or duplicating completed work.
+This document replaces the earlier 2026-09-11 handoff snapshot with the later state reached in the same implementation chat. It records what was verified, implemented, merged, accepted as an external limitation, and what remains genuinely unfinished.
 
-The continuation source of truth remains the repository's `Architecture/` and `Major discussion/` records plus verification of the live implementation. Do not redesign completed areas unless a new defect is demonstrated.
+The next agent must use the live repository as source of truth and re-read `main` before making changes. At this handoff the verified `main` head is:
 
-## Product and execution model established in the chat
+`4f7ad25cbaa301da9e5c8a1d30178c23439ff926`
 
-DataNexus AI, also referred to as Data Governance PowerHouse, is being implemented as an enterprise data platform for automated profiling, data quality, governance intelligence, AI governance, source onboarding, lineage, evidence, policy enforcement, and governed agent execution.
+Commit:
 
-The required delivery style throughout the chat has been implementation-first: inspect the live repo and production state, make the actual change, add a permanent verifier, run exact-head CI, merge only when green, apply database migrations through Supabase migration tooling, verify the exact production deployment SHA, inspect post-deploy logs/advisors, and continue until the module is complete or there is an exact technical blocker.
+`OPA: remove deprecated runtime flag on current main (#226)`
 
-## Authoritative organization and tenancy decision
+Do not start from an older feature branch or from the historical pending list without reconciling against current `main`.
 
-A major architecture decision settled in this chat is:
+## Product and delivery model
 
-**One DataNexus deployment = one organization = one dedicated database and dedicated infrastructure stack.**
+DataNexus AI / Data Governance PowerHouse is an enterprise data-profiling, data-quality, governance-intelligence, AI-governance, source-onboarding, lineage, evidence, policy, and governed-agent platform.
 
-Consequences that must not be reversed:
+The implementation discipline used throughout this chat is:
 
-1. A deployed instance belongs to exactly one organization.
-2. The dedicated database is the canonical instance boundary.
-3. `app.organizations` must resolve to exactly one organization at runtime; zero or multiple rows fail closed.
-4. Authentication may succeed while application access still fails closed if the user has no valid membership in the instance organization.
-5. Runtime tenant switching is not supported and no organization-switching UI/API should be introduced.
-6. `organization_id` stays in the schema for integrity, evidence, auditability, and future flexibility, but it is not a runtime tenant selector.
-7. Projects are subordinate to the single organization.
-8. Policies, knowledge, governance evidence, datasets, AI context, and documents are organization-specific and may be narrowed by project scope.
-9. Foreign-organization membership is an integrity/configuration defect and must fail safely rather than creating a second runtime tenant.
-10. “First membership” must never define the active tenant.
+`inspect live state -> implement -> permanent verifier/tests -> PR -> exact-head CI -> merge only green -> apply Supabase migration when required -> verify exact production deployment -> inspect advisors/logs -> continue`
 
-## Persona and landing-page decisions
+The user explicitly prefers autonomous implementation over design-only discussion. Parallelize independent work. Stop only for an exact technical or external blocker.
 
-The governance persona model is separate from organization administration.
+## Non-negotiable architecture preserved throughout the chat
 
-Exactly 13 personas are preserved, including `Metadata Analyst` and `Data Quality Analyst`. Do not add `Data Analyst` or `Data Engineer` without an explicit architecture change.
+### Organization / tenancy
 
-`Data Governance Admin` does **not** imply organization `/admin` privilege.
+- One DataNexus deployment = one organization = one dedicated database/infrastructure stack.
+- The dedicated database is the runtime tenant boundary.
+- `app.organizations` must resolve to exactly one organization. Zero or multiple organizations fail closed.
+- No runtime organization switching and no first-membership tenant selection.
+- `organization_id` remains for integrity, evidence, auditability, and future flexibility; it is not a runtime tenant selector.
+- Membership is still required even after authentication.
+- Projects are subordinate to the single organization.
 
-The shared role landing-page evidence loader legitimately depends on `governance.control_evaluations`. Preserve the `service_role` SELECT grant on that table. The earlier corrective migration was `20260910062422_grant_service_role_control_evaluations_read`.
+### Governance personas
 
-## Profiling and source lifecycle direction
+Organization administration and governance persona remain separate.
 
-The profiling critical path being protected is:
+Preserve exactly 13 governance personas:
 
-Dataset → Dataset Version → Profile Run → Schema Discovery → Profile Columns → Metric Execution → Metric Results → Findings Generation → Quality Score → Governance Insights → Validation.
+1. Senior Leadership
+2. Business User
+3. Data Owner
+4. Data Product Owner
+5. Data Steward
+6. Data Governance Specialist
+7. Compliance & Risk Officer
+8. Privacy & Security Officer
+9. Data Governance Admin
+10. Data Custodian / Technical Steward
+11. Source System / Application Owner
+12. Metadata Analyst
+13. Data Quality Analyst
 
-The expected product paths include CSV upload profiling and database-table profiling with end-to-end governance outputs.
+Do not add `Data Analyst` or `Data Engineer` without an explicit architecture decision. `Data Governance Admin` does not automatically get `/admin`.
 
-Source onboarding is a separate but connected lifecycle:
+Preserve `service_role` SELECT on `governance.control_evaluations`.
 
-Dataset Registration → Dataset Version Management → Source Configuration → Source Connectivity → Source Validation → Schema Availability → Profiling Ready.
+### Governance truth boundaries
 
-For database connectivity, the preferred enterprise abstraction is a common JDBC connection-string method that can support Databricks Unity Catalog, Microsoft SQL Server, PostgreSQL and other JDBC-compatible sources. The repo already contains CI and acceptance work around generic JDBC, Java 21/Spring Boot bridge validation, Databricks discovery, and source readiness.
+- PostgreSQL/Supabase remains authoritative for governed state and evidence.
+- Observation is not governance authority.
+- AI suggestion is not human/governed authority.
+- Inferred lineage is not source-observed lineage.
+- Execution authorization is separate from model/DQ approval.
+- W3C trace IDs are observability identifiers, not governance evidence.
+- Resource budgets are execution/quota controls, not deployment or approval authority.
+- Command Center remains read-only and protected by `admin.manage`.
+- External OPA is an enforcement point over canonical DataNexus policy, not a replacement policy authority.
+- External OTLP is observational only; canonical telemetry persists in PostgreSQL first.
 
-## Completed single-organization runtime work
+## Protected platform lifecycles
 
-### PR #177 — single-organization runtime
+Profiling lifecycle:
 
-Branch: `feat/single-organization-runtime`
+Dataset -> Dataset Version -> Profile Run -> Schema Discovery -> Profile Columns -> Metric Execution -> Metric Results -> Findings Generation -> Quality Score -> Governance Insights -> Validation
 
-Merged main SHA: `36feada83229009dce6327b09c6406e7fd40a978`
+Source onboarding lifecycle:
 
-Key results:
+Dataset Registration -> Dataset Version Management -> Source Configuration -> Source Connectivity -> Source Validation -> Schema Availability -> Profiling Ready
 
-- Added canonical instance-organization resolution in `lib/governance/instance-organization.ts`.
-- Removed first-membership tenant selection.
-- Landing/project settings became canonical-organization scoped.
-- Added `scripts/verify-single-organization-runtime.mjs`.
-- `verify:governance` includes the single-org verification.
-- Production Supabase state was verified as exactly one organization with no foreign membership.
-- Exact production Vercel SHA was verified READY.
+CSV upload profiling and database-table profiling must converge on the same governed profiling lifecycle.
 
-### PR #178 — central authorization propagation
+The preferred database abstraction remains a common JDBC connection-string method, with the existing Java 21 / Spring Boot JDBC bridge retained.
 
-Branch: `feat/single-org-authorization-propagation`
+## Events and implementation progress from this chat
 
-Merged main SHA: `946a69ca33b5612867e272306048dac825fb3de7`
+### 1. Supabase advisor hardening
 
-Key results:
+The chat audited the live Supabase Security Advisor and found seven RLS-enabled tables without policies:
 
-- Added project-to-instance-organization assertion.
-- Hardened project, dataset, dataset-version, and organization-admin authorization through the canonical instance boundary.
-- Preserved OWNER/ADMIN semantics while preventing cross-organization authorization drift.
-- Exact-head CI and production deployment validation were green.
+- `governance.ai_model_cost_events`
+- `governance.embedding_spaces`
+- `governance.governed_action_outcomes`
+- `governance.landing_page_settings`
+- `orchestration.job_dependencies`
+- `orchestration.source_concurrency_state`
+- `orchestration.worker_dispatch_state`
 
-## ADR-006 AI governance work completed during the chat
+The implementation added explicit fail-closed RLS policies and then recreated them as restrictive policies so future permissive policies cannot bypass the deny boundary.
 
-### PR #179 — canonical AI cost accounting
+PR #212 — `Supabase: harden advisor RLS findings` — merged successfully.
 
-Branch: `feat/canonical-ai-cost-accounting`
+Permanent verification was added through `scripts/verify-supabase-advisor-hardening.mjs` and a dedicated workflow.
 
-Merged main SHA: `161c96a98f36f2f71cd268fb4823488f06ed7bdf`
+Post-merge advisor state removed the seven actionable `rls_enabled_no_policy` findings.
 
-The database already had the governed pricing authority `governance.ai_model_pricing_versions`; no prices were invented or seeded.
+### 2. Security-advisor exceptions and Free-plan decision
 
-The implementation added canonical immutable cost evidence through `governance.ai_model_cost_events` and `governance.record_ai_model_cost_event(...)`.
+Four `SECURITY DEFINER` helper warnings remain for:
 
-Important behavior:
+- `app_private.is_org_admin(uuid)`
+- `app_private.is_org_member(uuid)`
+- `app_private.is_project_admin(uuid)`
+- `app_private.is_project_member(uuid)`
 
-- Cost is calculated only from provider-observed token usage and a governed effective pricing version.
-- Missing usage becomes `USAGE_UNAVAILABLE`.
-- Missing governed price becomes `PRICE_UNAVAILABLE`.
-- Ambiguous effective pricing fails closed.
-- No estimated/default/fallback price is permitted.
-- Cost events are immutable audit evidence.
-- Runtime routing records provider/model/request usage and links canonical cost evidence into telemetry.
-- A permanent verifier `scripts/verify-adr006-cost-accounting.mjs` was added and wired into CI.
+These were audited as intentional. They are read-only membership checks, owned by `postgres`, use `SET search_path TO ''`, are not anon/public executable, and are required to avoid recursive RLS evaluation. `app_private` is not PostgREST-exposed. Do not remove `SECURITY DEFINER` merely to silence the advisor.
 
-Production migration and exact Vercel deployment were validated successfully.
+Two no-primary-key advisor findings remain on profiling/JDBC fixture tables. They are intentional test/profile datasets with duplicate candidate keys. Adding surrogate keys solely to silence the advisor would change profiling behavior.
 
-### PR #180 — pricing-version foreign-key index hardening
+Unused-index advisor notices were reviewed. Exact duplicate indexes were not found. Zero-scan statistics alone are insufficient evidence for destructive removal, especially with stale/limited production workload statistics.
 
-Branch: `fix/ai-model-cost-pricing-fk-index`
+Supabase leaked-password protection remains disabled because the project is staying on the **Free** plan. The user explicitly chose to remain on Free. Treat this as an accepted plan/control-plane limitation, not an application implementation defect. Do not create custom leaked-password logic merely to imitate the paid Supabase feature.
 
-Merged main SHA: `83c8ed529be14e66f904b7f2d66b6be1449b6a32`
+### 3. JDBC availability and timeout hardening
 
-Migration: `20260910183500_index_ai_model_cost_events_pricing_version.sql`
+PR #213 hardened JDBC production availability contracts and deployment checks.
 
-This added a partial index on `governance.ai_model_cost_events(pricing_version_id)` for non-null values, eliminating the module-specific Supabase unindexed-FK advisor finding. Remaining unindexed-FK advisor findings were unrelated/pre-existing.
+Later, PR #220 aligned the application-side JDBC bridge default timeout with the bridge contract at 120 seconds, preserving the override and maximum/minimum controls. This closed an old mismatch where the application could time out while the bridge was still legitimately operating within its own query ceiling.
 
-## Parallel P0-P5 hardening observed during the chat
+Render live service currently visible in the confirmed `Demo-PwC Workspace`:
 
-A parallel implementation stream, historically named `implementation/p0-p5-revalidation-20260910`, advanced certification, profiling trust boundaries, source project boundaries, profiling governance insights, retrieval benchmark authority, budget-scope generalization, worker isolation/capacity, and DQ truth/evidence work.
+- `datanexus-jdbc-bridge`
+- branch `main`
+- region `singapore`
+- URL `https://datanexus-jdbc-bridge.onrender.com`
 
-Important principle: before starting a new change, inspect current `main`, open PRs, and active branches because this parallel stream has repeatedly landed work that would otherwise be duplicated.
+### 4. Original open-list reconciliation
 
-The production migration history seen during the chat already included, among others:
+The chat reviewed the earlier list of unfinished implementation items and separated genuine code gaps from external dependencies and already-complete work.
 
-- `p0_govern_certification_transitions`
-- `p5_worker_pool_isolation_and_capacity`
-- `enforce_dataset_source_project_boundary`
-- `profile_run_governance_insights`
-- `retrieval_benchmark_as_of_authority`
-- `cover_remaining_core_foreign_keys`
-- `generalize_ai_budget_admission_scope`
-- `embedding_space_identity`
-- `dq_result_truth_and_sensitive_evidence`
+A number of items were found already implemented rather than pending:
 
-## V5 governed outcome learning and deterministic verification
+- generalized AI budget scope composition is already implemented and live;
+- JDBC availability/readiness was already completed;
+- canonical AI cost accounting was already complete;
+- V5/V6 governed outcome and certification work had already landed;
+- OPA and OTLP first needed application boundaries rather than invented external infrastructure.
 
-The chat then moved to V5 governed outcome/learning work.
+This reduced the active autonomous implementation scope to retrieval authority/temporal enforcement, OPA provider boundary, OTLP exporter boundary, JDBC/worker verification, and then real external integration deployment.
 
-A dedicated branch was created: `implementation/v5-governed-outcome-learning-20260910`.
+### 5. Retrieval authority and temporal normalization
 
-During inspection, an important trust defect was found: the lower-level `agent.search_learning_cases()` database function could return ACTIVE learning cases even when their decision/outcome was not verified. The higher-level canonical memory provider already filtered episodic memory to `decision_status = VERIFIED` and `outcome_status = VERIFIED`, but the lower-level search RPC could bypass that rule.
+PR #214 introduced normalized retrieval authority and temporal metadata without inventing ranking trust.
 
-The V5 direction therefore became an authority bridge rather than another memory feature:
+A conflict was then identified: normalized labels could potentially be interpreted too loosely. A bare value such as `authority: approved` must not become governed authority without reviewer/decision/workflow/policy provenance.
 
-- governed outcomes must be immutable evidence;
-- policy and approval state must be copied from the governed autonomy action rather than caller-supplied;
-- learning promotion must require verified outcome and source-agent provenance;
-- learning influence must retain explicit provenance;
-- generic learning search must not expose unverified ACTIVE cases.
+PR #218 reconciled the normalization layer with the stricter ADR-006 trust boundary:
 
-While this handoff was being prepared, `main` advanced beyond the working V5 branch. The current verified `main` head observed in this chat is:
+- authority mode returns only projections with explicit governance provenance;
+- a bare authority/status/governed label cannot manufacture authority;
+- temporal mode requires a valid `asOf` and explicit timestamp evidence;
+- missing, invalid, future, stale, or out-of-window evidence fails closed;
+- permanent behavioral/static regression verification was added.
 
-`0f8a76034960f3110b444f820863287abc95a38b`
+PR #217 was superseded by #218.
 
-Commit message:
+### 6. OPA application-side policy enforcement boundary
 
-`V5: operationalize deterministic action verification`
+PR #215 added the fail-closed OPA-backed `PolicyDecisionProvider` behind the governed policy seam.
 
-The commit states that V5 was closed by adding deterministic governed outcome verification, source-agent scope enforcement, canonical outcome posture, and cumulative V5 journey verification.
+Important invariants:
 
-**Therefore the next agent must start from current `main`, not from the older V5 working branch, and must re-inspect the exact files/migrations/verifiers before making additional V5 changes.**
+- DataNexus resolves the canonical policy/version first.
+- Canonical DENY cannot be weakened.
+- External OPA may preserve or strengthen a canonical decision, never relax it.
+- Missing endpoint, timeout, incompatible result, stale policy version, or network failure fails closed.
+- PostgreSQL governance remains canonical authority.
+- OPA remains disabled unless explicitly selected.
 
-## Production/connectors used in this chat
+### 7. OTLP application-side observability boundary
 
-Repository: `shoaib143-sudo/data-quality-ai-platform`
+PR #216 added an optional OTLP/HTTP JSON exporter after canonical PostgreSQL telemetry persistence.
 
-Supabase project ref: `tvjnavjxuehpesxcfvrx`
+Important invariants:
 
-Vercel project: `data-quality-ai-platform`
+- canonical telemetry persists first;
+- external export is best-effort and observational only;
+- only bounded/whitelisted telemetry crosses the external boundary;
+- W3C trace identity is preserved but not treated as governance authority;
+- free-form prompt/reasoning/application payloads are not exported by this boundary;
+- network/export failure cannot invalidate canonical telemetry.
 
-Vercel production alias: `https://data-quality-ai-platform.vercel.app/`
+### 8. Worker historical 403 investigation
 
-The chat repeatedly validated exact production commit SHAs after merge rather than treating “latest deployment” as sufficient evidence.
+The user authorized use of the Render `Demo-PwC Workspace`.
 
-## Implementation discipline for the next agent
+The runtime investigation found no current Render `403`, `Forbidden`, or `Unauthorized` evidence in the checked window. The current worker endpoint is designed to fail closed with scoped secret authentication.
 
-Use this loop:
+Do not weaken worker authentication based only on historical 403 reports. Any future change requires exact dispatch-secret producer/consumer evidence and current runtime logs.
 
-`inspect -> implement -> verifier/tests -> PR -> exact-head CI -> merge only green -> apply DB migration -> verify exact production SHA -> post-deploy advisors/logs -> continue`
+### 9. External OPA deployment implementation
 
-Additional rules:
+After the application OPA provider merged, the chat moved to real external service deployment code.
 
-- For Supabase DDL, use migration application tooling, not ad-hoc SQL execution.
-- After DDL, inspect Supabase security/performance advisors.
-- Preserve security-definer/RLS/role boundaries and do not expose internal governance writes to anon/authenticated callers.
-- Do not seed fake governance state, pricing, approvals, or evidence merely to make a test pass.
-- Prefer immutable evidence and idempotent governed RPCs.
-- Do not create runtime organization switching.
-- Preserve all 13 personas and the `control_evaluations` service-role read boundary.
-- Avoid collision with active branches and recently merged parallel work.
-- If blocked, report the exact file, schema object, workflow, or infrastructure dependency rather than stopping at a generic explanation.
+The deployment implementation added:
 
-## Recommended continuation
+- bearer-token support in the application provider;
+- restrictive OPA API authorization policy;
+- one allowed authenticated DataNexus decision endpoint;
+- anonymous health endpoint only;
+- governed Rego decision policy preserving canonical authority;
+- pinned OPA v1.20.2 runtime;
+- explicit checksum verification;
+- bundle build/test contract;
+- fail-closed Render build/start scripts;
+- runtime authentication/decision tests.
 
-Because V5 deterministic verification has now landed on `main`, the next agent should first perform a live continuation audit rather than assuming the old pending list is still correct.
+PR #223 — `Deploy authenticated fail-closed OPA enforcement service` — merged.
 
-The audit should cover:
+PR #226 then removed a deprecated OPA runtime flag on the current OTLP-inclusive main. This is the current `main` head at handoff.
 
-1. current `main` and recent merged PRs;
-2. open PRs and active implementation branches;
-3. latest Supabase migrations and advisor findings;
-4. current V5 outcome/learning schema, functions, runtime integration, and cumulative verifier;
-5. exact production Vercel SHA and error/fatal runtime logs;
-6. ADR-006 remaining targets after accounting for work already landed by parallel streams.
+### 10. External OTLP collector implementation
 
-Likely remaining areas to evaluate after that audit include external policy enforcement/OPA, external OTLP export, residual retrieval authority/temporal normalization, source-onboarding enterprise acceptance, profiling end-to-end runtime validation, and unrelated residual database/security advisor items. Do not assume any of these are still open without inspecting current implementation.
+The external OTLP deployment implementation added:
 
-## Transfer prompt for another implementation agent
+- OpenTelemetry Collector Contrib v0.160.0, pinned;
+- explicit digest/checksum validation;
+- authenticated OTLP/HTTP receiver;
+- bearer-token authentication;
+- debug exporter at basic verbosity for receipt evidence without dumping span attributes/payloads;
+- Render build/start contracts;
+- runtime tests proving unauthenticated rejection and authenticated acceptance.
 
-```text
-You are taking over implementation of DataNexus AI / Data Governance PowerHouse in repository shoaib143-sudo/data-quality-ai-platform.
+The first branch/PR was superseded after OPA moved `main`.
 
-Your source of truth is the live repository plus the Architecture/ and Major discussion/ continuation records. Start from current main, not from an old feature branch. At handoff time the observed main SHA is 0f8a76034960f3110b444f820863287abc95a38b with commit “V5: operationalize deterministic action verification”. Re-read current main because it may have advanced again.
+PR #224 — `OTLP: deploy authenticated collector on current main` — merged successfully.
 
-First read:
-- Architecture/README.md
-- Architecture/2026-09-09-ADR-006-implementation-state-and-next-targets.md
-- Architecture/2026-09-10-ADR-007-single-organization-deployment-boundary.md
-- Architecture/2026-09-11-chat-handoff-summary-and-next-agent-prompt.md
-- Major discussion/2026-09-10-role-experience-implementation-and-operational-checkpoint.md
-- Major discussion/2026-09-11-chat-handoff-summary-and-next-agent-prompt.md
+PR #222 was closed as superseded.
 
-Non-negotiable architecture:
-- One deployment = one organization = dedicated DB/infrastructure.
-- Dedicated DB is the runtime tenant boundary; app.organizations must resolve to exactly one row; zero/multiple fail closed.
-- No organization-switching UI/API and no “first membership” tenant selection.
-- organization_id remains for integrity/auditability, not runtime tenant switching.
-- Organization administration and governance persona are separate.
-- Preserve exactly 13 governance personas. Data Governance Admin does not imply /admin.
-- Preserve service_role SELECT on governance.control_evaluations.
+### 11. Current external-infrastructure reality
 
-Completed work you must not rebuild:
-- PR #177 single-org runtime, merged SHA 36feada83229009dce6327b09c6406e7fd40a978.
-- PR #178 central single-org authorization propagation, merged SHA 946a69ca33b5612867e272306048dac825fb3de7.
-- PR #179 canonical AI cost accounting, merged SHA 161c96a98f36f2f71cd268fb4823488f06ed7bdf.
-- PR #180 AI cost pricing-version FK index hardening, merged SHA 83c8ed529be14e66f904b7f2d66b6be1449b6a32.
-- Parallel P0-P5 hardening has already landed substantial certification, worker, profiling, source-boundary, retrieval, budget, embedding, and DQ-truth work.
-- V5 deterministic governed outcome verification has landed on main. Re-inspect its current files/migrations/verifiers before changing it.
+Although OPA and OTLP deployment **code is now on `main`**, live Render inspection at handoff shows only one service in `Demo-PwC Workspace`: `datanexus-jdbc-bridge`.
 
-Important V5 trust rule: learning must be promoted/consumed only from verified governed outcomes with source-agent provenance. A prior inspection found agent.search_learning_cases() could expose ACTIVE unverified cases even though the canonical memory provider filtered verified episodic memory. Verify that current main closes this lower-level bypass and add/fix the permanent regression gate if it does not.
+Therefore do **not** claim that the external OPA PDP or OTLP collector is live merely because their deployment code merged.
 
-Profiling target lifecycle:
-Dataset -> Dataset Version -> Profile Run -> Schema Discovery -> Profile Columns -> Metric Execution -> Metric Results -> Findings -> Quality Score -> Governance Insights -> Validation.
+The next external-integration step remains:
 
-Source onboarding target lifecycle:
-Dataset Registration -> Dataset Version Management -> Source Configuration -> Connectivity -> Validation -> Schema Availability -> Profiling Ready.
-Use the common JDBC abstraction for JDBC-compatible enterprise systems and preserve the existing Java/Spring bridge and source-readiness contracts.
+1. provision an OPA web service in Render from current `main`;
+2. provision an OTLP collector web service in Render from current `main`;
+3. generate/store distinct strong bearer tokens as environment secrets;
+4. verify OPA `/health`, unauthenticated denial, authenticated governed decision response, and fail-closed behavior;
+5. verify OTLP unauthenticated denial and authenticated trace acceptance/receipt evidence;
+6. set Vercel production environment variables only after both standalone services pass verification;
+7. redeploy/verify the exact production application SHA;
+8. inspect post-deploy Vercel and Render logs.
 
-Execution style is implementation-first and autonomous. Do not merely give recommendations. Perform the actual change set until the module is complete or there is an exact technical blocker.
+For OPA the application configuration boundary is based on:
 
-For every target use:
-inspect -> implement -> permanent verifier/tests -> PR -> exact-head CI -> merge only green -> apply Supabase migration -> verify exact Vercel production SHA -> inspect Supabase advisors and runtime error/fatal logs.
+- `POLICY_DECISION_PROVIDER=opa`
+- `OPA_URL`
+- `OPA_DECISION_PATH`
+- `OPA_AUTH_TOKEN`
+- optional `OPA_TIMEOUT_MS`
 
-Before selecting work, inspect current main, open PRs, active branches, latest migrations, CI workflows, production deployment, and advisors so you do not duplicate parallel work.
+For OTLP use the existing standard `OTEL_EXPORTER_OTLP_*` and `OTEL_SERVICE_NAME` configuration already implemented in the application.
 
-Then choose the highest-value non-colliding unfinished architecture target and implement it end-to-end. Likely candidates to verify, not assume, are external OPA/policy enforcement, external OTLP export, residual retrieval authority/temporal normalization, source onboarding enterprise acceptance, profiling end-to-end production validation, or remaining unrelated DB/security hardening.
+The connected Vercel integration available in this chat exposed deployment/log tooling but no direct production environment-variable mutation action. If the next agent has the same limitation, report that as the exact control-plane blocker rather than claiming the application is wired.
 
-Never invent pricing, approvals, evidence, memberships, or governance state to make a test pass. Fail closed on ambiguity. Preserve immutable audit evidence, RLS/security-definer boundaries, and idempotent governed RPCs.
+## Current platform state summary
 
-Environment references:
-- GitHub repo: shoaib143-sudo/data-quality-ai-platform
-- Supabase project: tvjnavjxuehpesxcfvrx
-- Vercel project: data-quality-ai-platform
-- Production alias: https://data-quality-ai-platform.vercel.app/
+### Completed code / merged implementation
 
-Begin by auditing the current live state and immediately proceed to the next non-colliding implementation target. Do not stop at a status report if an actionable implementation remains.
-```
+- Single-organization runtime and authorization propagation.
+- Canonical AI cost accounting and pricing FK hardening.
+- V5/V6 governed outcome/certification work.
+- Supabase seven-table RLS advisor hardening.
+- JDBC availability/readiness hardening.
+- JDBC application timeout alignment.
+- Retrieval metadata normalization.
+- Strict governed retrieval authority and temporal enforcement.
+- Generic resource-budget scope composition.
+- OPA application provider boundary.
+- OTLP application exporter boundary.
+- Authenticated OPA Render deployment runtime/configuration code.
+- Authenticated OTLP Render collector runtime/configuration code.
+
+### External / operational work still open
+
+- Actually provision live OPA service in Render.
+- Actually provision live OTLP collector in Render.
+- Wire verified OPA/OTLP endpoints/secrets into Vercel production and reverify deployment.
+- Databricks `system.access` privilege-dependent lineage work where source-authoritative evidence is required.
+- Genuine governed retrieval relevance labels/data where real human/governance evidence is required.
+- Supabase leaked-password protection remains unavailable while staying on Free.
+- Production workload evidence is still required before any destructive unused-index cleanup.
+
+### Accepted non-implementation exceptions
+
+- Four private `SECURITY DEFINER` membership helper advisor warnings.
+- Two no-primary-key profiling/JDBC fixture notices.
+- Supabase leaked-password protection while the user remains on Free.
+
+## Stale / historical PR hygiene
+
+Several historical PRs remain open, including #209, #206, #173, #172, #102, #101, #100, #97 and #73. They are not automatically current implementation work. Reconcile each against `main` before using or closing it. Do not merge a stale branch simply because it remains open.
+
+## Environment references
+
+- GitHub repository: `shoaib143-sudo/data-quality-ai-platform`
+- Supabase project ref: `tvjnavjxuehpesxcfvrx`
+- Vercel project: `data-quality-ai-platform`
+- Vercel production alias: `https://data-quality-ai-platform.vercel.app/`
+- Render workspace: `Demo-PwC Workspace`
+- Current verified `main` at handoff: `4f7ad25cbaa301da9e5c8a1d30178c23439ff926`
+
+## Required continuation behavior
+
+The next agent must:
+
+1. re-read current `main` because it may have advanced;
+2. inspect open/merged PRs and avoid duplicate branches;
+3. inspect Render services before claiming OPA/OTLP are deployed;
+4. preserve all governance truth boundaries above;
+5. continue implementation autonomously and in parallel where independent;
+6. merge only after exact-head CI is green;
+7. apply all database DDL via Supabase migrations;
+8. verify exact production deployment SHA and runtime logs after integration changes;
+9. never manufacture approvals, labels, pricing, evidence, lineage, or credentials to make tests pass;
+10. fail closed on ambiguity.
+
+The executable transfer prompt is maintained in:
+
+`Major discussion/2026-09-11-chat-handoff-summary-and-next-agent-prompt.md`
