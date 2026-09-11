@@ -5,6 +5,7 @@ const requiredFiles = [
   'docs/recovery-assurance-v2.md',
   'infra/recovery/platform-manifest.json',
   'scripts/recovery-drill.mjs',
+  'scripts/test-recovery-assurance.mjs',
   'supabase/migrations/20260911190000_recovery_assurance_v2.sql',
   '.github/workflows/recovery-assurance.yml',
 ]
@@ -92,4 +93,5 @@ if (manifest.secretPolicy?.storeSecretValuesInRepository !== false) {
 }
 console.log('PASS recoverable production platform manifest')
 
-console.log('Recovery Assurance v2 static verification completed.')
+await import('./test-recovery-assurance.mjs')
+console.log('Recovery Assurance v2 static and behavioral verification completed.')
