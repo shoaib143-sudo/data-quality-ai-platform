@@ -272,7 +272,16 @@ export default {
     } catch (e) {
       console.error(e);
       const err:any=e;
-      return bad(err?.code ?? "EXECUTION_ERROR",err instanceof Error?err.message:String(err),err?.statusCode ?? 500);
+      const rawCode=typeof err?.code==="string"?err.code:"";
+      const code=/^[A-Z0-9_]{1,64}$/.test(rawCode)?rawCode:"EXECUTION_ERROR";
+      const statusCode=Number(err?.statusCode);
+      const status=[400,401,403,404,409,422].includes(statusCode)?statusCode:500;
+      const messages:Record<string,string>={
+        UNAUTHORIZED:"Authentication required",
+        FORBIDDEN:"Access denied",
+        INVALID_REQUEST:"Invalid request",
+      };
+      return bad(code,messages[code]??(status>=500?"Execution failed":"Request could not be completed"),status);
     } finally {
       try { await db?.end({timeout:1}); } catch {}
     }
