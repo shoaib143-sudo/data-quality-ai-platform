@@ -51,6 +51,8 @@ jobs:
         run: node scripts/verify-journey-operational-certification.mjs
       - name: Verify P0-P5 security, migration, and evidence boundaries
         run: node scripts/verify-p0-p4-revalidation.mjs
+      - name: Recovery Assurance v2 contract
+        run: pnpm run verify:recovery-assurance
       - name: Worker isolation and capacity contracts
         run: pnpm run verify:worker-runtime
       - name: TypeScript
