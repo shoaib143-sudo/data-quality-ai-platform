@@ -12,6 +12,7 @@ const automation = read('lib/data-quality/automation.ts')
 const resumable = read('lib/agents/resumable-run-step.ts')
 const kernel = read('lib/agents/runtime/native-autonomy-kernel.ts')
 const migration = read('supabase/migrations/20260911235000_data_quality_native_replay_certification.sql')
+const inferenceMigration = read('supabase/migrations/20260911235500_data_quality_replay_index_inference.sql')
 
 requireText(resumable, 'attempt: Number(existing.attempt ?? 1)', 'persisted attempt read')
 requireText(resumable, 'const attempt = Number(existing.attempt ?? 1) + 1', 'retry attempt increment')
@@ -36,6 +37,8 @@ for (const indexName of [
 ]) {
   requireText(migration, indexName, `${indexName} migration`)
 }
+requireText(inferenceMigration, 'on profiling.quality_rule_runs (agent_run_id, rule_definition_id, profile_run_id);', 'inferable rule-run unique index')
+requireText(inferenceMigration, 'on profiling.quality_quarantine_records (quality_rule_run_id, record_hash);', 'inferable quarantine unique index')
 requireText(migration, 'preserve_quality_rule_run_replay_timestamp', 'stable replay timestamp guard')
 requireText(migration, "event_type,\n    run_snapshot", 'quality run event rewrite')
 requireText(migration, "'replay_certified', true", 'certified DQ contracts')
