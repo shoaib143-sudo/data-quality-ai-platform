@@ -1,0 +1,29 @@
+name: Native Parallel DAG
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'scripts/verify-native-parallel-dag.mjs'
+      - '.github/workflows/native-parallel-dag.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'scripts/verify-native-parallel-dag.mjs'
+      - '.github/workflows/native-parallel-dag.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/verify-native-parallel-dag.mjs
