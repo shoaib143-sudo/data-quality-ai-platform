@@ -2,6 +2,7 @@ import type { ToolExecutionContext, ToolExecutionResult } from '../types'
 import { detectDuplicates, detectOutliers, detectPatterns, detectSensitiveColumns, inferCandidateKeys } from '@/lib/profiling/derived-tools'
 import { executeProfilingMetrics } from '@/lib/profiling/metric-engine'
 import { investigateProfilingRun } from '@/lib/profiling/investigation-engine'
+import { investigateProfilingRunReplaySafe } from '@/lib/profiling/investigation-replay'
 import { executeProfilingTool } from '@/lib/profiling/executor'
 import { executeJdbcProfileDataset } from '@/lib/profiling/jdbc-profile'
 import { executeFileProfileDataset } from '@/lib/profiling/file-profile'
@@ -71,7 +72,11 @@ export async function executeProfilingExecutor(operation: string, input: any, co
         result = await executeProfilingMetrics(datasetVersionId, profilingRunId, {}); break
       case 'investigate_profile':
         if (!profilingRunId) throw new Error('profilingRunId is required for investigate_profile')
-        result = await investigateProfilingRun(profilingRunId, datasetVersionId); break
+        result = await investigateProfilingRunReplaySafe({
+          profilingRunId,
+          datasetVersionId,
+          execute: () => investigateProfilingRun(profilingRunId, datasetVersionId),
+        }); break
       case 'persist_profile_snapshot':
         result = await persistProfileSnapshotReplaySafe(toolInput); break
       case 'complete_profile_run':

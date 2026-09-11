@@ -7,12 +7,14 @@ on:
       - 'lib/agents/executors/profiling-executor.ts'
       - 'lib/profiling/derived-tools.ts'
       - 'lib/profiling/executor.ts'
+      - 'lib/profiling/investigation-replay.ts'
       - 'lib/profiling/replay-safe-tools.ts'
       - 'lib/profiling/replay-safe-comparison.ts'
       - 'supabase/migrations/**profiling**'
       - 'scripts/verify-profiling-native-replay.mjs'
       - 'scripts/verify-profiling-safe-mutation-replay.mjs'
       - 'scripts/verify-profiling-compare-replay.mjs'
+      - 'scripts/verify-profiling-investigation-replay.mjs'
       - '.github/workflows/profiling-native-replay.yml'
   pull_request:
     branches: [main]
@@ -20,12 +22,14 @@ on:
       - 'lib/agents/executors/profiling-executor.ts'
       - 'lib/profiling/derived-tools.ts'
       - 'lib/profiling/executor.ts'
+      - 'lib/profiling/investigation-replay.ts'
       - 'lib/profiling/replay-safe-tools.ts'
       - 'lib/profiling/replay-safe-comparison.ts'
       - 'supabase/migrations/**profiling**'
       - 'scripts/verify-profiling-native-replay.mjs'
       - 'scripts/verify-profiling-safe-mutation-replay.mjs'
       - 'scripts/verify-profiling-compare-replay.mjs'
+      - 'scripts/verify-profiling-investigation-replay.mjs'
       - '.github/workflows/profiling-native-replay.yml'
 
 permissions:
@@ -46,3 +50,5 @@ jobs:
         run: node scripts/verify-profiling-safe-mutation-replay.mjs
       - name: Verify profiling replay-safe comparison
         run: node scripts/verify-profiling-compare-replay.mjs
+      - name: Verify profiling replay-safe investigation
+        run: node scripts/verify-profiling-investigation-replay.mjs
