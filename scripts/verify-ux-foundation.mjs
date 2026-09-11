@@ -27,6 +27,7 @@ const required = [
   'app/journeys/loading.tsx',
   'app/journeys/error.tsx',
   'app/reports/experience/page.tsx',
+  'app/reports/experience/layout.tsx',
   'app/reports/experience/loading.tsx',
   'app/reports/experience/error.tsx',
 ]
@@ -142,6 +143,12 @@ for (const [pattern, label] of [
 const reportsPage = await readFile('app/reports/page.tsx', 'utf8')
 if (!/href="\/reports\/experience"/.test(reportsPage)) throw new Error('Governance reports must link to experience insights.')
 console.log('PASS governance reports link to experience insights')
+
+const experienceLayout = await readFile('app/reports/experience/layout.tsx', 'utf8')
+if (!/requireWorkspaceAccess\('reports'\)/.test(experienceLayout)) {
+  throw new Error('Experience insights must use reports workspace authorization.')
+}
+console.log('PASS experience insights is reports-workspace authorized')
 
 const skipLink = await readFile('components/app-shell/skip-to-content.tsx', 'utf8')
 for (const [pattern, label] of [
