@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const recovery = readFileSync('lib/agents/runtime/native-recovery-v2.ts', 'utf8')
+const runtime = readFileSync('lib/agents/runtime/native-autonomy-runtime.ts', 'utf8')
 
 function contains(source, token, label) {
   assert.ok(source.includes(token), `${label} is missing: ${token}`)
@@ -12,6 +13,7 @@ contains(recovery, 'executeNativeClosedLoopV2', 'Recovery V2 closed loop')
 contains(recovery, 'recoverNativeStepV2', 'Recovery V2 step recovery')
 contains(recovery, 'retryable_error_codes', 'explicit retry error certification')
 contains(recovery, 'replayCertifiedFromPinnedContract', 'pinned replay certification derivation')
+contains(recovery, 'resolveAgentRunId', 'per-step pinned child run resolution')
 contains(recovery, "'FAILED_STEP_CONTRACT_HASH_MISSING'", 'missing contract hash fail closed')
 contains(recovery, "'FAILED_STEP_CONTRACT_DRIFT'", 'failed-step contract drift guard')
 contains(recovery, "'FAILED_STEP_EXECUTOR_DRIFT'", 'failed-step executor drift guard')
@@ -27,6 +29,14 @@ contains(recovery, '.select(\'id,agent_run_id,tool_key,contract_hash,input_hash,
 contains(recovery, 'hashNativeRuntimeValue(toolInput)', 'compensation input hash binding')
 contains(recovery, "'RECOVERY_ENGINE_FAILED'", 'recovery engine fail-closed result')
 contains(recovery, "'STEP_FAILED_VERIFIED_COMPENSATION'", 'verified compensation terminal result')
+
+contains(runtime, 'executeNativeClosedLoopV2', 'production supervisor Recovery V2 adoption')
+contains(runtime, 'resolveAgentRunId: (step) => getBinding(step).agentRunId', 'child run recovery binding')
+contains(runtime, 'policy: boundPlan.policy', 'validated autonomy policy reuse')
+contains(runtime, 'executeCompensation:', 'governed compensation executor binding')
+contains(runtime, 'buildCompensationInput:', 'governed compensation input binding')
+assert.equal(runtime.includes('type NativeRecoveryDecision'), false, 'production runtime must not expose legacy recovery decisions')
+assert.equal(runtime.includes('recover?('), false, 'production runtime must not expose legacy recovery callback')
 
 assert.equal(
   /recover\?\s*\([^)]*\).*NativeRecoveryDecision/s.test(recovery),
