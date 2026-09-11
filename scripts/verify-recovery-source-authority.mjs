@@ -71,8 +71,8 @@ for (const alias of aliases.aliases ?? []) {
 }
 
 const backup = JSON.parse(await readFile('infra/recovery/portable-backup-contract.json', 'utf8'))
-if (backup.schemaVersion !== 1 || backup.mechanism !== 'PORTABLE_LOGICAL_EXPORT') {
-  throw new Error('Portable backup contract must identify PORTABLE_LOGICAL_EXPORT as its mechanism.')
+if (!Number.isInteger(backup.schemaVersion) || backup.schemaVersion < 1 || backup.mechanism !== 'PORTABLE_LOGICAL_EXPORT') {
+  throw new Error('Portable backup contract must identify PORTABLE_LOGICAL_EXPORT as its mechanism with a valid schema version.')
 }
 if (backup.targetRpoMinutes !== 60 || backup.rpoCurrentlyProven !== false) {
   throw new Error('Portable backup contract must retain the 60-minute target while truthfully recording that it is not yet proven.')

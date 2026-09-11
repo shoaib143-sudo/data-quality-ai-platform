@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "mechanism": "PORTABLE_LOGICAL_EXPORT",
   "currentProviderPlan": "free",
   "targetRpoMinutes": 60,
@@ -12,12 +12,45 @@
       "schema.sql",
       "data.sql",
       "history_schema.sql",
-      "history_data.sql"
+      "history_data.sql",
+      "backup-manifest.json"
     ],
     "dataDumpExclusions": [
       "storage.buckets_vectors",
       "storage.vector_indexes"
     ]
+  },
+  "encryption": {
+    "required": true,
+    "mechanism": "age",
+    "mode": "recipient-based authenticated encryption",
+    "privateIdentityMayBeStoredInRepository": false
+  },
+  "execution": {
+    "trustedOperatorOrSelfHostedRunnerRequired": true,
+    "githubHostedProductionBackupAllowed": false,
+    "plaintextWorkingDirectoryMustBeTemporary": true,
+    "encryptedArtifactMustBeCopiedOffProvider": true
+  },
+  "consistency": {
+    "sourceIntegrityComparedBeforeAndAfterExport": true,
+    "transactionalSnapshotProven": false,
+    "failIfSourceChangesDuringExport": true,
+    "authoritativeRecoveryPointProducedByThisMechanism": false
+  },
+  "integrity": {
+    "encryptedArtifactSha256Required": true,
+    "perFileSha256Required": true,
+    "criticalTableContentFingerprintsRequired": true,
+    "schemaAndGovernanceObjectFingerprintsRequired": true,
+    "auditChainValidationRequiredAfterRestore": true
+  },
+  "localRestore": {
+    "supported": true,
+    "target": "ephemeral or operator-supplied local Supabase/Docker database",
+    "loopbackOnly": true,
+    "explicitDestructiveConfirmationRequired": true,
+    "fullPlatformReadyClaimAllowed": false
   },
   "security": {
     "plaintextBackupMayBeCommitted": false,
@@ -27,12 +60,12 @@
     "integrityHashRequired": true
   },
   "scopeBoundaries": {
-    "database": "covered only after a real export and isolated restore pass",
+    "database": "covered only after a real encrypted export and isolated local restore pass",
     "storageMetadata": "database evidence only",
     "storageObjectBytes": "separate recovery scope; not included in database backup",
     "edgeFunctions": "reconstructed from source-controlled supabase/functions and supabase/config.toml",
     "identityProviderConfiguration": "separate configuration inventory and validation required",
     "managedPitr": "not available in the current zero-additional-cost posture"
   },
-  "readinessRule": "This contract documents the portable backup mechanism. It does not by itself satisfy DATABASE, STORAGE, RPO, RTO, RESTORED, or READY evidence."
+  "readinessRule": "This contract provides an encrypted portable DATABASE recovery path. It does not by itself satisfy Storage object bytes, identity/platform configuration, managed PITR, authoritative RPO, service-level RTO, or full-platform READY evidence."
 }
