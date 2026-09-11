@@ -5,6 +5,7 @@ import { createGovernanceReasoningBudgetPolicyProvider } from './governance-reas
 import { createGovernanceProjectBudgetAdmissionProvider } from './governance-resource-budget-admission'
 import { createGovernanceRoutingPolicyProvider } from './governance-routing-policy'
 import { createGovernanceTelemetryProvider } from './governance-telemetry-provider'
+import { FailClosedRouteTelemetryRouter } from './fail-closed-route-telemetry-router'
 import { ObservableIntelligentRouter } from './observable-intelligent-router'
 import { OutputValidatedIntelligentRouter } from './output-validated-intelligent-router'
 import { createReasoningProvider } from './reasoning-provider'
@@ -20,8 +21,9 @@ export function createGovernanceIntelligentRouter(): IntelligentModelRouter {
     createProvider: createReasoningProvider,
   })
   const telemetry = createGovernanceTelemetryProvider()
+  const failClosedObservable = new FailClosedRouteTelemetryRouter(router, telemetry)
   const observable = new ObservableIntelligentRouter(
-    router,
+    failClosedObservable,
     telemetry,
     createGovernanceReasoningBudgetPolicyProvider(),
     createGovernanceProjectBudgetAdmissionProvider(),
