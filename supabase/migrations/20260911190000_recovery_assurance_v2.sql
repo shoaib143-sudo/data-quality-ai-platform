@@ -60,8 +60,6 @@ as $$
 declare
   v_policy governance.recovery_policies%rowtype;
   v_coverage jsonb;
-  v_derived_rpo integer;
-  v_derived_rto integer;
 begin
   if new.project_id is null or new.status not in ('PASSED','FAILED') then
     new.policy_result := 'NOT_EVALUATED';
@@ -79,19 +77,28 @@ begin
 
   v_coverage := governance.recovery_scope_coverage(new.scope_results,v_policy.required_scopes);
 
-  if new.incident_at is not null and new.recovery_point_at is not null then
-    v_derived_rpo := greatest(0,ceil(extract(epoch from (new.incident_at-new.recovery_point_at))/60.0)::integer);
-    new.measured_rpo_minutes := v_derived_rpo;
+  -- RPO and RTO are authoritative only when derived from timestamps captured by the drill.
+  if new.incident_at is null
+     or new.recovery_point_at is null
+     or new.started_at is null
+     or new.service_ready_at is null then
+    new.measured_rpo_minutes := null;
+    new.measured_rto_minutes := null;
+    new.policy_result := 'NOT_EVALUATED';
+    return new;
   end if;
 
-  if new.started_at is not null and new.service_ready_at is not null then
-    v_derived_rto := greatest(0,ceil(extract(epoch from (new.service_ready_at-new.started_at))/60.0)::integer);
-    new.measured_rto_minutes := v_derived_rto;
+  if new.recovery_point_at > new.incident_at or new.service_ready_at < new.started_at then
+    new.measured_rpo_minutes := null;
+    new.measured_rto_minutes := null;
+    new.policy_result := 'NOT_EVALUATED';
+    return new;
   end if;
 
-  if new.measured_rpo_minutes is null
-     or new.measured_rto_minutes is null
-     or coalesce((v_coverage->>'complete')::boolean,false)=false
+  new.measured_rpo_minutes := greatest(0,ceil(extract(epoch from (new.incident_at-new.recovery_point_at))/60.0)::integer);
+  new.measured_rto_minutes := greatest(0,ceil(extract(epoch from (new.service_ready_at-new.started_at))/60.0)::integer);
+
+  if coalesce((v_coverage->>'complete')::boolean,false)=false
      or new.external_evidence_ref is null
      or btrim(new.external_evidence_ref)='' then
     new.policy_result := 'NOT_EVALUATED';
@@ -147,6 +154,7 @@ begin
       when v_drill.id is null then 'DRILL_REQUIRED'
       when coalesce((v_coverage->>'complete')::boolean,false)=false then 'SCOPE_COVERAGE_INCOMPLETE'
       when v_drill.external_evidence_ref is null or btrim(v_drill.external_evidence_ref)='' then 'EXTERNAL_EVIDENCE_REQUIRED'
+      when v_drill.incident_at is null or v_drill.recovery_point_at is null or v_drill.started_at is null or v_drill.service_ready_at is null then 'TIMING_EVIDENCE_REQUIRED'
       when v_drill.policy_result<>'PASSED' then 'TARGETS_NOT_MET'
       when v_due<now() then 'DRILL_OVERDUE'
       else 'READY'
