@@ -328,7 +328,7 @@ export async function recoverNativeStepV2(input: {
     return { decision: 'RETRY', code: 'CERTIFIED_RETRY' }
   }
 
-  if (contract.execution_config.compensation_tool_key) {
+  if (certification.rollbackStrategy === 'COMPENSATION_TOOL') {
     return executeVerifiedCompensation({
       context: input.context,
       runtime: input.runtime,
@@ -340,9 +340,16 @@ export async function recoverNativeStepV2(input: {
     })
   }
 
+  if (certification.rollbackStrategy === 'ESCALATE_ONLY') {
+    return {
+      decision: 'ESCALATE',
+      code: retryCertified ? 'ROLLBACK_ESCALATION_REQUIRED' : 'STEP_NOT_REPLAY_CERTIFIED',
+    }
+  }
+
   return {
-    decision: 'ESCALATE',
-    code: retryCertified ? 'ERROR_NOT_CERTIFIED_FOR_RETRY' : 'STEP_NOT_REPLAY_CERTIFIED',
+    decision: 'FAIL',
+    code: 'ROLLBACK_CONTRACT_MISSING',
   }
 }
 
