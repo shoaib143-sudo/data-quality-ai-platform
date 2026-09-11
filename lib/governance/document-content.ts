@@ -124,6 +124,17 @@ function normalizeChunks(loaded: FileSourceResult): NormalizedChunk[] {
   return result
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+    return `{${entries.join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
 function batches<T>(values: T[], size: number) {
   const groups: T[][] = []
   for (let index = 0; index < values.length; index += size) groups.push(values.slice(index, index + size))
@@ -151,35 +162,99 @@ export async function persistGovernedDocumentContent(
   const sanitizedMetadata = sanitizeMetadata(loaded.metadata, sourceUri)
   sanitizedMetadata.source_uri = sourceUri
 
-  const { data: document, error: documentError } = await supabase
+  const persistedMetadata = {
+    ...sanitizedMetadata,
+    source_row_count: loaded.rowCount,
+    persisted_source_rows: loaded.rows.length,
+    content_truncated_by_execution_ceiling: loaded.rowCount > loaded.rows.length,
+    extraction_warnings: loaded.warnings,
+  }
+
+  const { data: existingDocument, error: existingDocumentError } = await supabase
     .schema('governance')
     .from('documents')
-    .upsert({
-      project_id: input.projectId,
-      dataset_id: input.datasetId,
-      dataset_version_id: input.datasetVersionId,
-      profile_run_id: input.profileRunId,
-      source_uri: sourceUri,
-      file_name: fileName,
-      file_type: extension,
-      content_type: loaded.contentType,
-      content_hash: loaded.contentHash,
-      extraction_method: extractionMethod,
-      character_count: characterCount,
-      chunk_count: chunks.length,
-      metadata: {
-        ...sanitizedMetadata,
-        source_row_count: loaded.rowCount,
-        persisted_source_rows: loaded.rows.length,
-        content_truncated_by_execution_ceiling: loaded.rowCount > loaded.rows.length,
-        extraction_warnings: loaded.warnings,
-      },
-      updated_at: now,
-    }, { onConflict: 'project_id,dataset_version_id,source_uri' })
-    .select('id,project_id,dataset_id,dataset_version_id,profile_run_id,source_uri,file_name,file_type,content_hash,chunk_count,character_count')
-    .single()
+    .select('id,project_id,dataset_id,dataset_version_id,profile_run_id,source_uri,file_name,file_type,content_type,content_hash,extraction_method,character_count,chunk_count,metadata')
+    .eq('project_id', input.projectId)
+    .eq('dataset_version_id', input.datasetVersionId)
+    .eq('source_uri', sourceUri)
+    .maybeSingle()
 
-  if (documentError) throw new Error(`Unable to persist governed document: ${documentError.message}`)
+  if (existingDocumentError) {
+    throw new Error(`Unable to inspect governed document replay state: ${existingDocumentError.message}`)
+  }
+
+  const documentMatches = Boolean(
+    existingDocument &&
+    existingDocument.dataset_id === input.datasetId &&
+    existingDocument.profile_run_id === input.profileRunId &&
+    existingDocument.file_name === fileName &&
+    existingDocument.file_type === extension &&
+    existingDocument.content_type === loaded.contentType &&
+    existingDocument.content_hash === loaded.contentHash &&
+    existingDocument.extraction_method === extractionMethod &&
+    existingDocument.character_count === characterCount &&
+    existingDocument.chunk_count === chunks.length &&
+    canonicalJson(existingDocument.metadata) === canonicalJson(persistedMetadata)
+  )
+
+  let chunksMatch = false
+  if (existingDocument && documentMatches) {
+    const { data: existingChunks, error: chunksError } = await supabase
+      .schema('governance')
+      .from('document_chunks')
+      .select('chunk_index,content_hash,character_count')
+      .eq('document_id', existingDocument.id)
+      .order('chunk_index')
+    if (chunksError) throw new Error(`Unable to inspect governed document chunks: ${chunksError.message}`)
+
+    chunksMatch = (existingChunks ?? []).length === chunks.length &&
+      chunks.every((chunk, index) => {
+        const persisted = existingChunks?.[index]
+        return persisted?.chunk_index === index + 1 &&
+          persisted?.content_hash === chunk.contentHash &&
+          persisted?.character_count === chunk.characterCount
+      })
+
+    if (chunksMatch) {
+      return {
+        document: existingDocument,
+        persistedChunks: chunks.length,
+        sourceRows: loaded.rowCount,
+        persistedSourceRows: loaded.rows.length,
+        truncated: loaded.rowCount > loaded.rows.length,
+      }
+    }
+  }
+
+  let document = existingDocument
+  if (!documentMatches) {
+    const { data, error: documentError } = await supabase
+      .schema('governance')
+      .from('documents')
+      .upsert({
+        project_id: input.projectId,
+        dataset_id: input.datasetId,
+        dataset_version_id: input.datasetVersionId,
+        profile_run_id: input.profileRunId,
+        source_uri: sourceUri,
+        file_name: fileName,
+        file_type: extension,
+        content_type: loaded.contentType,
+        content_hash: loaded.contentHash,
+        extraction_method: extractionMethod,
+        character_count: characterCount,
+        chunk_count: chunks.length,
+        metadata: persistedMetadata,
+        updated_at: now,
+      }, { onConflict: 'project_id,dataset_version_id,source_uri' })
+      .select('id,project_id,dataset_id,dataset_version_id,profile_run_id,source_uri,file_name,file_type,content_hash,chunk_count,character_count')
+      .single()
+
+    if (documentError) throw new Error(`Unable to persist governed document: ${documentError.message}`)
+    document = data
+  }
+
+  if (!document) throw new Error('Unable to resolve governed document replay target')
 
   const { error: deleteError } = await supabase
     .schema('governance')

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { persistProfileDatasetEvidenceReplaySafe } from '@/lib/profiling/profile-dataset-replay'
 import { jdbcEngineFromUrl, loadJdbcRows, parseJdbcTableReference } from '@/lib/connectors/jdbc'
 import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
 
@@ -83,15 +84,20 @@ export async function executeJdbcProfileDataset(datasetVersionId: string, profil
   const schemaSnapshot = { row_count: sampled.sourceRowCount, column_count: columns.length, source_access: { mode: 'source_rows', connector, sampled_rows: sampled.sampledRows, sampling_policy: sampled.policy, warnings }, columns }
   const schemaHash = stableHash(columns.map((column) => ({ name: column.name, ordinal_position: column.ordinal_position, source_type: column.source_type, inferred_type: column.inferred_type })))
 
-  const { error: deleteColumnsError } = await supabase.schema('profiling').from('profile_columns').delete().eq('profile_run_id', profilingRunId)
-  if (deleteColumnsError) throw new Error(`Unable to reset JDBC profile columns: ${deleteColumnsError.message}`)
-  if (columns.length) {
-    const { error: insertColumnsError } = await supabase.schema('profiling').from('profile_columns').insert(columns.map((column) => ({ profile_run_id: profilingRunId, column_name: column.name, ordinal_position: column.ordinal_position, source_type: column.source_type, inferred_type: column.inferred_type, total_count: column.total_count, non_null_count: column.non_null_count, null_count: column.null_count, blank_count: column.blank_count, zero_count: column.zero_count, distinct_count: column.distinct_count, distinct_percentage: column.distinct_percentage, metadata: column.metadata })))
-    if (insertColumnsError) throw new Error(`Unable to persist JDBC profile columns: ${insertColumnsError.message}`)
-  }
-  const { data: snapshot, error: snapshotError } = await supabase.schema('profiling').from('schema_snapshots').upsert({ profile_run_id: profilingRunId, dataset_version_id: datasetVersionId, schema_hash: schemaHash, schema: schemaSnapshot }, { onConflict: 'profile_run_id' }).select().single()
-  if (snapshotError) throw new Error(`Unable to persist JDBC schema snapshot: ${snapshotError.message}`)
-  const { data: run, error: runError } = await supabase.schema('profiling').from('profile_runs').update({ row_count: sampled.sourceRowCount, column_count: columns.length, schema_hash: schemaHash, summary: { row_count: sampled.sourceRowCount, column_count: columns.length, schema_hash: schemaHash, source_access: schemaSnapshot.source_access, columns: columns.map((column) => ({ name: column.name, type: column.inferred_type })) } }).eq('id', profilingRunId).select().single()
-  if (runError) throw new Error(`Unable to update JDBC profile run summary: ${runError.message}`)
-  return { tool: 'profile_dataset', connector: 'jdbc', profiling_run_id: profilingRunId, dataset_version_id: datasetVersionId, status: 'COMPLETED', row_count: sampled.sourceRowCount, column_count: columns.length, schema_hash: schemaHash, source_access: schemaSnapshot.source_access, snapshot, profile_run: run }
+  return persistProfileDatasetEvidenceReplaySafe({
+    datasetVersionId,
+    profilingRunId,
+    rowCount: sampled.sourceRowCount,
+    columnCount: columns.length,
+    schemaHash,
+    columns,
+    schema: schemaSnapshot,
+    summary: {
+      row_count: sampled.sourceRowCount,
+      column_count: columns.length,
+      schema_hash: schemaHash,
+      source_access: schemaSnapshot.source_access,
+      columns: columns.map((column) => ({ name: column.name, type: column.inferred_type })),
+    },
+  })
 }
