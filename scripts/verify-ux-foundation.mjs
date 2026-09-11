@@ -14,6 +14,7 @@ const required = [
   'components/app-shell/execution-status.tsx',
   'components/app-shell/workspace-state.tsx',
   'components/app-shell/workspace-error.tsx',
+  'components/app-shell/workspace-empty.tsx',
   'app/issues/loading.tsx',
   'app/issues/error.tsx',
   'app/workflows/loading.tsx',
@@ -167,6 +168,23 @@ for (const path of ['app/dashboard/page.tsx','app/inbox/page.tsx','app/journeys/
   }
 }
 console.log('PASS shared-shell surfaces expose keyboard main-content targets')
+
+const workspaceEmpty = await readFile('components/app-shell/workspace-empty.tsx', 'utf8')
+for (const [pattern, label] of [
+  [/aria-live="polite"/, 'non-disruptive empty-state announcement'],
+  [/actionHref/, 'optional primary recovery action'],
+  [/secondaryHref/, 'optional secondary recovery action'],
+  [/focus-visible:ring-2/, 'keyboard-visible empty-state actions'],
+]) {
+  if (!pattern.test(workspaceEmpty)) throw new Error(`Shared workspace empty state missing ${label}`)
+  console.log(`PASS ${label}`)
+}
+
+for (const path of ['app/journeys/page.tsx','app/reports/experience/page.tsx']) {
+  const source = await readFile(path, 'utf8')
+  if (!/WorkspaceEmptyState/.test(source)) throw new Error(`${path} must use the shared actionable empty state.`)
+}
+console.log('PASS priority zero-data workspaces use shared actionable empty states')
 
 const inbox = await readFile('app/inbox/page.tsx', 'utf8')
 for (const [pattern, label] of [
