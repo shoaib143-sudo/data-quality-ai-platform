@@ -37,6 +37,16 @@ contains(migration, "'compensatable', false", 'investigation non-compensatable c
 contains(migration, "'retryable_error_codes', jsonb_build_array('STEP_FAILED')", 'bounded investigation retry certification')
 contains(migration, 'if v_certified <> 1 then', 'single-tool certification postcondition')
 
+const certificationUpdateStart = migration.indexOf('update agent.tool_definitions t')
+const certificationPostconditionStart = migration.indexOf('do $block$', certificationUpdateStart)
+assert.ok(certificationUpdateStart >= 0 && certificationPostconditionStart > certificationUpdateStart, 'investigation certification update must precede its postcondition')
+const certificationUpdate = migration.slice(certificationUpdateStart, certificationPostconditionStart)
+assert.ok(!certificationUpdate.includes("t.version = '2.0'"), 'investigation certification must not depend on the legacy tool version')
+contains(certificationUpdate, "d.agent_key = 'profiling_agent'", 'logical agent certification scope')
+contains(certificationUpdate, "d.version = '2.0'", 'production agent definition certification scope')
+contains(certificationUpdate, 't.enabled', 'enabled logical tool certification scope')
+contains(certificationUpdate, "t.tool_key = 'investigate_profile'", 'logical tool certification scope')
+
 const storedResultLookup = migration.indexOf("v_result := v_run.summary->'investigation';")
 const tokenGeneration = migration.indexOf('extensions.gen_random_uuid()')
 assert.ok(storedResultLookup >= 0 && storedResultLookup < tokenGeneration, 'stored result must be checked before a new model-work lease is issued')
