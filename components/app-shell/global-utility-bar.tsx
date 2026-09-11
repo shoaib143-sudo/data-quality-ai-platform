@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Bell, Compass, Database, Layers3, Search, ShieldCheck, Sparkles } from 'lucide-react'
+import { SkipToContent } from '@/components/app-shell/skip-to-content'
 
 type Props = {
   roleLabel?: string
@@ -21,7 +22,9 @@ export function GlobalUtilityBar({
   homeHref = '/dashboard',
 }: Props) {
   return (
-    <header className="mb-6 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm backdrop-blur sm:px-5">
+    <>
+      <SkipToContent />
+      <header className="mb-6 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm backdrop-blur sm:px-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link href={homeHref} className="flex min-w-0 items-center gap-3" aria-label="DataNexus home">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-600 font-black text-white shadow-sm">DN</span>
@@ -66,6 +69,7 @@ export function GlobalUtilityBar({
           ) : null}
         </div>
       </div>
-    </header>
+      </header>
+    </>
   )
 }
