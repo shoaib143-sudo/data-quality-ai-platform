@@ -43,3 +43,10 @@ The foundation is intentionally incremental. Remaining UX work includes:
 - responsive treatment for remaining dense governance tables;
 
 The shell must not imply capabilities that the backend does not yet authorize.
+
+
+## Experience insights
+
+The UX Foundation now includes an `/experience-insights` workspace for privacy-minimized guided-journey interaction evidence. It separates accepted product interactions from authoritative governance outcomes and does not elevate telemetry into certification, remediation, or control truth.
+
+The initial workspace intentionally fails closed when the service-only analytics fallback is not visible through the authenticated Supabase client. A future server-side read path may expose authorized aggregates, but it must preserve project authorization and must not weaken the service-only write boundary.
