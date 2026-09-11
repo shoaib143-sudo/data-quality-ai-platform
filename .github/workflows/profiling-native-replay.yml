@@ -7,8 +7,10 @@ on:
       - 'lib/agents/executors/profiling-executor.ts'
       - 'lib/profiling/derived-tools.ts'
       - 'lib/profiling/executor.ts'
+      - 'lib/profiling/replay-safe-tools.ts'
       - 'supabase/migrations/**profiling**'
       - 'scripts/verify-profiling-native-replay.mjs'
+      - 'scripts/verify-profiling-safe-mutation-replay.mjs'
       - '.github/workflows/profiling-native-replay.yml'
   pull_request:
     branches: [main]
@@ -16,8 +18,10 @@ on:
       - 'lib/agents/executors/profiling-executor.ts'
       - 'lib/profiling/derived-tools.ts'
       - 'lib/profiling/executor.ts'
+      - 'lib/profiling/replay-safe-tools.ts'
       - 'supabase/migrations/**profiling**'
       - 'scripts/verify-profiling-native-replay.mjs'
+      - 'scripts/verify-profiling-safe-mutation-replay.mjs'
       - '.github/workflows/profiling-native-replay.yml'
 
 permissions:
@@ -34,3 +38,5 @@ jobs:
           node-version: 24
       - name: Verify profiling native read-only replay certification
         run: node scripts/verify-profiling-native-replay.mjs
+      - name: Verify profiling replay-safe mutations
+        run: node scripts/verify-profiling-safe-mutation-replay.mjs
