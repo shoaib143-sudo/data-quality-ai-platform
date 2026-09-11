@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "generatedFor": "DataNexus AI Recovery Assurance v2",
+  "supabase": {
+    "projectRef": "tvjnavjxuehpesxcfvrx",
+    "region": "ap-southeast-1",
+    "postgresMajor": 17,
+    "requiredEdgeFunctions": [
+      "profiling-executor",
+      "connection-health-check",
+      "dgp-postgres-connector",
+      "governance-embed",
+      "dgp-databricks-connector",
+      "dgp-native-hierarchy-connector"
+    ]
+  },
+  "vercel": {
+    "teamSlug": "shoaib143-sudo",
+    "projectId": "prj_Wg1fgyXWUN99I4zlWrtlU9si6yfR",
+    "projectName": "data-quality-ai-platform",
+    "framework": "nextjs",
+    "nodeVersion": "24.x",
+    "requiredDomains": [
+      "data-quality-ai-platform.vercel.app",
+      "data-quality-ai-platform-shoaib143-sudo.vercel.app",
+      "data-quality-ai-platform-git-main-shoaib143-sudo.vercel.app"
+    ],
+    "requiredCronPaths": [
+      "/api/jobs/worker"
+    ]
+  },
+  "render": {
+    "workspaceId": "tea-dac8qn91a67c73fnbfg0",
+    "region": "singapore",
+    "requiredServices": [
+      {
+        "name": "datanexus-opa",
+        "serviceId": "srv-dahk9jh594qs73fbh8ng",
+        "runtime": "node",
+        "buildCommand": "bash infra/opa/render-build.sh",
+        "startCommand": "bash infra/opa/render-start.sh"
+      },
+      {
+        "name": "datanexus-otel-collector",
+        "serviceId": "srv-dahkcph42hec7398hs80",
+        "runtime": "node",
+        "buildCommand": "bash infra/otel/render-build.sh",
+        "startCommand": "bash infra/otel/render-start.sh"
+      },
+      {
+        "name": "datanexus-jdbc-bridge",
+        "serviceId": "srv-daeh498n74is73dqnskg",
+        "runtime": "docker",
+        "rootDir": "services/jdbc-bridge",
+        "dockerfilePath": "./Dockerfile",
+        "healthCheckPath": "/health"
+      }
+    ]
+  },
+  "secretPolicy": {
+    "storeSecretValuesInRepository": false,
+    "evidenceMayContainSecretNamesOnly": true,
+    "rotationRequiredAfterCredentialExposure": true
+  }
+}
