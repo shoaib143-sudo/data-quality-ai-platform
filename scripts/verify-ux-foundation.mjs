@@ -7,6 +7,7 @@ const required = [
   'app/dashboard/page.tsx',
   'app/dashboard/error.tsx',
   'app/search/page.tsx',
+  'app/inbox/page.tsx',
 ]
 
 for (const path of required) {
@@ -17,7 +18,7 @@ for (const path of required) {
 const shell = await readFile('components/app-shell/global-utility-bar.tsx', 'utf8')
 for (const [pattern, label] of [
   [/href="\/search"/, 'real global search entry point'],
-  [/href="\/issues"/, 'governance work queue entry point'],
+  [/href="\/inbox"/, 'governance inbox entry point'],
   [/aria-label="Primary"/, 'semantic primary navigation'],
   [/focus-visible:ring-2/, 'visible keyboard focus treatment'],
 ]) {
@@ -39,5 +40,17 @@ for (const pattern of [/reset/, /Retry dashboard/, /View observability/]) {
   if (!pattern.test(errorState)) throw new Error('Dashboard error state must remain recoverable and actionable.')
 }
 console.log('PASS dashboard has a recoverable error state')
+
+const inbox = await readFile('app/inbox/page.tsx', 'utf8')
+for (const [pattern, label] of [
+  [/workflow_instances/, 'workflow approvals in unified inbox'],
+  [/governance'\)\.from\('issues'\)/, 'remediation issues in unified inbox'],
+  [/observability_alerts/, 'risk alerts in unified inbox'],
+  [/agent_runs/, 'execution attention in unified inbox'],
+  [/Some inbox sources could not be loaded/, 'partial-data inbox state'],
+]) {
+  if (!pattern.test(inbox)) throw new Error(`Governance inbox missing ${label}`)
+  console.log(`PASS ${label}`)
+}
 
 console.log('DataNexus UX Foundation verification completed.')
