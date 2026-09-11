@@ -1,0 +1,30 @@
+name: Governance Control Intelligence Service Role ACL
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'lib/governance/ai-governance-intelligence.ts'
+      - 'scripts/verify-governance-control-intelligence-service-role-acl.mjs'
+      - '.github/workflows/governance-control-intelligence-service-role-acl.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'lib/governance/ai-governance-intelligence.ts'
+      - 'scripts/verify-governance-control-intelligence-service-role-acl.mjs'
+      - '.github/workflows/governance-control-intelligence-service-role-acl.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify governance control-intelligence service-role ACL
+        run: node scripts/verify-governance-control-intelligence-service-role-acl.mjs
