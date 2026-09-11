@@ -1,3 +1,30 @@
+export async function GET(_request: Request, context: { params: Promise<{ runId: string }> }) {
+  try {
+    const user = await requireUser()
+    const { runId } = await context.params
+    const admin = createAdminClient()
+    const { data: run, error: runError } = await admin.schema('agent').from('agent_runs')
+      .select('id,project_id')
+      .eq('id', runId)
+      .maybeSingle()
+    if (runError) throw new Error(`Unable to resolve agent run: ${runError.message}`)
+    if (!run) return NextResponse.json({ error: 'Agent run not found.' }, { status: 404 })
+
+    await authorizeProject(user.id, run.project_id, 'agent.execute')
+    const { data: evaluations, error: evaluationError } = await admin.schema('agent').from('agent_evaluations')
+      .select('id,evaluator_type,evaluator_version,score,dimensions,feedback,created_at')
+      .eq('agent_run_id', run.id)
+      .order('created_at', { ascending: false })
+    if (evaluationError) throw new Error(`Unable to load agent evaluations: ${evaluationError.message}`)
+
+    return NextResponse.json({ evaluations: evaluations ?? [] })
+  } catch (error) {
+    const authorization = authorizationErrorResponse(error)
+    if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load agent evaluations.' }, { status: 500 })
+  }
+}
+
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
