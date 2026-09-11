@@ -1,5 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enqueueDurableJob, type DurableJobDependency } from '@/lib/orchestration/queue'
+import {
+  finishNativeAgentLifecycle,
+  startNativeAgentLifecycle,
+  type NativeAgentLifecycle,
+} from '@/lib/agents/runtime/native-agent-lifecycle'
 
 export async function queueDataQualityAutomation(input: {
   projectId: string
@@ -85,7 +90,18 @@ export async function queueDataQualityAutomation(input: {
   }).select('id').single()
   if (runError || !run) throw new Error(`Unable to create data quality agent run: ${runError?.message ?? 'unknown error'}`)
 
+  let lifecycle: NativeAgentLifecycle | null = null
   try {
+    lifecycle = await startNativeAgentLifecycle({
+      agentRunId: run.id,
+      phase: 'QUEUED',
+      summary: 'Data Quality Agent run is pinned to the native runtime and queued for governed execution.',
+      evidenceRefs: [
+        { domain: 'dataset_version', id: input.datasetVersionId },
+        { domain: 'profile_run', id: input.profileRunId },
+      ],
+    })
+
     const durableJob = await enqueueDurableJob({
       projectId: input.projectId,
       jobType: 'DATA_QUALITY',
@@ -129,6 +145,17 @@ export async function queueDataQualityAutomation(input: {
       error_message: error instanceof Error ? error.message : 'Unable to enqueue data quality job.',
       completed_at: new Date().toISOString(),
     }).eq('id', run.id).eq('status', 'QUEUED')
+    if (lifecycle) {
+      try {
+        await finishNativeAgentLifecycle({
+          lifecycle,
+          phase: 'FAILED',
+          summary: 'Data Quality Agent queue admission failed before execution.',
+        })
+      } catch (checkpointError) {
+        console.error('[data-quality-queue] unable to persist terminal native runtime checkpoint', checkpointError)
+      }
+    }
     throw error
   }
 }
