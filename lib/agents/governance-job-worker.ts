@@ -4,13 +4,18 @@ import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learnin
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
+import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { createGovernanceExecutionController } from '@/lib/ai/governance-execution-controller'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   markDurableJobFailed,
   markDurableJobSucceeded,
   type DurableJob,
 } from '@/lib/orchestration/queue'
+
+const GOVERNED_AGENT_ACTION_KEY = 'RUN_GOVERNANCE_AGENT'
+const GOVERNED_AGENT_TARGET_TYPE = 'GOVERNANCE_AGENT'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -175,6 +180,18 @@ async function executeGovernanceAgentJob(job: DurableJob) {
   }
   if (projectId !== job.project_id) throw new Error('Durable governance agent job projectId does not match job project_id.')
   if (question.length > 1000 || objective.length > 800) throw new Error('Durable governance agent question/objective exceeds the governed length limit.')
+
+  await createGovernanceExecutionController().assertAllowed({ projectId, agentDefinitionId })
+  const policyDecision = await createGovernancePolicyDecisionProvider().decide({
+    projectId,
+    actionKey: GOVERNED_AGENT_ACTION_KEY,
+    targetType: GOVERNED_AGENT_TARGET_TYPE,
+    riskLevel: 'LOW',
+    confidence: 1,
+  })
+  if (policyDecision.decision !== 'ALLOW') {
+    throw new Error(`Governed agent policy admission blocked durable execution: ${policyDecision.decision}: ${policyDecision.reason}`)
+  }
 
   const handoff = sourceAgentRunId ? await loadHandoffSource(projectId, sourceAgentRunId) : null
   const effectiveQuestion = handoff
