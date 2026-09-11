@@ -6,6 +6,7 @@ import { GOVERNANCE_READ_AGENT_KEYS } from '@/lib/agents/governance-read-agent'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
+import { persistAgentRunResultArtifact } from '@/lib/agents/run-result-artifact'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
@@ -207,9 +208,26 @@ export async function POST(request: Request) {
       startedAt: memoryStartedAt,
     })
 
-    const admin = createAdminClient()
-    const { error: outputError } = await admin.schema('agent').from('agent_runs').update({ output }).eq('id', result.runId).eq('project_id', projectId)
-    if (outputError) throw new Error(`Unable to persist enriched governance agent output: ${outputError.message}`)
+    const artifactStartedAt = Date.now()
+    const artifact = await persistAgentRunResultArtifact({
+      agentRunId: result.runId,
+      output,
+      name: `${result.output.agent.key} result`,
+    })
+    await recordStage({
+      telemetry,
+      traceContext,
+      projectId,
+      operation: 'governed_agent_result_artifact',
+      agentRunId: result.runId,
+      startedAt: artifactStartedAt,
+      attributes: {
+        artifact_id: artifact.artifactId,
+        artifact_type: 'AGENT_RUN_RESULT',
+        artifact_version: '1.0',
+        content_hash: artifact.contentHash,
+      },
+    })
 
     const evaluationStartedAt = Date.now()
     const memory = await persistGovernedAgentMemoryAndEvaluation({
@@ -229,7 +247,7 @@ export async function POST(request: Request) {
       attributes: { agent_key: result.output.agent.key },
     })
 
-    return NextResponse.json({ accepted: true, runId: result.runId, output, memory }, { status: 200 })
+    return NextResponse.json({ accepted: true, runId: result.runId, output, artifact, memory }, { status: 200 })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
