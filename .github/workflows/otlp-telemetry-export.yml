@@ -6,6 +6,8 @@ on:
     paths:
       - 'lib/ai/otlp-telemetry-exporter.ts'
       - 'lib/ai/governance-telemetry-provider.ts'
+      - 'lib/observability/otlp-ingest-auth.ts'
+      - 'app/api/internal/observability/otlp-auth/route.ts'
       - 'infra/otel/**'
       - 'scripts/verify-otlp-telemetry-exporter.mjs'
       - 'scripts/test-otlp-telemetry-exporter.mjs'
@@ -14,6 +16,8 @@ on:
     paths:
       - 'lib/ai/otlp-telemetry-exporter.ts'
       - 'lib/ai/governance-telemetry-provider.ts'
+      - 'lib/observability/otlp-ingest-auth.ts'
+      - 'app/api/internal/observability/otlp-auth/route.ts'
       - 'infra/otel/**'
       - 'scripts/verify-otlp-telemetry-exporter.mjs'
       - 'scripts/test-otlp-telemetry-exporter.mjs'
