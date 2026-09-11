@@ -39,6 +39,13 @@ export function createGovernanceResourceControlState() {
       if (error) throw new Error(`Unable to read AI resource budget concurrency leases: ${error.message}`)
       return data ?? []
     },
+    async listEffectiveModelPricing(projectId) {
+      const { data, error } = await supabase.schema('governance').from('ai_model_pricing_effective')
+        .select('id,project_id,provider,model_id,pricing_version,supersedes_pricing_id,currency,price_unit_tokens,input_price_per_million_tokens,output_price_per_million_tokens,effective_from,effective_to,source_reference,source_uri,reviewed_by,reviewed_at,reviewer_capability,review_note,created_at')
+        .eq('project_id', projectId).order('provider').order('model_id').order('currency')
+      if (error) throw new Error(`Unable to read effective AI model pricing authority: ${error.message}`)
+      return data ?? []
+    },
   }
   return new GovernedResourceControlState(persistence)
 }
