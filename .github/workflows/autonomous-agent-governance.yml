@@ -5,13 +5,23 @@ on:
     branches: [main, governed-autonomy-evidence]
     paths:
       - 'supabase/migrations/**'
+      - 'lib/agents/run-result-artifact.ts'
+      - 'app/api/agents/governance/run/route.ts'
+      - 'app/agents/runs/**'
       - 'scripts/verify-autonomous-agent-governance.mjs'
+      - 'scripts/verify-agent-run-artifacts.mjs'
+      - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
   pull_request:
     branches: [main]
     paths:
       - 'supabase/migrations/**'
+      - 'lib/agents/run-result-artifact.ts'
+      - 'app/api/agents/governance/run/route.ts'
+      - 'app/agents/runs/**'
       - 'scripts/verify-autonomous-agent-governance.mjs'
+      - 'scripts/verify-agent-run-artifacts.mjs'
+      - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
 
 permissions:
@@ -28,3 +38,5 @@ jobs:
           node-version: 24
       - name: Verify autonomous action safety and immutable evidence
         run: node scripts/verify-autonomous-agent-governance.mjs
+      - name: Verify durable agent run result artifacts
+        run: node scripts/verify-agent-run-artifacts.mjs
