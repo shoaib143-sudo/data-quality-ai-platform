@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 
 const probe = fs.readFileSync('lib/observability/external-integration-readiness.ts', 'utf8')
+const opaProvider = fs.readFileSync('lib/governance/opa-policy-decision-provider.ts', 'utf8')
+const otlpExporter = fs.readFileSync('lib/ai/otlp-telemetry-exporter.ts', 'utf8')
 const integrationRoute = fs.readFileSync('app/api/health/integrations/route.ts', 'utf8')
 const canonicalReadyRoute = fs.readFileSync('app/api/health/ready/route.ts', 'utf8')
 const failures = []
@@ -9,14 +11,25 @@ for (const token of [
   "process.env.POLICY_DECISION_PROVIDER",
   "process.env.OPA_URL",
   "process.env.OPA_DECISION_PATH",
-  "Boolean(process.env.OPA_AUTH_TOKEN?.trim())",
+  "process.env.OPA_AUTH_TOKEN",
+  "normalizeOpaEndpoint",
+  "normalizeOpaDecisionPath",
+  "opaAuthorizationHeaders",
   "process.env.OTEL_EXPORTER_OTLP_ENDPOINT",
-  "Boolean(process.env.OTEL_EXPORTER_OTLP_HEADERS?.trim())",
+  "process.env.OTEL_EXPORTER_OTLP_HEADERS",
+  "parseOtlpConfiguredHeaders",
+  "resolveOtlpTracesEndpoint",
   "`${baseUrl}/health`",
-  "body: JSON.stringify({ input: {} })",
-  "body: JSON.stringify({ resourceSpans: [] })",
+  "JSON.stringify({ input: {} })",
+  "JSON.stringify({ resourceSpans: [] })",
   "unauthenticatedDecision.status !== 401 && unauthenticatedDecision.status !== 403",
   "unauthenticatedTrace.status !== 401 && unauthenticatedTrace.status !== 403",
+  "const authenticatedDecision = await withTimeout",
+  "const authenticatedTrace = await withTimeout",
+  "if (!authenticatedDecision.ok)",
+  "if (!authenticatedTrace.ok)",
+  "...authorizationHeaders",
+  "...exporterHeaders",
   "status: 'UNAVAILABLE'",
   "status: 'DEGRADED'",
 ]) {
@@ -24,18 +37,38 @@ for (const token of [
 }
 
 for (const forbidden of [
-  /authorization\s*:/i,
-  /Bearer\s+/i,
   /canonical\s*:/i,
   /traceId\s*:/i,
   /spanId\s*:/i,
   /prompt\s*:/i,
   /completion\s*:/i,
   /chain[_\s-]*of[_\s-]*thought/i,
-  /OPA_AUTH_TOKEN[^\n]*(detail|JSON|stringify)/i,
-  /OTEL_EXPORTER_OTLP_HEADERS[^\n]*(detail|JSON|stringify)/i,
+  /JSON\.stringify\([^\n]*(OPA_AUTH_TOKEN|OTEL_EXPORTER_OTLP_HEADERS)/i,
+  /detail:[^\n]*(OPA_AUTH_TOKEN|OTEL_EXPORTER_OTLP_HEADERS)/i,
 ]) {
-  if (forbidden.test(probe)) failures.push(`external readiness probe must not transmit secrets or manufacture governed/telemetry evidence: ${forbidden}`)
+  if (forbidden.test(probe)) failures.push(`external readiness probe must not expose secrets or manufacture governed/telemetry evidence: ${forbidden}`)
+}
+
+for (const token of [
+  "export function normalizeOpaEndpoint",
+  "export function normalizeOpaDecisionPath",
+  "export function opaAuthorizationHeaders",
+  "this.endpoint = normalizeOpaEndpoint(options.endpoint)",
+  "this.decisionPath = normalizeOpaDecisionPath(options.decisionPath)",
+  "this.authorizationHeaders = opaAuthorizationHeaders(options.authorizationToken)",
+  "...this.authorizationHeaders",
+]) {
+  if (!opaProvider.includes(token)) failures.push(`OPA production client must share readiness auth semantics: ${token}`)
+}
+
+for (const token of [
+  "export function resolveOtlpTracesEndpoint",
+  "export function parseOtlpConfiguredHeaders",
+  "this.endpoint = resolveOtlpTracesEndpoint(options.endpoint)",
+  "this.headers = parseOtlpConfiguredHeaders(options.headers)",
+  "...this.headers",
+]) {
+  if (!otlpExporter.includes(token)) failures.push(`OTLP production client must share readiness auth semantics: ${token}`)
 }
 
 for (const token of [
@@ -63,6 +96,9 @@ if (!probe.includes("External OPA enforcement is not selected") || !probe.includ
 if (!probe.includes("External OTLP export is not configured") || !probe.includes("canonical PostgreSQL telemetry remains authoritative")) {
   failures.push('disabled OTLP export must preserve canonical PostgreSQL telemetry readiness')
 }
+if (!probe.includes('emptyDecisionBody') || !probe.includes('emptyTraceBody')) {
+  failures.push('credential validation must use empty non-governed, non-telemetry-bearing payloads')
+}
 
 if (failures.length) {
   console.error('External integration readiness contract failed:')
@@ -70,4 +106,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('External OPA/OTLP configuration, reachability, authentication-boundary, and canonical readiness contract passed.')
+console.log('External OPA/OTLP configuration, credential validity, auth boundary, and canonical readiness contract passed.')
