@@ -26,6 +26,10 @@ const required = [
   'app/journeys/layout.tsx',
   'app/journeys/loading.tsx',
   'app/journeys/error.tsx',
+  'app/experience-insights/page.tsx',
+  'app/experience-insights/layout.tsx',
+  'app/experience-insights/loading.tsx',
+  'app/experience-insights/error.tsx',
   'app/reports/experience/page.tsx',
   'app/reports/experience/layout.tsx',
   'app/reports/experience/loading.tsx',
@@ -182,3 +186,18 @@ for (const [pattern, label] of [
 }
 
 console.log('DataNexus UX Foundation verification completed.')
+
+const experienceInsights = await readFile('app/experience-insights/page.tsx', 'utf8')
+for (const [pattern, label] of [
+  [/aggregate_type'.*ux_governance_journey/s, 'bounded journey analytics query'],
+  [/UX_JOURNEY_VIEWED/, 'journey-view evidence'],
+  [/UX_JOURNEY_NEXT_ACTION_SELECTED/, 'next-action evidence'],
+  [/do not prove that a downstream governed task succeeded/i, 'interaction versus outcome truth boundary'],
+  [/eventsResult\.error \? \[\]/, 'fail-closed analytics visibility'],
+]) {
+  if (!pattern.test(experienceInsights)) throw new Error(`Experience insights missing ${label}`)
+  console.log(`PASS ${label}`)
+}
+const experienceLayout = await readFile('app/experience-insights/layout.tsx', 'utf8')
+if (!/requireWorkspaceAccess\('experience-insights'\)/.test(experienceLayout)) throw new Error('Experience insights must use workspace authorization.')
+console.log('PASS experience insights is workspace-authorized')
