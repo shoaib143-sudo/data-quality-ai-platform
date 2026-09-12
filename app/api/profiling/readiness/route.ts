@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 
 import { requireApiUser } from '@/lib/auth/require-api-user'
-import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
+import { authorizeDatasetVersion, AuthorizationError, hasProjectCapability } from '@/lib/auth/authorize'
 import { createClient } from '@/lib/supabase/server'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspace } from '@/lib/governance/workspace-policy'
 
 function text(value: string | null) {
   return typeof value === 'string' ? value.trim() : ''
@@ -42,7 +44,24 @@ export async function GET(request: Request) {
       throw new Error(`Unable to load profiling readiness: ${error.message}`)
     }
 
-    return NextResponse.json({ readiness: data })
+    const landingAccess = await resolveLandingAccess(user.id)
+    const canAccessDatasetsWorkspace = canAccessWorkspace(landingAccess.persona, 'datasets', landingAccess.organizationRole)
+    const [canManageSource, canUpdateCatalog] = await Promise.all([
+      hasProjectCapability(user.id, projectId, 'source.manage'),
+      hasProjectCapability(user.id, projectId, 'catalog.update'),
+    ])
+
+    const readiness = data && typeof data === 'object' && !Array.isArray(data)
+      ? {
+          ...data,
+          manual_access: {
+            source_edit: canAccessDatasetsWorkspace && canManageSource,
+            dataset_edit: canAccessDatasetsWorkspace && canUpdateCatalog,
+          },
+        }
+      : data
+
+    return NextResponse.json({ readiness })
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return NextResponse.json({ error: error.message, code: 'PROFILE_READINESS_ACCESS_DENIED' }, { status: error.status })
