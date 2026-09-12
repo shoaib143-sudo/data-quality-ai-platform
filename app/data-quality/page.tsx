@@ -25,6 +25,13 @@ type Finding = { id: string; profile_run_id: string; finding_type: string; sever
 type QualityRule = { id: string; dataset_id: string; dataset_version_id: string | null; column_name: string | null; rule_key: string; name: string; dimension: string; severity: string; metric_key: string; operator: string; threshold: number | null; enabled: boolean }
 type QualityRuleRun = { id: string; rule_definition_id: string; profile_run_id: string | null; status: string; passed: boolean | null; observed_value: number | null; threshold: number | null; completed_at: string | null }
 
+type RecommendationPresentation = {
+  title: string
+  rationale: string | null
+  priority: string | null
+  approvalRequired: boolean
+}
+
 const surface = 'rounded-[22px] border border-white/10 bg-[#0a1d33] shadow-[10px_10px_28px_rgba(0,0,0,.24),-7px_-7px_22px_rgba(30,74,114,.08)]'
 const inset = 'rounded-2xl border border-white/[0.07] bg-[#08182b]'
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#061426]'
@@ -44,6 +51,18 @@ function severityTone(value: string) {
   if (severity === 'CRITICAL' || severity === 'HIGH') return 'bg-rose-400/10 text-rose-300'
   if (severity === 'MEDIUM') return 'bg-amber-400/10 text-amber-300'
   return 'bg-slate-400/10 text-slate-300'
+}
+function presentRecommendation(value: unknown): RecommendationPresentation {
+  if (typeof value === 'string') return { title: value, rationale: null, priority: null, approvalRequired: false }
+  const record = asRecord(value)
+  const rawAction = typeof record.action === 'string' ? record.action.trim() : ''
+  const title = rawAction ? rawAction.replaceAll('_', ' ') : 'Governed recommendation'
+  return {
+    title,
+    rationale: typeof record.rationale === 'string' && record.rationale.trim() ? record.rationale.trim() : null,
+    priority: typeof record.priority === 'string' && record.priority.trim() ? record.priority.trim().toUpperCase() : null,
+    approvalRequired: record.approval_required === true,
+  }
 }
 
 export default async function DataQualityPage() {
@@ -162,10 +181,10 @@ export default async function DataQualityPage() {
       <section className="mt-5 space-y-4">{runs.slice(0,8).map(run => {
         const version=versionsById.get(run.dataset_version_id); const dataset=version?datasetsById.get(version.dataset_id):undefined; const score=scoresByRunId.get(run.id); const runFindings=findingsByRunId.get(run.id)??[]; const investigation=asRecord(asRecord(run.summary).investigation); const businessImpact=typeof investigation.business_impact==='string'?investigation.business_impact:null; const recommendations=Array.isArray(investigation.recommendations)?investigation.recommendations:[]
         return <article key={run.id} className={`${surface} overflow-hidden`}><div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.07] p-5"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-black text-white">{dataset?.name??'Unknown dataset'}</h2>{version?<span className="rounded-lg bg-blue-400/10 px-2 py-1 text-xs font-bold text-blue-300">v{version.version_number}</span>:null}<span className="rounded-lg bg-white/[0.05] px-2 py-1 text-xs font-bold text-slate-400">{run.status}</span></div><Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className={`mt-2 inline-flex items-center gap-1 text-xs font-bold text-cyan-300 ${focus}`}>Open run evidence <ArrowRight className="h-3 w-3" /></Link></div><p className={`text-3xl font-black ${scoreTone(score?.overall_score)}`}>{formatScore(score?.overall_score)}</p></div>
-          <div className="p-5"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{[['Completeness',score?.completeness_score],['Validity',score?.validity_score],['Uniqueness',score?.uniqueness_score],['Accuracy',score?.accuracy_score],['Rows / columns',`${run.row_count??'N/A'} / ${run.column_count??'N/A'}`]].map(([name,value])=><Link key={String(name)} href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className={`${inset} ${interactive} p-3`}><p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">{name}</p><p className="mt-1 text-lg font-black text-slate-200">{typeof value==='number'?formatScore(value):String(value)}</p></Link>)}</div>
+          <div className="p-5"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{[['Completeness',score?.completeness_score],['Validity',score?.validity_score],['Uniqueness',score?.uniqueness_score],['Accuracy',score?.accuracy_score]].map(([name,value])=><Link key={String(name)} href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className={`${inset} ${interactive} p-3`}><p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">{name}</p><p className="mt-1 text-lg font-black text-slate-200">{formatScore(typeof value==='number'?value:null)}</p></Link>)}<Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className={`${inset} ${interactive} p-3`}><p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">Rows / columns</p><p className="mt-1 text-lg font-black text-slate-200">{run.row_count??'N/A'} / {run.column_count??'N/A'}</p></Link></div>
           {businessImpact?<Link href={impactHref} className={`${inset} ${interactive} mt-4 block p-4`}><p className="text-xs font-black uppercase tracking-wide text-violet-300">Persisted business impact</p><p className="mt-2 text-sm leading-6 text-slate-300">{businessImpact}</p><p className="mt-2 text-xs font-bold text-blue-300">Review related governed context →</p></Link>:null}
           {runFindings.length?<div className="mt-4 flex flex-wrap gap-2">{runFindings.slice(0,6).map(finding=><Link key={finding.id} href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}&findingId=${encodeURIComponent(finding.id)}`} className={`rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-cyan-400/30 hover:text-white ${focus}`}>{finding.severity}: {finding.title}</Link>)}</div>:null}
-          {recommendations.length?<div className="mt-4"><p className="text-xs font-black uppercase tracking-wide text-slate-500">Persisted recommendations</p><div className="mt-2 grid gap-2 md:grid-cols-2">{recommendations.slice(0,4).map((recommendation,index)=><Link key={index} href="/issues" className={`${inset} ${interactive} p-3 text-xs leading-5 text-slate-300`}>{typeof recommendation==='string'?recommendation:JSON.stringify(recommendation)} <ArrowRight className="ml-1 inline h-3 w-3 text-blue-300" /></Link>)}</div></div>:null}
+          {recommendations.length?<div className="mt-4"><p className="text-xs font-black uppercase tracking-wide text-slate-500">Persisted recommendations</p><div className="mt-2 grid gap-2 md:grid-cols-2">{recommendations.slice(0,4).map((recommendation,index)=>{const presented=presentRecommendation(recommendation);return <Link key={index} href="/issues" className={`${inset} ${interactive} p-3 text-xs leading-5 text-slate-300`}><span className="flex flex-wrap items-center gap-2"><span className="font-bold capitalize text-slate-200">{presented.title}</span>{presented.priority?<span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-black text-slate-400">{presented.priority}</span>:null}{presented.approvalRequired?<span className="rounded-md bg-amber-400/10 px-2 py-0.5 text-[10px] font-black text-amber-300">APPROVAL REQUIRED</span>:null}</span>{presented.rationale?<span className="mt-1 block text-slate-400">{presented.rationale}</span>:null}<span className="mt-2 block font-bold text-blue-300">Open governed issues <ArrowRight className="ml-1 inline h-3 w-3" /></span></Link>})}</div></div>:null}
           {run.error_code?<div className="mt-4 flex items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-300"><AlertTriangle className="h-4 w-4" />{run.error_code}</div>:null}</div></article>
       })}</section>
 
