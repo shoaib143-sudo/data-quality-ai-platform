@@ -1,0 +1,35 @@
+name: Native supervisor durable resume
+
+on:
+  pull_request:
+    paths:
+      - 'lib/agents/runtime/native-supervisor-resume.ts'
+      - 'lib/agents/runtime/native-autonomy-runtime.ts'
+      - 'supabase/migrations/20260912043000_native_supervisor_durable_resume.sql'
+      - 'scripts/verify-native-supervisor-durable-resume.mjs'
+      - '.github/workflows/native-supervisor-durable-resume.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-supervisor-resume.ts'
+      - 'lib/agents/runtime/native-autonomy-runtime.ts'
+      - 'supabase/migrations/20260912043000_native_supervisor_durable_resume.sql'
+      - 'scripts/verify-native-supervisor-durable-resume.mjs'
+      - '.github/workflows/native-supervisor-durable-resume.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-native-supervisor-durable-resume.mjs
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build
