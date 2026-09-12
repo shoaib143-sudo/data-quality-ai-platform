@@ -9,6 +9,7 @@ import { executeProfilingTool } from '@/lib/profiling/executor'
 import { executeJdbcProfileDataset } from '@/lib/profiling/jdbc-profile'
 import { executeFileProfileDataset } from '@/lib/profiling/file-profile'
 import { compareProfilesReplaySafe } from '@/lib/profiling/replay-safe-comparison'
+import { assertDatasetVersionProfileReady } from '@/lib/profiling/readiness-gate'
 import {
   completeProfileRunReplaySafe,
   persistProfileSnapshotReplaySafe,
@@ -28,6 +29,10 @@ const DATASET_VERSION_OPTIONAL_OPERATIONS = new Set([
   'persist_profile_snapshot',
   'complete_profile_run',
 ])
+const PROFILE_READINESS_GATED_OPERATIONS = new Set([
+  'profile_dataset',
+  'execute_metrics',
+])
 
 export async function executeProfilingExecutor(operation: string, input: any, context: ToolExecutionContext): Promise<ToolExecutionResult> {
   const { agentRunId, stepId, projectId, agentDefinitionId, agentVersion } = context
@@ -40,6 +45,33 @@ export async function executeProfilingExecutor(operation: string, input: any, co
   let invocationId: string | null = null
   await writeAgentRunLog({ agentRunId, agentRunStepId: stepId, level: 'LIFECYCLE', eventType: 'PROFILING_EXECUTION_STARTED', message: `Profiling Agent ${PRODUCTION_AGENT_VERSION} started ${operation}.`, details: { operation, projectId, datasetVersionId: suppliedDatasetVersionId, profilingRunId: suppliedProfilingRunId, agentDefinitionId, agentVersion } })
   try {
+    // Fail closed only for operations that read source data or generate source-derived
+    // metric evidence. Diagnostic and investigation operations intentionally remain
+    // available so agents can explain blockers and perform separately authorized
+    // remediation. Every retry re-evaluates deterministic readiness from current
+    // governed evidence; the agent itself never decides that a dataset is READY.
+    if (PROFILE_READINESS_GATED_OPERATIONS.has(operation)) {
+      if (!projectId) throw new Error('projectId is required for profiling readiness enforcement')
+      const readiness = await assertDatasetVersionProfileReady(projectId, suppliedDatasetVersionId)
+      await writeAgentRunLog({
+        agentRunId,
+        agentRunStepId: stepId,
+        level: 'LIFECYCLE',
+        eventType: 'PROFILE_READINESS_CONFIRMED',
+        message: `Dataset version is READY for ${operation}.`,
+        details: {
+          operation,
+          projectId,
+          datasetVersionId: suppliedDatasetVersionId,
+          readinessState: readiness.state,
+          readinessPolicy: readiness.readiness_policy ?? null,
+          sourceType: readiness.source_type ?? null,
+          discoveryRunId: readiness.discovery_run_id ?? null,
+          scopeVersionId: readiness.scope_version_id ?? null,
+        },
+      })
+    }
+
     const admission = await admitNativeToolInvocation({
       agentRunId,
       toolKey: operation,
