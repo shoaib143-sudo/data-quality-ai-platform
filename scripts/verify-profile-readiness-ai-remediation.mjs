@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 
-const migration = fs.readFileSync('supabase/migrations/20260912174600_project_profile_readiness_admission_gate.sql', 'utf8')
+const migration = fs.readFileSync('supabase/migrations/20260912183000_profile_readiness_ai_remediation_tool.sql', 'utf8')
+const mergedAdmissionMigration = fs.readFileSync('supabase/migrations/20260912174600_project_profile_readiness_admission_gate.sql', 'utf8')
+const mainAdmissionMigration = `-- Defense-in-depth admission gate for profiling runs.\n-- The readiness verifier remains read-only. This trigger prevents a profile run\n-- from being created for a dataset version whose deterministic readiness state\n-- is BLOCKED or NOT_ASSESSED.`
 const executor = fs.readFileSync('lib/agents/executors/profiling-executor.ts', 'utf8')
 const route = fs.readFileSync('app/api/profiling/readiness/remediate/route.ts', 'utf8')
 const model = fs.readFileSync('lib/ai/profile-readiness-remediation-model.ts', 'utf8')
@@ -18,8 +20,11 @@ const requiredMigration = [
   "'approval_required', false",
   "'readiness_authority_change', false",
   "'governance_authority_change', false",
+  'PROFILE_READINESS_AI_REMEDIATION_TOOL_REGISTRATION_FAILED',
 ]
 for (const marker of requiredMigration) if (!migration.includes(marker)) throw new Error(`AI remediation tool contract missing: ${marker}`)
+if (!mergedAdmissionMigration.startsWith(mainAdmissionMigration)) throw new Error('Previously merged profile-run admission migration header changed unexpectedly')
+if (mergedAdmissionMigration.includes("'remediate_profile_readiness'")) throw new Error('Already-merged admission migration must remain immutable; AI tool registration belongs in a forward migration')
 
 for (const marker of [
   "case 'remediate_profile_readiness'",
@@ -84,4 +89,4 @@ for (const marker of [
   'DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE',
 ]) if (!unit.includes(marker)) throw new Error(`AI remediation negative unit coverage missing: ${marker}`)
 
-console.log('Governed AI profile-readiness remediation contract verified.')
+console.log('Governed AI profile-readiness remediation contract verified, including forward-only migration history.')
