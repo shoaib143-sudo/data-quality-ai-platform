@@ -7,7 +7,10 @@ const required = [
   'DERIVED_READINESS_DOES_NOT_MUTATE_SOURCE_OR_PROFILING_LIFECYCLE',
   "s.status = 'ACTIVE'",
   's.current_version_id is not null',
-  'sv.frozen_at',
+  'join catalog.source_scope_versions sv on sv.id = s.current_version_id',
+  'and sv.scope_id = s.id',
+  'and sv.source_id = s.source_id',
+  'and sv.project_id = s.project_id',
   "sor.operational_state = 'OBSERVED_READY'",
   'profiling.dataset_execution_sources',
   'aes.active = true',
@@ -23,10 +26,13 @@ const required = [
 for (const marker of required) {
   if (!migration.includes(marker)) throw new Error('Profile readiness contract missing: '+marker)
 }
+if (migration.includes('sv.frozen_at')) {
+  throw new Error('Profile readiness must bind to the active scope-version identity rather than unused frozen_at state')
+}
 if (/update\s+catalog\.data_sources|update\s+catalog\.datasets|insert\s+into\s+profiling\.profile_runs|delete\s+from/i.test(migration)) {
   throw new Error('Profile readiness verifier must remain derived/read-only')
 }
 if (/grant\s+execute[^;]+\b(public|anon)\b/i.test(migration)) {
   throw new Error('Anonymous profile-readiness execution must remain revoked')
 }
-console.log('Project profile readiness contract verified as derived, fail-closed, and lifecycle non-mutating.')
+console.log('Project profile readiness contract verified as derived, fail-closed, and bound to authoritative active scope-version identity.')
