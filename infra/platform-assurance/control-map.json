@@ -98,6 +98,14 @@
       "state": "ENFORCED_WITH_CAPABILITY_GAP",
       "frameworks": ["NIST-CSF2.RC", "NIST-SSDF.PO", "SLSA-BUILD"],
       "evidence": ["docs/recovery-assurance-v2.md", "infra/recovery/platform-manifest.json"]
+    },
+    {
+      "id": "PA-013",
+      "name": "Post-implementation certification authority",
+      "riskTier": "R3",
+      "state": "ENFORCED",
+      "frameworks": ["NIST-CSF2.GV", "NIST-SSDF.PO", "NIST-SSDF.PS", "SLSA-BUILD"],
+      "evidence": ["infra/platform-assurance/post-implementation-certification-contract.json", "scripts/verify-post-implementation-certification-contract.mjs", "scripts/verify-p0-p4-revalidation.mjs"]
     }
   ]
 }
