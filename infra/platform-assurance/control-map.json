@@ -15,9 +15,9 @@
       "id": "PA-002",
       "name": "Immutable CI action references",
       "riskTier": "R3",
-      "state": "ENFORCEMENT_ADDED_REMEDIATION_PENDING",
+      "state": "ENFORCED",
       "frameworks": ["NIST-SSDF.PS", "SLSA-BUILD", "CIS-16"],
-      "evidence": ["scripts/verify-workflow-action-pinning.mjs"]
+      "evidence": ["scripts/verify-workflow-action-pinning.mjs", "scripts/test-workflow-action-pinning.mjs"]
     },
     {
       "id": "PA-003",
