@@ -24,11 +24,11 @@ jobs:
         working-directory: services/jdbc-bridge
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Verify deployment availability contract
         run: node ../../scripts/verify-jdbc-bridge-deployment-contract.mjs
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
           java-version: '21'
@@ -42,7 +42,7 @@ jobs:
         run: docker save datanexus-jdbc-bridge:ci | gzip -9 > jdbc-bridge-image.tar.gz
       - name: Upload bridge container artifact
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: jdbc-bridge-image-${{ github.sha }}
           path: services/jdbc-bridge/jdbc-bridge-image.tar.gz
