@@ -70,7 +70,9 @@ requireText(sourceConcurrencyMigration, 'controls execution concurrency only; it
 
 requireText(workerRoute, "mode === 'ADAPTIVE_DISPATCH'", 'worker-secret event dispatch mode')
 requireText(workerRoute, 'runAdaptiveEventConvergence', 'job and outbox convergence loop')
-requireText(workerRoute, 'processOutboxEvents(events)', 'event-driven outbox processing')
+requireText(workerRoute, 'processEvents: processOutboxEvents', 'event-driven outbox processing through isolated lane')
+requireText(workerRoute, 'runOutboxLane', 'isolated outbox lane boundary')
+requireText(workerRoute, 'eventLaneBlocked ? skippedOutboxLane() : await executeOutboxLane(eventWorkerId)', 'stop re-hitting degraded outbox lane within adaptive convergence')
 requireText(profilingRoute, 'claimDurableJobByAgentRun(workerId, activeAgentRunId)', 'exact profiling job kick')
 requireText(eventDispatchMigration, 'net.http_post(', 'asynchronous database wake-up')
 requireText(eventDispatchMigration, 'after insert on orchestration.job_queue', 'queue insert wake trigger')
