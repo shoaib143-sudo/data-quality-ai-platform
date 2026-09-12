@@ -14,6 +14,7 @@ export type NativeCompensationInvocationLease = {
   executionGeneration: number
   leaseExpiresAt: string
   reclaimed: boolean
+  businessExecutionCompleted?: boolean
 }
 
 export type NativeCompensationClaimRejectionReason =
@@ -87,6 +88,7 @@ export async function claimNativeCompensationInvocation(input: {
       executionGeneration: generation,
       leaseExpiresAt,
       reclaimed: data.reclaimed === true,
+      businessExecutionCompleted: false,
     },
   }
 }
@@ -153,6 +155,9 @@ export async function failNativeCompensationInvocation(input: {
   errorCode?: string
   error: unknown
 }) {
+  if (input.lease.businessExecutionCompleted) {
+    throw new Error('Compensation business execution completed; failure evidence would be unsafe')
+  }
   const summary = input.error instanceof Error ? input.error.message : String(input.error)
   await finishNativeCompensationInvocation({
     lease: input.lease,
@@ -181,7 +186,9 @@ export async function executeWithNativeCompensationLease<T>(input: {
   timer.unref?.()
 
   try {
-    return await input.execute()
+    const result = await input.execute()
+    input.lease.businessExecutionCompleted = true
+    return result
   } finally {
     clearInterval(timer)
   }
