@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { checkExternalIntegrationBoundaries } from '@/lib/observability/external-integration-readiness'
-import { countUnresolvedDeadJobs } from '@/lib/observability/queue-readiness'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -152,28 +151,25 @@ export async function GET() {
   if (externalIntegrations.opa_enforcement.status === 'UNAVAILABLE') criticalFailure = true
 
   try {
-    const cutoff = new Date(Date.now() - 30 * 60_000).toISOString()
-    const now = new Date().toISOString()
-    const [deadResult, successfulResult, staleResult] = await Promise.all([
-      admin.schema('orchestration').from('job_queue')
-        .select('project_id,job_type,entity_id,completed_at')
-        .eq('status', 'DEAD')
-        .gte('completed_at', cutoff),
-      admin.schema('orchestration').from('job_queue')
-        .select('project_id,job_type,entity_id,completed_at')
-        .eq('status', 'SUCCEEDED')
-        .gte('completed_at', cutoff),
-      admin.schema('orchestration').from('job_queue')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'RUNNING')
-        .lt('lease_expires_at', now),
-    ])
-    if (deadResult.error || successfulResult.error || staleResult.error) {
-      throw deadResult.error ?? successfulResult.error ?? staleResult.error
+    const { data, error } = await admin.schema('orchestration').rpc('verify_job_queue_health')
+    if (error) throw error
+    const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {}
+    const valid = payload.valid === true
+    const queueStatus = payload.status === 'READY' || payload.status === 'DEGRADED' ? payload.status : null
+    if (!valid || !queueStatus) throw new Error('Invalid durable queue health contract')
+
+    if (queueStatus === 'READY') {
+      components.queue = payload.idle === true
+        ? { status: 'READY', detail: 'Durable queue is healthy and idle.' }
+        : { status: 'READY', detail: 'Durable queue is healthy.' }
+    } else {
+      const unresolvedDead = Number(payload.unresolved_dead ?? 0)
+      const staleRunning = Number(payload.stale_running ?? 0)
+      components.queue = {
+        status: 'DEGRADED',
+        detail: `Durable queue has ${unresolvedDead} unresolved dead job(s) and ${staleRunning} stale running job(s).`,
+      }
     }
-    const unresolvedDeadJobs = countUnresolvedDeadJobs(deadResult.data ?? [], successfulResult.data ?? [])
-    const degraded = unresolvedDeadJobs > 0 || (staleResult.count ?? 0) > 0
-    components.queue = degraded ? { status: 'DEGRADED', detail: 'Recent unresolved dead or stale durable jobs require attention.' } : { status: 'READY' }
   } catch {
     components.queue = { status: 'DEGRADED', detail: 'Durable queue health could not be fully evaluated.' }
   }
