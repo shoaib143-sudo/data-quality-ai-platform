@@ -97,19 +97,20 @@ const fingerprint = views[0].truthFingerprint
 const evidenceFingerprint = JSON.stringify(incident.evidence)
 const verificationFingerprint = JSON.stringify(incident.verification)
 
-for (const view of views) {
-  assert.equal(view.truthFingerprint, fingerprint, `${view.plan.persona} changed governed truth.`)
-  assert.equal(JSON.stringify(view.incident.evidence), evidenceFingerprint, `${view.plan.persona} changed governed evidence.`)
-  assert.equal(JSON.stringify(view.incident.verification), verificationFingerprint, `${view.plan.persona} changed verification truth.`)
+views.forEach((view, index) => {
+  const expectedPersona = personaSlugs[index]
+  assert.equal(view.plan.persona, expectedPersona, `${expectedPersona} must resolve its own deterministic presentation plan.`)
+  assert.equal(view.truthFingerprint, fingerprint, `${expectedPersona} changed governed truth.`)
+  assert.equal(JSON.stringify(view.incident.evidence), evidenceFingerprint, `${expectedPersona} changed governed evidence.`)
+  assert.equal(JSON.stringify(view.incident.verification), verificationFingerprint, `${expectedPersona} changed verification truth.`)
   assert.equal(view.incident.truthBoundary, 'GOVERNED_OUTCOME_ONLY')
   assert.equal(view.incident.authorizationBoundary, 'EXTERNAL_TO_PRESENTATION_ENGINE')
-  assert.equal(view.plan.persona, view.plan.persona)
-  assert.ok(view.components.length > 0, `${view.plan.persona} must have governed components.`)
-  assert.equal(new Set(view.components.map((component) => component.id)).size, view.components.length, `${view.plan.persona} must not render duplicate governed components.`)
-}
+  assert.ok(view.components.length > 0, `${expectedPersona} must have governed components.`)
+  assert.equal(new Set(view.components.map((component) => component.id)).size, view.components.length, `${expectedPersona} must not render duplicate governed components.`)
+})
 
 assert.equal(JSON.stringify(incident), immutableSnapshot, 'Presentation building must not mutate the canonical incident.')
-assert.equal(new Set(views.map((view) => view.plan.persona)).size, 13, 'Each formal persona must have exactly one certified view.')
+assert.deepEqual(views.map((view) => view.plan.persona), [...personaSlugs], 'Every formal persona must be certified exactly once and in the canonical registry order.')
 assert.ok(new Set(views.map((view) => view.plan.primaryQuestion)).size > 1, 'Persona presentation must vary primary questions while truth remains fixed.')
 assert.ok(new Set(views.map((view) => view.plan.abstraction)).size > 1, 'Persona presentation must vary abstraction while truth remains fixed.')
 assert.ok(new Set(views.map((view) => view.components.map((component) => component.id).join('|'))).size > 1, 'Persona presentation must vary component ordering/selection while truth remains fixed.')
