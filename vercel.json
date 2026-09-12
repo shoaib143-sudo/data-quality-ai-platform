@@ -1,4 +1,5 @@
 {
+  "buildCommand": "pnpm build && node scripts/generate-deployed-artifact-provenance.mjs",
   "crons": [
     {
       "path": "/api/jobs/worker",

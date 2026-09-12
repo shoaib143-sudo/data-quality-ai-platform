@@ -78,7 +78,11 @@ The AI intelligence, learning, governance, evaluation and observability architec
 
 - `2026-09-08-ADR-006-ai-intelligence-learning-governance-evaluation-and-observability.md`
 
-The current production operating-state checkpoint and continuation path is documented in:
+The current production architecture, governance and remediation checkpoint is documented in:
+
+- `2026-09-13-production-architecture-governance-and-remediation-checkpoint.md`
+
+The prior production operating-state checkpoint and continuation path is documented in:
 
 - `2026-09-08-production-operating-state-and-continuation.md`
 
@@ -211,7 +215,8 @@ Do not deploy the entire candidate stack at once. Introduce infrastructure only 
 - `2026-09-08-ADR-006-ai-intelligence-learning-governance-evaluation-and-observability.md` establishes replaceable reasoning/retrieval/model contracts, verified learning, the AI Evaluation Engine, deterministic/statistical/ML boundaries, Agent Intelligence and Learning, the AI Governance Plane, DataNexus AI Command Center, policy decision controls and the three-domain observability architecture.
 - `2026-09-06-production-operating-state-and-continuation.md` records the previous production acceptance checkpoint before later JDBC evidence and enterprise-acceptance integrations.
 - `2026-09-07-production-operating-state-and-continuation.md` records the later production evidence including repeat-stable multi-namespace JDBC sources and the unchanged external lineage blocker.
-- `2026-09-08-production-operating-state-and-continuation.md` is the current production operating-state checkpoint.
+- `2026-09-08-production-operating-state-and-continuation.md` records the prior production operating-state checkpoint.
+- `2026-09-13-production-architecture-governance-and-remediation-checkpoint.md` records the current release-provenance, presentation-contract and governed remediation architecture checkpoint, including the combined capability and workspace-access handoff boundary and the lifecycle status of PRs #351 through #356.
 
 Significant architecture changes should be recorded as dated ADR style Markdown files in this folder. Each change should capture:
 

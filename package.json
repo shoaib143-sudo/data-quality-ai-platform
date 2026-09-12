@@ -51,7 +51,7 @@
     "verify:remediation": "node scripts/verify-profiling-remediation.mjs",
     "verify:learning": "node scripts/verify-profiling-recommendation-learning.mjs",
     "verify:reprofile": "node scripts/verify-automatic-remediation-reprofile.mjs",
-    "verify:autonomous": "node scripts/verify-autonomous-governance-operations.mjs",
+    "verify:autonomous": "node scripts/verify-autonomous-governance-operations.mjs && node --experimental-strip-types scripts/test-human-remediation-handoff.mjs && node scripts/test-adversarial-human-remediation-handoff.mjs",
     "verify:lineage-governance": "node scripts/verify-lineage-change-governance.mjs",
     "verify:lineage-explorer": "node scripts/verify-lineage-explorer.mjs",
     "verify:recovery-assurance": "node scripts/verify-recovery-assurance.mjs",

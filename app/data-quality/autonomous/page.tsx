@@ -1,5 +1,9 @@
 import Link from 'next/link'
 import { BrainCircuit, CheckCircle2, CircleAlert, ExternalLink, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react'
+import { hasProjectCapability } from '@/lib/auth/authorize'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { resolveHumanRemediationHandoff } from '@/lib/governance/remediation-handoff'
+import { canAccessWorkspace } from '@/lib/governance/workspace-policy'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -60,9 +64,10 @@ function number(value: unknown) { const parsed = Number(value); return Number.is
 function nullableNumber(value: unknown) { const parsed=Number(value); return Number.isFinite(parsed)?parsed:null }
 
 export default async function AutonomousDataQualityPage() {
-  await requireUser()
+  const user = await requireUser()
   const supabase = await createClient()
-  const [investigationsResult, outcomesResult, learningResult] = await Promise.all([
+  const [landingAccess, investigationsResult, outcomesResult, learningResult] = await Promise.all([
+    resolveLandingAccess(user.id),
     supabase.schema('governance').from('data_quality_investigations').select('*').order('updated_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('data_quality_remediation_outcomes').select('*').order('updated_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('data_quality_recommendation_learning').select('id,workflow_instance_id,recommendation_action,priority,status,effective,evidence,updated_at').order('updated_at', { ascending: false }).limit(500),
@@ -73,6 +78,13 @@ export default async function AutonomousDataQualityPage() {
   const investigations = (investigationsResult.data ?? []) as Investigation[]
   const outcomes = (outcomesResult.data ?? []) as Outcome[]
   const learning = (learningResult.data ?? []) as Learning[]
+  const canAccessApprovalWorkspace = canAccessWorkspace(landingAccess.persona, 'workflows', landingAccess.organizationRole)
+  const projectIds = [...new Set(investigations.map((row) => row.project_id))]
+  const policyApprovalAccess = new Map(await Promise.all(projectIds.map(async (projectId) => [
+    projectId,
+    await hasProjectCapability(user.id, projectId, 'policy.approve'),
+  ] as const)))
+  const hasAnyApprovalWorkflowAccess = canAccessApprovalWorkspace && [...policyApprovalAccess.values()].some(Boolean)
   const datasetIds = [...new Set(investigations.map((row) => row.dataset_id))]
   const { data: datasets, error: datasetError } = datasetIds.length
     ? await supabase.schema('catalog').from('datasets').select('id,name').in('id', datasetIds)
@@ -96,7 +108,7 @@ export default async function AutonomousDataQualityPage() {
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm">
         <Link href="/data-quality" className="font-bold text-blue-700">← Data Quality</Link>
-        <div className="flex gap-2"><Link href="/workflows" className="rounded-xl border px-3 py-2 text-sm font-semibold">Approvals</Link><Link href="/issues" className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white">Remediation issues</Link></div>
+        <div className="flex gap-2">{hasAnyApprovalWorkflowAccess ? <Link href="/workflows" className="rounded-xl border px-3 py-2 text-sm font-semibold">Approvals</Link> : null}<Link href="/issues" className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white">Remediation issues</Link></div>
       </nav>
 
       <section className="mt-6 rounded-3xl border border-violet-100 bg-white p-7 shadow-sm">
@@ -123,6 +135,11 @@ export default async function AutonomousDataQualityPage() {
           const outcome = investigation.workflow_instance_id ? outcomeByWorkflow.get(investigation.workflow_instance_id) : null
           const causes = Array.isArray(investigation.probable_root_causes) ? investigation.probable_root_causes : []
           const recommendations = Array.isArray(investigation.recommendations) ? investigation.recommendations : []
+          const handoff = resolveHumanRemediationHandoff({
+            workflowInstanceId: investigation.workflow_instance_id,
+            canApprove: policyApprovalAccess.get(investigation.project_id) === true,
+            canAccessApprovalWorkspace,
+          })
           return <article key={investigation.id} className="rounded-3xl border bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">{datasetById.get(investigation.dataset_id)?.name ?? investigation.dataset_id.slice(0,8)}</p><h2 className="mt-1 text-xl font-bold">{investigation.summary}</h2></div>
@@ -134,7 +151,7 @@ export default async function AutonomousDataQualityPage() {
               <div className="rounded-2xl bg-blue-50/60 p-4"><p className="text-xs font-bold uppercase text-blue-700">Recommendations</p><div className="mt-2 space-y-2">{recommendations.length ? recommendations.map((recommendation,index)=><div key={index} className="text-sm"><span className="font-mono font-semibold">{text(recommendation.action)}</span>{recommendation.approval_required === true ? <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-bold text-amber-700">approval</span> : null}<p className="mt-1 text-slate-600">{text(recommendation.rationale)}</p></div>) : <p className="text-sm text-slate-500">Continue monitoring.</p>}</div></div>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-3 border-t pt-4 text-sm">
-              {investigation.workflow_instance_id ? <Link href="/workflows" className="inline-flex items-center gap-1 font-bold text-violet-700">Open approval workflow <ExternalLink className="h-3.5 w-3.5"/></Link> : <span className="text-slate-500">No approval required</span>}
+              {investigation.workflow_instance_id ? <div className="min-w-0"><Link href={handoff.href} className="inline-flex items-center gap-1 font-bold text-violet-700">{handoff.label} <ExternalLink className="h-3.5 w-3.5"/></Link><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{handoff.guidance}</p></div> : <span className="text-slate-500">No approval required</span>}
               {outcome ? <><span className={`rounded-full border px-2 py-1 text-xs font-bold ${tone(outcome.status)}`}>{outcome.status}</span><span className="text-xs text-slate-500">{outcome.production_mutation_performed ? 'production mutation recorded' : 'tracked governance action only'}</span></> : null}
               <Link href={`/agents/runs/${investigation.agent_run_id}`} className="ml-auto font-semibold text-blue-700">Run evidence →</Link>
             </div>
