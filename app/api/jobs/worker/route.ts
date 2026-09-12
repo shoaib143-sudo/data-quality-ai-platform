@@ -8,6 +8,7 @@ import { claimOutboxEvents, processOutboxEvents } from '@/lib/orchestration/outb
 import { claimDurableJobByAgentRun } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
 import { dispatchAdaptiveRounds } from '@/lib/orchestration/adaptive-dispatch'
+import { isAuthorizedWorkerBearer } from '@/lib/orchestration/worker-auth'
 import { runProjectionWorker } from '@/lib/data-plane/run-projection-worker'
 import { cleanupExpiredObjectArtifacts } from '@/lib/data-plane/object-lifecycle'
 import { enqueueDailySemanticIndexJobs } from '@/lib/governance/semantic-jobs'
@@ -21,21 +22,10 @@ export const maxDuration = 300
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
-async function isAuthorizedWorkerRequest(request: Request) {
+function isAuthorizedWorkerRequest(request: Request) {
   const authorization = request.headers.get('authorization')
   const suppliedSecret = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length).trim() : ''
-  if (!suppliedSecret) return false
-
-  const configuredSecret = process.env.CRON_SECRET
-  if (configuredSecret && suppliedSecret === configuredSecret) return true
-
-  const admin = createAdminClient()
-  const { data, error } = await admin.schema('orchestration').rpc('verify_worker_secret', { p_secret: suppliedSecret })
-  if (error) {
-    console.error('[worker-auth]', error.message)
-    return false
-  }
-  return data === true
+  return isAuthorizedWorkerBearer(suppliedSecret, process.env.CRON_SECRET)
 }
 
 async function runAdaptiveEventConvergence(workerId: string) {
@@ -83,7 +73,7 @@ async function runAdaptiveEventConvergence(workerId: string) {
 }
 
 export async function GET(request: Request) {
-  if (!(await isAuthorizedWorkerRequest(request))) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
+  if (!isAuthorizedWorkerRequest(request)) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
 
   const workerId = `scheduled-worker:${crypto.randomUUID()}`
   const scheduled = await enqueueDueSchedules(20)
@@ -126,7 +116,7 @@ export async function POST(request: Request) {
   const mode = text(body.mode)
 
   if (mode === 'ADAPTIVE_DISPATCH') {
-    if (!(await isAuthorizedWorkerRequest(request))) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
+    if (!isAuthorizedWorkerRequest(request)) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
     try {
       const workerId = `event-worker:${crypto.randomUUID()}`
       const convergence = await runAdaptiveEventConvergence(workerId)
@@ -143,7 +133,9 @@ export async function POST(request: Request) {
         eventResults: convergence.eventResults,
       })
     } catch (error) {
-      return NextResponse.json({ error: error instanceof Error ? error.message : 'Adaptive worker execution failed.' }, { status: 500 })
+      const message = error instanceof Error ? error.message : 'Adaptive worker execution failed.'
+      console.error('[worker-dispatch]', message.slice(0, 2000))
+      return NextResponse.json({ error: message }, { status: 500 })
     }
   }
 
