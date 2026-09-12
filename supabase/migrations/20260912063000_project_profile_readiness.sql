@@ -66,7 +66,7 @@ as $$
       case when d.status::text = 'ACTIVE' then true else false end as dataset_active,
       case when ds.status = 'ACTIVE' then true else false end as source_active,
       case when sor.operational_state = 'OBSERVED_READY' then true else false end as source_observed_ready,
-      case when sc.scope_id is not null and sc.scope_version_id is not null and sc.frozen_at is not null then true else false end as governed_scope_ready,
+      case when sc.scope_id is not null and sc.current_version_id is not null and sc.frozen_at is not null then true else false end as governed_scope_ready,
       case when lv.dataset_version_id is not null and aes.id is not null then true else false end as execution_binding_ready,
       case
         when ds.source_type = 'JDBC'
