@@ -78,9 +78,18 @@ if (!repair.includes('validateDataSourceForProfiling') || !repair.includes('disc
 for (const marker of [
   "fetch('/api/profiling/readiness/remediate'",
   'Ask AI to repair',
+  'Ask AI to diagnose',
   "outcome.status === 'APPROVAL_REQUIRED'",
   'await refreshReadiness()',
-]) if (!ui.includes(marker)) throw new Error(`Readiness UI AI option missing: ${marker}`)
+  "case 'READINESS_RULE_NOT_ONBOARDED'",
+  'Platform readiness-policy configuration — not dataset metadata.',
+  'What must change:',
+  'Who should act:',
+  'Success condition:',
+  'This is not a dataset-edit task.',
+  'AUTO_REPAIR_BLOCKERS',
+  "configurationKind: 'none'",
+]) if (!ui.includes(marker)) throw new Error(`Readiness UI governance/actionability missing: ${marker}`)
 if (ui.includes("fetch('/api/datasets/source/validate'")) throw new Error('Dataset readiness AI button must not bypass the governed AI remediation endpoint')
 
 for (const marker of [
@@ -98,4 +107,4 @@ for (const marker of [
   'DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE',
 ]) if (!unit.includes(marker)) throw new Error(`AI remediation negative unit coverage missing: ${marker}`)
 
-console.log('Governed AI profile-readiness remediation contract verified, including canonical dataset UI exposure and forward-only migration history.')
+console.log('Governed AI profile-readiness remediation contract verified, including actionable manual guidance, diagnose-vs-repair semantics, canonical dataset UI exposure, and forward-only migration history.')
