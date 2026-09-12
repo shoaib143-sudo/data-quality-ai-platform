@@ -8,6 +8,7 @@ on:
       - 'lib/agents/runtime/native-compensation-fencing.ts'
       - 'scripts/audit-native-compensation-reclaim-adversarial.mjs'
       - 'scripts/test-native-compensation-reclaim-fencing-adversarial.sh'
+      - 'scripts/test-native-compensation-lease-timing.sh'
       - 'supabase/migrations/**native_compensation_reclaim_fencing.sql'
       - '.github/workflows/native-compensation-post-implementation-assurance.yml'
   push:
@@ -17,6 +18,7 @@ on:
       - 'lib/agents/runtime/native-compensation-fencing.ts'
       - 'scripts/audit-native-compensation-reclaim-adversarial.mjs'
       - 'scripts/test-native-compensation-reclaim-fencing-adversarial.sh'
+      - 'scripts/test-native-compensation-lease-timing.sh'
       - 'supabase/migrations/**native_compensation_reclaim_fencing.sql'
       - '.github/workflows/native-compensation-post-implementation-assurance.yml'
 
@@ -81,3 +83,4 @@ jobs:
           trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
           pnpm dlx supabase@2.117.0 db reset --local
           bash "$ROOT/scripts/test-native-compensation-reclaim-fencing-adversarial.sh"
+          bash "$ROOT/scripts/test-native-compensation-lease-timing.sh"
