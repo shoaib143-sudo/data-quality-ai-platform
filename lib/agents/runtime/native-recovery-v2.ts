@@ -12,9 +12,15 @@ import {
   type NativeValidatedStep,
 } from './native-autonomy-kernel'
 import {
+  claimNativeCompensationInvocation,
+  completeNativeCompensationInvocation,
+  createNativeCompensationOwnerId,
+  failNativeCompensationInvocation,
+  withNativeCompensationLease,
+} from './native-compensation-fencing'
+import {
   admitNativeToolInvocation,
-  completeNativeToolInvocation,
-  failNativeToolInvocation,
+  assertNativeJsonContract,
   getNativePinnedToolContract,
   hashNativeRuntimeValue,
   normalizeNativeToolContractInput,
@@ -33,6 +39,10 @@ export type NativeRecoveryV2Outcome =
   | { decision: 'COMPENSATED'; code: 'VERIFIED_COMPENSATION'; compensation: NativeVerifiedCompensation }
   | { decision: 'ESCALATE'; code: string }
   | { decision: 'FAIL'; code: string }
+
+type NativePriorCompensation =
+  | NativeRecoveryV2Outcome
+  | { decision: 'RESUME'; invocationId: string }
 
 export type NativeRecoveryV2Runtime = {
   executeStep(input: { step: NativeValidatedStep; stepOrder: number; attempt: number }): Promise<unknown>
@@ -159,7 +169,7 @@ async function resolvePriorCompensation(input: {
   contract: NativePinnedToolContract
   inputHash: string
   idempotencyKey: string
-}): Promise<NativeRecoveryV2Outcome | null> {
+}): Promise<NativePriorCompensation | null> {
   const prior = await loadCompensationInvocationByIdempotency({
     agentRunId: input.agentRunId,
     toolKey: input.compensationKey,
@@ -182,7 +192,9 @@ async function resolvePriorCompensation(input: {
     })
     return { decision: 'COMPENSATED', code: 'VERIFIED_COMPENSATION', compensation }
   }
-  if (prior.status === 'RUNNING') return { decision: 'ESCALATE', code: 'COMPENSATION_ALREADY_IN_FLIGHT' }
+  if (prior.status === 'ADMITTED' || prior.status === 'RUNNING') {
+    return { decision: 'RESUME', invocationId: prior.id }
+  }
   return { decision: 'ESCALATE', code: 'COMPENSATION_PREVIOUSLY_FAILED' }
 }
 
@@ -233,6 +245,7 @@ async function executeVerifiedCompensation(input: {
 
   const idempotencyKey = `recovery:${input.failedStep.id}:${input.attempt}:${compensationKey}`
   const inputHash = hashNativeRuntimeValue(toolInput)
+  let invocationId: string | null = null
   const prior = await resolvePriorCompensation({
     agentRunId: input.agentRunId,
     compensationKey,
@@ -240,58 +253,105 @@ async function executeVerifiedCompensation(input: {
     inputHash,
     idempotencyKey,
   })
-  if (prior) return prior
+  if (prior?.decision === 'RESUME') {
+    invocationId = prior.invocationId
+  } else if (prior) {
+    return prior
+  }
 
-  let admission
-  try {
-    admission = await admitNativeToolInvocation({
-      agentRunId: input.agentRunId,
-      toolKey: compensationKey,
-      expectedExecutor: compensationStep.executorKey ?? certification.executorKey ?? '',
-      toolInput,
-      idempotencyKey,
-    })
-  } catch (error) {
-    const raced = await resolvePriorCompensation({
+  if (!invocationId) {
+    try {
+      const admission = await admitNativeToolInvocation({
+        agentRunId: input.agentRunId,
+        toolKey: compensationKey,
+        expectedExecutor: compensationStep.executorKey ?? certification.executorKey ?? '',
+        toolInput,
+        idempotencyKey,
+      })
+      invocationId = admission.invocationId
+    } catch (error) {
+      const raced = await resolvePriorCompensation({
+        agentRunId: input.agentRunId,
+        compensationKey,
+        contract,
+        inputHash,
+        idempotencyKey,
+      })
+      if (raced?.decision === 'RESUME') invocationId = raced.invocationId
+      else if (raced) return raced
+      else throw error
+    }
+  }
+
+  const ownerId = createNativeCompensationOwnerId()
+  const claim = await claimNativeCompensationInvocation({
+    agentRunId: input.agentRunId,
+    invocationId,
+    ownerId,
+  })
+
+  if (!claim.claimed) {
+    if (claim.reason === 'ACTIVE_LEASE') {
+      return { decision: 'ESCALATE', code: 'COMPENSATION_ALREADY_IN_FLIGHT' }
+    }
+    const terminal = await resolvePriorCompensation({
       agentRunId: input.agentRunId,
       compensationKey,
       contract,
       inputHash,
       idempotencyKey,
     })
-    if (raced) return raced
-    throw error
+    if (terminal?.decision !== 'RESUME') return terminal ?? { decision: 'FAIL', code: 'COMPENSATION_CLAIM_FAILED' }
+    return { decision: 'FAIL', code: 'COMPENSATION_CLAIM_FAILED' }
+  }
+
+  if (claim.generation <= 0 || claim.ownerId !== ownerId) {
+    return { decision: 'FAIL', code: 'COMPENSATION_CLAIM_INVALID' }
   }
 
   try {
-    const output = await input.runtime.executeCompensation({
-      failedStep: input.failedStep,
-      compensationToolKey: compensationKey,
-      contract: admission.contract,
-      toolInput: admission.toolInput,
-      attempt: input.attempt,
+    const output = await withNativeCompensationLease({
+      agentRunId: input.agentRunId,
+      invocationId,
+      ownerId,
+      generation: claim.generation,
+      execute: () => input.runtime.executeCompensation!({
+        failedStep: input.failedStep,
+        compensationToolKey: compensationKey,
+        contract,
+        toolInput,
+        attempt: input.attempt,
+      }),
     })
-    await completeNativeToolInvocation({
-      invocationId: admission.invocationId,
-      contract: admission.contract,
-      output,
+    assertNativeJsonContract(contract.output_schema, output, `${contract.tool_key} output`)
+    await completeNativeCompensationInvocation({
+      invocationId,
+      ownerId,
+      generation: claim.generation,
+      outputHash: hashNativeRuntimeValue(output),
     })
     const compensation = await verifyCompensationInvocation({
       agentRunId: input.agentRunId,
-      invocationId: admission.invocationId,
+      invocationId,
       toolKey: compensationKey,
-      contractHash: admission.contract.contract_hash,
+      contractHash: contract.contract_hash,
       inputHash,
     })
     return { decision: 'COMPENSATED', code: 'VERIFIED_COMPENSATION', compensation }
   } catch (error) {
     try {
-      await failNativeToolInvocation({
-        invocationId: admission.invocationId,
+      await failNativeCompensationInvocation({
+        invocationId,
+        ownerId,
+        generation: claim.generation,
         errorCode: 'RECOVERY_COMPENSATION_FAILED',
         error,
       })
-    } catch {
+    } catch (evidenceError) {
+      const message = evidenceError instanceof Error ? evidenceError.message : String(evidenceError)
+      if (/COMPENSATION_FENCED|superseded/i.test(message)) {
+        return { decision: 'FAIL', code: 'COMPENSATION_EXECUTION_FENCED' }
+      }
       return { decision: 'FAIL', code: 'COMPENSATION_EVIDENCE_FAILED' }
     }
     return { decision: 'ESCALATE', code: 'COMPENSATION_FAILED' }
