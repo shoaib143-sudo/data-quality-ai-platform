@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, Bot, CheckCircle2, Pencil, Play, RefreshCw, Wrench } from 'lucide-react'
+import { AlertCircle, Bot, CheckCircle2, Pencil, Play, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -23,6 +23,18 @@ type Readiness = {
   remediation?: Record<string, Remediation>
 }
 
+type AiRemediationOutcome = {
+  status?: string
+  selected_action?: string
+  executed?: boolean
+  approval_required?: boolean
+  rationale?: string
+  before_state?: string
+  after_state?: string
+  provider?: string | null
+  model?: string | null
+}
+
 export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDefinitionId, ready: legacyReady }: { projectId: string; datasetId: string; datasetVersionId: string; agentDefinitionId: string | null; ready: boolean }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -30,6 +42,7 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
   const [hasError, setHasError] = useState(false)
   const [readiness, setReadiness] = useState<Readiness | null>(null)
   const [readinessLoading, setReadinessLoading] = useState(true)
+  const [aiOutcome, setAiOutcome] = useState<AiRemediationOutcome | null>(null)
 
   const refreshReadiness = useCallback(async () => {
     setReadinessLoading(true)
@@ -55,7 +68,7 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
   const blockerCodes = useMemo(() => Object.keys(readiness?.blockers ?? {}).filter(code => readiness?.blockers?.[code]), [readiness])
   const primaryBlocker = blockerCodes[0]
   const primaryRemediation = primaryBlocker ? readiness?.remediation?.[primaryBlocker] : undefined
-  const canAutomate = blockerCodes.some(code => readiness?.remediation?.[code]?.ai_remediation === 'LOW_RISK_WHEN_POLICY_AUTHORIZED') && Boolean(readiness?.source_id)
+  const canAskAi = blockerCodes.some(code => Boolean(readiness?.remediation?.[code]?.ai_action))
   const manualHref = readiness?.source_id && blockerCodes.some(code => ['SOURCE_NOT_ACTIVE','SOURCE_NOT_OBSERVED_READY','GOVERNED_SCOPE_NOT_READY','EXECUTION_SOURCE_NOT_BOUND','DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE'].includes(code))
     ? canonicalRoutes.sourceEdit(readiness.source_id)
     : canonicalRoutes.datasetEdit(datasetId)
@@ -66,8 +79,6 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
     setHasError(false)
     setMessage('Starting profiling job…')
     try {
-      // Re-evaluate immediately before admission so UI state can never become the
-      // authority for profiling readiness.
       await refreshReadiness()
       const idempotencyKey = crypto.randomUUID()
       const response = await fetch('/api/agents/run', {
@@ -90,27 +101,40 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
     }
   }
 
-  async function tryAutomatedRepair() {
-    if (!canAutomate || !readiness?.source_id || busy) return
+  async function askAiToRepair() {
+    if (!canAskAi || busy) return
     setBusy(true)
     setHasError(false)
-    setMessage('Running governed source validation and safe reconciliation…')
+    setAiOutcome(null)
+    setMessage('AI is reviewing the readiness blockers under governed repair policy…')
     try {
-      const response = await fetch('/api/datasets/source/validate', {
+      const response = await fetch('/api/profiling/readiness/remediate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, sourceId: readiness.source_id }),
+        body: JSON.stringify({ projectId, datasetVersionId }),
       })
       const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload.error ?? 'Automated repair could not complete.')
-      setMessage(payload.operational
-        ? 'Safe source repair completed. Re-checking deterministic readiness…'
-        : 'Source validation completed, but additional setup is still required.')
+      if (!response.ok) throw new Error(payload.error ?? 'AI readiness remediation failed.')
+      const outcome = (payload.remediation ?? {}) as AiRemediationOutcome
+      setAiOutcome(outcome)
+
+      if (outcome.status === 'REMEDIATED') {
+        setMessage('AI-assisted low-risk repair completed and deterministic readiness is now READY.')
+      } else if (outcome.status === 'APPROVAL_REQUIRED') {
+        setMessage('AI reviewed the blockers, but at least one required change needs explicit user approval. No governed change was applied.')
+      } else if (outcome.status === 'AI_UNAVAILABLE') {
+        setMessage('The governed AI reasoning provider is unavailable. No change was applied; manual remediation remains available.')
+      } else if (outcome.executed) {
+        setMessage('AI-assisted low-risk repair ran, but deterministic readiness is still not READY. Review the remaining blocker guidance.')
+      } else {
+        setMessage('AI reviewed the blockers and found no currently authorized automatic repair. No change was applied.')
+      }
+
       await refreshReadiness()
       router.refresh()
     } catch (error) {
       setHasError(true)
-      setMessage(error instanceof Error ? error.message : 'Automated repair could not complete.')
+      setMessage(error instanceof Error ? error.message : 'AI readiness remediation failed.')
       await refreshReadiness()
       router.refresh()
     } finally {
@@ -123,9 +147,9 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
       <Link href={manualHref} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
         <Pencil className="h-3.5 w-3.5" /> Fix manually
       </Link>
-      {canAutomate ? <button type="button" onClick={() => void tryAutomatedRepair()} disabled={busy || readinessLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
-        {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
-        Try automated repair
+      {canAskAi ? <button type="button" onClick={() => void askAiToRepair()} disabled={busy || readinessLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
+        {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
+        Ask AI to repair
       </button> : null}
       {effectiveReady && agentDefinitionId ? <button type="button" onClick={() => void runProfiling()} disabled={busy || readinessLoading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
         {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
@@ -137,7 +161,8 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
     {!readinessLoading && readiness && !effectiveReady ? <div className="max-w-2xl rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-left text-xs text-amber-900" role="status">
       <div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><div><strong>{readiness.state ?? 'BLOCKED'}:</strong> {primaryRemediation?.root_cause ?? 'This dataset is not ready for profiling.'}</div></div>
       {primaryRemediation?.manual_action ? <div className="mt-1 pl-5"><strong>Manual:</strong> {primaryRemediation.manual_action}</div> : null}
-      {primaryRemediation?.ai_action ? <div className="mt-1 flex items-start gap-1 pl-5 text-slate-700"><Bot className="mt-0.5 h-3 w-3 shrink-0" /><span><strong>AI guidance:</strong> {primaryRemediation.ai_action}{primaryRemediation.approval_required ? ' User approval is required for the governed change.' : ''}</span></div> : null}
+      {primaryRemediation?.ai_action ? <div className="mt-1 flex items-start gap-1 pl-5 text-slate-700"><Bot className="mt-0.5 h-3 w-3 shrink-0" /><span><strong>AI option:</strong> {primaryRemediation.ai_action}{primaryRemediation.approval_required ? ' Explicit approval is required before a governed change.' : ''}</span></div> : null}
+      {aiOutcome?.rationale ? <div className="mt-1 pl-5 text-slate-700"><strong>Latest AI review:</strong> {aiOutcome.rationale}</div> : null}
       {legacyReady && !effectiveReady ? <div className="mt-1 pl-5 text-slate-600">The previous UI heuristic indicated executable, but deterministic readiness now takes precedence.</div> : null}
     </div> : null}
 
