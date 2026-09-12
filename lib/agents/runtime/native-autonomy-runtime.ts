@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   certifyNativePinnedToolContract,
@@ -20,6 +22,13 @@ import {
 import {
   executeNativeClosedLoopV2,
 } from '@/lib/agents/runtime/native-recovery-v2'
+import {
+  buildNativeSupervisorExecutionPins,
+  claimNativeSupervisorExecution,
+  initializeNativeSupervisorExecution,
+  releaseNativeSupervisorExecution,
+  renewNativeSupervisorExecution,
+} from '@/lib/agents/runtime/native-supervisor-resume'
 import {
   getNativePinnedToolContract,
   hashNativeRuntimeValue,
@@ -167,6 +176,27 @@ function checkpointEvidence(planHash: string, extra: NativeRuntimeEvidenceRef[] 
   return [{ domain: 'native_supervisor_plan', id: planHash }, ...extra]
 }
 
+function defaultSupervisorLeaseOwner() {
+  const deploymentIdentity = [
+    process.env.VERCEL_DEPLOYMENT_ID,
+    process.env.VERCEL_URL,
+    process.env.HOSTNAME,
+  ].map((value) => value?.trim()).find(Boolean) ?? 'local'
+  return `${deploymentIdentity}:${process.pid}:${randomUUID()}`.slice(0, 300)
+}
+
+function asExecutionGeneration(value: unknown) {
+  const generation = Number(value)
+  if (!Number.isSafeInteger(generation) || generation < 1) {
+    throw new Error('Durable supervisor claim returned an invalid execution generation')
+  }
+  return generation
+}
+
+function asError(error: unknown) {
+  return error instanceof Error ? error : new Error(String(error))
+}
+
 export async function executeNativeBoundRuntimePlan(input: {
   supervisorAgentRunId: string
   boundPlan: NativeBoundRuntimePlan
@@ -200,6 +230,8 @@ export async function executeNativeBoundRuntimePlan(input: {
   }): Promise<Record<string, unknown>> | Record<string, unknown>
   approvalExpiresAt?: string | null
   initialCheckpointId?: string | null
+  leaseOwner?: string | null
+  leaseSeconds?: number
 }): Promise<NativeClosedLoopResult> {
   const { supervisorAgentRunId, boundPlan } = input
   let lastCheckpointId: string | null = input.initialCheckpointId ?? null
@@ -212,101 +244,212 @@ export async function executeNativeBoundRuntimePlan(input: {
     return binding
   }
 
-  const result = await executeNativeClosedLoopV2({
-    context: {
-      resolveAgentRunId: (step) => getBinding(step).agentRunId,
-      policy: boundPlan.policy,
-    },
-    plan: boundPlan.plan,
-    runtime: {
-      executeStep: async ({ step, stepOrder, attempt }) => input.executeStep({
-        step,
-        binding: getBinding(step),
-        stepOrder,
-        attempt,
-      }),
-      validateOutcome: async ({ step, stepOrder, attempt, output }) => input.validateOutcome({
-        step,
-        binding: getBinding(step),
-        stepOrder,
-        attempt,
-        output,
-      }),
-      executeCompensation: input.executeCompensation
-        ? async ({ failedStep, compensationToolKey, contract, toolInput, attempt }) => input.executeCompensation!({
-            failedStep,
-            binding: getBinding(failedStep),
-            compensationToolKey,
-            contract,
-            toolInput,
-            attempt,
-          })
-        : undefined,
-      buildCompensationInput: input.buildCompensationInput
-        ? async ({ failedStep, compensationToolKey, error, attempt }) => input.buildCompensationInput!({
-            failedStep,
-            binding: getBinding(failedStep),
-            compensationToolKey,
-            error,
-            attempt,
-          })
-        : undefined,
-      requestApproval: async ({ step, stepOrder }) => {
-        const payloadHash = hashGovernedActionPayload(step.input)
-        return requestNativeRuntimeInterrupt({
-          agentRunId: supervisorAgentRunId,
-          type: 'HUMAN_APPROVAL',
-          requestSummary: `Approval required for ${step.toolKey} at supervisor step ${step.id}.`,
-          actionKey: step.toolKey,
-          actionPayloadHash: payloadHash,
-          idempotencyKey: `native-supervisor:${boundPlan.planHash}:${step.id}`,
-          expiresAt: input.approvalExpiresAt ?? null,
-          state: {
-            version: '1.0',
-            phase: 'WAITING_APPROVAL',
-            step: { name: step.id, order: stepOrder, attempt: 1 },
-            evidenceRefs: checkpointEvidence(boundPlan.planHash),
-            pendingAction: {
-              actionKey: step.toolKey,
-              payloadHash,
-              riskTier: `TIER_${step.riskTier}`,
-              requiresHumanApproval: true,
-            },
-            userVisibleSummary: `Supervisor paused for approval of ${step.toolKey}.`,
-          },
-        })
-      },
-      onEvent: async (event) => {
-        const eventId = await recordNativeSupervisorEvent({
-          supervisorAgentRunId,
-          planHash: boundPlan.planHash,
-          event,
-        })
-
-        if (!['STEP_VALIDATED', 'PLAN_SUCCEEDED', 'PLAN_FAILED'].includes(event.type)) return
-        const step = event.step
-        const state = {
-          version: '1.0' as const,
-          phase: event.type,
-          step: step && event.stepOrder
-            ? { name: step.id, order: event.stepOrder, attempt: event.attempt ?? 1 }
-            : undefined,
-          evidenceRefs: checkpointEvidence(boundPlan.planHash, [{ domain: 'native_supervisor_event', id: eventId }]),
-          userVisibleSummary: event.type === 'PLAN_SUCCEEDED'
-            ? 'Native supervisor completed the validated plan.'
-            : event.type === 'PLAN_FAILED'
-              ? `Native supervisor stopped safely: ${event.code ?? 'execution failure'}.`
-              : `Native supervisor validated step ${step?.id ?? ''}.`,
-        }
-        lastCheckpointId = await createNativeRuntimeCheckpoint({
-          agentRunId: supervisorAgentRunId,
-          kind: event.type === 'PLAN_SUCCEEDED' || event.type === 'PLAN_FAILED' ? 'TERMINAL' : 'STEP_BOUNDARY',
-          parentCheckpointId: lastCheckpointId,
-          state,
-        })
-      },
-    },
+  const pins = await buildNativeSupervisorExecutionPins({
+    supervisorAgentRunId,
+    planHash: boundPlan.planHash,
+    bindings: boundPlan.bindings.values(),
+  })
+  await initializeNativeSupervisorExecution({
+    agentRunId: supervisorAgentRunId,
+    pins,
+    checkpointId: lastCheckpointId,
   })
 
-  return result
+  const leaseOwner = input.leaseOwner?.trim() || defaultSupervisorLeaseOwner()
+  const leaseSeconds = input.leaseSeconds ?? 300
+  const claimed = await claimNativeSupervisorExecution({
+    agentRunId: supervisorAgentRunId,
+    pins,
+    leaseOwner,
+    leaseSeconds,
+    checkpointId: lastCheckpointId,
+  })
+  const executionGeneration = asExecutionGeneration(claimed.execution_generation)
+  let heartbeatFailure: Error | null = null
+  let heartbeatStopped = false
+  let heartbeatTimer: ReturnType<typeof setTimeout> | null = null
+  let renewalTail: Promise<void> = Promise.resolve()
+  let executionError: unknown = null
+
+  const renewLease = async (checkpointId: string | null = lastCheckpointId) => {
+    const operation = renewalTail.then(async () => {
+      const renewed = await renewNativeSupervisorExecution({
+        agentRunId: supervisorAgentRunId,
+        leaseOwner,
+        executionGeneration,
+        leaseSeconds,
+        checkpointId,
+      })
+      if (asExecutionGeneration(renewed.execution_generation) !== executionGeneration) {
+        throw new Error('Durable supervisor execution generation changed during renewal')
+      }
+    })
+    renewalTail = operation.catch(() => undefined)
+    await operation
+  }
+
+  const assertLeaseHealthy = () => {
+    if (heartbeatFailure) throw heartbeatFailure
+  }
+
+  const heartbeatIntervalMs = Math.max(5_000, Math.floor((leaseSeconds * 1_000) / 3))
+  const scheduleHeartbeat = () => {
+    if (heartbeatStopped) return
+    heartbeatTimer = setTimeout(async () => {
+      try {
+        await renewLease(lastCheckpointId)
+      } catch (error) {
+        heartbeatFailure = asError(error)
+        return
+      }
+      scheduleHeartbeat()
+    }, heartbeatIntervalMs)
+  }
+  scheduleHeartbeat()
+
+  try {
+    const result = await executeNativeClosedLoopV2({
+      context: {
+        resolveAgentRunId: (step) => getBinding(step).agentRunId,
+        policy: boundPlan.policy,
+      },
+      plan: boundPlan.plan,
+      runtime: {
+        executeStep: async ({ step, stepOrder, attempt }) => {
+          assertLeaseHealthy()
+          await renewLease()
+          const output = await input.executeStep({
+            step,
+            binding: getBinding(step),
+            stepOrder,
+            attempt,
+          })
+          await renewLease()
+          assertLeaseHealthy()
+          return output
+        },
+        validateOutcome: async ({ step, stepOrder, attempt, output }) => {
+          assertLeaseHealthy()
+          const validation = await input.validateOutcome({
+            step,
+            binding: getBinding(step),
+            stepOrder,
+            attempt,
+            output,
+          })
+          await renewLease()
+          assertLeaseHealthy()
+          return validation
+        },
+        executeCompensation: input.executeCompensation
+          ? async ({ failedStep, compensationToolKey, contract, toolInput, attempt }) => {
+              assertLeaseHealthy()
+              await renewLease()
+              const output = await input.executeCompensation!({
+                failedStep,
+                binding: getBinding(failedStep),
+                compensationToolKey,
+                contract,
+                toolInput,
+                attempt,
+              })
+              await renewLease()
+              assertLeaseHealthy()
+              return output
+            }
+          : undefined,
+        buildCompensationInput: input.buildCompensationInput
+          ? async ({ failedStep, compensationToolKey, error, attempt }) => input.buildCompensationInput!({
+              failedStep,
+              binding: getBinding(failedStep),
+              compensationToolKey,
+              error,
+              attempt,
+            })
+          : undefined,
+        requestApproval: async ({ step, stepOrder }) => {
+          assertLeaseHealthy()
+          await renewLease()
+          const payloadHash = hashGovernedActionPayload(step.input)
+          return requestNativeRuntimeInterrupt({
+            agentRunId: supervisorAgentRunId,
+            type: 'HUMAN_APPROVAL',
+            requestSummary: `Approval required for ${step.toolKey} at supervisor step ${step.id}.`,
+            actionKey: step.toolKey,
+            actionPayloadHash: payloadHash,
+            idempotencyKey: `native-supervisor:${boundPlan.planHash}:${step.id}`,
+            expiresAt: input.approvalExpiresAt ?? null,
+            state: {
+              version: '1.0',
+              phase: 'WAITING_APPROVAL',
+              step: { name: step.id, order: stepOrder, attempt: 1 },
+              evidenceRefs: checkpointEvidence(boundPlan.planHash),
+              pendingAction: {
+                actionKey: step.toolKey,
+                payloadHash,
+                riskTier: `TIER_${step.riskTier}`,
+                requiresHumanApproval: true,
+              },
+              userVisibleSummary: `Supervisor paused for approval of ${step.toolKey}.`,
+            },
+          })
+        },
+        onEvent: async (event) => {
+          assertLeaseHealthy()
+          const eventId = await recordNativeSupervisorEvent({
+            supervisorAgentRunId,
+            planHash: boundPlan.planHash,
+            event,
+          })
+
+          if (!['STEP_VALIDATED', 'PLAN_SUCCEEDED', 'PLAN_FAILED'].includes(event.type)) return
+          const step = event.step
+          const state = {
+            version: '1.0' as const,
+            phase: event.type,
+            step: step && event.stepOrder
+              ? { name: step.id, order: event.stepOrder, attempt: event.attempt ?? 1 }
+              : undefined,
+            evidenceRefs: checkpointEvidence(boundPlan.planHash, [
+              { domain: 'native_supervisor_event', id: eventId },
+              { domain: 'native_execution_generation', id: String(executionGeneration) },
+            ]),
+            userVisibleSummary: event.type === 'PLAN_SUCCEEDED'
+              ? 'Native supervisor completed the validated plan.'
+              : event.type === 'PLAN_FAILED'
+                ? `Native supervisor stopped safely: ${event.code ?? 'execution failure'}.`
+                : `Native supervisor validated step ${step?.id ?? ''}.`,
+          }
+          lastCheckpointId = await createNativeRuntimeCheckpoint({
+            agentRunId: supervisorAgentRunId,
+            kind: event.type === 'PLAN_SUCCEEDED' || event.type === 'PLAN_FAILED' ? 'TERMINAL' : 'STEP_BOUNDARY',
+            parentCheckpointId: lastCheckpointId,
+            state,
+          })
+          await renewLease(lastCheckpointId)
+          assertLeaseHealthy()
+        },
+      },
+    })
+
+    assertLeaseHealthy()
+    return result
+  } catch (error) {
+    executionError = error
+    throw error
+  } finally {
+    heartbeatStopped = true
+    if (heartbeatTimer) clearTimeout(heartbeatTimer)
+    await renewalTail
+    try {
+      await releaseNativeSupervisorExecution({
+        agentRunId: supervisorAgentRunId,
+        leaseOwner,
+        executionGeneration,
+        checkpointId: lastCheckpointId,
+      })
+    } catch (releaseError) {
+      if (!executionError) throw releaseError
+    }
+  }
 }
