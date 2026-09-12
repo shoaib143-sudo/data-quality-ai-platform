@@ -33,7 +33,7 @@
       "riskTier": "R3",
       "state": "ENFORCED",
       "frameworks": ["NIST-CSF2.PR", "OWASP-ASVS-AUTHZ", "OWASP-API-BOLA"],
-      "evidence": ["scripts/verify-privileged-api-authorization.mjs", "lib/auth/authorize.ts"]
+      "evidence": ["scripts/audit-user-facing-admin-routes.mjs", ".github/workflows/privileged-api-authorization-audit.yml", "lib/auth/authorize.ts"]
     },
     {
       "id": "PA-005",
