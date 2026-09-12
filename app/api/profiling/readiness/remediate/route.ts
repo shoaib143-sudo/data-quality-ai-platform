@@ -53,10 +53,11 @@ export async function POST(request: Request) {
       started_at: now,
     }).select('id').single()
     if (runError || !run) throw new Error(`Unable to create readiness remediation agent run: ${runError?.message ?? 'unknown error'}`)
-    agentRunId = run.id
+    const activeAgentRunId = run.id
+    agentRunId = activeAgentRunId
 
     const { data: step, error: stepError } = await admin.schema('agent').from('agent_run_steps').insert({
-      agent_run_id: agentRunId,
+      agent_run_id: activeAgentRunId,
       step_name: 'remediate_profile_readiness',
       step_order: 1,
       status: 'RUNNING',
@@ -64,14 +65,15 @@ export async function POST(request: Request) {
       started_at: now,
     }).select('id').single()
     if (stepError || !step) throw new Error(`Unable to create readiness remediation agent step: ${stepError?.message ?? 'unknown error'}`)
-    stepId = step.id
+    const activeStepId = step.id
+    stepId = activeStepId
 
     const execution = await executeProfilingExecutor(
       'remediate_profile_readiness',
       { datasetVersionId },
       {
-        agentRunId,
-        stepId,
+        agentRunId: activeAgentRunId,
+        stepId: activeStepId,
         projectId,
         agentDefinitionId: agentDefinition.id,
         agentVersion: agentDefinition.version,
@@ -88,16 +90,16 @@ export async function POST(request: Request) {
       completed_at: completedAt,
       error_code: null,
       error_message: null,
-    }).eq('id', stepId)
+    }).eq('id', activeStepId)
     await admin.schema('agent').from('agent_runs').update({
       status: 'SUCCEEDED',
       output: remediation,
       completed_at: completedAt,
       error_code: null,
       error_message: null,
-    }).eq('id', agentRunId)
+    }).eq('id', activeAgentRunId)
 
-    return NextResponse.json({ agentRunId, remediation })
+    return NextResponse.json({ agentRunId: activeAgentRunId, remediation })
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return NextResponse.json({ error: error.message, code: 'READINESS_REMEDIATION_ACCESS_DENIED' }, { status: error.status })
