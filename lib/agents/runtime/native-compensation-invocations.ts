@@ -16,9 +16,15 @@ export type NativeCompensationInvocationLease = {
   reclaimed: boolean
 }
 
+export type NativeCompensationClaimRejectionReason =
+  | 'ACTIVE_LEASE'
+  | 'TERMINAL'
+  | 'CONTRACT_DRIFT'
+  | 'UNSAFE_REPLAY'
+
 export type NativeCompensationClaimResult =
   | { claimed: true; lease: NativeCompensationInvocationLease }
-  | { claimed: false; reason: 'ACTIVE_LEASE' | 'TERMINAL' | 'CONTRACT_DRIFT' | 'UNSAFE_REPLAY'; status?: string }
+  | { claimed: false; reason: NativeCompensationClaimRejectionReason; status?: string }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -61,8 +67,8 @@ export async function claimNativeCompensationInvocation(input: {
     throw new Error(`Unable to claim compensation invocation: ${error?.message ?? 'invalid claim result'}`)
   }
   if (data.claimed !== true) {
-    const reason = String(data.reason ?? 'TERMINAL') as NativeCompensationClaimResult extends { claimed: false; reason: infer R } ? R : never
-    if (!['ACTIVE_LEASE', 'TERMINAL', 'CONTRACT_DRIFT', 'UNSAFE_REPLAY'].includes(reason as string)) {
+    const reason = String(data.reason ?? 'TERMINAL') as NativeCompensationClaimRejectionReason
+    if (!['ACTIVE_LEASE', 'TERMINAL', 'CONTRACT_DRIFT', 'UNSAFE_REPLAY'].includes(reason)) {
       throw new Error(`Unknown compensation claim rejection: ${String(data.reason ?? 'UNKNOWN')}`)
     }
     return { claimed: false, reason, status: typeof data.status === 'string' ? data.status : undefined }
