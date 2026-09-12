@@ -1,0 +1,33 @@
+name: Native interrupt timeout lifecycle
+
+on:
+  pull_request:
+    paths:
+      - 'lib/agents/runtime/native-interrupt-lifecycle.ts'
+      - 'supabase/migrations/20260912054000_native_interrupt_timeout_lifecycle.sql'
+      - 'scripts/verify-native-interrupt-timeout-lifecycle.mjs'
+      - '.github/workflows/native-interrupt-timeout-lifecycle.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-interrupt-lifecycle.ts'
+      - 'supabase/migrations/20260912054000_native_interrupt_timeout_lifecycle.sql'
+      - 'scripts/verify-native-interrupt-timeout-lifecycle.mjs'
+      - '.github/workflows/native-interrupt-timeout-lifecycle.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-native-interrupt-timeout-lifecycle.mjs
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build
