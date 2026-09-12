@@ -1,0 +1,43 @@
+name: Privacy Data Lifecycle
+
+on:
+  pull_request:
+    paths:
+      - 'infra/privacy/**'
+      - 'lib/privacy/**'
+      - 'scripts/verify-data-lifecycle-contract.mjs'
+      - 'scripts/test-data-lifecycle-contract.mjs'
+      - 'supabase/migrations/20260910184500_dq_result_truth_and_sensitive_evidence.sql'
+      - '.github/workflows/privacy-data-lifecycle.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/privacy/**'
+      - 'lib/privacy/**'
+      - 'scripts/verify-data-lifecycle-contract.mjs'
+      - 'scripts/test-data-lifecycle-contract.mjs'
+      - 'supabase/migrations/20260910184500_dq_result_truth_and_sensitive_evidence.sql'
+      - '.github/workflows/privacy-data-lifecycle.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify privacy lifecycle contract
+        run: node scripts/verify-data-lifecycle-contract.mjs
+      - name: Negative lifecycle tests
+        run: node --experimental-strip-types scripts/test-data-lifecycle-contract.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
