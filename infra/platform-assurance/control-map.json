@@ -114,6 +114,14 @@
       "state": "ENFORCED",
       "frameworks": ["NIST-CSF2.GV", "NIST-SSDF.RV"],
       "evidence": ["infra/platform-assurance/residual-risk-register.json", "scripts/verify-residual-risk-register.mjs", "docs/platform-assurance/supabase-security-exceptions.md"]
+    },
+    {
+      "id": "PA-015",
+      "name": "CI token least privilege and dangerous-trigger boundary",
+      "riskTier": "R3",
+      "state": "ENFORCED",
+      "frameworks": ["NIST-SSDF.PS", "SLSA-BUILD", "CIS-16"],
+      "evidence": ["scripts/verify-workflow-security-posture.mjs", "scripts/verify-p0-p4-revalidation.mjs"]
     }
   ]
 }
