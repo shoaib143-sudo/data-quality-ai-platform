@@ -15,9 +15,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
+
       - name: Verify project profile readiness contract
         run: node scripts/verify-project-profile-readiness.mjs
+
+      - name: Run independent adversarial audit
+        run: node scripts/audit-project-profile-readiness-adversarial.mjs
+
+      - name: Install PostgreSQL for isolated readiness tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+
+      - name: Execute dynamic readiness failure matrix
+        run: sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/test-project-profile-readiness.sql
+
+      - name: Install dependencies
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: TypeScript revalidation
+        run: pnpm exec tsc --noEmit
