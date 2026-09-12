@@ -10,6 +10,7 @@ import { executeJdbcProfileDataset } from '@/lib/profiling/jdbc-profile'
 import { executeFileProfileDataset } from '@/lib/profiling/file-profile'
 import { compareProfilesReplaySafe } from '@/lib/profiling/replay-safe-comparison'
 import { assertDatasetVersionProfileReady } from '@/lib/profiling/readiness-gate'
+import { executeProfileReadinessRemediation } from '@/lib/profiling/readiness-remediation-agent'
 import {
   completeProfileRunReplaySafe,
   persistProfileSnapshotReplaySafe,
@@ -116,6 +117,9 @@ export async function executeProfilingExecutor(operation: string, input: any, co
           profilingRunId,
           execute: () => executeProfilingMetrics(datasetVersionId, profilingRunId, {}),
         }); break
+      case 'remediate_profile_readiness':
+        if (!projectId) throw new Error('projectId is required for profile readiness remediation')
+        result = await executeProfileReadinessRemediation({ projectId, datasetVersionId, agentRunId }); break
       case 'investigate_profile':
         if (!profilingRunId) throw new Error('profilingRunId is required for investigate_profile')
         result = await investigateProfilingRunReplaySafe({
