@@ -86,7 +86,7 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
           descriptor,
         }
       }
-      if (readiness.manual_access?.source_edit !== true) {
+      if (readiness?.manual_access?.source_edit !== true) {
         return {
           href: null,
           label: `This change requires ${descriptor.requiredCapability ?? 'authorized source management'} access. Your current governance context cannot use the source configuration workspace.`,
@@ -97,7 +97,7 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
     }
 
     if (descriptor.routeKind === 'DATASET_EDIT') {
-      if (readiness.manual_access?.dataset_edit !== true) {
+      if (readiness?.manual_access?.dataset_edit !== true) {
         return {
           href: null,
           label: `This change requires ${descriptor.requiredCapability ?? 'authorized dataset management'} access. Your current governance context cannot use the dataset configuration workspace.`,
