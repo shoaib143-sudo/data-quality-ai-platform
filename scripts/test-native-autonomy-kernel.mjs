@@ -19,6 +19,7 @@ function certification(toolKey, overrides = {}) {
     privileged: false,
     governanceAuthorityChange: false,
     replayCertified: false,
+    rollbackStrategy: 'NOT_APPLICABLE',
     ...overrides,
   }
 }
@@ -26,8 +27,18 @@ function certification(toolKey, overrides = {}) {
 const projectId = 'project-1'
 const certifications = new Map([
   ['governance.dataset.read', certification('governance.dataset.read', { readOnly: true })],
-  ['quality.rules.execute', certification('quality.rules.execute', { idempotent: true, reversible: true, replayCertified: true })],
-  ['quality.remediation.propose', certification('quality.remediation.propose', { reversible: true })],
+  ['quality.rules.execute', certification('quality.rules.execute', {
+    idempotent: true,
+    compensatable: true,
+    replayCertified: true,
+    rollbackStrategy: 'COMPENSATION_TOOL',
+    compensationToolKey: 'quality.rules.compensate',
+  })],
+  ['quality.remediation.propose', certification('quality.remediation.propose', {
+    idempotent: true,
+    replayCertified: true,
+    rollbackStrategy: 'ESCALATE_ONLY',
+  })],
 ])
 
 const plan = {
@@ -68,7 +79,7 @@ assert.deepEqual(validated.steps.map((step) => step.decision), [
   'APPROVAL_REQUIRED',
 ])
 assert.deepEqual(validated.steps.map((step) => step.riskTier), [0, 1, 3])
-assert.deepEqual(validated.steps.map((step) => step.retryCertified), [true, true, false])
+assert.deepEqual(validated.steps.map((step) => step.retryCertified), [true, true, true])
 
 const tier2 = validateNativeBoundedPlan({
   plan,
@@ -80,7 +91,7 @@ const tier2 = validateNativeBoundedPlan({
 })
 assert.equal(tier2.steps[2].decision, 'AUTO_TIER_2_PREAPPROVED')
 assert.equal(tier2.steps[2].riskTier, 2)
-assert.equal(tier2.steps[2].retryCertified, false)
+assert.equal(tier2.steps[2].retryCertified, true)
 
 const contractHash = `sha256:${'a'.repeat(64)}`
 const pinnedRead = certifyNativePinnedToolContract({
@@ -103,7 +114,9 @@ const pinnedApproval = certifyNativePinnedToolContract({
   execution_config: {
     executor: 'quality-remediation-executor',
     approval_required: true,
-    reversible: true,
+    compensatable: true,
+    rollback_strategy: 'COMPENSATION_TOOL',
+    compensation_tool_key: 'quality.remediation.rollback',
   },
 })
 const approvalPlan = validateNativeBoundedPlan({
@@ -121,10 +134,69 @@ assert.throws(
       executor: 'quality-executor',
       replay_certified: true,
       idempotent: false,
+      rollback_strategy: 'ESCALATE_ONLY',
     },
   }),
   /replay certification requires read-only or idempotent execution/,
 )
+
+assert.throws(
+  () => certifyNativePinnedToolContract({
+    tool_key: 'quality.rules.execute',
+    contract_hash: contractHash,
+    execution_config: {
+      executor: 'quality-executor',
+      idempotent: true,
+      replay_certified: true,
+    },
+  }),
+  /mutating tool requires rollback_strategy COMPENSATION_TOOL or ESCALATE_ONLY/,
+)
+
+assert.throws(
+  () => certifyNativePinnedToolContract({
+    tool_key: 'quality.rules.execute',
+    contract_hash: contractHash,
+    execution_config: {
+      executor: 'quality-executor',
+      idempotent: true,
+      replay_certified: true,
+      rollback_strategy: 'ESCALATE_ONLY',
+      compensatable: true,
+    },
+  }),
+  /ESCALATE_ONLY cannot claim reversible\/compensatable execution or a compensation tool/,
+)
+
+assert.throws(
+  () => certifyNativePinnedToolContract({
+    tool_key: 'quality.rules.execute',
+    contract_hash: contractHash,
+    execution_config: {
+      executor: 'quality-executor',
+      idempotent: true,
+      replay_certified: true,
+      rollback_strategy: 'COMPENSATION_TOOL',
+      compensatable: true,
+    },
+  }),
+  /COMPENSATION_TOOL requires compensation_tool_key/,
+)
+
+const pinnedCompensation = certifyNativePinnedToolContract({
+  tool_key: 'quality.rules.execute',
+  contract_hash: contractHash,
+  execution_config: {
+    executor: 'quality-executor',
+    idempotent: true,
+    replay_certified: true,
+    rollback_strategy: 'COMPENSATION_TOOL',
+    compensatable: true,
+    compensation_tool_key: 'quality.rules.compensate',
+  },
+})
+assert.equal(pinnedCompensation.rollbackStrategy, 'COMPENSATION_TOOL')
+assert.equal(pinnedCompensation.compensationToolKey, 'quality.rules.compensate')
 
 await assert.rejects(
   () => prepareNativeAutonomousExecution({
@@ -226,7 +298,7 @@ assert.equal(executions, 2)
 assert.ok(events.includes('RECOVERY_DECIDED'))
 assert.ok(events.includes('PLAN_SUCCEEDED'))
 
-const unsafeTier2Plan = validateNativeBoundedPlan({
+const boundedTier2Plan = validateNativeBoundedPlan({
   plan: { ...plan, steps: [plan.steps[2]] },
   certifications,
   policy: {
@@ -234,11 +306,13 @@ const unsafeTier2Plan = validateNativeBoundedPlan({
     approvedTier2Tools: ['quality.remediation.propose'],
   },
 })
-const unsafeRetry = await executeNativeClosedLoop({
-  plan: unsafeTier2Plan,
+let boundedAttempts = 0
+const boundedFailure = await executeNativeClosedLoop({
+  plan: boundedTier2Plan,
   runtime: {
     async executeStep() {
-      throw new Error('temporary failure')
+      boundedAttempts += 1
+      throw Object.assign(new Error('temporary failure'), { code: 'STEP_FAILED' })
     },
     async validateOutcome() {
       return { valid: false }
@@ -248,11 +322,12 @@ const unsafeRetry = await executeNativeClosedLoop({
     },
   },
 })
-assert.deepEqual(unsafeRetry, {
+assert.equal(boundedAttempts, 3)
+assert.deepEqual(boundedFailure, {
   status: 'FAILED',
   completedStepIds: [],
   stepId: 'propose-remediation',
-  code: 'UNSAFE_RETRY_BLOCKED',
+  code: 'STEP_FAILED',
 })
 
 const approvalResult = await executeNativeClosedLoop({

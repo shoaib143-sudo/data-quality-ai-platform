@@ -15,6 +15,8 @@ contains(kernel, 'NATIVE_AUTONOMY_MAX_ATTEMPTS = 3', 'bounded recovery')
 contains(kernel, 'certifyNativePinnedToolContract', 'pinned contract safety certification')
 contains(kernel, "'approval_required'", 'approval contract binding')
 contains(kernel, "'replay_certified'", 'replay certification')
+contains(kernel, 'certifyNativeRollbackContract', 'rollback contract binding')
+contains(kernel, "'COMPENSATION_TOOL'", 'Tier 1 compensation rollback strategy')
 contains(kernel, "'AUTO_TIER_0'", 'Tier 0 automatic execution')
 contains(kernel, "'AUTO_TIER_1'", 'Tier 1 automatic execution')
 contains(kernel, "'AUTO_TIER_2_PREAPPROVED'", 'Tier 2 pre-approved execution')
@@ -47,7 +49,8 @@ assert.equal(/\binput\s+jsonb\b/i.test(migration), false, 'supervisor evidence m
 assert.equal(/\boutput\s+jsonb\b/i.test(migration), false, 'supervisor evidence must not persist raw output JSON')
 assert.equal(/\bprompt\b/i.test(migration.replace(/--[^\n]*/g, '')), false, 'supervisor evidence schema must not persist prompts')
 
-contains(tests, 'UNSAFE_RETRY_BLOCKED', 'unsafe retry regression test')
+contains(tests, 'mutating tool requires rollback_strategy COMPENSATION_TOOL or ESCALATE_ONLY', 'missing rollback strategy regression test')
+contains(tests, "rollbackStrategy, 'COMPENSATION_TOOL'", 'compensation rollback regression test')
 contains(tests, "status: 'WAITING_APPROVAL'", 'approval pause regression test')
 contains(tests, 'replay certification requires read-only or idempotent execution', 'replay safety regression test')
 
