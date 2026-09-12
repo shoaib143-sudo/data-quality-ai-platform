@@ -1,0 +1,26 @@
+name: Ownership Coverage Evidence
+
+on:
+  pull_request:
+    paths:
+      - 'app/home/[persona]/page.tsx'
+      - 'scripts/verify-ownership-coverage-evidence.mjs'
+      - '.github/workflows/ownership-coverage-evidence.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify ownership evidence contract
+        run: node scripts/verify-ownership-coverage-evidence.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
