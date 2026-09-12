@@ -191,7 +191,7 @@
       "riskTier": "R3",
       "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
       "requirements": [
-        "every accepted exception has an owner",
+        "every accepted exception has an accountable owner and risk tier",
         "rationale and compensating controls are recorded",
         "review due date or expiry is recorded",
         "closure condition is explicit",
@@ -222,10 +222,12 @@
   },
   "exceptionRecordRequiredFields": [
     "riskId",
+    "riskTier",
+    "status",
     "owner",
     "rationale",
     "compensatingControls",
-    "acceptedAt",
+    "recordedAt",
     "reviewDueAt",
     "closureCondition"
   ],
