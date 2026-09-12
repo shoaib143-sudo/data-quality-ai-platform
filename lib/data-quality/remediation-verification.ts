@@ -1,8 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { queueDataQualityAutomation } from '@/lib/data-quality/queue'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { assertDataQualityVerificationBinding } from '@/lib/data-quality/remediation-verification-integrity'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
+function object(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 function uuidList(value: unknown) { return Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [] }
 function severityRank(value: unknown) {
   const ranks: Record<string, number> = { INFO: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 }
@@ -22,7 +24,7 @@ export async function verifyDataQualityRemediation(input: {
   const { data: outcome, error: outcomeError } = await admin
     .schema('governance')
     .from('data_quality_remediation_outcomes')
-    .select('id,project_id,workflow_instance_id,investigation_id,source_agent_run_id,remediation_issue_ids,status,outcome,checks')
+    .select('id,project_id,workflow_instance_id,investigation_id,source_agent_run_id,remediation_issue_ids,status,outcome,checks,verification_agent_run_id,verification_profile_run_id,verification_generation')
     .eq('workflow_instance_id', input.workflowInstanceId)
     .maybeSingle()
   if (outcomeError || !outcome) throw new Error(`Unable to load data quality remediation outcome: ${outcomeError?.message ?? 'not found'}`)
@@ -42,9 +44,38 @@ export async function verifyDataQualityRemediation(input: {
     .eq('id', input.verificationAgentRunId)
     .maybeSingle()
   if (verificationRunError || !verificationRun) throw new Error(`Unable to load verification data quality run: ${verificationRunError?.message ?? 'not found'}`)
+
+  const priorOutcome = object(outcome.outcome)
+  const expectedVerificationProfileRunId = outcome.verification_profile_run_id ?? (text(priorOutcome.verification_profile_run_id) || null)
+  const verificationInput = object(verificationRun.input)
+  assertDataQualityVerificationBinding(
+    {
+      workflowInstanceId: outcome.workflow_instance_id,
+      verificationAgentRunId: outcome.verification_agent_run_id,
+      verificationProfileRunId: expectedVerificationProfileRunId,
+      verificationGeneration: outcome.verification_generation == null ? null : Number(outcome.verification_generation),
+    },
+    {
+      agentRunId: verificationRun.id,
+      input: verificationInput,
+    },
+  )
+
   if (verificationRun.status !== 'SUCCEEDED') throw new Error(`Verification data quality run must be successful, received ${verificationRun.status}.`)
   if (verificationRun.project_id !== outcome.project_id || verificationRun.dataset_id !== investigation.dataset_id) throw new Error('Verification run must belong to the same governed dataset and project.')
   if (input.verificationAgentRunId === outcome.source_agent_run_id) throw new Error('Verification must use a new data quality execution.')
+
+  if (expectedVerificationProfileRunId) {
+    const { data: verificationProfile, error: verificationProfileError } = await admin
+      .schema('profiling')
+      .from('profile_runs')
+      .select('id,dataset_version_id,status')
+      .eq('id', expectedVerificationProfileRunId)
+      .maybeSingle()
+    if (verificationProfileError || !verificationProfile) throw new Error(`Unable to load linked verification profile run: ${verificationProfileError?.message ?? 'not found'}`)
+    if (verificationProfile.status !== 'COMPLETED') throw new Error(`Linked verification profile run must be COMPLETED, received ${verificationProfile.status}.`)
+    if (verificationProfile.dataset_version_id !== verificationRun.dataset_version_id) throw new Error('Verification Data Quality run and linked verification profile must use the same dataset version.')
+  }
 
   const [{ data: sourceRuns, error: sourceRunsError }, { data: verificationRuns, error: verificationRunsError }] = await Promise.all([
     admin.schema('profiling').from('quality_rule_runs').select('id,rule_definition_id,status').eq('agent_run_id', outcome.source_agent_run_id),
@@ -78,6 +109,13 @@ export async function verifyDataQualityRemediation(input: {
   const verificationPassed = issuesResolved && failureCountNotWorse && severeFailuresNotWorse && materialImprovement
 
   const checks = {
+    verification_evidence_binding: {
+      passed: true,
+      workflow_instance_id: outcome.workflow_instance_id,
+      verification_agent_run_id: verificationRun.id,
+      verification_profile_run_id: expectedVerificationProfileRunId,
+      verification_generation: outcome.verification_generation ?? 0,
+    },
     tracked_remediation_issues_resolved: { passed: issuesResolved, expected: issueIds.length, resolved: (issues ?? []).filter((issue) => ['RESOLVED', 'CLOSED'].includes(issue.status)).length },
     failed_controls_not_worse: { passed: failureCountNotWorse, source_failed: sourceFailed.length, verification_failed: verificationFailed.length },
     severe_controls_not_worse: { passed: severeFailuresNotWorse, source_high_or_critical: sourceSevere.length, verification_high_or_critical: verificationSevere.length },
@@ -88,11 +126,16 @@ export async function verifyDataQualityRemediation(input: {
 
   const { error: updateError } = await admin.schema('governance').from('data_quality_remediation_outcomes').update({
     verification_agent_run_id: input.verificationAgentRunId,
+    verification_profile_run_id: expectedVerificationProfileRunId,
     status,
     checks,
     outcome: {
+      ...priorOutcome,
       verification_passed: verificationPassed,
       verification_source: verificationSource,
+      verification_profile_run_id: expectedVerificationProfileRunId,
+      verification_agent_run_id: input.verificationAgentRunId,
+      verification_generation: outcome.verification_generation ?? 0,
       source_failed_rule_count: sourceFailed.length,
       verification_failed_rule_count: verificationFailed.length,
       source_severe_failure_count: sourceSevere.length,
@@ -128,13 +171,22 @@ export async function verifyDataQualityRemediation(input: {
     entityType: 'DATA_QUALITY_RUN',
     entityId: input.verificationAgentRunId,
     correlationId: input.workflowInstanceId,
-    metadata: { workflow_instance_id: input.workflowInstanceId, source_agent_run_id: outcome.source_agent_run_id, verification_agent_run_id: input.verificationAgentRunId, verification_source: verificationSource, checks },
+    metadata: {
+      workflow_instance_id: input.workflowInstanceId,
+      source_agent_run_id: outcome.source_agent_run_id,
+      verification_agent_run_id: input.verificationAgentRunId,
+      verification_profile_run_id: expectedVerificationProfileRunId,
+      verification_generation: outcome.verification_generation ?? 0,
+      verification_source: verificationSource,
+      checks,
+    },
   })
 
   return {
     workflowInstanceId: input.workflowInstanceId,
     sourceAgentRunId: outcome.source_agent_run_id,
     verificationAgentRunId: input.verificationAgentRunId,
+    verificationProfileRunId: expectedVerificationProfileRunId,
     verificationPassed,
     status,
     checks,

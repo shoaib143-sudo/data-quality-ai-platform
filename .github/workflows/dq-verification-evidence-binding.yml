@@ -1,0 +1,32 @@
+name: DQ Verification Evidence Binding
+
+on:
+  pull_request:
+    paths:
+      - 'lib/data-quality/remediation-verification.ts'
+      - 'lib/data-quality/remediation-verification-integrity.ts'
+      - 'lib/data-quality/remediation-reprofile.ts'
+      - 'supabase/migrations/20260912032000_backfill_dq_verification_profile_linkage.sql'
+      - 'scripts/test-dq-verification-evidence-binding.mjs'
+      - 'scripts/verify-dq-verification-evidence-binding.mjs'
+      - '.github/workflows/dq-verification-evidence-binding.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify evidence binding contracts
+        run: node scripts/verify-dq-verification-evidence-binding.mjs
+      - name: Unit test evidence binding
+        run: node --experimental-strip-types scripts/test-dq-verification-evidence-binding.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
