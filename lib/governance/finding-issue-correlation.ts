@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
-export type FindingIssueIdentity = {
+export type FindingIssueIdentity = Record<string, unknown> & {
   id: string
   project_id: string
   dataset_id: string | null
@@ -20,7 +20,7 @@ export async function findIssueByFindingIdentity(projectId: string, findingId: s
   if (!projectId || !findingId) return null
   const admin = createAdminClient()
   const { data, error } = await admin.schema('governance').from('issues')
-    .select('id,project_id,dataset_id,dataset_version_id,profile_run_id,finding_id,quality_rule_run_id,title,severity,status,owner_user_id,created_at,updated_at')
+    .select('*')
     .eq('project_id', projectId)
     .eq('finding_id', findingId)
     .maybeSingle()
