@@ -16,10 +16,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
+          cache: pnpm
 
       - name: Verify project profile readiness contract
         run: node scripts/verify-project-profile-readiness.mjs
@@ -46,9 +52,7 @@ jobs:
         run: sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/test-project-profile-readiness-admission.sql
 
       - name: Install dependencies
-        run: |
-          corepack enable
-          pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: TypeScript revalidation
         run: pnpm exec tsc --noEmit
