@@ -1,5 +1,6 @@
 import { assertProjectBelongsToInstanceOrganization } from '@/lib/governance/instance-organization'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { normalizeRootCauseEvidence, resolveLegacyVerificationProfileRunId } from './incident-evidence-normalization'
 import {
   assertGovernedIncidentTruthInvariant,
   deriveIncidentLifecycleState,
@@ -16,11 +17,6 @@ function text(value: unknown) {
 
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
-}
-
-function stringList(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value.map((item) => typeof item === 'string' ? item.trim() : text(object(item).summary) || text(object(item).description)).filter(Boolean)
 }
 
 function evidenceRef(authority: IncidentEvidenceRef['authority'], sourceTable: string, sourceId: string, kind: string, observedAt?: string | null, deterministic = true): IncidentEvidenceRef {
@@ -116,11 +112,21 @@ export async function loadGovernedIncident(input: { projectId: string; issueId: 
   }
 
   const rootCauseEvidence: IncidentRootCauseEvidence[] = []
-  for (const explanation of stringList(investigation?.probable_root_causes)) {
-    rootCauseEvidence.push({ ...evidenceRef('DATA_QUALITY', 'governance.data_quality_investigations', investigation!.id, 'PROBABLE_ROOT_CAUSE', investigation!.updated_at, false), explanation, confidence: null, advisory: true })
+  for (const cause of normalizeRootCauseEvidence(investigation?.probable_root_causes)) {
+    rootCauseEvidence.push({
+      ...evidenceRef('DATA_QUALITY', 'governance.data_quality_investigations', investigation!.id, 'PROBABLE_ROOT_CAUSE', investigation!.updated_at, false),
+      explanation: cause.explanation,
+      confidence: cause.confidence,
+      advisory: true,
+    })
   }
-  for (const explanation of stringList(observability?.probable_root_causes)) {
-    rootCauseEvidence.push({ ...evidenceRef('OBSERVABILITY', 'governance.observability_incidents', observability!.id, 'PROBABLE_ROOT_CAUSE', observability!.last_observed_at, false), explanation, confidence: observability!.confidence ?? null, advisory: true })
+  for (const cause of normalizeRootCauseEvidence(observability?.probable_root_causes)) {
+    rootCauseEvidence.push({
+      ...evidenceRef('OBSERVABILITY', 'governance.observability_incidents', observability!.id, 'PROBABLE_ROOT_CAUSE', observability!.last_observed_at, false),
+      explanation: cause.explanation,
+      confidence: cause.confidence ?? observability!.confidence ?? null,
+      advisory: true,
+    })
   }
 
   const impactEvidence: IncidentImpactEvidence[] = [
@@ -139,7 +145,8 @@ export async function loadGovernedIncident(input: { projectId: string; issueId: 
     ? profiling?.status ?? null
     : dq?.status?.startsWith('VERIFICATION') || ['VERIFIED', 'VERIFICATION_FAILED'].includes(dq?.status ?? '') ? dq?.status ?? null : null
   const verificationRequired = Boolean(profiling || dq)
-  const verificationRunId = profiling?.verification_profile_run_id ?? dq?.verification_profile_run_id ?? null
+  const dqVerificationRunId = dq ? resolveLegacyVerificationProfileRunId(dq.verification_profile_run_id, dq.outcome) : null
+  const verificationRunId = profiling?.verification_profile_run_id ?? dqVerificationRunId
   const sourceRunId = profiling?.source_profile_run_id ?? issue.profile_run_id ?? null
   const verifiedAt = profiling?.verified_at ?? dq?.verified_at ?? null
 
