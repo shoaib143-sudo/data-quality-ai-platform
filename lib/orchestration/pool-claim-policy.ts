@@ -10,6 +10,12 @@ export type PoolClaimAssessment = {
   allPoolsFailed: boolean
 }
 
+export type StaleReleaseFailureAssessment = {
+  canContinueClaiming: boolean
+  error: string
+  disposition: 'STALE_RUNNING_LEFT_FENCED_FOR_RETRY' | 'FAIL_CLOSED'
+}
+
 export function assessPoolClaimOutcomes(outcomes: PoolClaimOutcome[]): PoolClaimAssessment {
   const successfulPoolCount = outcomes.filter((outcome) => outcome.succeeded).length
   const failures = outcomes
@@ -23,6 +29,18 @@ export function assessPoolClaimOutcomes(outcomes: PoolClaimOutcome[]): PoolClaim
     successfulPoolCount,
     failures,
     allPoolsFailed: outcomes.length > 0 && successfulPoolCount === 0,
+  }
+}
+
+export function assessStaleReleaseFailure(
+  error: string | undefined,
+  claimableStatuses: readonly string[],
+): StaleReleaseFailureAssessment {
+  const staleRunningCouldBeClaimed = claimableStatuses.includes('RUNNING')
+  return {
+    canContinueClaiming: !staleRunningCouldBeClaimed,
+    error: (error || 'Unknown stale-job release failure').slice(0, 500),
+    disposition: staleRunningCouldBeClaimed ? 'FAIL_CLOSED' : 'STALE_RUNNING_LEFT_FENCED_FOR_RETRY',
   }
 }
 

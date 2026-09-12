@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 
 import {
   assessPoolClaimOutcomes,
+  assessStaleReleaseFailure,
   formatPoolClaimFailures,
 } from '../lib/orchestration/pool-claim-policy.ts'
 
@@ -56,4 +57,15 @@ const longError = 'x'.repeat(800)
 const bounded = assessPoolClaimOutcomes([{ pool: 'SEMANTIC', succeeded: false, error: longError }])
 assert.equal(bounded.failures[0].error.length, 500, 'persisted failure evidence must be bounded')
 
-console.log('Durable workload-pool claim isolation unit tests passed.')
+const staleReleaseWithQueuedOnlyClaims = assessStaleReleaseFailure('Gateway Timeout', ['QUEUED'])
+assert.equal(staleReleaseWithQueuedOnlyClaims.canContinueClaiming, true, 'stale RUNNING work stays fenced when only QUEUED rows are claimable')
+assert.equal(staleReleaseWithQueuedOnlyClaims.disposition, 'STALE_RUNNING_LEFT_FENCED_FOR_RETRY')
+
+const staleReleaseWithRunningClaims = assessStaleReleaseFailure('Gateway Timeout', ['QUEUED', 'RUNNING'])
+assert.equal(staleReleaseWithRunningClaims.canContinueClaiming, false, 'cleanup failure must fail closed if RUNNING rows could be reclaimed by the claim path')
+assert.equal(staleReleaseWithRunningClaims.disposition, 'FAIL_CLOSED')
+
+const boundedRelease = assessStaleReleaseFailure('y'.repeat(800), ['QUEUED'])
+assert.equal(boundedRelease.error.length, 500, 'stale-release failure evidence must be bounded')
+
+console.log('Durable workload-pool claim isolation and stale-release safety unit tests passed.')

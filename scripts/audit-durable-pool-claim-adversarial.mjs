@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-import { assessPoolClaimOutcomes } from '../lib/orchestration/pool-claim-policy.ts'
+import { assessPoolClaimOutcomes, assessStaleReleaseFailure } from '../lib/orchestration/pool-claim-policy.ts'
 
 const queue = fs.readFileSync('lib/orchestration/queue.ts', 'utf8')
 const claimStart = queue.indexOf('export async function claimDurableJobs')
@@ -53,12 +53,19 @@ for (const scenario of scenarios) {
   assert.equal(result.allPoolsFailed, scenario.allPoolsFailed, scenario.name)
 }
 
-assert.match(claimPath, /if \(releaseError\) throw new Error/, 'stale lease release failure must fail before new claims')
+const safeCleanupFailure = assessStaleReleaseFailure('Gateway Timeout', ['QUEUED'])
+assert.equal(safeCleanupFailure.canContinueClaiming, true, 'cleanup outage must not suppress QUEUED-only work while stale RUNNING rows remain fenced')
+const unsafeCleanupFailure = assessStaleReleaseFailure('Gateway Timeout', ['QUEUED', 'RUNNING'])
+assert.equal(unsafeCleanupFailure.canContinueClaiming, false, 'cleanup outage must fail closed if RUNNING rows could become claimable')
+
+assert.match(claimPath, /assessStaleReleaseFailure\(releaseError\.message, \['QUEUED'\]\)/, 'runtime cleanup degradation must declare the QUEUED-only claim invariant')
+assert.match(claimPath, /await writeTelemetry\(null, 'job\.stale_release_failed'/, 'stale cleanup failure must produce explicit evidence')
+assert.match(claimPath, /if \(!releaseAssessment\.canContinueClaiming\)/, 'unsafe cleanup degradation must fail closed')
 assert.match(claimPath, /await writeTelemetry\(null, 'job\.pool_claim_failed'/, 'pool failure must produce explicit evidence')
 assert.match(claimPath, /disposition: 'POOL_LEFT_QUEUED_FOR_RETRY'/, 'failed pool work must remain retryable')
 assert.match(claimPath, /if \(assessment\.allPoolsFailed\)/, 'complete outage must fail closed')
-assert.doesNotMatch(claimPath, /last_error/, 'claim transport failures must not mutate job business failure state')
-assert.doesNotMatch(claimPath, /from\('job_queue'\)\.update/, 'claim transport failures must not update durable job state')
-assert.doesNotMatch(claimPath, /markDurableJobFailed/, 'pool transport failure must not consume durable job attempts')
+assert.doesNotMatch(claimPath, /last_error/, 'claim transport and cleanup failures must not mutate job business failure state')
+assert.doesNotMatch(claimPath, /from\('job_queue'\)\.update/, 'claim transport and cleanup failures must not update durable job state')
+assert.doesNotMatch(claimPath, /markDurableJobFailed/, 'transport failures must not consume durable job attempts')
 
-console.log(`Independent automated adversarial audit passed for ${scenarios.length} workload-pool failure scenarios.`)
+console.log(`Independent automated adversarial audit passed for ${scenarios.length} workload-pool failure scenarios plus safe and unsafe stale-release failure boundaries.`)
