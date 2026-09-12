@@ -6,7 +6,7 @@ const ui=fs.readFileSync('app/platform/platform-controls-v2.tsx','utf8')
 
 assert.match(api,/verify_project_governance_activation/)
 assert.match(api,/governanceActivation:governanceActivation\.data\?\?null/)
-assert.match(api,/authorizeProject\(user\.id,projectId,'catalog\.read'\)/)
+assert.match(api,/requireCapability\(user\.id,projectId,'catalog\.read'\)/)
 
 assert.match(ui,/Effective project governance coverage/)
 assert.match(ui,/Proposed, suggested, draft, and provisional records are shown separately and never counted as effective governance/)
