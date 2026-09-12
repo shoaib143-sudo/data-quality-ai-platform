@@ -104,4 +104,10 @@ const integritySource = readFileSync(new URL('../lib/governance/issue-reference-
 assert.match(integritySource, /governance_findings/)
 assert.match(integritySource, /ISSUE_CONTROL_FINDING_PROJECT_MISMATCH/)
 
+const timestampMigration = readFileSync(new URL('../supabase/migrations/20260912043500_governance_issue_resolution_timestamp_integrity.sql', import.meta.url), 'utf8')
+assert.match(timestampMigration, /set resolved_at = updated_at/i)
+assert.match(timestampMigration, /set resolved_at = null/i)
+assert.match(timestampMigration, /issues_resolution_timestamp_consistency/)
+assert.match(timestampMigration, /validate constraint issues_resolution_timestamp_consistency/i)
+
 console.log('Governed incident adversarial hardening tests passed.')
