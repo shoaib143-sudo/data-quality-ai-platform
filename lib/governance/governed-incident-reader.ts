@@ -1,6 +1,7 @@
 import { assertProjectBelongsToInstanceOrganization } from '@/lib/governance/instance-organization'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeRootCauseEvidence, resolveLegacyVerificationProfileRunId } from './incident-evidence-normalization'
+import { assertIssueReferencesBelongToProject } from './issue-reference-integrity'
 import {
   assertGovernedIncidentTruthInvariant,
   deriveIncidentLifecycleState,
@@ -35,6 +36,19 @@ export async function loadGovernedIncident(input: { projectId: string; issueId: 
 
   if (issueError) throw new Error(`Unable to load governed incident issue: ${issueError.message}`)
   if (!issue) return null
+
+  // The incident reader uses the service-role client to compose evidence, so re-validate
+  // every stored object reference before following it. This makes stale/internal writes
+  // fail closed instead of allowing an admin read to cross project boundaries.
+  await assertIssueReferencesBelongToProject({
+    projectId: input.projectId,
+    datasetId: issue.dataset_id,
+    datasetVersionId: issue.dataset_version_id,
+    profileRunId: issue.profile_run_id,
+    findingId: issue.finding_id,
+    qualityRuleRunId: issue.quality_rule_run_id,
+    controlFindingId: issue.control_finding_id,
+  })
 
   const profilingOutcomePromise = admin.schema('governance').from('profiling_remediation_outcomes')
     .select('id,workflow_instance_id,source_profile_run_id,verification_profile_run_id,status,source_quality_score,verification_quality_score,quality_score_delta,source_high_severity_findings,verification_high_severity_findings,high_severity_findings_delta,checks,outcome,verified_at,updated_at')
@@ -92,6 +106,13 @@ export async function loadGovernedIncident(input: { projectId: string; issueId: 
   const finding = findingResult.data
   const investigation = investigationResult.data
   const knowledge = knowledgeResult.data ?? []
+
+  // Profiling and Data Quality outcomes are separate verification authorities with
+  // different provenance contracts. Mixing individual fields from both would create
+  // synthetic truth, so ambiguous linkage fails closed until reconciled upstream.
+  if (profiling && dq) {
+    throw new Error('Ambiguous governed incident remediation authority: issue is linked to both profiling and data-quality remediation outcomes.')
+  }
 
   let lineageNodes: Array<Record<string, unknown>> = []
   if (lineage?.id) {

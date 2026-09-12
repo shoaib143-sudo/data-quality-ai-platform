@@ -133,6 +133,10 @@ function upper(value: string | null | undefined) {
   return String(value ?? '').trim().toUpperCase()
 }
 
+function isResolvedIssueStatus(value: string | null | undefined) {
+  return ['RESOLVED', 'CLOSED'].includes(upper(value))
+}
+
 export function canTransitionIncidentLifecycle(
   from: GovernedIncidentLifecycleState,
   to: GovernedIncidentLifecycleState,
@@ -153,23 +157,27 @@ export function deriveIncidentLifecycleState(signals: IncidentLifecycleSignals):
   const issueStatus = upper(signals.issueStatus)
   const remediationStatus = upper(signals.remediationStatus)
   const verificationStatus = upper(signals.verificationStatus)
+  const issueResolved = isResolvedIssueStatus(issueStatus)
+  const verificationPreviouslyPassed = ['VERIFIED', 'VERIFIED_RESOLVED', 'PASSED'].includes(verificationStatus)
 
-  if (signals.wasReopened) return 'REOPENED'
+  // Current issue truth always outranks historical verification evidence. A previously
+  // verified issue that is now non-terminal is reopened, never still "verified resolved".
+  if (signals.wasReopened || (verificationPreviouslyPassed && !issueResolved)) return 'REOPENED'
   if (issueStatus === 'BLOCKED') return 'BLOCKED'
 
-  if (['VERIFIED', 'VERIFIED_RESOLVED', 'PASSED'].includes(verificationStatus)) {
+  if (verificationPreviouslyPassed && issueResolved) {
     return 'VERIFIED_RESOLVED'
   }
-  if (['VERIFICATION_FAILED', 'FAILED', 'FAIL'].includes(verificationStatus)) {
+  if (['VERIFICATION_FAILED', 'FAILED', 'FAIL'].includes(verificationStatus) && issueResolved) {
     return 'VERIFICATION_FAILED'
   }
-  if (['VERIFYING', 'RUNNING', 'IN_PROGRESS'].includes(verificationStatus)) {
+  if (['VERIFYING', 'RUNNING', 'IN_PROGRESS'].includes(verificationStatus) && issueResolved) {
     return 'VERIFYING'
   }
-  if (signals.verificationRequired && ['RESOLVED', 'CLOSED'].includes(issueStatus)) {
+  if (signals.verificationRequired && issueResolved) {
     return verificationStatus === 'QUEUED' ? 'VERIFYING' : 'VERIFICATION_PENDING'
   }
-  if (!signals.verificationRequired && ['RESOLVED', 'CLOSED'].includes(issueStatus) && signals.hasResolutionEvidence) {
+  if (!signals.verificationRequired && issueResolved && signals.hasResolutionEvidence) {
     return 'RESOLUTION_RECORDED'
   }
 
@@ -192,10 +200,18 @@ export function assertGovernedIncidentTruthInvariant(incident: GovernedIncident)
   if (incident.authorizationBoundary !== 'EXTERNAL_TO_PRESENTATION_ENGINE') {
     throw new Error('Governed incident authorization must remain external to presentation.')
   }
-  if (incident.verification.required && truth.lifecycleState === 'VERIFIED_RESOLVED') {
-    const status = upper(incident.verification.status)
-    if (!['VERIFIED', 'VERIFIED_RESOLVED', 'PASSED'].includes(status)) {
-      throw new Error('VERIFIED_RESOLVED requires authoritative verification evidence.')
+  if (truth.lifecycleState === 'VERIFIED_RESOLVED') {
+    if (!isResolvedIssueStatus(truth.issueStatus)) {
+      throw new Error('VERIFIED_RESOLVED requires the governance issue itself to remain RESOLVED or CLOSED.')
     }
+    if (incident.verification.required) {
+      const status = upper(incident.verification.status)
+      if (!['VERIFIED', 'VERIFIED_RESOLVED', 'PASSED'].includes(status)) {
+        throw new Error('VERIFIED_RESOLVED requires authoritative verification evidence.')
+      }
+    }
+  }
+  if (!isResolvedIssueStatus(truth.issueStatus) && truth.resolvedAt) {
+    throw new Error('Non-terminal governance issues must not retain resolvedAt.')
   }
 }

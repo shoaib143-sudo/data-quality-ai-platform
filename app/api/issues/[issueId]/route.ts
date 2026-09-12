@@ -4,6 +4,12 @@ import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { assertIssueOwnerBelongsToProjectOrganization, IssueReferenceIntegrityError } from '@/lib/governance/issue-reference-integrity'
+import {
+  deriveIssueResolutionMutation,
+  effectiveResolutionSummary,
+  requiresGovernedResolutionEvidence,
+  shouldCompensateVerificationSchedulingFailure,
+} from '@/lib/governance/incident-resolution-integrity'
 import { scheduleRemediationVerificationFromIssue } from '@/lib/profiling/remediation-reprofile'
 import { scheduleFreshDataQualityVerificationFromIssue } from '@/lib/data-quality/remediation-reprofile'
 import { verifyObservabilityIncidentResponseFromIssue } from '@/lib/observability/incident-response-verification'
@@ -36,17 +42,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
     if (typeof body.severity === 'string' && !ISSUE_SEVERITIES.has(body.severity.toUpperCase())) {
       return NextResponse.json({ error: 'Invalid issue severity.', code: 'ISSUE_SEVERITY_INVALID' }, { status: 400 })
     }
+    if (typeof body.title === 'string' && !body.title.trim()) {
+      return NextResponse.json({ error: 'Issue title cannot be empty.', code: 'ISSUE_TITLE_REQUIRED' }, { status: 400 })
+    }
     if (body.ownerUserId !== undefined) {
       await assertIssueOwnerBelongsToProjectOrganization(issue.project_id, body.ownerUserId)
     }
 
-    const wasResolved = ['RESOLVED', 'CLOSED'].includes(issue.status)
-    const resolvingNow = !wasResolved && ['RESOLVED', 'CLOSED'].includes(status)
+    const mutationAt = new Date().toISOString()
+    const resolutionMutation = deriveIssueResolutionMutation({
+      previousStatus: issue.status,
+      nextStatus: status,
+      previousResolvedAt: issue.resolved_at ?? null,
+      now: mutationAt,
+    })
 
     let isProfilingRemediation = false
     let isDataQualityRemediation = false
     let isObservabilityResponse = false
-    if (resolvingNow) {
+
+    // Validate the governed-remediation relationship for every resulting terminal
+    // state, not only the first transition to RESOLVED/CLOSED. This prevents a
+    // later PATCH from deleting mandatory resolution evidence.
+    if (resolutionMutation.willBeResolved) {
       if (issue.profile_run_id) {
         const { data: profilingOutcome, error: profilingOutcomeError } = await admin
           .schema('governance')
@@ -84,24 +102,41 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
       isObservabilityResponse = Boolean(observabilityIncident)
     }
 
-    const governedRemediation = isProfilingRemediation || isDataQualityRemediation || isObservabilityResponse
-    const resolutionSummary = typeof body.resolutionSummary === 'string' ? body.resolutionSummary.trim() : ''
-    if (governedRemediation && !resolutionSummary) {
+    // Profiling and DQ remediation outcomes are independent verification authorities.
+    // Never silently choose one when the same issue is linked to both.
+    if (isProfilingRemediation && isDataQualityRemediation) {
       return NextResponse.json({
-        error: 'Resolution evidence is required before a governed remediation issue can be resolved.',
+        error: 'Issue is linked to multiple remediation verification authorities and cannot be resolved until the ambiguity is reconciled.',
+        code: 'AMBIGUOUS_REMEDIATION_VERIFICATION_AUTHORITY',
+      }, { status: 409 })
+    }
+
+    const governedRemediation = isProfilingRemediation || isDataQualityRemediation || isObservabilityResponse
+    const resolutionSummaryProvided = Object.prototype.hasOwnProperty.call(body, 'resolutionSummary')
+    const resolutionSummary = effectiveResolutionSummary(issue.resolution_summary, body.resolutionSummary, resolutionSummaryProvided)
+    if (requiresGovernedResolutionEvidence({
+      governedRemediation,
+      nextStatus: status,
+      effectiveSummary: resolutionSummary,
+    })) {
+      return NextResponse.json({
+        error: 'Resolution evidence is required while a governed remediation issue is resolved.',
         code: 'REMEDIATION_RESOLUTION_EVIDENCE_REQUIRED',
       }, { status: 400 })
     }
 
-    const updates: Record<string, unknown> = { updated_at: new Date().toISOString(), status }
+    const updates: Record<string, unknown> = {
+      updated_at: mutationAt,
+      status,
+      resolved_at: resolutionMutation.resolvedAt,
+    }
     if (body.ownerUserId !== undefined) updates.owner_user_id = body.ownerUserId || null
     if (body.dueAt !== undefined) updates.due_at = body.dueAt || null
     if (typeof body.title === 'string') updates.title = body.title.trim()
     if (typeof body.description === 'string') updates.description = body.description.trim() || null
     if (typeof body.severity === 'string') updates.severity = body.severity.toUpperCase()
-    if (typeof body.resolutionSummary === 'string') updates.resolution_summary = resolutionSummary || null
+    if (resolutionSummaryProvided && typeof body.resolutionSummary === 'string') updates.resolution_summary = resolutionSummary || null
     if (body.resolutionEvidence && typeof body.resolutionEvidence === 'object') updates.resolution_evidence = body.resolutionEvidence
-    if (['RESOLVED', 'CLOSED'].includes(status)) updates.resolved_at = new Date().toISOString()
 
     const { data, error } = await admin.schema('governance').from('issues').update(updates).eq('id', issueId).select('*').single()
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
@@ -114,6 +149,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
       entityId: issueId,
       metadata: {
         status,
+        reopened: resolutionMutation.reopeningNow,
         profiling_remediation: isProfilingRemediation,
         data_quality_remediation: isDataQualityRemediation,
         observability_response: isObservabilityResponse,
@@ -122,7 +158,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
     })
 
     let verificationScheduling: Record<string, unknown> | null = null
-    if (['RESOLVED', 'CLOSED'].includes(status)) {
+    if (resolutionMutation.willBeResolved) {
       try {
         const dataQualityScheduling = await scheduleFreshDataQualityVerificationFromIssue({ issueId, projectId: issue.project_id, userId: user.id })
         if (dataQualityScheduling.status !== 'NOT_DATA_QUALITY_REMEDIATION') {
@@ -137,9 +173,69 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
           if (observabilityVerification.status !== 'NOT_OBSERVABILITY_RESPONSE') verificationScheduling = { ...observabilityVerification, mode: 'OBSERVABILITY_RESPONSE' }
         }
       } catch (verificationError) {
+        const verificationErrorMessage = verificationError instanceof Error
+          ? verificationError.message
+          : 'Automatic remediation verification scheduling failed.'
         verificationScheduling = {
           status: 'QUEUE_FAILED',
-          error: verificationError instanceof Error ? verificationError.message : 'Automatic remediation verification scheduling failed.',
+          error: verificationErrorMessage,
+        }
+
+        if (shouldCompensateVerificationSchedulingFailure({
+          governedRemediation,
+          resolvingNow: resolutionMutation.resolvingNow,
+        })) {
+          // Scheduling requires the issue to be terminal first. If scheduling then
+          // fails, compensate only the status/timestamp and preserve the submitted
+          // remediation evidence. Optimistic updated_at matching prevents us from
+          // overwriting a concurrent mutation.
+          const rollbackAt = new Date().toISOString()
+          const { data: rollback, error: rollbackError } = await admin.schema('governance').from('issues')
+            .update({
+              status: issue.status,
+              resolved_at: issue.resolved_at ?? null,
+              updated_at: rollbackAt,
+            })
+            .eq('id', issueId)
+            .eq('status', status)
+            .eq('updated_at', data.updated_at)
+            .select('*')
+            .maybeSingle()
+
+          const rollbackApplied = !rollbackError && Boolean(rollback)
+          await writeGovernanceAudit({
+            projectId: issue.project_id,
+            actorUserId: user.id,
+            eventType: 'ISSUE_RESOLUTION_VERIFICATION_SCHEDULING_FAILED',
+            entityType: 'ISSUE',
+            entityId: issueId,
+            metadata: {
+              attempted_status: status,
+              restored_status: rollbackApplied ? issue.status : null,
+              rollback_applied: rollbackApplied,
+              concurrent_state_detected: !rollbackApplied && !rollbackError,
+              rollback_error: rollbackError?.message ?? null,
+              verification_error: verificationErrorMessage,
+              resolution_evidence_preserved: true,
+            },
+          })
+
+          if (!rollbackApplied) {
+            return NextResponse.json({
+              error: 'Governed verification scheduling failed and the issue changed concurrently; no rollback was forced.',
+              code: 'REMEDIATION_VERIFICATION_SCHEDULING_CONCURRENT_STATE',
+              verificationScheduling,
+              resolutionRolledBack: false,
+            }, { status: 409 })
+          }
+
+          return NextResponse.json({
+            error: 'Resolution was not committed because governed verification could not be scheduled.',
+            code: 'REMEDIATION_VERIFICATION_SCHEDULING_FAILED',
+            issue: rollback,
+            verificationScheduling,
+            resolutionRolledBack: true,
+          }, { status: 503 })
         }
       }
     }
