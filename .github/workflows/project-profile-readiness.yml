@@ -24,6 +24,12 @@ jobs:
       - name: Verify project profile readiness contract
         run: node scripts/verify-project-profile-readiness.mjs
 
+      - name: Verify governed AI remediation contract
+        run: node scripts/verify-profile-readiness-ai-remediation.mjs
+
+      - name: Unit test remediation policy
+        run: node --experimental-strip-types scripts/test-profile-readiness-remediation-policy.mjs
+
       - name: Run independent adversarial audit
         run: node scripts/audit-project-profile-readiness-adversarial.mjs
 
