@@ -8,6 +8,13 @@
       "observedProductionVersion": "20260911112344",
       "reason": "Recovery Assurance v2 was applied to the live Supabase project through the management migration API after merge, which registered the application timestamp as the live migration version. The repository filename remains the immutable source migration identifier. Production migration history must not be rewritten to cosmetically match the repository filename.",
       "observedVia": "Supabase list_migrations"
+    },
+    {
+      "logicalName": "native_interrupt_timeout_lifecycle",
+      "repositoryVersion": "20260912054000",
+      "observedProductionVersion": "20260912051858",
+      "reason": "The governed native interrupt-timeout lifecycle was present on signed protected main before production schema drift was detected by the Platform Assurance Baseline. The exact repository migration was then applied through the Supabase management migration API, which registered the application timestamp. Keep repository history forward-only and recognize this verified alias during recovery/reconstruction checks.",
+      "observedVia": "Supabase list_migrations"
     }
   ]
 }
