@@ -69,9 +69,31 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
   const primaryBlocker = blockerCodes[0]
   const primaryRemediation = primaryBlocker ? readiness?.remediation?.[primaryBlocker] : undefined
   const canAskAi = blockerCodes.some(code => Boolean(readiness?.remediation?.[code]?.ai_action))
-  const manualHref = readiness?.source_id && blockerCodes.some(code => ['SOURCE_NOT_ACTIVE','SOURCE_NOT_OBSERVED_READY','GOVERNED_SCOPE_NOT_READY','EXECUTION_SOURCE_NOT_BOUND','DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE'].includes(code))
-    ? canonicalRoutes.sourceEdit(readiness.source_id)
-    : canonicalRoutes.datasetEdit(datasetId)
+  const manualTarget = useMemo(() => {
+    if (!primaryBlocker) return null
+
+    if (primaryBlocker === 'READINESS_RULE_NOT_ONBOARDED') {
+      return {
+        href: null,
+        label: 'Readiness policy onboarding requires a governance administrator. No self-service remediation is available from this dataset page.',
+      }
+    }
+
+    if (['SOURCE_NOT_ACTIVE','SOURCE_NOT_OBSERVED_READY','GOVERNED_SCOPE_NOT_READY','EXECUTION_SOURCE_NOT_BOUND','DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE'].includes(primaryBlocker)) {
+      return readiness?.source_id
+        ? { href: canonicalRoutes.sourceEdit(readiness.source_id), label: null }
+        : { href: null, label: 'The blocked source could not be resolved, so no safe remediation route is available.' }
+    }
+
+    if (['DATASET_NOT_ACTIVE'].includes(primaryBlocker)) {
+      return { href: canonicalRoutes.datasetEdit(datasetId), label: null }
+    }
+
+    return {
+      href: null,
+      label: primaryRemediation?.manual_action ?? 'No governed self-service remediation route is available for this blocker.',
+    }
+  }, [datasetId, primaryBlocker, primaryRemediation?.manual_action, readiness?.source_id])
 
   async function runProfiling() {
     if (!effectiveReady || !agentDefinitionId || busy) return
@@ -144,9 +166,9 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
 
   return <div className="mt-0 flex w-full flex-col items-end gap-2">
     <div className="flex flex-wrap items-center justify-end gap-3">
-      <Link href={manualHref} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
+      {manualTarget?.href ? <Link href={manualTarget.href} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
         <Pencil className="h-3.5 w-3.5" /> Fix manually
-      </Link>
+      </Link> : null}
       {canAskAi ? <button type="button" onClick={() => void askAiToRepair()} disabled={busy || readinessLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
         {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />}
         Ask AI to repair
@@ -161,6 +183,7 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
     {!readinessLoading && readiness && !effectiveReady ? <div className="max-w-2xl rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-left text-xs text-amber-900" role="status">
       <div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><div><strong>{readiness.state ?? 'BLOCKED'}:</strong> {primaryRemediation?.root_cause ?? 'This dataset is not ready for profiling.'}</div></div>
       {primaryRemediation?.manual_action ? <div className="mt-1 pl-5"><strong>Manual:</strong> {primaryRemediation.manual_action}</div> : null}
+      {manualTarget?.label ? <div className="mt-1 pl-5 text-slate-700"><strong>Access:</strong> {manualTarget.label}</div> : null}
       {primaryRemediation?.ai_action ? <div className="mt-1 flex items-start gap-1 pl-5 text-slate-700"><Bot className="mt-0.5 h-3 w-3 shrink-0" /><span><strong>AI option:</strong> {primaryRemediation.ai_action}{primaryRemediation.approval_required ? ' Explicit approval is required before a governed change.' : ''}</span></div> : null}
       {aiOutcome?.rationale ? <div className="mt-1 pl-5 text-slate-700"><strong>Latest AI review:</strong> {aiOutcome.rationale}</div> : null}
       {legacyReady && !effectiveReady ? <div className="mt-1 pl-5 text-slate-600">The previous UI heuristic indicated executable, but deterministic readiness now takes precedence.</div> : null}
