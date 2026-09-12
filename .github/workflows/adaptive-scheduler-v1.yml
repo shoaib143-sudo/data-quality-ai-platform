@@ -19,6 +19,9 @@ on:
       - 'scripts/test-durable-pool-claim-isolation.mjs'
       - 'scripts/verify-durable-pool-claim-isolation.mjs'
       - 'scripts/audit-durable-pool-claim-adversarial.mjs'
+      - 'scripts/test-outbox-lane-isolation.mjs'
+      - 'scripts/verify-outbox-lane-isolation.mjs'
+      - 'scripts/audit-outbox-lane-adversarial.mjs'
       - '.github/workflows/adaptive-scheduler-v1.yml'
   pull_request:
     branches: [main]
@@ -38,6 +41,9 @@ on:
       - 'scripts/test-durable-pool-claim-isolation.mjs'
       - 'scripts/verify-durable-pool-claim-isolation.mjs'
       - 'scripts/audit-durable-pool-claim-adversarial.mjs'
+      - 'scripts/test-outbox-lane-isolation.mjs'
+      - 'scripts/verify-outbox-lane-isolation.mjs'
+      - 'scripts/audit-outbox-lane-adversarial.mjs'
       - '.github/workflows/adaptive-scheduler-v1.yml'
 
 permissions:
@@ -62,6 +68,12 @@ jobs:
         run: node scripts/verify-durable-pool-claim-isolation.mjs
       - name: Independent adversarial workload-pool audit
         run: node --experimental-strip-types scripts/audit-durable-pool-claim-adversarial.mjs
+      - name: Unit and failure test outbox lane isolation
+        run: node --experimental-strip-types scripts/test-outbox-lane-isolation.mjs
+      - name: Verify outbox lane isolation contract
+        run: node scripts/verify-outbox-lane-isolation.mjs
+      - name: Independent adversarial outbox lane audit
+        run: node --experimental-strip-types scripts/audit-outbox-lane-adversarial.mjs
       - run: node scripts/verify-adaptive-scheduler-v1.mjs
       - run: node scripts/verify-adaptive-sampling.mjs
       - run: node scripts/verify-profile-evidence-reuse.mjs
