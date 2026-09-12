@@ -32,6 +32,7 @@ declare
   v_unapproved_exposed_privileged_functions integer;
   v_governed_admin_rpc_auth_exec boolean;
   v_governed_admin_rpc_anon_exec boolean;
+  v_governed_admin_rpc_guarded boolean;
   v_valid boolean;
 begin
   select split_part(setting,'=',2) into v_schema_setting
@@ -65,8 +66,11 @@ begin
 
   select
     has_function_privilege('authenticated', p.oid, 'EXECUTE'),
-    has_function_privilege('anon', p.oid, 'EXECUTE')
-  into v_governed_admin_rpc_auth_exec, v_governed_admin_rpc_anon_exec
+    has_function_privilege('anon', p.oid, 'EXECUTE'),
+    coalesce(p.proconfig @> array['search_path=""'],false)
+      and position('auth.uid()' in lower(p.prosrc)) > 0
+      and position('app_private.is_project_admin' in lower(p.prosrc)) > 0
+  into v_governed_admin_rpc_auth_exec, v_governed_admin_rpc_anon_exec, v_governed_admin_rpc_guarded
   from pg_proc p
   join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='orchestration'
@@ -86,6 +90,9 @@ begin
       and pg_get_function_identity_arguments(p.oid)='p_case_id uuid, p_action text'
       and has_function_privilege('authenticated',p.oid,'EXECUTE')
       and not has_function_privilege('anon',p.oid,'EXECUTE')
+      and coalesce(p.proconfig @> array['search_path=""'],false)
+      and position('auth.uid()' in lower(p.prosrc)) > 0
+      and position('app_private.is_project_admin' in lower(p.prosrc)) > 0
     );
 
   v_valid := not v_app_private_exposed
@@ -96,6 +103,7 @@ begin
     and v_unsafe_helper_search_path=0
     and coalesce(v_governed_admin_rpc_auth_exec,false)
     and not coalesce(v_governed_admin_rpc_anon_exec,true)
+    and coalesce(v_governed_admin_rpc_guarded,false)
     and v_unapproved_exposed_privileged_functions=0;
 
   return jsonb_build_object(
@@ -110,6 +118,7 @@ begin
     'unapproved_exposed_privileged_function_count',v_unapproved_exposed_privileged_functions,
     'governed_admin_recovery_rpc_authenticated',coalesce(v_governed_admin_rpc_auth_exec,false),
     'governed_admin_recovery_rpc_anonymous',coalesce(v_governed_admin_rpc_anon_exec,false),
+    'governed_admin_recovery_rpc_authorization_guarded',coalesce(v_governed_admin_rpc_guarded,false),
     'rls_helper_model','Authenticated users may execute four read-only membership helpers solely for RLS evaluation; app_private is not a PostgREST exposed schema.',
     'privileged_rpc_model','Only explicitly governed SECURITY DEFINER RPCs with in-function authorization may remain authenticated-callable.'
   );
