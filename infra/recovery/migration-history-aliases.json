@@ -22,6 +22,13 @@
       "observedProductionVersion": "20260912053907",
       "reason": "The adversarial Platform Assurance audit applied the forward-only authorization-before-lock hardening through the Supabase management migration API. The repository source version was generated from the authoritative database UTC clock after the pre-existing 20260912054000 source migration so fresh reconstruction preserves dependency order. Do not rewrite the observed production migration version.",
       "observedVia": "Supabase list_migrations"
+    },
+    {
+      "logicalName": "reconcile_certification_membership_runtime",
+      "repositoryVersion": "20260912054927",
+      "observedProductionVersion": "20260912055014",
+      "reason": "Platform Assurance found that the historical P0 certification source referenced a non-existent organization_members.is_active column while production had already been repaired by a management migration. This forward-only source migration re-states the verified live RPC contract against the authoritative membership schema and was applied through the Supabase management API. Keep both histories immutable and use this alias during reconstruction checks.",
+      "observedVia": "Supabase list_migrations"
     }
   ]
 }
