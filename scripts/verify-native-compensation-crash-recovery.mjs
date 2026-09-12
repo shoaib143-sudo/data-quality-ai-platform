@@ -55,6 +55,9 @@ const requiredRuntimeFragments = [
   'executeWithNativeCompensationLease',
   'p_execution_generation: input.lease.executionGeneration',
   'p_expected_idempotency_key: input.idempotencyKey',
+  'businessExecutionCompleted?: boolean',
+  'input.lease.businessExecutionCompleted = true',
+  'Compensation business execution completed; failure evidence would be unsafe',
   'setInterval(',
   'clearInterval(timer)',
 ]
@@ -87,7 +90,7 @@ for (const fragment of requiredRecoveryFragments) {
 // scenario to the concrete invariant that makes the replay safe.
 const faultMatrix = new Map([
   ['crash before compensation side effect', recovery.includes("prior.status === 'ADMITTED'") && migration.includes('COMPENSATION_CLAIMED')],
-  ['crash after side effect before completion', recovery.includes('idempotencyKey,') && migration.includes('p_expected_idempotency_key')],
+  ['crash after side effect before completion', recovery.includes('idempotencyKey,') && migration.includes('p_expected_idempotency_key') && runtime.includes('businessExecutionCompleted')],
   ['crash after checkpoint', recovery.includes('getNativePinnedToolContract') && recovery.includes('input.step.contractHash')],
   ['restart on different deployment', runtime.includes('VERCEL_GIT_COMMIT_SHA') && runtime.includes('randomUUID()')],
   ['active lease blocks another worker', migration.includes("'ACTIVE_LEASE'") && migration.includes('execution_lease_expires_at > now()')],
@@ -108,6 +111,7 @@ for (const [scenario, covered] of faultMatrix) {
 }
 assert.equal(faultMatrix.size, 15, 'compensation fault matrix must retain all required scenarios')
 
+assert.match(runtime, /if \(input\.lease\.businessExecutionCompleted\)[\s\S]*failure evidence would be unsafe/)
 assert.ok(!runtime.includes('approvalInterruptId'), 'compensation reclaim must not manufacture approval authority')
 assert.ok(!migration.includes("SET status = 'ADMITTED'"), 'reclaim must preserve the existing in-flight invocation rather than manufacture a fresh status transition')
 
