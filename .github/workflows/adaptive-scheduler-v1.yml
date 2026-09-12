@@ -16,6 +16,9 @@ on:
       - 'scripts/verify-adaptive-scheduler-v1.mjs'
       - 'scripts/verify-adaptive-sampling.mjs'
       - 'scripts/verify-profile-evidence-reuse.mjs'
+      - 'scripts/test-durable-pool-claim-isolation.mjs'
+      - 'scripts/verify-durable-pool-claim-isolation.mjs'
+      - 'scripts/audit-durable-pool-claim-adversarial.mjs'
       - '.github/workflows/adaptive-scheduler-v1.yml'
   pull_request:
     branches: [main]
@@ -32,6 +35,9 @@ on:
       - 'scripts/verify-adaptive-scheduler-v1.mjs'
       - 'scripts/verify-adaptive-sampling.mjs'
       - 'scripts/verify-profile-evidence-reuse.mjs'
+      - 'scripts/test-durable-pool-claim-isolation.mjs'
+      - 'scripts/verify-durable-pool-claim-isolation.mjs'
+      - 'scripts/audit-durable-pool-claim-adversarial.mjs'
       - '.github/workflows/adaptive-scheduler-v1.yml'
 
 permissions:
@@ -50,6 +56,12 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Unit test workload-pool claim isolation
+        run: node --experimental-strip-types scripts/test-durable-pool-claim-isolation.mjs
+      - name: Verify workload-pool claim isolation contract
+        run: node scripts/verify-durable-pool-claim-isolation.mjs
+      - name: Independent adversarial workload-pool audit
+        run: node --experimental-strip-types scripts/audit-durable-pool-claim-adversarial.mjs
       - run: node scripts/verify-adaptive-scheduler-v1.mjs
       - run: node scripts/verify-adaptive-sampling.mjs
       - run: node scripts/verify-profile-evidence-reuse.mjs
