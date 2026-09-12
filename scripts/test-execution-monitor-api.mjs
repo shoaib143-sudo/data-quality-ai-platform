@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict'
+import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {pathToFileURL} from 'node:url'
+import ts from 'typescript'
+const dir=mkdtempSync(join(tmpdir(),'monitor-api-'))
+const root='00000000-0000-4000-a000-000000000001',child='00000000-0000-4000-a000-000000000002',project='11111111-1111-4111-a111-111111111111'
+const rows={ 'agent.agent_runs':[{id:root,parent_run_id:null,project_id:project,agent_definition_id:'def',status:'RUNNING',created_at:'2026-09-12'}, {id:child,parent_run_id:root,project_id:project,agent_definition_id:'def',status:'QUEUED',created_at:'2026-09-12'}], 'agent.agent_definitions':[{id:'def',name:'Synthetic'}] }
+let authorized=true;const queried=[]
+globalThis.monitorTestDb={schema(schema){return{from(table){const name=`${schema}.${table}`;queried.push(name);let predicates=[],cap=10000,fields='*',start=0;const q={select(f){fields=f;return q},eq(k,v){predicates.push(r=>r[k]===v);return q},in(k,v){predicates.push(r=>v.includes(r[k]));return q},is(k,v){predicates.push(r=>r[k]===v);return q},order(){return q},limit(n){cap=n;return q},range(a,b){start=a;cap=b-a+1;return q},maybeSingle(){return result(true)},single(){return result(true)},then(a,b){return result(false).then(a,b)}};function result(single){let data=(rows[name]??[]).filter(r=>predicates.every(p=>p(r))).slice(start,start+cap).map(r=>fields==='*'?r:Object.fromEntries(fields.split(',').map(k=>[k,r[k]])));return Promise.resolve({data:single?(data[0]??null):data,error:null})}return q}}}}
+globalThis.monitorAuthorize=async(user,p)=>{if(!authorized||p!==project)throw new Error('Access denied')}
+try{
+  writeFileSync(join(dir,'stub.mjs'),'export const createAdminClient=()=>globalThis.monitorTestDb;export const authorizeProject=(...args)=>globalThis.monitorAuthorize(...args);')
+  for(const [source,out] of [['lib/monitoring/execution-contract.ts','core.mjs'],['lib/monitoring/execution-read-model.ts','read.mjs'],['lib/monitoring/execution-branch.ts','branch.mjs']]){
+    let text=ts.transpileModule(readFileSync(source,'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("import 'server-only';",'').replaceAll('@/lib/supabase/admin','./stub.mjs').replaceAll('@/lib/auth/authorize','./stub.mjs').replaceAll('./execution-contract','./core.mjs').replaceAll('./execution-read-model','./read.mjs');writeFileSync(join(dir,out),text)
+  }
+  const {readExecution,readExecutionRoots}=await import(pathToFileURL(join(dir,'read.mjs')))
+  const {readExecutionBranch}=await import(pathToFileURL(join(dir,'branch.mjs')))
+  let n=0;const test=async(name,f)=>{await f();console.log(`PASS synthetic API ${++n}: ${name}`)}
+  await test('old child deep link resolves full root',async()=>{const s=await readExecution('user',child);assert.equal(s.rootId,root);assert.equal(s.runs.length,2)})
+  await test('project scope excludes foreign child',async()=>{rows['agent.agent_runs'].push({id:'foreign',parent_run_id:root,project_id:'other'});const s=await readExecution('user',root);assert.equal(s.runs.length,2)})
+  await test('unauthorized read stops before evidence fetch',async()=>{authorized=false;queried.length=0;await assert.rejects(readExecution('user',root),/Access denied/);assert.deepEqual(queried,['agent.agent_runs']);authorized=true})
+  await test('run payload canary is never selected',async()=>{rows['agent.agent_runs'][0].input={secret:'SYNTHETIC_SECRET_CANARY'};assert.ok(!JSON.stringify(await readExecution('user',root)).includes('SYNTHETIC_SECRET_CANARY'))})
+  await test('plan preserves explicit source/target binding',async()=>{rows['agent.agent_artifacts']=[{id:'plan-artifact',agent_run_id:root,artifact_type:'MONITOR_PLAN',payload:{version:1,runId:root,revision:'synthetic',complete:true,steps:[{id:'a',runId:root,order:1,name:'a',dependsOn:[]},{id:'b',runId:child,order:2,name:'b',dependsOn:['a']}]}}];const s=await readExecution('user',root);assert.equal(s.edges[0].source,root);assert.equal(s.edges[0].target,child);assert.equal(s.edges[0].satisfied,false)})
+  await test('bounded tree marks incomplete rather than success',async()=>{const s=await readExecution('user',root,1);assert.equal(s.truncated,true);assert.equal(s.runs.length,1)})
+  await test('invalid identifiers rejected before querying',async()=>{queried.length=0;await assert.rejects(readExecution('user','invalid'),/Invalid/);assert.equal(queried.length,0)})
+  await test('missing parent fails explicitly',async()=>{rows['agent.agent_runs'][1].parent_run_id='missing';await assert.rejects(readExecution('user',child),/incomplete/);rows['agent.agent_runs'][1].parent_run_id=root})
+  await test('branch belongs to authorized tree before diagnostics read',async()=>{const detail=await readExecutionBranch('user',root,child);assert.deepEqual(detail.steps,[])})
+  await test('cross-project branch diagnostics fail closed',async()=>{queried.length=0;await assert.rejects(readExecutionBranch('user',root,'00000000-0000-4000-a000-000000000099'));assert.ok(!queried.includes('agent.agent_artifacts'))})
+  await test('unrelated root cannot be inspected as a branch',async()=>{const unrelated='00000000-0000-4000-a000-000000000090';rows['agent.agent_runs'].push({id:unrelated,parent_run_id:null,project_id:project});await assert.rejects(readExecutionBranch('user',root,unrelated),/does not belong/)})
+  await test('diagnostics authorization applies even for root itself',async()=>{authorized=false;queried.length=0;await assert.rejects(readExecutionBranch('user',root,root),/Access denied/);assert.ok(!queried.includes('agent.agent_run_steps'));authorized=true})
+  await test('attempt payload only exposes allowlisted fields',async()=>{rows['agent.agent_artifacts']=[{id:'old',agent_run_id:child,artifact_type:'MONITOR_ATTEMPT',payload:{id:'step',attempt:1,status:'FAILED',input:'SECRET_CANARY',error_message:'SECRET_CANARY'}}];const detail=await readExecutionBranch('user',root,child);assert.equal(detail.attempts.length,1);assert.ok(!JSON.stringify(detail).includes('SECRET_CANARY'))})
+  await test('external job remains a blocking dependency without invented run',async()=>{rows['orchestration.job_queue']=[{id:'job',project_id:project,agent_run_id:child,status:'QUEUED'},{id:'external',project_id:project,agent_run_id:null,status:'FAILED'}];rows['orchestration.job_dependencies']=[{project_id:project,job_id:'job',depends_on_job_id:'external',dependency_type:'SUCCESS'}];const result=await readExecution('user',root);assert.equal(result.edges[0].external,true);assert.equal(result.edges[0].satisfied,false);assert.ok(!result.runs.some(r=>r.id==='external'))})
+  await test('external terminal failure satisfies terminal prerequisite',async()=>{rows['orchestration.job_dependencies'][0].dependency_type='TERMINAL';assert.equal((await readExecution('user',root)).edges[0].satisfied,true)})
+  await test('invalid newest plan never falls back to stale complete scope',async()=>{rows['agent.agent_artifacts']=[{id:'new',agent_run_id:root,artifact_type:'MONITOR_PLAN',payload:{invalid:true}},{id:'old',agent_run_id:root,artifact_type:'MONITOR_PLAN',payload:{version:1,runId:root,revision:'old',complete:true,steps:[]}}];assert.equal((await readExecution('user',root)).plans.length,0)})
+  await test('root pagination is project scoped and excludes child runs',async()=>{const result=await readExecutionRoots('user',project);assert.ok(result.runs.every(r=>r.project_id===project&&r.parent_run_id===null));assert.equal(result.nextOffset,null)})
+  await test('root summaries authorize before any run data query',async()=>{authorized=false;queried.length=0;await assert.rejects(readExecutionRoots('user',project),/Access denied/);assert.equal(queried.length,0);authorized=true})
+  console.log(`${n} API read-model cases passed against an in-memory synthetic database adapter. Live RLS and deployment are not tested.`)
+}finally{rmSync(dir,{recursive:true,force:true});delete globalThis.monitorTestDb;delete globalThis.monitorAuthorize}

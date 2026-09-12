@@ -41,3 +41,7 @@ supabase_backup_before_migration_repair/
 
 # Alternate project-state draft
 PROJECT_STATE_v1.md
+
+# Synthetic browser verification outputs
+test-results/
+/playwright-report/
