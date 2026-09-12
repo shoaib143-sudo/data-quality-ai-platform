@@ -30,9 +30,10 @@ function integer(value: unknown): number | null {
 /**
  * Binds a verification verdict to the exact remediation workflow evidence.
  *
- * Historical generation-0 outcomes predate workflow metadata in agent input, so
- * exact persisted agent identity remains authoritative for those rows. Current
- * generations additionally require workflow, generation, and fresh profile IDs.
+ * Historical generation-0 outcomes predate workflow/generation metadata in
+ * agent input, so exact persisted agent/profile identity remains authoritative
+ * for those rows. Current generations additionally require workflow, generation,
+ * and governed verification trigger metadata.
  */
 export function assertDataQualityVerificationBinding(
   expected: DataQualityVerificationExpectation,
@@ -50,6 +51,16 @@ export function assertDataQualityVerificationBinding(
       'DQ_VERIFICATION_AGENT_MISMATCH',
       'Verification agent run does not match the remediation workflow evidence binding.',
     )
+  }
+
+  if (expected.verificationProfileRunId) {
+    const profileRunId = text(candidate.input.profileRunId)
+    if (profileRunId !== expected.verificationProfileRunId) {
+      throw new DataQualityVerificationBindingError(
+        'DQ_VERIFICATION_PROFILE_MISMATCH',
+        'Verification run does not consume the profiling run linked to the remediation workflow.',
+      )
+    }
   }
 
   const generation = expected.verificationGeneration ?? 0
@@ -77,15 +88,5 @@ export function assertDataQualityVerificationBinding(
       'DQ_VERIFICATION_TRIGGER_MISMATCH',
       'Verification run was not created by the governed Data Quality remediation verification flow.',
     )
-  }
-
-  if (expected.verificationProfileRunId) {
-    const profileRunId = text(candidate.input.profileRunId)
-    if (profileRunId !== expected.verificationProfileRunId) {
-      throw new DataQualityVerificationBindingError(
-        'DQ_VERIFICATION_PROFILE_MISMATCH',
-        'Verification run does not consume the fresh profiling run linked to the remediation workflow.',
-      )
-    }
   }
 }
