@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "frameworkAlignmentOnly": true,
+  "frameworkNote": "Framework references are engineering alignment aids and do not claim external certification.",
+  "controls": [
+    {
+      "id": "PA-001",
+      "name": "Protected exact-head release gates",
+      "riskTier": "R3",
+      "state": "ENFORCED",
+      "frameworks": ["NIST-CSF2.GV", "NIST-SSDF.PO", "SLSA-SOURCE"],
+      "evidence": [".github/workflows/quality-gate.yml", ".github/workflows/p0-p4-revalidation.yml"]
+    },
+    {
+      "id": "PA-002",
+      "name": "Immutable CI action references",
+      "riskTier": "R3",
+      "state": "ENFORCEMENT_ADDED_REMEDIATION_PENDING",
+      "frameworks": ["NIST-SSDF.PS", "SLSA-BUILD", "CIS-16"],
+      "evidence": ["scripts/verify-workflow-action-pinning.mjs"]
+    },
+    {
+      "id": "PA-003",
+      "name": "Locked dependency graph and vulnerability audit",
+      "riskTier": "R2",
+      "state": "ENFORCED",
+      "frameworks": ["NIST-SSDF.PS", "CIS-16"],
+      "evidence": ["pnpm-lock.yaml", ".github/workflows/dependency-review.yml"]
+    },
+    {
+      "id": "PA-004",
+      "name": "Privileged API authorization boundary",
+      "riskTier": "R3",
+      "state": "ENFORCED",
+      "frameworks": ["NIST-CSF2.PR", "OWASP-ASVS-AUTHZ", "OWASP-API-BOLA"],
+      "evidence": ["scripts/verify-privileged-api-authorization.mjs", "lib/auth/authorize.ts"]
+    },
+    {
+      "id": "PA-005",
+      "name": "Database grant and RLS authority",
+      "riskTier": "R3",
+      "state": "ENFORCED_WITH_REVIEWED_EXCEPTIONS",
+      "frameworks": ["NIST-CSF2.PR", "OWASP-ASVS-AUTHZ"],
+      "evidence": ["scripts/verify-supabase-advisor-hardening.mjs", "docs/platform-assurance/supabase-security-exceptions.md"]
+    },
+    {
+      "id": "PA-006",
+      "name": "Security-definer function exposure review",
+      "riskTier": "R3",
+      "state": "ENFORCED_WITH_REVIEWED_EXCEPTIONS",
+      "frameworks": ["NIST-CSF2.PR", "OWASP-ASVS-AUTHZ"],
+      "evidence": ["docs/platform-assurance/supabase-security-exceptions.md", "scripts/verify-platform-assurance-baseline.mjs"]
+    },
+    {
+      "id": "PA-007",
+      "name": "Full-platform recovery assurance",
+      "riskTier": "R3",
+      "state": "ENFORCED_WITH_CAPABILITY_GAP",
+      "frameworks": ["NIST-CSF2.RC", "CIS-11"],
+      "evidence": ["docs/recovery-assurance-v2.md", "infra/recovery/full-platform-recovery-contract.json"]
+    },
+    {
+      "id": "PA-008",
+      "name": "Security incident response lifecycle",
+      "riskTier": "R3",
+      "state": "ENFORCED",
+      "frameworks": ["NIST-CSF2.DE", "NIST-CSF2.RS", "CIS-17"],
+      "evidence": ["docs/security-incident-response.md", "infra/platform-assurance/security-incident-response.json"]
+    },
+    {
+      "id": "PA-009",
+      "name": "Runtime topology and configuration authority",
+      "riskTier": "R2",
+      "state": "ENFORCED",
+      "frameworks": ["NIST-CSF2.ID", "NIST-CSF2.PR", "CIS-1", "CIS-2"],
+      "evidence": ["infra/recovery/platform-manifest.json", "infra/platform-assurance/runtime-config-contract.json"]
+    },
+    {
+      "id": "PA-010",
+      "name": "AI output cannot become governance authority",
+      "riskTier": "R3",
+      "state": "ENFORCED",
+      "frameworks": ["NIST-AI-RMF-GOVERN", "NIST-AI-RMF-MANAGE"],
+      "evidence": ["AGENTS.md", "Architecture/2026-09-08-ADR-006-ai-intelligence-learning-governance-evaluation-and-observability.md"]
+    },
+    {
+      "id": "PA-011",
+      "name": "Persona presentation preserves canonical truth",
+      "riskTier": "R2",
+      "state": "ENFORCED",
+      "frameworks": ["NIST-CSF2.PR"],
+      "evidence": ["scripts/verify-governed-incident-13-persona-certification.mjs"]
+    },
+    {
+      "id": "PA-012",
+      "name": "Production recovery evidence and provenance",
+      "riskTier": "R3",
+      "state": "ENFORCED_WITH_CAPABILITY_GAP",
+      "frameworks": ["NIST-CSF2.RC", "NIST-SSDF.PO", "SLSA-BUILD"],
+      "evidence": ["docs/recovery-assurance-v2.md", "infra/recovery/platform-manifest.json"]
+    }
+  ]
+}
