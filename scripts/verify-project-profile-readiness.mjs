@@ -1,38 +1,85 @@
 import fs from 'node:fs'
 
-const migration = fs.readFileSync('supabase/migrations/20260912063000_project_profile_readiness.sql','utf8')
+const migration = fs.readFileSync('supabase/migrations/20260912173500_project_profile_readiness_v2.sql','utf8')
+const gate = fs.readFileSync('lib/profiling/readiness-gate.ts','utf8')
+const executor = fs.readFileSync('lib/agents/executors/profiling-executor.ts','utf8')
 
-const required = [
+const requiredMigration = [
+  'catalog.verify_dataset_profile_readiness(',
+  'catalog.verify_dataset_version_profile_readiness(',
   'catalog.verify_project_profile_readiness(p_project_id uuid)',
-  'DERIVED_READINESS_DOES_NOT_MUTATE_SOURCE_OR_PROFILING_LIFECYCLE',
-  "s.status = 'ACTIVE'",
-  's.current_version_id is not null',
-  'join catalog.source_scope_versions sv on sv.id = s.current_version_id',
-  'and sv.scope_id = s.id',
-  'and sv.source_id = s.source_id',
-  'and sv.project_id = s.project_id',
-  "sor.operational_state = 'OBSERVED_READY'",
-  'profiling.dataset_execution_sources',
-  'aes.active = true',
-  "when ds.source_type = 'JDBC'",
-  'coalesce(lm.complete,false)',
-  'not coalesce(lm.truncated,true)',
-  'DISCOVERY_EVIDENCE_INCOMPLETE',
-  'EXECUTION_SOURCE_NOT_BOUND',
-  'GOVERNED_SCOPE_NOT_READY',
-  'SOURCE_NOT_OBSERVED_READY',
-  'grant execute on function catalog.verify_project_profile_readiness(uuid) to authenticated, service_role'
+  "when datasets_assessed = 0 then 'NOT_ASSESSED'",
+  "when ready_count = datasets_assessed then 'READY'",
+  "when ready_count > 0 then 'PARTIALLY_READY'",
+  "when blocked_count > 0 then 'BLOCKED'",
+  "dc.source_type = 'JDBC'",
+  "m.complete = true",
+  "m.truncated = false",
+  "m.failed_item_count = 0",
+  'm.completed_at is not null',
+  'sc.scope_id = m.scope_id',
+  'sc.scope_version_id = m.scope_version_id',
+  'READINESS_RULE_NOT_ONBOARDED',
+  'DATASET_VERSION_NOT_LATEST',
+  'DETERMINISTIC_DERIVED_READINESS_NO_AGENT_OVERRIDE',
+  'LOW_RISK_WHEN_POLICY_AUTHORIZED',
+  'approval_required',
+  'can_profile_any',
+  'can_profile_all',
+  'security invoker',
+  "set search_path = ''",
+  'grant execute on function catalog.verify_dataset_profile_readiness(uuid, uuid) to authenticated, service_role',
+  'grant execute on function catalog.verify_dataset_version_profile_readiness(uuid, uuid) to authenticated, service_role',
+  'grant execute on function catalog.verify_project_profile_readiness(uuid) to authenticated, service_role',
 ]
-for (const marker of required) {
-  if (!migration.includes(marker)) throw new Error('Profile readiness contract missing: '+marker)
+
+for (const marker of requiredMigration) {
+  if (!migration.includes(marker)) throw new Error('Profile readiness V2 contract missing: ' + marker)
 }
-if (migration.includes('sv.frozen_at')) {
-  throw new Error('Profile readiness must bind to the active scope-version identity rather than unused frozen_at state')
+
+if (/\bsecurity\s+definer\b/i.test(migration)) {
+  throw new Error('Profile readiness verification must remain SECURITY INVOKER')
 }
-if (/update\s+catalog\.data_sources|update\s+catalog\.datasets|insert\s+into\s+profiling\.profile_runs|delete\s+from/i.test(migration)) {
-  throw new Error('Profile readiness verifier must remain derived/read-only')
+if (/\b(update|insert\s+into|delete\s+from|truncate)\s+(catalog|profiling)\./i.test(migration)) {
+  throw new Error('Profile readiness verifier migration must remain derived/read-only')
 }
 if (/grant\s+execute[^;]+\b(public|anon)\b/i.test(migration)) {
   throw new Error('Anonymous profile-readiness execution must remain revoked')
 }
-console.log('Project profile readiness contract verified as derived, fail-closed, and bound to authoritative active scope-version identity.')
+if (/else\s+true\s+end\s+as\s+discovery_evidence_ready/i.test(migration)) {
+  throw new Error('Unknown/non-JDBC source types must not silently pass readiness')
+}
+if (!/join\s+active_scope\s+sc[\s\S]+sc\.scope_version_id\s*=\s*m\.scope_version_id/i.test(migration)) {
+  throw new Error('Successful discovery evidence must be bound to the current active scope version')
+}
+
+const requiredGate = [
+  "readonly code = 'PROFILE_READINESS_GATE_BLOCKED'",
+  "readiness.state !== 'READY'",
+  'readiness.profiling_ready !== true',
+  ".schema('catalog')",
+  ".rpc('verify_dataset_version_profile_readiness'",
+]
+for (const marker of requiredGate) {
+  if (!gate.includes(marker)) throw new Error('Readiness runtime gate missing: ' + marker)
+}
+
+const requiredExecutor = [
+  'PROFILE_READINESS_GATED_OPERATIONS',
+  "'profile_dataset'",
+  "'execute_metrics'",
+  'assertDatasetVersionProfileReady(projectId, suppliedDatasetVersionId)',
+  'PROFILE_READINESS_CONFIRMED',
+]
+for (const marker of requiredExecutor) {
+  if (!executor.includes(marker)) throw new Error('Profiling executor readiness enforcement missing: ' + marker)
+}
+
+for (const diagnosticOperation of ['investigate_profile', 'detect_patterns', 'infer_candidate_keys']) {
+  const gateSetMatch = executor.match(/PROFILE_READINESS_GATED_OPERATIONS\s*=\s*new Set\(\[([\s\S]*?)\]\)/)
+  if (gateSetMatch?.[1]?.includes(`'${diagnosticOperation}'`)) {
+    throw new Error(`Diagnostic operation ${diagnosticOperation} must remain available while readiness is blocked`)
+  }
+}
+
+console.log('Project profile readiness V2 contract verified: fail-closed source policies, current-scope successful evidence, per-dataset execution gate, and diagnostic access preserved.')
