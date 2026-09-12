@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 2,
+  "target": "WCAG_2_2_AA",
+  "claimScope": "EXPLICIT_REQUIRED_PERSONA_SURFACE_SET",
+  "wholePlatformClaimRequiresCompleteSurfaceInventory": true,
+  "productionClaimRequiresMeasuredEvidence": true,
+  "automatedScanAloneIsSufficient": false,
+  "maxEvidenceAgeHours": 24,
+  "futureClockSkewMinutes": 5,
+  "personas": [
+    "senior-leadership",
+    "business-user",
+    "data-owner",
+    "data-product-owner",
+    "data-steward",
+    "data-governance-specialist",
+    "compliance-risk-officer",
+    "privacy-security-officer",
+    "data-governance-admin",
+    "data-custodian",
+    "source-system-owner",
+    "metadata-analyst",
+    "data-quality-analyst"
+  ],
+  "requiredManualChecks": [
+    "KEYBOARD_ONLY",
+    "SCREEN_READER",
+    "FOCUS_ORDER",
+    "DIALOG_FOCUS_TRAP",
+    "ZOOM_200",
+    "ZOOM_400",
+    "NARROW_VIEWPORT",
+    "DYNAMIC_STATUS_ANNOUNCEMENT",
+    "FORM_ERROR_RECOVERY",
+    "COMPLEX_TABLE_OR_GRAPH_ALTERNATIVE"
+  ],
+  "requiredAutomatedChecks": ["SEMANTIC_HTML", "ARIA_VALIDITY", "COLOR_CONTRAST", "LANDMARK_STRUCTURE"],
+  "states": ["NOT_MEASURED", "PASS", "FAIL"]
+}

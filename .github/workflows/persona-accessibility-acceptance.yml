@@ -1,0 +1,42 @@
+name: Persona Accessibility Acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/accessibility/**'
+      - 'lib/accessibility/**'
+      - 'scripts/test-persona-accessibility-contract.mjs'
+      - 'scripts/verify-persona-accessibility-contract.mjs'
+      - '.github/workflows/persona-accessibility-acceptance.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/accessibility/**'
+      - 'lib/accessibility/**'
+      - 'scripts/test-persona-accessibility-contract.mjs'
+      - 'scripts/verify-persona-accessibility-contract.mjs'
+      - '.github/workflows/persona-accessibility-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify WCAG 2.2 AA persona contract
+        run: node scripts/verify-persona-accessibility-contract.mjs
+      - name: Accessibility negative/failure tests
+        run: node --experimental-strip-types scripts/test-persona-accessibility-contract.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
