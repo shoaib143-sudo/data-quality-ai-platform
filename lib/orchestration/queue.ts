@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { recordSourceConcurrencyOutcome } from '@/lib/orchestration/source-concurrency'
-import { assessPoolClaimOutcomes, formatPoolClaimFailures } from '@/lib/orchestration/pool-claim-policy'
+import { assessPoolClaimOutcomes, assessStaleReleaseFailure, formatPoolClaimFailures } from '@/lib/orchestration/pool-claim-policy'
 
 export type DurableJobType = 'PROFILING' | 'DATA_QUALITY' | 'NOTIFICATION' | 'OBSERVABILITY' | 'DISCOVERY' | 'LINEAGE_ENRICHMENT' | 'SEMANTIC_INDEX' | 'GOVERNANCE_AGENT'
 export type DurableWorkloadPool = 'CORE' | 'SEMANTIC' | 'GOVERNANCE'
@@ -176,7 +176,18 @@ function configuredWorkloadPools(poolOverride?: DurableWorkloadPool) {
 export async function claimDurableJobs(workerId: string, limit = 2, poolOverride?: DurableWorkloadPool) {
   const admin = createAdminClient()
   const { error: releaseError } = await admin.schema('orchestration').rpc('release_stale_jobs')
-  if (releaseError) throw new Error(`Unable to release stale durable jobs before claiming work: ${releaseError.message}`)
+  if (releaseError) {
+    const releaseAssessment = assessStaleReleaseFailure(releaseError.message, ['QUEUED'])
+    if (!releaseAssessment.canContinueClaiming) {
+      throw new Error(`Unable to release stale durable jobs safely: ${releaseAssessment.error}`)
+    }
+    console.error('[job-stale-release]', releaseAssessment.error)
+    await writeTelemetry(null, 'job.stale_release_failed', 1, {
+      error: releaseAssessment.error,
+      disposition: releaseAssessment.disposition,
+      claimable_statuses: ['QUEUED'],
+    })
+  }
 
   const boundedLimit = Math.max(1, Math.min(Math.floor(limit), 16))
   const pools = configuredWorkloadPools(poolOverride)
