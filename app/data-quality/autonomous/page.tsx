@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { BrainCircuit, CheckCircle2, CircleAlert, ExternalLink, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react'
 import { hasProjectCapability } from '@/lib/auth/authorize'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { resolveHumanRemediationHandoff } from '@/lib/governance/remediation-handoff'
+import { canAccessWorkspace } from '@/lib/governance/workspace-policy'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -64,7 +66,8 @@ function nullableNumber(value: unknown) { const parsed=Number(value); return Num
 export default async function AutonomousDataQualityPage() {
   const user = await requireUser()
   const supabase = await createClient()
-  const [investigationsResult, outcomesResult, learningResult] = await Promise.all([
+  const [landingAccess, investigationsResult, outcomesResult, learningResult] = await Promise.all([
+    resolveLandingAccess(user.id),
     supabase.schema('governance').from('data_quality_investigations').select('*').order('updated_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('data_quality_remediation_outcomes').select('*').order('updated_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('data_quality_recommendation_learning').select('id,workflow_instance_id,recommendation_action,priority,status,effective,evidence,updated_at').order('updated_at', { ascending: false }).limit(500),
@@ -75,12 +78,13 @@ export default async function AutonomousDataQualityPage() {
   const investigations = (investigationsResult.data ?? []) as Investigation[]
   const outcomes = (outcomesResult.data ?? []) as Outcome[]
   const learning = (learningResult.data ?? []) as Learning[]
+  const canAccessApprovalWorkspace = canAccessWorkspace(landingAccess.persona, 'workflows', landingAccess.organizationRole)
   const projectIds = [...new Set(investigations.map((row) => row.project_id))]
   const policyApprovalAccess = new Map(await Promise.all(projectIds.map(async (projectId) => [
     projectId,
     await hasProjectCapability(user.id, projectId, 'policy.approve'),
   ] as const)))
-  const hasAnyPolicyApprovalAccess = [...policyApprovalAccess.values()].some(Boolean)
+  const hasAnyApprovalWorkflowAccess = canAccessApprovalWorkspace && [...policyApprovalAccess.values()].some(Boolean)
   const datasetIds = [...new Set(investigations.map((row) => row.dataset_id))]
   const { data: datasets, error: datasetError } = datasetIds.length
     ? await supabase.schema('catalog').from('datasets').select('id,name').in('id', datasetIds)
@@ -104,7 +108,7 @@ export default async function AutonomousDataQualityPage() {
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm">
         <Link href="/data-quality" className="font-bold text-blue-700">← Data Quality</Link>
-        <div className="flex gap-2">{hasAnyPolicyApprovalAccess ? <Link href="/workflows" className="rounded-xl border px-3 py-2 text-sm font-semibold">Approvals</Link> : null}<Link href="/issues" className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white">Remediation issues</Link></div>
+        <div className="flex gap-2">{hasAnyApprovalWorkflowAccess ? <Link href="/workflows" className="rounded-xl border px-3 py-2 text-sm font-semibold">Approvals</Link> : null}<Link href="/issues" className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white">Remediation issues</Link></div>
       </nav>
 
       <section className="mt-6 rounded-3xl border border-violet-100 bg-white p-7 shadow-sm">
@@ -134,6 +138,7 @@ export default async function AutonomousDataQualityPage() {
           const handoff = resolveHumanRemediationHandoff({
             workflowInstanceId: investigation.workflow_instance_id,
             canApprove: policyApprovalAccess.get(investigation.project_id) === true,
+            canAccessApprovalWorkspace,
           })
           return <article key={investigation.id} className="rounded-3xl border bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">

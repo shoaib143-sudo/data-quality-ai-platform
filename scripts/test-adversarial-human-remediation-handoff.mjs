@@ -8,6 +8,7 @@ function read(path) {
 const page = read('app/data-quality/autonomous/page.tsx')
 const handoff = read('lib/governance/remediation-handoff.ts')
 const remediationRoute = read('app/api/data-quality/remediation/route.ts')
+const workspacePolicy = read('lib/governance/workspace-policy.ts')
 
 assert.match(
   page,
@@ -16,8 +17,24 @@ assert.match(
 )
 assert.match(
   page,
+  /canAccessWorkspace\(landingAccess\.persona, 'workflows', landingAccess\.organizationRole\)/,
+  'Data Quality remediation UI must also honor the existing workflows workspace policy.',
+)
+assert.match(
+  page,
   /canApprove:\s*policyApprovalAccess\.get\(investigation\.project_id\) === true/,
   'Each investigation must resolve its handoff against that investigation project capability.',
+)
+assert.match(
+  page,
+  /canAccessApprovalWorkspace,/
+  ,
+  'Each investigation handoff must receive the resolved workflow workspace-access decision.',
+)
+assert.match(
+  page,
+  /hasAnyApprovalWorkflowAccess\s*\?\s*<Link href="\/workflows"/,
+  'The global approvals entry must require the combined capability and workspace gate.',
 )
 assert.match(
   page,
@@ -29,31 +46,33 @@ assert.doesNotMatch(
   /investigation\.workflow_instance_id\s*\?[^\n]*<Link href="\/workflows"/,
   'Workflow-backed investigations must not unconditionally route users into the governance operator console.',
 )
-assert.match(
-  page,
-  /hasAnyPolicyApprovalAccess\s*\?\s*<Link href="\/workflows"/,
-  'The global approvals entry must remain capability gated.',
-)
 
 assert.match(
   handoff,
-  /if \(input\.canApprove\)[\s\S]*href: `\/workflows\?instanceId=\$\{encodeURIComponent\(workflowInstanceId\)\}`/,
-  'Only an authorized approver may receive the focused workflow URL and the workflow id must be encoded.',
+  /if \(input\.canApprove && input\.canAccessApprovalWorkspace\)[\s\S]*href: `\/workflows\?instanceId=\$\{encodeURIComponent\(workflowInstanceId\)\}`/,
+  'A focused workflow URL requires both approval capability and workflow workspace access.',
 )
 assert.match(
   handoff,
-  /kind: 'governed-handoff'[\s\S]*href: '\/issues'/,
-  'Unauthorized workflow-backed remediation must fail closed to the governed issue path.',
+  /if \(input\.canApprove\)[\s\S]*kind: 'governed-handoff'[\s\S]*href: '\/issues'[\s\S]*Governance Workflows workspace is not available/i,
+  'An approver without workflow workspace access must fail closed to the governed issue path.',
 )
 assert.match(
   handoff,
   /project approver with policy approval authority/i,
-  'Unauthorized users must receive explicit human approval guidance.',
+  'Users without approval capability must receive explicit human approval guidance.',
 )
 assert.match(
   handoff,
   /read only/i,
-  'Unauthorized users must be told that their access remains read only.',
+  'Users without approval capability must be told that their access remains read only.',
+)
+
+const seniorLeadershipAccess = workspacePolicy.match(/'senior-leadership':\s*\[([^\]]*)\]/)?.[1] ?? ''
+assert.equal(
+  seniorLeadershipAccess.includes("'workflows'"),
+  false,
+  'The remediation fix must not broaden the Senior Leadership workspace policy to clear the navigation defect.',
 )
 
 assert.match(
