@@ -1,0 +1,26 @@
+name: Catalog lifecycle contract
+
+on:
+  pull_request:
+    paths:
+      - 'app/catalog/catalog-manager.tsx'
+      - 'app/api/catalog/[datasetId]/route.ts'
+      - 'scripts/test-catalog-lifecycle-contract.mjs'
+      - 'scripts/audit-catalog-lifecycle-adversarial.mjs'
+      - '.github/workflows/catalog-lifecycle-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-lifecycle-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Contract and negative cases
+        run: node scripts/test-catalog-lifecycle-contract.mjs
+      - name: Independent adversarial audit
+        run: node scripts/audit-catalog-lifecycle-adversarial.mjs
