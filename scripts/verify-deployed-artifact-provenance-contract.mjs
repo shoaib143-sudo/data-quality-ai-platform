@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const contract = JSON.parse(await readFile('infra/release-provenance/deployed-artifact-contract.json', 'utf8'))
-const packageJson = JSON.parse(await readFile('package.json', 'utf8'))
+const vercel = JSON.parse(await readFile('vercel.json', 'utf8'))
 const workflow = await readFile('.github/workflows/release-provenance.yml', 'utf8')
 
 assert.equal(contract.schemaVersion, 1)
@@ -34,7 +34,7 @@ assert.equal(contract.rules.secretEnvironmentValuesMayBeSerialized, false)
 assert.equal(contract.rules.manifestMustBindDeploymentId, true)
 assert.equal(contract.rules.manifestMustBindSourceCommitSha, true)
 
-assert.match(packageJson.scripts.build, /^next build\s*&&\s*node scripts\/generate-deployed-artifact-provenance\.mjs$/)
+assert.match(vercel.buildCommand ?? '', /^pnpm build\s*&&\s*node scripts\/generate-deployed-artifact-provenance\.mjs$/)
 for (const expected of [
   'Verify deployed artifact provenance contract',
   'Deployed artifact unit and negative/failure tests',
