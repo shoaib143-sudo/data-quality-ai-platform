@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "provenanceKind": "SIGNED_REFERENCE_BUILD",
+  "productionArtifactEquivalenceClaimed": false,
+  "requiredBindings": [
+    "SOURCE_COMMIT_SHA",
+    "SOURCE_TREE_SHA",
+    "LOCKFILE_SHA256",
+    "MIGRATION_SET_SHA256",
+    "REFERENCE_BUILD_SHA256",
+    "REFERENCE_MANIFEST_ATTESTATION",
+    "GITHUB_WORKFLOW_RUN",
+    "SIGSTORE_ATTESTATION"
+  ],
+  "protectedMainOnlyAttestation": true,
+  "attestationProvider": "github-actions-sigstore",
+  "referenceBuildMustBeAttested": true,
+  "referenceManifestMustBeAttested": true,
+  "attestationMustBeVerifiedBeforeEvidenceUpload": true,
+  "productionVerificationRequiresSeparateDeploymentSourceBinding": true,
+  "mutableActionReferencesAllowed": false,
+  "pullRequestAttestationAllowed": false
+}
