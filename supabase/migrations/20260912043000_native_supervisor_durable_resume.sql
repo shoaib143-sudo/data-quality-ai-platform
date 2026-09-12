@@ -76,12 +76,13 @@ BEGIN
     RETURN v_result;
 END; $$;
 
-CREATE OR REPLACE FUNCTION agent.renew_supervisor_execution_lease_internal(p_agent_run_id uuid,p_lease_owner text,p_execution_generation bigint,p_lease_seconds integer DEFAULT 60)
+CREATE OR REPLACE FUNCTION agent.renew_supervisor_execution_lease_internal(p_agent_run_id uuid,p_lease_owner text,p_execution_generation bigint,p_lease_seconds integer DEFAULT 60,p_checkpoint_id uuid DEFAULT NULL)
 RETURNS agent.agent_run_execution_leases LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_result agent.agent_run_execution_leases%ROWTYPE;
 BEGIN
     IF p_lease_seconds < 10 OR p_lease_seconds > 3600 THEN RAISE EXCEPTION 'lease duration must be between 10 and 3600 seconds'; END IF;
-    UPDATE agent.agent_run_execution_leases SET lease_expires_at=now()+pg_catalog.make_interval(secs=>p_lease_seconds),updated_at=now() WHERE agent_run_id=p_agent_run_id AND lease_owner=trim(p_lease_owner) AND execution_generation=p_execution_generation AND lease_expires_at > now() RETURNING * INTO v_result;
+    IF p_checkpoint_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM agent.agent_run_checkpoints c WHERE c.id=p_checkpoint_id AND c.agent_run_id=p_agent_run_id) THEN RAISE EXCEPTION 'Checkpoint is outside the agent run'; END IF;
+    UPDATE agent.agent_run_execution_leases SET checkpoint_id=COALESCE(p_checkpoint_id,checkpoint_id),lease_expires_at=now()+pg_catalog.make_interval(secs=>p_lease_seconds),updated_at=now() WHERE agent_run_id=p_agent_run_id AND lease_owner=trim(p_lease_owner) AND execution_generation=p_execution_generation AND lease_expires_at > now() RETURNING * INTO v_result;
     IF NOT FOUND THEN RAISE EXCEPTION 'Supervisor execution lease is not owned by this generation'; END IF;
     RETURN v_result;
 END; $$;
@@ -98,11 +99,11 @@ END; $$;
 
 REVOKE ALL ON FUNCTION agent.initialize_supervisor_execution_internal(uuid,text,text,text,uuid) FROM public,anon,authenticated;
 REVOKE ALL ON FUNCTION agent.claim_supervisor_execution_internal(uuid,text,text,text,text,integer,uuid) FROM public,anon,authenticated;
-REVOKE ALL ON FUNCTION agent.renew_supervisor_execution_lease_internal(uuid,text,bigint,integer) FROM public,anon,authenticated;
+REVOKE ALL ON FUNCTION agent.renew_supervisor_execution_lease_internal(uuid,text,bigint,integer,uuid) FROM public,anon,authenticated;
 REVOKE ALL ON FUNCTION agent.release_supervisor_execution_lease_internal(uuid,text,bigint,uuid) FROM public,anon,authenticated;
 GRANT EXECUTE ON FUNCTION agent.initialize_supervisor_execution_internal(uuid,text,text,text,uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION agent.claim_supervisor_execution_internal(uuid,text,text,text,text,integer,uuid) TO service_role;
-GRANT EXECUTE ON FUNCTION agent.renew_supervisor_execution_lease_internal(uuid,text,bigint,integer) TO service_role;
+GRANT EXECUTE ON FUNCTION agent.renew_supervisor_execution_lease_internal(uuid,text,bigint,integer,uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION agent.release_supervisor_execution_lease_internal(uuid,text,bigint,uuid) TO service_role;
 COMMENT ON TABLE agent.agent_run_execution_leases IS 'Durable supervisor ownership and immutable execution pins. Deployment identity may change; plan, runtime, and pinned tool-contract identity may not.';
 COMMIT;
