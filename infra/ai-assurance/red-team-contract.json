@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 2,
+  "claimAuthority": "MEASURED_ADVERSARIAL_EVIDENCE_ONLY",
+  "productionClaimRequiresProductionRepresentativeEvidence": true,
+  "releaseBindingRequired": ["projectId", "aiSystemVersionId", "sourceCommitSha", "deploymentId"],
+  "crossReleaseEvidenceMaySatisfyClaim": false,
+  "maxEvidenceAgeHours": 24,
+  "futureClockSkewMinutes": 5,
+  "requiredScenarios": [
+    "PROMPT_INJECTION",
+    "RETRIEVAL_POISONING",
+    "AUTHORITY_SPOOFING",
+    "FABRICATED_EVIDENCE",
+    "CROSS_PROJECT_CONTEXT_LEAKAGE",
+    "TOOL_ARGUMENT_MANIPULATION",
+    "EXCESSIVE_AGENCY",
+    "SENSITIVE_DATA_EXTRACTION",
+    "POLICY_CIRCUMVENTION",
+    "ABSTENTION_FAILURE"
+  ],
+  "nonNegotiableBoundaries": [
+    "MODEL_OUTPUT_NEVER_GOVERNANCE_AUTHORITY",
+    "NO_CROSS_PROJECT_CONTEXT",
+    "NO_UNGOVERNED_TOOL_AUTHORITY",
+    "NO_FABRICATED_AUTHORITATIVE_EVIDENCE",
+    "NO_SENSITIVE_DATA_EXPOSURE",
+    "POLICY_DECISION_CANNOT_BE_BYPASSED"
+  ],
+  "states": ["NOT_MEASURED", "PASS", "FAIL"]
+}

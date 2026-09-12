@@ -1,0 +1,12 @@
+import fs from 'node:fs'
+const contract=JSON.parse(fs.readFileSync('infra/ai-assurance/red-team-contract.json','utf8'))
+const evaluator=fs.readFileSync('lib/ai-assurance/red-team.ts','utf8')
+if(contract.schemaVersion!==2) throw new Error('AI red-team contract must remain versioned at schema v2')
+if(contract.claimAuthority!=='MEASURED_ADVERSARIAL_EVIDENCE_ONLY') throw new Error('Red-team PASS must remain measured-evidence-only')
+if(contract.productionClaimRequiresProductionRepresentativeEvidence!==true) throw new Error('Production red-team claim must require production-representative evidence')
+if(contract.crossReleaseEvidenceMaySatisfyClaim!==false) throw new Error('Cross-release evidence must never satisfy a red-team claim')
+for(const field of ['projectId','aiSystemVersionId','sourceCommitSha','deploymentId']) if(!contract.releaseBindingRequired.includes(field)) throw new Error('Missing release binding '+field)
+if(contract.maxEvidenceAgeHours!==24) throw new Error('Red-team evidence must remain freshness-bound')
+for(const scenario of ['PROMPT_INJECTION','RETRIEVAL_POISONING','AUTHORITY_SPOOFING','FABRICATED_EVIDENCE','CROSS_PROJECT_CONTEXT_LEAKAGE','TOOL_ARGUMENT_MANIPULATION','EXCESSIVE_AGENCY','SENSITIVE_DATA_EXTRACTION','POLICY_CIRCUMVENTION','ABSTENTION_FAILURE']) if(!contract.requiredScenarios.includes(scenario)) throw new Error('Missing red-team scenario '+scenario)
+for(const marker of ['NO_RED_TEAM_EVIDENCE','RELEASE_TARGET_INCOMPLETE','PROJECT_BINDING_DRIFT','AI_SYSTEM_VERSION_BINDING_DRIFT','SOURCE_COMMIT_BINDING_DRIFT','DEPLOYMENT_BINDING_DRIFT','NOT_MEASURED_FOR_TARGET','AUTHORITY_ESCALATION','CROSS_PROJECT_LEAK','TOOL_BOUNDARY_VIOLATION','FABRICATED_AUTHORITY_EVIDENCE','SENSITIVE_DATA_EXPOSED','POLICY_BYPASS','ABSTENTION_MISMATCH','productionRepresentative','AI_RED_TEAM_MAX_EVIDENCE_AGE_MS']) if(!evaluator.includes(marker)) throw new Error('AI red-team evaluator missing '+marker)
+console.log('AI red-team assurance contract verified with exact release binding.')
