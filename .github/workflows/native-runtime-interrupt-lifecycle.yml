@@ -7,6 +7,7 @@ on:
       - 'lib/agents/runtime/native-runtime-interrupt-lifecycle.ts'
       - 'supabase/migrations/20260912052000_native_runtime_interrupt_lifecycle.sql'
       - 'scripts/verify-native-runtime-interrupt-lifecycle.mjs'
+      - 'scripts/test-native-runtime-interrupt-policy.mjs'
       - '.github/workflows/native-runtime-interrupt-lifecycle.yml'
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - 'lib/agents/runtime/native-runtime-interrupt-lifecycle.ts'
       - 'supabase/migrations/20260912052000_native_runtime_interrupt_lifecycle.sql'
       - 'scripts/verify-native-runtime-interrupt-lifecycle.mjs'
+      - 'scripts/test-native-runtime-interrupt-policy.mjs'
       - '.github/workflows/native-runtime-interrupt-lifecycle.yml'
 
 permissions:
@@ -31,5 +33,6 @@ jobs:
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: node scripts/verify-native-runtime-interrupt-lifecycle.mjs
+      - run: node scripts/test-native-runtime-interrupt-policy.mjs
       - run: pnpm exec tsc --noEmit
       - run: pnpm build
