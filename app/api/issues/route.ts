@@ -3,6 +3,13 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import {
+  assertIssueOwnerBelongsToProjectOrganization,
+  assertIssueReferencesBelongToProject,
+  IssueReferenceIntegrityError,
+} from '@/lib/governance/issue-reference-integrity'
+
+const ISSUE_SEVERITIES = new Set(['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -11,6 +18,9 @@ function text(value: unknown) {
 function authorizationResponse(error: unknown) {
   if (error instanceof AuthorizationError) {
     return NextResponse.json({ error: error.message }, { status: error.status })
+  }
+  if (error instanceof IssueReferenceIntegrityError) {
+    return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
   }
   return null
 }
@@ -55,22 +65,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'projectId and title are required.' }, { status: 400 })
     }
 
+    const severity = text(body.severity).toUpperCase() || 'MEDIUM'
+    if (!ISSUE_SEVERITIES.has(severity)) {
+      return NextResponse.json({ error: 'Invalid issue severity.', code: 'ISSUE_SEVERITY_INVALID' }, { status: 400 })
+    }
+
     await authorizeProject(user.id, projectId, 'issues.manage')
+    await Promise.all([
+      assertIssueReferencesBelongToProject({
+        projectId,
+        datasetId: body.datasetId,
+        datasetVersionId: body.datasetVersionId,
+        profileRunId: body.profileRunId,
+        findingId: body.findingId,
+        qualityRuleRunId: body.qualityRuleRunId,
+      }),
+      assertIssueOwnerBelongsToProjectOrganization(projectId, body.ownerUserId),
+    ])
 
     const admin = createAdminClient()
     const payload = {
       project_id: projectId,
-      dataset_id: body.datasetId || null,
-      dataset_version_id: body.datasetVersionId || null,
-      profile_run_id: body.profileRunId || null,
-      finding_id: body.findingId || null,
-      quality_rule_run_id: body.qualityRuleRunId || null,
+      dataset_id: text(body.datasetId) || null,
+      dataset_version_id: text(body.datasetVersionId) || null,
+      profile_run_id: text(body.profileRunId) || null,
+      finding_id: text(body.findingId) || null,
+      quality_rule_run_id: text(body.qualityRuleRunId) || null,
       title,
       description: text(body.description) || null,
-      severity: text(body.severity).toUpperCase() || 'MEDIUM',
+      severity,
       status: 'OPEN',
-      owner_user_id: body.ownerUserId || null,
-      due_at: body.dueAt || null,
+      owner_user_id: text(body.ownerUserId) || null,
+      due_at: text(body.dueAt) || null,
       created_by: user.id,
     }
 

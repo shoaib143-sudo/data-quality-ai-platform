@@ -3,9 +3,13 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { assertIssueOwnerBelongsToProjectOrganization, IssueReferenceIntegrityError } from '@/lib/governance/issue-reference-integrity'
 import { scheduleRemediationVerificationFromIssue } from '@/lib/profiling/remediation-reprofile'
 import { scheduleFreshDataQualityVerificationFromIssue } from '@/lib/data-quality/remediation-reprofile'
 import { verifyObservabilityIncidentResponseFromIssue } from '@/lib/observability/incident-response-verification'
+
+const ISSUE_STATUSES = new Set(['OPEN', 'TRIAGED', 'IN_PROGRESS', 'BLOCKED', 'RESOLVED', 'CLOSED'])
+const ISSUE_SEVERITIES = new Set(['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ issueId: string }> }) {
   try {
@@ -26,6 +30,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
 
     const body = await request.json()
     const status = typeof body.status === 'string' ? body.status.toUpperCase() : issue.status
+    if (!ISSUE_STATUSES.has(status)) {
+      return NextResponse.json({ error: 'Invalid issue status.', code: 'ISSUE_STATUS_INVALID' }, { status: 400 })
+    }
+    if (typeof body.severity === 'string' && !ISSUE_SEVERITIES.has(body.severity.toUpperCase())) {
+      return NextResponse.json({ error: 'Invalid issue severity.', code: 'ISSUE_SEVERITY_INVALID' }, { status: 400 })
+    }
+    if (body.ownerUserId !== undefined) {
+      await assertIssueOwnerBelongsToProjectOrganization(issue.project_id, body.ownerUserId)
+    }
+
     const wasResolved = ['RESOLVED', 'CLOSED'].includes(issue.status)
     const resolvingNow = !wasResolved && ['RESOLVED', 'CLOSED'].includes(status)
 
@@ -79,10 +93,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
       }, { status: 400 })
     }
 
-    const updates: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-      status,
-    }
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString(), status }
     if (body.ownerUserId !== undefined) updates.owner_user_id = body.ownerUserId || null
     if (body.dueAt !== undefined) updates.due_at = body.dueAt || null
     if (typeof body.title === 'string') updates.title = body.title.trim()
@@ -92,13 +103,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
     if (body.resolutionEvidence && typeof body.resolutionEvidence === 'object') updates.resolution_evidence = body.resolutionEvidence
     if (['RESOLVED', 'CLOSED'].includes(status)) updates.resolved_at = new Date().toISOString()
 
-    const { data, error } = await admin
-      .schema('governance')
-      .from('issues')
-      .update(updates)
-      .eq('id', issueId)
-      .select('*')
-      .single()
+    const { data, error } = await admin.schema('governance').from('issues').update(updates).eq('id', issueId).select('*').single()
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
     await writeGovernanceAudit({
@@ -119,33 +124,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
     let verificationScheduling: Record<string, unknown> | null = null
     if (['RESOLVED', 'CLOSED'].includes(status)) {
       try {
-        const dataQualityScheduling = await scheduleFreshDataQualityVerificationFromIssue({
-          issueId,
-          projectId: issue.project_id,
-          userId: user.id,
-        })
-
+        const dataQualityScheduling = await scheduleFreshDataQualityVerificationFromIssue({ issueId, projectId: issue.project_id, userId: user.id })
         if (dataQualityScheduling.status !== 'NOT_DATA_QUALITY_REMEDIATION') {
           verificationScheduling = { ...dataQualityScheduling, mode: 'DATA_QUALITY_FRESH_PROFILE' }
         } else if (data.profile_run_id) {
           verificationScheduling = {
-            ...(await scheduleRemediationVerificationFromIssue({
-              issueId,
-              projectId: issue.project_id,
-              sourceProfileRunId: data.profile_run_id,
-              userId: user.id,
-            })),
+            ...(await scheduleRemediationVerificationFromIssue({ issueId, projectId: issue.project_id, sourceProfileRunId: data.profile_run_id, userId: user.id })),
             mode: 'PROFILING',
           }
         } else {
-          const observabilityVerification = await verifyObservabilityIncidentResponseFromIssue({
-            issueId,
-            projectId: issue.project_id,
-            actorUserId: user.id,
-          })
-          if (observabilityVerification.status !== 'NOT_OBSERVABILITY_RESPONSE') {
-            verificationScheduling = { ...observabilityVerification, mode: 'OBSERVABILITY_RESPONSE' }
-          }
+          const observabilityVerification = await verifyObservabilityIncidentResponseFromIssue({ issueId, projectId: issue.project_id, actorUserId: user.id })
+          if (observabilityVerification.status !== 'NOT_OBSERVABILITY_RESPONSE') verificationScheduling = { ...observabilityVerification, mode: 'OBSERVABILITY_RESPONSE' }
         }
       } catch (verificationError) {
         verificationScheduling = {
@@ -157,11 +146,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
 
     return NextResponse.json({ issue: data, verificationScheduling })
   } catch (error) {
-    if (error instanceof AuthorizationError) {
-      return NextResponse.json({ error: error.message }, { status: error.status })
-    }
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Unable to update issue.',
-    }, { status: 500 })
+    if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
+    if (error instanceof IssueReferenceIntegrityError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to update issue.' }, { status: 500 })
   }
 }

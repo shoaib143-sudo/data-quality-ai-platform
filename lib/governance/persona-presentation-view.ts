@@ -59,7 +59,7 @@ export function buildRoleLandingPresentation(plan: PresentationPlan, data: Prese
       { label: 'Material risks', value: String(data.highFindings), detail: `${data.materialFindings} material findings`, href: '/issues', icon: 'alert' },
       { label: 'Business impact', value: String(impacts), detail: 'Linked reports, KPIs, processes and decisions', href: '/reports', icon: 'lineage' },
       { label: 'Decisions in progress', value: String(decisions), detail: 'Certification and exception decisions', href: '/stewardship', icon: 'check' },
-      { label: 'Ownership coverage', value: `${data.ownershipCoverage}%`, detail: 'Governed datasets with an accountable owner', href: '/stewardship', icon: 'users' },
+      { label: 'Stewardship coverage', value: `${data.ownershipCoverage}%`, detail: 'Governed datasets with at least one active stewardship assignment', href: '/stewardship', icon: 'users' },
     ], aiStarters: ['What needs my attention today?', 'Where is our biggest data risk?', 'What changed since my last review?', 'Which business decisions are affected?', 'Are we improving overall?'] }
     case 'trusted-data-discovery': return { plan, attentionTitle: 'Known concerns affecting governed data', contextTitle: 'Data available by business domain', actionTitle: 'Find trusted data for your business need', actionHref: '/catalog', metrics: [
       { label: 'Certified datasets', value: String(data.certifiedDatasets), detail: 'Governed datasets with certified status', href: '/catalog?q=CERTIFIED', icon: 'check' },
@@ -71,7 +71,7 @@ export function buildRoleLandingPresentation(plan: PresentationPlan, data: Prese
       { label: 'High-risk findings', value: String(data.highFindings), detail: 'Critical and high findings', href: '/issues', icon: 'alert' },
       { label: 'Critical data mappings', value: String(data.cdeMappings), detail: 'Governed CDE mappings', href: '/classification', icon: 'tag' },
       { label: 'Pending decisions', value: String(decisions), detail: 'Certification and exception decisions', href: '/stewardship', icon: 'check' },
-      { label: 'Ownership coverage', value: `${data.ownershipCoverage}%`, detail: 'Datasets with accountable ownership', href: '/stewardship', icon: 'users' },
+      { label: 'Stewardship coverage', value: `${data.ownershipCoverage}%`, detail: 'Datasets with active governed stewardship assignments', href: '/stewardship', icon: 'users' },
     ], aiStarters: ['What requires my decision today?', 'Which owned data is outside tolerance?', 'What critical data is affected?', 'Who is resolving the highest risks?', 'What should I prioritize next?'] }
     case 'product-trust': return { plan, attentionTitle: 'Consumer-impacting data product risks', contextTitle: 'Product trust by business domain', actionTitle: 'Review data products requiring attention', actionHref: '/catalog', metrics: [
       { label: 'Product trust', value: pct(data.confidence), detail: 'Latest scored profiling evidence', href: '/data-quality', icon: 'gauge' },
@@ -88,7 +88,7 @@ export function buildRoleLandingPresentation(plan: PresentationPlan, data: Prese
     case 'governance-programme': return { plan, attentionTitle: 'Governance gaps requiring intervention', contextTitle: 'Governance health by business domain', actionTitle: 'Target the largest governance gap', actionHref: '/reports', metrics: [
       { label: 'Control failures', value: String(data.failedControlEvaluations), detail: 'Governance control evaluations not passing', href: '/data-quality/rules', icon: 'alert' },
       { label: 'Critical data coverage', value: String(data.cdeMappings), detail: 'Governed CDE mappings', href: '/classification', icon: 'tag' },
-      { label: 'Ownership coverage', value: `${data.ownershipCoverage}%`, detail: 'Datasets with accountable ownership', href: '/stewardship', icon: 'users' },
+      { label: 'Stewardship coverage', value: `${data.ownershipCoverage}%`, detail: 'Datasets with active governed stewardship assignments', href: '/stewardship', icon: 'users' },
       { label: 'Open exceptions', value: String(data.pendingWaivers), detail: 'Control waivers awaiting decision', href: '/audit', icon: 'check' },
     ], aiStarters: ['Where are our governance gaps?', 'Which domains need intervention?', 'Are controls working effectively?', 'Where is ownership incomplete?', 'Are governance outcomes improving?'] }
     case 'control-assurance': return { plan, attentionTitle: 'Regulatory and control exposure', contextTitle: 'Exposure by business domain', actionTitle: 'Review the most material control exposure', actionHref: '/audit', metrics: [
@@ -123,7 +123,7 @@ export function buildRoleLandingPresentation(plan: PresentationPlan, data: Prese
     ], aiStarters: ['Is my source causing downstream issues?', 'What changed in my source?', 'Which defects keep recurring?', 'Who is affected downstream?', 'What upstream fix should I prioritize?'] }
     case 'metadata-intelligence': return { plan, attentionTitle: 'Metadata gaps requiring analysis', contextTitle: 'Metadata coverage by business domain', actionTitle: 'Review the largest metadata gap', actionHref: '/catalog', metrics: [
       { label: 'Domain assignment', value: `${data.domainAssignedCoverage}%`, detail: 'Datasets assigned to a business domain', href: '/catalog', icon: 'tag' },
-      { label: 'Ownership coverage', value: `${data.ownershipCoverage}%`, detail: 'Datasets with accountable ownership', href: '/catalog', icon: 'users' },
+      { label: 'Stewardship coverage', value: `${data.ownershipCoverage}%`, detail: 'Datasets with active governed stewardship assignments', href: '/catalog', icon: 'users' },
       { label: 'Glossary mappings', value: String(data.approvedGlossaryMappings), detail: 'Approved dataset and column term mappings', href: '/glossary', icon: 'book' },
       { label: 'Classifications', value: String(data.approvedClassifications), detail: 'Approved classification evidence', href: '/classification', icon: 'check' },
     ], aiStarters: ['Show metadata gaps by dataset', 'Which datasets lack business terms?', 'Where is ownership missing?', 'Show lineage and metadata coverage', 'Which metadata should be improved first?'] }
