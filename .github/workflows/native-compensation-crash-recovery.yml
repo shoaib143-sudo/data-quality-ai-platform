@@ -1,0 +1,35 @@
+name: Native compensation crash recovery
+
+on:
+  pull_request:
+    paths:
+      - 'lib/agents/runtime/native-compensation-invocations.ts'
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'supabase/migrations/20260912065000_native_compensation_crash_recovery.sql'
+      - 'scripts/verify-native-compensation-crash-recovery.mjs'
+      - '.github/workflows/native-compensation-crash-recovery.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-compensation-invocations.ts'
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'supabase/migrations/20260912065000_native_compensation_crash_recovery.sql'
+      - 'scripts/verify-native-compensation-crash-recovery.mjs'
+      - '.github/workflows/native-compensation-crash-recovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-native-compensation-crash-recovery.mjs
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build
