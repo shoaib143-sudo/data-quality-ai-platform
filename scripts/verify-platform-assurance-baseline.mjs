@@ -28,6 +28,11 @@ for (const control of controls) {
   if (!Array.isArray(control.evidence) || control.evidence.length === 0) fail(`Control ${control.id} must declare evidence.`)
   for (const evidence of control.evidence) if (!exists(evidence)) fail(`Control ${control.id} evidence path is missing: ${evidence}`)
 }
+const immutableCiControl = controls.find(control => control.id === 'PA-002')
+if (immutableCiControl?.state !== 'ENFORCED') fail('PA-002 immutable CI action references must remain ENFORCED.')
+for (const evidence of ['scripts/verify-workflow-action-pinning.mjs', 'scripts/test-workflow-action-pinning.mjs']) {
+  if (!immutableCiControl?.evidence?.includes(evidence)) fail(`PA-002 must retain evidence: ${evidence}`)
+}
 
 const requiredPhases = ['DETECT','CLASSIFY','CONTAIN','PRESERVE_EVIDENCE','ERADICATE','RECOVER','COMMUNICATE','POST_INCIDENT_REVIEW','CONTROL_UPDATE']
 if (JSON.stringify(incident.requiredPhases) !== JSON.stringify(requiredPhases)) fail('Security incident phases must remain ordered and complete.')
