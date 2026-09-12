@@ -1,3 +1,4 @@
+import { recordMonitorPlan } from '@/lib/monitoring/execution-evidence'
 import { randomUUID } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -244,6 +245,8 @@ export async function executeNativeBoundRuntimePlan(input: {
     return binding
   }
 
+
+
   const pins = await buildNativeSupervisorExecutionPins({
     supervisorAgentRunId,
     planHash: boundPlan.planHash,
@@ -308,6 +311,14 @@ export async function executeNativeBoundRuntimePlan(input: {
   scheduleHeartbeat()
 
   try {
+    await recordMonitorPlan({
+      version: 1, runId: supervisorAgentRunId, revision: boundPlan.planHash, complete: true,
+      steps: boundPlan.plan.steps.map((step, index) => ({
+        id: step.id, runId: getBinding(step).agentRunId, order: index + 1,
+        name: step.toolKey, dependsOn: step.dependsOn ?? [],
+      })),
+    })
+
     const result = await executeNativeClosedLoopV2({
       context: {
         resolveAgentRunId: (step) => getBinding(step).agentRunId,
