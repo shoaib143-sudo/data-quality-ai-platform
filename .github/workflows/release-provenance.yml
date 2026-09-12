@@ -1,0 +1,97 @@
+name: Release Provenance
+
+on:
+  pull_request:
+    paths:
+      - 'infra/release-provenance/**'
+      - 'scripts/generate-reference-build-manifest.mjs'
+      - 'scripts/verify-release-provenance-contract.mjs'
+      - 'scripts/test-reference-build-manifest.mjs'
+      - '.github/workflows/release-provenance.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-release-provenance-contract.mjs
+      - run: node scripts/test-reference-build-manifest.mjs
+
+  attest-reference-build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build certified reference artifact
+        run: pnpm build
+      - name: Package reference build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence
+          items=(.next package.json pnpm-lock.yaml)
+          if [ -d public ]; then items+=(public); fi
+          tar -czf release-evidence/reference-build.tgz "${items[@]}"
+      - name: Generate source and migration bindings
+        run: node scripts/generate-reference-build-manifest.mjs release-evidence/reference-build.tgz
+      - name: Sign reference build and manifest provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: |
+            release-evidence/reference-build.tgz
+            release-evidence/reference-build-manifest.json
+      - name: Verify signed reference build and manifest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh attestation verify release-evidence/reference-build.tgz --repo "$GITHUB_REPOSITORY"
+          gh attestation verify release-evidence/reference-build-manifest.json --repo "$GITHUB_REPOSITORY"
+      - name: Preserve attestation bundle
+        shell: bash
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$ATTESTATION_BUNDLE" release-evidence/attestation.sigstore.json
+      - name: Upload release evidence bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-provenance-${{ github.run_id }}
+          path: release-evidence/
+          retention-days: 90
