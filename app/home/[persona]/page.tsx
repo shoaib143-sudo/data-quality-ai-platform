@@ -186,7 +186,7 @@ export default async function PersonaHomePage({ params, searchParams }: { params
       accuracy: latestScore?.accuracy_score ?? null,
       certificationStatus: governance?.certification_status || 'UNCERTIFIED',
       criticality: governance?.criticality || 'UNSET',
-      hasOwner: Boolean(stewardship && upper(stewardship.coverage_status) !== 'UNASSIGNED'),
+      hasOwner: Boolean(stewardship && upper(stewardship.coverage_status) === 'ACCOUNTABLE'),
       findingCount: latestFindings.length,
       highFindingCount: latestFindings.filter(item => isHigh(item.severity)).length,
       latestRunId: latestRun?.id ?? null,
