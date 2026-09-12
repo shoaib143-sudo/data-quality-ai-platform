@@ -1,6 +1,8 @@
 name: V6 Operational Certification
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
