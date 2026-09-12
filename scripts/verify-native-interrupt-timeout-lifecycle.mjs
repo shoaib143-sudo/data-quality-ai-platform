@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const migration = readFileSync('supabase/migrations/20260912054000_native_interrupt_timeout_lifecycle.sql', 'utf8')
+const authorizationOrderMigration = readFileSync('supabase/migrations/20260912054005_harden_runtime_interrupt_authorization_order.sql', 'utf8')
 const runtime = readFileSync('lib/agents/runtime/native-interrupt-lifecycle.ts', 'utf8')
 
 const requiredMigrationFragments = [
@@ -36,6 +37,12 @@ assert.match(migration, /REVOKE ALL ON FUNCTION agent\.process_runtime_interrupt
 assert.match(migration, /REVOKE ALL ON FUNCTION agent\.cancel_runtime_interrupt_internal\(uuid,text\) FROM public, anon, authenticated/)
 assert.match(migration, /GRANT EXECUTE ON FUNCTION agent\.process_runtime_interrupt_timeout_internal\(uuid,text\) TO service_role/)
 assert.match(migration, /GRANT EXECUTE ON FUNCTION agent\.cancel_runtime_interrupt_internal\(uuid,text\) TO service_role/)
+
+assert.match(authorizationOrderMigration, /JOIN agent\.agent_runs r ON r\.id = i\.agent_run_id[\s\S]*WHERE i\.id = p_interrupt_id[\s\S]*AND app_private\.is_project_admin\(r\.project_id\)[\s\S]*FOR UPDATE OF i/)
+assert.ok(authorizationOrderMigration.includes("RAISE EXCEPTION 'Agent runtime interrupt is unavailable'"), 'unauthorized and unknown interrupt identifiers must share a generic fail-closed response')
+assert.ok(!authorizationOrderMigration.includes('Project administrator approval is required'), 'authorization-order hardening must not expose a distinct project-admin failure')
+assert.match(authorizationOrderMigration, /REVOKE ALL ON FUNCTION agent\.resolve_runtime_interrupt\(uuid,text,text,jsonb\) FROM public, anon, service_role/)
+assert.match(authorizationOrderMigration, /GRANT EXECUTE ON FUNCTION agent\.resolve_runtime_interrupt\(uuid,text,text,jsonb\) TO authenticated/)
 
 const requiredRuntimeFragments = [
   'processNativeRuntimeInterruptTimeout',
