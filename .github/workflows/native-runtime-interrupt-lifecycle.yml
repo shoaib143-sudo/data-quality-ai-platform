@@ -1,0 +1,35 @@
+name: Native runtime interrupt lifecycle
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/jobs/worker/route.ts'
+      - 'lib/agents/runtime/native-runtime-interrupt-lifecycle.ts'
+      - 'supabase/migrations/20260912052000_native_runtime_interrupt_lifecycle.sql'
+      - 'scripts/verify-native-runtime-interrupt-lifecycle.mjs'
+      - '.github/workflows/native-runtime-interrupt-lifecycle.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/api/jobs/worker/route.ts'
+      - 'lib/agents/runtime/native-runtime-interrupt-lifecycle.ts'
+      - 'supabase/migrations/20260912052000_native_runtime_interrupt_lifecycle.sql'
+      - 'scripts/verify-native-runtime-interrupt-lifecycle.mjs'
+      - '.github/workflows/native-runtime-interrupt-lifecycle.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-native-runtime-interrupt-lifecycle.mjs
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build
