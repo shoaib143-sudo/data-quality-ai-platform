@@ -1,7 +1,9 @@
 import fs from 'node:fs'
+import { spawnSync } from 'node:child_process'
 
 const layout = fs.readFileSync('app/admin/ai-command-center/layout.tsx', 'utf8')
 const page = fs.readFileSync('app/admin/ai-command-center/retrieval-evaluation/page.tsx', 'utf8')
+const repair = fs.readFileSync('supabase/migrations/20260913031500_retrieval_evaluation_read_grants.sql', 'utf8')
 const failures = []
 const requireText = (source, token, label) => { if (!source.includes(token)) failures.push(`missing ${label}: ${token}`) }
 
@@ -15,6 +17,15 @@ requireText(page, ".eq('evaluation_type', 'RETRIEVAL_RELEVANCE')", 'retrieval ev
 requireText(page, "benchmarkReady ? 'READY' : 'BLOCKED'", 'evidence-based readiness indicator')
 requireText(page, 'No canonical retrieval relevance cases are recorded', 'truthful no-label state')
 requireText(page, 'Neither automatically selects, promotes, activates, deploys, or approves', 'authority boundary')
+
+for (const object of [
+  'governance.ai_retrieval_evaluation_case_versions',
+  'governance.ai_retrieval_relevance_judgments',
+  'governance.ai_retrieval_evaluation_case_effective',
+]) {
+  requireText(repair, `revoke all on ${object} from anon;`, `anonymous denial for ${object}`)
+  requireText(repair, `grant select on ${object} to authenticated;`, `authenticated SELECT for ${object}`)
+}
 
 for (const forbidden of [
   /\.insert\s*\(/,
@@ -33,5 +44,13 @@ if (failures.length) {
   failures.forEach((failure) => console.error(` - ${failure}`))
   process.exit(1)
 }
+
+const adversarial = spawnSync(process.execPath, ['scripts/test-adversarial-retrieval-evaluation-read-grants.mjs'], {
+  encoding: 'utf8',
+  stdio: 'pipe',
+})
+if (adversarial.stdout) process.stdout.write(adversarial.stdout)
+if (adversarial.stderr) process.stderr.write(adversarial.stderr)
+if (adversarial.status !== 0) process.exit(adversarial.status ?? 1)
 
 console.log('ADR-006 retrieval evaluation Command Center read-only boundary verified.')
