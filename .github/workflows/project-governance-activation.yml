@@ -6,12 +6,20 @@ on:
     paths:
       - 'supabase/migrations/**project_governance_activation.sql'
       - 'scripts/verify-project-governance-activation.mjs'
+      - 'scripts/test-project-governance-activation-ui.mjs'
+      - 'scripts/audit-project-governance-activation-ui-adversarial.mjs'
+      - 'app/api/platform/[projectId]/route.ts'
+      - 'app/platform/platform-controls-v2.tsx'
       - '.github/workflows/project-governance-activation.yml'
   pull_request:
     branches: [main]
     paths:
       - 'supabase/migrations/**project_governance_activation.sql'
       - 'scripts/verify-project-governance-activation.mjs'
+      - 'scripts/test-project-governance-activation-ui.mjs'
+      - 'scripts/audit-project-governance-activation-ui-adversarial.mjs'
+      - 'app/api/platform/[projectId]/route.ts'
+      - 'app/platform/platform-controls-v2.tsx'
       - '.github/workflows/project-governance-activation.yml'
 
 permissions:
@@ -27,3 +35,7 @@ jobs:
           node-version: 24
       - name: Verify governance activation contract
         run: node scripts/verify-project-governance-activation.mjs
+      - name: Test governance activation UI contract
+        run: node scripts/test-project-governance-activation-ui.mjs
+      - name: Independent adversarial governance activation UI audit
+        run: node scripts/audit-project-governance-activation-ui-adversarial.mjs

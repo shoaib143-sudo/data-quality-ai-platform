@@ -17,6 +17,7 @@ export type PlatformProject = {
 type PlatformData = {
   capacity: Record<string, unknown> | null
   recovery: Record<string, unknown> | null
+  governanceActivation: Record<string, unknown> | null
   contractChecks: Array<Record<string, unknown>>
   drills: Array<Record<string, unknown>>
   jobs: Array<Record<string, unknown>>
@@ -84,11 +85,50 @@ export function PlatformControlsV2({projects}:{projects:PlatformProject[]}) {
   const latestCheck=data?.contractChecks?.[0]
   const latestDrill=data?.drills?.[0]
   const readiness=record(data?.recovery)
+  const governanceActivation=record(data?.governanceActivation)
+  const governanceCoverage=record(governanceActivation.coverage)
+  const governancePending=record(governanceActivation.pending)
+  const governanceBlockers=record(governanceActivation.blockers)
+  const governanceState=String(governanceActivation.state??'UNKNOWN')
+  const governanceStateLabel=governanceState.replaceAll('_',' ')
 
   return <div className="space-y-5">
     <section className={`${surface} flex flex-wrap items-end justify-between gap-4 p-5`}><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Control scope</p><h2 className="mt-1 text-xl font-black text-white">Project reliability boundary</h2><p className="mt-1 text-sm text-slate-500">Read access and each mutation use the same live capability contract as the API.</p></div><div className="flex flex-wrap items-end gap-2"><label className="text-xs font-bold text-slate-400">Project<select value={projectId} onChange={event=>setProjectId(event.target.value)} className={`mt-1 block min-w-64 ${input}`}>{projects.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button type="button" onClick={()=>void load()} disabled={loading} className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/10 px-4 text-sm font-bold text-slate-200 hover:bg-white/[.05] disabled:opacity-50">{loading?<Loader2 className="h-4 w-4 animate-spin"/>:<RefreshCw className="h-4 w-4"/>}Refresh</button></div></section>
     {message?<p className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-300">{message}</p>:null}{error?<p className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-300">{error}</p>:null}
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric icon={<Activity className="h-5 w-5"/>} label="Running jobs" value={summary.running} href="/monitoring"/><Metric icon={<Gauge className="h-5 w-5"/>} label="Queued jobs" value={summary.queued} href="/monitoring"/><Metric icon={<ShieldAlert className="h-5 w-5"/>} label="Dead jobs" value={summary.failed} href="/monitoring"/><Metric icon={<DatabaseBackup className="h-5 w-5"/>} label="Pending events" value={summary.pending} href="/monitoring"/></section>
+
+    <section className={`${surface} p-5`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Governance activation</p>
+          <h3 className="mt-1 font-black text-white">Effective project governance coverage</h3>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">Read-only deterministic evidence. Proposed, suggested, draft, and provisional records are shown separately and never counted as effective governance.</p>
+        </div>
+        <span className="rounded-lg bg-cyan-400/10 px-2.5 py-1.5 text-[10px] font-black text-cyan-200">{governanceStateLabel}</span>
+      </div>
+      {governanceActivation.project_id ? <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <GovernanceMetric label="Active datasets" value={number(governanceActivation.active_datasets,0)}/>
+        <GovernanceMetric label="Fully core-governed" value={number(governanceActivation.fully_core_governed,0)}/>
+        <GovernanceMetric label="Stewardship" value={number(governanceCoverage.stewardship,0)}/>
+        <GovernanceMetric label="Authoritative classification" value={number(governanceCoverage.authoritative_classification,0)}/>
+        <GovernanceMetric label="Approved glossary" value={number(governanceCoverage.approved_glossary_mapping,0)}/>
+        <GovernanceMetric label="Approved CDE" value={number(governanceCoverage.approved_cde_mapping,0)}/>
+        <GovernanceMetric label="Active contracts" value={number(governanceCoverage.active_contract,0)}/>
+        <GovernanceMetric label="Active certifications" value={number(governanceCoverage.active_certification,0)}/>
+      </div> : <p className="mt-4 text-sm text-slate-500">Governance activation evidence is unavailable for this project.</p>}
+      {Object.keys(governanceBlockers).length ? <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/5 p-4">
+        <p className="text-xs font-black uppercase tracking-[.12em] text-amber-300">Current blockers</p>
+        <ul className="mt-2 grid gap-2 text-xs text-slate-300 sm:grid-cols-2">
+          {Object.keys(governanceBlockers).map(code=><li key={code}>{governanceBlockerLabel(code)}</li>)}
+        </ul>
+      </div> : null}
+      {Object.values(governancePending).some(value=>number(value,0)>0) ? <div className="mt-4">
+        <p className="text-xs font-black uppercase tracking-[.12em] text-slate-400">Pending, non-effective records</p>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {Object.entries(governancePending).filter(([,value])=>number(value,0)>0).map(([key,value])=><div key={key} className="rounded-xl border border-white/10 bg-[#08182b] px-3 py-2 text-xs text-slate-400"><span className="font-bold text-slate-200">{number(value,0)}</span> {pendingLabel(key)}</div>)}
+        </div>
+      </div> : null}
+    </section>
 
     <section className="grid gap-5 xl:grid-cols-2">
       <form onSubmit={saveCapacity} className={`${surface} p-5`}><div className="flex items-center justify-between"><h3 className="font-black text-white">Execution capacity</h3><span className={`rounded-lg px-2 py-1 text-[10px] font-black ${project?.canManageCapacity?'bg-emerald-400/10 text-emerald-300':'bg-slate-400/10 text-slate-500'}`}>{project?.canManageCapacity?'MANAGE':'READ ONLY'}</span></div><div className="mt-4 grid gap-3 sm:grid-cols-2"><Field label="Concurrent jobs" value={capacity.maxConcurrentJobs} disabled={!project?.canManageCapacity} onChange={value=>setCapacity(current=>({...current,maxConcurrentJobs:value}))}/><Field label="Jobs per hour" value={capacity.maxJobsPerHour} disabled={!project?.canManageCapacity} onChange={value=>setCapacity(current=>({...current,maxJobsPerHour:value}))}/><Field label="Max profile rows" value={capacity.maxProfileRows} disabled={!project?.canManageCapacity} onChange={value=>setCapacity(current=>({...current,maxProfileRows:value}))}/><Field label="Max file bytes" value={capacity.maxFileBytes} disabled={!project?.canManageCapacity} onChange={value=>setCapacity(current=>({...current,maxFileBytes:value}))}/><Field label="Notifications/hour" value={capacity.maxNotificationsPerHour} disabled={!project?.canManageCapacity} onChange={value=>setCapacity(current=>({...current,maxNotificationsPerHour:value}))}/></div>{project?.canManageCapacity?<button disabled={busy==='capacity'} className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{busy==='capacity'?'Saving…':'Save capacity'}</button>:<p className="mt-4 text-xs text-slate-500">`capacity.manage` is required to change these limits.</p>}</form>
@@ -103,3 +143,8 @@ export function PlatformControlsV2({projects}:{projects:PlatformProject[]}) {
 
 function Field({label,value,onChange,disabled=false}:{label:string;value:number;onChange:(value:number)=>void;disabled?:boolean}){return <label className="text-xs font-bold text-slate-400">{label}<input type="number" value={value} disabled={disabled} onChange={event=>onChange(Number(event.target.value))} className={`mt-1 w-full ${input} disabled:cursor-not-allowed disabled:opacity-45`}/></label>}
 function Metric({label,value,icon,href}:{label:string;value:number;icon:React.ReactNode;href:string}){return <Link href={href} className={`${surface} block p-4 transition hover:-translate-y-0.5 hover:border-cyan-400/30`}><span className="text-cyan-300">{icon}</span><p className="mt-3 text-2xl font-black text-white">{value}</p><p className="mt-1 text-xs font-bold text-slate-400">{label}</p></Link>}
+
+function GovernanceMetric({label,value}:{label:string;value:number}){return <div className="rounded-xl border border-white/10 bg-[#08182b] p-3"><p className="text-xl font-black text-white">{value}</p><p className="mt-1 text-[11px] font-bold text-slate-500">{label}</p></div>}
+
+function governanceBlockerLabel(code:string){const labels:Record<string,string>={NO_ACTIVE_DATASETS:'No active datasets are available for governance activation.',INCOMPLETE_STEWARDSHIP_COVERAGE:'Active datasets do not all have effective stewardship coverage.',INCOMPLETE_AUTHORITATIVE_CLASSIFICATION_COVERAGE:'Active datasets do not all have authoritative classification coverage.',INCOMPLETE_APPROVED_GLOSSARY_COVERAGE:'Active datasets do not all have approved glossary mappings.',INCOMPLETE_APPROVED_CDE_COVERAGE:'Active datasets do not all have approved CDE mappings.',INCOMPLETE_ACTIVE_CONTRACT_COVERAGE:'Active datasets do not all have active data contracts.',INCOMPLETE_ACTIVE_CERTIFICATION_COVERAGE:'Active datasets do not all have current certifications.'};return labels[code]??'A governance activation requirement is not yet satisfied.'}
+function pendingLabel(key:string){const labels:Record<string,string>={proposed_stewardship:'proposed stewardship assignments',proposed_classifications:'proposed classifications',proposed_glossary_mappings:'proposed glossary mappings',suggested_cde_mappings:'suggested CDE mappings',draft_contracts:'draft contracts',provisional_certifications:'provisional certifications'};return labels[key]??'pending governance records'}
