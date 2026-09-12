@@ -22,10 +22,10 @@ const certificationSnapshotSchema = fs.readFileSync('supabase/migrations/2026091
 
 if (controlMap.schemaVersion !== 1 || controlMap.frameworkAlignmentOnly !== true) fail('Control map must be versioned and explicitly alignment-only.')
 const controls = controlMap.controls ?? []
-if (controls.length < 12) fail('Platform assurance control map must cover the baseline control set.')
+if (controls.length < 13) fail('Platform assurance control map must cover the current baseline control set.')
 const ids = controls.map(control => control.id)
 if (new Set(ids).size !== ids.length) fail('Platform assurance control IDs must be unique.')
-for (const expected of Array.from({ length: 12 }, (_, i) => `PA-${String(i + 1).padStart(3, '0')}`)) {
+for (const expected of Array.from({ length: 13 }, (_, i) => `PA-${String(i + 1).padStart(3, '0')}`)) {
   if (!ids.includes(expected)) fail(`Missing required platform assurance control ${expected}.`)
 }
 for (const control of controls) {
@@ -37,6 +37,16 @@ const immutableCiControl = controls.find(control => control.id === 'PA-002')
 if (immutableCiControl?.state !== 'ENFORCED') fail('PA-002 immutable CI action references must remain ENFORCED.')
 for (const evidence of ['scripts/verify-workflow-action-pinning.mjs', 'scripts/test-workflow-action-pinning.mjs']) {
   if (!immutableCiControl?.evidence?.includes(evidence)) fail(`PA-002 must retain evidence: ${evidence}`)
+}
+const privilegedApiControl = controls.find(control => control.id === 'PA-004')
+if (privilegedApiControl?.state !== 'ENFORCED') fail('PA-004 privileged API authorization boundary must remain ENFORCED.')
+for (const evidence of ['scripts/audit-user-facing-admin-routes.mjs', '.github/workflows/privileged-api-authorization-audit.yml', 'lib/auth/authorize.ts']) {
+  if (!privilegedApiControl?.evidence?.includes(evidence)) fail(`PA-004 must retain authoritative evidence: ${evidence}`)
+}
+const certificationAuthorityControl = controls.find(control => control.id === 'PA-013')
+if (certificationAuthorityControl?.state !== 'ENFORCED' || certificationAuthorityControl?.riskTier !== 'R3') fail('PA-013 post-implementation certification authority must remain an enforced R3 control.')
+for (const evidence of ['infra/platform-assurance/post-implementation-certification-contract.json', 'scripts/verify-post-implementation-certification-contract.mjs', 'scripts/verify-p0-p4-revalidation.mjs']) {
+  if (!certificationAuthorityControl?.evidence?.includes(evidence)) fail(`PA-013 must retain certification authority evidence: ${evidence}`)
 }
 
 const requiredPhases = ['DETECT','CLASSIFY','CONTAIN','PRESERVE_EVIDENCE','ERADICATE','RECOVER','COMMUNICATE','POST_INCIDENT_REVIEW','CONTROL_UPDATE']
