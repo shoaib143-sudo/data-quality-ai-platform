@@ -29,6 +29,13 @@
       "observedProductionVersion": "20260912055014",
       "reason": "Platform Assurance found that the historical P0 certification source referenced a non-existent organization_members.is_active column while production had already been repaired by a management migration. This forward-only source migration re-states the verified live RPC contract against the authoritative membership schema and was applied through the Supabase management API. Keep both histories immutable and use this alias during reconstruction checks.",
       "observedVia": "Supabase list_migrations"
+    },
+    {
+      "logicalName": "reconcile_certification_prior_snapshot_schema",
+      "repositoryVersion": "20260912055356",
+      "observedProductionVersion": "20260912055419",
+      "reason": "The earlier certification runtime fix had introduced prior-certification snapshot columns only in production migration history. This recovery-safe forward migration makes those columns and their status constraint explicit and idempotent in repository history, then applies the same contract to production without rewriting either history.",
+      "observedVia": "Supabase schema_migrations"
     }
   ]
 }
