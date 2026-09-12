@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { WorkspaceEmptyState } from '@/components/app-shell/workspace-empty'
 
 type Project = { id: string; name: string }
 type AnalyticsEvent = {
@@ -53,11 +54,16 @@ export default async function ExperienceInsightsPage() {
       <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
         <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
           <GlobalUtilityBar contextLabel="Experience insights" />
-          <section className="rounded-3xl border border-slate-200 bg-white p-9 text-center shadow-sm">
-            <Sparkles className="mx-auto h-9 w-9 text-slate-400" />
-            <h1 className="mt-4 text-2xl font-black">No accessible projects to report</h1>
-            <p className="mt-2 text-sm text-slate-500">Experience reporting appears only for projects available in your governed access scope.</p>
-          </section>
+          <WorkspaceEmptyState
+            title="No accessible projects to report"
+            detail="Experience reporting appears only for projects available in your governed access scope. No telemetry outside that scope is queried."
+            headingLevel="h1"
+            actionHref="/journeys"
+            actionLabel="Open guided journeys"
+            secondaryHref="/reports"
+            secondaryLabel="Return to governance reports"
+            icon={Sparkles}
+          />
         </div>
       </main>
     )
