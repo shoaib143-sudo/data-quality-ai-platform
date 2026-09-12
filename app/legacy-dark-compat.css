@@ -34,14 +34,19 @@ html.dark main.min-h-screen.bg-gray-50 :is(.text-slate-800,.text-slate-700,.text
   color: rgb(203 213 225);
 }
 
-html.dark main.min-h-screen.bg-slate-50 :is(.text-slate-600,.text-slate-500,.text-gray-600,.text-gray-500),
-html.dark main.min-h-screen.bg-gray-50 :is(.text-slate-600,.text-slate-500,.text-gray-600,.text-gray-500) {
+html.dark main.min-h-screen.bg-slate-50 :is(.text-slate-600,.text-slate-500,.text-slate-400,.text-gray-600,.text-gray-500,.text-gray-400),
+html.dark main.min-h-screen.bg-gray-50 :is(.text-slate-600,.text-slate-500,.text-slate-400,.text-gray-600,.text-gray-500,.text-gray-400) {
   color: rgb(148 163 184);
 }
 
-html.dark main.min-h-screen.bg-slate-50 :is(.text-slate-400,.text-gray-400),
-html.dark main.min-h-screen.bg-gray-50 :is(.text-slate-400,.text-gray-400) {
-  color: rgb(100 116 139);
+html.dark main.min-h-screen.bg-slate-50 :is(.text-blue-600,.text-blue-700),
+html.dark main.min-h-screen.bg-gray-50 :is(.text-blue-600,.text-blue-700) {
+  color: rgb(147 197 253);
+}
+
+html.dark main.min-h-screen.bg-slate-50 :is(.text-violet-600,.text-violet-700,.text-purple-600,.text-purple-700),
+html.dark main.min-h-screen.bg-gray-50 :is(.text-violet-600,.text-violet-700,.text-purple-600,.text-purple-700) {
+  color: rgb(196 181 253);
 }
 
 html.dark main.min-h-screen.bg-slate-50 :is(.border-slate-200,.border-slate-300,.border-gray-200,.border-gray-300,.border-blue-100,.border-violet-100,.border-purple-100),
