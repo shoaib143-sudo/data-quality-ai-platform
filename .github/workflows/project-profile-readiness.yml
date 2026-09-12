@@ -36,6 +36,12 @@ jobs:
       - name: Unit test remediation policy
         run: node --experimental-strip-types scripts/test-profile-readiness-remediation-policy.mjs
 
+      - name: Test human remediation UX contract
+        run: node scripts/test-profile-readiness-human-remediation-ux.mjs
+
+      - name: Audit human remediation UX adversarially
+        run: node scripts/audit-profile-readiness-human-remediation-ux-adversarial.mjs
+
       - name: Run independent adversarial audit
         run: node scripts/audit-project-profile-readiness-adversarial.mjs
 
