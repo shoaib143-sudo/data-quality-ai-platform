@@ -1,11 +1,7 @@
 import { chooseProfileReadinessRemediation } from '@/lib/ai/profile-readiness-remediation-model'
+import { evaluateProfileReadinessRemediationPolicy } from '@/lib/profiling/readiness-remediation-policy'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidateAndReconcileSourceForProfiling } from '@/lib/profiling/source-readiness-repair'
-
-const AUTOMATIC_SOURCE_REPAIR_BLOCKERS = new Set([
-  'SOURCE_NOT_OBSERVED_READY',
-  'EXECUTION_SOURCE_NOT_BOUND',
-])
 
 type AllowedAction = 'REVALIDATE_SOURCE' | 'NO_ACTION'
 
@@ -19,15 +15,6 @@ function text(value: unknown) {
 
 function number(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-function activeBlockers(readiness: Record<string, unknown>) {
-  const blockers = record(readiness.blockers)
-  return Object.entries(blockers).filter(([, active]) => active === true).map(([code]) => code)
-}
-
-function blockerPolicy(readiness: Record<string, unknown>, code: string) {
-  return record(record(readiness.remediation)[code])
 }
 
 async function loadReadiness(projectId: string, datasetVersionId: string) {
@@ -47,7 +34,7 @@ export async function executeProfileReadinessRemediation(input: {
 }) {
   const before = await loadReadiness(input.projectId, input.datasetVersionId)
   const beforeState = text(before.state) || 'NOT_ASSESSED'
-  const blockerCodes = activeBlockers(before)
+  const policy = evaluateProfileReadinessRemediationPolicy(before)
 
   if (beforeState === 'READY' && before.profiling_ready === true) {
     return {
@@ -59,40 +46,33 @@ export async function executeProfileReadinessRemediation(input: {
       confidence: 1,
       before_state: beforeState,
       after_state: beforeState,
-      blocker_codes: blockerCodes,
+      blocker_codes: policy.blockerCodes,
       readiness: before,
       provider: null,
       model: null,
     }
   }
 
-  const sourceId = text(before.source_id)
-  const approvalRequired = blockerCodes.some(code => blockerPolicy(before, code).approval_required === true)
-  const allLowRisk = blockerCodes.length > 0 && blockerCodes.every(code => blockerPolicy(before, code).ai_remediation === 'LOW_RISK_WHEN_POLICY_AUTHORIZED')
-  const allAddressableBySourceRevalidation = blockerCodes.length > 0 && blockerCodes.every(code => AUTOMATIC_SOURCE_REPAIR_BLOCKERS.has(code))
-  const canExecuteLowRiskRepair = Boolean(sourceId) && !approvalRequired && allLowRisk && allAddressableBySourceRevalidation
-  const allowedActions: AllowedAction[] = canExecuteLowRiskRepair ? ['REVALIDATE_SOURCE', 'NO_ACTION'] : ['NO_ACTION']
-
   const ai = await chooseProfileReadinessRemediation({
     projectId: input.projectId,
     executionCorrelationId: input.agentRunId,
     readiness: before,
-    allowedActions,
+    allowedActions: policy.allowedActions,
   })
 
   if (!ai) {
     return {
-      status: approvalRequired ? 'APPROVAL_REQUIRED' : 'AI_UNAVAILABLE',
+      status: policy.approvalRequired ? 'APPROVAL_REQUIRED' : 'AI_UNAVAILABLE',
       selected_action: 'NO_ACTION',
       executed: false,
-      approval_required: approvalRequired,
-      rationale: approvalRequired
+      approval_required: policy.approvalRequired,
+      rationale: policy.approvalRequired
         ? 'One or more active readiness blockers require explicit approval before any governed change.'
         : 'No governed AI reasoning provider is currently available. No mutation was attempted.',
       confidence: null,
       before_state: beforeState,
       after_state: beforeState,
-      blocker_codes: blockerCodes,
+      blocker_codes: policy.blockerCodes,
       readiness: before,
       provider: null,
       model: null,
@@ -100,21 +80,21 @@ export async function executeProfileReadinessRemediation(input: {
   }
 
   const rawAction = text(ai.result.action).toUpperCase()
-  const selectedAction: AllowedAction = allowedActions.includes(rawAction as AllowedAction) ? rawAction as AllowedAction : 'NO_ACTION'
+  const selectedAction: AllowedAction = policy.allowedActions.includes(rawAction as AllowedAction) ? rawAction as AllowedAction : 'NO_ACTION'
   const rationale = text(ai.result.rationale) || 'The AI planner did not provide a rationale.'
   const confidence = number(ai.result.confidence)
 
   if (selectedAction !== 'REVALIDATE_SOURCE') {
     return {
-      status: approvalRequired ? 'APPROVAL_REQUIRED' : 'NO_SAFE_AUTOMATIC_ACTION',
+      status: policy.approvalRequired ? 'APPROVAL_REQUIRED' : 'NO_SAFE_AUTOMATIC_ACTION',
       selected_action: 'NO_ACTION',
       executed: false,
-      approval_required: approvalRequired,
+      approval_required: policy.approvalRequired,
       rationale,
       confidence,
       before_state: beforeState,
       after_state: beforeState,
-      blocker_codes: blockerCodes,
+      blocker_codes: policy.blockerCodes,
       readiness: before,
       provider: ai.provider,
       model: ai.model,
@@ -122,17 +102,17 @@ export async function executeProfileReadinessRemediation(input: {
     }
   }
 
-  if (!canExecuteLowRiskRepair || !sourceId) {
+  if (!policy.canExecuteLowRiskRepair || !policy.sourceId) {
     return {
       status: 'POLICY_BLOCKED',
       selected_action: 'NO_ACTION',
       executed: false,
-      approval_required: approvalRequired,
+      approval_required: policy.approvalRequired,
       rationale: 'The AI requested an action that is not authorized by the deterministic remediation policy. No mutation was attempted.',
       confidence,
       before_state: beforeState,
       after_state: beforeState,
-      blocker_codes: blockerCodes,
+      blocker_codes: policy.blockerCodes,
       readiness: before,
       provider: ai.provider,
       model: ai.model,
@@ -140,7 +120,7 @@ export async function executeProfileReadinessRemediation(input: {
     }
   }
 
-  const repair = await revalidateAndReconcileSourceForProfiling({ projectId: input.projectId, sourceId })
+  const repair = await revalidateAndReconcileSourceForProfiling({ projectId: input.projectId, sourceId: policy.sourceId })
   const after = await loadReadiness(input.projectId, input.datasetVersionId)
   const afterState = text(after.state) || 'NOT_ASSESSED'
 
@@ -153,7 +133,7 @@ export async function executeProfileReadinessRemediation(input: {
     confidence,
     before_state: beforeState,
     after_state: afterState,
-    blocker_codes: blockerCodes,
+    blocker_codes: policy.blockerCodes,
     readiness: after,
     source_validation: repair.validation,
     provider: ai.provider,
