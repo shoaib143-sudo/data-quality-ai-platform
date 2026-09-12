@@ -3,6 +3,7 @@ name: P0-P5 Revalidation
 on:
   push:
     branches:
+      - main
       - implementation/p0-p5-revalidation-20260910
   pull_request:
     branches:
@@ -33,6 +34,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Exact-main certification trigger contract
+        run: node --test tests/exact-main-certification-contract.test.mjs
       - name: V0 trusted governance baseline
         run: node --experimental-strip-types scripts/verify-v0-trusted-governance-baseline.mjs
       - name: V1 sensitive dataset governance journey

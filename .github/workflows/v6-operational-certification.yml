@@ -1,6 +1,8 @@
 name: V6 Operational Certification
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -29,6 +31,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Exact-main certification trigger contract
+        run: node --test tests/exact-main-certification-contract.test.mjs
       - name: V0 trusted governance baseline
         run: node --experimental-strip-types scripts/verify-v0-trusted-governance-baseline.mjs
       - name: V1 sensitive dataset governance journey
