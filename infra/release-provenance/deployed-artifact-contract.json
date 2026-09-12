@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "VERCEL_DEPLOYED_ARTIFACT",
+  "provider": "vercel",
+  "artifactClass": "PRODUCTION_DEPLOYMENT",
+  "manifestPath": "/.well-known/deployed-artifact-provenance.json",
+  "digestAlgorithm": "sha256",
+  "requiredProductionBindings": [
+    "VERCEL_DEPLOYMENT_ID",
+    "VERCEL_GIT_COMMIT_SHA",
+    "VERCEL_ENV=production",
+    "VERCEL_PROJECT_PRODUCTION_URL"
+  ],
+  "digestScopes": [
+    ".next/server",
+    ".next/static",
+    ".next/BUILD_ID",
+    "package.json",
+    "pnpm-lock.yaml",
+    "public"
+  ],
+  "excludedPaths": [
+    "public/.well-known/deployed-artifact-provenance.json"
+  ],
+  "rules": {
+    "productionBuildMustFailClosedOnMissingIdentity": true,
+    "previewEvidenceMaySatisfyProduction": false,
+    "artifactDigestMustBeSha256": true,
+    "digestOrderingMustBeDeterministic": true,
+    "symbolicLinksAllowedInDigestScope": false,
+    "secretEnvironmentValuesMayBeSerialized": false,
+    "manifestMustBindDeploymentId": true,
+    "manifestMustBindSourceCommitSha": true
+  }
+}
