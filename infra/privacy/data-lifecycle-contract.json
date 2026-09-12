@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 2,
+  "secretValuesAllowed": false,
+  "silentIndefiniteRetentionAllowed": false,
+  "dataClasses": [
+    {
+      "id": "SOURCE_SAMPLE",
+      "purpose": "profiling and governed evidence",
+      "sensitivity": "SOURCE_DERIVED_POTENTIALLY_SENSITIVE",
+      "minimization": "REDACT_OR_HASH_GOVERNED_SENSITIVE_VALUES",
+      "retentionMode": "TIME_BOUND_GOVERNED_POLICY",
+      "deletionMode": "DELETE_WITH_SOURCE_EVIDENCE_POLICY",
+      "governanceAuthority": "AUTHORITATIVE_CLASSIFICATION",
+      "rawSensitiveHandling": "FORBIDDEN"
+    },
+    {
+      "id": "PROFILE_METRIC_VALUE",
+      "purpose": "deterministic data-quality and profiling measurement",
+      "sensitivity": "AGGREGATED_OR_DERIVED",
+      "minimization": "PERSIST_ONLY_REQUIRED_METRIC_OUTPUT",
+      "retentionMode": "GOVERNED_RECORD",
+      "deletionMode": "DELETE_WITH_DATASET_LIFECYCLE",
+      "governanceAuthority": "PROFILING_TRUTH",
+      "rawSensitiveHandling": "FORBIDDEN"
+    },
+    {
+      "id": "QUALITY_EXCEPTION_SAMPLE",
+      "purpose": "diagnostic exception evidence",
+      "sensitivity": "SOURCE_DERIVED_POTENTIALLY_SENSITIVE",
+      "minimization": "REDACT_SENSITIVE_VALUES_HASH_RECORD_KEYS",
+      "retentionMode": "TIME_BOUND_GOVERNED_POLICY",
+      "deletionMode": "DELETE_WITH_QUALITY_EVIDENCE_POLICY",
+      "governanceAuthority": "DQ_EVIDENCE",
+      "rawSensitiveHandling": "FORBIDDEN"
+    },
+    {
+      "id": "DOCUMENT_CONTENT",
+      "purpose": "governance document retrieval and evidence",
+      "sensitivity": "DOCUMENT_DERIVED",
+      "minimization": "CHUNK_ONLY_REQUIRED_CONTENT_WITH_PROVENANCE",
+      "retentionMode": "TIME_BOUND_GOVERNED_POLICY",
+      "deletionMode": "CASCADE_SOURCE_AND_DERIVED_CONTENT",
+      "governanceAuthority": "DOCUMENT_SOURCE_PROVENANCE",
+      "rawSensitiveHandling": "GOVERNED_SOURCE_ONLY"
+    },
+    {
+      "id": "EMBEDDING",
+      "purpose": "semantic retrieval",
+      "sensitivity": "DERIVED_FROM_SOURCE_CONTENT",
+      "minimization": "NO_SECRET_VALUES_AND_SOURCE_PROVENANCE_REQUIRED",
+      "retentionMode": "FOLLOW_SOURCE_LIFECYCLE",
+      "deletionMode": "CASCADE_WITH_SOURCE",
+      "governanceAuthority": "RETRIEVAL_INDEX_ONLY",
+      "rawSensitiveHandling": "FORBIDDEN"
+    },
+    {
+      "id": "AI_PROMPT",
+      "purpose": "governed model execution",
+      "sensitivity": "CONTEXT_DERIVED_POTENTIALLY_SENSITIVE",
+      "minimization": "MINIMUM_CONTEXT_REDACT_SECRETS",
+      "retentionMode": "TIME_BOUND_GOVERNED_POLICY",
+      "deletionMode": "DELETE_WITH_AI_EVIDENCE_POLICY",
+      "governanceAuthority": "NON_AUTHORITATIVE_INPUT",
+      "rawSensitiveHandling": "FORBIDDEN"
+    },
+    {
+      "id": "AI_OUTPUT",
+      "purpose": "recommendation reasoning and evidence",
+      "sensitivity": "MODEL_DERIVED",
+      "minimization": "PERSIST_ONLY_REQUIRED_EVIDENCE",
+      "retentionMode": "TIME_BOUND_GOVERNED_POLICY",
+      "deletionMode": "DELETE_WITH_AI_EVIDENCE_POLICY",
+      "governanceAuthority": "ADVISORY_ONLY",
+      "rawSensitiveHandling": "FORBIDDEN"
+    },
+    {
+      "id": "TELEMETRY_ATTRIBUTE",
+      "purpose": "operational observability",
+      "sensitivity": "OPERATIONAL_METADATA",
+      "minimization": "NO_RAW_SOURCE_VALUES_NO_SECRETS",
+      "retentionMode": "TIME_BOUND_GOVERNED_POLICY",
+      "deletionMode": "DELETE_WITH_OBSERVABILITY_POLICY",
+      "governanceAuthority": "OBSERVABILITY_ONLY",
+      "rawSensitiveHandling": "FORBIDDEN"
+    },
+    {
+      "id": "AUDIT_EVIDENCE",
+      "purpose": "governance accountability and traceability",
+      "sensitivity": "GOVERNANCE_METADATA",
+      "minimization": "NO_SECRET_VALUES_REFERENCE_SENSITIVE_OBJECTS_BY_ID",
+      "retentionMode": "GOVERNED_RECORD",
+      "deletionMode": "GOVERNED_ERASURE_OR_ARCHIVE_ONLY",
+      "governanceAuthority": "AUDIT_AUTHORITY",
+      "rawSensitiveHandling": "FORBIDDEN"
+    },
+    {
+      "id": "CREDENTIAL_REFERENCE",
+      "purpose": "resolve external credentials without persisting secret material",
+      "sensitivity": "SECRET_METADATA",
+      "minimization": "REFERENCE_NAME_ONLY",
+      "retentionMode": "FOLLOW_CONNECTION_LIFECYCLE",
+      "deletionMode": "DELETE_REFERENCE_WITH_CONNECTION",
+      "governanceAuthority": "REFERENCE_ONLY",
+      "rawSensitiveHandling": "FORBIDDEN"
+    }
+  ]
+}
