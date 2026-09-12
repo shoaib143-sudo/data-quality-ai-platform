@@ -18,6 +18,7 @@ const incidentDoc = fs.readFileSync('docs/security-incident-response.md', 'utf8'
 const timeoutMigration = fs.readFileSync('supabase/migrations/20260912054000_native_interrupt_timeout_lifecycle.sql', 'utf8')
 const interruptAuthorizationMigration = fs.readFileSync('supabase/migrations/20260912054005_harden_runtime_interrupt_authorization_order.sql', 'utf8')
 const certificationRuntimeMigration = fs.readFileSync('supabase/migrations/20260912054927_reconcile_certification_membership_runtime.sql', 'utf8')
+const certificationSnapshotSchema = fs.readFileSync('supabase/migrations/20260912055356_reconcile_certification_prior_snapshot_schema.sql', 'utf8')
 
 if (controlMap.schemaVersion !== 1 || controlMap.frameworkAlignmentOnly !== true) fail('Control map must be versioned and explicitly alignment-only.')
 const controls = controlMap.controls ?? []
@@ -90,11 +91,17 @@ if (!certificationRuntimeMigration.includes('FROM app.organization_members om'))
 if (!certificationRuntimeMigration.includes('prior_certification_status')) fail('Certification runtime must preserve prior certification state for cancellation.')
 if (!certificationRuntimeMigration.includes('REVOKE ALL ON FUNCTION governance.request_dataset_certification')) fail('Certification request RPC must remain unavailable to client roles.')
 if (!certificationRuntimeMigration.includes('GRANT EXECUTE ON FUNCTION governance.request_dataset_certification')) fail('Certification request RPC must remain service-role governed.')
+for (const column of ['prior_certification_status', 'prior_certified_at', 'prior_certified_by']) {
+  if (!certificationSnapshotSchema.includes(`ADD COLUMN IF NOT EXISTS ${column}`)) fail(`Certification reconstruction must restore ${column}.`)
+}
+if (!certificationSnapshotSchema.includes('certification_requests_prior_certification_status_check')) fail('Certification prior-state status constraint must be reconstruction-safe.')
 
 if (migrationAliases.policy !== 'DO_NOT_REWRITE_PRODUCTION_HISTORY') fail('Migration alias policy must remain forward-only.')
 const interruptAuthAlias = (migrationAliases.aliases ?? []).find(item => item.logicalName === 'harden_runtime_interrupt_authorization_order')
 if (interruptAuthAlias?.repositoryVersion !== '20260912054005' || interruptAuthAlias?.observedProductionVersion !== '20260912053907') fail('Runtime interrupt hardening migration alias must match verified repository and production versions.')
 const certificationAlias = (migrationAliases.aliases ?? []).find(item => item.logicalName === 'reconcile_certification_membership_runtime')
 if (certificationAlias?.repositoryVersion !== '20260912054927' || certificationAlias?.observedProductionVersion !== '20260912055014') fail('Certification runtime reconciliation alias must match verified repository and production versions.')
+const certificationSnapshotAlias = (migrationAliases.aliases ?? []).find(item => item.logicalName === 'reconcile_certification_prior_snapshot_schema')
+if (certificationSnapshotAlias?.repositoryVersion !== '20260912055356' || certificationSnapshotAlias?.observedProductionVersion !== '20260912055419') fail('Certification snapshot schema reconciliation alias must match verified repository and production versions.')
 
 console.log(`Platform assurance baseline verified: ${controls.length} controls, ${runtime.configurations.length} explicit runtime settings, ${incident.requiredPhases.length} incident phases.`)
