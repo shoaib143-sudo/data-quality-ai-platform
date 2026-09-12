@@ -89,7 +89,7 @@
       "riskTier": "R2",
       "state": "ENFORCED",
       "frameworks": ["NIST-CSF2.PR"],
-      "evidence": ["scripts/verify-governed-incident-13-persona-certification.mjs"]
+      "evidence": ["scripts/test-governed-incident-13-persona-certification.mjs", ".github/workflows/governed-incident-13-persona-certification.yml"]
     },
     {
       "id": "PA-012",
