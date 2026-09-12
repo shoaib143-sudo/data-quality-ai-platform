@@ -32,7 +32,8 @@ for (const marker of [
 ]) {
   if (!evaluator.includes(marker)) fail(`Recovery evaluator must enforce ${marker}.`)
 }
-if (evaluator.includes('targetRpoMinutes: number') || evaluator.includes('targetRtoMinutes: number') || evaluator.includes('maxReleaseEvidenceAgeHours: number')) {
+const inputType = evaluator.match(/export type RecoveryReadinessInput = \{([\s\S]*?)\n\}/)?.[1] ?? ''
+if (/targetRpoMinutes\s*:|targetRtoMinutes\s*:|maxReleaseEvidenceAgeHours\s*:/.test(inputType)) {
   fail('Recovery evidence callers must not supply policy RPO/RTO/freshness targets.')
 }
 
