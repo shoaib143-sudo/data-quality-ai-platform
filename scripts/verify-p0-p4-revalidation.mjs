@@ -1,5 +1,7 @@
 import fs from 'node:fs'
 
+await import('./verify-workflow-action-pinning.mjs')
+
 const read = (path) => fs.readFileSync(path, 'utf8')
 const assert = (condition, message) => {
   if (!condition) throw new Error(message)
