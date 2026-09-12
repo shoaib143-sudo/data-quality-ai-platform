@@ -123,6 +123,7 @@ export async function renewNativeSupervisorExecution(input: {
   leaseOwner: string
   executionGeneration: number
   leaseSeconds?: number
+  checkpointId?: string | null
 }) {
   const leaseOwner = assertLeaseOwner(input.leaseOwner)
   const leaseSeconds = input.leaseSeconds ?? 300
@@ -133,6 +134,7 @@ export async function renewNativeSupervisorExecution(input: {
     p_lease_owner: leaseOwner,
     p_execution_generation: input.executionGeneration,
     p_lease_seconds: leaseSeconds,
+    p_checkpoint_id: input.checkpointId ?? null,
   })
   if (error || !data) throw new Error(`Unable to renew durable supervisor execution: ${error?.message ?? 'lease lost'}`)
   return data as NativeSupervisorExecutionLease
