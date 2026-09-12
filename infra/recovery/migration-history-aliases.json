@@ -15,6 +15,13 @@
       "observedProductionVersion": "20260912051858",
       "reason": "The governed native interrupt-timeout lifecycle was present on signed protected main before production schema drift was detected by the Platform Assurance Baseline. The exact repository migration was then applied through the Supabase management migration API, which registered the application timestamp. Keep repository history forward-only and recognize this verified alias during recovery/reconstruction checks.",
       "observedVia": "Supabase list_migrations"
+    },
+    {
+      "logicalName": "harden_runtime_interrupt_authorization_order",
+      "repositoryVersion": "20260912054005",
+      "observedProductionVersion": "20260912053907",
+      "reason": "The adversarial Platform Assurance audit applied the forward-only authorization-before-lock hardening through the Supabase management migration API. The repository source version was generated from the authoritative database UTC clock after the pre-existing 20260912054000 source migration so fresh reconstruction preserves dependency order. Do not rewrite the observed production migration version.",
+      "observedVia": "Supabase list_migrations"
     }
   ]
 }
