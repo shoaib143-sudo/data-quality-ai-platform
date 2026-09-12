@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'lib/agents/runtime/native-supervisor-resume.ts'
+      - 'lib/agents/runtime/native-autonomy-runtime.ts'
       - 'supabase/migrations/20260912043000_native_supervisor_durable_resume.sql'
       - 'scripts/verify-native-supervisor-durable-resume.mjs'
       - '.github/workflows/native-supervisor-durable-resume.yml'
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - 'lib/agents/runtime/native-supervisor-resume.ts'
+      - 'lib/agents/runtime/native-autonomy-runtime.ts'
       - 'supabase/migrations/20260912043000_native_supervisor_durable_resume.sql'
       - 'scripts/verify-native-supervisor-durable-resume.mjs'
       - '.github/workflows/native-supervisor-durable-resume.yml'
