@@ -1,0 +1,83 @@
+name: Native Compensation Post Implementation Assurance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'lib/agents/runtime/native-compensation-fencing.ts'
+      - 'scripts/audit-native-compensation-reclaim-adversarial.mjs'
+      - 'scripts/test-native-compensation-reclaim-fencing-adversarial.sh'
+      - 'supabase/migrations/**native_compensation_reclaim_fencing.sql'
+      - '.github/workflows/native-compensation-post-implementation-assurance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'lib/agents/runtime/native-compensation-fencing.ts'
+      - 'scripts/audit-native-compensation-reclaim-adversarial.mjs'
+      - 'scripts/test-native-compensation-reclaim-fencing-adversarial.sh'
+      - 'supabase/migrations/**native_compensation_reclaim_fencing.sql'
+      - '.github/workflows/native-compensation-post-implementation-assurance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-static-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Independent compensation threat-model audit
+        run: node scripts/audit-native-compensation-reclaim-adversarial.mjs
+      - name: TypeScript revalidation
+        run: pnpm exec tsc --noEmit
+
+  adversarial-database-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Reconstruct isolated Supabase database
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE"
+          WORK="$RUNNER_TEMP/datanexus-compensation-assurance"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
+          cd "$WORK"
+          pnpm dlx supabase@2.117.0 init
+          SOURCE_MIGRATION_DIR="$ROOT/supabase/migrations" TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-migration-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-agent-status-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-audit-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-jdbc-fixture-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-observability-incident-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-lineage-legacy-constraint-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-remediation-knowledge-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-intelligence-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-policy-boundary-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-operational-policy-boundary-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-control-evidence-syntax-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-catalog-reconcile-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-membership-helper-acl-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-synthetic-suite-rollback-replay.mjs"
+          pnpm dlx supabase@2.117.0 start
+          trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
+          pnpm dlx supabase@2.117.0 db reset --local
+          bash "$ROOT/scripts/test-native-compensation-reclaim-fencing-adversarial.sh"
