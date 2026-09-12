@@ -22,10 +22,10 @@ const certificationSnapshotSchema = fs.readFileSync('supabase/migrations/2026091
 
 if (controlMap.schemaVersion !== 1 || controlMap.frameworkAlignmentOnly !== true) fail('Control map must be versioned and explicitly alignment-only.')
 const controls = controlMap.controls ?? []
-if (controls.length < 14) fail('Platform assurance control map must cover the current baseline control set.')
+if (controls.length < 15) fail('Platform assurance control map must cover the current baseline control set.')
 const ids = controls.map(control => control.id)
 if (new Set(ids).size !== ids.length) fail('Platform assurance control IDs must be unique.')
-for (const expected of Array.from({ length: 14 }, (_, i) => `PA-${String(i + 1).padStart(3, '0')}`)) {
+for (const expected of Array.from({ length: 15 }, (_, i) => `PA-${String(i + 1).padStart(3, '0')}`)) {
   if (!ids.includes(expected)) fail(`Missing required platform assurance control ${expected}.`)
 }
 for (const control of controls) {
@@ -52,6 +52,11 @@ const residualRiskControl = controls.find(control => control.id === 'PA-014')
 if (residualRiskControl?.state !== 'ENFORCED' || residualRiskControl?.riskTier !== 'R3') fail('PA-014 residual-risk governance must remain an enforced R3 control.')
 for (const evidence of ['infra/platform-assurance/residual-risk-register.json', 'scripts/verify-residual-risk-register.mjs', 'docs/platform-assurance/supabase-security-exceptions.md']) {
   if (!residualRiskControl?.evidence?.includes(evidence)) fail(`PA-014 must retain residual-risk evidence: ${evidence}`)
+}
+const workflowSecurityControl = controls.find(control => control.id === 'PA-015')
+if (workflowSecurityControl?.state !== 'ENFORCED' || workflowSecurityControl?.riskTier !== 'R3') fail('PA-015 CI workflow security posture must remain an enforced R3 control.')
+for (const evidence of ['scripts/verify-workflow-security-posture.mjs', 'scripts/verify-p0-p4-revalidation.mjs']) {
+  if (!workflowSecurityControl?.evidence?.includes(evidence)) fail(`PA-015 must retain workflow security evidence: ${evidence}`)
 }
 
 const requiredPhases = ['DETECT','CLASSIFY','CONTAIN','PRESERVE_EVIDENCE','ERADICATE','RECOVER','COMMUNICATE','POST_INCIDENT_REVIEW','CONTROL_UPDATE']
