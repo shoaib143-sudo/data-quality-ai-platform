@@ -12,6 +12,7 @@ const manifest = readJson('infra/recovery/platform-manifest.json')
 const migrationAliases = readJson('infra/recovery/migration-history-aliases.json')
 const supabaseEnv = fs.readFileSync('lib/supabase/env.ts', 'utf8')
 const supabaseAdmin = fs.readFileSync('lib/supabase/admin.ts', 'utf8')
+const externalReadiness = fs.readFileSync('lib/observability/external-integration-readiness.ts', 'utf8')
 const supabaseExceptions = fs.readFileSync('docs/platform-assurance/supabase-security-exceptions.md', 'utf8')
 const incidentDoc = fs.readFileSync('docs/security-incident-response.md', 'utf8')
 const timeoutMigration = fs.readFileSync('supabase/migrations/20260912054000_native_interrupt_timeout_lifecycle.sql', 'utf8')
@@ -48,9 +49,26 @@ if (runtime.configurations.some(item => Object.hasOwn(item, 'value') || Object.h
 for (const item of runtime.configurations) {
   if (!item.name || !item.classification || !item.authority || !item.failureMode || !item.evidence) fail(`Runtime configuration entry is incomplete: ${item.name ?? 'unknown'}`)
   if (!exists(item.evidence)) fail(`Runtime configuration evidence path is missing: ${item.evidence}`)
+  if (item.classification.startsWith('SECRET_') && item.browserExposureForbidden !== true) fail(`Secret runtime configuration must explicitly forbid browser exposure: ${item.name}`)
 }
+const requiredRuntimeConfigNames = [
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'POLICY_DECISION_PROVIDER',
+  'OPA_URL',
+  'OPA_DECISION_PATH',
+  'OPA_AUTH_TOKEN',
+  'OTEL_EXPORTER_OTLP_ENDPOINT',
+  'OTEL_EXPORTER_OTLP_HEADERS',
+]
+const runtimeConfigNames = new Set(runtime.configurations.map(item => item.name))
+for (const name of requiredRuntimeConfigNames) if (!runtimeConfigNames.has(name)) fail(`Runtime configuration inventory is missing ${name}.`)
 if (!supabaseEnv.includes('NEXT_PUBLIC_SUPABASE_URL') || !supabaseEnv.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')) fail('Browser Supabase configuration must use explicit public environment variables.')
 if (!supabaseAdmin.includes('SUPABASE_SERVICE_ROLE_KEY') || supabaseAdmin.includes('NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY')) fail('Service-role credential must remain server-only.')
+for (const name of ['POLICY_DECISION_PROVIDER','OPA_URL','OPA_DECISION_PATH','OPA_AUTH_TOKEN','OTEL_EXPORTER_OTLP_ENDPOINT','OTEL_EXPORTER_OTLP_HEADERS']) {
+  if (!externalReadiness.includes(`process.env.${name}`)) fail(`Runtime configuration inventory entry is not consumed by readiness code: ${name}`)
+}
 if (!manifest.secretPolicy || manifest.secretPolicy.storeSecretValuesInRepository !== false) fail('Recovery topology must prohibit repository secret values.')
 
 for (const marker of ['ACCEPTED LOCKED-TABLE POSTURE', 'INTENTIONAL PRIVILEGED AUTHORIZATION HELPERS', 'INTENTIONAL GOVERNED HUMAN-DECISION RPC', 'OPEN PLAN-CONSTRAINED SECURITY GAP']) {
