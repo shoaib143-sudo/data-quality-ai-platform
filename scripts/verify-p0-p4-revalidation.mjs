@@ -3,6 +3,8 @@ import fs from 'node:fs'
 const { verifyWorkflowActionPinning } = await import('./verify-workflow-action-pinning.mjs')
 await verifyWorkflowActionPinning()
 await import('./test-workflow-action-pinning.mjs')
+const { verifyWorkflowSecurityPosture } = await import('./verify-workflow-security-posture.mjs')
+await verifyWorkflowSecurityPosture()
 await import('./verify-platform-assurance-baseline.mjs')
 await import('./verify-post-implementation-certification-contract.mjs')
 
