@@ -4,6 +4,7 @@ const { verifyWorkflowActionPinning } = await import('./verify-workflow-action-p
 await verifyWorkflowActionPinning()
 await import('./test-workflow-action-pinning.mjs')
 await import('./verify-platform-assurance-baseline.mjs')
+await import('./verify-post-implementation-certification-contract.mjs')
 
 const read = (path) => fs.readFileSync(path, 'utf8')
 const assert = (condition, message) => {
