@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
+import { getReadinessManualRemediationDescriptor } from '@/lib/profiling/readiness-manual-remediation'
 
 type Remediation = {
   root_cause?: string
@@ -21,6 +22,10 @@ type Readiness = {
   source_id?: string
   blockers?: Record<string, boolean>
   remediation?: Record<string, Remediation>
+  manual_access?: {
+    source_edit?: boolean
+    dataset_edit?: boolean
+  }
 }
 
 type AiRemediationOutcome = {
@@ -71,29 +76,43 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
   const canAskAi = blockerCodes.some(code => Boolean(readiness?.remediation?.[code]?.ai_action))
   const manualTarget = useMemo(() => {
     if (!primaryBlocker) return null
+    const descriptor = getReadinessManualRemediationDescriptor(primaryBlocker)
 
-    if (primaryBlocker === 'READINESS_RULE_NOT_ONBOARDED') {
-      return {
-        href: null,
-        label: 'Readiness policy onboarding requires a governance administrator. No self-service remediation is available from this dataset page.',
+    if (descriptor.routeKind === 'SOURCE_EDIT') {
+      if (!readiness?.source_id) {
+        return {
+          href: null,
+          label: 'The blocked source could not be resolved, so no safe remediation route is available.',
+          descriptor,
+        }
       }
+      if (readiness.manual_access?.source_edit !== true) {
+        return {
+          href: null,
+          label: `This change requires ${descriptor.requiredCapability ?? 'authorized source management'} access. Your current governance context cannot use the source configuration workspace.`,
+          descriptor,
+        }
+      }
+      return { href: canonicalRoutes.sourceEdit(readiness.source_id), label: null, descriptor }
     }
 
-    if (['SOURCE_NOT_ACTIVE','SOURCE_NOT_OBSERVED_READY','GOVERNED_SCOPE_NOT_READY','EXECUTION_SOURCE_NOT_BOUND','DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE'].includes(primaryBlocker)) {
-      return readiness?.source_id
-        ? { href: canonicalRoutes.sourceEdit(readiness.source_id), label: null }
-        : { href: null, label: 'The blocked source could not be resolved, so no safe remediation route is available.' }
-    }
-
-    if (['DATASET_NOT_ACTIVE'].includes(primaryBlocker)) {
-      return { href: canonicalRoutes.datasetEdit(datasetId), label: null }
+    if (descriptor.routeKind === 'DATASET_EDIT') {
+      if (readiness.manual_access?.dataset_edit !== true) {
+        return {
+          href: null,
+          label: `This change requires ${descriptor.requiredCapability ?? 'authorized dataset management'} access. Your current governance context cannot use the dataset configuration workspace.`,
+          descriptor,
+        }
+      }
+      return { href: canonicalRoutes.datasetEdit(datasetId), label: null, descriptor }
     }
 
     return {
       href: null,
-      label: primaryRemediation?.manual_action ?? 'No governed self-service remediation route is available for this blocker.',
+      label: descriptor.unavailableGuidance ?? primaryRemediation?.manual_action ?? 'No governed self-service remediation route is available for this blocker.',
+      descriptor,
     }
-  }, [datasetId, primaryBlocker, primaryRemediation?.manual_action, readiness?.source_id])
+  }, [datasetId, primaryBlocker, primaryRemediation?.manual_action, readiness?.manual_access?.dataset_edit, readiness?.manual_access?.source_edit, readiness?.source_id])
 
   async function runProfiling() {
     if (!effectiveReady || !agentDefinitionId || busy) return
@@ -184,6 +203,7 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
       <div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><div><strong>{readiness.state ?? 'BLOCKED'}:</strong> {primaryRemediation?.root_cause ?? 'This dataset is not ready for profiling.'}</div></div>
       {primaryRemediation?.manual_action ? <div className="mt-1 pl-5"><strong>Manual:</strong> {primaryRemediation.manual_action}</div> : null}
       {manualTarget?.label ? <div className="mt-1 pl-5 text-slate-700"><strong>Access:</strong> {manualTarget.label}</div> : null}
+      {manualTarget?.descriptor ? <div className="mt-1 pl-5 text-slate-700"><strong>Object:</strong> {manualTarget.descriptor.affectedObject}. <strong>Expected result:</strong> {manualTarget.descriptor.postcondition}</div> : null}
       {primaryRemediation?.ai_action ? <div className="mt-1 flex items-start gap-1 pl-5 text-slate-700"><Bot className="mt-0.5 h-3 w-3 shrink-0" /><span><strong>AI option:</strong> {primaryRemediation.ai_action}{primaryRemediation.approval_required ? ' Explicit approval is required before a governed change.' : ''}</span></div> : null}
       {aiOutcome?.rationale ? <div className="mt-1 pl-5 text-slate-700"><strong>Latest AI review:</strong> {aiOutcome.rationale}</div> : null}
       {legacyReady && !effectiveReady ? <div className="mt-1 pl-5 text-slate-600">The previous UI heuristic indicated executable, but deterministic readiness now takes precedence.</div> : null}
