@@ -41,8 +41,8 @@ assert.throws(
 )
 
 // Historical generation-0 outcomes did not persist workflow/generation metadata
-// into agent input. Exact authoritative agent identity is sufficient for those
-// rows, while stale agent substitution still fails closed.
+// into agent input. Exact authoritative agent + profile identity remains enough
+// to preserve valid legacy evidence while rejecting stale substitutions.
 const legacy = {
   workflowInstanceId: 'legacy-workflow',
   verificationAgentRunId: 'legacy-agent',
@@ -54,8 +54,12 @@ assert.doesNotThrow(() => assertDataQualityVerificationBinding(legacy, {
   input: { trigger: 'PROFILE_COMPLETED', profileRunId: 'legacy-profile' },
 }))
 assert.throws(
-  () => assertDataQualityVerificationBinding(legacy, { agentRunId: 'stale-agent', input: {} }),
+  () => assertDataQualityVerificationBinding(legacy, { agentRunId: 'stale-agent', input: { profileRunId: 'legacy-profile' } }),
   (error) => error instanceof DataQualityVerificationBindingError && error.code === 'DQ_VERIFICATION_AGENT_MISMATCH',
+)
+assert.throws(
+  () => assertDataQualityVerificationBinding(legacy, { agentRunId: 'legacy-agent', input: { profileRunId: 'stale-profile' } }),
+  (error) => error instanceof DataQualityVerificationBindingError && error.code === 'DQ_VERIFICATION_PROFILE_MISMATCH',
 )
 
 console.log('Data Quality verification evidence-binding unit tests passed.')
