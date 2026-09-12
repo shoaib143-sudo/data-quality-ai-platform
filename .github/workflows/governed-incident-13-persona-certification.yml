@@ -1,0 +1,34 @@
+name: Governed Incident 13-Persona Certification
+
+on:
+  pull_request:
+    paths:
+      - 'lib/governance/governed-incident*.ts'
+      - 'lib/governance/incident-*.ts'
+      - 'lib/governance/personas.ts'
+      - 'app/issues/**'
+      - 'scripts/test-governed-incident-13-persona-certification.mjs'
+      - 'scripts/ts-extension-loader.mjs'
+      - '.github/workflows/governed-incident-13-persona-certification.yml'
+
+jobs:
+  certify-personas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Certify 13-persona incident truth invariance
+        run: node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/test-governed-incident-13-persona-certification.mjs
+      - name: Re-run governed incident lifecycle tests
+        run: node --experimental-strip-types scripts/test-governed-incident-foundation.mjs
+      - name: Re-run evidence normalization tests
+        run: node --experimental-strip-types scripts/test-incident-evidence-normalization.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
