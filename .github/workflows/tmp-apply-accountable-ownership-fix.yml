@@ -1,0 +1,36 @@
+name: Temporary Accountable Ownership Fix
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Apply strict accountable ownership semantics
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/home/[persona]/page.tsx')
+          s=p.read_text()
+          old="hasOwner: Boolean(stewardship && upper(stewardship.coverage_status) !== 'UNASSIGNED'),"
+          new="hasOwner: Boolean(stewardship && upper(stewardship.coverage_status) === 'ACCOUNTABLE'),"
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected exactly one permissive ownership mapping, found {s.count(old)}')
+          p.write_text(s.replace(old,new))
+          PY
+      - name: Commit narrow truth fix
+        run: |
+          git config user.name datanexus-assurance-bot
+          git config user.email datanexus-assurance-bot@users.noreply.github.com
+          git add 'app/home/[persona]/page.tsx'
+          git commit -m 'Use accountable-only ownership coverage'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
