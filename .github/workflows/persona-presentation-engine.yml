@@ -1,0 +1,34 @@
+name: Persona Presentation Engine
+
+on:
+  pull_request:
+    paths:
+      - 'lib/governance/persona-presentation.ts'
+      - 'lib/governance/personas.ts'
+      - 'components/governance/**'
+      - 'app/home/**'
+      - 'Architecture/2026-09-12-persona-aware-presentation-engine.md'
+      - 'scripts/verify-persona-presentation-engine.mjs'
+      - '.github/workflows/persona-presentation-engine.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify persona-aware presentation contract
+        run: node scripts/verify-persona-presentation-engine.mjs
+      - name: Verify TypeScript production build
+        run: pnpm build
