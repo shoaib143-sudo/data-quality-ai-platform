@@ -133,7 +133,7 @@ BEGIN
         RAISE EXCEPTION 'Agent run not found';
     END IF;
 
-    IF FOUND AND v_existing.interrupt_id IS NOT NULL THEN
+    IF v_existing.interrupt_id IS NOT NULL THEN
         RETURN pg_catalog.jsonb_build_object(
             'interruptId', p_interrupt_id,
             'interruptStatus', v_interrupt.status,
@@ -183,7 +183,9 @@ BEGIN
     IF v_action = 'CANCELLED' AND v_run_status = 'WAITING'::agent.run_status THEN
         UPDATE agent.agent_runs
         SET status = 'CANCELLED'::agent.run_status,
-            completed_at = COALESCE(completed_at, now())
+            completed_at = COALESCE(completed_at, now()),
+            cancelled_at = COALESCE(cancelled_at, now()),
+            cancellation_reason = COALESCE(cancellation_reason, 'Runtime interrupt timed out under server-owned cancellation policy')
         WHERE id = v_interrupt.agent_run_id;
         v_run_status := 'CANCELLED'::agent.run_status;
     END IF;
@@ -305,7 +307,9 @@ BEGIN
         IF v_timeout_action = 'CANCELLED' THEN
             UPDATE agent.agent_runs
             SET status = 'CANCELLED'::agent.run_status,
-                completed_at = COALESCE(completed_at, now())
+                completed_at = COALESCE(completed_at, now()),
+                cancelled_at = COALESCE(cancelled_at, now()),
+                cancellation_reason = COALESCE(cancellation_reason, 'Runtime interrupt timed out under server-owned cancellation policy')
             WHERE id = v_interrupt.agent_run_id
               AND status = 'WAITING'::agent.run_status;
         END IF;
@@ -330,7 +334,9 @@ BEGIN
     IF v_decision = 'REJECTED' THEN
         UPDATE agent.agent_runs
         SET status = 'CANCELLED'::agent.run_status,
-            completed_at = COALESCE(completed_at, now())
+            completed_at = COALESCE(completed_at, now()),
+            cancelled_at = COALESCE(cancelled_at, now()),
+            cancellation_reason = COALESCE(cancellation_reason, 'Runtime interrupt rejected by human approver')
         WHERE id = v_interrupt.agent_run_id
           AND status = 'WAITING'::agent.run_status;
 
