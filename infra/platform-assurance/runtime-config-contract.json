@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "topologyAuthority": "infra/recovery/platform-manifest.json",
+  "secretValuesAllowed": false,
+  "configurations": [
+    {
+      "name": "NEXT_PUBLIC_SUPABASE_URL",
+      "component": "web",
+      "classification": "PUBLIC_CONFIGURATION",
+      "required": true,
+      "authority": "Vercel production environment",
+      "failureMode": "FAIL_CLOSED_AT_CLIENT_CREATION",
+      "evidence": "lib/supabase/env.ts"
+    },
+    {
+      "name": "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "component": "web",
+      "classification": "PUBLIC_APPLICATION_KEY",
+      "required": true,
+      "authority": "Supabase project / Vercel production environment",
+      "failureMode": "FAIL_CLOSED_AT_CLIENT_CREATION",
+      "evidence": "lib/supabase/env.ts"
+    },
+    {
+      "name": "SUPABASE_SERVICE_ROLE_KEY",
+      "component": "server",
+      "classification": "SECRET_LEGACY_ELEVATED_KEY",
+      "required": true,
+      "authority": "Managed server secret store",
+      "browserExposureForbidden": true,
+      "failureMode": "FAIL_CLOSED_AT_ADMIN_CLIENT_CREATION",
+      "evidence": "lib/supabase/admin.ts",
+      "migrationTarget": "Supabase secret key when compatibility permits"
+    }
+  ],
+  "externalConfigurationSurfaces": [
+    {
+      "component": "OPA",
+      "topologyEvidence": "infra/opa",
+      "readinessEvidence": "app/api/health/integrations/route.ts",
+      "secretValuesForbiddenInRepository": true
+    },
+    {
+      "component": "OTLP",
+      "topologyEvidence": "infra/otel",
+      "readinessEvidence": "app/api/health/integrations/route.ts",
+      "secretValuesForbiddenInRepository": true
+    },
+    {
+      "component": "JDBC_BRIDGE",
+      "topologyEvidence": "services/jdbc-bridge",
+      "secretValuesForbiddenInRepository": true
+    }
+  ]
+}
