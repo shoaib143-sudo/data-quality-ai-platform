@@ -36,6 +36,9 @@ jobs:
       - name: Execute dynamic readiness failure matrix
         run: sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/test-project-profile-readiness.sql
 
+      - name: Execute profile-run admission tests
+        run: sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/test-project-profile-readiness-admission.sql
+
       - name: Install dependencies
         run: |
           corepack enable
