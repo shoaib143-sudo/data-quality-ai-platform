@@ -9,7 +9,7 @@ on:
       - 'scripts/audit-native-compensation-reclaim-adversarial.mjs'
       - 'scripts/test-native-compensation-reclaim-fencing-adversarial.sh'
       - 'scripts/test-native-compensation-lease-timing.sh'
-      - 'supabase/migrations/**native_compensation_reclaim_fencing.sql'
+      - 'supabase/migrations/**native_compensation*.sql'
       - '.github/workflows/native-compensation-post-implementation-assurance.yml'
   push:
     branches: [main]
@@ -19,7 +19,7 @@ on:
       - 'scripts/audit-native-compensation-reclaim-adversarial.mjs'
       - 'scripts/test-native-compensation-reclaim-fencing-adversarial.sh'
       - 'scripts/test-native-compensation-lease-timing.sh'
-      - 'supabase/migrations/**native_compensation_reclaim_fencing.sql'
+      - 'supabase/migrations/**native_compensation*.sql'
       - '.github/workflows/native-compensation-post-implementation-assurance.yml'
 
 permissions:
