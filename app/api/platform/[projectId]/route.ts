@@ -22,9 +22,10 @@ export async function GET(_request:Request,{params}:{params:Promise<{projectId:s
     const {projectId}=await params
     const admin=await requireCapability(user.id,projectId,'catalog.read')
     const oneHourAgo=new Date(Date.now()-60*60_000).toISOString()
-    const [capacity,recovery,contractChecks,drills,jobs,events,telemetry,sampling]=await Promise.all([
+    const [capacity,recovery,governanceActivation,contractChecks,drills,jobs,events,telemetry,sampling]=await Promise.all([
       admin.schema('orchestration').from('capacity_policies').select('*').eq('project_id',projectId).maybeSingle(),
       admin.schema('governance').rpc('recovery_readiness',{p_project_id:projectId}),
+      admin.schema('governance').rpc('verify_project_governance_activation',{p_project_id:projectId}),
       admin.schema('governance').from('platform_contract_check_runs').select('*').eq('project_id',projectId).order('completed_at',{ascending:false}).limit(10),
       admin.schema('governance').from('backup_restore_drills').select('*').eq('project_id',projectId).order('created_at',{ascending:false}).limit(10),
       admin.schema('orchestration').from('job_queue').select('id,status,job_type,attempts,max_attempts,created_at,started_at,completed_at,last_error').eq('project_id',projectId).gte('created_at',oneHourAgo).order('created_at',{ascending:false}).limit(100),
@@ -32,11 +33,12 @@ export async function GET(_request:Request,{params}:{params:Promise<{projectId:s
       admin.schema('orchestration').from('platform_telemetry').select('metric_key,numeric_value,dimensions,observed_at').eq('project_id',projectId).order('observed_at',{ascending:false}).limit(200),
       admin.schema('profiling').from('sampling_policies').select('dataset_id,mode,max_rows,sample_percent,deterministic_seed,updated_at').eq('project_id',projectId).order('updated_at',{ascending:false}),
     ])
-    const firstError=[capacity.error,recovery.error,contractChecks.error,drills.error,jobs.error,events.error,telemetry.error,sampling.error].find(Boolean)
+    const firstError=[capacity.error,recovery.error,governanceActivation.error,contractChecks.error,drills.error,jobs.error,events.error,telemetry.error,sampling.error].find(Boolean)
     if(firstError)throw new Error(firstError.message)
     return NextResponse.json({
       capacity:capacity.data??null,
       recovery:recovery.data??null,
+      governanceActivation:governanceActivation.data??null,
       contractChecks:contractChecks.data??[],
       drills:drills.data??[],
       jobs:jobs.data??[],
