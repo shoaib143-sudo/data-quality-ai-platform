@@ -170,21 +170,18 @@ export async function executeWithNativeCompensationLease<T>(input: {
 }) {
   const leaseSeconds = input.leaseSeconds ?? 120
   const heartbeatMs = Math.max(5, input.heartbeatSeconds ?? Math.floor(leaseSeconds / 3)) * 1000
-  let heartbeatError: unknown = null
   let heartbeatRunning = false
   const timer = setInterval(() => {
-    if (heartbeatRunning || heartbeatError) return
+    if (heartbeatRunning) return
     heartbeatRunning = true
     void renewNativeCompensationInvocationLease({ lease: input.lease, leaseSeconds })
-      .catch((error) => { heartbeatError = error })
+      .catch(() => undefined)
       .finally(() => { heartbeatRunning = false })
   }, heartbeatMs)
   timer.unref?.()
 
   try {
-    const result = await input.execute()
-    if (heartbeatError) throw heartbeatError
-    return result
+    return await input.execute()
   } finally {
     clearInterval(timer)
   }
