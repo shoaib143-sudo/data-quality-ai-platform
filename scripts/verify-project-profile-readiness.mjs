@@ -76,12 +76,13 @@ const requiredExecutor = [
   "'execute_metrics'",
   'assertDatasetVersionProfileReady(projectId, suppliedDatasetVersionId)',
   'PROFILE_READINESS_CONFIRMED',
+  "case 'remediate_profile_readiness'",
 ]
 for (const marker of requiredExecutor) if (!executor.includes(marker)) throw new Error('Profiling executor readiness enforcement missing: ' + marker)
 
-for (const diagnosticOperation of ['investigate_profile', 'detect_patterns', 'infer_candidate_keys']) {
+for (const diagnosticOperation of ['investigate_profile', 'detect_patterns', 'infer_candidate_keys', 'remediate_profile_readiness']) {
   const gateSetMatch = executor.match(/PROFILE_READINESS_GATED_OPERATIONS\s*=\s*new Set\(\[([\s\S]*?)\]\)/)
-  if (gateSetMatch?.[1]?.includes(`'${diagnosticOperation}'`)) throw new Error(`Diagnostic operation ${diagnosticOperation} must remain available while readiness is blocked`)
+  if (gateSetMatch?.[1]?.includes(`'${diagnosticOperation}'`)) throw new Error(`Diagnostic/remediation operation ${diagnosticOperation} must remain available while readiness is blocked`)
 }
 
 const requiredApi = [
@@ -95,14 +96,15 @@ for (const marker of requiredApi) if (!readinessApi.includes(marker)) throw new 
 const requiredUi = [
   '/api/profiling/readiness?',
   "readiness?.state === 'READY'",
-  'Try automated repair',
-  '/api/datasets/source/validate',
+  'Ask AI to repair',
+  '/api/profiling/readiness/remediate',
   'primaryRemediation?.root_cause',
   'primaryRemediation.manual_action',
-  'AI guidance:',
+  'AI option:',
   'await refreshReadiness()',
 ]
 for (const marker of requiredUi) if (!datasetActions.includes(marker)) throw new Error('Dataset readiness UI integration missing: ' + marker)
 if (datasetActions.includes('if (!ready ||')) throw new Error('Legacy readiness boolean must not remain the execution authority in DatasetActions')
+if (datasetActions.includes("fetch('/api/datasets/source/validate'")) throw new Error('Dataset AI remediation UI must not bypass the governed remediation agent endpoint')
 
-console.log('Project profile readiness V2 contract verified: deterministic states, current-scope successful evidence, DB admission backstop, runtime gate, authorized UI evidence, manual repair, automated low-risk repair, and diagnostic access preserved.')
+console.log('Project profile readiness V2 contract verified: deterministic states, current-scope successful evidence, DB admission backstop, runtime gate, authorized UI evidence, manual repair, governed AI-assisted low-risk repair, and diagnostic access preserved.')
