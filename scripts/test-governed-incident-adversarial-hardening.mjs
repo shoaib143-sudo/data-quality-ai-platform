@@ -88,7 +88,9 @@ assert.throws(() => assertGovernedIncidentTruthInvariant({
 }), /must not retain resolvedAt/)
 
 const routeSource = readFileSync(new URL('../app/api/issues/[issueId]/route.ts', import.meta.url), 'utf8')
+assert.match(routeSource, /ISSUE_TITLE_REQUIRED/)
 assert.match(routeSource, /requiresGovernedResolutionEvidence/)
+assert.match(routeSource, /AMBIGUOUS_REMEDIATION_VERIFICATION_AUTHORITY/)
 assert.match(routeSource, /resolutionMutation\.reopeningNow/)
 assert.match(routeSource, /resolved_at: resolutionMutation\.resolvedAt/)
 assert.match(routeSource, /ISSUE_RESOLUTION_VERIFICATION_SCHEDULING_FAILED/)
@@ -99,6 +101,7 @@ assert.match(routeSource, /resolution_evidence_preserved: true/)
 const readerSource = readFileSync(new URL('../lib/governance/governed-incident-reader.ts', import.meta.url), 'utf8')
 assert.match(readerSource, /assertIssueReferencesBelongToProject/)
 assert.match(readerSource, /controlFindingId: issue\.control_finding_id/)
+assert.match(readerSource, /Ambiguous governed incident remediation authority/)
 
 const integritySource = readFileSync(new URL('../lib/governance/issue-reference-integrity.ts', import.meta.url), 'utf8')
 assert.match(integritySource, /governance_findings/)
