@@ -31,6 +31,9 @@ export const canonicalRoutes = {
   governedDataset(datasetId: string) {
     return canonicalResourcePath('/catalog/dataset', datasetId)
   },
+  governedIncident(issueId: string) {
+    return canonicalResourcePath('/issues', issueId)
+  },
   datasetEdit(datasetId: string) {
     return `${canonicalResourcePath('/datasets/dataset', datasetId)}/edit`
   },
