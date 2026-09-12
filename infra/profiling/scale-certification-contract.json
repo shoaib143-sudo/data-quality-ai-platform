@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "claimAuthority": "MEASURED_RUNTIME_EVIDENCE_ONLY",
+  "syntheticEvidenceMaySatisfyProductionClaim": false,
+  "maxEvidenceAgeHours": 24,
+  "futureClockSkewMinutes": 5,
+  "requiredTiers": [
+    {"id":"ROWS_10K","minRows":10000,"maxP95Seconds":60,"maxErrorRate":0.01},
+    {"id":"ROWS_100K","minRows":100000,"maxP95Seconds":300,"maxErrorRate":0.01},
+    {"id":"ROWS_1M","minRows":1000000,"maxP95Seconds":1800,"maxErrorRate":0.01}
+  ],
+  "requiredShapes": ["WIDE_TABLE","HIGH_CARDINALITY","NULL_HEAVY","UNICODE","LARGE_STRINGS","SCHEMA_DRIFT","MALFORMED_RECORDS"],
+  "requiredEvidence": ["rowCount","columnCount","durationSeconds","peakMemoryBytes","errorRate","profileRunId","datasetVersionId","observedAt"],
+  "numericValidity": "FINITE_NON_NEGATIVE_WITH_POSITIVE_COLUMN_COUNT_AND_ERROR_RATE_0_TO_1",
+  "shapeEvidenceAuthority": "PRODUCTION_REPRESENTATIVE_ONLY",
+  "states": ["NOT_MEASURED","PASS","FAIL"]
+}
