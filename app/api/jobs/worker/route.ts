@@ -16,6 +16,7 @@ import { refreshAllPredictiveRisk } from '@/lib/governance/predictive-risk'
 import { applyAllPredictiveRiskGovernedActions } from '@/lib/governance/governed-autonomy'
 import { refreshAllAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { processGovernanceAgentJobs } from '@/lib/agents/governance-job-worker'
+import { processDueNativeRuntimeInterrupts } from '@/lib/agents/runtime/native-runtime-interrupt-lifecycle'
 
 export const maxDuration = 300
 
@@ -90,11 +91,12 @@ export async function GET(request: Request) {
   const dispatch = await dispatchAdaptiveRounds(workerId)
   const events = await claimOutboxEvents(workerId, 30)
   const eventResults = await processOutboxEvents(events)
-  const [incidentEscalations, projections, semanticIndexScheduling, objectRetention] = await Promise.all([
+  const [incidentEscalations, projections, semanticIndexScheduling, objectRetention, nativeRuntimeInterrupts] = await Promise.all([
     evaluateIncidentSlaEscalations(50),
     runProjectionWorker({ projectLimit: 10, batchSize: 200 }),
     enqueueDailySemanticIndexJobs(100),
     cleanupExpiredObjectArtifacts(25),
+    processDueNativeRuntimeInterrupts(50),
   ])
   const predictiveRisk = await refreshAllPredictiveRisk()
   const aiGovernanceIntelligence = await refreshAllAIGovernanceIntelligence()
@@ -111,6 +113,7 @@ export async function GET(request: Request) {
     governanceAgentResults: dispatch.governanceAgentResults,
     semanticIndexScheduling,
     objectRetention,
+    nativeRuntimeInterrupts,
     predictiveRisk,
     aiGovernanceIntelligence,
     governedAutonomy,
