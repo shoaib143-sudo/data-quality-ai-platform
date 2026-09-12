@@ -20,6 +20,7 @@ const profilingExecutor = read('lib/profiling/executor.ts')
 const metricEngine = read('lib/profiling/metric-engine.ts')
 const certificationBoundaryMigration = read('supabase/migrations/20260910113000_p0_govern_certification_transitions.sql')
 const certificationRuntimeMigration = read('supabase/migrations/20260912054927_reconcile_certification_membership_runtime.sql')
+const certificationSnapshotSchema = read('supabase/migrations/20260912055356_reconcile_certification_prior_snapshot_schema.sql')
 
 assert(certificationRequest.includes("requireApiUser"), 'Certification request API must use API-safe authentication.')
 assert(certificationRequest.includes("rpc('request_dataset_certification'"), 'Certification requests must use governed RPC.')
@@ -50,6 +51,12 @@ assert(certificationRuntimeMigration.includes('GRANT EXECUTE ON FUNCTION governa
 assert(certificationRuntimeMigration.includes('GRANT EXECUTE ON FUNCTION governance.review_dataset_certification'), 'Governed review RPC must explicitly grant service execution.')
 assert(certificationRuntimeMigration.includes('REVOKE ALL ON FUNCTION governance.request_dataset_certification'), 'Governed request RPC must revoke client execution.')
 assert(certificationRuntimeMigration.includes('REVOKE ALL ON FUNCTION governance.review_dataset_certification'), 'Governed review RPC must revoke client execution.')
+
+for (const column of ['prior_certification_status', 'prior_certified_at', 'prior_certified_by']) {
+  assert(certificationSnapshotSchema.includes(`ADD COLUMN IF NOT EXISTS ${column}`), `Certification reconstruction must explicitly restore ${column}.`)
+}
+assert(certificationSnapshotSchema.includes('certification_requests_prior_certification_status_check'), 'Certification prior-state status constraint must be reconstruction-safe.')
+assert(certificationSnapshotSchema.includes("'UNCERTIFIED','PENDING','CERTIFIED','REJECTED','EXPIRED'"), 'Certification prior-state vocabulary must be bounded.')
 
 assert(agentProfilingExecutor.includes('executeProfilingMetrics(datasetVersionId, profilingRunId, {})'), 'Metric executor must discard caller-supplied evidence rows.')
 assert(agentProfilingExecutor.includes('Never forward caller supplied rows'), 'Profiling executor must document the caller-evidence boundary.')
