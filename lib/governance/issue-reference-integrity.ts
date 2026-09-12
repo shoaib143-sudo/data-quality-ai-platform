@@ -49,12 +49,14 @@ export async function assertIssueReferencesBelongToProject(input: {
   profileRunId?: unknown
   findingId?: unknown
   qualityRuleRunId?: unknown
+  controlFindingId?: unknown
 }): Promise<void> {
   const datasetId = id(input.datasetId)
   const datasetVersionId = id(input.datasetVersionId)
   const profileRunId = id(input.profileRunId)
   const findingId = id(input.findingId)
   const qualityRuleRunId = id(input.qualityRuleRunId)
+  const controlFindingId = id(input.controlFindingId)
 
   if (datasetId) await assertDatasetInProject(datasetId, input.projectId)
 
@@ -118,6 +120,17 @@ export async function assertIssueReferencesBelongToProject(input: {
     }
     if (profileRunId && data.profile_run_id && String(data.profile_run_id) !== profileRunId) {
       throw new IssueReferenceIntegrityError('Quality rule run does not belong to the supplied profile run.', 'ISSUE_QUALITY_RULE_PROFILE_RUN_MISMATCH')
+    }
+  }
+
+  if (controlFindingId) {
+    const admin = createAdminClient()
+    const { data, error } = await admin.schema('governance').from('governance_findings')
+      .select('id,project_id').eq('id', controlFindingId).maybeSingle()
+    if (error) throw new IssueReferenceIntegrityError(`Unable to validate governance control finding: ${error.message}`)
+    if (!data) throw new IssueReferenceIntegrityError('Governance control finding does not exist.', 'ISSUE_CONTROL_FINDING_NOT_FOUND', 404)
+    if (String(data.project_id) !== input.projectId) {
+      throw new IssueReferenceIntegrityError('Governance control finding does not belong to the authorized project.', 'ISSUE_CONTROL_FINDING_PROJECT_MISMATCH')
     }
   }
 }
