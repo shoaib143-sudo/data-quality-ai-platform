@@ -291,8 +291,7 @@ BEGIN
 
     UPDATE agent.agent_runs
     SET status = 'CANCELLED'::agent.run_status,
-        completed_at = COALESCE(completed_at, v_now),
-        updated_at = v_now
+        completed_at = COALESCE(completed_at, v_now)
     WHERE id = v_interrupt.agent_run_id;
 
     PERFORM app_private.record_agent_runtime_interrupt_event(
