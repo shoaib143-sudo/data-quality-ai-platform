@@ -6,6 +6,7 @@ on:
       - 'app/lineage/layout.tsx'
       - 'app/datasets/layout.tsx'
       - 'app/catalog/page.tsx'
+      - 'app/catalog/physical-assets/page.tsx'
       - 'lib/governance/workspace-policy.ts'
       - 'scripts/test-persona-workspace-link-composition.mjs'
       - 'scripts/audit-persona-workspace-link-composition-adversarial.mjs'
