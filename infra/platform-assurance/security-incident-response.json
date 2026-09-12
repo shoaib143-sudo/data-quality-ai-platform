@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "requiredPhases": ["DETECT", "CLASSIFY", "CONTAIN", "PRESERVE_EVIDENCE", "ERADICATE", "RECOVER", "COMMUNICATE", "POST_INCIDENT_REVIEW", "CONTROL_UPDATE"],
+  "severities": ["SEV0", "SEV1", "SEV2", "SEV3"],
+  "incidentClasses": ["AUTHORIZATION_BYPASS", "SECRET_EXPOSURE", "DATA_EXFILTRATION", "SUPPLY_CHAIN_COMPROMISE", "AI_AUTHORITY_BREACH", "INTEGRITY_TAMPERING", "AVAILABILITY", "PRIVACY"],
+  "invariants": {
+    "evidenceIsAppendOnly": true,
+    "secretValuesForbiddenInEvidence": true,
+    "recoveryDoesNotEraseEvidence": true,
+    "postIncidentReviewRequiredForSev0Sev1": true,
+    "controlUpdateOrExplicitNoChangeDecisionRequired": true
+  }
+}
