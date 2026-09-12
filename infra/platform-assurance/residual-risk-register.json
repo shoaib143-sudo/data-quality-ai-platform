@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "authority": "infra/platform-assurance/post-implementation-certification-contract.json",
+  "reviewPolicy": {
+    "reviewOnMaterialChange": true,
+    "defaultMaximumReviewDays": 30,
+    "expiredReviewBlocksCertification": true
+  },
+  "risks": [
+    {
+      "riskId": "PA-RISK-001",
+      "riskTier": "R2",
+      "status": "ACCEPTED_EXCEPTION",
+      "owner": "PLATFORM_SECURITY_OWNER",
+      "rationale": "agent.agent_run_runtime_manifests intentionally has RLS enabled with no client policy because authenticated and anonymous roles have no CRUD grants; adding a permissive policy only to silence the advisor would broaden access.",
+      "compensatingControls": [
+        "authenticated and anon have no table CRUD grants",
+        "runtime manifest persistence is service-side privileged code only",
+        "any future authenticated grant requires project-scoped RLS plus adversarial tests"
+      ],
+      "recordedAt": "2026-09-12T00:00:00Z",
+      "reviewDueAt": "2026-10-12T00:00:00Z",
+      "closureCondition": "Close only when the advisor condition can be removed without broadening client access, or replace the locked-table posture with an explicitly tested project-scoped RLS design.",
+      "evidenceRefs": ["docs/platform-assurance/supabase-security-exceptions.md"]
+    },
+    {
+      "riskId": "PA-RISK-002",
+      "riskTier": "R3",
+      "status": "ACCEPTED_EXCEPTION",
+      "owner": "PLATFORM_SECURITY_OWNER",
+      "rationale": "The four app_private membership helpers are intentional SECURITY DEFINER authorization helpers used by RLS and authorization predicates. They are authenticated-callable, derive identity from auth.uid(), use an empty search_path, and do not expose membership table contents.",
+      "compensatingControls": [
+        "anon execution is denied",
+        "empty search_path with schema-qualified authoritative relations",
+        "member and non-member behavior is subject to live authorization validation",
+        "changes require security review"
+      ],
+      "recordedAt": "2026-09-12T00:00:00Z",
+      "reviewDueAt": "2026-10-12T00:00:00Z",
+      "closureCondition": "Close if the helpers can move to an equally safe SECURITY INVOKER or non-exposed design without breaking recursive RLS authorization; otherwise renew only with fresh live positive and negative evidence.",
+      "evidenceRefs": ["docs/platform-assurance/supabase-security-exceptions.md"]
+    },
+    {
+      "riskId": "PA-RISK-003",
+      "riskTier": "R3",
+      "status": "ACCEPTED_EXCEPTION",
+      "owner": "PLATFORM_SECURITY_OWNER",
+      "rationale": "agent.resolve_runtime_interrupt is an authenticated SECURITY DEFINER RPC because it is the governed human approval/rejection boundary for a pending runtime interrupt.",
+      "compensatingControls": [
+        "project-admin authority is evaluated before row locking",
+        "unknown and unauthorized interrupt identifiers share a generic fail-closed response",
+        "decision and action-payload hash are validated",
+        "timeout and cancellation automation remain service-role only",
+        "live hostile-user and authorized-user rollback tests leave zero residue"
+      ],
+      "recordedAt": "2026-09-12T00:00:00Z",
+      "reviewDueAt": "2026-10-12T00:00:00Z",
+      "closureCondition": "Close if the RPC can be replaced by an equivalently safe invoker or non-exposed boundary; otherwise renew only with current advisor review and adversarial authorization evidence.",
+      "evidenceRefs": [
+        "docs/platform-assurance/supabase-security-exceptions.md",
+        "supabase/migrations/20260912054005_harden_runtime_interrupt_authorization_order.sql"
+      ]
+    },
+    {
+      "riskId": "PA-RISK-004",
+      "riskTier": "R2",
+      "status": "OPEN_GAP",
+      "owner": "PLATFORM_SECURITY_OWNER",
+      "rationale": "Supabase leaked-password protection is not enabled on the current plan and must not be represented as remediated.",
+      "compensatingControls": [
+        "strong password requirements where available",
+        "safe session handling",
+        "MFA and passkey evaluation",
+        "authentication monitoring",
+        "upgrade decision required before higher-risk production use"
+      ],
+      "recordedAt": "2026-09-12T00:00:00Z",
+      "reviewDueAt": "2026-10-12T00:00:00Z",
+      "closureCondition": "Enable leaked-password protection on a supported plan and re-run the live Supabase security advisor before claiming closure.",
+      "evidenceRefs": ["docs/platform-assurance/supabase-security-exceptions.md"]
+    }
+  ]
+}

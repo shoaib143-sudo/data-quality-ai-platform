@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "authority": "Architecture/2026-09-10-ADR-007-trusted-operational-governance-capability-model.md",
+  "implementationMap": "Architecture/2026-09-10-trusted-operational-governance-implementation-map.md",
+  "purpose": "Define the fail-closed evidence contract required after implementation before DataNexus may claim a capability, release, or the remaining platform is certified or production-verified.",
+  "claimLevels": ["IMPLEMENTED", "CERTIFIED", "PRODUCTION_VERIFIED"],
+  "resultStates": ["PASS", "FAIL", "NOT_MEASURED", "NOT_APPLICABLE", "WAIVED"],
+  "truthRules": {
+    "syntheticEvidenceMayProveProduction": false,
+    "ciSuccessMaySubstituteForProductionEvidence": false,
+    "staticSourceEvidenceMaySubstituteForRuntimeEvidence": false,
+    "notMeasuredMaySatisfyRequiredEvidence": false,
+    "staleEvidenceMaySatisfyRequiredEvidence": false,
+    "waivedR3AuthorizationOrGovernanceTruthBoundaryAllowed": false,
+    "certifiedCommitMustEqualProductionSourceCommit": true,
+    "databaseMigrationHistoryMustBeReconciled": true,
+    "independentPostImplementationEvidenceRequired": true
+  },
+  "requiredEvidenceRecordFields": [
+    "evidenceClass",
+    "result",
+    "sourceCommit",
+    "environment",
+    "observedAt",
+    "producer",
+    "evidenceRef",
+    "freshnessPolicy"
+  ],
+  "requiredImplementationScopes": [
+    "GOVERNANCE_TRUTH_AND_LIFECYCLE",
+    "EVIDENCE_AND_CONTROL_PLANE",
+    "DATA_QUALITY_CONTROL_SYSTEM",
+    "DATA_ESTATE_KNOWLEDGE_GRAPH",
+    "GOVERNED_INVESTIGATION_AND_AGENTS",
+    "GOVERNED_ACTION_AND_LEARNING",
+    "OPERATIONAL_ASSURANCE",
+    "PERSONA_AWARE_PRESENTATION"
+  ],
+  "requiredAcceptancePaths": ["NORMAL", "UNAUTHORIZED_ADVERSARIAL", "DEGRADED_FAILURE"],
+  "mandatoryEvidenceClasses": [
+    {
+      "id": "SOURCE_RELEASE_INTEGRITY",
+      "riskTier": "R3",
+      "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
+      "requirements": [
+        "protected base branch",
+        "exact-head required checks",
+        "immutable external CI action references",
+        "no merge when a protected context is failing, cancelled, skipped, stale or pending"
+      ]
+    },
+    {
+      "id": "CI_WORKFLOW_SECURITY",
+      "riskTier": "R3",
+      "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
+      "requirements": [
+        "explicit least-privilege GITHUB_TOKEN permissions",
+        "dangerous trigger review including pull_request_target",
+        "untrusted pull-request code cannot receive privileged secrets or write authority",
+        "workflow dependency references are immutable"
+      ]
+    },
+    {
+      "id": "DEPENDENCY_AND_CODE_SECURITY",
+      "riskTier": "R2",
+      "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
+      "requirements": [
+        "lockfile-exact dependency resolution",
+        "vulnerability policy gate",
+        "static security analysis",
+        "no unresolved release-blocking findings"
+      ]
+    },
+    {
+      "id": "AUTHORIZATION_AND_ISOLATION",
+      "riskTier": "R3",
+      "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
+      "requirements": [
+        "authorized positive path",
+        "unauthorized negative path",
+        "cross-project or cross-scope negative path",
+        "direct-bypass attempt",
+        "object identifiers are revalidated rather than trusted from the client",
+        "authorization is evaluated before privileged mutation or lock acquisition where practical"
+      ]
+    },
+    {
+      "id": "DATABASE_AUTHORITY_AND_RLS",
+      "riskTier": "R3",
+      "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
+      "requirements": [
+        "RLS and grants match intended client and service authority",
+        "SECURITY DEFINER functions are explicitly justified and least-executable",
+        "SECURITY DEFINER search paths are fixed and object references are safe",
+        "member and non-member runtime tests exist for exposed privileged helpers",
+        "governance truth cannot be mutated through an unsupported direct path"
+      ]
+    },
+    {
+      "id": "MIGRATION_AND_RECONSTRUCTION",
+      "riskTier": "R3",
+      "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
+      "requirements": [
+        "released migrations are immutable",
+        "forward-only repairs represent management-applied production changes in repository history",
+        "clean reconstruction reaches the current schema contract",
+        "repository and production migration aliases are explicit where immutable history differs",
+        "post-migration live invariants are verified"
+      ]
+    },
+    {
+      "id": "BUILD_PROVENANCE",
+      "riskTier": "R3",
+      "requiredFor": ["PRODUCTION_VERIFIED"],
+      "requirements": [
+        "build provenance binds source commit to builder identity",
+        "release artifact or deployment output has an immutable digest or equivalent verifiable identity",
+        "provenance is generated by the build or deployment system rather than hand-authored",
+        "the production deployment can be traced back to the certified source commit"
+      ]
+    },
+    {
+      "id": "DEPLOYMENT_PROVENANCE",
+      "riskTier": "R3",
+      "requiredFor": ["PRODUCTION_VERIFIED"],
+      "requirements": [
+        "production deployment identifier is recorded",
+        "deployment source commit equals the certified commit",
+        "production alias or domain resolves to the intended deployment",
+        "required runtime configuration names and external dependency selection are verified without storing secret values"
+      ]
+    },
+    {
+      "id": "PRODUCTION_RUNTIME_JOURNEY",
+      "riskTier": "R3",
+      "requiredFor": ["PRODUCTION_VERIFIED"],
+      "requirements": [
+        "live authenticated business journey succeeds",
+        "live unauthorized or adversarial journey fails closed",
+        "live degraded behavior preserves truth and evidence integrity",
+        "runtime evidence is from the production boundary, not a preview or synthetic substitute"
+      ]
+    },
+    {
+      "id": "RECOVERY_ROLLBACK_AND_COMPENSATION",
+      "riskTier": "R3",
+      "requiredFor": ["PRODUCTION_VERIFIED"],
+      "requirements": [
+        "changed surfaces have recovery, rollback, compensation or explicit escalation semantics",
+        "recovery evidence is appropriate to database, application, storage, identity and external dependency impact",
+        "irreversible changes cannot claim reversibility",
+        "recovery drills or restoration evidence are current enough for the certified release"
+      ]
+    },
+    {
+      "id": "OBSERVABILITY_AND_WORKFLOW_SLO",
+      "riskTier": "R2",
+      "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
+      "requirements": [
+        "material workflow SLIs are emitted",
+        "failure and retry evidence is observable",
+        "audit and trace evidence can be correlated to the governed workflow",
+        "relevant workflow SLOs are measured rather than inferred from HTTP availability alone"
+      ]
+    },
+    {
+      "id": "AI_GOVERNANCE_AND_EVALUATION",
+      "riskTier": "R3",
+      "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
+      "requirements": [
+        "model output cannot authorize itself or become governance truth",
+        "retrieval remains permission-scoped and evidence-addressable",
+        "provider, model, policy and evaluation versions are attributable",
+        "abstention and provider failure paths are explicit",
+        "only verified outcomes may influence governed learning"
+      ]
+    },
+    {
+      "id": "PERSONA_TASK_E2E",
+      "riskTier": "R2",
+      "requiredFor": ["PRODUCTION_VERIFIED"],
+      "requirements": [
+        "persona-facing capabilities preserve one canonical governance truth",
+        "authorization is independent of presentation",
+        "all affected canonical personas can complete their intended task through an authenticated live journey",
+        "accessibility and keyboard-critical paths are validated for affected interactive surfaces"
+      ]
+    },
+    {
+      "id": "RESIDUAL_RISK_AND_EXCEPTION_GOVERNANCE",
+      "riskTier": "R3",
+      "requiredFor": ["CERTIFIED", "PRODUCTION_VERIFIED"],
+      "requirements": [
+        "every accepted exception has an accountable owner and risk tier",
+        "rationale and compensating controls are recorded",
+        "review due date or expiry is recorded",
+        "closure condition is explicit",
+        "release-blocking R3 authorization, evidence-integrity or governance-truth gaps are not waived"
+      ]
+    }
+  ],
+  "canonicalPersonas": [
+    "senior-leadership",
+    "business-user",
+    "data-owner",
+    "data-product-owner",
+    "data-steward",
+    "data-governance-specialist",
+    "compliance-risk-officer",
+    "privacy-security-officer",
+    "data-governance-admin",
+    "data-custodian",
+    "source-system-owner",
+    "metadata-analyst",
+    "data-quality-analyst"
+  ],
+  "freshnessRules": {
+    "liveProductionEvidenceMustDeclareMaximumAge": true,
+    "securityAdvisorEvidenceMustDeclareMaximumAge": true,
+    "recoveryEvidenceMustDeclareMaximumAge": true,
+    "expiredEvidenceResult": "NOT_MEASURED"
+  },
+  "exceptionRecordRequiredFields": [
+    "riskId",
+    "riskTier",
+    "status",
+    "owner",
+    "rationale",
+    "compensatingControls",
+    "recordedAt",
+    "reviewDueAt",
+    "closureCondition"
+  ],
+  "productionVerificationBindings": [
+    "certifiedSourceCommit",
+    "buildOrDeploymentProvenance",
+    "productionDeploymentId",
+    "productionDomainOrAlias",
+    "databaseMigrationSet",
+    "liveRuntimeEvidence"
+  ],
+  "completionRule": {
+    "IMPLEMENTED": "The capability exists and its deterministic implementation contracts pass; this is not a certification claim.",
+    "CERTIFIED": "All evidence classes required for CERTIFIED are fresh PASS or justified NOT_APPLICABLE; no required class is FAIL, NOT_MEASURED or stale.",
+    "PRODUCTION_VERIFIED": "CERTIFIED is satisfied and every production-only evidence class is fresh PASS or justified NOT_APPLICABLE, with exact source/build/deployment/database/runtime binding and no unresolved release-blocking residual risk."
+  }
+}
