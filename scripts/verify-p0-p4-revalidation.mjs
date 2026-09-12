@@ -2,6 +2,7 @@ import fs from 'node:fs'
 
 const { verifyWorkflowActionPinning } = await import('./verify-workflow-action-pinning.mjs')
 await verifyWorkflowActionPinning()
+await import('./test-workflow-action-pinning.mjs')
 await import('./verify-platform-assurance-baseline.mjs')
 
 const read = (path) => fs.readFileSync(path, 'utf8')
