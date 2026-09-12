@@ -1,0 +1,44 @@
+name: Native Rollback Contracts Current
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-autonomy-kernel.ts'
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'lib/agents/runtime/native-rollback-contract.ts'
+      - 'scripts/test-native-autonomy-kernel.mjs'
+      - 'scripts/test-native-rollback-contracts.mjs'
+      - 'scripts/verify-native-autonomy-kernel.mjs'
+      - 'scripts/verify-native-rollback-contracts-current.mjs'
+      - 'supabase/migrations/**native_rollback_compensation_contracts.sql'
+      - '.github/workflows/native-rollback-contracts-current.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-autonomy-kernel.ts'
+      - 'lib/agents/runtime/native-recovery-v2.ts'
+      - 'lib/agents/runtime/native-rollback-contract.ts'
+      - 'scripts/test-native-autonomy-kernel.mjs'
+      - 'scripts/test-native-rollback-contracts.mjs'
+      - 'scripts/verify-native-autonomy-kernel.mjs'
+      - 'scripts/verify-native-rollback-contracts-current.mjs'
+      - 'supabase/migrations/**native_rollback_compensation_contracts.sql'
+      - '.github/workflows/native-rollback-contracts-current.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify rollback contracts
+        run: node scripts/verify-native-rollback-contracts-current.mjs
+      - name: Test rollback contract classifier
+        run: node --experimental-strip-types scripts/test-native-rollback-contracts.mjs

@@ -1,4 +1,8 @@
 import {
+  certifyNativeRollbackContract,
+  type NativeRollbackStrategy,
+} from './native-rollback-contract'
+import {
   getGovernedAgentPolicy,
   isGovernedAgentKey,
   type GovernedAgentKey,
@@ -41,6 +45,8 @@ export type NativeToolSafetyCertification = {
   privileged: boolean
   governanceAuthorityChange: boolean
   replayCertified: boolean
+  rollbackStrategy: NativeRollbackStrategy
+  compensationToolKey?: string
   approvalRequired?: boolean
   prohibited?: boolean
   executorKey?: string
@@ -136,16 +142,36 @@ export function certifyNativePinnedToolContract(
     throw new NativePlanValidationError([`${contract.tool_key}: pinned executor is required`])
   }
 
+  const readOnly = contractFlag(config, contract.tool_key, 'read_only', 'readOnly')
+  const reversible = contractFlag(config, contract.tool_key, 'reversible')
+  const compensatable = contractFlag(config, contract.tool_key, 'compensatable')
+  let rollback
+  try {
+    rollback = certifyNativeRollbackContract({
+      config,
+      toolKey: contract.tool_key,
+      readOnly,
+      reversible,
+      compensatable,
+    })
+  } catch (error) {
+    throw new NativePlanValidationError([
+      error instanceof Error ? error.message : `${contract.tool_key}: invalid rollback contract`,
+    ])
+  }
+
   const certification: NativeToolSafetyCertification = {
     toolKey: contract.tool_key,
-    readOnly: contractFlag(config, contract.tool_key, 'read_only', 'readOnly'),
+    readOnly,
     idempotent: contractFlag(config, contract.tool_key, 'idempotent'),
-    reversible: contractFlag(config, contract.tool_key, 'reversible'),
-    compensatable: contractFlag(config, contract.tool_key, 'compensatable'),
+    reversible,
+    compensatable,
     destructive: contractFlag(config, contract.tool_key, 'destructive'),
     privileged: contractFlag(config, contract.tool_key, 'privileged'),
     governanceAuthorityChange: contractFlag(config, contract.tool_key, 'governance_authority_change', 'governanceAuthorityChange'),
     replayCertified: contractFlag(config, contract.tool_key, 'replay_certified', 'replayCertified'),
+    rollbackStrategy: rollback.rollbackStrategy,
+    compensationToolKey: rollback.compensationToolKey,
     approvalRequired: contractFlag(config, contract.tool_key, 'approval_required', 'requires_human_approval', 'approvalRequired'),
     prohibited: contractFlag(config, contract.tool_key, 'autonomy_prohibited', 'prohibited'),
     executorKey: executor.trim(),
@@ -193,7 +219,8 @@ function classifyExecution(
   if (
     certification.idempotent
     && certification.replayCertified
-    && (certification.reversible || certification.compensatable)
+    && certification.rollbackStrategy === 'COMPENSATION_TOOL'
+    && certification.compensatable
   ) {
     return { decision: 'AUTO_TIER_1', riskTier: 1 }
   }
