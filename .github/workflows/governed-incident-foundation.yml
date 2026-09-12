@@ -1,0 +1,34 @@
+name: Governed Incident Foundation
+
+on:
+  pull_request:
+    paths:
+      - 'lib/governance/governed-incident.ts'
+      - 'lib/governance/governed-incident-reader.ts'
+      - 'lib/governance/governed-incident-view.ts'
+      - 'lib/governance/incident-presentation.ts'
+      - 'lib/governance/incident-component-registry.ts'
+      - 'lib/governance/personas.ts'
+      - 'scripts/test-governed-incident-foundation.mjs'
+      - 'scripts/verify-governed-incident-foundation.mjs'
+      - '.github/workflows/governed-incident-foundation.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify governed incident foundation
+        run: node scripts/verify-governed-incident-foundation.mjs
+      - name: Unit test governed incident lifecycle
+        run: node --experimental-strip-types scripts/test-governed-incident-foundation.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
