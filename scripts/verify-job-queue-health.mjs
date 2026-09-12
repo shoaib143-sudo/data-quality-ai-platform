@@ -13,7 +13,7 @@ for (const marker of [
   'entity_id is not distinct from dead.entity_id',
   'revoke all on function orchestration.verify_job_queue_health(integer) from public, anon, authenticated',
   'grant execute on function orchestration.verify_job_queue_health(integer) to service_role',
-  'JOB_QUEUE_HEALTH_INVALID_WINDOW',
+  'QUEUE_HEALTH_INVALID_WINDOW',
   'JOB_QUEUE_HEALTH_PROBE_POSTCONDITION_FAILED',
 ]) {
   if (!migration.toLowerCase().includes(marker.toLowerCase())) {
