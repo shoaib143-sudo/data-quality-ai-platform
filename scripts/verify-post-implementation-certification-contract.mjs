@@ -118,7 +118,7 @@ for (const key of ['liveProductionEvidenceMustDeclareMaximumAge', 'securityAdvis
 }
 if (contract.freshnessRules?.expiredEvidenceResult !== 'NOT_MEASURED') fail('Expired certification evidence must degrade to NOT_MEASURED.')
 
-for (const field of ['riskId', 'owner', 'rationale', 'compensatingControls', 'acceptedAt', 'reviewDueAt', 'closureCondition']) {
+for (const field of ['riskId', 'riskTier', 'status', 'owner', 'rationale', 'compensatingControls', 'recordedAt', 'reviewDueAt', 'closureCondition']) {
   if (!contract.exceptionRecordRequiredFields?.includes(field)) fail(`Residual risk records must require ${field}.`)
 }
 for (const binding of ['certifiedSourceCommit', 'buildOrDeploymentProvenance', 'productionDeploymentId', 'productionDomainOrAlias', 'databaseMigrationSet', 'liveRuntimeEvidence']) {
