@@ -1,0 +1,32 @@
+name: Persona Incident Workspace
+
+on:
+  pull_request:
+    paths:
+      - 'app/issues/page.tsx'
+      - 'app/issues/[issueId]/page.tsx'
+      - 'lib/governance/governed-incident*.ts'
+      - 'lib/governance/incident-*.ts'
+      - 'lib/governance/personas.ts'
+      - 'scripts/verify-persona-incident-workspace.mjs'
+      - '.github/workflows/persona-incident-workspace.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify persona incident workspace
+        run: node scripts/verify-persona-incident-workspace.mjs
+      - name: Re-run governed incident unit tests
+        run: node --experimental-strip-types scripts/test-governed-incident-foundation.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
