@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const migration = readFileSync('supabase/migrations/20260912104500_native_compensation_reclaim_fencing.sql', 'utf8')
+const runningShapeFix = readFileSync('supabase/migrations/20260912110000_native_compensation_running_terminal_shape.sql', 'utf8')
 const recovery = readFileSync('lib/agents/runtime/native-recovery-v2.ts', 'utf8')
 const fencing = readFileSync('lib/agents/runtime/native-compensation-fencing.ts', 'utf8')
 
@@ -13,6 +14,14 @@ function contains(source, token, label) {
 contains(migration, 'FOR UPDATE;', 'claim row lock')
 contains(migration, "'ACTIVE_LEASE'", 'live lease exclusion')
 contains(migration, 'compensation_generation = v_invocation.compensation_generation + 1', 'monotonic stale reclaim generation')
+
+// Threat: the new RUNNING compensation state conflicts with pre-existing invocation evidence shape checks.
+contains(runningShapeFix, "status IN ('ADMITTED', 'RUNNING')", 'non-terminal RUNNING evidence shape')
+contains(runningShapeFix, "status = 'SUCCEEDED'", 'successful terminal evidence shape preserved')
+contains(runningShapeFix, "status IN ('FAILED', 'REJECTED')", 'failed/rejected terminal evidence shape preserved')
+contains(runningShapeFix, 'completed_at IS NULL', 'non-terminal completion timestamp guard')
+contains(runningShapeFix, 'output_hash IS NULL', 'non-terminal output hash guard')
+contains(runningShapeFix, 'error_code IS NULL', 'non-terminal error-code guard')
 
 // Threat: an obsolete worker writes terminal evidence after a newer worker reclaimed execution.
 contains(migration, 'compensation_owner_id IS DISTINCT FROM p_owner_id', 'pre-completion owner fence')
