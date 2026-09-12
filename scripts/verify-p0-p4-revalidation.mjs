@@ -7,6 +7,7 @@ const { verifyWorkflowSecurityPosture } = await import('./verify-workflow-securi
 await verifyWorkflowSecurityPosture()
 await import('./verify-platform-assurance-baseline.mjs')
 await import('./verify-post-implementation-certification-contract.mjs')
+await import('./verify-residual-risk-register.mjs')
 
 const read = (path) => fs.readFileSync(path, 'utf8')
 const assert = (condition, message) => {
