@@ -11,6 +11,7 @@ const policy = fs.readFileSync('lib/profiling/readiness-remediation-policy.ts', 
 const repair = fs.readFileSync('lib/profiling/source-readiness-repair.ts', 'utf8')
 const validationRoute = fs.readFileSync('app/api/datasets/source/validate/route.ts', 'utf8')
 const ui = fs.readFileSync('app/datasets/dataset-actions.tsx', 'utf8')
+const catalogDatasetPage = fs.readFileSync('app/catalog/dataset/[datasetId]/page.tsx', 'utf8')
 const unit = fs.readFileSync('scripts/test-profile-readiness-remediation-policy.mjs', 'utf8')
 
 const requiredMigration = [
@@ -83,10 +84,18 @@ for (const marker of [
 if (ui.includes("fetch('/api/datasets/source/validate'")) throw new Error('Dataset readiness AI button must not bypass the governed AI remediation endpoint')
 
 for (const marker of [
+  "import { DatasetActions } from '@/app/datasets/dataset-actions'",
+  'aria-label="Profiling readiness actions"',
+  '<DatasetActions projectId={dataset.project_id}',
+  'datasetVersionId={version.id}',
+]) if (!catalogDatasetPage.includes(marker)) throw new Error(`Canonical dataset page does not expose governed readiness remediation: ${marker}`)
+if (!catalogDatasetPage.includes('canProfiling&&version')) throw new Error('Canonical dataset page must only expose readiness actions to profiling-capable users with a current dataset version')
+
+for (const marker of [
   'SOURCE_NOT_OBSERVED_READY: true, SOURCE_NOT_ACTIVE: true',
   'assert.equal(policy.approvalRequired, true)',
   'assert.equal(policy.canExecuteLowRiskRepair, false)',
   'DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE',
 ]) if (!unit.includes(marker)) throw new Error(`AI remediation negative unit coverage missing: ${marker}`)
 
-console.log('Governed AI profile-readiness remediation contract verified, including forward-only migration history.')
+console.log('Governed AI profile-readiness remediation contract verified, including canonical dataset UI exposure and forward-only migration history.')
