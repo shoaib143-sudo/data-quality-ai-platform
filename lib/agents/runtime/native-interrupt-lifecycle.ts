@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export type NativeInterruptTerminalStatus = 'PENDING' | 'RESOLVED' | 'RESUMED' | 'CANCELLED' | 'EXPIRED'
-export type NativeInterruptRunStatus = 'CREATED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
+export type NativeInterruptRunStatus = 'CREATED' | 'QUEUED' | 'RUNNING' | 'WAITING' | 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'CANCELLED'
 
 export type NativeInterruptLifecycleResult = {
   interruptId: string
@@ -24,7 +24,7 @@ export type NativeInterruptAuditEvent = {
 
 const UUIDISH_PATTERN = /^[0-9a-f-]{8,}$/i
 const INTERRUPT_STATUSES = new Set<NativeInterruptTerminalStatus>(['PENDING', 'RESOLVED', 'RESUMED', 'CANCELLED', 'EXPIRED'])
-const RUN_STATUSES = new Set<NativeInterruptRunStatus>(['CREATED', 'RUNNING', 'WAITING', 'SUCCEEDED', 'FAILED', 'CANCELLED'])
+const RUN_STATUSES = new Set<NativeInterruptRunStatus>(['CREATED', 'QUEUED', 'RUNNING', 'WAITING', 'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED'])
 
 function assertUuidish(value: string, field: string) {
   if (!UUIDISH_PATTERN.test(value)) throw new Error(`${field} is invalid`)
