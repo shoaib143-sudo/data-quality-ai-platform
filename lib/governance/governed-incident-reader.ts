@@ -107,6 +107,13 @@ export async function loadGovernedIncident(input: { projectId: string; issueId: 
   const investigation = investigationResult.data
   const knowledge = knowledgeResult.data ?? []
 
+  // Profiling and Data Quality outcomes are separate verification authorities with
+  // different provenance contracts. Mixing individual fields from both would create
+  // synthetic truth, so ambiguous linkage fails closed until reconciled upstream.
+  if (profiling && dq) {
+    throw new Error('Ambiguous governed incident remediation authority: issue is linked to both profiling and data-quality remediation outcomes.')
+  }
+
   let lineageNodes: Array<Record<string, unknown>> = []
   if (lineage?.id) {
     const { data, error } = await admin.schema('governance').from('lineage_impact_nodes')
