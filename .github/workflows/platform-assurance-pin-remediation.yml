@@ -1,0 +1,60 @@
+name: Platform Assurance Pin Remediation
+
+on:
+  push:
+    branches:
+      - hardening/platform-assurance-baseline-20260912
+
+permissions:
+  contents: write
+
+jobs:
+  pin-actions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: hardening/platform-assurance-baseline-20260912
+      - name: Pin known mutable action references
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              'actions/checkout@v4': 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+              'actions/setup-node@v4': 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020',
+              'pnpm/action-setup@v4': 'pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1',
+              'actions/setup-java@v4': 'actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961',
+              'actions/upload-artifact@v4': 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+          }
+
+          changed = []
+          for workflow in sorted(Path('.github/workflows').glob('*.y*ml')):
+              before = workflow.read_text()
+              after = before
+              for old, new in replacements.items():
+                  after = after.replace(old, new)
+              if after != before:
+                  workflow.write_text(after)
+                  changed.append(str(workflow))
+
+          print(f'Pinned action references in {len(changed)} workflow(s).')
+          for item in changed:
+              print(item)
+          PY
+          node scripts/verify-workflow-action-pinning.mjs
+      - name: Commit remediation
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No pinning changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows
+          git commit -m 'Pin GitHub Actions to immutable revisions'
+          git push origin HEAD:hardening/platform-assurance-baseline-20260912
