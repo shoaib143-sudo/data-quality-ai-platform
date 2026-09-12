@@ -9,11 +9,13 @@ const controlMap = readJson('infra/platform-assurance/control-map.json')
 const incident = readJson('infra/platform-assurance/security-incident-response.json')
 const runtime = readJson('infra/platform-assurance/runtime-config-contract.json')
 const manifest = readJson('infra/recovery/platform-manifest.json')
+const migrationAliases = readJson('infra/recovery/migration-history-aliases.json')
 const supabaseEnv = fs.readFileSync('lib/supabase/env.ts', 'utf8')
 const supabaseAdmin = fs.readFileSync('lib/supabase/admin.ts', 'utf8')
 const supabaseExceptions = fs.readFileSync('docs/platform-assurance/supabase-security-exceptions.md', 'utf8')
 const incidentDoc = fs.readFileSync('docs/security-incident-response.md', 'utf8')
 const timeoutMigration = fs.readFileSync('supabase/migrations/20260912054000_native_interrupt_timeout_lifecycle.sql', 'utf8')
+const interruptAuthorizationMigration = fs.readFileSync('supabase/migrations/20260912054005_harden_runtime_interrupt_authorization_order.sql', 'utf8')
 
 if (controlMap.schemaVersion !== 1 || controlMap.frameworkAlignmentOnly !== true) fail('Control map must be versioned and explicitly alignment-only.')
 const controls = controlMap.controls ?? []
@@ -58,5 +60,14 @@ for (const marker of ['ACCEPTED LOCKED-TABLE POSTURE', 'INTENTIONAL PRIVILEGED A
 if (!timeoutMigration.includes("REVOKE ALL ON FUNCTION agent.process_runtime_interrupt_timeout_internal(uuid,text) FROM public, anon, authenticated")) fail('Timeout automation must remain unavailable to authenticated clients.')
 if (!timeoutMigration.includes("GRANT EXECUTE ON FUNCTION agent.process_runtime_interrupt_timeout_internal(uuid,text) TO service_role")) fail('Timeout automation must remain service-role governed.')
 if (!timeoutMigration.includes("'LATE_DECISION_REJECTED'")) fail('Late human interrupt decisions must remain auditable.')
+if (!/AND app_private\.is_project_admin\(r\.project_id\)[\s\S]*FOR UPDATE OF i/.test(interruptAuthorizationMigration)) fail('Human interrupt authorization must be evaluated before row locking.')
+if (!interruptAuthorizationMigration.includes("RAISE EXCEPTION 'Agent runtime interrupt is unavailable'")) fail('Unknown and unauthorized interrupt identifiers must share a generic fail-closed response.')
+if (interruptAuthorizationMigration.includes('Project administrator approval is required')) fail('Human interrupt RPC must not disclose a distinct authorization failure for a known interrupt.')
+if (!interruptAuthorizationMigration.includes('REVOKE ALL ON FUNCTION agent.resolve_runtime_interrupt(uuid,text,text,jsonb) FROM public, anon, service_role')) fail('Human interrupt RPC must remain unavailable to anon and service automation.')
+if (!interruptAuthorizationMigration.includes('GRANT EXECUTE ON FUNCTION agent.resolve_runtime_interrupt(uuid,text,text,jsonb) TO authenticated')) fail('Human interrupt RPC must remain authenticated-only.')
+
+if (migrationAliases.policy !== 'DO_NOT_REWRITE_PRODUCTION_HISTORY') fail('Migration alias policy must remain forward-only.')
+const interruptAuthAlias = (migrationAliases.aliases ?? []).find(item => item.logicalName === 'harden_runtime_interrupt_authorization_order')
+if (interruptAuthAlias?.repositoryVersion !== '20260912054005' || interruptAuthAlias?.observedProductionVersion !== '20260912053907') fail('Runtime interrupt hardening migration alias must match verified repository and production versions.')
 
 console.log(`Platform assurance baseline verified: ${controls.length} controls, ${runtime.configurations.length} explicit runtime settings, ${incident.requiredPhases.length} incident phases.`)
