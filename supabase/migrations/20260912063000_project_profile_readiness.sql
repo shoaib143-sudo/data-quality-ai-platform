@@ -25,10 +25,12 @@ as $$
     select distinct on (s.source_id)
       s.source_id,
       s.id as scope_id,
-      s.current_version_id,
-      sv.frozen_at
+      s.current_version_id
     from catalog.source_scopes s
-    left join catalog.source_scope_versions sv on sv.id = s.current_version_id
+    join catalog.source_scope_versions sv on sv.id = s.current_version_id
+      and sv.scope_id = s.id
+      and sv.source_id = s.source_id
+      and sv.project_id = s.project_id
     where s.project_id = p_project_id
       and s.status = 'ACTIVE'
       and s.current_version_id is not null
@@ -58,7 +60,6 @@ as $$
       aes.id as execution_source_id,
       sc.scope_id,
       sc.current_version_id as scope_version_id,
-      sc.frozen_at as scope_frozen_at,
       lm.discovery_run_id,
       lm.complete as manifest_complete,
       lm.truncated as manifest_truncated,
@@ -66,7 +67,7 @@ as $$
       case when d.status::text = 'ACTIVE' then true else false end as dataset_active,
       case when ds.status = 'ACTIVE' then true else false end as source_active,
       case when sor.operational_state = 'OBSERVED_READY' then true else false end as source_observed_ready,
-      case when sc.scope_id is not null and sc.current_version_id is not null and sc.frozen_at is not null then true else false end as governed_scope_ready,
+      case when sc.scope_id is not null and sc.current_version_id is not null then true else false end as governed_scope_ready,
       case when lv.dataset_version_id is not null and aes.id is not null then true else false end as execution_binding_ready,
       case
         when ds.source_type = 'JDBC'
@@ -131,7 +132,7 @@ as $$
 $$;
 
 comment on function catalog.verify_project_profile_readiness(uuid) is
-  'Derives dataset profiling readiness from source lifecycle, observed discovery evidence, frozen governed scope, latest version, and active execution binding without mutating lifecycle authority.';
+  'Derives dataset profiling readiness from source lifecycle, observed discovery evidence, active governed scope-version identity, latest dataset version, and active execution binding without mutating lifecycle authority.';
 
 revoke all on function catalog.verify_project_profile_readiness(uuid) from public, anon;
 grant execute on function catalog.verify_project_profile_readiness(uuid) to authenticated, service_role;
