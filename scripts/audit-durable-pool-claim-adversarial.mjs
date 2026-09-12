@@ -4,6 +4,10 @@ import fs from 'node:fs'
 import { assessPoolClaimOutcomes } from '../lib/orchestration/pool-claim-policy.ts'
 
 const queue = fs.readFileSync('lib/orchestration/queue.ts', 'utf8')
+const claimStart = queue.indexOf('export async function claimDurableJobs')
+const claimEnd = queue.indexOf('export async function markDurableJobSucceeded', claimStart)
+assert.ok(claimStart >= 0 && claimEnd > claimStart, 'claimDurableJobs source boundary must be discoverable')
+const claimPath = queue.slice(claimStart, claimEnd)
 
 const scenarios = [
   {
@@ -49,11 +53,12 @@ for (const scenario of scenarios) {
   assert.equal(result.allPoolsFailed, scenario.allPoolsFailed, scenario.name)
 }
 
-assert.match(queue, /if \(releaseError\) throw new Error/, 'stale lease release failure must fail before new claims')
-assert.match(queue, /await writeTelemetry\(null, 'job\.pool_claim_failed'/, 'pool failure must produce explicit evidence')
-assert.match(queue, /disposition: 'POOL_LEFT_QUEUED_FOR_RETRY'/, 'failed pool work must remain retryable')
-assert.match(queue, /if \(assessment\.allPoolsFailed\)/, 'complete outage must fail closed')
-assert.doesNotMatch(queue, /last_error.*pool_claim_failed/s, 'claim transport failures must not mutate job business failure state')
-assert.doesNotMatch(queue, /markDurableJobFailed\([^)]*pool/s, 'pool transport failure must not consume durable job attempts')
+assert.match(claimPath, /if \(releaseError\) throw new Error/, 'stale lease release failure must fail before new claims')
+assert.match(claimPath, /await writeTelemetry\(null, 'job\.pool_claim_failed'/, 'pool failure must produce explicit evidence')
+assert.match(claimPath, /disposition: 'POOL_LEFT_QUEUED_FOR_RETRY'/, 'failed pool work must remain retryable')
+assert.match(claimPath, /if \(assessment\.allPoolsFailed\)/, 'complete outage must fail closed')
+assert.doesNotMatch(claimPath, /last_error/, 'claim transport failures must not mutate job business failure state')
+assert.doesNotMatch(claimPath, /from\('job_queue'\)\.update/, 'claim transport failures must not update durable job state')
+assert.doesNotMatch(claimPath, /markDurableJobFailed/, 'pool transport failure must not consume durable job attempts')
 
 console.log(`Independent automated adversarial audit passed for ${scenarios.length} workload-pool failure scenarios.`)
