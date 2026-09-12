@@ -8,6 +8,7 @@ import {
   assertIssueReferencesBelongToProject,
   IssueReferenceIntegrityError,
 } from '@/lib/governance/issue-reference-integrity'
+import { findIssueByFindingIdentity, isFindingIdentityConflict } from '@/lib/governance/finding-issue-correlation'
 
 const ISSUE_SEVERITIES = new Set(['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
 
@@ -23,6 +24,31 @@ function authorizationResponse(error: unknown) {
     return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
   }
   return null
+}
+
+async function deduplicatedIssueResponse(input: {
+  projectId: string
+  findingId: string
+  actorUserId: string
+  reason: 'PREEXISTING' | 'CONCURRENT_INSERT'
+}) {
+  const existing = await findIssueByFindingIdentity(input.projectId, input.findingId)
+  if (!existing) return null
+
+  await writeGovernanceAudit({
+    projectId: input.projectId,
+    actorUserId: input.actorUserId,
+    eventType: 'ISSUE_CREATE_DEDUPLICATED',
+    entityType: 'ISSUE',
+    entityId: existing.id,
+    metadata: {
+      findingId: input.findingId,
+      reason: input.reason,
+      identity: 'PROFILING_FINDING',
+    },
+  })
+
+  return NextResponse.json({ issue: existing, deduplicated: true }, { status: 200 })
 }
 
 export async function GET(request: Request) {
@@ -100,13 +126,33 @@ export async function POST(request: Request) {
       created_by: user.id,
     }
 
+    if (payload.finding_id) {
+      const response = await deduplicatedIssueResponse({
+        projectId,
+        findingId: payload.finding_id,
+        actorUserId: user.id,
+        reason: 'PREEXISTING',
+      })
+      if (response) return response
+    }
+
     const { data, error } = await admin
       .schema('governance')
       .from('issues')
       .insert(payload)
       .select('*')
       .single()
+
     if (error) {
+      if (payload.finding_id && isFindingIdentityConflict(error)) {
+        const response = await deduplicatedIssueResponse({
+          projectId,
+          findingId: payload.finding_id,
+          actorUserId: user.id,
+          reason: 'CONCURRENT_INSERT',
+        })
+        if (response) return response
+      }
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
@@ -116,9 +162,16 @@ export async function POST(request: Request) {
       eventType: 'ISSUE_CREATED',
       entityType: 'ISSUE',
       entityId: data.id,
-      metadata: { datasetId: payload.dataset_id, severity: payload.severity },
+      metadata: {
+        datasetId: payload.dataset_id,
+        datasetVersionId: payload.dataset_version_id,
+        profileRunId: payload.profile_run_id,
+        findingId: payload.finding_id,
+        qualityRuleRunId: payload.quality_rule_run_id,
+        severity: payload.severity,
+      },
     })
-    return NextResponse.json({ issue: data }, { status: 201 })
+    return NextResponse.json({ issue: data, deduplicated: false }, { status: 201 })
   } catch (error) {
     const response = authorizationResponse(error)
     if (response) return response
