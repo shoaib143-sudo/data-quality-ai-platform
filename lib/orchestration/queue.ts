@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { recordSourceConcurrencyOutcome } from '@/lib/orchestration/source-concurrency'
+import { assessPoolClaimOutcomes, formatPoolClaimFailures } from '@/lib/orchestration/pool-claim-policy'
 
 export type DurableJobType = 'PROFILING' | 'DATA_QUALITY' | 'NOTIFICATION' | 'OBSERVABILITY' | 'DISCOVERY' | 'LINEAGE_ENRICHMENT' | 'SEMANTIC_INDEX' | 'GOVERNANCE_AGENT'
 export type DurableWorkloadPool = 'CORE' | 'SEMANTIC' | 'GOVERNANCE'
@@ -174,11 +175,13 @@ function configuredWorkloadPools(poolOverride?: DurableWorkloadPool) {
 
 export async function claimDurableJobs(workerId: string, limit = 2, poolOverride?: DurableWorkloadPool) {
   const admin = createAdminClient()
-  await admin.schema('orchestration').rpc('release_stale_jobs')
+  const { error: releaseError } = await admin.schema('orchestration').rpc('release_stale_jobs')
+  if (releaseError) throw new Error(`Unable to release stale durable jobs before claiming work: ${releaseError.message}`)
 
   const boundedLimit = Math.max(1, Math.min(Math.floor(limit), 16))
   const pools = configuredWorkloadPools(poolOverride)
   const jobs: DurableJob[] = []
+  const outcomes: Array<{ pool: DurableWorkloadPool; succeeded: boolean; error?: string }> = []
 
   for (let index = 0; index < pools.length && jobs.length < boundedLimit; index += 1) {
     const remaining = boundedLimit - jobs.length
@@ -190,8 +193,26 @@ export async function claimDurableJobs(workerId: string, limit = 2, poolOverride
       p_pool: pool,
       p_limit: poolLimit,
     })
-    if (error) throw new Error(`Unable to claim durable jobs for ${pool} pool: ${error.message}`)
+
+    if (error) {
+      const message = error.message || 'Unknown workload-pool claim failure'
+      outcomes.push({ pool, succeeded: false, error: message })
+      console.error('[job-pool-claim]', `${pool}: ${message.slice(0, 500)}`)
+      await writeTelemetry(null, 'job.pool_claim_failed', 1, {
+        pool,
+        error: message.slice(0, 500),
+        disposition: 'POOL_LEFT_QUEUED_FOR_RETRY',
+      })
+      continue
+    }
+
+    outcomes.push({ pool, succeeded: true })
     jobs.push(...((data ?? []) as DurableJob[]))
+  }
+
+  const assessment = assessPoolClaimOutcomes(outcomes)
+  if (assessment.allPoolsFailed) {
+    throw new Error(`Unable to claim durable jobs from any configured workload pool: ${formatPoolClaimFailures(assessment.failures)}`)
   }
 
   await recordClaimTelemetry(jobs)
