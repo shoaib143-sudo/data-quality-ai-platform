@@ -103,7 +103,6 @@ export async function withNativeCompensationLease<T>(input: {
   execute: () => Promise<T>
 }): Promise<T> {
   let stopped = false
-  let renewalFailure: Error | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
 
   const renew = async () => {
@@ -115,10 +114,11 @@ export async function withNativeCompensationLease<T>(input: {
         ownerId: input.ownerId,
       })
       if (!claim.claimed || claim.generation !== input.generation || claim.ownerId !== input.ownerId) {
-        throw new Error(`Compensation lease was superseded: ${claim.reason || claim.status || 'UNKNOWN'}`)
+        return
       }
-    } catch (error) {
-      renewalFailure = error instanceof Error ? error : new Error(String(error))
+    } catch {
+      // Transport failure is not terminal evidence. The owner/generation fenced completion
+      // decides whether this worker still owns the invocation after execution settles.
       return
     }
     if (!stopped) timer = setTimeout(renew, NATIVE_COMPENSATION_HEARTBEAT_MS)
@@ -126,9 +126,7 @@ export async function withNativeCompensationLease<T>(input: {
 
   timer = setTimeout(renew, NATIVE_COMPENSATION_HEARTBEAT_MS)
   try {
-    const result = await input.execute()
-    if (renewalFailure) throw renewalFailure
-    return result
+    return await input.execute()
   } finally {
     stopped = true
     if (timer) clearTimeout(timer)
