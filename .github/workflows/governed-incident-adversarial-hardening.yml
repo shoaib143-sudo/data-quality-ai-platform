@@ -1,0 +1,33 @@
+name: Governed Incident Adversarial Hardening
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/issues/**'
+      - 'lib/governance/governed-incident*.ts'
+      - 'lib/governance/incident-resolution-integrity.ts'
+      - 'lib/governance/issue-reference-integrity.ts'
+      - 'scripts/test-governed-incident-adversarial-hardening.mjs'
+      - '.github/workflows/governed-incident-adversarial-hardening.yml'
+
+jobs:
+  adversarial-incident:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Governed incident adversarial lifecycle tests
+        run: node --experimental-strip-types scripts/test-governed-incident-adversarial-hardening.mjs
+      - name: Canonical governed incident lifecycle regression
+        run: node --experimental-strip-types scripts/test-governed-incident-foundation.mjs
+      - name: 13-persona truth invariance regression
+        run: node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/test-governed-incident-13-persona-certification.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
