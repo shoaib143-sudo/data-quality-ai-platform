@@ -35,8 +35,18 @@ begin
     raise exception 'RETRIEVAL_EVALUATION_ANONYMOUS_READ_MUST_BE_DENIED';
   end if;
 
-  if has_table_privilege('authenticated', 'governance.ai_retrieval_evaluation_case_versions', 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
-     or has_table_privilege('authenticated', 'governance.ai_retrieval_relevance_judgments', 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') then
+  if has_table_privilege('authenticated', 'governance.ai_retrieval_evaluation_case_versions', 'INSERT')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_evaluation_case_versions', 'UPDATE')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_evaluation_case_versions', 'DELETE')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_evaluation_case_versions', 'TRUNCATE')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_evaluation_case_versions', 'REFERENCES')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_evaluation_case_versions', 'TRIGGER')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_relevance_judgments', 'INSERT')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_relevance_judgments', 'UPDATE')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_relevance_judgments', 'DELETE')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_relevance_judgments', 'TRUNCATE')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_relevance_judgments', 'REFERENCES')
+     or has_table_privilege('authenticated', 'governance.ai_retrieval_relevance_judgments', 'TRIGGER') then
     raise exception 'RETRIEVAL_EVALUATION_AUTHENTICATED_MUTATION_GRANT_FORBIDDEN';
   end if;
 end
