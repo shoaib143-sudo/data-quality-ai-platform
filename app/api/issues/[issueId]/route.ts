@@ -42,6 +42,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
     if (typeof body.severity === 'string' && !ISSUE_SEVERITIES.has(body.severity.toUpperCase())) {
       return NextResponse.json({ error: 'Invalid issue severity.', code: 'ISSUE_SEVERITY_INVALID' }, { status: 400 })
     }
+    if (typeof body.title === 'string' && !body.title.trim()) {
+      return NextResponse.json({ error: 'Issue title cannot be empty.', code: 'ISSUE_TITLE_REQUIRED' }, { status: 400 })
+    }
     if (body.ownerUserId !== undefined) {
       await assertIssueOwnerBelongsToProjectOrganization(issue.project_id, body.ownerUserId)
     }
@@ -97,6 +100,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ is
         .maybeSingle()
       if (observabilityIncidentError) throw new Error(`Unable to validate observability response issue: ${observabilityIncidentError.message}`)
       isObservabilityResponse = Boolean(observabilityIncident)
+    }
+
+    // Profiling and DQ remediation outcomes are independent verification authorities.
+    // Never silently choose one when the same issue is linked to both.
+    if (isProfilingRemediation && isDataQualityRemediation) {
+      return NextResponse.json({
+        error: 'Issue is linked to multiple remediation verification authorities and cannot be resolved until the ambiguity is reconciled.',
+        code: 'AMBIGUOUS_REMEDIATION_VERIFICATION_AUTHORITY',
+      }, { status: 409 })
     }
 
     const governedRemediation = isProfilingRemediation || isDataQualityRemediation || isObservabilityResponse
