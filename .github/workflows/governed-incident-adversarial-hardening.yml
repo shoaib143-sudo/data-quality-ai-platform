@@ -7,6 +7,7 @@ on:
       - 'lib/governance/governed-incident*.ts'
       - 'lib/governance/incident-resolution-integrity.ts'
       - 'lib/governance/issue-reference-integrity.ts'
+      - 'supabase/migrations/20260912043500_governance_issue_resolution_timestamp_integrity.sql'
       - 'scripts/test-governed-incident-adversarial-hardening.mjs'
       - '.github/workflows/governed-incident-adversarial-hardening.yml'
 
