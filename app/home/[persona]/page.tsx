@@ -15,6 +15,7 @@ type Source = { status: string }
 type QualityRun = { status: string; passed: boolean | null; started_at: string }
 type Alert = { status: string; last_observed_at: string | null }
 type DatasetCatalog = { dataset_id: string; certification_status: string; criticality: string; business_owner_user_id: string | null; steward_user_id: string | null }
+type StewardshipCoverage = { dataset_id: string; business_owner_count: number | string; data_steward_count: number | string; technical_owner_count: number | string; custodian_count: number | string; coverage_status: string }
 type Classification = { dataset_id: string | null; status: string | null; authority_state: string | null }
 type GlossaryMapping = { dataset_id: string | null; approved: boolean | null; mapping_status: string | null }
 type CdeMapping = { dataset_id: string; status: string }
@@ -103,8 +104,9 @@ export default async function PersonaHomePage({ params, searchParams }: { params
   const projectIds = [...new Set(datasets.map(dataset => dataset.project_id))]
   const admin = createAdminClient()
   const empty = { data: [], error: null }
-  const [catalogResult, classificationsResult, glossaryResult, cdeResult, certificationResult, waiverResult, controlResult, issuesResult, contextAssetsResult, contextLinksResult] = await Promise.all([
+  const [catalogResult, stewardshipResult, classificationsResult, glossaryResult, cdeResult, certificationResult, waiverResult, controlResult, issuesResult, contextAssetsResult, contextLinksResult] = await Promise.all([
     datasetIds.length ? admin.schema('governance').from('dataset_catalog').select('dataset_id,certification_status,criticality,business_owner_user_id,steward_user_id').in('dataset_id', datasetIds) : empty,
+    datasetIds.length ? admin.schema('governance').from('stewardship_dataset_coverage').select('dataset_id,business_owner_count,data_steward_count,technical_owner_count,custodian_count,coverage_status').in('dataset_id', datasetIds) : empty,
     datasetIds.length ? admin.schema('governance').from('dataset_classifications').select('dataset_id,status,authority_state').in('dataset_id', datasetIds) : empty,
     datasetIds.length ? admin.schema('governance').from('glossary_mappings').select('dataset_id,approved,mapping_status').in('dataset_id', datasetIds) : empty,
     datasetIds.length ? admin.schema('governance').from('cde_mappings').select('dataset_id,status').in('dataset_id', datasetIds) : empty,
@@ -116,11 +118,12 @@ export default async function PersonaHomePage({ params, searchParams }: { params
     datasetIds.length ? admin.schema('governance').from('dataset_business_context_links').select('dataset_id,business_context_asset_id').in('dataset_id', datasetIds) : empty,
   ])
 
-  for (const result of [catalogResult, classificationsResult, glossaryResult, cdeResult, certificationResult, waiverResult, controlResult, issuesResult, contextAssetsResult, contextLinksResult]) {
+  for (const result of [catalogResult, stewardshipResult, classificationsResult, glossaryResult, cdeResult, certificationResult, waiverResult, controlResult, issuesResult, contextAssetsResult, contextLinksResult]) {
     if (result.error) throw new Error(`Unable to load governed landing evidence: ${result.error.message}`)
   }
 
   const datasetCatalog = (catalogResult.data ?? []) as DatasetCatalog[]
+  const stewardshipCoverage = (stewardshipResult.data ?? []) as StewardshipCoverage[]
   const classifications = (classificationsResult.data ?? []) as Classification[]
   const glossaryMappings = (glossaryResult.data ?? []) as GlossaryMapping[]
   const cdeMappings = (cdeResult.data ?? []) as CdeMapping[]
@@ -157,6 +160,7 @@ export default async function PersonaHomePage({ params, searchParams }: { params
   }
 
   const catalogByDataset = new Map(datasetCatalog.map(item => [item.dataset_id, item]))
+  const stewardshipByDataset = new Map(stewardshipCoverage.map(item => [item.dataset_id, item]))
   const glossaryByDataset = new Map<string, number>()
   for (const item of glossaryMappings) if (item.dataset_id && isApprovedGlossary(item)) glossaryByDataset.set(item.dataset_id, (glossaryByDataset.get(item.dataset_id) ?? 0) + 1)
   const classificationsByDataset = new Map<string, number>()
@@ -169,6 +173,7 @@ export default async function PersonaHomePage({ params, searchParams }: { params
     const latestScore = latestRun ? latestScoreByRun.get(latestRun.id) : undefined
     const latestFindings = latestRun ? findingsByRun.get(latestRun.id) ?? [] : []
     const governance = catalogByDataset.get(dataset.id)
+    const stewardship = stewardshipByDataset.get(dataset.id)
     return {
       id: dataset.id,
       projectId: dataset.project_id,
@@ -181,7 +186,7 @@ export default async function PersonaHomePage({ params, searchParams }: { params
       accuracy: latestScore?.accuracy_score ?? null,
       certificationStatus: governance?.certification_status || 'UNCERTIFIED',
       criticality: governance?.criticality || 'UNSET',
-      hasOwner: Boolean(governance?.business_owner_user_id || governance?.steward_user_id),
+      hasOwner: Boolean(stewardship && upper(stewardship.coverage_status) !== 'UNASSIGNED'),
       findingCount: latestFindings.length,
       highFindingCount: latestFindings.filter(item => isHigh(item.severity)).length,
       latestRunId: latestRun?.id ?? null,
