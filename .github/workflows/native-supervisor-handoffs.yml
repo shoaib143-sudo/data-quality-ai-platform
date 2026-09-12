@@ -1,1 +1,35 @@
-name: Native Supervisor Handoffs\n\non:\n  push:\n    branches: [main]\n    paths:\n      - 'lib/agents/runtime/native-supervisor-service.ts'\n      - 'lib/agents/governance-specialist-agent.ts'\n      - 'app/api/agents/supervisor/run/route.ts'\n      - 'supabase/migrations/**handoff**'\n      - 'scripts/verify-native-supervisor-handoffs.mjs'\n      - '.github/workflows/native-supervisor-handoffs.yml'\n  pull_request:\n    branches: [main]\n    paths:\n      - 'lib/agents/runtime/native-supervisor-service.ts'\n      - 'lib/agents/governance-specialist-agent.ts'\n      - 'app/api/agents/supervisor/run/route.ts'\n      - 'supabase/migrations/**handoff**'\n      - 'scripts/verify-native-supervisor-handoffs.mjs'\n      - '.github/workflows/native-supervisor-handoffs.yml'\n\npermissions:\n  contents: read\n\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020\n        with:\n          node-version: 24\n      - run: node scripts/verify-native-supervisor-handoffs.mjs\n
+name: Native Supervisor Handoffs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'app/api/agents/supervisor/run/route.ts'
+      - 'supabase/migrations/**handoff**'
+      - 'scripts/verify-native-supervisor-handoffs.mjs'
+      - '.github/workflows/native-supervisor-handoffs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'app/api/agents/supervisor/run/route.ts'
+      - 'supabase/migrations/**handoff**'
+      - 'scripts/verify-native-supervisor-handoffs.mjs'
+      - '.github/workflows/native-supervisor-handoffs.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: node scripts/verify-native-supervisor-handoffs.mjs

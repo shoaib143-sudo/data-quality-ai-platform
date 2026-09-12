@@ -7,6 +7,9 @@ on:
       - 'scripts/verify-ownership-coverage-evidence.mjs'
       - '.github/workflows/ownership-coverage-evidence.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest

@@ -13,6 +13,9 @@ on:
       - 'scripts/verify-governed-incident-foundation.mjs'
       - '.github/workflows/governed-incident-foundation.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest

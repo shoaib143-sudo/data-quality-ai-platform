@@ -11,6 +11,9 @@ on:
       - 'scripts/verify-persona-incident-workspace.mjs'
       - '.github/workflows/persona-incident-workspace.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest

@@ -11,6 +11,9 @@ on:
       - 'scripts/test-governed-incident-adversarial-hardening.mjs'
       - '.github/workflows/governed-incident-adversarial-hardening.yml'
 
+permissions:
+  contents: read
+
 jobs:
   adversarial-incident:
     runs-on: ubuntu-latest

@@ -11,6 +11,9 @@ on:
       - 'scripts/ts-extension-loader.mjs'
       - '.github/workflows/governed-incident-13-persona-certification.yml'
 
+permissions:
+  contents: read
+
 jobs:
   certify-personas:
     runs-on: ubuntu-latest

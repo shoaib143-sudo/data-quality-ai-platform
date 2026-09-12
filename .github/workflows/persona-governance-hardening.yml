@@ -11,6 +11,9 @@ on:
       - 'scripts/verify-persona-governance-hardening.mjs'
       - '.github/workflows/persona-governance-hardening.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest

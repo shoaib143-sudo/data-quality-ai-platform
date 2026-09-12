@@ -14,6 +14,9 @@ on:
       - 'scripts/verify-databricks-metric-catalog.mjs'
       - '.github/workflows/databricks-metric-catalog.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest

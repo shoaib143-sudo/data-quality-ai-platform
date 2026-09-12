@@ -11,6 +11,9 @@ on:
       - 'scripts/verify-dq-verification-evidence-binding.mjs'
       - '.github/workflows/dq-verification-evidence-binding.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest

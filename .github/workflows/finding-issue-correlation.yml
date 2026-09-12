@@ -10,6 +10,9 @@ on:
       - 'scripts/verify-finding-issue-correlation.mjs'
       - '.github/workflows/finding-issue-correlation.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest

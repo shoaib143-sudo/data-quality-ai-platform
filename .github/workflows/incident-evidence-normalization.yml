@@ -9,6 +9,9 @@ on:
       - 'scripts/verify-incident-evidence-normalization.mjs'
       - '.github/workflows/incident-evidence-normalization.yml'
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
