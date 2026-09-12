@@ -164,9 +164,16 @@ requireText('lib/profiling/source-validation.ts', [
   'catalog, schema, table',
   'validateJdbcConnection({ jdbcUrl: jdbcUrl!, credentialRef: credentialRef!, schema, table: table!, catalog })',
 ])
-requireText('app/api/datasets/source/validate/route.ts', [
+requireText('lib/profiling/source-readiness-repair.ts', [
   'metadata.catalog',
   'jdbc-table://${catalog ? `${catalog}.` : \'\'}${schema}.${table}',
+  'validateDataSourceForProfiling',
+  'discoverNativeHierarchy',
+  'revalidateAndReconcileSourceForProfiling',
+])
+requireText('app/api/datasets/source/validate/route.ts', [
+  'revalidateAndReconcileSourceForProfiling',
+  "authorizeProject(user.id, projectId, 'catalog.read')",
 ])
 requireText('app/api/datasets/source/[sourceId]/route.ts', [
   'catalog: metadata.catalog',
