@@ -2,7 +2,10 @@ import { readFile } from 'node:fs/promises'
 
 const engine = await readFile('lib/governance/persona-presentation.ts', 'utf8')
 const viewRegistry = await readFile('lib/governance/persona-presentation-view.ts', 'utf8')
+const datasetEngine = await readFile('lib/governance/persona-dataset-presentation.ts', 'utf8')
+const governedComponents = await readFile('components/governance/governed-presentation-registry.tsx', 'utf8')
 const landing = await readFile('components/governance/role-landing-page.tsx', 'utf8')
+const datasetPage = await readFile('app/catalog/dataset/[datasetId]/page.tsx', 'utf8')
 const personas = await readFile('lib/governance/personas.ts', 'utf8')
 const architecture = await readFile('Architecture/2026-09-12-persona-aware-presentation-engine.md', 'utf8')
 
@@ -25,6 +28,7 @@ const personaSlugs = [
 for (const slug of personaSlugs) {
   if (!personas.includes(`'${slug}'`)) throw new Error(`Canonical persona registry missing ${slug}`)
   if (!engine.includes(`'${slug}':`)) throw new Error(`Presentation engine missing policy for ${slug}`)
+  if (!datasetEngine.includes(`'${slug}':`)) throw new Error(`Dataset presentation engine missing policy for ${slug}`)
   console.log(`PASS presentation policy ${slug}`)
 }
 
@@ -63,6 +67,35 @@ for (const [pattern, label] of [
 
 if (/function personaView\(/.test(landing)) throw new Error('Role landing must not retain a second hard-coded persona presentation engine.')
 console.log('PASS duplicate hard-coded persona view engine removed')
+
+for (const [pattern, label] of [
+  [/Record<PersonaSlug, Omit<DatasetPresentationPlan/, 'dataset policy exhaustiveness'],
+  [/buildPersonaPresentationPlan\(persona\)/, 'dataset plan inherits central persona policy'],
+  [/metricOrder/, 'persona-aware dataset metric ordering'],
+  [/sectionOrder/, 'persona-aware dataset section ordering'],
+  [/GOVERNED_OUTCOME_ONLY/, 'dataset truth boundary'],
+]) {
+  if (!pattern.test(datasetEngine)) throw new Error(`Dataset presentation engine missing ${label}`)
+  console.log(`PASS ${label}`)
+}
+
+for (const component of ['GovernedMetricCard','GovernedEvidenceTile','GovernedSection','GovernedEmptyState']) {
+  if (!governedComponents.includes(`function ${component}`)) throw new Error(`Governed component registry missing ${component}`)
+  console.log(`PASS governed component ${component}`)
+}
+
+for (const [pattern, label] of [
+  [/buildDatasetPresentationPlan\(landing\.persona\)/, 'dataset route consumes persona presentation contract'],
+  [/presentation\.metricOrder\.map/, 'dataset KPI composition follows persona plan'],
+  [/presentation\.sectionOrder\.map/, 'dataset section composition follows persona plan'],
+  [/canAccessWorkspace\(/, 'dataset authorization remains external to presentation engine'],
+  [/Persona-aware presentation only\. Governed evidence, policy and authorization are unchanged\./, 'dataset visible truth-boundary copy'],
+  [/schema\('profiling'\)/, 'dataset keeps canonical profiling evidence source'],
+  [/schema\('governance'\)/, 'dataset keeps canonical governance evidence source'],
+]) {
+  if (!pattern.test(datasetPage)) throw new Error(`Governed dataset integration missing ${label}`)
+  console.log(`PASS ${label}`)
+}
 
 for (const [pattern, label] of [
   [/will not create a separate UI\/UX Governance Agent/, 'no separate UI agent decision'],
