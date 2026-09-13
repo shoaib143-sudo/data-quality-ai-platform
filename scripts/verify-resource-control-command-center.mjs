@@ -5,6 +5,7 @@ const migration = fs.readFileSync('supabase/migrations/20260908203507_adr006_res
 const admissionMigration = fs.readFileSync('supabase/migrations/20260909112000_adr006_atomic_project_budget_admission.sql', 'utf8')
 const pricingMigration = fs.readFileSync('supabase/migrations/20260909134000_adr006_model_pricing_authority.sql', 'utf8')
 const runtimeCostMigration = fs.readFileSync('supabase/migrations/20260911164500_adr006_governed_runtime_cost_enforcement.sql', 'utf8')
+const budgetReadRepair = fs.readFileSync('supabase/migrations/20260913043000_fix_ai_resource_budget_service_reads.sql', 'utf8')
 const adapter = fs.readFileSync('lib/ai/governance-resource-control-state.ts', 'utf8')
 const state = fs.readFileSync('lib/ai/resource-control-command-center-state.ts', 'utf8')
 const page = fs.readFileSync('app/admin/ai-command-center/resource-controls/page.tsx', 'utf8')
@@ -52,6 +53,45 @@ for (const required of [
 ]) assert.ok(runtimeCostMigration.includes(required), `runtime cost enforcement migration must include ${required}`)
 assert.ok(!/exchange|fx_rate|currency_conversion/i.test(runtimeCostMigration), 'runtime cost enforcement must not introduce FX conversion')
 
+for (const object of [
+  'governance.ai_resource_budget_policy_versions',
+  'governance.ai_resource_budget_policy_effective',
+]) {
+  assert.ok(
+    budgetReadRepair.includes(`grant select on ${object} to service_role;`),
+    `budget read repair must grant service_role SELECT on ${object}`,
+  )
+}
+assert.ok(
+  budgetReadRepair.includes('AI_RESOURCE_BUDGET_DIRECT_USER_READ_MUST_REMAIN_DENIED'),
+  'budget read repair must fail closed if anon/authenticated direct reads become available',
+)
+assert.ok(
+  budgetReadRepair.includes('AI_RESOURCE_BUDGET_SERVICE_MUTATION_GRANT_FORBIDDEN'),
+  'budget read repair must reject service-role mutation grants',
+)
+assert.ok(
+  budgetReadRepair.includes('AI_RESOURCE_BUDGET_RLS_MUST_REMAIN_ENABLED'),
+  'budget read repair must preserve base-table RLS',
+)
+assert.ok(
+  budgetReadRepair.includes('AI_RESOURCE_BUDGET_VIEW_MUST_REMAIN_SECURITY_INVOKER'),
+  'budget read repair must preserve SECURITY INVOKER view semantics',
+)
+assert.ok(
+  !/grant\s+(?:all|insert|update|delete|truncate|references|trigger)\b[^;]*\bto\s+service_role\b/i.test(budgetReadRepair),
+  'budget read repair must not grant service-role mutation privileges',
+)
+assert.ok(
+  !/grant\s+select\b[^;]*\bto\s+(?:anon|authenticated)\b/i.test(budgetReadRepair),
+  'budget read repair must not widen direct user read access',
+)
+assert.ok(
+  !/disable\s+row\s+level\s+security/i.test(budgetReadRepair),
+  'budget read repair must not disable RLS',
+)
+
+assert.ok(adapter.includes('createAdminClient()'), 'resource-control adapter must use the server-side admin client after page authorization')
 assert.ok(adapter.includes("from('ai_resource_budget_policy_effective')"), 'adapter must read canonical effective budgets')
 assert.ok(adapter.includes("from('ai_model_pricing_effective')"), 'adapter must read canonical effective model pricing authority')
 assert.ok(!/\.insert\(|\.update\(|\.delete\(|\.upsert\(|\.rpc\(/.test(adapter), 'resource-control adapter must be read-only')
