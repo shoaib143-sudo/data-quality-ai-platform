@@ -1,8 +1,24 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  BrainCircuit,
+  ChevronRight,
+  CircleCheck,
+  CirclePause,
+  Clock3,
+  Database,
+  GitBranch,
+  Layers3,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+} from 'lucide-react'
+
 import { createClient } from '@/lib/supabase/client'
-import { ExecutionStatusBadge } from '@/components/app-shell/execution-status'
 
 export type MonitoringRun = {
   id: string
@@ -33,76 +49,201 @@ export type MonitoringStep = {
 
 export type MonitoringAgent = { id: string; name: string; version: string; agent_key: string }
 export type MonitoringDataset = { id: string; name: string }
+export type MonitoringProject = { id: string; name: string; description: string | null }
 
 type Props = {
   initialRuns: MonitoringRun[]
   initialAgents: MonitoringAgent[]
   initialDatasets: MonitoringDataset[]
+  initialProjects: MonitoringProject[]
   initialSteps: MonitoringStep[]
   initialNow: string
   initialRunId?: string | null
   userId: string
 }
 
-const ACTIVE = new Set(['RUNNING', 'QUEUED', 'PENDING'])
+type CellStatus = 'FAILED' | 'RUNNING' | 'WAITING' | 'QUEUED' | 'COMPLETE' | 'IDLE'
+
+type DomainCell = {
+  project: MonitoringProject
+  runs: MonitoringRun[]
+  status: CellStatus
+  activeCount: number
+  failedCount: number
+  completeCount: number
+  componentCount: number
+  latestAt: string
+}
+
+const ACTIVE = new Set(['RUNNING', 'CREATED', 'PENDING'])
+const WAITING = new Set(['WAITING'])
+const QUEUED = new Set(['QUEUED'])
 const COMPLETE = new Set(['SUCCEEDED', 'COMPLETED'])
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-SG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore' })
-const TIME_FORMATTER = new Intl.DateTimeFormat('en-SG', { timeStyle: 'medium', timeZone: 'Asia/Singapore' })
+const TIME_FORMATTER = new Intl.DateTimeFormat('en-SG', { timeStyle: 'short', timeZone: 'Asia/Singapore' })
 
-function formatDate(value: string) { return DATE_FORMATTER.format(new Date(value)) }
-function formatTime(value: string) { return TIME_FORMATTER.format(new Date(value)) }
-function duration(run: MonitoringRun, now: Date) {
+function normalizeRunStatus(status: string): CellStatus {
+  if (status === 'FAILED' || status === 'DEAD' || status === 'CANCELLED') return 'FAILED'
+  if (ACTIVE.has(status)) return 'RUNNING'
+  if (WAITING.has(status)) return 'WAITING'
+  if (QUEUED.has(status)) return 'QUEUED'
+  if (COMPLETE.has(status)) return 'COMPLETE'
+  return 'IDLE'
+}
+
+function aggregateStatus(runs: MonitoringRun[]): CellStatus {
+  const statuses = runs.map((run) => normalizeRunStatus(run.status))
+  if (statuses.includes('FAILED')) return 'FAILED'
+  if (statuses.includes('RUNNING')) return 'RUNNING'
+  if (statuses.includes('WAITING')) return 'WAITING'
+  if (statuses.includes('QUEUED')) return 'QUEUED'
+  if (statuses.includes('COMPLETE')) return 'COMPLETE'
+  return 'IDLE'
+}
+
+function statusMeta(status: CellStatus) {
+  if (status === 'FAILED') return { label: 'Failed', dot: 'bg-fuchsia-400', ring: 'border-fuchsia-400/50', glow: 'shadow-[0_0_65px_rgba(217,70,239,.22)]', text: 'text-fuchsia-200', soft: 'bg-fuchsia-400/10' }
+  if (status === 'RUNNING') return { label: 'Running', dot: 'bg-cyan-300', ring: 'border-cyan-300/55', glow: 'shadow-[0_0_70px_rgba(34,211,238,.28)]', text: 'text-cyan-100', soft: 'bg-cyan-300/10' }
+  if (status === 'WAITING') return { label: 'Waiting', dot: 'bg-amber-300', ring: 'border-amber-300/55', glow: 'shadow-[0_0_65px_rgba(251,191,36,.24)]', text: 'text-amber-100', soft: 'bg-amber-300/10' }
+  if (status === 'QUEUED') return { label: 'Queued', dot: 'bg-sky-200', ring: 'border-sky-300/45', glow: 'shadow-[0_0_50px_rgba(125,211,252,.18)]', text: 'text-sky-100', soft: 'bg-sky-300/10' }
+  if (status === 'COMPLETE') return { label: 'Complete', dot: 'bg-emerald-300', ring: 'border-emerald-300/55', glow: 'shadow-[0_0_65px_rgba(52,211,153,.22)]', text: 'text-emerald-100', soft: 'bg-emerald-300/10' }
+  return { label: 'Idle', dot: 'bg-slate-400', ring: 'border-slate-500/35', glow: 'shadow-none', text: 'text-slate-300', soft: 'bg-slate-400/10' }
+}
+
+function relativeAge(run: MonitoringRun, now: Date) {
   const end = run.completed_at ? new Date(run.completed_at) : now
-  const seconds = Math.max(0, Math.floor((end.getTime() - new Date(run.started_at ?? run.created_at).getTime()) / 1000))
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  if (hours) return `${hours}h ${minutes}m`
-  if (minutes) return `${minutes}m ${seconds % 60}s`
+  const start = new Date(run.started_at ?? run.created_at)
+  const seconds = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000))
+  const minutes = Math.floor(seconds / 60)
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  if (minutes > 0) return `${minutes}m`
   return `${seconds}s`
 }
-function progress(steps: MonitoringStep[]) {
-  if (!steps.length) return { percent: 0, label: 'Initializing' }
-  const completed = steps.filter((s) => COMPLETE.has(s.status)).length
-  const failed = steps.some((s) => s.status === 'FAILED')
-  if (failed) return { percent: Math.round((completed / steps.length) * 100), label: 'Execution failed' }
-  if (completed === steps.length) return { percent: 100, label: 'All steps complete' }
-  return { percent: Math.max(5, Math.round((completed / steps.length) * 100)), label: `${completed} of ${steps.length} steps` }
-}
-function isStalled(run: MonitoringRun, now: Date) {
-  if (!ACTIVE.has(run.status)) return false
-  const started = new Date(run.started_at ?? run.created_at).getTime()
-  return now.getTime() - started > 30 * 60 * 1000
+
+function stepProgress(steps: MonitoringStep[]) {
+  if (!steps.length) return { done: 0, total: 0, percent: 0 }
+  const done = steps.filter((step) => COMPLETE.has(step.status)).length
+  return { done, total: steps.length, percent: Math.round((done / steps.length) * 100) }
 }
 
-function MetricCard({ label, value, detail, tone, icon }: { label: string; value: number; detail: string; tone: 'active' | 'success' | 'danger' | 'neutral'; icon: string }) {
-  const styles = {
-    active: 'border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50/60 to-background dark:border-blue-900/50 dark:from-blue-950/30 dark:via-cyan-950/20',
-    success: 'border-emerald-200 bg-gradient-to-br from-emerald-50 via-teal-50/60 to-background dark:border-emerald-900/50 dark:from-emerald-950/30 dark:via-teal-950/20',
-    danger: 'border-red-200 bg-gradient-to-br from-red-50 via-orange-50/50 to-background dark:border-red-900/50 dark:from-red-950/30 dark:via-orange-950/20',
-    neutral: 'border-violet-200 bg-gradient-to-br from-violet-50 via-indigo-50/50 to-background dark:border-violet-900/50 dark:from-violet-950/30 dark:via-indigo-950/20',
-  }
-  const iconStyles = {
-    active: 'bg-blue-600 text-white shadow-blue-200 dark:shadow-blue-950',
-    success: 'bg-emerald-600 text-white shadow-emerald-200 dark:shadow-emerald-950',
-    danger: 'bg-red-600 text-white shadow-red-200 dark:shadow-red-950',
-    neutral: 'bg-violet-600 text-white shadow-violet-200 dark:shadow-violet-950',
-  }
-  return <div className={`group relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg ${styles[tone]}`}>
-    <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/30 blur-2xl dark:bg-white/5" />
-    <div className="relative flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-muted-foreground">{label}</p><p className="mt-2 text-3xl font-bold tracking-tight">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg shadow-lg ${iconStyles[tone]}`}>{icon}</span></div>
-  </div>
+function StatusPill({ status }: { status: CellStatus }) {
+  const meta = statusMeta(status)
+  const Icon = status === 'COMPLETE' ? CircleCheck : status === 'FAILED' ? TriangleAlert : status === 'WAITING' ? Clock3 : status === 'QUEUED' ? CirclePause : Sparkles
+  return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${meta.ring} ${meta.soft} ${meta.text}`}>
+    <Icon className="h-3.5 w-3.5" />
+    {meta.label}
+  </span>
 }
 
-export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initialSteps, initialNow, initialRunId = null, userId: _userId }: Props) {
+function RunNode({ run, label, selected, onSelect }: { run: MonitoringRun; label: string; selected: boolean; onSelect: () => void }) {
+  const status = normalizeRunStatus(run.status)
+  const meta = statusMeta(status)
+  return <button
+    type="button"
+    onClick={(event) => { event.stopPropagation(); onSelect() }}
+    className={`group relative grid h-11 w-11 place-items-center rounded-full border transition duration-300 hover:scale-110 ${meta.ring} ${meta.soft} ${selected ? 'scale-110 ring-2 ring-white/70' : ''}`}
+    title={`${label} · ${meta.label}`}
+    aria-label={`${label}, ${meta.label}`}
+  >
+    <span className={`absolute inset-2 rounded-full blur-md opacity-70 ${meta.dot}`} />
+    <span className={`relative h-2.5 w-2.5 rounded-full ${meta.dot} ${status === 'RUNNING' ? 'animate-pulse' : ''}`} />
+  </button>
+}
+
+function OrganicDomainCell({
+  cell,
+  agents,
+  selectedRunId,
+  selected,
+  onSelectDomain,
+  onSelectRun,
+}: {
+  cell: DomainCell
+  agents: Map<string, MonitoringAgent>
+  selectedRunId: string | null
+  selected: boolean
+  onSelectDomain: () => void
+  onSelectRun: (id: string) => void
+}) {
+  const meta = statusMeta(cell.status)
+  const visibleRuns = cell.runs.slice(0, 8)
+  return <button
+    type="button"
+    onClick={onSelectDomain}
+    className={`group relative min-h-[290px] overflow-hidden rounded-[44%_56%_52%_48%/43%_45%_55%_57%] border bg-[#071a2c]/90 p-5 text-left transition duration-500 hover:-translate-y-1 hover:scale-[1.01] ${meta.ring} ${meta.glow} ${selected ? 'ring-2 ring-cyan-200/55' : ''}`}
+  >
+    <div className="absolute inset-0 opacity-75" style={{ backgroundImage: 'radial-gradient(circle at 35% 28%, rgba(34,211,238,.16), transparent 28%), radial-gradient(circle at 72% 68%, rgba(59,130,246,.12), transparent 34%), radial-gradient(circle at 50% 50%, rgba(255,255,255,.04), transparent 48%)' }} />
+    <div className="absolute inset-[13%] rounded-full border border-cyan-100/[0.06] shadow-[inset_0_0_70px_rgba(34,211,238,.07)]" />
+    <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full opacity-30">
+      {visibleRuns.map((run, index) => {
+        const angle = (index / Math.max(visibleRuns.length, 1)) * Math.PI * 2
+        const x = 50 + Math.cos(angle) * 29
+        const y = 53 + Math.sin(angle) * 27
+        return <line key={run.id} x1="50%" y1="52%" x2={`${x}%`} y2={`${y}%`} stroke="rgba(103,232,249,.55)" strokeWidth="0.7" />
+      })}
+    </svg>
+
+    <div className="relative z-10 flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200/55">Data Domain</p>
+        <h3 className="mt-1 truncate text-lg font-bold text-white">{cell.project.name}</h3>
+      </div>
+      <StatusPill status={cell.status} />
+    </div>
+
+    <div className="absolute left-1/2 top-[52%] z-10 -translate-x-1/2 -translate-y-1/2">
+      <div className={`grid h-24 w-24 place-items-center rounded-full border bg-[#071827]/95 ${meta.ring} ${meta.glow}`}>
+        <div className="text-center">
+          <Layers3 className={`mx-auto h-7 w-7 ${meta.text}`} />
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{cell.componentCount} components</p>
+        </div>
+      </div>
+    </div>
+
+    <div className="absolute inset-[24%] z-20">
+      {visibleRuns.map((run, index) => {
+        const angle = (index / Math.max(visibleRuns.length, 1)) * Math.PI * 2 - Math.PI / 2
+        const radius = 43
+        const left = 50 + Math.cos(angle) * radius
+        const top = 50 + Math.sin(angle) * radius
+        return <div key={run.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${left}%`, top: `${top}%` }}>
+          <RunNode run={run} label={agents.get(run.agent_definition_id)?.name ?? 'Execution'} selected={selectedRunId === run.id} onSelect={() => onSelectRun(run.id)} />
+        </div>
+      })}
+    </div>
+
+    <div className="absolute bottom-5 left-5 right-5 z-10 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3 text-[11px] text-slate-400">
+      <span>{cell.activeCount} active · {cell.completeCount} complete</span>
+      <span className="inline-flex items-center gap-1 text-cyan-200/70">Inspect <ChevronRight className="h-3.5 w-3.5" /></span>
+    </div>
+  </button>
+}
+
+export function JobMonitor({
+  initialRuns,
+  initialAgents,
+  initialDatasets,
+  initialProjects,
+  initialSteps,
+  initialNow,
+  initialRunId = null,
+  userId: _userId,
+}: Props) {
   const [runs, setRuns] = useState(initialRuns)
   const [steps, setSteps] = useState(initialSteps)
-  const [filter, setFilter] = useState('ALL')
-  const [selectedId, setSelectedId] = useState<string | null>(initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialRuns[0]?.id ?? null)
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialRuns[0]?.id ?? null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
+    const initial = initialRunId ? initialRuns.find((run) => run.id === initialRunId) : initialRuns[0]
+    return initial?.project_id ?? initialProjects[0]?.id ?? null
+  })
+  const [statusFilter, setStatusFilter] = useState<CellStatus | 'ALL'>('ALL')
+  const [search, setSearch] = useState('')
   const [lastUpdated, setLastUpdated] = useState(() => new Date(initialNow))
   const [refreshing, setRefreshing] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const agents = useMemo(() => new Map(initialAgents.map((a) => [a.id, a])), [initialAgents])
-  const datasets = useMemo(() => new Map(initialDatasets.map((d) => [d.id, d])), [initialDatasets])
+
+  const agents = useMemo(() => new Map(initialAgents.map((agent) => [agent.id, agent])), [initialAgents])
+  const datasets = useMemo(() => new Map(initialDatasets.map((dataset) => [dataset.id, dataset])), [initialDatasets])
+  const projects = useMemo(() => new Map(initialProjects.map((project) => [project.id, project])), [initialProjects])
   const stepsByRun = useMemo(() => {
     const map = new Map<string, MonitoringStep[]>()
     for (const step of steps) map.set(step.agent_run_id, [...(map.get(step.agent_run_id) ?? []), step])
@@ -112,80 +253,253 @@ export function JobMonitor({ initialRuns, initialAgents, initialDatasets, initia
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
-    const supabase = createClient()
-    const { data, error } = await supabase.schema('agent').from('agent_runs').select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message').order('created_at', { ascending: false }).limit(50)
-    if (!error && data) {
-      const nextRuns = data as MonitoringRun[]
-      setRuns(nextRuns)
-      const ids = nextRuns.map((r) => r.id)
-      if (ids.length) {
-        const { data: nextSteps, error: stepError } = await supabase.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, started_at, completed_at, error_code, error_message').in('agent_run_id', ids).order('step_order')
-        if (!stepError && nextSteps) setSteps(nextSteps as MonitoringStep[])
-      } else setSteps([])
-      setLastUpdated(new Date())
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.schema('agent').from('agent_runs').select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message').order('created_at', { ascending: false }).limit(50)
+      if (!error && data) {
+        const nextRuns = data as MonitoringRun[]
+        setRuns(nextRuns)
+        const ids = nextRuns.map((run) => run.id)
+        if (ids.length) {
+          const { data: nextSteps, error: stepError } = await supabase.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, started_at, completed_at, error_code, error_message').in('agent_run_id', ids).order('step_order')
+          if (!stepError && nextSteps) setSteps(nextSteps as MonitoringStep[])
+        } else {
+          setSteps([])
+        }
+        setLastUpdated(new Date())
+      }
+    } finally {
+      setRefreshing(false)
     }
-    setRefreshing(false)
   }, [])
-  useEffect(() => { const timer = window.setInterval(refresh, 3000); return () => window.clearInterval(timer) }, [refresh])
-  useEffect(() => { if (!selectedId || !runs.some((r) => r.id === selectedId)) setSelectedId(runs[0]?.id ?? null) }, [runs, selectedId])
+
   useEffect(() => {
-    if (!selectedId) return
-    const run = runs.find((item) => item.id === selectedId)
-    if (!run || run.status !== 'QUEUED') return
-    void fetch('/api/jobs/worker', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentRunId: selectedId }),
-    }).then(() => refresh()).catch(() => undefined)
-  }, [selectedId, runs, refresh])
+    const timer = window.setInterval(() => void refresh(), 5000)
+    return () => window.clearInterval(timer)
+  }, [refresh])
 
-  const filtered = useMemo(() => filter === 'ALL' ? runs : runs.filter((r) => r.status === filter), [runs, filter])
-  const selected = runs.find((r) => r.id === selectedId) ?? null
-  const selectedSteps = selected ? stepsByRun.get(selected.id) ?? [] : []
-  const active = runs.filter((r) => ACTIVE.has(r.status))
-  const stalled = runs.filter((r) => isStalled(r, lastUpdated))
-  const queued = runs.filter((r) => r.status === 'QUEUED' || r.status === 'PENDING').length
-  const completed = runs.filter((r) => COMPLETE.has(r.status)).length
-  const failed = runs.filter((r) => r.status === 'FAILED').length
-  const hero = active[0]
-  const heroSteps = hero ? stepsByRun.get(hero.id) ?? [] : []
-  const heroProgress = hero ? progress(heroSteps) : null
+  const domainCells = useMemo(() => {
+    const grouped = new Map<string, MonitoringRun[]>()
+    for (const run of runs) grouped.set(run.project_id, [...(grouped.get(run.project_id) ?? []), run])
 
-  const selectRun = (id: string) => {
-    setSelectedId(id)
-    window.setTimeout(() => document.getElementById('selected-job')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
+    const cells: DomainCell[] = []
+    for (const [projectId, projectRuns] of grouped) {
+      const project = projects.get(projectId) ?? { id: projectId, name: `Domain ${projectId.slice(0, 8)}`, description: 'Governed execution scope' }
+      const status = aggregateStatus(projectRuns)
+      cells.push({
+        project,
+        runs: projectRuns,
+        status,
+        activeCount: projectRuns.filter((run) => ACTIVE.has(run.status) || WAITING.has(run.status) || QUEUED.has(run.status)).length,
+        failedCount: projectRuns.filter((run) => normalizeRunStatus(run.status) === 'FAILED').length,
+        completeCount: projectRuns.filter((run) => normalizeRunStatus(run.status) === 'COMPLETE').length,
+        componentCount: new Set(projectRuns.map((run) => run.agent_definition_id)).size,
+        latestAt: projectRuns[0]?.created_at ?? initialNow,
+      })
+    }
+    return cells.sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
+  }, [runs, projects, initialNow])
+
+  useEffect(() => {
+    if (!selectedProjectId || !domainCells.some((cell) => cell.project.id === selectedProjectId)) {
+      setSelectedProjectId(domainCells[0]?.project.id ?? null)
+    }
+  }, [domainCells, selectedProjectId])
+
+  const filteredCells = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return domainCells.filter((cell) => {
+      const matchesStatus = statusFilter === 'ALL' || cell.status === statusFilter
+      const matchesSearch = !q || cell.project.name.toLowerCase().includes(q) || cell.runs.some((run) => {
+        const agent = agents.get(run.agent_definition_id)?.name ?? ''
+        const dataset = run.dataset_id ? datasets.get(run.dataset_id)?.name ?? '' : ''
+        return `${agent} ${dataset} ${run.id}`.toLowerCase().includes(q)
+      })
+      return matchesStatus && matchesSearch
+    })
+  }, [domainCells, statusFilter, search, agents, datasets])
+
+  const selectedCell = domainCells.find((cell) => cell.project.id === selectedProjectId) ?? domainCells[0] ?? null
+  const selectedRun = runs.find((run) => run.id === selectedRunId) ?? selectedCell?.runs[0] ?? null
+  const selectedSteps = selectedRun ? stepsByRun.get(selectedRun.id) ?? [] : []
+  const progress = stepProgress(selectedSteps)
+
+  const activeJobs = runs.filter((run) => ACTIVE.has(run.status)).length
+  const queuedJobs = runs.filter((run) => WAITING.has(run.status) || QUEUED.has(run.status)).length
+  const completed24h = runs.filter((run) => {
+    if (!COMPLETE.has(run.status)) return false
+    const at = new Date(run.completed_at ?? run.created_at).getTime()
+    return lastUpdated.getTime() - at <= 24 * 60 * 60 * 1000
+  }).length
+  const failed24h = runs.filter((run) => {
+    if (normalizeRunStatus(run.status) !== 'FAILED') return false
+    const at = new Date(run.completed_at ?? run.created_at).getTime()
+    return lastUpdated.getTime() - at <= 24 * 60 * 60 * 1000
+  }).length
+
+  function selectDomain(cell: DomainCell) {
+    setSelectedProjectId(cell.project.id)
+    if (!selectedRunId || !cell.runs.some((run) => run.id === selectedRunId)) setSelectedRunId(cell.runs[0]?.id ?? null)
   }
-  const copyRunId = async () => {
-    if (!selected) return
-    await navigator.clipboard.writeText(selected.id)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1500)
+
+  function selectRun(runId: string) {
+    const run = runs.find((item) => item.id === runId)
+    if (run) setSelectedProjectId(run.project_id)
+    setSelectedRunId(runId)
   }
-  const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-  return <div className="space-y-7">
-    <section className="relative overflow-hidden rounded-3xl border bg-gradient-to-r from-slate-950 via-blue-950 to-violet-950 p-6 text-white shadow-xl sm:p-8 dark:from-slate-900 dark:via-blue-950 dark:to-violet-950">
-      <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-400/20 blur-3xl" /><div className="absolute -bottom-32 left-1/3 h-72 w-72 rounded-full bg-violet-400/20 blur-3xl" />
-      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200"><span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.9)]" /> Operations Center</div><h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Job Monitoring</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">A live operational view of agent executions, progress, stalled jobs, and execution health.</p></div><div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur"><p className="text-xs text-slate-300">Live synchronization</p><p className="mt-1 text-sm font-semibold">Every 3 seconds</p></div></div>
-    </section>
+  return <section className="overflow-hidden rounded-3xl border border-cyan-300/10 bg-[#061426] shadow-[0_24px_80px_rgba(0,0,0,.35)]">
+    <div className="border-b border-white/[0.07] bg-[#07182a]/95 px-5 py-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {[
+            ['Active jobs', activeJobs, 'text-cyan-200'],
+            ['Running', runs.filter((run) => ACTIVE.has(run.status)).length, 'text-emerald-300'],
+            ['Queued', queuedJobs, 'text-amber-200'],
+            ['Completed (24h)', completed24h, 'text-emerald-300'],
+            ['Failed (24h)', failed24h, 'text-rose-300'],
+          ].map(([label, value, tone]) => <div key={String(label)} className="min-w-[112px] border-l border-white/10 pl-3 first:border-l-0 first:pl-0">
+            <p className={`text-2xl font-black ${tone}`}>{value}</p>
+            <p className="text-[11px] text-slate-400">{label}</p>
+          </div>)}
+        </div>
+        <div className="flex items-center gap-3 text-xs text-slate-400">
+          <span>Updated {TIME_FORMATTER.format(lastUpdated)}</span>
+          <button type="button" onClick={() => void refresh()} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/5 px-3 py-2 font-semibold text-cyan-100 transition hover:bg-cyan-300/10 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      </div>
+    </div>
 
-    <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <MetricCard label="Active jobs" value={active.length} detail={stalled.length ? `${stalled.length} need attention` : active.length ? 'Execution in progress' : 'Nothing running right now'} tone="active" icon="●" />
-      <MetricCard label="Queued" value={queued} detail="Waiting to execute" tone="neutral" icon="◷" />
-      <MetricCard label="Completed" value={completed} detail="Successful executions" tone="success" icon="✓" />
-      <MetricCard label="Failed" value={failed} detail="Requires attention" tone="danger" icon="!" />
-    </section>
+    <div className="border-b border-white/[0.07] bg-[#051220] px-5 py-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search data domains, components, datasets, or run IDs…" className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-300/35" />
+        </div>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CellStatus | 'ALL')} className="rounded-xl border border-white/10 bg-[#07182a] px-3 py-2.5 text-sm text-slate-200">
+          <option value="ALL">All statuses</option>
+          <option value="RUNNING">Running</option>
+          <option value="WAITING">Waiting</option>
+          <option value="QUEUED">Queued</option>
+          <option value="FAILED">Failed</option>
+          <option value="COMPLETE">Complete</option>
+        </select>
+        <div className="rounded-xl border border-cyan-300/25 bg-cyan-300/8 px-3 py-2.5 text-sm font-bold text-cyan-100">Domain Cells</div>
+      </div>
+    </div>
 
-    {stalled.length > 0 && <section className="relative overflow-hidden rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-5 shadow-sm dark:border-amber-900/60 dark:from-amber-950/30 dark:to-orange-950/20"><div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-orange-300/20 to-transparent" /><div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-lg">!</span><div><p className="font-semibold text-amber-950 dark:text-amber-300">{stalled.length} job{stalled.length === 1 ? '' : 's'} may be stalled</p><p className="mt-1 text-xs text-amber-900/70 dark:text-amber-400/80">Active for more than 30 minutes. Review execution steps and diagnostics before taking action.</p></div></div><button type="button" onClick={() => { setFilter('RUNNING'); if (stalled[0]) selectRun(stalled[0].id) }} className="rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-600">Review stalled jobs</button></div></section>}
+    <div className="grid min-h-[720px] xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="relative overflow-hidden border-r border-white/[0.07] bg-[#03101d] p-5 sm:p-7">
+        <div className="pointer-events-none absolute inset-0 opacity-45" style={{ backgroundImage: 'radial-gradient(circle at 50% 45%, rgba(14,165,233,.14), transparent 34%), radial-gradient(circle at 12% 20%, rgba(16,185,129,.06), transparent 20%), radial-gradient(circle at 87% 72%, rgba(139,92,246,.08), transparent 22%)' }} />
+        <div className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px)', backgroundSize: '42px 42px' }} />
 
-    {hero && heroProgress ? <section className="relative overflow-hidden rounded-3xl border bg-card shadow-lg"><div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-cyan-500 via-blue-500 to-violet-500" /><div className="p-6 sm:p-8"><div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between"><div className="min-w-0"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400"><span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500" /></span>Live execution</div><div className="mt-3 flex flex-wrap items-center gap-3"><h2 className="text-xl font-bold tracking-tight">{agents.get(hero.agent_definition_id)?.name ?? 'Agent execution'} <span className="font-medium text-muted-foreground">v{agents.get(hero.agent_definition_id)?.version ?? '?'}</span></h2><ExecutionStatusBadge status={hero.status} /></div><p className="mt-1 text-sm text-muted-foreground">{hero.dataset_id ? datasets.get(hero.dataset_id)?.name ?? 'Dataset unavailable' : 'Dataset unavailable'}</p></div><div className="rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 px-5 py-3 text-white shadow-lg"><p className="text-3xl font-bold tracking-tight">{heroProgress.percent}%</p><p className="text-xs text-blue-100">{heroProgress.label}</p></div></div><div className="mt-7 h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-violet-500 transition-all duration-500" style={{ width: `${heroProgress.percent}%` }} /></div><div className="mt-6 flex flex-wrap gap-3">{heroSteps.length ? heroSteps.map((step) => <div key={step.id} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${ACTIVE.has(step.status) ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300' : COMPLETE.has(step.status) ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300' : 'border-border bg-muted/40 text-muted-foreground'}`}><span className="font-semibold">{COMPLETE.has(step.status) ? '✓' : ACTIVE.has(step.status) ? '●' : '○'}</span><span>{step.step_name}</span></div>) : <span className="text-sm text-muted-foreground">Preparing execution steps…</span>}</div><div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-4 text-xs text-muted-foreground"><span>Running for <strong className="text-foreground">{duration(hero, lastUpdated)}</strong></span><span>Started {hero.started_at ? formatTime(hero.started_at) : 'Not started'}</span><button type="button" onClick={() => selectRun(hero.id)} className="ml-auto rounded-lg bg-foreground px-3 py-2 font-semibold text-background transition hover:opacity-90">Open execution</button></div></div></section> : <section className="rounded-3xl border border-dashed bg-card p-8 shadow-sm"><div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-lg text-white shadow-lg">✓</div><div><h2 className="font-semibold">All clear</h2><p className="mt-1 text-sm text-muted-foreground">There are no active executions right now.</p></div></div></section>}
+        <div className="relative z-10 mb-5 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-200/55">Governed topology</p>
+            <h2 className="mt-1 text-xl font-bold text-white">Luminous Data Domain cells</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Each organic cell is a governed project scope standing in for a Data Domain. Its inner nodes are live execution components. Status is aggregated from the runs inside the domain.</p>
+          </div>
+          <div className="hidden items-center gap-2 text-[11px] text-slate-500 sm:flex"><GitBranch className="h-4 w-4" /> Execution relationships remain inspectable in run details</div>
+        </div>
 
-    <section className="overflow-hidden rounded-3xl border bg-card shadow-lg"><div className="border-b bg-gradient-to-r from-violet-50/70 via-background to-blue-50/70 p-5 dark:from-violet-950/20 dark:to-blue-950/20 sm:p-6"><div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-xs text-white">≡</span><h2 className="font-bold">Recent activity</h2></div><p className="mt-1 text-xs text-muted-foreground">Select any execution to inspect its operational timeline.</p></div><div className="flex flex-wrap items-center gap-2"><select aria-label="Filter jobs" value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-xl border bg-background px-3 py-2.5 text-sm shadow-sm"><option value="ALL">All jobs</option><option value="RUNNING">Running</option><option value="QUEUED">Queued</option><option value="SUCCEEDED">Completed</option><option value="FAILED">Failed</option></select><button type="button" onClick={refresh} disabled={refreshing} className="rounded-xl bg-foreground px-4 py-2.5 text-sm font-semibold text-background shadow-sm transition hover:opacity-90 disabled:opacity-50">{refreshing ? 'Refreshing…' : 'Refresh now'}</button><span className="rounded-xl border bg-background px-3 py-2.5 text-xs text-muted-foreground">Updated {formatTime(lastUpdated.toISOString())}</span></div></div></div>{filtered.length === 0 ? <div className="p-12 text-center"><p className="font-medium">No jobs found</p><p className="mt-1 text-sm text-muted-foreground">Try another status filter or start an agent.</p></div> : <div className="divide-y">{filtered.map((run) => { const agent = agents.get(run.agent_definition_id); const dataset = run.dataset_id ? datasets.get(run.dataset_id) : null; const p = progress(stepsByRun.get(run.id) ?? []); const runStalled = isStalled(run, lastUpdated); return <button key={run.id} type="button" onClick={() => selectRun(run.id)} className={`relative w-full px-5 py-4 text-left transition-all hover:bg-gradient-to-r hover:from-blue-50/60 hover:to-violet-50/30 dark:hover:from-blue-950/20 dark:hover:to-violet-950/10 ${selectedId === run.id ? 'bg-gradient-to-r from-blue-50 to-violet-50/60 dark:from-blue-950/20 dark:to-violet-950/10' : ''}`}><div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_140px_100px] lg:items-center"><div className="min-w-0"><div className="flex items-center gap-2"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${run.status === 'FAILED' ? 'bg-red-500' : COMPLETE.has(run.status) ? 'bg-emerald-500' : ACTIVE.has(run.status) ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.7)]' : 'bg-violet-400'}`} /><p className="truncate text-sm font-semibold">{agent ? `${agent.name} v${agent.version}` : 'Agent run'}</p>{runStalled && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">STALLED?</span>}</div><p className="mt-1 truncate pl-5 text-xs text-muted-foreground">{dataset?.name ?? 'Dataset unavailable'}</p></div><div className="flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full transition-all ${run.status === 'FAILED' ? 'bg-gradient-to-r from-red-400 to-orange-500' : 'bg-gradient-to-r from-cyan-400 via-blue-500 to-violet-500'}`} style={{ width: `${p.percent}%` }} /></div><span className="w-10 text-right text-xs font-semibold text-muted-foreground">{p.percent}%</span></div><ExecutionStatusBadge status={run.status} /><span className="text-xs font-medium text-muted-foreground lg:text-right">{duration(run, lastUpdated)}</span></div></button> })}</div>}</section>
+        {filteredCells.length ? <div className="relative z-10 grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+          {filteredCells.map((cell) => <OrganicDomainCell
+            key={cell.project.id}
+            cell={cell}
+            agents={agents}
+            selectedRunId={selectedRunId}
+            selected={selectedCell?.project.id === cell.project.id}
+            onSelectDomain={() => selectDomain(cell)}
+            onSelectRun={selectRun}
+          />)}
+        </div> : <div className="relative z-10 grid min-h-[480px] place-items-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02]">
+          <div className="text-center">
+            <BrainCircuit className="mx-auto h-10 w-10 text-cyan-200/45" />
+            <p className="mt-3 font-semibold text-slate-300">No matching domain cells</p>
+            <p className="mt-1 text-xs text-slate-500">Adjust the status filter or search criteria.</p>
+          </div>
+        </div>}
 
-    {selected && <section id="selected-job" className="scroll-mt-6 overflow-hidden rounded-3xl border bg-card shadow-lg"><div className="border-b bg-gradient-to-r from-slate-50 via-blue-50/50 to-violet-50/50 p-5 dark:from-slate-950/40 dark:via-blue-950/20 dark:to-violet-950/20 sm:p-6"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Selected execution</p><ExecutionStatusBadge status={selected.status} />{isStalled(selected, lastUpdated) && <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">Needs attention</span>}</div><h2 className="mt-2 truncate text-xl font-bold">{agents.get(selected.agent_definition_id)?.name ?? 'Agent run'} <span className="font-medium text-muted-foreground">v{agents.get(selected.agent_definition_id)?.version ?? '?'}</span></h2><p className="mt-1 text-sm text-muted-foreground">{selected.dataset_id ? datasets.get(selected.dataset_id)?.name ?? 'Dataset unavailable' : 'Dataset unavailable'} · {duration(selected, lastUpdated)}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => jumpTo('job-logs')} className="rounded-xl border bg-background px-3 py-2 text-xs font-semibold shadow-sm transition hover:bg-muted">Logs</button><button type="button" onClick={() => jumpTo('job-actions')} className="rounded-xl border bg-background px-3 py-2 text-xs font-semibold shadow-sm transition hover:bg-muted">Actions</button><button type="button" onClick={() => void copyRunId()} className="rounded-xl border bg-background px-3 py-2 text-xs font-semibold shadow-sm transition hover:bg-muted">{copied ? 'Copied' : 'Copy run ID'}</button></div></div></div><div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_320px]"><div><div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Execution timeline</p><p className="mt-1 text-sm text-muted-foreground">Step state and transition history</p></div><span className="rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1 text-sm font-bold text-white">{progress(selectedSteps).percent}%</span></div><div className="mt-4 h-2.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-violet-500 transition-all" style={{ width: `${progress(selectedSteps).percent}%` }} /></div><div className="mt-6 space-y-1">{selectedSteps.length ? selectedSteps.map((step, index) => <div key={step.id} className="flex gap-4 rounded-2xl p-3 transition-colors hover:bg-muted/40"><div className="flex flex-col items-center"><div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-xs font-bold ${COMPLETE.has(step.status) ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : ACTIVE.has(step.status) ? 'border-blue-200 bg-blue-50 text-blue-700' : step.status === 'FAILED' ? 'border-red-200 bg-red-50 text-red-700' : 'bg-muted text-muted-foreground'}`}>{COMPLETE.has(step.status) ? '✓' : ACTIVE.has(step.status) ? '●' : step.status === 'FAILED' ? '!' : index + 1}</div>{index < selectedSteps.length - 1 && <div className="mt-2 h-full w-px bg-gradient-to-b from-border to-transparent" />}</div><div className="min-w-0 flex-1 pb-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">{step.step_name}</p><ExecutionStatusBadge status={step.status} /></div><p className="mt-1 text-xs text-muted-foreground">Attempt {step.attempt}{step.started_at ? ` · ${formatTime(step.started_at)}` : ''}{step.completed_at ? ` → ${formatTime(step.completed_at)}` : ''}</p>{step.error_message && <p className="mt-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-700 dark:text-red-400">{step.error_message}</p>}</div></div>) : <div className="rounded-2xl border border-dashed p-8 text-center"><p className="text-sm font-medium">No execution steps recorded</p><p className="mt-1 text-xs text-muted-foreground">The executor may still be initializing. Refreshing continues automatically.</p></div>}</div></div><aside className="rounded-2xl border bg-gradient-to-br from-slate-50 to-blue-50/50 p-5 dark:from-slate-950/30 dark:to-blue-950/10"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Run information</p><dl className="mt-5 space-y-4 text-sm"><div><dt className="text-xs text-muted-foreground">Status</dt><dd className="mt-1"><ExecutionStatusBadge status={selected.status} /></dd></div><div><dt className="text-xs text-muted-foreground">Started</dt><dd className="mt-1 font-medium">{selected.started_at ? formatDate(selected.started_at) : 'Not started'}</dd></div><div><dt className="text-xs text-muted-foreground">Duration</dt><dd className="mt-1 font-medium">{duration(selected, lastUpdated)}</dd></div><div><dt className="text-xs text-muted-foreground">Run ID</dt><dd className="mt-1 break-all rounded-lg bg-background/80 p-2 font-mono text-[11px] text-muted-foreground">{selected.id}</dd></div></dl>{selected.error_message && <div className="mt-5 rounded-xl border border-red-500/20 bg-red-500/5 p-4"><p className="text-sm font-semibold text-red-700 dark:text-red-400">Execution error</p><p className="mt-1 text-xs text-muted-foreground">{selected.error_message}</p>{selected.error_code && <p className="mt-2 font-mono text-[10px] text-muted-foreground">{selected.error_code}</p>}</div>}{isStalled(selected, lastUpdated) && <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50/70 p-4 dark:border-amber-800 dark:bg-amber-950/20"><p className="text-sm font-semibold text-amber-900 dark:text-amber-300">No recent completion signal</p><p className="mt-1 text-xs text-amber-800/80 dark:text-amber-400/80">The monitor flags long active runs for investigation. Review logs before terminating.</p></div>}</aside></div></section>}
+        <div className="relative z-10 mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/[0.07] pt-4 text-[11px] text-slate-400">
+          {(['RUNNING', 'COMPLETE', 'WAITING', 'FAILED', 'QUEUED'] as CellStatus[]).map((status) => {
+            const meta = statusMeta(status)
+            return <span key={status} className="inline-flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} />{meta.label}</span>
+          })}
+          <span className="ml-auto text-slate-500">Cells represent Data Domain execution health · nodes represent components</span>
+        </div>
+      </div>
 
-    <section id="job-actions" className="overflow-hidden rounded-3xl border bg-gradient-to-r from-violet-50 via-background to-blue-50 p-5 shadow-sm dark:from-violet-950/20 dark:to-blue-950/20 sm:p-6"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">Operational controls</p><h2 className="mt-1 font-bold">Actions for the selected execution</h2><p className="mt-1 text-xs text-muted-foreground">Use the selected execution context to access logs, diagnostics, and lifecycle controls.</p></div>{selected ? <ExecutionStatusBadge status={selected.status} /> : <span className="text-xs text-muted-foreground">Select a job first</span>}</div></section>
+      <aside className="bg-[#07182a] p-5">
+        {selectedCell ? <div className="space-y-5">
+          <div className="border-b border-white/10 pb-4">
+            <p className="text-xs font-semibold text-slate-400">Selected Data Domain</p>
+            <h3 className="mt-2 text-2xl font-bold text-white">{selectedCell.project.name}</h3>
+            <div className="mt-3"><StatusPill status={selectedCell.status} /></div>
+            {selectedCell.project.description ? <p className="mt-3 text-xs leading-5 text-slate-500">{selectedCell.project.description}</p> : null}
+          </div>
 
-    <div className="flex flex-col gap-2 border-t pt-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between"><span>Auto refresh every 3 seconds</span><span>Last synchronized {formatTime(lastUpdated.toISOString())}</span></div>
-  </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-cyan-100">{selectedCell.componentCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Components</p></div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-emerald-300">{selectedCell.completeCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Complete</p></div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-rose-300">{selectedCell.failedCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Failed</p></div>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold text-slate-200">Execution components</h4><span className="text-[10px] text-slate-500">{selectedCell.runs.length} recent runs</span></div>
+            <div className="max-h-[310px] space-y-2 overflow-auto pr-1">
+              {selectedCell.runs.map((run) => {
+                const meta = statusMeta(normalizeRunStatus(run.status))
+                const agent = agents.get(run.agent_definition_id)
+                const dataset = run.dataset_id ? datasets.get(run.dataset_id) : null
+                const p = stepProgress(stepsByRun.get(run.id) ?? [])
+                return <button key={run.id} type="button" onClick={() => selectRun(run.id)} className={`w-full rounded-xl border p-3 text-left transition ${selectedRun?.id === run.id ? 'border-cyan-300/35 bg-cyan-300/[0.07]' : 'border-white/10 bg-white/[0.025] hover:border-white/20'}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{agent?.name ?? 'Execution component'}</p><p className="mt-0.5 truncate text-[11px] text-slate-500">{dataset?.name ?? 'No dataset'} · {relativeAge(run, lastUpdated)}</p></div>
+                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-cyan-300/70" style={{ width: `${p.percent}%` }} /></div>
+                </button>
+              })}
+            </div>
+          </div>
+
+          {selectedRun ? <div className="border-t border-white/10 pt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200/55">Selected execution</p>
+                <p className="mt-1 font-semibold text-white">{agents.get(selectedRun.agent_definition_id)?.name ?? 'Agent execution'}</p>
+              </div>
+              <StatusPill status={normalizeRunStatus(selectedRun.status)} />
+            </div>
+            <div className="mt-3 space-y-2">
+              {selectedSteps.length ? selectedSteps.slice(0, 6).map((step) => {
+                const status = normalizeRunStatus(step.status)
+                const meta = statusMeta(status)
+                const Icon = status === 'COMPLETE' ? CircleCheck : status === 'FAILED' ? TriangleAlert : status === 'RUNNING' ? Sparkles : CirclePause
+                return <div key={step.id} className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-xs">
+                  <Icon className={`h-4 w-4 ${meta.text}`} />
+                  <span className="min-w-0 flex-1 truncate text-slate-300">{step.step_name}</span>
+                  <span className={meta.text}>{meta.label}</span>
+                </div>
+              }) : <div className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-slate-500">Execution steps are not yet recorded.</div>}
+            </div>
+            <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500"><span>{progress.done}/{progress.total} steps complete</span><span>{DATE_FORMATTER.format(new Date(selectedRun.created_at))}</span></div>
+            <Link href={`/monitoring?run=${encodeURIComponent(selectedRun.id)}#job-logs`} className="mt-4 flex w-full items-center justify-between rounded-xl border border-cyan-300/35 bg-cyan-300/[0.07] px-4 py-3 text-sm font-bold text-cyan-100 transition hover:bg-cyan-300/10">
+              View execution details
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div> : null}
+
+          <div className="grid gap-2 border-t border-white/10 pt-4 text-xs">
+            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><Database className="h-4 w-4 text-cyan-300" /><div><p className="font-semibold text-slate-300">Evidence</p><p className="text-[11px] text-slate-500">Datasets · findings · run artifacts</p></div></div>
+            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><ShieldCheck className="h-4 w-4 text-emerald-300" /><div><p className="font-semibold text-slate-300">Governed scope</p><p className="text-[11px] text-slate-500">Project authorization and execution controls remain enforced</p></div></div>
+            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><BrainCircuit className="h-4 w-4 text-violet-300" /><div><p className="font-semibold text-slate-300">AI execution</p><p className="text-[11px] text-slate-500">Organic cells visualize status, not authority</p></div></div>
+          </div>
+        </div> : <div className="grid h-full place-items-center text-center"><div><Layers3 className="mx-auto h-10 w-10 text-slate-600" /><p className="mt-3 text-sm font-semibold text-slate-400">No domain selected</p></div></div>}
+      </aside>
+    </div>
+  </section>
 }
