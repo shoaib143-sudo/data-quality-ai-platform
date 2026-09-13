@@ -1,0 +1,26 @@
+name: Terminal issue resolution UI
+
+on:
+  pull_request:
+    paths:
+      - 'app/issues/issue-manager.tsx'
+      - 'app/api/issues/[issueId]/route.ts'
+      - 'scripts/test-terminal-issue-resolution-ui.mjs'
+      - 'scripts/audit-terminal-issue-resolution-ui-adversarial.mjs'
+      - '.github/workflows/terminal-issue-resolution-ui.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  terminal-issue-resolution-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Contract and negative cases
+        run: node scripts/test-terminal-issue-resolution-ui.mjs
+      - name: Independent adversarial audit
+        run: node scripts/audit-terminal-issue-resolution-ui-adversarial.mjs

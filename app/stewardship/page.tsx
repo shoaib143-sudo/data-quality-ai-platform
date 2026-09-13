@@ -1,12 +1,19 @@
 import Link from 'next/link'
 import { Handshake, Layers3 } from 'lucide-react'
 import { requireUser } from '@/lib/auth/require-user'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { resolvePreferredGovernanceProject } from '@/lib/governance/preferred-project'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { createClient } from '@/lib/supabase/server'
 import { StewardshipManager } from './stewardship-manager'
 
 export default async function StewardshipPage() {
-  await requireUser()
-  const supabase = await createClient()
+  const user = await requireUser()
+  const [supabase, preferredProjectId, landing] = await Promise.all([
+    createClient(),
+    resolvePreferredGovernanceProject(user.id),
+    resolveLandingAccess(user.id),
+  ])
   const [projects, datasets, sources, assets, members, assignments, certifications, datasetCoverage, catalogCoverage] = await Promise.all([
     supabase.schema('app').from('projects').select('id,name,organization_id').order('name'),
     supabase.schema('catalog').from('datasets').select('id,project_id,name').order('name'),
@@ -22,13 +29,20 @@ export default async function StewardshipPage() {
     if (result.error) throw new Error(result.error.message)
   }
 
+  const orderedProjects = [...(projects.data ?? [])].sort((left, right) => {
+    if (left.id === preferredProjectId) return -1
+    if (right.id === preferredProjectId) return 1
+    return left.name.localeCompare(right.name)
+  })
+  const homeHref = canAccessWorkspace(landing.persona, 'dashboard', landing.organizationRole) ? '/dashboard' : '/home'
+
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <nav className="mb-6 flex items-center justify-between rounded-2xl border bg-white px-5 py-3 shadow-sm">
-          <Link href="/dashboard" className="flex items-center gap-3 font-bold">
+          <Link href={homeHref} className="flex items-center gap-3 font-bold">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5" /></span>
-            Data Governance PowerHouse
+            DataNexus AI
           </Link>
           <Link href="/catalog" className="text-sm font-semibold text-blue-600">Catalog</Link>
         </nav>
@@ -42,7 +56,7 @@ export default async function StewardshipPage() {
           </div>
         </header>
         <StewardshipManager
-          projects={projects.data ?? []}
+          projects={orderedProjects}
           datasets={datasets.data ?? []}
           sources={sources.data ?? []}
           catalogAssets={assets.data ?? []}

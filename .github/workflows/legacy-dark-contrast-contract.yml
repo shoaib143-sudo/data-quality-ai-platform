@@ -1,0 +1,29 @@
+name: Legacy dark contrast contract
+
+on:
+  pull_request:
+    paths:
+      - 'app/layout.tsx'
+      - 'app/legacy-dark-compat.css'
+      - 'app/glossary/**'
+      - 'app/classification/**'
+      - 'app/stewardship/**'
+      - 'scripts/test-legacy-dark-contrast-contract.mjs'
+      - 'scripts/audit-legacy-dark-contrast-adversarial.mjs'
+      - '.github/workflows/legacy-dark-contrast-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-dark-contrast-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Contrast contract and negative cases
+        run: node scripts/test-legacy-dark-contrast-contract.mjs
+      - name: Independent adversarial audit
+        run: node scripts/audit-legacy-dark-contrast-adversarial.mjs

@@ -1,0 +1,26 @@
+name: Project role persona count
+
+on:
+  pull_request:
+    paths:
+      - 'app/admin/project-roles/page.tsx'
+      - 'lib/governance/persona-role-keys.ts'
+      - 'scripts/test-project-role-persona-count.mjs'
+      - 'scripts/audit-project-role-persona-count-adversarial.mjs'
+      - '.github/workflows/project-role-persona-count.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  project-role-persona-count:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Persona count contract
+        run: node scripts/test-project-role-persona-count.mjs
+      - name: Independent adversarial audit
+        run: node scripts/audit-project-role-persona-count-adversarial.mjs
