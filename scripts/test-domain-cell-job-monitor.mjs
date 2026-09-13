@@ -35,3 +35,27 @@ assert.equal(customerComponents.length, 2, 'repeated runs from one component mus
 assert.equal(customerComponents.find((row) => row.agent_definition_id === 'quality')?.id, 'r3', 'latest component state must win over an older failure')
 
 console.log('Domain Cell grouping unit tests passed: persisted domain grouping, project isolation, unassigned metadata, and latest-component state.')
+
+
+const organicPosition = (index, total) => {
+  const ringCount = total > 16 ? 3 : total > 8 ? 2 : 1
+  const ring = index % ringCount
+  const slotIndex = Math.floor(index / ringCount)
+  const slotCount = Math.max(1, Math.ceil(total / ringCount))
+  const angle = (slotIndex / slotCount) * Math.PI * 2 - Math.PI / 2 + (ring * Math.PI) / Math.max(slotCount, 2)
+  const radii = ringCount === 1 ? [39] : ringCount === 2 ? [31, 43] : [27, 36, 45]
+  const radius = radii[ring]
+  return { left: 50 + Math.cos(angle) * radius, top: 53 + Math.sin(angle) * radius * 0.82 }
+}
+
+for (const total of [1, 8, 9, 17, 24]) {
+  const positions = Array.from({ length: total }, (_, index) => organicPosition(index, total))
+  assert.equal(positions.length, total, 'every component must receive an organic position')
+  assert.equal(new Set(positions.map((position) => `${position.left.toFixed(4)}:${position.top.toFixed(4)}`)).size, total, 'component placement must not collapse distinct nodes')
+  for (const position of positions) {
+    assert.ok(position.left >= 5 && position.left <= 95, 'organic node must remain inside horizontal membrane bounds')
+    assert.ok(position.top >= 10 && position.top <= 90, 'organic node must remain inside vertical membrane bounds')
+  }
+}
+
+console.log('Domain Cell organic placement tests passed: every component receives a deterministic in-membrane position across one, two, and three-ring layouts.')
