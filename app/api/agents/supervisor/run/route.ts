@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { runNativeSpecialistSupervisor } from '@/lib/agents/runtime/native-supervisor-service'
+import { currentExecutionFingerprint, markApprovalExecuted, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
 
 export const maxDuration = 300
 
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
     const projectId = text(body?.projectId ?? body?.project_id)
     const goal = text(body?.goal)
     const workers = Array.isArray(body?.workers) ? body?.workers : []
+    const approvalRequestId = text(body?.approvalRequestId ?? body?.approval_request_id)
 
     if (!projectId || !goal) {
       return NextResponse.json({ error: 'projectId and goal are required.' }, { status: 400 })
@@ -28,6 +30,17 @@ export async function POST(request: Request) {
     }
 
     await authorizeProject(user.id, projectId, 'agent.execute')
+    if (approvalRequestId) {
+      const currentFingerprint = await currentExecutionFingerprint({
+        requestId: approvalRequestId,
+        parameters: { goal, workers },
+      })
+      await validateApprovalForExecution({
+        requestId: approvalRequestId,
+        executorUserId: user.id,
+        currentFingerprint,
+      })
+    }
 
     const result = await runNativeSpecialistSupervisor({
       projectId,
@@ -47,6 +60,8 @@ export async function POST(request: Request) {
         }
       }),
     })
+
+    if (approvalRequestId) await markApprovalExecuted(approvalRequestId)
 
     return NextResponse.json({
       accepted: true,
