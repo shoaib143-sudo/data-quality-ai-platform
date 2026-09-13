@@ -6,7 +6,7 @@ import { evaluateIncidentSlaEscalations } from '@/lib/observability/incident-sla
 import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
 import { claimOutboxEvents, processOutboxEvents } from '@/lib/orchestration/outbox'
 import { runOutboxLane, skippedOutboxLane, type OutboxLaneResult } from '@/lib/orchestration/outbox-lane'
-import { claimDurableJobByAgentRun } from '@/lib/orchestration/queue'
+import { claimDurableJobByAgentRun, runDurableQueueMaintenance } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
 import { dispatchAdaptiveRounds } from '@/lib/orchestration/adaptive-dispatch'
 import { isAuthorizedWorkerBearer } from '@/lib/orchestration/worker-auth'
@@ -104,6 +104,7 @@ export async function GET(request: Request) {
   if (!isAuthorizedWorkerRequest(request)) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
 
   const workerId = `scheduled-worker:${crypto.randomUUID()}`
+  const queueMaintenance = await runDurableQueueMaintenance()
   const scheduled = await enqueueDueSchedules(20)
   const dispatch = await dispatchAdaptiveRounds(workerId)
   const eventLane = await executeOutboxLane(workerId)
@@ -119,6 +120,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     workerId,
+    queueMaintenance,
     scheduled,
     adaptiveDispatch: true,
     dispatchRounds: dispatch.rounds,
