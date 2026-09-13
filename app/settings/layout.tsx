@@ -5,3 +5,4 @@ export default async function SettingsLayout({ children }: { children: ReactNode
   await requireWorkspaceAccess('account')
   return children
 }
+
