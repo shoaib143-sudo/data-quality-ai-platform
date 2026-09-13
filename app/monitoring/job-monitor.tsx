@@ -48,7 +48,7 @@ export type MonitoringStep = {
 }
 
 export type MonitoringAgent = { id: string; name: string; version: string; agent_key: string }
-export type MonitoringDataset = { id: string; name: string }
+export type MonitoringDataset = { id: string; name: string; business_domain: string | null }
 export type MonitoringProject = { id: string; name: string; description: string | null }
 
 type Props = {
@@ -65,13 +65,17 @@ type Props = {
 type CellStatus = 'FAILED' | 'RUNNING' | 'WAITING' | 'QUEUED' | 'COMPLETE' | 'IDLE'
 
 type DomainCell = {
+  key: string
+  domainName: string
   project: MonitoringProject
   runs: MonitoringRun[]
+  componentRuns: MonitoringRun[]
   status: CellStatus
   activeCount: number
   failedCount: number
   completeCount: number
   componentCount: number
+  datasetCount: number
   latestAt: string
 }
 
@@ -99,6 +103,19 @@ function aggregateStatus(runs: MonitoringRun[]): CellStatus {
   if (statuses.includes('QUEUED')) return 'QUEUED'
   if (statuses.includes('COMPLETE')) return 'COMPLETE'
   return 'IDLE'
+}
+
+function dataDomainForRun(run: MonitoringRun, datasets: Map<string, MonitoringDataset>) {
+  const domain = run.dataset_id ? datasets.get(run.dataset_id)?.business_domain?.trim() : ''
+  return domain || 'Unassigned Data Domain'
+}
+
+function latestRunPerComponent(runs: MonitoringRun[]) {
+  const latest = new Map<string, MonitoringRun>()
+  for (const run of runs) {
+    if (!latest.has(run.agent_definition_id)) latest.set(run.agent_definition_id, run)
+  }
+  return [...latest.values()]
 }
 
 function statusMeta(status: CellStatus) {
@@ -166,7 +183,7 @@ function OrganicDomainCell({
   onSelectRun: (id: string) => void
 }) {
   const meta = statusMeta(cell.status)
-  const visibleRuns = cell.runs.slice(0, 8)
+  const visibleRuns = cell.componentRuns.slice(0, 8)
   return <button
     type="button"
     onClick={onSelectDomain}
@@ -186,7 +203,7 @@ function OrganicDomainCell({
     <div className="relative z-10 flex items-start justify-between gap-3">
       <div className="min-w-0">
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200/55">Data Domain</p>
-        <h3 className="mt-1 truncate text-lg font-bold text-white">{cell.project.name}</h3>
+        <h3 className="mt-1 truncate text-lg font-bold text-white">{cell.domainName}</h3><p className="mt-0.5 truncate text-[10px] text-slate-500">Scope · {cell.project.name}</p>
       </div>
       <StatusPill status={cell.status} />
     </div>
@@ -232,10 +249,7 @@ export function JobMonitor({
   const [runs, setRuns] = useState(initialRuns)
   const [steps, setSteps] = useState(initialSteps)
   const [selectedRunId, setSelectedRunId] = useState<string | null>(initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialRuns[0]?.id ?? null)
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
-    const initial = initialRunId ? initialRuns.find((run) => run.id === initialRunId) : initialRuns[0]
-    return initial?.project_id ?? initialProjects[0]?.id ?? null
-  })
+  const [selectedDomainKey, setSelectedDomainKey] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<CellStatus | 'ALL'>('ALL')
   const [search, setSearch] = useState('')
   const [lastUpdated, setLastUpdated] = useState(() => new Date(initialNow))
@@ -279,38 +293,51 @@ export function JobMonitor({
   }, [refresh])
 
   const domainCells = useMemo(() => {
-    const grouped = new Map<string, MonitoringRun[]>()
-    for (const run of runs) grouped.set(run.project_id, [...(grouped.get(run.project_id) ?? []), run])
+    const grouped = new Map<string, { projectId: string; domainName: string; runs: MonitoringRun[] }>()
+    for (const run of runs) {
+      const domainName = dataDomainForRun(run, datasets)
+      const key = `${run.project_id}::${domainName}`
+      const current = grouped.get(key) ?? { projectId: run.project_id, domainName, runs: [] }
+      current.runs.push(run)
+      grouped.set(key, current)
+    }
 
     const cells: DomainCell[] = []
-    for (const [projectId, projectRuns] of grouped) {
-      const project = projects.get(projectId) ?? { id: projectId, name: `Domain ${projectId.slice(0, 8)}`, description: 'Governed execution scope' }
-      const status = aggregateStatus(projectRuns)
+    for (const [key, group] of grouped) {
+      const projectRuns = group.runs
+      const project = projects.get(group.projectId) ?? { id: group.projectId, name: `Scope ${group.projectId.slice(0, 8)}`, description: 'Governed execution scope' }
+      const componentRuns = latestRunPerComponent(projectRuns)
+      const status = aggregateStatus(componentRuns)
       cells.push({
+        key,
+        domainName: group.domainName,
         project,
         runs: projectRuns,
+        componentRuns,
         status,
-        activeCount: projectRuns.filter((run) => ACTIVE.has(run.status) || WAITING.has(run.status) || QUEUED.has(run.status)).length,
-        failedCount: projectRuns.filter((run) => normalizeRunStatus(run.status) === 'FAILED').length,
-        completeCount: projectRuns.filter((run) => normalizeRunStatus(run.status) === 'COMPLETE').length,
-        componentCount: new Set(projectRuns.map((run) => run.agent_definition_id)).size,
+        activeCount: componentRuns.filter((run) => ACTIVE.has(run.status) || WAITING.has(run.status) || QUEUED.has(run.status)).length,
+        failedCount: componentRuns.filter((run) => normalizeRunStatus(run.status) === 'FAILED').length,
+        completeCount: componentRuns.filter((run) => normalizeRunStatus(run.status) === 'COMPLETE').length,
+        componentCount: componentRuns.length,
+        datasetCount: new Set(projectRuns.flatMap((run) => run.dataset_id ? [run.dataset_id] : [])).size,
         latestAt: projectRuns[0]?.created_at ?? initialNow,
       })
     }
     return cells.sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
-  }, [runs, projects, initialNow])
+  }, [runs, projects, datasets, initialNow])
 
   useEffect(() => {
-    if (!selectedProjectId || !domainCells.some((cell) => cell.project.id === selectedProjectId)) {
-      setSelectedProjectId(domainCells[0]?.project.id ?? null)
-    }
-  }, [domainCells, selectedProjectId])
+    if (selectedDomainKey && domainCells.some((cell) => cell.key === selectedDomainKey)) return
+    const selected = selectedRunId ? runs.find((run) => run.id === selectedRunId) : null
+    const selectedCell = selected ? domainCells.find((cell) => cell.runs.some((run) => run.id === selected.id)) : null
+    setSelectedDomainKey(selectedCell?.key ?? domainCells[0]?.key ?? null)
+  }, [domainCells, runs, selectedRunId, selectedDomainKey])
 
   const filteredCells = useMemo(() => {
     const q = search.trim().toLowerCase()
     return domainCells.filter((cell) => {
       const matchesStatus = statusFilter === 'ALL' || cell.status === statusFilter
-      const matchesSearch = !q || cell.project.name.toLowerCase().includes(q) || cell.runs.some((run) => {
+      const matchesSearch = !q || cell.domainName.toLowerCase().includes(q) || cell.project.name.toLowerCase().includes(q) || cell.runs.some((run) => {
         const agent = agents.get(run.agent_definition_id)?.name ?? ''
         const dataset = run.dataset_id ? datasets.get(run.dataset_id)?.name ?? '' : ''
         return `${agent} ${dataset} ${run.id}`.toLowerCase().includes(q)
@@ -319,7 +346,7 @@ export function JobMonitor({
     })
   }, [domainCells, statusFilter, search, agents, datasets])
 
-  const selectedCell = domainCells.find((cell) => cell.project.id === selectedProjectId) ?? domainCells[0] ?? null
+  const selectedCell = domainCells.find((cell) => cell.key === selectedDomainKey) ?? domainCells[0] ?? null
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? selectedCell?.runs[0] ?? null
   const selectedSteps = selectedRun ? stepsByRun.get(selectedRun.id) ?? [] : []
   const progress = stepProgress(selectedSteps)
@@ -338,13 +365,13 @@ export function JobMonitor({
   }).length
 
   function selectDomain(cell: DomainCell) {
-    setSelectedProjectId(cell.project.id)
-    if (!selectedRunId || !cell.runs.some((run) => run.id === selectedRunId)) setSelectedRunId(cell.runs[0]?.id ?? null)
+    setSelectedDomainKey(cell.key)
+    if (!selectedRunId || !cell.runs.some((run) => run.id === selectedRunId)) setSelectedRunId(cell.componentRuns[0]?.id ?? cell.runs[0]?.id ?? null)
   }
 
   function selectRun(runId: string) {
-    const run = runs.find((item) => item.id === runId)
-    if (run) setSelectedProjectId(run.project_id)
+    const cell = domainCells.find((item) => item.runs.some((run) => run.id === runId))
+    if (cell) setSelectedDomainKey(cell.key)
     setSelectedRunId(runId)
   }
 
@@ -400,18 +427,18 @@ export function JobMonitor({
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-200/55">Governed topology</p>
             <h2 className="mt-1 text-xl font-bold text-white">Luminous Data Domain cells</h2>
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Each organic cell is a governed project scope standing in for a Data Domain. Its inner nodes are live execution components. Status is aggregated from the runs inside the domain.</p>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Each luminous cell is a persisted catalog Data Domain from dataset business-domain metadata. Inner nodes are the latest execution state of each component in that domain. Unassigned executions remain explicit instead of being guessed into a domain.</p>
           </div>
           <div className="hidden items-center gap-2 text-[11px] text-slate-500 sm:flex"><GitBranch className="h-4 w-4" /> Execution relationships remain inspectable in run details</div>
         </div>
 
         {filteredCells.length ? <div className="relative z-10 grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
           {filteredCells.map((cell) => <OrganicDomainCell
-            key={cell.project.id}
+            key={cell.key}
             cell={cell}
             agents={agents}
             selectedRunId={selectedRunId}
-            selected={selectedCell?.project.id === cell.project.id}
+            selected={selectedCell?.key === cell.key}
             onSelectDomain={() => selectDomain(cell)}
             onSelectRun={selectRun}
           />)}
@@ -436,21 +463,23 @@ export function JobMonitor({
         {selectedCell ? <div className="space-y-5">
           <div className="border-b border-white/10 pb-4">
             <p className="text-xs font-semibold text-slate-400">Selected Data Domain</p>
-            <h3 className="mt-2 text-2xl font-bold text-white">{selectedCell.project.name}</h3>
+            <h3 className="mt-2 text-2xl font-bold text-white">{selectedCell.domainName}</h3>
+            <p className="mt-1 text-xs text-slate-500">Governed scope · {selectedCell.project.name}</p>
             <div className="mt-3"><StatusPill status={selectedCell.status} /></div>
             {selectedCell.project.description ? <p className="mt-3 text-xs leading-5 text-slate-500">{selectedCell.project.description}</p> : null}
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-cyan-100">{selectedCell.componentCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Components</p></div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-sky-200">{selectedCell.datasetCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Datasets</p></div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-emerald-300">{selectedCell.completeCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Complete</p></div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-rose-300">{selectedCell.failedCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Failed</p></div>
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold text-slate-200">Execution components</h4><span className="text-[10px] text-slate-500">{selectedCell.runs.length} recent runs</span></div>
+            <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold text-slate-200">Execution components</h4><span className="text-[10px] text-slate-500">{selectedCell.runs.length} recent runs · latest state per component</span></div>
             <div className="max-h-[310px] space-y-2 overflow-auto pr-1">
-              {selectedCell.runs.map((run) => {
+              {selectedCell.componentRuns.map((run) => {
                 const meta = statusMeta(normalizeRunStatus(run.status))
                 const agent = agents.get(run.agent_definition_id)
                 const dataset = run.dataset_id ? datasets.get(run.dataset_id) : null
