@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     const user = await requireApiUser()
     const projectId = new URL(request.url).searchParams.get('projectId')?.trim()
     if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
-    await authorizeProject(user.id, projectId, 'agent.execute')
+    await authorizeProject(user.id, projectId, 'agent.converse')
 
     const admin = createAdminClient()
     const { data, error } = await admin
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     }
     if (question.length > 1000) return NextResponse.json({ error: 'question must be 1000 characters or fewer.' }, { status: 400 })
 
-    await authorizeProject(user.id, projectId, 'agent.execute')
+    await authorizeProject(user.id, projectId, 'agent.converse')
     const telemetry = createGovernanceTelemetryProvider()
     const traceContext = telemetryTraceContextFromRequest(request)
     const controlStartedAt = Date.now()
