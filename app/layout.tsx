@@ -1,6 +1,8 @@
 import { Analytics } from '@vercel/analytics/next'
+import { Suspense } from 'react'
 import type { Metadata, Viewport } from 'next'
 import { ProfileMenu } from '@/components/app-shell/profile-menu'
+import { FloatingDataNexusAgent } from '@/components/ai/floating-datanexus-agent'
 import './globals.css'
 import './legacy-dark-compat.css'
 
@@ -33,6 +35,7 @@ export default function RootLayout({
       <body className="antialiased">
         {children}
         <ProfileMenu />
+        <Suspense fallback={null}><FloatingDataNexusAgent /></Suspense>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

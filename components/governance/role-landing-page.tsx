@@ -4,7 +4,6 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
-  Bot,
   BookOpen,
   CheckCircle2,
   ClipboardCheck,
@@ -120,13 +119,6 @@ function TrendChart({ points }: { points: LandingTrendPoint[] }) {
   return <div className={`${inset} overflow-hidden p-3`}><svg viewBox={`0 0 ${width} ${height}`} className="h-52 w-full" role="img" aria-label="Data confidence trend">{[0.25, 0.5, 0.75, 1].map(value => { const y = top + (1 - value) * usableHeight; return <line key={value} x1={left} x2={width-left} y1={y} y2={y} stroke="rgba(148,163,184,.12)" /> })}<path d={path} fill="none" stroke="rgb(34 211 238)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />{coords.map((point,index)=><circle key={index} cx={point.x} cy={point.y} r="5" fill="rgb(45 212 191)" stroke="rgb(6 20 38)" strokeWidth="3" />)}{points.map((point,index)=><text key={point.label} x={coords[index].x} y={height-8} textAnchor="middle" fill="rgb(148 163 184)" fontSize="11">{point.label}</text>)}</svg></div>
 }
 
-function aiHref(prompt: string, data: RoleLandingData) {
-  const params = new URLSearchParams()
-  if (data.defaultProjectId) params.set('projectId', data.defaultProjectId)
-  if (data.selectedDatasetId) params.set('datasetId', data.selectedDatasetId)
-  params.set('prompt', prompt)
-  return `/ai-insights?${params.toString()}`
-}
 function KpiLink({ item }: { item: PresentationMetric }) {
   return <Link href={item.href} data-track-recent="true" data-recent-label={item.label} className={`${surface} ${interactive} group block p-4`}><div className="flex items-start justify-between gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-400/10 text-cyan-300">{metricIcon(item.icon)}</span><ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-cyan-300" /></div><p className="mt-4 text-2xl font-black text-white">{item.value}</p><p className="mt-1 text-sm font-bold text-slate-200">{item.label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{item.detail}</p></Link>
 }
@@ -166,7 +158,7 @@ export function RoleLandingPage({ persona, data, userLabel, canAdmin=false }: { 
       <div className={`${inset} mt-5 p-3`}><p className="text-[10px] font-black uppercase tracking-[0.15em] text-cyan-300">Presentation mode</p><p className="mt-2 text-sm font-bold text-white">{persona.title}</p><p className="mt-1 text-xs leading-5 text-slate-500">{plan.objective}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600">{plan.abstraction} · {plan.primary}</p></div>
       <div className="mt-5"><p className="px-1 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500">Quick links</p><div className="mt-2 space-y-1">{visibleNav.slice(1,6).map(item=><Link key={item.href} href={item.href} data-track-recent="true" data-recent-label={item.label} className={`flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-slate-400 hover:bg-white/[0.05] hover:text-white ${focus}`}><span>{item.label}</span><ArrowRight className="h-3 w-3" /></Link>)}</div></div>
       <div className="mt-4"><LandingRecentlyViewed /></div>
-      <section className="mt-3 rounded-[22px] border border-violet-400/35 bg-gradient-to-br from-violet-600/20 via-blue-600/15 to-cyan-500/10 p-3"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-500/20 text-violet-200"><Bot className="h-6 w-6" /></span><div><p className="text-sm font-black text-white">DataNexus AI Agent</p><p className="text-[10px] text-violet-200/70">{persona.title} copilot</p></div></div><div className="mt-3 space-y-1.5">{view.aiStarters.map(prompt=><Link key={prompt} href={aiHref(prompt,data)} className={`flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/10 px-2.5 py-2 text-[11px] font-semibold leading-4 text-slate-200 hover:border-cyan-300/30 hover:bg-white/[0.06] ${focus}`}><span>{prompt}</span><ArrowRight className="h-3 w-3 shrink-0 text-cyan-300" /></Link>)}</div><Link href={aiHref(view.aiStarters[0],data)} className={`${button} mt-3 w-full bg-gradient-to-r from-violet-600 to-blue-600 text-white`}>Ask DataNexus AI <ArrowRight className="h-4 w-4" /></Link></section>
+
       {canAdmin?<Link href="/admin" className={`${button} mt-4 w-full border border-white/10 bg-white/[0.04] text-slate-300`}><Settings className="h-4 w-4" />Administration</Link>:null}
       <p className="mt-auto px-2 pt-6 text-[10px] text-slate-600">DataNexus AI · governed outcome, persona-aware presentation</p>
     </aside>
