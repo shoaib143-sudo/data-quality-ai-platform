@@ -8,7 +8,7 @@ export async function readExecutionBranch(userId: string, runId: string, branchI
     const db=createAdminClient()
     const root=await db.schema('agent').from('agent_runs').select('id,project_id').eq('id',runId).single()
     if(root.error || !root.data) throw new Error('Unavailable root')
-    await authorizeProject(userId,root.data.project_id,'agent.execute')
+    await authorizeProject(userId,root.data.project_id,'observability.read')
     let cursor:string|null=branchId; const seen=new Set<string>()
     while(cursor && cursor!==runId) {
       if(seen.has(cursor)||seen.size>=64) throw new Error('Invalid ancestry')
