@@ -78,7 +78,11 @@ The AI intelligence, learning, governance, evaluation and observability architec
 
 - `2026-09-08-ADR-006-ai-intelligence-learning-governance-evaluation-and-observability.md`
 
-The current production architecture, governance and remediation checkpoint is documented in:
+The current September 13 decision synthesis, including chat-agreed engineering rules, authority boundaries, tradeoffs, superseded decisions and unresolved architecture items, is documented in:
+
+- `2026-09-13-chat-derived-architecture-decisions-and-authority-boundaries.md`
+
+The earlier September 13 production architecture, governance and remediation checkpoint is documented in:
 
 - `2026-09-13-production-architecture-governance-and-remediation-checkpoint.md`
 
@@ -216,7 +220,8 @@ Do not deploy the entire candidate stack at once. Introduce infrastructure only 
 - `2026-09-06-production-operating-state-and-continuation.md` records the previous production acceptance checkpoint before later JDBC evidence and enterprise-acceptance integrations.
 - `2026-09-07-production-operating-state-and-continuation.md` records the later production evidence including repeat-stable multi-namespace JDBC sources and the unchanged external lineage blocker.
 - `2026-09-08-production-operating-state-and-continuation.md` records the prior production operating-state checkpoint.
-- `2026-09-13-production-architecture-governance-and-remediation-checkpoint.md` records the current release-provenance, presentation-contract and governed remediation architecture checkpoint, including the combined capability and workspace-access handoff boundary and the lifecycle status of PRs #351 through #356.
+- `2026-09-13-production-architecture-governance-and-remediation-checkpoint.md` records the earlier September 13 release-provenance, presentation-contract and governed-remediation checkpoint through PR #356. Its time-specific lifecycle statements are preserved as history.
+- `2026-09-13-chat-derived-architecture-decisions-and-authority-boundaries.md` is the current September 13 architecture decision synthesis. It records the chat-agreed engineering acceptance model, deterministic authority principles, later same-day implementation decisions, tradeoffs, superseded decisions and unresolved Living Tree release architecture.
 
 Significant architecture changes should be recorded as dated ADR style Markdown files in this folder. Each change should capture:
 
