@@ -46,6 +46,10 @@ export function StewardshipManager({
   initialCertifications,
   datasetCoverage,
   catalogCoverage,
+  initialProjectId,
+  stewardshipManageProjectIds,
+  certificationRequestProjectIds,
+  certificationReviewProjectIds,
 }: {
   projects: Project[]
   datasets: Dataset[]
@@ -56,18 +60,29 @@ export function StewardshipManager({
   initialCertifications: Certification[]
   datasetCoverage: DatasetCoverage[]
   catalogCoverage: CatalogCoverage[]
+  initialProjectId?: string | null
+  stewardshipManageProjectIds: string[]
+  certificationRequestProjectIds: string[]
+  certificationReviewProjectIds: string[]
 }) {
+  const resolvedInitialProjectId = initialProjectId && projects.some(project => project.id === initialProjectId)
+    ? initialProjectId
+    : projects[0]?.id ?? ''
   const [assignments] = useState(initialAssignments)
   const [certifications, setCertifications] = useState(initialCertifications)
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
+  const [projectId, setProjectId] = useState(resolvedInitialProjectId)
   const [targetType, setTargetType] = useState<'DATASET' | 'CATALOG_ASSET'>('DATASET')
   const [targetId, setTargetId] = useState('')
+  const [certificationDatasetId, setCertificationDatasetId] = useState('')
   const [userId, setUserId] = useState('')
   const [role, setRole] = useState('DATA_STEWARD')
   const [accountability, setAccountability] = useState('Own governance triage, semantic review, quality follow-up and evidence for this target.')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
+  const canManageStewardship = stewardshipManageProjectIds.includes(projectId)
+  const canRequestCertification = certificationRequestProjectIds.includes(projectId)
+  const canReviewCertification = certificationReviewProjectIds.includes(projectId)
   const project = projects.find(item => item.id === projectId)
   const sourceIds = useMemo(() => new Set(sources.filter(item => item.project_id === projectId).map(item => item.id)), [sources, projectId])
   const projectDatasets = datasets.filter(item => item.project_id === projectId)
@@ -75,6 +90,7 @@ export function StewardshipManager({
   const projectMembers = members.filter(item => item.organization_id === project?.organization_id)
   const targetOptions = targetType === 'DATASET' ? projectDatasets : projectAssets
   const effectiveTargetId = targetOptions.some(item => item.id === targetId) ? targetId : targetOptions[0]?.id ?? ''
+  const effectiveCertificationDatasetId = projectDatasets.some(item => item.id === certificationDatasetId) ? certificationDatasetId : projectDatasets[0]?.id ?? ''
   const effectiveUserId = projectMembers.some(item => item.user_id === userId) ? userId : projectMembers[0]?.user_id ?? ''
   const datasetById = useMemo(() => new Map(datasets.map(item => [item.id, item])), [datasets])
   const assetById = useMemo(() => new Map(catalogAssets.map(item => [item.id, item])), [catalogAssets])
@@ -88,6 +104,7 @@ export function StewardshipManager({
 
   async function assign(event: FormEvent) {
     event.preventDefault()
+    if (!canManageStewardship) return
     setBusy(true)
     setMessage('')
     try {
@@ -112,6 +129,7 @@ export function StewardshipManager({
   }
 
   async function revoke(assignmentId: string) {
+    if (!canManageStewardship) return
     setBusy(true)
     setMessage('')
     try {
@@ -132,14 +150,17 @@ export function StewardshipManager({
   }
 
   async function requestCertification(datasetId: string) {
+    if (!canRequestCertification) return
     setBusy(true)
+    setMessage('')
     try {
       const dataset = datasets.find(item => item.id === datasetId)
+      if (!dataset || dataset.project_id !== projectId) throw new Error('Choose a governed dataset in the selected project.')
       const response = await fetch('/api/stewardship/certifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectId: dataset?.project_id,
+          projectId: dataset.project_id,
           datasetId,
           assignedTo: projectMembers.find(item => item.role === 'OWNER')?.user_id ?? null,
         }),
@@ -156,18 +177,37 @@ export function StewardshipManager({
   }
 
   async function decide(id: string, status: string) {
-    const response = await fetch(`/api/stewardship/certifications/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    })
-    const payload = await response.json()
-    if (!response.ok) throw new Error(payload.error ?? 'Decision failed.')
-    setCertifications(value => value.map(item => item.id === id ? payload.request : item))
+    if (!canReviewCertification) return
+    setBusy(true)
+    setMessage('')
+    try {
+      const response = await fetch(`/api/stewardship/certifications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error ?? 'Decision failed.')
+      setCertifications(value => value.map(item => item.id === id ? payload.request : item))
+      setMessage(`Certification moved to ${status.replaceAll('_', ' ').toLowerCase()}.`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Certification decision failed.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <div className="mt-6 space-y-6">
+      <section className="rounded-2xl border bg-white p-5 shadow-sm">
+        <label className="block max-w-md text-sm font-semibold text-slate-700">Governed project
+          <select value={projectId} onChange={event => { setProjectId(event.target.value); setTargetId(''); setCertificationDatasetId(''); setUserId(''); setMessage('') }} className="mt-1 w-full rounded-xl border px-3 py-2.5">
+            {projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <p className="mt-2 text-xs text-slate-500">Evidence remains visible within your read scope. Assignment and certification actions appear only when the selected project grants the matching governance capability.</p>
+      </section>
+
       <section className="grid gap-3 md:grid-cols-4">
         <Metric label="Effective assignments" value={effectiveAssignments} icon={<UserRoundCheck className="h-4 w-4" />} />
         <Metric label="Accountable datasets" value={accountableDatasets} icon={<CheckCircle2 className="h-4 w-4" />} />
@@ -176,13 +216,10 @@ export function StewardshipManager({
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[0.82fr_1.18fr]">
-        <form onSubmit={assign} className="rounded-3xl border bg-white p-6 shadow-sm">
+        {canManageStewardship ? <form onSubmit={assign} className="rounded-3xl border bg-white p-6 shadow-sm">
           <h2 className="text-xl font-bold">Assign accountability</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">Assignments are DataNexus governance decisions. AI may suggest a candidate later, but it cannot silently activate an owner or steward.</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">Assignments are human governance decisions. AI may suggest a candidate, but it cannot silently activate an owner or steward.</p>
           <div className="mt-5 grid gap-3">
-            <select value={projectId} onChange={event => { setProjectId(event.target.value); setTargetId(''); setUserId('') }} className="rounded-xl border px-3 py-2.5">
-              {projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
             <select value={targetType} onChange={event => { setTargetType(event.target.value as 'DATASET' | 'CATALOG_ASSET'); setTargetId('') }} className="rounded-xl border px-3 py-2.5">
               <option value="DATASET">Governed dataset</option>
               <option value="CATALOG_ASSET">Current catalog asset</option>
@@ -205,9 +242,11 @@ export function StewardshipManager({
             <button disabled={busy || !effectiveTargetId || !effectiveUserId} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white disabled:opacity-50">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Assign governed role
             </button>
-            {message ? <p className="text-sm text-slate-600">{message}</p> : null}
           </div>
-        </form>
+        </form> : <section className="rounded-3xl border border-dashed bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold">Accountability register</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">You can review stewardship evidence for this project, but assignment and revocation controls are hidden because `stewardship.manage` is not granted.</p>
+        </section>}
 
         <section className="rounded-3xl border bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
@@ -232,7 +271,7 @@ export function StewardshipManager({
                         {item.subject_state !== 'CURRENT' ? <span className="rounded-full bg-red-50 px-2 py-0.5 font-bold text-red-700">ASSIGNEE {item.subject_state}</span> : null}
                       </div>
                     </div>
-                    {item.status !== 'REVOKED' ? <button type="button" disabled={busy} onClick={() => void revoke(item.id)} className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-bold text-red-700">Revoke</button> : null}
+                    {canManageStewardship && item.status !== 'REVOKED' ? <button type="button" disabled={busy} onClick={() => void revoke(item.id)} className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-bold text-red-700">Revoke</button> : null}
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{item.accountability ?? 'No accountability statement recorded.'}</p>
                   <p className="mt-2 text-xs text-slate-400">Assignee {item.user_id.slice(0, 8)}… · origin {item.origin} · effective {item.active ? 'yes' : 'no'}</p>
@@ -242,6 +281,8 @@ export function StewardshipManager({
           </div>
         </section>
       </div>
+
+      {message ? <p className="rounded-2xl border bg-white p-4 text-sm text-slate-600 shadow-sm" role="status">{message}</p> : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-3xl border bg-white p-6 shadow-sm">
@@ -254,12 +295,19 @@ export function StewardshipManager({
         </section>
 
         <section className="rounded-3xl border bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div><h2 className="text-xl font-bold">Certification queue</h2><p className="mt-1 text-xs text-slate-500">Certification remains a separate governed decision; stewardship does not automatically certify an asset.</p></div>
-            {targetType === 'DATASET' && effectiveTargetId ? <button onClick={() => void requestCertification(effectiveTargetId)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white"><ShieldCheck className="h-4 w-4" />Request</button> : null}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div><h2 className="text-xl font-bold">Certification queue</h2><p className="mt-1 text-xs text-slate-500">Certification is a separate governed decision. Request and review controls follow their own capabilities.</p></div>
+            {canRequestCertification && projectDatasets.length ? <div className="flex min-w-64 flex-col gap-2">
+              <select value={effectiveCertificationDatasetId} onChange={event => setCertificationDatasetId(event.target.value)} className="rounded-xl border px-3 py-2 text-sm">
+                {projectDatasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+              <button disabled={busy || !effectiveCertificationDatasetId} onClick={() => void requestCertification(effectiveCertificationDatasetId)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50"><ShieldCheck className="h-4 w-4" />Request certification</button>
+            </div> : null}
           </div>
+          {!canRequestCertification && !canReviewCertification ? <p className="mt-4 rounded-xl border border-dashed bg-slate-50 p-3 text-sm text-slate-600">Certification evidence is read-only for your current project capability set.</p> : null}
           <div className="mt-4 space-y-2">
-            {certifications.filter(item => item.project_id === projectId).map(item => <div key={item.id} className="rounded-xl border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-bold">{datasetById.get(item.dataset_id)?.name ?? 'Historical dataset'}</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold">{item.status}</span></div><p className="mt-1 text-xs text-slate-500">Requested {new Date(item.requested_at).toLocaleString()}</p>{!['APPROVED', 'REJECTED', 'CANCELLED'].includes(item.status) ? <div className="mt-2 flex gap-2"><button onClick={() => void decide(item.id, 'IN_REVIEW')} className="rounded-lg border px-2 py-1 text-xs font-bold">Review</button><button onClick={() => void decide(item.id, 'APPROVED')} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-bold text-white">Approve</button><button onClick={() => void decide(item.id, 'REJECTED')} className="rounded-lg bg-red-600 px-2 py-1 text-xs font-bold text-white">Reject</button></div> : null}</div>)}
+            {certifications.filter(item => item.project_id === projectId).map(item => <div key={item.id} className="rounded-xl border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-bold">{datasetById.get(item.dataset_id)?.name ?? 'Historical dataset'}</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold">{item.status}</span></div><p className="mt-1 text-xs text-slate-500">Requested {new Date(item.requested_at).toLocaleString()}</p>{canReviewCertification && !['APPROVED', 'REJECTED', 'CANCELLED'].includes(item.status) ? <div className="mt-2 flex gap-2"><button disabled={busy} onClick={() => void decide(item.id, 'IN_REVIEW')} className="rounded-lg border px-2 py-1 text-xs font-bold">Review</button><button disabled={busy} onClick={() => void decide(item.id, 'APPROVED')} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-bold text-white">Approve</button><button disabled={busy} onClick={() => void decide(item.id, 'REJECTED')} className="rounded-lg bg-red-600 px-2 py-1 text-xs font-bold text-white">Reject</button></div> : null}</div>)}
+            {!certifications.some(item => item.project_id === projectId) ? <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No certification requests are recorded for this project.</p> : null}
           </div>
         </section>
       </div>
