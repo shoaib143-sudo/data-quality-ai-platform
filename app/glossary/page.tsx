@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { BookMarked, Layers3 } from 'lucide-react'
+import { hasProjectCapability } from '@/lib/auth/authorize'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { resolvePreferredGovernanceProject } from '@/lib/governance/preferred-project'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
@@ -27,6 +28,9 @@ export default async function GlossaryPage() {
     if (right.id === preferredProjectId) return 1
     return left.name.localeCompare(right.name)
   })
+  const manageableProjectIds = (await Promise.all((projects.data ?? []).map(async project => [String(project.id), await hasProjectCapability(user.id, String(project.id), 'glossary.manage')] as const)))
+    .filter(([, allowed]) => allowed)
+    .map(([projectId]) => projectId)
   const sourceProject = new Map((sources.data ?? []).map(source => [source.id, source.project_id]))
   const sourceIds = [...sourceProject.keys()]
   const assets = sourceIds.length
@@ -67,6 +71,7 @@ export default async function GlossaryPage() {
         datasets={datasets.data ?? []}
         catalogAssets={catalogAssets}
         initialTerms={terms.data ?? []}
+        manageableProjectIds={manageableProjectIds}
       />
     </div>
   </main>
