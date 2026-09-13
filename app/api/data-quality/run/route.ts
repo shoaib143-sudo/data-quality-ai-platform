@@ -3,6 +3,7 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
 import { queueDataQualityAutomation } from '@/lib/data-quality/queue'
+import { currentExecutionFingerprint, markApprovalExecuted, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
 
 export const maxDuration = 300
 
@@ -51,11 +52,25 @@ export async function POST(request: Request) {
     const user = await requireApiUser()
     const body = await request.json()
     const datasetVersionId = text(body.datasetVersionId)
+    const agentDefinitionId = text(body.agentDefinitionId ?? body.agent_definition_id)
+    const approvalRequestId = text(body.approvalRequestId ?? body.approval_request_id)
     const rawIdempotencyKey = text(request.headers.get('idempotency-key') ?? body.idempotencyKey ?? body.idempotency_key)
     let profileRunId = text(body.profileRunId)
     if (!datasetVersionId) return NextResponse.json({ error: 'datasetVersionId is required.' }, { status: 400 })
 
     const { dataset, version } = await authorizeDatasetVersion(user.id, datasetVersionId, 'quality.execute')
+    if (approvalRequestId) {
+      if (!agentDefinitionId) return NextResponse.json({ error: 'agentDefinitionId is required to fulfill this execution request.' }, { status: 400 })
+      const currentFingerprint = await currentExecutionFingerprint({
+        requestId: approvalRequestId,
+        parameters: { agentDefinitionId, datasetVersionId },
+      })
+      await validateApprovalForExecution({
+        requestId: approvalRequestId,
+        executorUserId: user.id,
+        currentFingerprint,
+      })
+    }
     const admin = createAdminClient()
     const enabledRuleCount = await enabledQualityRuleCount(admin, dataset.id, version.id)
     if (enabledRuleCount === 0) {
@@ -97,6 +112,7 @@ export async function POST(request: Request) {
       idempotencyKey: rawIdempotencyKey ? `data-quality:manual:${rawIdempotencyKey}` : null,
     })
 
+    if (approvalRequestId) await markApprovalExecuted(approvalRequestId)
     return NextResponse.json({
       accepted: true,
       execution_completed: false,
