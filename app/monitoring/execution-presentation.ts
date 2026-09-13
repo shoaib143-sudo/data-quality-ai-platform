@@ -1,6 +1,6 @@
 import { displayState, type Edge, type Run, type Snapshot } from '@/lib/monitoring/execution-contract'
 
-export type ExecutionPresentationState = ReturnType<typeof displayState>
+export type ExecutionPresentationState = 'running' | 'complete' | 'waiting' | 'failed' | 'queued' | 'cancelled' | 'skipped' | 'unknown'
 
 export type ExecutionPresentationNode = {
   id: string
@@ -30,17 +30,17 @@ export type ExecutionPresentation = {
 }
 
 export function buildExecutionPresentation(snapshot: Snapshot): ExecutionPresentation {
-  const nodes = snapshot.runs.map(run => ({
+  const nodes: ExecutionPresentationNode[] = snapshot.runs.map(run => ({
     id: run.id,
     parentId: run.parent_run_id,
     label: run.name ?? 'Agent run',
-    state: displayState(run, snapshot),
+    state: displayState(run, snapshot) as ExecutionPresentationState,
     recordedStatus: run.status,
     isRoot: run.id === snapshot.rootId,
     run,
   }))
 
-  const ownership = snapshot.runs.flatMap(run => run.parent_run_id ? [{
+  const ownership: ExecutionPresentationEdge[] = snapshot.runs.flatMap(run => run.parent_run_id ? [{
     id: `ownership:${run.parent_run_id}:${run.id}`,
     source: run.parent_run_id,
     target: run.id,
@@ -51,7 +51,7 @@ export function buildExecutionPresentation(snapshot: Snapshot): ExecutionPresent
     external: false,
   }] : [])
 
-  const prerequisites = snapshot.edges.map(edge => ({
+  const prerequisites: ExecutionPresentationEdge[] = snapshot.edges.map(edge => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
