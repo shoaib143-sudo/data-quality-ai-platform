@@ -25,9 +25,16 @@ await build({entryPoints:['tests/browser/execution-monitor/entry.tsx'],outfile:j
 const globalCss = await postcss([tailwindcss()]).process(readFileSync('app/globals.css','utf8'), {from:resolve('app/globals.css')})
 const bundleCss = join(dir,'bundle.css')
 writeFileSync(bundleCss,globalCss.css+'\n'+readFileSync(bundleCss,'utf8'))
+// Load only fixed build outputs. Request values select an in-memory asset;
+// they must never become filesystem paths (CodeQL path-injection boundary).
+const assets = new Map([
+  ['/bundle.js', {type:'text/javascript',body:readFileSync(join(dir,'bundle.js'))}],
+  ['/bundle.css', {type:'text/css',body:readFileSync(bundleCss)}],
+])
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic Living Tree verification</title><link rel="stylesheet" href="/bundle.css"><style>body{margin:24px;background:#070e18;color:#e2e8f0;font-family:Arial,sans-serif}*{box-sizing:border-box}button{font:inherit}a{color:#93c5fd}#root{max-width:1600px;margin:auto}</style></head><body><p>SYNTHETIC VALIDATION ONLY. No live jobs or credentials.</p><div id="root"></div><script src="/bundle.js"></script></body></html>`
 const server = createServer((req,res) => {
-  if(req.url === '/bundle.js' || req.url === '/bundle.css') {res.setHeader('Content-Type',req.url.endsWith('css')?'text/css':'text/javascript');res.end(readFileSync(join(dir,req.url.slice(1))));return}
+  const asset = assets.get(req.url ?? '')
+  if(asset) {res.setHeader('Content-Type',asset.type);res.end(asset.body);return}
   if(req.url?.startsWith('/api/')) {res.writeHead(503,{'Content-Type':'application/json'});res.end('{"error":"Synthetic APIs must be supplied by the browser test"}');return}
   res.setHeader('Content-Type','text/html');res.end(html)
 })

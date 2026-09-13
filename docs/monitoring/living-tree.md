@@ -70,9 +70,11 @@ The fixture now compiles `app/globals.css` with the existing PostCSS/Tailwind pl
 
 Fresh local verification passed frozen-lockfile installation, TypeScript, all 45 synthetic checks, supervisor production and durable-resume checks, profiling lifecycle contracts, and the production build. The browser installation with OS dependencies was denied by this session's package-manager permissions; installing the browser binaries alone succeeded and all nine tests subsequently ran successfully.
 
+CI run `34741760070` also passed all nine strengthened browser tests on `2cfcf0c`. CodeQL review thread `PRRT_kwDOUCzvOc6hzRDc` identified request-derived filesystem access in the fixture asset server. Although the original code restricted URL values, the server now preloads exactly two fixed build outputs into a Map and uses the request only as an in-memory lookup key. No request input reaches a filesystem path. Fresh CodeQL validation is required for this follow-up.
+
 The earlier V6 runtime SLO failure measured the existing production `/login` endpoint: 50/50 HTTP successes but p95 1580.98ms against a 1500ms limit. The fresh runtime-slo job in run `34741515142` passed without changing thresholds.
 
-Preview `dpl_9guJMXPogUaR5hhwtPoEcS49hiVy` was confirmed READY at `dfa35df`. Browser navigation reached Vercel sign-in, not an authenticated DataNexus session. Actual authorized/unauthorized application personas, a controlled new execution, monitor API latency/payload measurements, the deployed server flag, and production acceptance remain outstanding. No application execution or live database mutation was made during this follow-up. PR #363 stays draft until these acceptance gates are satisfied.
+Preview `dpl_HhZrNAaJXCfibarjeKUs7CsTJzmh` was confirmed READY at `2cfcf0c`. Configured Vercel access reached the DataNexus sign-in page; there is no authenticated application session yet. Actual authorized/unauthorized application personas, a controlled new execution, monitor API latency/payload measurements, the deployed server flag, and production acceptance remain outstanding. No application execution or live database mutation was made during this follow-up. PR #363 stays draft until these acceptance gates are satisfied.
 
 ## Rollout and rollback
 
