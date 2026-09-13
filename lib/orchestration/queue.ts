@@ -38,19 +38,35 @@ async function writeTelemetry(projectId: string | null, metricKey: string, numer
   if (error) console.error('[platform-telemetry]', error.message)
 }
 
+function logClaimDegradation(metricKey: string, dimensions: Record<string, unknown>) {
+  // Claim transport degradation must not synchronously write back through the same
+  // database path that just timed out. Runtime logs are durable operational evidence
+  // and avoid timeout amplification while queued work remains fenced for retry.
+  console.error('[job-claim-degraded-evidence]', JSON.stringify({ metric_key: metricKey, ...dimensions }).slice(0, 2000))
+}
+
 async function recordClaimTelemetry(jobs: DurableJob[]) {
-  await Promise.all(jobs.map(async (job) => {
-    if (!job.started_at) return
+  const rows = jobs.flatMap((job) => {
+    if (!job.started_at) return []
     const createdAt = new Date(job.created_at).getTime()
     const startedAt = new Date(job.started_at).getTime()
-    if (!Number.isFinite(createdAt) || !Number.isFinite(startedAt)) return
-    await writeTelemetry(job.project_id, 'job.queue_wait_ms', Math.max(0, startedAt - createdAt), {
-      job_type: job.job_type,
-      priority: job.priority,
-      attempts: job.attempts,
-      dispatch_mode: job.lease_owner?.startsWith('event-worker:') ? 'EVENT_DRIVEN' : 'WORKER_CLAIM',
-    })
-  }))
+    if (!Number.isFinite(createdAt) || !Number.isFinite(startedAt)) return []
+    return [{
+      project_id: job.project_id,
+      metric_key: 'job.queue_wait_ms',
+      numeric_value: Math.max(0, startedAt - createdAt),
+      dimensions: {
+        job_type: job.job_type,
+        priority: job.priority,
+        attempts: job.attempts,
+        dispatch_mode: job.lease_owner?.startsWith('event-worker:') ? 'EVENT_DRIVEN' : 'WORKER_CLAIM',
+      },
+    }]
+  })
+  if (rows.length === 0) return
+  const admin = createAdminClient()
+  const { error } = await admin.schema('orchestration').from('platform_telemetry').insert(rows)
+  if (error) console.error('[platform-telemetry]', error.message)
 }
 
 async function resolveCapacity(projectId: string) {
@@ -182,7 +198,7 @@ export async function claimDurableJobs(workerId: string, limit = 2, poolOverride
       throw new Error(`Unable to release stale durable jobs safely: ${releaseAssessment.error}`)
     }
     console.error('[job-stale-release]', releaseAssessment.error)
-    await writeTelemetry(null, 'job.stale_release_failed', 1, {
+    logClaimDegradation('job.stale_release_failed', {
       error: releaseAssessment.error,
       disposition: releaseAssessment.disposition,
       claimable_statuses: ['QUEUED'],
@@ -209,7 +225,7 @@ export async function claimDurableJobs(workerId: string, limit = 2, poolOverride
       const message = error.message || 'Unknown workload-pool claim failure'
       outcomes.push({ pool, succeeded: false, error: message })
       console.error('[job-pool-claim]', `${pool}: ${message.slice(0, 500)}`)
-      await writeTelemetry(null, 'job.pool_claim_failed', 1, {
+      logClaimDegradation('job.pool_claim_failed', {
         pool,
         error: message.slice(0, 500),
         disposition: 'POOL_LEFT_QUEUED_FOR_RETRY',
