@@ -49,6 +49,8 @@ function scoreValue(score: Score, dimension: Dimension) {
   return score.overall_score
 }
 function readableAssetType(value: string) {
+  const normalized = upper(value)
+  if (normalized === 'BUSINESS_DOMAIN') return 'Data Domain'
   return value.toLowerCase().split('_').map(part => part ? part[0].toUpperCase() + part.slice(1) : part).join(' ')
 }
 function relativeDate(value: string | null) {

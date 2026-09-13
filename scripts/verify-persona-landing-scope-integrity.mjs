@@ -5,6 +5,7 @@ const landing = fs.readFileSync('components/governance/role-landing-page.tsx', '
 
 const checks = [
   ['Data Domain is canonical UI nomenclature', landing.includes('aria-label="Data Domain"') && landing.includes('All Data Domains') && landing.includes('>Data Domain</th>')],
+  ['business context BUSINESS_DOMAIN renders as Data Domain', page.includes("if (normalized === 'BUSINESS_DOMAIN') return 'Data Domain'")],
   ['available Data Domains remain selectable after scoping', landing.includes('data.availableDomains.map')],
   ['dataset filter cannot override a different selected Data Domain', page.includes("item.id === requested.datasetId && (requestedDomain === 'overall' || item.domain === requestedDomain)")],
   ['landing dataset evidence is scoped', page.includes('scopedDatasetSummaries') && page.includes('scopedDatasetIds')],
