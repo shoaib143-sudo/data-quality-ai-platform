@@ -23,7 +23,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
 
   const [agentsResult, datasetsResult, projectsResult, stepsResult] = await Promise.all([
     agentIds.length ? supabase.schema('agent').from('agent_definitions').select('id, name, version, agent_key').in('id', agentIds) : Promise.resolve({ data: [], error: null }),
-    datasetIds.length ? supabase.schema('catalog').from('datasets').select('id, name').in('id', datasetIds) : Promise.resolve({ data: [], error: null }),
+    datasetIds.length ? supabase.schema('catalog').from('datasets').select('id, name, business_domain').in('id', datasetIds) : Promise.resolve({ data: [], error: null }),
     projectIds.length ? supabase.schema('app').from('projects').select('id, name, description').in('id', projectIds) : Promise.resolve({ data: [], error: null }),
     runIds.length ? supabase.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, started_at, completed_at, error_code, error_message').in('agent_run_id', runIds).order('step_order') : Promise.resolve({ data: [], error: null }),
   ])
