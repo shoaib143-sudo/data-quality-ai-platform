@@ -24,6 +24,8 @@ jobs:
         run: node --experimental-strip-types scripts/verify-persona-workspace-policy.mjs
       - name: Verify real-life persona acceptance task contract
         run: node --experimental-strip-types scripts/verify-persona-real-life-task-contract.mjs
+      - name: Verify Data Domain filter contract
+        run: node scripts/verify-data-domain-filter-contract.mjs
       - name: Verify shared DataNexus UX foundation
         run: node scripts/verify-ux-foundation.mjs
       - name: Verify UX product telemetry contract
