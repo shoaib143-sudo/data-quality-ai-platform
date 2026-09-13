@@ -23,3 +23,6 @@ assert.doesNotMatch(monitor, /Math\.random/, 'Domain topology placement must rem
 assert.doesNotMatch(monitor, /SIMULATED DATA|simulated data/i, 'Production Job Monitor must not label real execution evidence as simulated.')
 
 console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, latest component-state aggregation, deterministic organic topology, filtering, live refresh, and deep-linked diagnostics.')
+
+await import('./test-domain-cell-job-monitor.mjs')
+await import('./audit-domain-cell-job-monitor-adversarial.mjs')
