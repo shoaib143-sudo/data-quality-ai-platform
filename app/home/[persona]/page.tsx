@@ -196,15 +196,23 @@ export default async function PersonaHomePage({ params, searchParams }: { params
     }
   })
 
-  const requestedDataset = requested.datasetId && datasetSummaries.some(item => item.id === requested.datasetId) ? requested.datasetId : ''
   const requestedDomain = requested.domain && requested.domain !== 'overall' && datasetSummaries.some(item => item.domain === requested.domain) ? requested.domain : 'overall'
+  const requestedDataset = requested.datasetId && datasetSummaries.some(item => item.id === requested.datasetId && (requestedDomain === 'overall' || item.domain === requestedDomain)) ? requested.datasetId : ''
+  const scopedDatasetSummaries = requestedDataset
+    ? datasetSummaries.filter(item => item.id === requestedDataset)
+    : requestedDomain === 'overall'
+      ? datasetSummaries
+      : datasetSummaries.filter(item => item.domain === requestedDomain)
+  const scopedDatasetIds = new Set(scopedDatasetSummaries.map(item => item.id))
 
-  const completedLatestRuns = [...latestRunByDataset.values()].filter(run => upper(run.status) === 'COMPLETED')
+  const completedLatestRuns = [...latestRunByDataset.entries()]
+    .filter(([datasetId, run]) => scopedDatasetIds.has(datasetId) && upper(run.status) === 'COMPLETED')
+    .map(([, run]) => run)
   const scoredLatestRuns = completedLatestRuns.filter(run => typeof latestScoreByRun.get(run.id)?.overall_score === 'number')
   const confidence = scoredLatestRuns.length ? scoredLatestRuns.reduce((sum, run) => sum + Number(latestScoreByRun.get(run.id)?.overall_score ?? 0), 0) / scoredLatestRuns.length : null
 
   const domainNames = [...new Set(datasetSummaries.map(item => item.domain))]
-  const domains: LandingDomain[] = domainNames.map(name => {
+  const availableDomains: LandingDomain[] = domainNames.map(name => {
     const members = datasetSummaries.filter(item => item.domain === name)
     const scored = members.filter(item => typeof item.confidence === 'number')
     return {
@@ -214,6 +222,9 @@ export default async function PersonaHomePage({ params, searchParams }: { params
       highFindings: members.reduce((sum, item) => sum + item.highFindingCount, 0),
     }
   }).sort((a, b) => b.assets - a.assets || a.name.localeCompare(b.name))
+  const domains = requestedDomain === 'overall'
+    ? availableDomains
+    : availableDomains.filter(domain => domain.name === requestedDomain)
 
   const cutoff = Date.now() - rangeDays[selectedRange] * 86_400_000
   const trendBuckets = new Map<string, number[]>()
@@ -238,7 +249,7 @@ export default async function PersonaHomePage({ params, searchParams }: { params
     value: values.reduce((sum, value) => sum + value, 0) / values.length,
   }))
 
-  const currentMaterial = datasetSummaries.flatMap(dataset => {
+  const currentMaterial = scopedDatasetSummaries.flatMap(dataset => {
     const runId = dataset.latestRunId
     if (!runId) return []
     return (findingsByRun.get(runId) ?? []).filter(item => isMaterial(item.severity)).map(item => ({ ...item, dataset }))
@@ -255,6 +266,7 @@ export default async function PersonaHomePage({ params, searchParams }: { params
   const assetById = new Map(contextAssets.map(asset => [asset.id, asset]))
   const impactByType = new Map<string, Set<string>>()
   for (const link of contextLinks) {
+    if (!scopedDatasetIds.has(link.dataset_id)) continue
     const asset = assetById.get(link.business_context_asset_id)
     if (!asset) continue
     const existing = impactByType.get(asset.asset_type) ?? new Set<string>()
@@ -269,38 +281,45 @@ export default async function PersonaHomePage({ params, searchParams }: { params
 
   const activity: LandingActivity[] = []
   for (const item of currentMaterial.slice(0, 4)) activity.push({ id: `finding-${item.id}`, label: item.title, detail: `${item.dataset.name} · ${item.severity}`, when: relativeDate(item.created_at), href: `/profiling/explorer?runId=${encodeURIComponent(item.profile_run_id)}&findingId=${encodeURIComponent(item.id)}`, tone: isHigh(item.severity) ? 'warn' : 'info' })
-  for (const run of runs.filter(item => upper(item.status) === 'COMPLETED').slice(0, 4)) {
+  for (const run of runs.filter(item => upper(item.status) === 'COMPLETED')) {
     const version = versionById.get(run.dataset_version_id)
     const dataset = version ? datasetById.get(version.dataset_id) : undefined
-    if (dataset) activity.push({ id: `run-${run.id}`, label: 'Profiling evidence completed', detail: dataset.name, when: relativeDate(run.completed_at || run.started_at), href: `/profiling/explorer?runId=${encodeURIComponent(run.id)}`, tone: 'good' })
+    if (dataset && scopedDatasetIds.has(dataset.id) && activity.length < 8) activity.push({ id: `run-${run.id}`, label: 'Profiling evidence completed', detail: dataset.name, when: relativeDate(run.completed_at || run.started_at), href: `/profiling/explorer?runId=${encodeURIComponent(run.id)}`, tone: 'good' })
   }
   activity.sort((a, b) => a.when.localeCompare(b.when))
 
-  const assignedDomains = datasets.filter(dataset => Boolean(dataset.business_domain)).length
-  const ownedDatasets = datasetSummaries.filter(dataset => dataset.hasOwner).length
+  const scopedIssues = requestedDomain === 'overall' && !requestedDataset
+    ? issues
+    : issues.filter(issue => issue.dataset_id ? scopedDatasetIds.has(issue.dataset_id) : false)
+  const assignedDomains = scopedDatasetSummaries.filter(dataset => dataset.domain !== 'Unassigned').length
+  const ownedDatasets = scopedDatasetSummaries.filter(dataset => dataset.hasOwner).length
+  const scopedGlossaryMappings = glossaryMappings.filter(item => item.dataset_id && scopedDatasetIds.has(item.dataset_id))
+  const scopedClassifications = classifications.filter(item => item.dataset_id && scopedDatasetIds.has(item.dataset_id))
+  const scopedCdeMappings = cdeMappings.filter(item => scopedDatasetIds.has(item.dataset_id))
   const data: RoleLandingData = {
     confidence,
-    governedAssets: datasets.length,
+    governedAssets: scopedDatasetSummaries.length,
     activeSources: sources.filter(source => upper(source.status) === 'ACTIVE').length,
     materialFindings: currentMaterial.length,
     highFindings: currentHigh.length,
     failedControls: qualityRuns.filter(run => upper(run.status) === 'FAILED' || run.passed === false).length,
     openAlerts: alerts.filter(alert => upper(alert.status) !== 'RESOLVED').length,
-    coverage: datasets.length ? Math.round((completedLatestRuns.length / datasets.length) * 100) : 0,
+    coverage: scopedDatasetSummaries.length ? Math.round((completedLatestRuns.length / scopedDatasetSummaries.length) * 100) : 0,
     affectedDomains: domains.filter(domain => domain.name !== 'Unassigned').length,
-    certifiedDatasets: datasetSummaries.filter(dataset => upper(dataset.certificationStatus) === 'CERTIFIED').length,
-    pendingCertifications: certificationRequests.filter(request => isPending(request.status)).length,
+    certifiedDatasets: scopedDatasetSummaries.filter(dataset => upper(dataset.certificationStatus) === 'CERTIFIED').length,
+    pendingCertifications: certificationRequests.filter(request => scopedDatasetIds.has(request.dataset_id) && isPending(request.status)).length,
     pendingWaivers: waivers.filter(waiver => isPending(waiver.status)).length,
-    unresolvedIssues: issues.filter(issue => isUnresolved(issue.status)).length,
-    ownershipCoverage: datasets.length ? Math.round((ownedDatasets / datasets.length) * 100) : 0,
-    domainAssignedCoverage: datasets.length ? Math.round((assignedDomains / datasets.length) * 100) : 0,
-    approvedGlossaryMappings: glossaryMappings.filter(isApprovedGlossary).length,
-    approvedClassifications: classifications.filter(isApprovedClassification).length,
-    cdeMappings: cdeMappings.length,
+    unresolvedIssues: scopedIssues.filter(issue => isUnresolved(issue.status)).length,
+    ownershipCoverage: scopedDatasetSummaries.length ? Math.round((ownedDatasets / scopedDatasetSummaries.length) * 100) : 0,
+    domainAssignedCoverage: scopedDatasetSummaries.length ? Math.round((assignedDomains / scopedDatasetSummaries.length) * 100) : 0,
+    approvedGlossaryMappings: scopedGlossaryMappings.filter(isApprovedGlossary).length,
+    approvedClassifications: scopedClassifications.filter(isApprovedClassification).length,
+    cdeMappings: scopedCdeMappings.length,
     failedControlEvaluations: controlEvaluations.filter(item => isFailedControl(item.result)).length,
     topFindings,
     domains,
-    datasets: datasetSummaries,
+    availableDomains,
+    datasets: scopedDatasetSummaries,
     trend,
     activity: activity.slice(0, 8),
     businessImpact,
