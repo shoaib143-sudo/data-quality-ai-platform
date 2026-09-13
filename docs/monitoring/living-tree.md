@@ -119,3 +119,20 @@ The Preview environment was set to `JOB_MONITOR_TREE_ENABLED=false` for deployed
 ### Preview rollback restoration
 
 After rollback validation, `JOB_MONITOR_TREE_ENABLED` was removed from the Preview environment, restoring the default Tree-enabled behavior. This commit triggers a fresh Preview deployment so the restored default can be verified before final acceptance.
+
+
+### Final release-candidate validation — 2026-09-13
+
+Exact head `80a356a5759ddd24e21e1429edd02d25d99b9721` is deployed and READY on Vercel preview `dpl_FfZjMoEqUqJATQAtvGRE1niuL2Ni`.
+
+All exact-head automated gates are green, including Living Tree Job Monitor, Navigation Integrity, Persona Workspace Policy, Governed Incident 13-Persona Certification, Privileged API Authorization Audit, Native Supervisor Production, Native supervisor durable resume, CodeQL Security, Quality Gate, P0-P5 Revalidation, and V6 Operational Certification.
+
+The branch was rebuilt on the current production visual system. Newer Profile/Settings account governance and shared DataNexus UI changes are preserved, while Job Monitor remains visible through the governed monitoring workspace for all 13 personas.
+
+Rollback behavior was deployed and validated earlier with `JOB_MONITOR_TREE_ENABLED=false`; the flag was then removed and the default Tree-enabled behavior restored.
+
+A fresh controlled supervisor execution was attempted only through the supported authenticated application boundary. The automation profile had no authenticated DataNexus session and stopped without execution. No role bindings, execution rows, or evidence rows were created or modified. The pre-provisioned Data Governance Admin and owner users both resolve `agent.execute=true` for the target project, so the remaining blocker is session establishment only, not authorization design.
+
+Production durable-worker traffic continues to show intermittent Supabase/PostgREST `Gateway Timeout` responses on pool claims and stale-release maintenance. The worker claim hot-path migration is live, its bounded scan and indexes are present, and failures remain fail-safe as queued/fenced-for-retry. This runtime provider-path degradation is tracked separately from Living Tree correctness and is not hidden by this release evidence.
+
+The draft must remain unmerged until one authenticated controlled supervisor execution is observed end-to-end through the real API and its resulting parent/child execution evidence is verified in Job Monitor.
