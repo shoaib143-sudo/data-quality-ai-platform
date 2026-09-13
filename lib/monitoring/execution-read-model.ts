@@ -21,7 +21,7 @@ export async function readExecution(userId: string, requestedId: string, limit =
   const db = createAdminClient()
   const { data: requested, error } = await db.schema('agent').from('agent_runs').select(RUN_FIELDS).eq('id', requestedId).maybeSingle()
   check(error); if (!requested) throw new Error('Execution not found')
-  await authorizeProject(userId, requested.project_id, 'agent.execute')
+  await authorizeProject(userId, requested.project_id, 'observability.read')
   const projectId = requested.project_id
   let root = requested as Run; const seen = new Set<string>()
   while (root.parent_run_id) {
@@ -97,7 +97,7 @@ export async function readExecution(userId: string, requestedId: string, limit =
 
 export async function readExecutionRoots(userId: string, projectId: string, offset = 0, status = '') {
   assertRunId(projectId)
-  await authorizeProject(userId, projectId, 'agent.execute')
+  await authorizeProject(userId, projectId, 'observability.read')
   let query = createAdminClient().schema('agent').from('agent_runs').select(RUN_FIELDS)
     .eq('project_id', projectId).is('parent_run_id', null)
   const statuses = ['CREATED', 'QUEUED', 'RUNNING', 'WAITING', 'SUCCEEDED', 'FAILED', 'CANCELLED']
