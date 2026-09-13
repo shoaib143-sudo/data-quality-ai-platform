@@ -45,6 +45,14 @@ function logClaimDegradation(metricKey: string, dimensions: Record<string, unkno
   console.error('[job-claim-degraded-evidence]', JSON.stringify({ metric_key: metricKey, ...dimensions }).slice(0, 2000))
 }
 
+function isRetryableClaimGatewayError(message: string) {
+  return /gateway timeout/i.test(message)
+}
+
+async function waitForClaimReplay() {
+  await new Promise((resolve) => setTimeout(resolve, 125))
+}
+
 async function recordClaimTelemetry(jobs: DurableJob[]) {
   const rows = jobs.flatMap((job) => {
     if (!job.started_at) return []
@@ -222,11 +230,27 @@ export async function claimDurableJobs(workerId: string, limit = 2, poolOverride
     const remainingPools = pools.length - index
     const poolLimit = Math.max(1, Math.ceil(remaining / remainingPools))
     const pool = pools[index]
-    const { data, error } = await admin.schema('orchestration').rpc('claim_jobs_by_pool', {
-      p_worker: `${workerId}:${pool.toLowerCase()}`,
+    const claimWorker = `${workerId}:${pool.toLowerCase()}`
+    const claimArgs = {
+      p_worker: claimWorker,
       p_pool: pool,
       p_limit: poolLimit,
-    })
+    }
+    let { data, error } = await admin.schema('orchestration').rpc('claim_jobs_by_pool', claimArgs)
+
+    if (error && isRetryableClaimGatewayError(error.message || '')) {
+      await waitForClaimReplay()
+      const replay = await admin.schema('orchestration').rpc('claim_jobs_by_pool', claimArgs)
+      data = replay.data
+      error = replay.error
+      if (!error) {
+        console.warn('[job-pool-claim-recovered]', JSON.stringify({
+          pool,
+          worker: claimWorker,
+          disposition: 'IDEMPOTENT_REPLAY_RECOVERED',
+        }))
+      }
+    }
 
     if (error) {
       const message = error.message || 'Unknown workload-pool claim failure'
