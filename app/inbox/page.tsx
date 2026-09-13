@@ -67,7 +67,7 @@ export default async function InboxPage(){
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-3xl font-black tracking-tight sm:text-4xl">Governance Inbox</h1><p className="mt-3 max-w-3xl leading-7 text-slate-600">One place for pending governance work, unresolved risk signals, remediation items, and execution failures available to your current governance context.</p></div><Link href="/search" className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Search evidence</Link></div>
       </section>
 
-      {failures.length?<section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">Some available inbox sources could not be loaded: {failures.join(', ')}. Other permitted evidence is still shown below.</section>:null}
+      {failures.length?<section className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">Some inbox sources could not be loaded: {failures.join(', ')}. Available evidence is still shown below.</section>:null}
 
       {summaryCards.length?<section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{summaryCards.map(({label,value,Icon,href})=><Link key={label} href={href} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"><Icon className="h-5 w-5 text-blue-600" aria-hidden="true"/><p className="mt-4 text-3xl font-black">{value}</p><p className="text-sm font-semibold text-slate-500">{label}</p></Link>)}</section>:null}
 
