@@ -1,0 +1,34 @@
+name: Persona test principal provisioning contract
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/admin/persona-test-principals/route.ts'
+      - 'app/admin/persona-test-principals/page.tsx'
+      - 'scripts/test-persona-test-principal-provisioning.mjs'
+      - '.github/workflows/persona-test-principal-provisioning.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/api/admin/persona-test-principals/route.ts'
+      - 'app/admin/persona-test-principals/page.tsx'
+      - 'scripts/test-persona-test-principal-provisioning.mjs'
+      - '.github/workflows/persona-test-principal-provisioning.yml'
+
+jobs:
+  persona-provisioning-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify explicit OWNER-only credential rotation boundary
+        run: node scripts/test-persona-test-principal-provisioning.mjs
+      - name: Production build
+        run: pnpm build
