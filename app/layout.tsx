@@ -32,7 +32,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="antialiased">
+      <body className="dn-page antialiased">
         {children}
         <ProfileMenu />
         <Suspense fallback={null}><FloatingDataNexusAgent /></Suspense>

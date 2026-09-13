@@ -36,6 +36,8 @@ jobs:
         run: node --experimental-strip-types scripts/verify-persona-landing-content-parity.mjs
       - name: Verify floating DataNexus AI Agent
         run: node scripts/verify-floating-ai-agent.mjs
+      - name: Verify whole-product DataNexus theme
+        run: node scripts/verify-whole-product-theme.mjs
       - name: Verify UX product telemetry contract
         run: node scripts/verify-ux-product-telemetry.mjs
       - name: Verify policy-denied UX contract
