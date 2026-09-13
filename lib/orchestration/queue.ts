@@ -45,6 +45,10 @@ function logClaimDegradation(metricKey: string, dimensions: Record<string, unkno
   console.error('[job-claim-degraded-evidence]', JSON.stringify({ metric_key: metricKey, ...dimensions }).slice(0, 2000))
 }
 
+function logClaimRpcEvidence(dimensions: Record<string, unknown>) {
+  console.info('[job-claim-rpc-evidence]', JSON.stringify(dimensions).slice(0, 2000))
+}
+
 function isRetryableClaimGatewayError(message: string) {
   return /gateway timeout/i.test(message)
 }
@@ -236,21 +240,40 @@ export async function claimDurableJobs(workerId: string, limit = 2, poolOverride
       p_pool: pool,
       p_limit: poolLimit,
     }
+    const firstStartedAt = Date.now()
     let { data, error } = await admin.schema('orchestration').rpc('claim_jobs_by_pool', claimArgs)
+    const firstElapsedMs = Date.now() - firstStartedAt
+    let retryElapsedMs: number | null = null
+    const firstGatewayTimeout = Boolean(error && isRetryableClaimGatewayError(error.message || ''))
 
-    if (error && isRetryableClaimGatewayError(error.message || '')) {
+    if (firstGatewayTimeout) {
       await waitForClaimReplay()
+      const retryStartedAt = Date.now()
       const replay = await admin.schema('orchestration').rpc('claim_jobs_by_pool', claimArgs)
+      retryElapsedMs = Date.now() - retryStartedAt
       data = replay.data
       error = replay.error
       if (!error) {
         console.warn('[job-pool-claim-recovered]', JSON.stringify({
           pool,
           worker: claimWorker,
+          first_elapsed_ms: firstElapsedMs,
+          retry_elapsed_ms: retryElapsedMs,
           disposition: 'IDEMPOTENT_REPLAY_RECOVERED',
         }))
       }
     }
+
+    logClaimRpcEvidence({
+      pool,
+      worker: claimWorker,
+      first_elapsed_ms: firstElapsedMs,
+      retry_elapsed_ms: retryElapsedMs,
+      retry_attempted: firstGatewayTimeout,
+      recovered: firstGatewayTimeout && !error,
+      final_status: error ? 'FAILED' : 'SUCCEEDED',
+      claimed_jobs: Array.isArray(data) ? data.length : 0,
+    })
 
     if (error) {
       const message = error.message || 'Unknown workload-pool claim failure'
