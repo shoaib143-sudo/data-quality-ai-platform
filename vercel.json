@@ -5,5 +5,8 @@
       "path": "/api/jobs/worker",
       "schedule": "* * * * *"
     }
+  ],
+  "regions": [
+    "sin1"
   ]
 }
