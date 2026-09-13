@@ -67,7 +67,7 @@ export type GovernedInvestigation = {
     agentKey: GovernedAgentKey
     question: string | null
     projectScoped: true
-    authorizationCapability: 'agent.execute'
+    authorizationCapability: 'agent.converse'
   }
   role: ReturnType<typeof getGovernedAgentPolicy>
   queryPlan: {
@@ -276,7 +276,7 @@ export function buildGovernedInvestigation(input: {
       agentKey: input.agentKey,
       question: input.question?.trim() || null,
       projectScoped: true,
-      authorizationCapability: 'agent.execute',
+      authorizationCapability: 'agent.converse',
     },
     role: policy,
     queryPlan: {
