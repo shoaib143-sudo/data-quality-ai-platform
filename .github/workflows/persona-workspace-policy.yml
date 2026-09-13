@@ -28,6 +28,8 @@ jobs:
         run: node scripts/verify-persona-mutation-visibility.mjs
       - name: Verify shared DataNexus UX foundation
         run: node scripts/verify-ux-foundation.mjs
+      - name: Verify shared DataNexus theme contract
+        run: node scripts/verify-datanexus-theme-contract.mjs
       - name: Verify UX product telemetry contract
         run: node scripts/verify-ux-product-telemetry.mjs
       - name: Verify policy-denied UX contract
