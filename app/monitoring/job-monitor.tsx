@@ -178,7 +178,7 @@ function RunNode({ run, label, selected, dense, onSelect }: { run: MonitoringRun
   >
     <span className={`absolute inset-1.5 rounded-full blur-md opacity-75 ${meta.dot}`} />
     <span className={`relative rounded-full ${dense ? 'h-2 w-2' : 'h-2.5 w-2.5'} ${meta.dot} ${status === 'RUNNING' ? 'animate-pulse' : ''}`} />
-    <span className="pointer-events-none absolute top-full mt-1 hidden max-w-24 truncate rounded-md border border-white/10 bg-[#061426]/95 px-1.5 py-0.5 text-[9px] font-semibold text-slate-200 shadow-lg group-hover:block group-focus-visible:block">{label}</span>
+    <span className={`pointer-events-none absolute top-full mt-1 max-w-24 truncate rounded-md border border-white/10 bg-[#061426]/95 px-1.5 py-0.5 text-[9px] font-semibold text-slate-200 shadow-lg ${dense ? 'hidden group-hover:block group-focus-visible:block' : 'block'}`}>{label}</span>
   </button>
 }
 
