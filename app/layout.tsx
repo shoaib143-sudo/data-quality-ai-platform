@@ -1,5 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
+import { ProfileMenu } from '@/components/app-shell/profile-menu'
 import './globals.css'
 import './legacy-dark-compat.css'
 
@@ -31,6 +32,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="antialiased">
         {children}
+        <ProfileMenu />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

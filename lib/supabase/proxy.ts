@@ -7,6 +7,8 @@ const protectedPrefixes = [
   '/datasets',
   '/profiling',
   '/data-quality',
+  '/profile',
+  '/settings',
   '/observability',
   '/agents',
 ]
