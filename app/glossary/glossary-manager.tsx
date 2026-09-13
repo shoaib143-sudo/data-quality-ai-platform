@@ -73,6 +73,7 @@ export function GlossaryManager({
 }) {
   const [terms, setTerms] = useState(initialTerms)
   const manageableProjects = useMemo(() => new Set(manageableProjectIds), [manageableProjectIds])
+  const manageableProjects = useMemo(() => new Set(manageableProjectIds), [manageableProjectIds])
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [term, setTerm] = useState('')
   const [definition, setDefinition] = useState('')
@@ -82,6 +83,7 @@ export function GlossaryManager({
   const [message, setMessage] = useState('')
 
   const visibleTerms = useMemo(() => terms.filter(item => item.project_id === projectId), [terms, projectId])
+  const canManageSelectedProject = manageableProjects.has(projectId)
   const canManageSelectedProject = manageableProjects.has(projectId)
   const stats = useMemo(() => ({
     reference: visibleTerms.filter(item => item.status === 'REFERENCE').length,
