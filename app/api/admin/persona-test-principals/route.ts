@@ -36,6 +36,10 @@ function password() {
   return `DnX!${randomBytes(24).toString('base64url')}#9Q`
 }
 
+function text(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 async function findAuthUserByEmail(admin: ReturnType<typeof createAdminClient>, email: string) {
   let page = 1
   while (page <= 10) {
@@ -49,12 +53,12 @@ async function findAuthUserByEmail(admin: ReturnType<typeof createAdminClient>, 
   return null
 }
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   try {
     const user = await requireApiUser()
-    const url = new URL(request.url)
-    const projectId = url.searchParams.get('projectId')?.trim() ?? ''
-    const execute = url.searchParams.get('execute')?.trim() ?? ''
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>
+    const projectId = text(body.projectId)
+    const execute = text(body.execute)
     if (!projectId || execute !== EXECUTE_TOKEN) {
       return NextResponse.json({ error: 'Explicit projectId and execution confirmation are required.' }, { status: 400 })
     }
