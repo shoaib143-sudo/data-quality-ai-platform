@@ -48,7 +48,7 @@ requireText('lib/agents/governance-specialist-agent.ts', [
 
 requireText('app/api/agents/governance/run/route.ts', [
   'executeGovernanceSpecialistAgent',
-  "authorizeProject(user.id, projectId, 'agent.execute')",
+  "authorizeProject(user.id, projectId, 'agent.converse')",
   'persistGovernedAgentMemoryAndEvaluation',
 ])
 
