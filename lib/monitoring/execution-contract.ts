@@ -1,3 +1,5 @@
+export const EXECUTION_SNAPSHOT_SCHEMA_VERSION = 1 as const
+
 export type Run = {
   id: string; parent_run_id: string | null; project_id: string; agent_definition_id: string
   dataset_id: string | null; status: string; created_at: string; started_at: string | null
@@ -6,7 +8,9 @@ export type Run = {
 export type Step = { id: string; agent_run_id: string; step_name: string; step_order: number; status: string; attempt: number; started_at: string | null; completed_at: string | null; error_code: string | null }
 export type Plan = { version: 1; runId: string; revision: string; complete: boolean; steps: { id: string; runId: string; order: number; name: string; dependsOn: string[] }[] }
 export type Edge = { id: string; source: string; target: string; kind: 'dependency' | 'handoff'; condition: 'SUCCESS' | 'TERMINAL'; satisfied: boolean; evidence: string; external?: boolean; sourceJobId?: string; targetJobId?: string }
-export type Snapshot = { rootId: string; fetchedAt: string; runs: Run[]; steps: Step[]; edges: Edge[]; plans: Plan[]; waits: { runId: string; reason: string }[]; warnings: string[]; truncated: boolean }
+export type Snapshot = { schemaVersion?: typeof EXECUTION_SNAPSHOT_SCHEMA_VERSION; rootId: string; fetchedAt: string; runs: Run[]; steps: Step[]; edges: Edge[]; plans: Plan[]; waits: { runId: string; reason: string }[]; warnings: string[]; truncated: boolean }
+export type VersionedSnapshot = Snapshot & { schemaVersion: typeof EXECUTION_SNAPSHOT_SCHEMA_VERSION }
+export function versionSnapshot(snapshot: Snapshot): VersionedSnapshot { return {...snapshot, schemaVersion: EXECUTION_SNAPSHOT_SCHEMA_VERSION} }
 export const SUCCESS = new Set(['SUCCEEDED', 'COMPLETED'])
 export const TERMINAL = new Set(['SUCCEEDED', 'COMPLETED', 'FAILED', 'ERROR', 'DEAD', 'CANCELLED', 'TERMINATED', 'SKIPPED'])
 export function dependencySatisfied(status: string, condition: Edge['condition']) { return (condition === 'SUCCESS' ? SUCCESS : TERMINAL).has(status) }

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeProject } from '@/lib/auth/authorize'
+import { versionSnapshot } from '@/lib/monitoring/execution-contract'
 import { readExecution, readExecutionRoots } from '@/lib/monitoring/execution-read-model'
 import { LivingJobMonitor } from './living-job-monitor'
 
@@ -19,7 +20,7 @@ export default async function MonitoringPage({searchParams}: {searchParams: Prom
   let initialSnapshot = null
   let initialError: string | null = null
   if (query.run) {
-    try { initialSnapshot = await readExecution(user.id, query.run) }
+    try { initialSnapshot = versionSnapshot(await readExecution(user.id, query.run)) }
     catch { initialError = 'The requested execution is unavailable or its hierarchy is incomplete.' }
   }
   const projectId = initialSnapshot?.runs[0]?.project_id ?? projects.find(p => p.id === query.project)?.id ?? projects[0]?.id
