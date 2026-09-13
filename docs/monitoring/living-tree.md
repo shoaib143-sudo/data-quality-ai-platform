@@ -27,7 +27,7 @@ Selected active trees refresh every three seconds, summaries every fifteen secon
 
 Tree loading begins at 100 runs and expands in increments of 100 to a maximum of 1,000. Ancestry/traversal depth is bounded at 64. Step/plan/dependency queries have explicit evidence windows. Truncation produces warnings and suppresses percentages. Branch detail pages contain up to 100 items per evidence category; the next page advances each category together. Deep-linked details remain available even when the selected run is outside the tree window. No claim of complete unbounded graph retrieval is made.
 
-Layout recalculates only when topology changes. State-only refreshes preserve branch positions. Collapsed branches retain their allocated positions. The component keeps zoom/collapse state when switching Tree/List. A newly selected execution starts a fresh layout.
+Layout recalculates only when topology changes. State-only refreshes preserve branch positions. Collapsed branches retain their allocated positions. The component keeps zoom/collapse state when switching Tree/List. A newly selected execution starts a fresh layout. Fit tree removes the minimum canvas width so the complete tree fits narrow viewports; zoom then scales from that fitted width. On phones, fit provides an overview, while zoom/pan and the full-size branch details or List view support reading individual jobs.
 
 ## Verification
 
@@ -56,11 +56,23 @@ Local verification during implementation:
 | Synthetic evidence persistence tests | 7 passed, modeling both deployed unique constraints |
 | Supervisor production and durable-resume checks | Passed |
 | Profiling lifecycle contract check | Passed |
-| Layout microbenchmark | 1,000 shallow synthetic nodes computed in approximately 14 ms on one run; not browser render latency |
-| Browser execution in local session | Unavailable: browser startup denied and cloud browser cannot access localhost |
-| Browser suite | Nine tests compile and are listed; CI execution is the release gate |
+| Layout microbenchmark | 1,000 shallow synthetic nodes computed in 2.56 ms in the September 13 local rerun; not browser render latency |
+| Browser execution in local session | September 13: 9/9 passed after installing Chromium; includes mobile fit bounds, reduced motion, and mutation/error guards |
+| Browser suite | 9/9 passed in CI run `34741515050` on `dfa35dfffbb7070e987de79f8cc5f48f0ea08f26`; artifact `10312379915` |
 
 Live Supabase checks used the existing connector and performed schema/catalog reads. Required columns, RLS on runs/steps/artifacts, parent lookup index, and artifact uniqueness were confirmed. A historical root with one actual child and three recorded steps per run was queried; neither run had a monitor manifest. A rollback-only transaction verified two synthetic attempt versions and idempotent replay against the real artifact table; a follow-up query confirmed zero synthetic rows remained. These checks used the database administrator connection and do not establish authenticated RLS behavior for each application persona.
+
+## September 13 verification follow-up
+
+The original nine browser failures came from `next/link` routing helpers imported by `JobTermination`. The isolated esbuild bundle defined only `NODE_ENV` and omitted the routing constants that Next.js normally inlines. The fixture now defines the six relevant routing defaults explicitly. It does not install a blanket `process` shim, replace the production components, or relax error/mutation assertions. This was a fixture defect; it is not evidence of the same defect in the Next.js deployment.
+
+The fixture now compiles `app/globals.css` with the existing PostCSS/Tailwind plugin, so screenshot review includes real theme and utility styles in the diagnostics and execution-action sections. Local screenshot inspection covered desktop selection, dependency paths, cyan/green/amber states, mobile reduced motion, collapsed branches, and List fallback. The mobile review revealed that Fit tree merely reset zoom while preserving a 960px minimum width. The control now fits the viewport, and the browser test asserts no canvas overflow and an in-bounds root after fitting. The nine tests still pass with these stronger checks. Mobile fit is an overview with small labels; zoom and the full-size details/List remain available.
+
+Fresh local verification passed frozen-lockfile installation, TypeScript, all 45 synthetic checks, supervisor production and durable-resume checks, profiling lifecycle contracts, and the production build. The browser installation with OS dependencies was denied by this session's package-manager permissions; installing the browser binaries alone succeeded and all nine tests subsequently ran successfully.
+
+The earlier V6 runtime SLO failure measured the existing production `/login` endpoint: 50/50 HTTP successes but p95 1580.98ms against a 1500ms limit. The fresh runtime-slo job in run `34741515142` passed without changing thresholds.
+
+Preview `dpl_9guJMXPogUaR5hhwtPoEcS49hiVy` was confirmed READY at `dfa35df`. Browser navigation reached Vercel sign-in, not an authenticated DataNexus session. Actual authorized/unauthorized application personas, a controlled new execution, monitor API latency/payload measurements, the deployed server flag, and production acceptance remain outstanding. No application execution or live database mutation was made during this follow-up. PR #363 stays draft until these acceptance gates are satisfied.
 
 ## Rollout and rollback
 
