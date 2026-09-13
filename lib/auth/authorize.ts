@@ -3,6 +3,7 @@ import {
   assertInstanceOrganizationId,
   assertProjectBelongsToInstanceOrganization,
   resolveInstanceOrganizationMembership,
+  resolveKnownInstanceOrganizationMembership,
 } from '@/lib/governance/instance-organization'
 
 export type AuthorizationCapability =
@@ -56,9 +57,7 @@ export type ProjectAuthorization = {
   capability: AuthorizationCapability
 }
 
-export async function hasProjectCapability(userId: string, projectId: string, capability: AuthorizationCapability): Promise<boolean> {
-  if (!userId || !projectId) return false
-  await assertProjectBelongsToInstanceOrganization(projectId)
+async function hasValidatedProjectCapability(userId: string, projectId: string, capability: AuthorizationCapability): Promise<boolean> {
   const admin = createAdminClient()
   const { data, error } = await admin.schema('governance').rpc('has_project_capability', {
     p_project_id: projectId,
@@ -67,6 +66,12 @@ export async function hasProjectCapability(userId: string, projectId: string, ca
   })
   if (error) throw new Error(`Unable to evaluate project capability: ${error.message}`)
   return data === true
+}
+
+export async function hasProjectCapability(userId: string, projectId: string, capability: AuthorizationCapability): Promise<boolean> {
+  if (!userId || !projectId) return false
+  await assertProjectBelongsToInstanceOrganization(projectId)
+  return hasValidatedProjectCapability(userId, projectId, capability)
 }
 
 export async function authorizeProject(userId: string, projectId: string, capability: AuthorizationCapability): Promise<ProjectAuthorization> {
@@ -81,8 +86,8 @@ export async function authorizeProject(userId: string, projectId: string, capabi
   }
 
   const [allowed, membership] = await Promise.all([
-    hasProjectCapability(userId, projectId, capability),
-    resolveInstanceOrganizationMembership(userId),
+    hasValidatedProjectCapability(userId, projectId, capability),
+    resolveKnownInstanceOrganizationMembership(userId, projectContext.organizationId),
   ])
   if (!allowed) throw new AuthorizationError(`You do not have permission to perform ${capability} in this project.`)
 
