@@ -99,3 +99,6 @@ PR #422 must not leave draft until:
 - delegated approval records on_behalf_of provenance
 - notification provider absence is visible and fail-closed
 - production smoke test passes
+
+
+Release convergence: reconciled onto current main after Domain Cell Job Monitor #426-#428, preserving resource-scoped Agent Policy v2 authorization.
