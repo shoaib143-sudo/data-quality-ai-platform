@@ -5,6 +5,7 @@ import {
   type GovernanceReadAgentKey,
 } from '@/lib/agents/governance-read-agent'
 import { getGovernedAgentPolicy } from '@/lib/agents/governed-agent-registry'
+import { authorizedDatasetScopeForProject } from '@/lib/governance/resource-authorization'
 import { assertGovernedInvestigationGrounding, buildGovernedInvestigation } from '@/lib/agents/governed-investigation'
 import {
   finishNativeAgentLifecycle,
@@ -120,7 +121,7 @@ async function loadGraph(admin: ReturnType<typeof createAdminClient>, projectId:
   return { anchor, edges: (data ?? []) as Array<Record<string, unknown>> }
 }
 
-async function loadContext(admin: ReturnType<typeof createAdminClient>, projectId: string): Promise<SpecialistContext> {
+async function loadContext(admin: ReturnType<typeof createAdminClient>, projectId: string, authorizedDatasetIds: readonly string[], fullProjectVisibility: boolean): Promise<SpecialistContext> {
   const [
     datasetsResult,
     scorecardsResult,
@@ -142,7 +143,7 @@ async function loadContext(admin: ReturnType<typeof createAdminClient>, projectI
     lineageTransformationEdgesResult,
     lineageCountResult,
   ] = await Promise.all([
-    admin.schema('catalog').from('datasets').select('id,name,business_domain,data_source_id,source_identifier,created_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(500),
+    authorizedDatasetIds.length ? admin.schema('catalog').from('datasets').select('id,name,business_domain,data_source_id,source_identifier,created_at').eq('project_id', projectId).in('id', [...authorizedDatasetIds]).order('created_at', { ascending: false }).limit(500) : Promise.resolve({ data: [], error: null }),
     admin.schema('governance').from('project_scorecard_snapshots').select('id,overall_score,dimensions,evidence,calculated_at').eq('project_id', projectId).order('calculated_at', { ascending: false }).limit(12),
     admin.schema('governance').from('critical_data_elements').select('id,cde_key,name,domain,criticality,regulatory_relevance,owner_role,steward_role,status,metadata').eq('project_id', projectId).limit(500),
     admin.schema('governance').from('cde_mappings').select('id,cde_id,dataset_id,column_name,confidence,status,source,evidence').eq('project_id', projectId).limit(1000),
@@ -174,8 +175,34 @@ async function loadContext(admin: ReturnType<typeof createAdminClient>, projectI
     if (result.error) throw new Error(`Unable to load specialist agent ${label}: ${result.error.message}`)
   }
 
-  const datasets = datasetsResult.data ?? []
+  const allowedDatasetIds = new Set(authorizedDatasetIds.map(String))
+  const datasets = (datasetsResult.data ?? []).filter(row => allowedDatasetIds.has(String(row.id)))
   const datasetIds = datasets.map((row) => row.id)
+  const filterDatasetLinkedRows = <T extends Record<string, any>>(rows: T[] | null | undefined): T[] => {
+    const values = rows ?? []
+    if (fullProjectVisibility) return values
+    return values.filter(row => row.dataset_id && allowedDatasetIds.has(String(row.dataset_id)))
+  }
+  const scopedCdeMappings = filterDatasetLinkedRows(cdeMappingsResult.data ?? [])
+  const allowedCdeIds = new Set(scopedCdeMappings.map(row => String(row.cde_id)).filter(Boolean))
+  const scopedCdes = fullProjectVisibility
+    ? (cdesResult.data ?? [])
+    : (cdesResult.data ?? []).filter(row => allowedCdeIds.has(String(row.id)))
+  const scopedAccountability = fullProjectVisibility
+    ? (accountabilityResult.data ?? [])
+    : (accountabilityResult.data ?? []).filter(row =>
+        String(row.scope_type ?? '').toUpperCase() === 'DATASET'
+        && allowedDatasetIds.has(String(row.scope_key ?? '')))
+  const scopedLineageAssets = fullProjectVisibility
+    ? (lineageAssetsResult.data ?? [])
+    : (lineageAssetsResult.data ?? []).filter(row => row.dataset_id && allowedDatasetIds.has(String(row.dataset_id)))
+  const allowedLineageAssetIds = new Set(scopedLineageAssets.map(row => String(row.id)))
+  // Cross-resource lineage can reveal the opposite side of a transformation.
+  // Until lineage endpoints carry resource-aware authorization metadata, partial
+  // project access exposes only lineage assets directly attached to allowed datasets.
+  const scopedLineageColumnMappings = fullProjectVisibility ? (lineageColumnMappingsResult.data ?? []) : []
+  const scopedLineageTransformations = fullProjectVisibility ? (lineageTransformationsResult.data ?? []) : []
+  const scopedLineageEdges = fullProjectVisibility ? (lineageTransformationEdgesResult.data ?? []) : []
   const versionsResult = datasetIds.length
     ? await admin.schema('catalog').from('dataset_versions').select('id,dataset_id,version_number,status,created_at').in('dataset_id', datasetIds).order('created_at', { ascending: false }).limit(2000)
     : { data: [], error: null }
@@ -209,27 +236,27 @@ async function loadContext(admin: ReturnType<typeof createAdminClient>, projectI
     datasets,
     versions,
     profileRuns,
-    scorecards: scorecardsResult.data ?? [],
-    cdes: cdesResult.data ?? [],
-    cdeMappings: cdeMappingsResult.data ?? [],
-    accountability: accountabilityResult.data ?? [],
-    contracts: contractsResult.data ?? [],
-    certifications: certificationsResult.data ?? [],
-    issues: issuesResult.data ?? [],
-    incidents: incidentsResult.data ?? [],
-    remediationKnowledge: remediationResult.data ?? [],
-    alerts: alertsResult.data ?? [],
+    scorecards: fullProjectVisibility ? (scorecardsResult.data ?? []) : [],
+    cdes: scopedCdes,
+    cdeMappings: scopedCdeMappings,
+    accountability: scopedAccountability,
+    contracts: filterDatasetLinkedRows(contractsResult.data ?? []),
+    certifications: filterDatasetLinkedRows(certificationsResult.data ?? []),
+    issues: filterDatasetLinkedRows(issuesResult.data ?? []),
+    incidents: filterDatasetLinkedRows(incidentsResult.data ?? []),
+    remediationKnowledge: filterDatasetLinkedRows(remediationResult.data ?? []),
+    alerts: filterDatasetLinkedRows(alertsResult.data ?? []),
     ruleRuns: ruleRunsResult.data ?? [],
     comparisons: comparisonsResult.data ?? [],
     anomalies: anomaliesResult.data ?? [],
-    knowledgeDocuments: knowledgeDocumentsResult.data ?? [],
-    glossaryTerms: glossaryResult.data ?? [],
-    regulatoryApplicability: regulatoryResult.data ?? [],
-    lineageAssets: lineageAssetsResult.data ?? [],
-    lineageTransformations: lineageTransformationsResult.data ?? [],
-    lineageColumnMappings: lineageColumnMappingsResult.data ?? [],
-    lineageTransformationEdges: lineageTransformationEdgesResult.data ?? [],
-    lineageEdgeCount: Number(lineageCountResult.count ?? 0),
+    knowledgeDocuments: fullProjectVisibility ? (knowledgeDocumentsResult.data ?? []) : [],
+    glossaryTerms: fullProjectVisibility ? (glossaryResult.data ?? []) : [],
+    regulatoryApplicability: fullProjectVisibility ? (regulatoryResult.data ?? []) : [],
+    lineageAssets: scopedLineageAssets,
+    lineageTransformations: scopedLineageTransformations,
+    lineageColumnMappings: scopedLineageColumnMappings,
+    lineageTransformationEdges: scopedLineageEdges,
+    lineageEdgeCount: fullProjectVisibility ? Number(lineageCountResult.count ?? 0) : scopedLineageEdges.length,
   }
 }
 
@@ -583,14 +610,17 @@ export async function executeGovernanceSpecialistAgent(input: {
       ).join('\n')}`
     }
 
+    const datasetScope = await authorizedDatasetScopeForProject(input.actorUserId, input.projectId)
     const [projectResult, ctx, knowledgeMatches] = await Promise.all([
       admin.schema('app').from('projects').select('id,name,organization_id').eq('id', input.projectId).maybeSingle(),
-      loadContext(admin, input.projectId),
-      loadKnowledge(admin, input.projectId, query),
+      loadContext(admin, input.projectId, datasetScope.authorizedDatasetIds, datasetScope.fullProjectVisibility),
+      datasetScope.fullProjectVisibility
+        ? loadKnowledge(admin, input.projectId, query)
+        : Promise.resolve([] as KnowledgeMatch[]),
     ])
     if (projectResult.error || !projectResult.data) throw new Error(`Unable to resolve specialist agent project: ${projectResult.error?.message ?? 'not found'}`)
 
-    const graph = await loadGraph(admin, input.projectId, knowledgeMatches[0])
+    const graph = datasetScope.fullProjectVisibility ? await loadGraph(admin, input.projectId, knowledgeMatches[0]) : { anchor: null, edges: [] as Array<Record<string, unknown>> }
     const specialized = roleEvidence(agentKey, ctx)
     const investigation = assertGovernedInvestigationGrounding(buildGovernedInvestigation({
       projectId: input.projectId,
@@ -659,6 +689,7 @@ export async function executeGovernanceSpecialistAgent(input: {
         'Field-lineage evidence is bounded to the most recent 300 transformations/edges and 500 column mappings for a project.',
         'Freshness currently uses completed profiling observation time as a proxy until source-native watermark telemetry is available.',
         'Shared investigation provenance is project scoped and unsupported claim evidence fails the run before success is persisted.',
+        'Resource evidence is restricted to datasets the initiating user is currently authorized to view; project-wide knowledge and graph evidence require full project dataset visibility.',
       ],
     }
 
@@ -705,6 +736,8 @@ export async function executeGovernanceSpecialistAgent(input: {
         field_lineage_mapping_count: ctx.lineageColumnMappings.length,
         transformation_count: ctx.lineageTransformations.length,
         knowledge_match_count: knowledgeMatches.length,
+        resource_scope_dataset_count: datasetScope.authorizedDatasetIds.length,
+        resource_scope_full_project_visibility: datasetScope.fullProjectVisibility,
         investigation_contract_version: investigation.contractVersion,
         investigation_grounding_status: investigation.grounding.status,
         investigation_evidence_ref_count: investigation.grounding.evidenceRefCount,
