@@ -102,14 +102,14 @@ export function buildRoleLandingPresentation(plan: PresentationPlan, data: Prese
       trendTitle: 'Owned Data Domain trust trend',
       attentionTitle: 'Risks and decisions requiring owner attention',
       contextTitle: 'Owned Data Domain health',
-      actionKicker: 'Owner decision',
-      actionTitle: 'Review owner decisions and remediation',
+      actionKicker: 'Owner attention',
+      actionTitle: 'Review risks and required owner actions',
       actionHref: '/stewardship',
       metrics: [
         { label: 'High-risk findings', value: String(data.highFindings), detail: 'Critical and high findings', href: '/issues', icon: 'alert' },
         { label: 'Critical data mappings', value: String(data.cdeMappings), detail: 'Governed critical-data mappings', href: '/classification', icon: 'tag' },
         { label: 'Pending decisions', value: String(decisions), detail: 'Certification and exception decisions', href: '/stewardship', icon: 'check' },
-        { label: 'Stewardship coverage', value: `${data.ownershipCoverage}%`, detail: 'Datasets with active governed stewardship assignments', href: '/stewardship', icon: 'users' },
+        { label: 'Accountability coverage', value: `${data.ownershipCoverage}%`, detail: 'Datasets with active governed accountability coverage', href: '/stewardship', icon: 'users' },
       ],
       aiStarters: ['What requires my decision today?', 'Which owned data is outside tolerance?', 'What critical data is affected?', 'Who is resolving the highest risks?', 'What should I prioritize next?'],
     }
