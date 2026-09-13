@@ -65,6 +65,20 @@ check('platform controls remain Data Governance Admin only', personaSlugs.every(
 check('organization admin is not granted by governance persona alone', personaSlugs.every(slug => !canAccessWorkspace(slug, 'admin', null)))
 check('workspace prefixes are unique', new Set(workspacePrefixes.map(([prefix]) => prefix)).size === workspacePrefixes.length)
 
+const expectedAgentExecutePersonas = new Set([
+  'data-owner',
+  'data-steward',
+  'data-governance-admin',
+  'data-custodian',
+  'data-quality-analyst',
+])
+for (const slug of personaSlugs) {
+  check(
+    `${slug} Agents workspace matches canonical agent.execute capability`,
+    canAccessWorkspace(slug, 'agents') === expectedAgentExecutePersonas.has(slug),
+  )
+}
+
 const explicitlyNonWorkspaceRoutes = [
   '/', '/login', '/signup', '/forgot-password', '/reset-password', '/home', '/home/:param', '/home/unavailable',
   '/access-denied', '/ai-insights',
