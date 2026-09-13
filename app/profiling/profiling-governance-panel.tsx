@@ -79,6 +79,9 @@ export default function ProfilingGovernancePanel({
   workflow,
   outcome,
   issues,
+  canManageWorkflow,
+  canManageRemediation,
+  canOpenWorkflows,
 }: {
   profileRunId: string
   profileRunStatus: string
@@ -86,6 +89,9 @@ export default function ProfilingGovernancePanel({
   workflow: WorkflowView
   outcome: OutcomeView
   issues: IssueView[]
+  canManageWorkflow: boolean
+  canManageRemediation: boolean
+  canOpenWorkflows: boolean
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
@@ -154,10 +160,10 @@ export default function ProfilingGovernancePanel({
   const allTrackedIssuesResolved = issues.length > 0 && openIssues.length === 0
   const verificationCancelled = outcome?.status === 'VERIFICATION_CANCELLED'
   const verificationRecoveryLabel = verificationCancelled ? 'Restart automatic verification' : 'Retry automatic verification'
-  const canStartApproval = profileRunStatus === 'COMPLETED' && investigation.approvalRequired && !workflow
-  const canTrackRemediation = workflow?.status === 'APPROVED' && !outcome
-  const canCheckVerification = workflow?.status === 'APPROVED' && Boolean(outcome) && allTrackedIssuesResolved && !verificationCancelled
-  const canRetryVerification = workflow?.status === 'APPROVED'
+  const canStartApproval = canManageWorkflow && profileRunStatus === 'COMPLETED' && investigation.approvalRequired && !workflow
+  const canTrackRemediation = canManageRemediation && workflow?.status === 'APPROVED' && !outcome
+  const canCheckVerification = canManageRemediation && workflow?.status === 'APPROVED' && Boolean(outcome) && allTrackedIssuesResolved && !verificationCancelled
+  const canRetryVerification = canManageRemediation && workflow?.status === 'APPROVED'
     && (outcome?.verificationRetryable === true || verificationCancelled)
     && allTrackedIssuesResolved
 
@@ -168,7 +174,7 @@ export default function ProfilingGovernancePanel({
           <h2 className="font-semibold">Governed Investigation & Remediation</h2>
           <p className="mt-1 text-sm text-muted-foreground">Move this profiling run from investigation evidence into approval, tracked remediation, automatic re-profile verification, and learning.</p>
         </div>
-        <Link href="/workflows" className="text-sm font-semibold text-violet-600 underline">Open Governance Workflows</Link>
+        {canOpenWorkflows ? <Link href="/workflows" className="text-sm font-semibold text-violet-600 underline">Open Governance Workflows</Link> : null}
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-4">
@@ -310,7 +316,7 @@ export default function ProfilingGovernancePanel({
                     <span className="rounded-full border px-2 py-0.5 text-xs">{badge(issue.status)} · {badge(issue.severity)}</span>
                   </div>
                   {issue.resolutionSummary ? <p className="mt-2 text-muted-foreground">Resolution: {issue.resolutionSummary}</p> : null}
-                  {!resolved ? (
+                  {!resolved && canManageRemediation ? (
                     <div className="mt-3 space-y-2">
                       <textarea
                         value={resolutionDrafts[issue.id] ?? ''}

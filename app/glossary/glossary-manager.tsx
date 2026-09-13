@@ -63,13 +63,16 @@ export function GlossaryManager({
   datasets,
   catalogAssets,
   initialTerms,
+  manageableProjectIds,
 }: {
   projects: Project[]
   datasets: Dataset[]
   catalogAssets: CatalogAsset[]
   initialTerms: Term[]
+  manageableProjectIds: string[]
 }) {
   const [terms, setTerms] = useState(initialTerms)
+  const manageableProjects = useMemo(() => new Set(manageableProjectIds), [manageableProjectIds])
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [term, setTerm] = useState('')
   const [definition, setDefinition] = useState('')
@@ -79,6 +82,7 @@ export function GlossaryManager({
   const [message, setMessage] = useState('')
 
   const visibleTerms = useMemo(() => terms.filter(item => item.project_id === projectId), [terms, projectId])
+  const canManageSelectedProject = manageableProjects.has(projectId)
   const stats = useMemo(() => ({
     reference: visibleTerms.filter(item => item.status === 'REFERENCE').length,
     governed: visibleTerms.filter(item => item.authority_type !== 'REFERENCE_BOOTSTRAP').length,
@@ -199,8 +203,8 @@ export function GlossaryManager({
       <Metric label="Mapping review queue" value={stats.review} detail="Proposed or revision-sensitive mappings" />
     </section>
 
-    <div className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
-      <form onSubmit={create} className="rounded-3xl border bg-white p-6 shadow-sm">
+    <div className={`grid gap-6 ${canManageSelectedProject ? 'lg:grid-cols-[0.72fr_1.28fr]' : 'lg:grid-cols-1'}`}>
+      {canManageSelectedProject ? <form onSubmit={create} className="rounded-3xl border bg-white p-6 shadow-sm">
         <div className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-violet-600" /><h2 className="text-xl font-bold">New governed term</h2></div>
         <p className="mt-2 text-sm text-slate-500">New terms always begin as drafts. Approval is an explicit lifecycle action with evidence.</p>
         <div className="mt-5 grid gap-3">
@@ -216,11 +220,11 @@ export function GlossaryManager({
           </button>
           {message ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</p> : null}
         </div>
-      </form>
+      </form> : null}
 
       <section className="rounded-3xl border bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="text-xl font-bold">Semantic workbench</h2><p className="mt-1 text-sm text-slate-500">Published meaning survives draft revisions; mappings are reviewed against the approved term version.</p></div>
+          <div><h2 className="text-xl font-bold">Semantic workbench</h2><p className="mt-1 text-sm text-slate-500">Published meaning survives draft revisions; mappings are reviewed against the approved term version.</p>{!canManageSelectedProject ? <p className="mt-1 text-xs font-semibold text-blue-600">Read-only glossary evidence for this project.</p> : null}</div>
           <select value={projectId} onChange={event => setProjectId(event.target.value)} className="rounded-xl border px-3 py-2 text-sm font-semibold">
             {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
@@ -247,22 +251,22 @@ export function GlossaryManager({
                     {publishedVersion ? ` · published v${publishedVersion.version_number}` : ' · no published authority'}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                {manageableProjects.has(item.project_id) ? <div className="flex flex-wrap gap-2">
                   {item.status === 'REFERENCE' ? <ActionButton disabled={busy} onClick={() => void termAction(item, 'ADOPT_REFERENCE')} icon={<ShieldCheck className="h-3.5 w-3.5" />} label="Adopt" /> : null}
                   {item.status === 'DRAFT' ? <ActionButton disabled={busy} onClick={() => void termAction(item, 'SUBMIT_REVIEW')} icon={<Send className="h-3.5 w-3.5" />} label="Submit" /> : null}
                   {item.status === 'IN_REVIEW' ? <ActionButton disabled={busy} onClick={() => void termAction(item, 'APPROVE')} icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Approve" /> : null}
                   {item.status === 'APPROVED' ? <ActionButton disabled={busy} onClick={() => void termAction(item, 'DEPRECATE')} icon={<Archive className="h-3.5 w-3.5" />} label="Deprecate" /> : null}
                   {item.status === 'DEPRECATED' ? <ActionButton disabled={busy} onClick={() => void termAction(item, 'REOPEN')} icon={<RotateCcw className="h-3.5 w-3.5" />} label="Reopen" /> : null}
-                </div>
+                </div> : null}
               </div>
 
-              <MappingForm
+              {manageableProjects.has(item.project_id) ? <MappingForm
                 term={item}
                 datasets={datasets.filter(dataset => dataset.project_id === item.project_id)}
                 catalogAssets={catalogAssets.filter(asset => asset.project_id === item.project_id)}
                 disabled={busy}
                 onMap={proposeMapping}
-              />
+              /> : null}
 
               <div className="mt-3 space-y-2">
                 {(item.glossary_mappings ?? []).map(mapping => {
@@ -280,13 +284,13 @@ export function GlossaryManager({
                       <span> · {mapping.validation_state}</span>
                       {mapping.term_version_number ? <span> · term v{mapping.term_version_number}</span> : null}
                     </div>
-                    <div className="flex gap-1.5">
+                    {manageableProjects.has(item.project_id) ? <div className="flex gap-1.5">
                       {['PROPOSED', 'NEEDS_REVIEW'].includes(mapping.mapping_status) ? <>
                         <button type="button" disabled={busy || !canApprove} title={canApprove ? 'Approve mapping' : 'Approve the term and ensure catalog mapping validity first'} onClick={() => void mappingAction(item, mapping, 'APPROVE')} className="rounded-lg border bg-white px-2 py-1 text-xs font-semibold disabled:opacity-40">Approve</button>
                         <button type="button" disabled={busy} onClick={() => void mappingAction(item, mapping, 'REJECT')} className="rounded-lg border bg-white px-2 py-1 text-xs font-semibold">Reject</button>
                       </> : null}
                       {mapping.mapping_status === 'REJECTED' ? <button type="button" disabled={busy} onClick={() => void mappingAction(item, mapping, 'RESET_PROPOSAL')} className="rounded-lg border bg-white px-2 py-1 text-xs font-semibold">Reopen</button> : null}
-                    </div>
+                    </div> : null}
                   </div>
                 })}
               </div>

@@ -89,7 +89,7 @@ for (const marker of [
   '<DatasetActions projectId={dataset.project_id}',
   'datasetVersionId={version.id}',
 ]) if (!catalogDatasetPage.includes(marker)) throw new Error(`Canonical dataset page does not expose governed readiness remediation: ${marker}`)
-if (!catalogDatasetPage.includes('canProfiling&&version')) throw new Error('Canonical dataset page must only expose readiness actions to profiling-capable users with a current dataset version')
+if (!catalogDatasetPage.includes('canExecuteProfiling&&version')) throw new Error('Canonical dataset page must only expose readiness actions to users with profiling.execute and a current dataset version')
 
 for (const marker of [
   'SOURCE_NOT_OBSERVED_READY: true, SOURCE_NOT_ACTIVE: true',
