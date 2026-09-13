@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const projectId = new URL(request.url).searchParams.get('projectId')?.trim() ?? ''
     if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
 
-    await authorizeProject(user.id, projectId, 'agent.execute')
+    await authorizeProject(user.id, projectId, 'agent.view')
     const admin = createAdminClient()
     const { data, error } = await admin
       .schema('agent')
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       projectId,
-      capability: 'agent.execute',
+      capability: 'agent.view',
       registryVersion: '1.0',
       readiness: missingAgentKeys.length ? 'INCOMPLETE' : 'READY',
       requiredAgentCount: GOVERNED_AGENT_KEYS.length,
