@@ -16,8 +16,8 @@ const checks = [
   [landingSource, /resolveInstanceOrganizationMembership\(userId\)/, 'landing access uses instance organization membership'],
   [landingSource, /projects[\s\S]*eq\('organization_id', organizationId\)/, 'projects remain scoped to instance organization'],
   [landingSource, /assertInstanceOrganizationId\(organizationId\)/, 'landing settings reject foreign organization context'],
-  [authorizationSource, /hasProjectCapability[\s\S]*assertProjectBelongsToInstanceOrganization\(projectId\)[\s\S]*has_project_capability/, 'direct capability checks enforce instance project boundary'],
-  [authorizationSource, /authorizeProject[\s\S]*assertProjectBelongsToInstanceOrganization\(projectId\)[\s\S]*resolveInstanceOrganizationMembership\(userId\)/, 'project authorization enforces instance organization and membership'],
+  [authorizationSource, /hasProjectCapability[\s\S]*assertProjectBelongsToInstanceOrganization\(projectId\)[\s\S]*(?:hasValidatedProjectCapability|has_project_capability)/, 'direct capability checks enforce instance project boundary'],
+  [authorizationSource, /authorizeProject[\s\S]*assertProjectBelongsToInstanceOrganization\(projectId\)[\s\S]*resolveKnownInstanceOrganizationMembership\(userId, projectContext\.organizationId\)/, 'project authorization enforces validated instance organization membership without duplicate lookup'],
   [authorizationSource, /authorizeOrganizationAdmin[\s\S]*assertInstanceOrganizationId\(organizationId\)[\s\S]*resolveInstanceOrganizationMembership\(userId\)/, 'organization administration enforces instance organization'],
   [personasSource, /export const personaSlugs = \[[\s\S]*'metadata-analyst'[\s\S]*'data-quality-analyst'[\s\S]*\] as const/, 'existing persona registry preserved'],
 ]
