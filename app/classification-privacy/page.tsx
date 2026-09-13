@@ -1,12 +1,19 @@
 import Link from 'next/link'
 import { ShieldCheck, Layers3 } from 'lucide-react'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { resolvePreferredGovernanceProject } from '@/lib/governance/preferred-project'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { requireUser } from '@/lib/auth/require-user'
 import { createClient } from '@/lib/supabase/server'
 import { ClassificationPrivacyManager } from './classification-privacy-manager'
 
 export default async function ClassificationPrivacyPage() {
-  await requireUser()
-  const supabase = await createClient()
+  const user = await requireUser()
+  const [supabase, landing, preferredProjectId] = await Promise.all([
+    createClient(),
+    resolveLandingAccess(user.id),
+    resolvePreferredGovernanceProject(user.id),
+  ])
   const [projects, datasets, sources, assets, labels, classifications, datasetCoverage, catalogCoverage, hooks] = await Promise.all([
     supabase.schema('app').from('projects').select('id,name').order('name'),
     supabase.schema('catalog').from('datasets').select('id,project_id,name').order('name'),
@@ -21,14 +28,15 @@ export default async function ClassificationPrivacyPage() {
   for (const result of [projects, datasets, sources, assets, labels, classifications, datasetCoverage, catalogCoverage, hooks]) {
     if (result.error) throw new Error(result.error.message)
   }
+  const homeHref = canAccessWorkspace(landing.persona, 'dashboard', landing.organizationRole) ? '/dashboard' : '/home'
 
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <nav className="mb-6 flex items-center justify-between rounded-2xl border bg-white px-5 py-3 shadow-sm">
-          <Link href="/dashboard" className="flex items-center gap-3 font-bold">
+          <Link href={homeHref} className="flex items-center gap-3 font-bold">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5" /></span>
-            Data Governance PowerHouse
+            DataNexus AI
           </Link>
           <Link href="/catalog" className="text-sm font-semibold text-blue-600">Catalog</Link>
         </nav>
@@ -51,6 +59,7 @@ export default async function ClassificationPrivacyPage() {
           datasetCoverage={datasetCoverage.data ?? []}
           catalogCoverage={catalogCoverage.data ?? []}
           privacyHooks={hooks.data ?? []}
+          initialProjectId={preferredProjectId}
         />
       </div>
     </main>

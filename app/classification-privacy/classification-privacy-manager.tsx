@@ -4,10 +4,11 @@ import { useMemo, useState } from 'react'
 
 type Row = Record<string, any>
 
-export function ClassificationPrivacyManager({ projects, datasets, sources, assets, labels, classifications, datasetCoverage, catalogCoverage, privacyHooks }: {
-  projects: Row[]; datasets: Row[]; sources: Row[]; assets: Row[]; labels: Row[]; classifications: Row[]; datasetCoverage: Row[]; catalogCoverage: Row[]; privacyHooks: Row[]
+export function ClassificationPrivacyManager({ projects, datasets, sources, assets, labels, classifications, datasetCoverage, catalogCoverage, privacyHooks, initialProjectId }: {
+  projects: Row[]; datasets: Row[]; sources: Row[]; assets: Row[]; labels: Row[]; classifications: Row[]; datasetCoverage: Row[]; catalogCoverage: Row[]; privacyHooks: Row[]; initialProjectId?: string | null
 }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
+  const resolvedInitialProjectId = initialProjectId && projects.some(project => project.id === initialProjectId) ? initialProjectId : ''
+  const [projectId, setProjectId] = useState(resolvedInitialProjectId)
   const [targetType, setTargetType] = useState('CATALOG_ASSET')
   const [targetId, setTargetId] = useState('')
   const [labelId, setLabelId] = useState('')
@@ -59,17 +60,17 @@ export function ClassificationPrivacyManager({ projects, datasets, sources, asse
   return <div className="mt-6 space-y-6">
     <section className="rounded-2xl border bg-white p-5 shadow-sm">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <label className="text-sm font-semibold">Project<select className="mt-1 w-full rounded-lg border p-2 font-normal" value={projectId} onChange={e => { setProjectId(e.target.value); setTargetId('') }}>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        <label className="text-sm font-semibold">Project<select className="mt-1 w-full rounded-lg border p-2 font-normal" value={projectId} onChange={e => { setProjectId(e.target.value); setTargetId(''); setColumnName(''); setMessage('') }}>
+          <option value="">Choose a governed project</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select></label>
-        <label className="text-sm font-semibold">Target<select className="mt-1 w-full rounded-lg border p-2 font-normal" value={targetType} onChange={e => { setTargetType(e.target.value); setTargetId(''); setColumnName('') }}>
+        <label className="text-sm font-semibold">Target<select className="mt-1 w-full rounded-lg border p-2 font-normal" value={targetType} onChange={e => { setTargetType(e.target.value); setTargetId(''); setColumnName('') }} disabled={!projectId}>
           <option value="CATALOG_ASSET">Current catalog asset</option><option value="DATASET">Dataset</option>
         </select></label>
-        <label className="text-sm font-semibold">Asset / dataset<select className="mt-1 w-full rounded-lg border p-2 font-normal" value={targetId} onChange={e => { setTargetId(e.target.value); setColumnName('') }}>
+        <label className="text-sm font-semibold">Asset / dataset<select className="mt-1 w-full rounded-lg border p-2 font-normal" value={targetId} onChange={e => { setTargetId(e.target.value); setColumnName('') }} disabled={!projectId}>
           <option value="">Select…</option>
           {(targetType === 'CATALOG_ASSET' ? projectAssets : projectDatasets).map(r => <option key={r.id} value={r.id}>{r.asset_key ?? r.name}</option>)}
         </select></label>
-        <label className="text-sm font-semibold">Classification<select className="mt-1 w-full rounded-lg border p-2 font-normal" value={labelId} onChange={e => setLabelId(e.target.value)}>
+        <label className="text-sm font-semibold">Classification<select className="mt-1 w-full rounded-lg border p-2 font-normal" value={labelId} onChange={e => setLabelId(e.target.value)} disabled={!projectId}>
           <option value="">Select…</option>{projectLabels.map(l => <option key={l.id} value={l.id}>{l.code} · {l.name} · L{l.sensitivity_level ?? '?'}</option>)}
         </select></label>
         <label className="text-sm font-semibold">Field (optional)<select className="mt-1 w-full rounded-lg border p-2 font-normal" value={columnName} onChange={e => setColumnName(e.target.value)} disabled={targetType !== 'CATALOG_ASSET' || !selectedAsset}>
@@ -80,10 +81,11 @@ export function ClassificationPrivacyManager({ projects, datasets, sources, asse
         <button className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40" disabled={busy || !projectId || !targetId || !labelId} onClick={propose}>Propose classification</button>
         <p className="text-xs text-slate-500">Human proposals still enter review. Source observations and AI suggestions are never silently authoritative.</p>
       </div>
+      {!projectId && <p className="mt-3 rounded-lg border border-dashed bg-slate-50 p-3 text-sm text-slate-600">Choose a governed project before reviewing or proposing sensitive-data classifications. DataNexus does not assume the first organization project is active.</p>}
       {message && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">{message}</p>}
     </section>
 
-    <section className="rounded-2xl border bg-white p-5 shadow-sm">
+    {projectId && <><section className="rounded-2xl border bg-white p-5 shadow-sm">
       <h2 className="font-black">Review queue &amp; governed state</h2>
       <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="p-2">Target</th><th className="p-2">Field</th><th className="p-2">Origin</th><th className="p-2">Authority</th><th className="p-2">State</th><th className="p-2">Decision</th></tr></thead><tbody>
         {projectClassifications.map(c => <tr key={c.id} className="border-b last:border-0"><td className="p-2">{c.target_locator ?? c.dataset_id ?? 'Dataset'}</td><td className="p-2">{c.column_name ?? '—'}</td><td className="p-2">{c.origin}</td><td className="p-2 font-semibold">{c.authority_state}</td><td className="p-2">{c.target_state}</td><td className="p-2">{c.status === 'SUGGESTED' ? <span className="flex gap-2"><button disabled={busy} onClick={() => review(c.id, 'APPROVED')} className="rounded bg-emerald-600 px-2 py-1 text-xs font-bold text-white">Approve</button><button disabled={busy} onClick={() => review(c.id, 'REJECTED')} className="rounded bg-slate-700 px-2 py-1 text-xs font-bold text-white">Reject</button></span> : c.status}</td></tr>)}
@@ -95,6 +97,6 @@ export function ClassificationPrivacyManager({ projects, datasets, sources, asse
       <div className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-black">Dataset coverage</h3><p className="mt-2 text-3xl font-black">{datasetRows.filter(r => r.coverage_state === 'GOVERNED').length}/{datasetRows.length}</p><p className="text-xs text-slate-500">with at least one authoritative classification</p></div>
       <div className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-black">Catalog coverage</h3><p className="mt-2 text-3xl font-black">{catalogRows.filter(r => r.coverage_state === 'GOVERNED').length}/{catalogRows.length}</p><p className="text-xs text-slate-500">stable current catalog identities governed</p></div>
       <div className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-black">Privacy control hooks</h3><p className="mt-2 text-3xl font-black">{hookRows.length}</p><p className="text-xs text-slate-500">declarative intents only; external enforcement is not claimed</p></div>
-    </section>
+    </section></>}
   </div>
 }
