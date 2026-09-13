@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Handshake, Layers3 } from 'lucide-react'
+import { hasProjectCapability } from '@/lib/auth/authorize'
 import { requireUser } from '@/lib/auth/require-user'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { resolvePreferredGovernanceProject } from '@/lib/governance/preferred-project'
@@ -29,11 +30,25 @@ export default async function StewardshipPage() {
     if (result.error) throw new Error(result.error.message)
   }
 
-  const orderedProjects = [...(projects.data ?? [])].sort((left, right) => {
+  const projectRows = projects.data ?? []
+  const capabilities = await Promise.all(projectRows.map(async project => ({
+    projectId: project.id,
+    stewardshipManage: await hasProjectCapability(user.id, project.id, 'stewardship.manage'),
+    certificationRequest: await hasProjectCapability(user.id, project.id, 'certification.request'),
+    certificationReview: await hasProjectCapability(user.id, project.id, 'certification.review'),
+  })))
+  const stewardshipManageProjectIds = capabilities.filter(row => row.stewardshipManage).map(row => row.projectId)
+  const certificationRequestProjectIds = capabilities.filter(row => row.certificationRequest).map(row => row.projectId)
+  const certificationReviewProjectIds = capabilities.filter(row => row.certificationReview).map(row => row.projectId)
+
+  const orderedProjects = [...projectRows].sort((left, right) => {
     if (left.id === preferredProjectId) return -1
     if (right.id === preferredProjectId) return 1
     return left.name.localeCompare(right.name)
   })
+  const initialProjectId = preferredProjectId && orderedProjects.some(project => project.id === preferredProjectId)
+    ? preferredProjectId
+    : orderedProjects[0]?.id ?? null
   const homeHref = canAccessWorkspace(landing.persona, 'dashboard', landing.organizationRole) ? '/dashboard' : '/home'
 
   return (
@@ -65,6 +80,10 @@ export default async function StewardshipPage() {
           initialCertifications={certifications.data ?? []}
           datasetCoverage={datasetCoverage.data ?? []}
           catalogCoverage={catalogCoverage.data ?? []}
+          initialProjectId={initialProjectId}
+          stewardshipManageProjectIds={stewardshipManageProjectIds}
+          certificationRequestProjectIds={certificationRequestProjectIds}
+          certificationReviewProjectIds={certificationReviewProjectIds}
         />
       </div>
     </main>

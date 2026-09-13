@@ -1,28 +1,35 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
-import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
+import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizeProject, AuthorizationError, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
 import { calculateInitialNextRun } from '@/lib/orchestration/schedules'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function number(value: unknown) { const parsed=Number(value); return Number.isFinite(parsed)?parsed:null }
+function errorResponse(error: unknown, fallback: string) {
+  const authorization=authorizationErrorResponse(error)
+  if(authorization) return NextResponse.json({error:authorization.error},{status:authorization.status})
+  return NextResponse.json({error:error instanceof Error?error.message:fallback},{status:500})
+}
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    await requireUser()
-    const supabase=await createClient()
-    const { data,error }=await supabase.schema('orchestration').from('job_schedules').select('*').order('next_run_at')
+    const user=await requireApiUser()
+    const projectId=new URL(request.url).searchParams.get('projectId')?.trim()??''
+    if(!projectId) return NextResponse.json({error:'projectId is required.'},{status:400})
+    await authorizeProject(user.id,projectId,'schedule.manage')
+    const admin=createAdminClient()
+    const { data,error }=await admin.schema('orchestration').from('job_schedules').select('*').eq('project_id',projectId).order('next_run_at')
     if(error) return NextResponse.json({error:error.message},{status:500})
     return NextResponse.json({schedules:data??[]})
   } catch (error) {
-    return NextResponse.json({error:error instanceof Error?error.message:'Unable to load schedules.'},{status:500})
+    return errorResponse(error,'Unable to load schedules.')
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user=await requireUser()
+    const user=await requireApiUser()
     const body=await request.json()
     const projectId=text(body.projectId)
     const datasetVersionId=text(body.datasetVersionId)
