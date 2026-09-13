@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'projectId, labelId and name are required.' }, { status: 400 })
     }
 
-    await authorizeProject(user.id, projectId, 'classification.review')
+    await authorizeProject(user.id, projectId, 'policy.approve')
 
     const admin = createAdminClient()
     const { data, error } = await admin.schema('governance').from('classification_policies').insert({
@@ -30,9 +31,25 @@ export async function POST(request: Request) {
       enabled: true,
     }).select('*').single()
 
-    return error
-      ? NextResponse.json({ error: error.message }, { status: 400 })
-      : NextResponse.json({ policy: data }, { status: 201 })
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+    await writeGovernanceAudit({
+      projectId,
+      actorUserId: user.id,
+      eventType: 'CLASSIFICATION_POLICY_CREATED',
+      entityType: 'CLASSIFICATION_POLICY',
+      entityId: data.id,
+      metadata: {
+        label_id: labelId,
+        name,
+        retention_days: data.retention_days,
+        encryption_required: data.encryption_required,
+        masking_required: data.masking_required,
+        approval_required: data.approval_required,
+      },
+    })
+
+    return NextResponse.json({ policy: data }, { status: 201 })
   } catch (error) {
     const authError = authorizationErrorResponse(error)
     if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status })
