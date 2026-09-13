@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireApiUser } from '@/lib/auth/require-api-user'
-import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { AuthorizationError, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizeAgentAction } from '@/lib/governance/agent-authorization'
 import { writeAgentRunLog } from '@/lib/agents/run-log'
 
 const ACTIVE_RUN_STATUSES = ['CREATED', 'RUNNING', 'QUEUED', 'WAITING']
@@ -13,10 +14,20 @@ export async function POST(_request: Request, context: { params: Promise<{ runId
     if (!runId) return NextResponse.json({ error: 'runId is required.' }, { status: 400 })
 
     const admin = createAdminClient()
-    const { data: run, error: runError } = await admin.schema('agent').from('agent_runs').select('id, project_id, status').eq('id', runId).single()
+    const { data: run, error: runError } = await admin.schema('agent').from('agent_runs').select('id, project_id, dataset_id, status').eq('id', runId).single()
     if (runError || !run) return NextResponse.json({ error: 'Agent run not found.' }, { status: 404 })
 
-    await authorizeProject(user.id, run.project_id, 'agent.execute')
+    try {
+      await authorizeAgentAction(
+        user.id,
+        'execution.cancel',
+        run.dataset_id
+          ? { type: 'DATASET', projectId: run.project_id, datasetId: run.dataset_id }
+          : { type: 'PROJECT', projectId: run.project_id },
+      )
+    } catch {
+      throw new AuthorizationError('You do not have permission to cancel this execution.')
+    }
 
     if (!ACTIVE_RUN_STATUSES.includes(run.status)) return NextResponse.json({ error: `Run is already ${String(run.status).toLowerCase()}.` }, { status: 409 })
 
