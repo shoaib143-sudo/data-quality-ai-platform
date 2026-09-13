@@ -7,9 +7,9 @@ import ts from 'typescript'
 const dir=mkdtempSync(join(tmpdir(),'monitor-api-'))
 const root='00000000-0000-4000-a000-000000000001',child='00000000-0000-4000-a000-000000000002',project='11111111-1111-4111-a111-111111111111'
 const rows={ 'agent.agent_runs':[{id:root,parent_run_id:null,project_id:project,agent_definition_id:'def',status:'RUNNING',created_at:'2026-09-12'}, {id:child,parent_run_id:root,project_id:project,agent_definition_id:'def',status:'QUEUED',created_at:'2026-09-12'}], 'agent.agent_definitions':[{id:'def',name:'Synthetic'}] }
-let authorized=true;const queried=[]
+let authorized=true;const queried=[],capabilities=[]
 globalThis.monitorTestDb={schema(schema){return{from(table){const name=`${schema}.${table}`;queried.push(name);let predicates=[],cap=10000,fields='*',start=0;const q={select(f){fields=f;return q},eq(k,v){predicates.push(r=>r[k]===v);return q},in(k,v){predicates.push(r=>v.includes(r[k]));return q},is(k,v){predicates.push(r=>r[k]===v);return q},order(){return q},limit(n){cap=n;return q},range(a,b){start=a;cap=b-a+1;return q},maybeSingle(){return result(true)},single(){return result(true)},then(a,b){return result(false).then(a,b)}};function result(single){let data=(rows[name]??[]).filter(r=>predicates.every(p=>p(r))).slice(start,start+cap).map(r=>fields==='*'?r:Object.fromEntries(fields.split(',').map(k=>[k,r[k]])));return Promise.resolve({data:single?(data[0]??null):data,error:null})}return q}}}}
-globalThis.monitorAuthorize=async(user,p)=>{if(!authorized||p!==project)throw new Error('Access denied')}
+globalThis.monitorAuthorize=async(user,p,capability)=>{capabilities.push(capability);if(!authorized||p!==project)throw new Error('Access denied')}
 try{
   writeFileSync(join(dir,'stub.mjs'),'export const createAdminClient=()=>globalThis.monitorTestDb;export const authorizeProject=(...args)=>globalThis.monitorAuthorize(...args);')
   for(const [source,out] of [['lib/monitoring/execution-contract.ts','core.mjs'],['lib/monitoring/execution-read-model.ts','read.mjs'],['lib/monitoring/execution-branch.ts','branch.mjs']]){
@@ -19,6 +19,9 @@ try{
   const {readExecutionBranch}=await import(pathToFileURL(join(dir,'branch.mjs')))
   let n=0;const test=async(name,f)=>{await f();console.log(`PASS synthetic API ${++n}: ${name}`)}
   await test('old child deep link resolves full root',async()=>{const s=await readExecution('user',child);assert.equal(s.rootId,root);assert.equal(s.runs.length,2)})
+  await test('execution reads require observability read',async()=>{capabilities.length=0;await readExecution('user',root);assert.equal(capabilities.at(-1),'observability.read')})
+  await test('root summaries require observability read',async()=>{capabilities.length=0;await readExecutionRoots('user',project);assert.equal(capabilities.at(-1),'observability.read')})
+  await test('branch diagnostics require observability read',async()=>{capabilities.length=0;await readExecutionBranch('user',root,child);assert.equal(capabilities.at(-1),'observability.read')})
   await test('project scope excludes foreign child',async()=>{rows['agent.agent_runs'].push({id:'foreign',parent_run_id:root,project_id:'other'});const s=await readExecution('user',root);assert.equal(s.runs.length,2)})
   await test('unauthorized read stops before evidence fetch',async()=>{authorized=false;queried.length=0;await assert.rejects(readExecution('user',root),/Access denied/);assert.deepEqual(queried,['agent.agent_runs']);authorized=true})
   await test('run payload canary is never selected',async()=>{rows['agent.agent_runs'][0].input={secret:'SYNTHETIC_SECRET_CANARY'};assert.ok(!JSON.stringify(await readExecution('user',root)).includes('SYNTHETIC_SECRET_CANARY'))})
