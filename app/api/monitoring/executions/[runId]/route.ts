@@ -10,6 +10,7 @@ export async function GET(request: Request, context: { params: Promise<{runId:st
     return NextResponse.json(await readExecution(user.id,runId,limit),{headers:{'Cache-Control':'private, no-store'}})
   } catch(error) {
     const auth = authorizationErrorResponse(error)
+    if (!auth) console.error('Monitoring execution read failed', error instanceof Error ? error.message : 'unknown error')
     return NextResponse.json({error:auth?.error ?? 'Unable to load execution. It may be unavailable or incomplete.'},{status:auth?.status ?? 400})
   }
 }
