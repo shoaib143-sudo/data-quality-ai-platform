@@ -9,7 +9,7 @@ export default async function MonitoringPage({searchParams}: {searchParams: Prom
   const user = await requireUser()
   const query = await searchParams
   const db = createAdminClient()
-  const projectsResult = await db.schema('catalog').from('projects').select('id,name').order('name')
+  const projectsResult = await db.schema('app').from('projects').select('id,name').order('name')
   if (projectsResult.error) throw new Error('Unable to load monitoring projects')
   const checked = await Promise.all((projectsResult.data ?? []).map(async project => {
     try { await authorizeProject(user.id, project.id, 'observability.read'); return project }
