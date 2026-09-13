@@ -22,6 +22,12 @@ jobs:
           node-version: 24
       - name: Verify all persona landing and workspace routes
         run: node --experimental-strip-types scripts/verify-persona-workspace-policy.mjs
+      - name: Verify Agent Policy v2 foundation
+        run: node --experimental-strip-types scripts/verify-agent-policy-v2.mjs
+      - name: Run Agent Policy v2 unit tests
+        run: node --experimental-strip-types scripts/test-agent-policy-v2-unit.mjs
+      - name: Run independent Agent Policy v2 adversarial audit
+        run: node --experimental-strip-types scripts/audit-agent-policy-v2-adversarial.mjs
       - name: Verify real-life persona acceptance task contract
         run: node --experimental-strip-types scripts/verify-persona-real-life-task-contract.mjs
       - name: Verify persona mutation visibility matches server authorization
