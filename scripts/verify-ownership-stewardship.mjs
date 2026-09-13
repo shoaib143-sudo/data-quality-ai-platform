@@ -62,7 +62,7 @@ requireText(page, "from('stewardship_dataset_coverage')", 'UI consumes dataset c
 requireText(page, "from('stewardship_catalog_coverage')", 'UI consumes catalog coverage evidence')
 requireText(manager, 'Current catalog asset', 'catalog identity assignment UI')
 requireText(manager, 'Accountable means both a current business owner and a current data steward are present.', 'coverage semantics are explainable')
-requireText(manager, 'AI may suggest a candidate later, but it cannot silently activate an owner or steward.', 'AI authority boundary visible')
+requireText(manager, 'AI may suggest a candidate, but it cannot silently activate an owner or steward.', 'AI authority boundary visible')
 requireText(manager, 'Assignment revoked. History and audit evidence were preserved.', 'revocation history visible')
 requireText(manager, 'Certification remains a separate governed decision', 'stewardship does not imply certification')
 
