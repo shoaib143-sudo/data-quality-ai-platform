@@ -9,6 +9,9 @@ const claimStart = queue.indexOf('export async function claimDurableJobs')
 const claimEnd = queue.indexOf('export async function markDurableJobSucceeded', claimStart)
 assert.ok(claimStart >= 0 && claimEnd > claimStart, 'claimDurableJobs source boundary must be discoverable')
 const claimPath = queue.slice(claimStart, claimEnd)
+const maintenanceStart = queue.indexOf('export async function runDurableQueueMaintenance')
+assert.ok(maintenanceStart >= 0 && maintenanceStart < claimStart, 'durable queue maintenance must be explicit and separate from claims')
+const maintenancePath = queue.slice(maintenanceStart, claimStart)
 
 const scenarios = [
   {
@@ -59,9 +62,10 @@ assert.equal(safeCleanupFailure.canContinueClaiming, true, 'cleanup outage must 
 const unsafeCleanupFailure = assessStaleReleaseFailure('Gateway Timeout', ['QUEUED', 'RUNNING'])
 assert.equal(unsafeCleanupFailure.canContinueClaiming, false, 'cleanup outage must fail closed if RUNNING rows could become claimable')
 
-assert.match(claimPath, /assessStaleReleaseFailure\(releaseError\.message, \['QUEUED'\]\)/, 'runtime cleanup degradation must declare the QUEUED-only claim invariant')
-assert.match(claimPath, /logClaimDegradation\('job\.stale_release_failed'/, 'stale cleanup failure must produce explicit runtime evidence')
-assert.match(claimPath, /if \(!releaseAssessment\.canContinueClaiming\)/, 'unsafe cleanup degradation must fail closed')
+assert.doesNotMatch(claimPath, /release_stale_jobs/, 'normal queue claims must not run stale maintenance')
+assert.match(maintenancePath, /assessStaleReleaseFailure\(error\.message, \['QUEUED'\]\)/, 'maintenance degradation must declare the QUEUED-only claim invariant')
+assert.match(maintenancePath, /logClaimDegradation\('job\.stale_release_failed'/, 'stale cleanup failure must produce explicit runtime evidence')
+assert.match(maintenancePath, /if \(!assessment\.canContinueClaiming\)/, 'unsafe cleanup degradation must fail closed')
 assert.match(claimPath, /logClaimDegradation\('job\.pool_claim_failed'/, 'pool failure must produce explicit runtime evidence')
 assert.doesNotMatch(claimPath, /await writeTelemetry\(null, 'job\.(stale_release_failed|pool_claim_failed)'/, 'claim transport failures must not synchronously write through the failed database path')
 assert.match(claimPath, /disposition: 'POOL_LEFT_QUEUED_FOR_RETRY'/, 'failed pool work must remain retryable')
