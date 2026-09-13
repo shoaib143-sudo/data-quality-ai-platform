@@ -1,3 +1,6 @@
+import { hasProjectCapability } from '@/lib/auth/authorize'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import ProfilingExplorer from '@/app/profiling/profiling-explorer'
@@ -24,7 +27,7 @@ function numeric(value: unknown) {
 }
 
 export default async function ProfilingExplorerPage({ searchParams }: { searchParams: ExplorerSearchParams }) {
-  await requireUser()
+  const user = await requireUser()
   const supabase = await createClient()
   const requested = await searchParams
   const requestedRunId = requested.runId?.trim() || null
@@ -33,7 +36,7 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
     ? await supabase
         .schema('profiling')
         .from('profile_runs')
-        .select('id,status,summary')
+        .select('id,status,summary,dataset_version_id')
         .eq('id', requestedRunId)
         .maybeSingle()
     : { data: null, error: null }
@@ -45,7 +48,7 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
     : await supabase
         .schema('profiling')
         .from('profile_runs')
-        .select('id,status,summary')
+        .select('id,status,summary,dataset_version_id')
         .order('started_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -56,6 +59,20 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
   if (!latestRun) {
     return <main className="min-h-screen p-8"><div className="mx-auto max-w-5xl rounded-xl border p-8"><h1 className="text-2xl font-semibold">Profiling Explorer</h1><p className="mt-2 text-sm text-muted-foreground">No profiling runs are available.</p></div></main>
   }
+
+  const [landing, versionContext] = await Promise.all([
+    resolveLandingAccess(user.id),
+    supabase.schema('catalog').from('dataset_versions').select('dataset_id').eq('id', latestRun.dataset_version_id).maybeSingle(),
+  ])
+  if (versionContext.error || !versionContext.data) throw new Error(`Unable to resolve profiling project context: ${versionContext.error?.message ?? 'dataset version not found'}`)
+  const datasetContext = await supabase.schema('catalog').from('datasets').select('project_id').eq('id', versionContext.data.dataset_id).maybeSingle()
+  if (datasetContext.error || !datasetContext.data) throw new Error(`Unable to resolve profiling project context: ${datasetContext.error?.message ?? 'dataset not found'}`)
+  const projectId = String(datasetContext.data.project_id)
+  const [canManageWorkflow, canManageRemediation] = await Promise.all([
+    hasProjectCapability(user.id, projectId, 'workflow.manage'),
+    hasProjectCapability(user.id, projectId, 'issues.manage'),
+  ])
+  const canOpenWorkflows = canAccessWorkspace(landing.persona, 'workflows', landing.organizationRole)
 
   const [
     { data: findings, error: findingsError },
@@ -163,6 +180,9 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
           workflow={governanceWorkflow}
           outcome={governanceOutcome}
           issues={governanceIssues}
+          canManageWorkflow={canManageWorkflow}
+          canManageRemediation={canManageRemediation}
+          canOpenWorkflows={canOpenWorkflows}
         />
         <ProfilingExplorer
           findings={(findings ?? []) as any}

@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'An approved profiling remediation workflow is required.' }, { status: 409 })
     }
 
-    await authorizeProject(user.id, instance.project_id, 'quality.read')
+    await authorizeProject(user.id, instance.project_id, 'issues.manage')
 
     const context = object(instance.context)
     if (context.source !== 'PROFILING_INVESTIGATION') {
