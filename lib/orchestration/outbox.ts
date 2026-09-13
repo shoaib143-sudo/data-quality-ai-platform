@@ -35,20 +35,38 @@ export async function claimOutboxEvents(workerId: string, limit = 20) {
     p_worker: workerId,
     p_limit: limit,
   }
+  const firstStartedAt = Date.now()
   let { data, error } = await admin.schema('orchestration').rpc('claim_events', claimArgs)
+  const firstElapsedMs = Date.now() - firstStartedAt
+  let retryElapsedMs: number | null = null
+  const firstGatewayTimeout = Boolean(error && isRetryableOutboxGatewayError(error.message || ''))
 
-  if (error && isRetryableOutboxGatewayError(error.message || '')) {
+  if (firstGatewayTimeout) {
     await waitForOutboxClaimReplay()
+    const retryStartedAt = Date.now()
     const replay = await admin.schema('orchestration').rpc('claim_events', claimArgs)
+    retryElapsedMs = Date.now() - retryStartedAt
     data = replay.data
     error = replay.error
     if (!error) {
       console.warn('[outbox-claim-recovered]', JSON.stringify({
         worker: workerId,
+        first_elapsed_ms: firstElapsedMs,
+        retry_elapsed_ms: retryElapsedMs,
         disposition: 'IDEMPOTENT_REPLAY_RECOVERED',
       }))
     }
   }
+
+  console.info('[outbox-claim-rpc-evidence]', JSON.stringify({
+    worker: workerId,
+    first_elapsed_ms: firstElapsedMs,
+    retry_elapsed_ms: retryElapsedMs,
+    retry_attempted: firstGatewayTimeout,
+    recovered: firstGatewayTimeout && !error,
+    final_status: error ? 'FAILED' : 'SUCCEEDED',
+    claimed_events: Array.isArray(data) ? data.length : 0,
+  }))
 
   if (error) throw new Error(`Unable to claim governance events: ${error.message}`)
   return (data ?? []) as OutboxEvent[]
