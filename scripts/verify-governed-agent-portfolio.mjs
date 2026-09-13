@@ -21,7 +21,7 @@ const agentKeys = [
   'support_agent',
 ]
 
-requireText('lib/auth/authorize.ts', ["'agent.execute'"])
+requireText('lib/auth/authorize.ts', ["'agent.execute'", "'agent.converse'"])
 requireText('supabase/migrations/20260904190310_add_governed_agent_execution_capability.sql', [
   "'agent.execute'",
   "'DATA_OWNER'",
@@ -92,7 +92,7 @@ requireText('infra/data-plane/clickhouse/init/004_agent_intelligence_history.sql
   'INTERVAL 730 DAY',
 ])
 requireText('app/api/agents/governance/run/route.ts', [
-  "authorizeProject(user.id, projectId, 'agent.execute')",
+  "authorizeProject(user.id, projectId, 'agent.converse')",
   'executeGovernanceSpecialistAgent',
   'enrichGovernedAgentWithMemory',
   'persistGovernedAgentMemoryAndEvaluation',
