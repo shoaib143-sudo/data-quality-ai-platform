@@ -60,7 +60,7 @@ export default async function InboxPage(){
 
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-      <GlobalUtilityBar contextLabel="Governance inbox" persona={landing.persona} organizationRole={landing.organizationRole} roleLabel={landing.personaDefinition.title}/>
+      <GlobalUtilityBar contextLabel="Governance inbox" persona={landing.persona} organizationRole={landing.organizationRole} roleLabel={landing.persona}/>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm sm:p-9">
         <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Action center</p>
