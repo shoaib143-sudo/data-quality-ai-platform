@@ -8,6 +8,44 @@ export const maxDuration = 300
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
+async function enabledQualityRuleCount(
+  admin: ReturnType<typeof createAdminClient>,
+  datasetId: string,
+  datasetVersionId: string,
+) {
+  const { data, error } = await admin
+    .schema('profiling')
+    .from('quality_rule_definitions')
+    .select('id,dataset_version_id')
+    .eq('dataset_id', datasetId)
+    .eq('enabled', true)
+  if (error) throw new Error(`Unable to resolve enabled quality rules: ${error.message}`)
+  return (data ?? []).filter(rule => !rule.dataset_version_id || rule.dataset_version_id === datasetVersionId).length
+}
+
+function errorResponse(error: unknown) {
+  if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
+  return NextResponse.json({ error: error instanceof Error ? error.message : 'Data quality automation failed.' }, { status: 500 })
+}
+
+export async function GET(request: Request) {
+  try {
+    const user = await requireApiUser()
+    const datasetVersionId = text(new URL(request.url).searchParams.get('datasetVersionId'))
+    if (!datasetVersionId) return NextResponse.json({ error: 'datasetVersionId is required.' }, { status: 400 })
+
+    const { dataset, version } = await authorizeDatasetVersion(user.id, datasetVersionId, 'quality.execute')
+    const admin = createAdminClient()
+    const enabledRuleCount = await enabledQualityRuleCount(admin, dataset.id, version.id)
+    return NextResponse.json(
+      { datasetVersionId: version.id, enabledRuleCount, executable: enabledRuleCount > 0 },
+      { headers: { 'Cache-Control': 'private, no-store' } },
+    )
+  } catch (error) {
+    return errorResponse(error)
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await requireApiUser()
@@ -19,6 +57,10 @@ export async function POST(request: Request) {
 
     const { dataset, version } = await authorizeDatasetVersion(user.id, datasetVersionId, 'quality.execute')
     const admin = createAdminClient()
+    const enabledRuleCount = await enabledQualityRuleCount(admin, dataset.id, version.id)
+    if (enabledRuleCount === 0) {
+      return NextResponse.json({ error: 'No enabled quality rules apply to this dataset version.' }, { status: 409 })
+    }
 
     if (!profileRunId) {
       const { data: latestRun, error: runError } = await admin
@@ -65,7 +107,6 @@ export async function POST(request: Request) {
       monitorUrl: `/monitoring?run=${encodeURIComponent(queued.agentRunId)}`,
     }, { status: 202 })
   } catch (error) {
-    if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Data quality automation failed.' }, { status: 500 })
+    return errorResponse(error)
   }
 }
