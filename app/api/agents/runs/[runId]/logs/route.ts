@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireApiUser } from '@/lib/auth/require-api-user'
-import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { AuthorizationError, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizeAgentAction } from '@/lib/governance/agent-authorization'
 
 export async function GET(
   request: Request,
@@ -16,12 +17,22 @@ export async function GET(
     const { data: run, error: runError } = await admin
       .schema('agent')
       .from('agent_runs')
-      .select('id, project_id, status, created_at, started_at, completed_at, error_code, error_message')
+      .select('id, project_id, dataset_id, status, created_at, started_at, completed_at, error_code, error_message')
       .eq('id', runId)
       .single()
     if (runError || !run) return NextResponse.json({ error: 'Agent run not found.' }, { status: 404 })
 
-    await authorizeProject(user.id, run.project_id, 'agent.execute')
+    try {
+      await authorizeAgentAction(
+        user.id,
+        'execution.view_evidence',
+        run.dataset_id
+          ? { type: 'DATASET', projectId: run.project_id, datasetId: run.dataset_id }
+          : { type: 'PROJECT', projectId: run.project_id },
+      )
+    } catch {
+      throw new AuthorizationError('You do not have permission to view execution evidence for this run.')
+    }
 
     const [{ data: steps, error: stepsError }, { data: messages, error: messagesError }, { data: artifacts, error: artifactsError }] = await Promise.all([
       admin.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, input, output, started_at, completed_at, error_code, error_message, created_at').eq('agent_run_id', runId).order('step_order', { ascending: true }),
