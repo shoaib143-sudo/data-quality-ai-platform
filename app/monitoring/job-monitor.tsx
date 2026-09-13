@@ -152,18 +152,33 @@ function StatusPill({ status }: { status: CellStatus }) {
   </span>
 }
 
-function RunNode({ run, label, selected, onSelect }: { run: MonitoringRun; label: string; selected: boolean; onSelect: () => void }) {
+function organicNodePosition(index: number, total: number) {
+  const ringCount = total > 16 ? 3 : total > 8 ? 2 : 1
+  const ring = index % ringCount
+  const slotIndex = Math.floor(index / ringCount)
+  const slotCount = Math.max(1, Math.ceil(total / ringCount))
+  const angle = (slotIndex / slotCount) * Math.PI * 2 - Math.PI / 2 + (ring * Math.PI) / Math.max(slotCount, 2)
+  const radii = ringCount === 1 ? [39] : ringCount === 2 ? [31, 43] : [27, 36, 45]
+  const radius = radii[ring]
+  return {
+    left: 50 + Math.cos(angle) * radius,
+    top: 53 + Math.sin(angle) * radius * 0.82,
+  }
+}
+
+function RunNode({ run, label, selected, dense, onSelect }: { run: MonitoringRun; label: string; selected: boolean; dense: boolean; onSelect: () => void }) {
   const status = normalizeRunStatus(run.status)
   const meta = statusMeta(status)
   return <button
     type="button"
     onClick={(event) => { event.stopPropagation(); onSelect() }}
-    className={`group relative grid h-11 w-11 place-items-center rounded-full border transition duration-300 hover:scale-110 ${meta.ring} ${meta.soft} ${selected ? 'scale-110 ring-2 ring-white/70' : ''}`}
+    className={`group relative grid place-items-center rounded-full border transition duration-300 hover:scale-110 ${dense ? 'h-8 w-8' : 'h-10 w-10'} ${meta.ring} ${meta.soft} ${selected ? 'scale-110 ring-2 ring-white/70' : ''}`}
     title={`${label} · ${meta.label}`}
     aria-label={`${label}, ${meta.label}`}
   >
-    <span className={`absolute inset-2 rounded-full blur-md opacity-70 ${meta.dot}`} />
-    <span className={`relative h-2.5 w-2.5 rounded-full ${meta.dot} ${status === 'RUNNING' ? 'animate-pulse' : ''}`} />
+    <span className={`absolute inset-1.5 rounded-full blur-md opacity-75 ${meta.dot}`} />
+    <span className={`relative rounded-full ${dense ? 'h-2 w-2' : 'h-2.5 w-2.5'} ${meta.dot} ${status === 'RUNNING' ? 'animate-pulse' : ''}`} />
+    <span className="pointer-events-none absolute top-full mt-1 hidden max-w-24 truncate rounded-md border border-white/10 bg-[#061426]/95 px-1.5 py-0.5 text-[9px] font-semibold text-slate-200 shadow-lg group-hover:block group-focus-visible:block">{label}</span>
   </button>
 }
 
@@ -183,57 +198,54 @@ function OrganicDomainCell({
   onSelectRun: (id: string) => void
 }) {
   const meta = statusMeta(cell.status)
-  const visibleRuns = cell.componentRuns.slice(0, 8)
-  return <button
-    type="button"
-    onClick={onSelectDomain}
-    className={`group relative min-h-[290px] overflow-hidden rounded-[44%_56%_52%_48%/43%_45%_55%_57%] border bg-[#071a2c]/90 p-5 text-left transition duration-500 hover:-translate-y-1 hover:scale-[1.01] ${meta.ring} ${meta.glow} ${selected ? 'ring-2 ring-cyan-200/55' : ''}`}
+  const visibleRuns = cell.componentRuns
+  const denseNodes = visibleRuns.length > 10
+  return <article
+    className={`group relative min-h-[340px] overflow-hidden rounded-[44%_56%_52%_48%/43%_45%_55%_57%] border bg-[#071a2c]/90 p-5 text-left transition duration-500 hover:-translate-y-1 hover:scale-[1.01] ${meta.ring} ${meta.glow} ${selected ? 'ring-2 ring-cyan-200/55' : ''}`}
   >
     <div className="absolute inset-0 opacity-75" style={{ backgroundImage: 'radial-gradient(circle at 35% 28%, rgba(34,211,238,.16), transparent 28%), radial-gradient(circle at 72% 68%, rgba(59,130,246,.12), transparent 34%), radial-gradient(circle at 50% 50%, rgba(255,255,255,.04), transparent 48%)' }} />
     <div className="absolute inset-[13%] rounded-full border border-cyan-100/[0.06] shadow-[inset_0_0_70px_rgba(34,211,238,.07)]" />
     <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full opacity-30">
       {visibleRuns.map((run, index) => {
-        const angle = (index / Math.max(visibleRuns.length, 1)) * Math.PI * 2
-        const x = 50 + Math.cos(angle) * 29
-        const y = 53 + Math.sin(angle) * 27
-        return <line key={run.id} x1="50%" y1="52%" x2={`${x}%`} y2={`${y}%`} stroke="rgba(103,232,249,.55)" strokeWidth="0.7" />
+        const position = organicNodePosition(index, visibleRuns.length)
+        return <line key={run.id} x1="50%" y1="52%" x2={`${position.left}%`} y2={`${position.top}%`} stroke="rgba(103,232,249,.55)" strokeWidth="0.7" />
       })}
     </svg>
 
     <div className="relative z-10 flex items-start justify-between gap-3">
-      <div className="min-w-0">
+      <button type="button" onClick={onSelectDomain} className="min-w-0 text-left" aria-label={`Inspect ${cell.domainName} Data Domain`}>
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200/55">Data Domain</p>
-        <h3 className="mt-1 truncate text-lg font-bold text-white">{cell.domainName}</h3><p className="mt-0.5 truncate text-[10px] text-slate-500">Scope · {cell.project.name}</p>
-      </div>
+        <h3 className="mt-1 truncate text-lg font-bold text-white group-hover:text-cyan-50">{cell.domainName}</h3>
+        <p className="mt-0.5 truncate text-[10px] text-slate-500">Scope · {cell.project.name}</p>
+      </button>
       <StatusPill status={cell.status} />
     </div>
 
-    <div className="absolute left-1/2 top-[52%] z-10 -translate-x-1/2 -translate-y-1/2">
-      <div className={`grid h-24 w-24 place-items-center rounded-full border bg-[#071827]/95 ${meta.ring} ${meta.glow}`}>
+    <button type="button" onClick={onSelectDomain} className="absolute left-1/2 top-[52%] z-10 -translate-x-1/2 -translate-y-1/2" aria-label={`Inspect ${cell.domainName} Data Domain summary`}>
+      <div className={`grid h-28 w-28 place-items-center rounded-full border bg-[#071827]/95 ${meta.ring} ${meta.glow}`}>
         <div className="text-center">
-          <Layers3 className={`mx-auto h-7 w-7 ${meta.text}`} />
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{cell.componentCount} components</p>
+          <div className={`mx-auto grid h-11 w-11 place-items-center rounded-full border ${meta.ring} ${meta.soft}`}><Layers3 className={`h-6 w-6 ${meta.text}`} /></div>
+          <p className="mt-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-300">{cell.domainName}</p>
+          <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">{cell.componentCount} components</p>
         </div>
       </div>
-    </div>
+    </button>
 
-    <div className="absolute inset-[24%] z-20">
+    <div className="absolute inset-[18%] z-20" aria-label={`${cell.componentCount} execution components inside ${cell.domainName}`}>
       {visibleRuns.map((run, index) => {
-        const angle = (index / Math.max(visibleRuns.length, 1)) * Math.PI * 2 - Math.PI / 2
-        const radius = 43
-        const left = 50 + Math.cos(angle) * radius
-        const top = 50 + Math.sin(angle) * radius
-        return <div key={run.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${left}%`, top: `${top}%` }}>
-          <RunNode run={run} label={agents.get(run.agent_definition_id)?.name ?? 'Execution'} selected={selectedRunId === run.id} onSelect={() => onSelectRun(run.id)} />
+        const position = organicNodePosition(index, visibleRuns.length)
+        const label = agents.get(run.agent_definition_id)?.name ?? 'Execution'
+        return <div key={run.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${position.left}%`, top: `${position.top}%` }}>
+          <RunNode run={run} label={label} selected={selectedRunId === run.id} dense={denseNodes} onSelect={() => onSelectRun(run.id)} />
         </div>
       })}
     </div>
 
     <div className="absolute bottom-5 left-5 right-5 z-10 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3 text-[11px] text-slate-400">
-      <span>{cell.activeCount} active · {cell.completeCount} complete</span>
-      <span className="inline-flex items-center gap-1 text-cyan-200/70">Inspect <ChevronRight className="h-3.5 w-3.5" /></span>
+      <span>{cell.activeCount} active · {cell.completeCount} complete · {cell.failedCount} failed</span>
+      <button type="button" onClick={onSelectDomain} className="inline-flex items-center gap-1 font-semibold text-cyan-200/70 hover:text-cyan-100">Inspect <ChevronRight className="h-3.5 w-3.5" /></button>
     </div>
-  </button>
+  </article>
 }
 
 export function JobMonitor({
@@ -427,7 +439,7 @@ export function JobMonitor({
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-200/55">Governed topology</p>
             <h2 className="mt-1 text-xl font-bold text-white">Luminous Data Domain cells</h2>
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Each luminous cell is a persisted catalog Data Domain from dataset business-domain metadata. Inner nodes are the latest execution state of each component in that domain. Unassigned executions remain explicit instead of being guessed into a domain.</p>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Each luminous organic cell is a persisted catalog Data Domain. Every execution component appears inside its domain membrane as a live status organelle, while the nucleus summarizes domain health. Unassigned executions remain explicit instead of being guessed into a domain.</p>
           </div>
           <div className="hidden items-center gap-2 text-[11px] text-slate-500 sm:flex"><GitBranch className="h-4 w-4" /> Execution relationships remain inspectable in run details</div>
         </div>
