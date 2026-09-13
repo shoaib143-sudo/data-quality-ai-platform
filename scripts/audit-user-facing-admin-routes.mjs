@@ -9,6 +9,8 @@ const interactiveAuthMarkers = [
   'authorizeDataset(',
   'authorizeDatasetVersion(',
   'authorizeOrganizationAdmin(',
+  'authorizeAgentAction(',
+  'filterAuthorizedExecutionRuns(',
 ]
 
 const specializedMachineAuthMarkers = [
@@ -42,8 +44,8 @@ const approvedPrivilegedExceptions = new Map([
 
 const pinnedInteractiveBoundaries = new Map([
   ['app/api/admin/members/route.ts', ['requireApiUser(', 'authorizeOrganizationAdmin(']],
-  ['app/api/agents/runs/[runId]/logs/route.ts', ['requireApiUser(', "'agent.execute'"]],
-  ['app/api/agents/runs/[runId]/terminate/route.ts', ['requireApiUser(', "'agent.execute'"]],
+  ['app/api/agents/runs/[runId]/logs/route.ts', ['requireApiUser(', "'execution.view_evidence'"]],
+  ['app/api/agents/runs/[runId]/terminate/route.ts', ['requireApiUser(', "'execution.cancel'"]],
   ['app/api/classification/policies/route.ts', ['requireApiUser(', "'policy.approve'"]],
   ['app/api/datasets/[datasetId]/route.ts', ['requireApiUser(', "'catalog.update'", "'source.manage'"]],
   ['app/api/datasets/create-project/route.ts', ['requireApiUser(', 'authorizeOrganizationAdmin(']],
