@@ -32,6 +32,8 @@ jobs:
         run: node scripts/verify-datanexus-theme-contract.mjs
       - name: Verify persona landing scope integrity
         run: node scripts/verify-persona-landing-scope-integrity.mjs
+      - name: Verify 13 persona landing content parity
+        run: node --experimental-strip-types scripts/verify-persona-landing-content-parity.mjs
       - name: Verify UX product telemetry contract
         run: node scripts/verify-ux-product-telemetry.mjs
       - name: Verify policy-denied UX contract
