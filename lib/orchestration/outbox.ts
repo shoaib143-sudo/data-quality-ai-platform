@@ -21,12 +21,35 @@ export type OutboxEvent = {
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
+function isRetryableOutboxGatewayError(message: string) {
+  return /gateway timeout/i.test(message)
+}
+
+async function waitForOutboxClaimReplay() {
+  await new Promise((resolve) => setTimeout(resolve, 125))
+}
+
 export async function claimOutboxEvents(workerId: string, limit = 20) {
   const admin = createAdminClient()
-  const { data, error } = await admin.schema('orchestration').rpc('claim_events', {
+  const claimArgs = {
     p_worker: workerId,
     p_limit: limit,
-  })
+  }
+  let { data, error } = await admin.schema('orchestration').rpc('claim_events', claimArgs)
+
+  if (error && isRetryableOutboxGatewayError(error.message || '')) {
+    await waitForOutboxClaimReplay()
+    const replay = await admin.schema('orchestration').rpc('claim_events', claimArgs)
+    data = replay.data
+    error = replay.error
+    if (!error) {
+      console.warn('[outbox-claim-recovered]', JSON.stringify({
+        worker: workerId,
+        disposition: 'IDEMPOTENT_REPLAY_RECOVERED',
+      }))
+    }
+  }
+
   if (error) throw new Error(`Unable to claim governance events: ${error.message}`)
   return (data ?? []) as OutboxEvent[]
 }
