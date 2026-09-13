@@ -3,10 +3,11 @@ import { getSupabaseEnv } from './env'
 
 export function createAdminClient() {
   const { url } = getSupabaseEnv()
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  // Support both the legacy service-role variable and Supabase's current server-secret naming.
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY
 
   if (!serviceRoleKey) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
+    throw new Error('A Supabase server secret is not configured')
   }
 
   return createClient(url, serviceRoleKey, {
