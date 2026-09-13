@@ -1,12 +1,19 @@
 import Link from 'next/link'
 import { BookMarked, Layers3 } from 'lucide-react'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { resolvePreferredGovernanceProject } from '@/lib/governance/preferred-project'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { GlossaryManager } from './glossary-manager'
 
 export default async function GlossaryPage() {
-  await requireUser()
-  const supabase = await createClient()
+  const user = await requireUser()
+  const [supabase, preferredProjectId, landing] = await Promise.all([
+    createClient(),
+    resolvePreferredGovernanceProject(user.id),
+    resolveLandingAccess(user.id),
+  ])
   const [projects, datasets, terms, sources] = await Promise.all([
     supabase.schema('app').from('projects').select('id,name').order('name'),
     supabase.schema('catalog').from('datasets').select('id,project_id,name').order('name'),
@@ -15,6 +22,11 @@ export default async function GlossaryPage() {
   ])
   for (const result of [projects, datasets, terms, sources]) if (result.error) throw new Error(result.error.message)
 
+  const orderedProjects = [...(projects.data ?? [])].sort((left, right) => {
+    if (left.id === preferredProjectId) return -1
+    if (right.id === preferredProjectId) return 1
+    return left.name.localeCompare(right.name)
+  })
   const sourceProject = new Map((sources.data ?? []).map(source => [source.id, source.project_id]))
   const sourceIds = [...sourceProject.keys()]
   const assets = sourceIds.length
@@ -30,13 +42,14 @@ export default async function GlossaryPage() {
     ...asset,
     project_id: sourceProject.get(asset.source_id) ?? '',
   })).filter(asset => asset.project_id)
+  const homeHref = canAccessWorkspace(landing.persona, 'dashboard', landing.organizationRole) ? '/dashboard' : '/home'
 
   return <main className="min-h-screen bg-slate-50">
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <nav className="mb-6 flex items-center justify-between rounded-2xl border bg-white px-5 py-3 shadow-sm">
-        <Link href="/dashboard" className="flex items-center gap-3 font-bold">
+        <Link href={homeHref} className="flex items-center gap-3 font-bold">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5" /></span>
-          Data Governance PowerHouse
+          DataNexus AI
         </Link>
         <Link href="/catalog" className="text-sm font-semibold text-blue-600">Catalog</Link>
       </nav>
@@ -50,7 +63,7 @@ export default async function GlossaryPage() {
         </div>
       </header>
       <GlossaryManager
-        projects={projects.data ?? []}
+        projects={orderedProjects}
         datasets={datasets.data ?? []}
         catalogAssets={catalogAssets}
         initialTerms={terms.data ?? []}
