@@ -39,9 +39,6 @@ async function writeTelemetry(projectId: string | null, metricKey: string, numer
 }
 
 function logClaimDegradation(metricKey: string, dimensions: Record<string, unknown>) {
-  // Claim transport degradation must not synchronously write back through the same
-  // database path that just timed out. Runtime logs are durable operational evidence
-  // and avoid timeout amplification while queued work remains fenced for retry.
   console.error('[job-claim-degraded-evidence]', JSON.stringify({ metric_key: metricKey, ...dimensions }).slice(0, 2000))
 }
 
@@ -189,22 +186,29 @@ function configuredWorkloadPools(poolOverride?: DurableWorkloadPool) {
   return ['CORE', 'SEMANTIC', 'GOVERNANCE'] satisfies DurableWorkloadPool[]
 }
 
-export async function claimDurableJobs(workerId: string, limit = 2, poolOverride?: DurableWorkloadPool) {
+export async function runDurableQueueMaintenance() {
   const admin = createAdminClient()
-  const { error: releaseError } = await admin.schema('orchestration').rpc('release_stale_jobs')
-  if (releaseError) {
-    const releaseAssessment = assessStaleReleaseFailure(releaseError.message, ['QUEUED'])
-    if (!releaseAssessment.canContinueClaiming) {
-      throw new Error(`Unable to release stale durable jobs safely: ${releaseAssessment.error}`)
-    }
-    console.error('[job-stale-release]', releaseAssessment.error)
-    logClaimDegradation('job.stale_release_failed', {
-      error: releaseAssessment.error,
-      disposition: releaseAssessment.disposition,
-      claimable_statuses: ['QUEUED'],
-    })
+  const { data, error } = await admin.schema('orchestration').rpc('release_stale_jobs')
+  if (!error) {
+    return { released: Number(data ?? 0), degraded: false, disposition: 'MAINTENANCE_COMPLETED' as const }
   }
 
+  const assessment = assessStaleReleaseFailure(error.message, ['QUEUED'])
+  if (!assessment.canContinueClaiming) {
+    throw new Error(`Unable to release stale durable jobs safely: ${assessment.error}`)
+  }
+
+  console.error('[job-stale-release]', assessment.error)
+  logClaimDegradation('job.stale_release_failed', {
+    error: assessment.error,
+    disposition: assessment.disposition,
+    claimable_statuses: ['QUEUED'],
+  })
+  return { released: 0, degraded: true, disposition: assessment.disposition }
+}
+
+export async function claimDurableJobs(workerId: string, limit = 2, poolOverride?: DurableWorkloadPool) {
+  const admin = createAdminClient()
   const boundedLimit = Math.max(1, Math.min(Math.floor(limit), 16))
   const pools = configuredWorkloadPools(poolOverride)
   const jobs: DurableJob[] = []
