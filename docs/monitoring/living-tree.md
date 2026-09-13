@@ -12,7 +12,8 @@ The monitoring page no longer imports the legacy JobMonitor or JobHealth impleme
 
 ## Evidence and authorization
 
-- Server-side queries reuse `agent.execute`, project authorization, and existing diagnostics/action boundaries. Branch diagnostics verify ancestry before reading evidence. There is no new privileged database function or authorization policy.
+- Monitor reads use `observability.read` project authorization. Project discovery may use the server-side admin client to cross table RLS, but every project is filtered through explicit project authorization before presentation. Retry, cancel, terminate, recovery, and execution remain separately authorized and are not granted by monitor visibility.
+- Branch diagnostics verify ancestry before reading evidence. There is no new privileged database function or authorization policy.
 - Tree responses select safe run/step fields, safe plan metadata, explicit dependency IDs, and interrupt types. They do not include tool inputs, outputs, raw messages, checkpoint state, or artifact payloads other than the validated plan projection.
 - Existing full diagnostic export remains an explicit, separately authorized operation.
 - A versioned `MONITOR_PLAN` artifact records admitted plan steps and child bindings before execution. Native supervisor evidence is written only after the validated plan is pinned and its execution lease is acquired.
@@ -20,6 +21,7 @@ The monitoring page no longer imports the legacy JobMonitor or JobHealth impleme
 - Artifact versions include a deterministic digest, respecting the deployed unique `(agent_run_id, artifact_type, artifact_version)` constraint. Same evidence replay is idempotent. Different steps, attempts, and plan revisions coexist. This requires no migration.
 - Completed recorded steps do not imply complete scope. A percentage needs a complete recorded plan and a non-truncated evidence window. Counts are shown for historical runs without manifests. Parent success remains a separate recorded fact.
 - Historical overwritten attempt details are not reconstructed. Existing checkpoint and supervisor event history is displayed separately.
+- The execution snapshot API exposes schema version `1`. Server-rendered initial snapshots and client refreshes use the same versioning helper so Tree and List remain on one canonical execution contract.
 
 ## Refresh and bounds
 
@@ -28,6 +30,10 @@ Selected active trees refresh every three seconds, summaries every fifteen secon
 Tree loading begins at 100 runs and expands in increments of 100 to a maximum of 1,000. Ancestry/traversal depth is bounded at 64. Step/plan/dependency queries have explicit evidence windows. Truncation produces warnings and suppresses percentages. Branch detail pages contain up to 100 items per evidence category; the next page advances each category together. Deep-linked details remain available even when the selected run is outside the tree window. No claim of complete unbounded graph retrieval is made.
 
 Layout recalculates only when topology changes. State-only refreshes preserve branch positions. Collapsed branches retain their allocated positions. The component keeps zoom/collapse state when switching Tree/List. A newly selected execution starts a fresh layout. Fit tree removes the minimum canvas width so the complete tree fits narrow viewports; zoom then scales from that fitted width. On phones, fit provides an overview, while zoom/pan and the full-size branch details or List view support reading individual jobs.
+
+Execution semantics are normalized through a presentation layer before tree rendering. That layer emits presentation nodes, recorded ownership relationships, and recorded prerequisites. Layout remains responsible only for geometry, and the renderer does not invent workflow relationships or authorization semantics.
+
+A terminal branch-diagnostic failure stops the branch-detail loading state, shows a retryable error, and labels attempt evidence unavailable until diagnostics recover. It no longer shows error and loading messages simultaneously.
 
 ## Verification
 
@@ -52,7 +58,7 @@ Local verification during implementation:
 | --- | --- |
 | Production Next.js build | Passed, including monitoring page and three API routes |
 | Pure state/layout tests | 20 passed |
-| Synthetic authorized read-model tests | 18 passed |
+| Synthetic authorized read-model tests | 21 cases after explicit `observability.read` assertions for execution, root-summary, and branch reads |
 | Synthetic evidence persistence tests | 7 passed, modeling both deployed unique constraints |
 | Supervisor production and durable-resume checks | Passed |
 | Profiling lifecycle contract check | Passed |
@@ -70,17 +76,23 @@ The fixture now compiles `app/globals.css` with the existing PostCSS/Tailwind pl
 
 Fresh local verification passed frozen-lockfile installation, TypeScript, all 45 synthetic checks, supervisor production and durable-resume checks, profiling lifecycle contracts, and the production build. The browser installation with OS dependencies was denied by this session's package-manager permissions; installing the browser binaries alone succeeded and all nine tests subsequently ran successfully.
 
-CI run `34741760070` also passed all nine strengthened browser tests on `2cfcf0c`. CodeQL review thread `PRRT_kwDOUCzvOc6hzRDc` identified request-derived filesystem access in the fixture asset server. Although the original code restricted URL values, the server now preloads exactly two fixed build outputs into a Map and uses the request only as an in-memory lookup key. No request input reaches a filesystem path. Fresh CodeQL validation is required for this follow-up.
+CI run `34741760070` also passed all nine strengthened browser tests on `2cfcf0c`. CodeQL review thread `PRRT_kwDOUCzvOc6hzRDc` identified request-derived filesystem access in the fixture asset server. Although the original code restricted URL values, the server now preloads exactly two fixed build outputs into a Map and uses the request only as an in-memory lookup key. No request input reaches a filesystem path.
 
-The earlier V6 runtime SLO failure measured the existing production `/login` endpoint: 50/50 HTTP successes but p95 1580.98ms against a 1500ms limit. The fresh runtime-slo job in run `34741515142` passed without changing thresholds.
+Signed-in preview validation subsequently moved beyond the Vercel sign-in gate. Senior Leadership renders `Job Monitor` in its persona workspace, and the navigation definition plus workspace policy expose Job Monitor across all 13 personas without granting execution authority. Preview environment compatibility was corrected for the deployed Supabase server-secret naming.
 
-Preview `dpl_HhZrNAaJXCfibarjeKUs7CsTJzmh` was confirmed READY at `2cfcf0c`. Configured Vercel access reached the DataNexus sign-in page; there is no authenticated application session yet. Actual authorized/unauthorized application personas, a controlled new execution, monitor API latency/payload measurements, the deployed server flag, and production acceptance remain outstanding. No application execution or live database mutation was made during this follow-up. PR #363 stays draft until these acceptance gates are satisfied.
+The monitor project registry is `app.projects`, not `catalog.projects`. The monitoring page now discovers projects through the server-side boundary and filters each project with `observability.read`. This fixed the signed-in preview failure that previously reported `Unable to load monitoring projects`.
+
+A real recorded failed Data Quality execution was loaded through the signed-in preview. Its snapshot exposed the recorded failed run, three actual execution steps, explicit error evidence, and branch diagnostics including a recorded checkpoint. A separate historical two-agent execution was also validated: the root is a `Profiling Agent`, the child is a recorded `Data Quality Agent`, both contain three recorded steps, and the snapshot contains an explicit satisfied `SUCCESS` scheduler dependency from the profiling job to the data-quality job. The Living Tree renders both ownership and prerequisite semantics from this evidence rather than fabricating relationships.
+
+The execution endpoint briefly appeared to leave the client on `Loading execution hierarchy…` while an older preview was being exercised. Direct signed-in inspection of the current branch confirmed the current endpoint returns the full snapshot and the current UI hydrates it. Terminal branch-detail failures are now explicitly retryable and do not continue to claim that evidence is loading.
+
+Current-head acceptance still requires a controlled new E2E supervisor/profiling execution, representative API latency/payload measurements, deployed feature-flag verification, final read-only persona negative testing, and production commit/UI acceptance. PR #363 stays draft until these gates are satisfied.
 
 ## Rollout and rollback
 
 The tree is the default view when `JOB_MONITOR_TREE_ENABLED` is unset or `true`. Set the server environment variable to `false` and redeploy to use the shared safe List view without loading the tree canvas. Rollback never reintroduces selection-triggered execution or fabricated percentages. Evidence artifacts remain readable and no historical backfill or destructive migration is required.
 
-Before production acceptance: pass CI browser checks, verify a signed-in user's authorized and unauthorized project paths on the deployment, run a controlled supervisor/profiling execution, inspect new manifests and retry snapshots, and measure API p95/payload size under representative load. Existing SQL checks and microbenchmarks do not replace those gates. No live application session or new production job was created during local verification.
+Before production acceptance: pass current-head CI browser checks, verify signed-in authorized and unauthorized project paths, run a controlled supervisor/profiling execution, inspect new manifests and retry snapshots, measure API p50/p95 and payload size under representative load, verify the deployed server flag, and complete production smoke testing. Existing SQL checks and microbenchmarks do not replace those gates.
 
 ## Native capability challenge
 
@@ -88,13 +100,13 @@ This implementation borrows the distinction between trace parentage and causal l
 
 | Capability | Assessment | Disposition |
 | --- | --- | --- |
-| Persisted ownership and causal-link inspection | PARTIAL: implemented projection; deployment acceptance pending | KEEP / BUILD_NOW |
+| Persisted ownership and causal-link inspection | PARTIAL: implemented projection; production acceptance pending | KEEP / BUILD_NOW |
 | Prospective plan scope and profiling retry snapshots | PARTIAL: implemented; old history cannot be recovered | BUILD_NOW |
-| Read-only correlated navigation | PARTIAL: implemented; browser CI gate pending | BUILD_NOW |
+| Read-only correlated navigation | PARTIAL: signed-in preview validated; production acceptance pending | BUILD_NOW |
 | Durable checkpoints, leases, approval and cancellation authority | PARTIAL: existing native mechanisms reused | KEEP |
 | Streaming transport and high-viewer-count performance parity | GAP_DEFERRED: requires measured production need | BENCHMARK_LATER |
 | Trace-parent versus dependency semantics | PARTIAL: explicit edge types/conditions retained | BORROW_PATTERN |
-| Renderer or transport replacement | PARTIAL: contract/layout/polling modules separated | EXTENSION_POINT |
+| Renderer or transport replacement | PARTIAL: contract, presentation, layout, and polling modules separated | EXTENSION_POINT |
 | New runtime, replay mutation, or agent decision architecture | NOT_APPLICABLE | NOT_APPLICABLE |
 
-ADR-007 agent classification is unchanged. Identity, project scope, RLS, approval, lease, retry, cancellation, result-artifact authority, and governance remain DataNexus-owned. Snapshot failure cannot fabricate completeness. Objective parity requires correct recorded relationships, authorization tests, browser interactions, and measured latency/size under load; no production parity or universal performance claim is made.
+ADR-007 documents the Living Tree execution architecture and transition invariants. Identity, project scope, RLS, approval, lease, retry, cancellation, result-artifact authority, and governance remain DataNexus-owned. Snapshot failure cannot fabricate completeness. Objective parity requires correct recorded relationships, authorization tests, browser interactions, and measured latency/size under load; no production parity or universal performance claim is made.
