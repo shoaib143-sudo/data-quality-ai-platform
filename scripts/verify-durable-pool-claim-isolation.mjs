@@ -5,7 +5,7 @@ const policy = fs.readFileSync('lib/orchestration/pool-claim-policy.ts', 'utf8')
 
 for (const marker of [
   "rpc('release_stale_jobs')",
-  "assessStaleReleaseFailure(releaseError.message, ['QUEUED'])",
+  "assessStaleReleaseFailure(error.message, ['QUEUED'])",
   "console.error('[job-stale-release]'",
   "'job.stale_release_failed'",
   "'STALE_RUNNING_LEFT_FENCED_FOR_RETRY'",
@@ -20,7 +20,7 @@ for (const marker of [
   if (!(queue + policy).includes(marker)) throw new Error(`Pool claim isolation contract missing: ${marker}`)
 }
 
-if (queue.includes('if (releaseError) throw new Error(`Unable to release stale durable jobs before claiming work:')) {
+if (queue.includes('if (error) throw new Error(`Unable to release stale durable jobs before claiming work:')) {
   throw new Error('A transient stale-release failure must not abort safely fenced QUEUED-only claims.')
 }
 if (queue.includes('if (error) throw new Error(`Unable to claim durable jobs for ${pool} pool:')) {
