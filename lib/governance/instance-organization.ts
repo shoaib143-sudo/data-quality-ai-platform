@@ -38,12 +38,11 @@ export async function resolveInstanceOrganizationId(): Promise<string> {
 }
 
 /**
- * Resolves the authenticated user's membership inside the one organization
- * owned by this DataNexus instance. Unexpected memberships are integrity
- * defects and fail closed. They are never treated as alternate tenant context.
+ * Resolves membership after the caller has already proved organizationId is the
+ * canonical instance organization. This keeps the same fail-closed membership
+ * checks without repeating the canonical-organization lookup.
  */
-export async function resolveInstanceOrganizationMembership(userId: string): Promise<InstanceOrganizationMembership> {
-  const organizationId = await resolveInstanceOrganizationId()
+export async function resolveKnownInstanceOrganizationMembership(userId: string, organizationId: string): Promise<InstanceOrganizationMembership> {
   const admin = createAdminClient()
   const membershipsResult = await admin.schema('app').from('organization_members')
     .select('organization_id,role')
@@ -73,6 +72,16 @@ export async function resolveInstanceOrganizationMembership(userId: string): Pro
     organizationId,
     organizationRole: membership.role ? String(membership.role) : null,
   }
+}
+
+/**
+ * Resolves the authenticated user's membership inside the one organization
+ * owned by this DataNexus instance. Unexpected memberships are integrity
+ * defects and fail closed. They are never treated as alternate tenant context.
+ */
+export async function resolveInstanceOrganizationMembership(userId: string): Promise<InstanceOrganizationMembership> {
+  const organizationId = await resolveInstanceOrganizationId()
+  return resolveKnownInstanceOrganizationMembership(userId, organizationId)
 }
 
 export async function assertInstanceOrganizationId(organizationId: string): Promise<void> {
