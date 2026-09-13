@@ -79,24 +79,27 @@ AI-assisted lineage follows the same authority principle: metadata-derived candi
 - `2026-09-06-productionization-decisions-and-truth-boundaries.md` records the productionization decisions for the Module #3 blocker, external governance corpus, origin naming, semantic embeddings, Vercel/Render runtime split, temporary JDBC credentials, multi-schema scope, Supabase plan limitations, security posture reporting, and JDBC runtime incident handling.
 - `2026-09-06-ai-assisted-lineage-suggestions.md` records the production implementation and verification of metadata-derived lineage suggestions, explicit review and promotion, production defects repaired, and the continuing separation from source-authoritative lineage.
 - `2026-09-06-progress-checkpoint-and-agent-handover.md` records the September 6 production acceptance, catalog/JDBC evidence, Module #3 blocker, then-current open work and agent handoff.
-- `2026-09-13-engineering-summary-production-verification-and-next-work.md` is the current engineering and handoff record. It summarizes the September 13 Singapore work window, PRs #351 through #356, deployed-artifact provenance, governed remediation production verification, open audit PRs, assurance results, the separate retrieval-evaluation runtime observation, and the next execution sequence.
+- `2026-09-13-engineering-summary-production-verification-and-next-work.md` records the earlier September 13 checkpoint through PR #356, including deployed-artifact provenance and the governed remediation production-verification sequence. Its lifecycle statements are historical and are superseded where later same-day merges advanced `main`.
+- `2026-09-13-chat-review-decision-register-and-unresolved-items.md` is the current September 13 discussion synthesis. It extracts chat-agreed engineering rules, design and architecture decisions, tradeoffs, authority boundaries, superseded decisions, later same-day implementation evidence, and unresolved architecture items.
 
 The capability matrix is intentionally broader than the current implementation scope. Future implementation should draw from it rather than recreate the exploration from scratch.
 
 ## Current continuation checkpoint
 
-The authoritative current checkpoint is:
+The authoritative current September 13 decision checkpoint is:
 
-- `2026-09-13-engineering-summary-production-verification-and-next-work.md`
+- `2026-09-13-chat-review-decision-register-and-unresolved-items.md`
 
-At that checkpoint:
+At this checkpoint:
 
-- production `main` is documented at merge SHA `8618943a9f12add199c2a8156bf998d3ff8ec2e3` from PR #356;
-- the governed human remediation handoff is production-verified for the previously failing Senior Leadership case without widening permissions;
-- deployed-artifact provenance is active and the final remediation production deployment is bound to a compiled SHA-256 artifact digest;
-- PRs #351, #352 and #354 remain open even though their recorded heads passed dedicated and protected CI, so they are not production state;
-- those open PRs must be reconciled with current `main`, revalidated on their exact final heads, then merged, deployed and production-verified one at a time;
-- a separate production HTTP 500 on `/admin/ai-command-center/retrieval-evaluation`, caused by permission denial on `ai_retrieval_evaluation_case_effective`, remains outside the completed remediation scope and requires its own investigation.
+- protected `main` is reconciled at `be2fbd45d5692aaef6e73101efefeec352a31aa3`, the merge of PR #361;
+- the earlier human-remediation architecture remains governed by both project capability and workspace access, without widening permissions;
+- PRs #351, #352 and #354, which were open in the earlier morning record, later merged to `main`;
+- the retrieval-evaluation read-path finding that was previously listed as unresolved was addressed by PR #358 using minimal read grants while preserving RLS, `SECURITY INVOKER` semantics and application authorization;
+- Physical Assets identity presentation was aligned with the authoritative schema in PR #366, and Project Roles persona count was derived from the governed catalog in PR #367;
+- shared workspace actions were aligned with persona/workspace policy in PR #360 without weakening direct route authorization;
+- the scoped legacy dark-contrast compatibility bridge was merged in PR #361;
+- PR #363, Living Tree job monitoring, remains an open draft and must not be described as production accepted until its authenticated persona, controlled execution, load, current-head CI, deployment-flag and production acceptance gates are complete.
 
 ## Preservation rule
 
