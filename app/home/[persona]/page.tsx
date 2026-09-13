@@ -223,7 +223,7 @@ export default async function PersonaHomePage({ params, searchParams }: { params
       confidence: scored.length ? scored.reduce((sum, item) => sum + Number(item.confidence), 0) / scored.length : null,
       highFindings: members.reduce((sum, item) => sum + item.highFindingCount, 0),
     }
-  }).sort((a, b) => b.assets - a.assets || a.name.localeCompare(b.name))
+  }).sort((a, b) => (a.name === 'Unassigned' ? 1 : 0) - (b.name === 'Unassigned' ? 1 : 0) || b.assets - a.assets || a.name.localeCompare(b.name))
   const domains = requestedDomain === 'overall'
     ? availableDomains
     : availableDomains.filter(domain => domain.name === requestedDomain)
@@ -271,6 +271,7 @@ export default async function PersonaHomePage({ params, searchParams }: { params
     if (!scopedDatasetIds.has(link.dataset_id)) continue
     const asset = assetById.get(link.business_context_asset_id)
     if (!asset) continue
+    if (upper(asset.asset_type) === 'BUSINESS_DOMAIN') continue
     const existing = impactByType.get(asset.asset_type) ?? new Set<string>()
     existing.add(asset.id)
     impactByType.set(asset.asset_type, existing)
@@ -286,7 +287,7 @@ export default async function PersonaHomePage({ params, searchParams }: { params
   for (const run of runs.filter(item => upper(item.status) === 'COMPLETED')) {
     const version = versionById.get(run.dataset_version_id)
     const dataset = version ? datasetById.get(version.dataset_id) : undefined
-    if (dataset && scopedDatasetIds.has(dataset.id) && activity.length < 8) activity.push({ id: `run-${run.id}`, label: 'Profiling evidence completed', detail: dataset.name, when: relativeDate(run.completed_at || run.started_at), href: `/profiling/explorer?runId=${encodeURIComponent(run.id)}`, tone: 'good' })
+    if (dataset && scopedDatasetIds.has(dataset.id) && activity.length < 8) activity.push({ id: `run-${run.id}`, label: `Profiling completed: ${dataset.name}`, detail: 'Latest governed profiling evidence is available', when: relativeDate(run.completed_at || run.started_at), href: `/profiling/explorer?runId=${encodeURIComponent(run.id)}`, tone: 'good' })
   }
   activity.sort((a, b) => a.when.localeCompare(b.when))
 
