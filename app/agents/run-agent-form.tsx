@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import type { PersonaConversationDefault } from '@/lib/governance/persona-conversation-defaults'
 
 export type AgentOption = {
   id: string
@@ -36,10 +37,22 @@ export function RunAgentForm({
   agents,
   projects,
   datasetVersions,
+  agentExecuteProjectIds,
+  profilingExecuteProjectIds,
+  qualityExecuteProjectIds,
+  conversationalProjectIds,
+  requestableProjectIds,
+  conversationDefaults,
 }: {
   agents: AgentOption[]
   projects: ProjectOption[]
   datasetVersions: DatasetVersionOption[]
+  agentExecuteProjectIds: string[]
+  profilingExecuteProjectIds: string[]
+  qualityExecuteProjectIds: string[]
+  conversationalProjectIds: string[]
+  requestableProjectIds: string[]
+  conversationDefaults: PersonaConversationDefault
 }) {
   const router = useRouter()
   const [agentDefinitionId, setAgentDefinitionId] = useState(agents[0]?.id ?? '')
@@ -50,12 +63,35 @@ export function RunAgentForm({
   const [question, setQuestion] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>(() => {
+    const preferred = agents
+      .filter(agent => GOVERNED_READ_AGENT_KEYS.has(agent.agentKey) && conversationDefaults.preferredAgentKeys.includes(agent.agentKey))
+      .map(agent => agent.id)
+    return preferred.length
+      ? preferred.slice(0, 6)
+      : agents.filter(agent => GOVERNED_READ_AGENT_KEYS.has(agent.agentKey)).slice(0, 3).map(agent => agent.id)
+  })
 
   const selectedAgent = useMemo(
     () => agents.find((agent) => agent.id === agentDefinitionId) ?? null,
     [agents, agentDefinitionId],
   )
   const governedReadAgent = Boolean(selectedAgent && GOVERNED_READ_AGENT_KEYS.has(selectedAgent.agentKey))
+  const nativeSupervisorAgent = selectedAgent?.agentKey === 'native_supervisor_agent'
+  const supervisorCandidates = useMemo(
+    () => agents.filter(agent => GOVERNED_READ_AGENT_KEYS.has(agent.agentKey)),
+    [agents],
+  )
+  const canConverseProject = conversationalProjectIds.includes(projectId)
+  const canExecuteSelectedAgent = selectedAgent?.agentKey === 'profiling_agent'
+    ? profilingExecuteProjectIds.includes(projectId)
+    : selectedAgent?.agentKey === 'data_quality_agent'
+      ? qualityExecuteProjectIds.includes(projectId)
+      : agentExecuteProjectIds.includes(projectId)
+  const canRequestProject = requestableProjectIds.includes(projectId)
+  const requestableOperationalAgent = Boolean(selectedAgent && ['profiling_agent', 'data_quality_agent', 'native_supervisor_agent'].includes(selectedAgent.agentKey))
+  const canRequestSelectedAgent = !governedReadAgent && requestableOperationalAgent && canRequestProject && !canExecuteSelectedAgent
+  const canSubmitSelectedAgent = governedReadAgent ? canConverseProject : (canExecuteSelectedAgent || canRequestSelectedAgent)
   const projectVersions = useMemo(
     () => datasetVersions.filter((version) => version.projectId === projectId),
     [datasetVersions, projectId],
@@ -75,23 +111,89 @@ export function RunAgentForm({
       setStatus('Select an agent and project.')
       return
     }
-    if (!governedReadAgent && !datasetVersionId) {
+    if (governedReadAgent && !canConverseProject) {
+      setStatus('You are not authorized to use conversational agents in this project.')
+      return
+    }
+    if (!governedReadAgent && !canExecuteSelectedAgent && !canRequestSelectedAgent) {
+      setStatus('You can use the Agents workspace for governed read access, but you are not authorized to start or request this operational execution.')
+      return
+    }
+    if (!governedReadAgent && !nativeSupervisorAgent && !datasetVersionId) {
       setStatus('Select a dataset version for this operational agent.')
+      return
+    }
+    if (nativeSupervisorAgent && !question.trim()) {
+      setStatus('Enter a supervisor goal.')
+      return
+    }
+    if (nativeSupervisorAgent && selectedWorkerIds.length < 1) {
+      setStatus('Select at least one specialist for the supervisor.')
       return
     }
 
     setRunning(true)
 
     try {
+      if (!governedReadAgent && !canExecuteSelectedAgent && canRequestSelectedAgent) {
+        const workers = selectedWorkerIds.map((workerId, index) => ({
+          workerId: `worker-${index + 1}`,
+          agentDefinitionId: workerId,
+          question: question.trim() || null,
+          dependsOn: [],
+        }))
+        const isSupervisor = selectedAgent.agentKey === 'native_supervisor_agent'
+        const selectedVersion = isSupervisor ? null : datasetVersions.find(version => version.id === datasetVersionId)
+        if (!isSupervisor && !selectedVersion) throw new Error('Select a dataset version before requesting execution.')
+        const actionKey = isSupervisor
+          ? 'RUN_SUPERVISOR'
+          : selectedAgent.agentKey === 'data_quality_agent'
+            ? 'RUN_DATA_QUALITY'
+            : 'RUN_PROFILING'
+        const response = await fetch('/api/agent-approvals/requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(isSupervisor ? {
+            actionKey,
+            projectId,
+            parameters: { goal: question.trim(), workers },
+          } : {
+            actionKey,
+            datasetId: selectedVersion!.datasetId,
+            parameters: {
+              agentDefinitionId,
+              datasetVersionId,
+            },
+          }),
+        })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error ?? 'Unable to request execution approval.')
+        router.push('/approvals')
+        router.refresh()
+        return
+      }
+
       let endpoint: string
       let body: Record<string, unknown>
 
       if (governedReadAgent) {
         endpoint = '/api/agents/governance/run'
         body = { agentDefinitionId, projectId, question: question.trim() || undefined }
+      } else if (nativeSupervisorAgent) {
+        endpoint = '/api/agents/supervisor/run'
+        body = {
+          projectId,
+          goal: question.trim(),
+          workers: selectedWorkerIds.map((workerId, index) => ({
+            workerId: `worker-${index + 1}`,
+            agentDefinitionId: workerId,
+            question: question.trim() || null,
+            dependsOn: [],
+          })),
+        }
       } else if (selectedAgent.agentKey === 'data_quality_agent') {
         endpoint = '/api/data-quality/run'
-        body = { datasetVersionId }
+        body = { agentDefinitionId, datasetVersionId }
       } else {
         endpoint = '/api/agents/run'
         body = { agentDefinitionId, projectId, datasetVersionId }
@@ -168,13 +270,13 @@ export function RunAgentForm({
             <label className="space-y-2 text-sm">
               <span className="font-medium">Dataset version</span>
               <select
-                value={governedReadAgent ? '' : datasetVersionId}
+                value={governedReadAgent || nativeSupervisorAgent ? '' : datasetVersionId}
                 onChange={(event) => setDatasetVersionId(event.target.value)}
                 className="w-full rounded-md border bg-background px-3 py-2"
-                disabled={running || governedReadAgent || projectVersions.length === 0}
+                disabled={running || governedReadAgent || nativeSupervisorAgent || projectVersions.length === 0}
               >
-                <option value="">{governedReadAgent ? 'Not required for this agent' : 'Select a version'}</option>
-                {!governedReadAgent && projectVersions.map((version) => (
+                <option value="">{governedReadAgent || nativeSupervisorAgent ? 'Not required for this agent' : 'Select a version'}</option>
+                {!governedReadAgent && !nativeSupervisorAgent && projectVersions.map((version) => (
                   <option key={version.id} value={version.id}>{version.datasetName} v{version.versionNumber}</option>
                 ))}
               </select>
@@ -183,13 +285,84 @@ export function RunAgentForm({
             <div className="flex items-end">
               <button
                 type="submit"
-                disabled={running || !selectedAgent || !projectId || (!governedReadAgent && !datasetVersionId)}
+                disabled={running || !canSubmitSelectedAgent || !selectedAgent || !projectId || (!governedReadAgent && !nativeSupervisorAgent && !datasetVersionId) || (nativeSupervisorAgent && selectedWorkerIds.length === 0)}
                 className="w-full rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {running ? 'Running…' : 'Run Agent'}
+                {running
+                  ? (governedReadAgent ? 'Asking…' : canExecuteSelectedAgent ? 'Running…' : 'Requesting…')
+                  : governedReadAgent
+                    ? (canConverseProject ? 'Ask Agent' : 'Conversation not permitted')
+                    : canExecuteSelectedAgent
+                      ? 'Run Agent'
+                      : canRequestSelectedAgent
+                        ? 'Request execution'
+                        : 'Execution not permitted'}
               </button>
             </div>
           </div>
+
+          {governedReadAgent && conversationDefaults.suggestedPrompts.length ? (
+            <div className="rounded-xl border bg-muted/20 p-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">Suggested for your persona</span>
+                <span>· {conversationDefaults.responseDepth.toLowerCase()} responses</span>
+                <span>· {conversationDefaults.evidenceDepth.toLowerCase().replace('_', ' ')} evidence</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {conversationDefaults.suggestedPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => setQuestion(prompt)}
+                    disabled={running}
+                    className="rounded-full border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {nativeSupervisorAgent ? (
+            <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
+              <label className="block space-y-2 text-sm">
+                <span className="font-medium">Supervisor goal</span>
+                <textarea
+                  value={question}
+                  onChange={(event) => setQuestion(event.target.value.slice(0, 2000))}
+                  rows={4}
+                  placeholder="Describe the governed investigation or operational objective."
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                  disabled={running}
+                />
+                <span className="text-xs text-muted-foreground">{question.length}/2000 characters</span>
+              </label>
+              <fieldset>
+                <legend className="text-sm font-medium">Specialists</legend>
+                <p className="mt-1 text-xs text-muted-foreground">Choose 1 to 6 read-only specialists. Preferred agents are selected by default when available.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {supervisorCandidates.map(agent => {
+                    const checked = selectedWorkerIds.includes(agent.id)
+                    const limitReached = !checked && selectedWorkerIds.length >= 6
+                    return (
+                      <label key={agent.id} className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={running || limitReached}
+                          onChange={event => setSelectedWorkerIds(current => event.target.checked
+                            ? [...current, agent.id].slice(0, 6)
+                            : current.filter(id => id !== agent.id))}
+                        />
+                        <span>{agent.name}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </fieldset>
+            </div>
+          ) : null}
 
           {governedReadAgent && (
             <label className="block space-y-2 text-sm">
@@ -208,6 +381,11 @@ export function RunAgentForm({
         </form>
       )}
 
+      {projectId && !canExecuteSelectedAgent ? (
+        <p className="mt-4 rounded-md border p-3 text-sm text-muted-foreground">
+          You can use governed conversational agents and inspect authorized evidence in this project. Starting, retrying, or cancelling operational executions remains separately authorized.
+        </p>
+      ) : null}
       {status && <p className="mt-4 rounded-md border p-3 text-sm" role="status">{status}</p>}
     </section>
   )
