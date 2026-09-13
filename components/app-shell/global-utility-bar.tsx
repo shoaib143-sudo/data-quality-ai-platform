@@ -1,11 +1,15 @@
 import Link from 'next/link'
 import { Bell, Compass, Database, Layers3, Search, ShieldCheck, Sparkles } from 'lucide-react'
 import { SkipToContent } from '@/components/app-shell/skip-to-content'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-policy'
+import type { PersonaSlug } from '@/lib/governance/personas'
 
 type Props = {
   roleLabel?: string
   contextLabel?: string
   homeHref?: string
+  persona?: PersonaSlug
+  organizationRole?: string | null
 }
 
 const navItems = [
@@ -19,14 +23,21 @@ const navItems = [
 export function GlobalUtilityBar({
   roleLabel,
   contextLabel = 'Current project',
-  homeHref = '/dashboard',
+  homeHref,
+  persona,
+  organizationRole,
 }: Props) {
+  const resolvedHomeHref = homeHref ?? (persona && !canAccessWorkspaceHref(persona, '/dashboard', organizationRole) ? '/home' : '/dashboard')
+  const visibleNavItems = persona
+    ? navItems.filter(item => canAccessWorkspaceHref(persona, item.href, organizationRole))
+    : navItems
+
   return (
     <>
       <SkipToContent />
       <header className="mb-6 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm backdrop-blur sm:px-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href={homeHref} className="flex min-w-0 items-center gap-3" aria-label="DataNexus home">
+        <Link href={resolvedHomeHref} className="flex min-w-0 items-center gap-3" aria-label="DataNexus home">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-600 font-black text-white shadow-sm">DN</span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-black tracking-tight text-slate-950">DataNexus</span>
@@ -35,7 +46,7 @@ export function GlobalUtilityBar({
         </Link>
 
         <nav className="order-3 flex w-full gap-1 overflow-x-auto sm:order-none sm:w-auto" aria-label="Primary">
-          {navItems.map(({ href, label, icon: Icon }) => (
+          {visibleNavItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -48,22 +59,22 @@ export function GlobalUtilityBar({
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link
+          {(!persona || canAccessWorkspaceHref(persona, '/search', organizationRole)) ? <Link
             href="/search"
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
             aria-label="Search DataNexus"
           >
             <Search className="h-4 w-4" aria-hidden="true" />
             <span className="hidden lg:inline">Search</span>
-          </Link>
-          <Link
+          </Link> : null}
+          {(!persona || canAccessWorkspaceHref(persona, '/inbox', organizationRole)) ? <Link
             href="/inbox"
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
             aria-label="Open governance inbox"
           >
             <Bell className="h-4 w-4" aria-hidden="true" />
             <span className="hidden lg:inline">Inbox</span>
-          </Link>
+          </Link> : null}
           {roleLabel ? (
             <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">{roleLabel}</span>
           ) : null}
