@@ -187,7 +187,7 @@ export default async function JourneysPage() {
           <div>
             <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Platform evidence lifecycle</p>
             <h2 id="evidence-lifecycle-title" className="mt-1 text-2xl font-black">Connected data to verified governance evidence</h2>
-            <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">These stages describe persisted platform evidence. They do not imply that your persona is responsible for executing every technical stage, and they do not claim certification or completion without evidence.</p>
+            <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">These stages describe persisted platform evidence without claiming certification or completion that has not been proven. They do not imply that your persona is responsible for executing every technical stage.</p>
           </div>
           {journeys.length ? journeys.map(({ project, steps, nextStep, completed, telemetryStage }) => (
             <article key={project.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
@@ -230,8 +230,8 @@ export default async function JourneysPage() {
             <WorkspaceEmptyState
               title="No accessible project journey yet"
               detail="A governed project must exist before DataNexus can derive source, discovery, profiling, remediation, and control evidence. Your role workflow above remains available."
-              actionHref={roleWorkflow[0]?.href ?? '/home'}
-              actionLabel={roleWorkflow[0]?.label ?? 'Return home'}
+              actionHref={canDiscovery ? '/catalog/discovery' : (roleWorkflow[0]?.href ?? '/home')}
+              actionLabel={canDiscovery ? 'Open governed discovery' : (roleWorkflow[0]?.label ?? 'Return home')}
               secondaryHref="/inbox"
               secondaryLabel="Open governance inbox"
               icon={Compass}
