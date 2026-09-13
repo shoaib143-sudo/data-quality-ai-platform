@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeProject } from '@/lib/auth/authorize'
 import { readExecution, readExecutionRoots } from '@/lib/monitoring/execution-read-model'
 import { LivingJobMonitor } from './living-job-monitor'
@@ -8,7 +8,7 @@ import { LivingJobMonitor } from './living-job-monitor'
 export default async function MonitoringPage({searchParams}: {searchParams: Promise<{run?: string; branch?: string; project?: string}>}) {
   const user = await requireUser()
   const query = await searchParams
-  const db = await createClient()
+  const db = createAdminClient()
   const projectsResult = await db.schema('catalog').from('projects').select('id,name').order('name')
   if (projectsResult.error) throw new Error('Unable to load monitoring projects')
   const checked = await Promise.all((projectsResult.data ?? []).map(async project => {
