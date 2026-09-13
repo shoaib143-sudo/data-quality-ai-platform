@@ -94,10 +94,13 @@ const checks = [
 ]
 
 const authorizationSource = await readFile('lib/auth/authorize.ts', 'utf8')
+const hasExportedCapabilityBoundary = /export async function hasProjectCapability/.test(authorizationSource)
+const hasCentralRpc = /rpc\('has_project_capability'/.test(authorizationSource)
+const authorizeProjectUsesCapabilityBoundary = /authorizeProject[\s\S]*(?:hasProjectCapability|hasValidatedProjectCapability)\(userId, projectId, capability\)/.test(authorizationSource)
 if (!/export async function authorizeProject/.test(authorizationSource)
-  || !/export async function hasProjectCapability/.test(authorizationSource)
-  || !/rpc\('has_project_capability'/.test(authorizationSource)
-  || !/hasProjectCapability\(userId, projectId, capability\)/.test(authorizationSource)) {
+  || !hasExportedCapabilityBoundary
+  || !hasCentralRpc
+  || !authorizeProjectUsesCapabilityBoundary) {
   throw new Error('Governance architecture contract failed: central authorization is missing from lib/auth/authorize.ts')
 }
 console.log('PASS central authorization')
