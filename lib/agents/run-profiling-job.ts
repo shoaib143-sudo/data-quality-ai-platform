@@ -1,3 +1,4 @@
+import { recordMonitorAttempt, recordMonitorPlan } from '@/lib/monitoring/execution-evidence'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeProfilingExecutor } from '@/lib/agents/executors/profiling-executor'
 import { persistAgentRunResultArtifact } from '@/lib/agents/run-result-artifact'
@@ -30,13 +31,14 @@ async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, inp
   const { data: existing, error: existingError } = await admin
     .schema('agent')
     .from('agent_run_steps')
-    .select('id,attempt')
+    .select('id,agent_run_id,step_name,step_order,status,attempt,started_at,completed_at,error_code')
     .eq('agent_run_id', input.agentRunId)
     .eq('step_order', input.stepOrder)
     .maybeSingle()
   if (existingError) throw new Error(`Unable to resolve profiling step ${input.stepOrder}: ${existingError.message}`)
 
   if (existing) {
+    await recordMonitorAttempt(existing)
     const { data, error } = await admin
       .schema('agent')
       .from('agent_run_steps')
@@ -52,6 +54,8 @@ async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, inp
         error_message: null,
       })
       .eq('id', existing.id)
+      .eq('attempt', existing.attempt)
+      .eq('status', existing.status)
       .select('id')
       .single()
     if (error || !data) throw new Error(`Unable to restart profiling step ${input.stepOrder}: ${error?.message ?? 'unknown error'}`)
@@ -135,6 +139,16 @@ export async function executePreparedProfilingJob(input: {
     const profileTool = toolMap.get('profile_dataset')
     const metricTool = toolMap.get('execute_metrics')
     const investigationTool = toolMap.get('investigate_profile')
+
+    await recordMonitorPlan({
+      version: 1, runId: agentRunId,
+      revision: [profileTool, metricTool, investigationTool].map(tool => `${tool.id}:${tool.version}`).join(':'),
+      complete: true,
+      steps: [profileTool, metricTool, investigationTool].map((tool, index) => ({
+        id: `profiling-${index + 1}`, runId: agentRunId, order: index + 1,
+        name: tool.tool_key, dependsOn: index ? [`profiling-${index}`] : [],
+      })),
+    })
 
     const profileStep = await startOrRetryStep(admin, {
       agentRunId,
