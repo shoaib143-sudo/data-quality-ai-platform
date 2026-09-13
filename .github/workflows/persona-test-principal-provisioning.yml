@@ -15,6 +15,9 @@ on:
       - 'scripts/test-persona-test-principal-provisioning.mjs'
       - '.github/workflows/persona-test-principal-provisioning.yml'
 
+permissions:
+  contents: read
+
 jobs:
   persona-provisioning-contract:
     runs-on: ubuntu-latest
