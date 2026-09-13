@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import { assessPoolClaimOutcomes, assessStaleReleaseFailure } from '../lib/orchestration/pool-claim-policy.ts'
 
 const queue = fs.readFileSync('lib/orchestration/queue.ts', 'utf8')
+const hotPathMigration = fs.readFileSync('supabase/migrations/20260913120500_optimize_worker_claim_hot_path.sql', 'utf8')
 const claimStart = queue.indexOf('export async function claimDurableJobs')
 const claimEnd = queue.indexOf('export async function markDurableJobSucceeded', claimStart)
 assert.ok(claimStart >= 0 && claimEnd > claimStart, 'claimDurableJobs source boundary must be discoverable')
@@ -68,4 +69,16 @@ assert.doesNotMatch(claimPath, /last_error/, 'claim transport and cleanup failur
 assert.doesNotMatch(claimPath, /from\('job_queue'\)\.update/, 'claim transport and cleanup failures must not update durable job state')
 assert.doesNotMatch(claimPath, /markDurableJobFailed/, 'transport failures must not consume durable job attempts')
 
-console.log(`Independent automated adversarial audit passed for ${scenarios.length} workload-pool failure scenarios plus safe and unsafe stale-release failure boundaries.`)
+assert.match(hotPathMigration, /idx_job_queue_stale_running_lease[\s\S]*where status = 'RUNNING'/, 'stale lease maintenance must have a selective RUNNING lease index')
+assert.match(hotPathMigration, /idx_job_queue_running_project[\s\S]*where status = 'RUNNING'/, 'capacity checks must have a selective RUNNING project index')
+assert.match(hotPathMigration, /create or replace function orchestration\.release_stale_jobs\(\)[\s\S]*perform orchestration\.resolve_failed_job_dependencies\(\)/, 'dependency cleanup must run once in claim-cycle maintenance')
+const sqlClaimStart = hotPathMigration.indexOf('create or replace function orchestration.claim_jobs_by_pool')
+assert.ok(sqlClaimStart >= 0, 'optimized workload-pool claim function must be defined')
+const sqlClaimPath = hotPathMigration.slice(sqlClaimStart)
+assert.doesNotMatch(sqlClaimPath, /perform orchestration\.resolve_failed_job_dependencies\(\)/, 'dependency cleanup must not repeat once per workload pool')
+assert.match(sqlClaimPath, /limit v_scan_limit\s+for update of q skip locked/i, 'pool claim candidate scan must be bounded and retain SKIP LOCKED concurrency')
+assert.match(sqlClaimPath, /v_scan_limit integer := least\(256, greatest\(32,/i, 'claim scan bound must be explicit and finite')
+assert.match(sqlClaimPath, /q\.status = 'QUEUED'/, 'claim path must remain QUEUED-only')
+assert.match(sqlClaimPath, /not exists \([\s\S]*job_dependencies/, 'claim path must keep dependency eligibility fail-closed')
+
+console.log(`Independent automated adversarial audit passed for ${scenarios.length} workload-pool failure scenarios, stale-release boundaries, and bounded SQL hot-path invariants.`)
