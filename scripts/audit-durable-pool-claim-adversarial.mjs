@@ -60,14 +60,22 @@ const unsafeCleanupFailure = assessStaleReleaseFailure('Gateway Timeout', ['QUEU
 assert.equal(unsafeCleanupFailure.canContinueClaiming, false, 'cleanup outage must fail closed if RUNNING rows could become claimable')
 
 assert.match(claimPath, /assessStaleReleaseFailure\(releaseError\.message, \['QUEUED'\]\)/, 'runtime cleanup degradation must declare the QUEUED-only claim invariant')
-assert.match(claimPath, /await writeTelemetry\(null, 'job\.stale_release_failed'/, 'stale cleanup failure must produce explicit evidence')
+assert.match(claimPath, /logClaimDegradation\('job\.stale_release_failed'/, 'stale cleanup failure must produce explicit runtime evidence')
 assert.match(claimPath, /if \(!releaseAssessment\.canContinueClaiming\)/, 'unsafe cleanup degradation must fail closed')
-assert.match(claimPath, /await writeTelemetry\(null, 'job\.pool_claim_failed'/, 'pool failure must produce explicit evidence')
+assert.match(claimPath, /logClaimDegradation\('job\.pool_claim_failed'/, 'pool failure must produce explicit runtime evidence')
+assert.doesNotMatch(claimPath, /await writeTelemetry\(null, 'job\.(stale_release_failed|pool_claim_failed)'/, 'claim transport failures must not synchronously write through the failed database path')
 assert.match(claimPath, /disposition: 'POOL_LEFT_QUEUED_FOR_RETRY'/, 'failed pool work must remain retryable')
 assert.match(claimPath, /if \(assessment\.allPoolsFailed\)/, 'complete outage must fail closed')
 assert.doesNotMatch(claimPath, /last_error/, 'claim transport and cleanup failures must not mutate job business failure state')
 assert.doesNotMatch(claimPath, /from\('job_queue'\)\.update/, 'claim transport and cleanup failures must not update durable job state')
 assert.doesNotMatch(claimPath, /markDurableJobFailed/, 'transport failures must not consume durable job attempts')
+
+const recordClaimTelemetryStart = queue.indexOf('async function recordClaimTelemetry')
+const resolveCapacityStart = queue.indexOf('async function resolveCapacity', recordClaimTelemetryStart)
+assert.ok(recordClaimTelemetryStart >= 0 && resolveCapacityStart > recordClaimTelemetryStart, 'claim telemetry source boundary must be discoverable')
+const recordClaimTelemetryPath = queue.slice(recordClaimTelemetryStart, resolveCapacityStart)
+assert.match(recordClaimTelemetryPath, /from\('platform_telemetry'\)\.insert\(rows\)/, 'successful claim queue-wait telemetry must use one batch insert')
+assert.doesNotMatch(recordClaimTelemetryPath, /Promise\.all\(jobs\.map/, 'successful claim telemetry must not fan out one database write per claimed job')
 
 assert.match(hotPathMigration, /idx_job_queue_stale_running_lease[\s\S]*where status = 'RUNNING'/, 'stale lease maintenance must have a selective RUNNING lease index')
 assert.match(hotPathMigration, /idx_job_queue_running_project[\s\S]*where status = 'RUNNING'/, 'capacity checks must have a selective RUNNING project index')
@@ -81,4 +89,4 @@ assert.match(sqlClaimPath, /v_scan_limit integer := least\(256, greatest\(32,/i,
 assert.match(sqlClaimPath, /q\.status = 'QUEUED'/, 'claim path must remain QUEUED-only')
 assert.match(sqlClaimPath, /not exists \([\s\S]*job_dependencies/, 'claim path must keep dependency eligibility fail-closed')
 
-console.log(`Independent automated adversarial audit passed for ${scenarios.length} workload-pool failure scenarios, stale-release boundaries, and bounded SQL hot-path invariants.`)
+console.log(`Independent automated adversarial audit passed for ${scenarios.length} workload-pool failure scenarios, transport-degradation evidence, batched claim telemetry, stale-release boundaries, and bounded SQL hot-path invariants.`)
