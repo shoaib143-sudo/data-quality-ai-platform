@@ -1,0 +1,165 @@
+.heroNetwork {
+  --neural-edge: #22d3ee;
+  --neural-secondary: #7c3aed;
+  --neural-glow: rgba(34, 211, 238, .34);
+  position: relative;
+  min-height: 610px;
+  overflow: hidden;
+  border-radius: 2rem;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(30, 64, 175, .22), transparent 23%),
+    radial-gradient(circle at 38% 32%, rgba(34, 211, 238, .17), transparent 29%),
+    radial-gradient(circle at 68% 65%, rgba(168, 85, 247, .18), transparent 31%),
+    linear-gradient(145deg, rgba(3, 15, 30, .99), rgba(1, 8, 19, .995));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neural-edge) 28%, transparent),
+    0 0 42px color-mix(in srgb, var(--neural-edge) 18%, transparent),
+    inset 0 0 90px rgba(0, 0, 0, .4);
+}
+
+.heroNetwork::before,
+.heroNetwork::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  inset: 4%;
+  border-radius: 50%;
+}
+
+.heroNetwork::before {
+  z-index: 0;
+  border: 1.5px solid color-mix(in srgb, var(--neural-edge) 80%, white 20%);
+  background:
+    repeating-conic-gradient(from 4deg,
+      transparent 0deg 6deg,
+      color-mix(in srgb, var(--neural-edge) 23%, transparent) 7deg 7.8deg,
+      transparent 8.8deg 15deg),
+    radial-gradient(circle at 50% 50%, transparent 0 22%, color-mix(in srgb, var(--neural-secondary) 18%, transparent) 38%, transparent 64%);
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--neural-edge) 86%, white 8%),
+    0 0 26px color-mix(in srgb, var(--neural-edge) 62%, transparent),
+    0 0 60px color-mix(in srgb, var(--neural-secondary) 44%, transparent),
+    0 0 110px color-mix(in srgb, var(--neural-edge) 22%, transparent),
+    inset 0 0 36px color-mix(in srgb, var(--neural-edge) 18%, transparent);
+  animation: neuralPulse 6s ease-in-out infinite;
+}
+
+.heroNetwork::after {
+  z-index: 0;
+  inset: 9%;
+  border: 1px solid color-mix(in srgb, var(--neural-secondary) 42%, transparent);
+  background:
+    radial-gradient(circle at 14% 23%, var(--neural-edge) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 18%, #a855f7 0 1px, transparent 2px),
+    radial-gradient(circle at 78% 71%, var(--neural-edge) 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 25% 78%, #8b5cf6 0 1px, transparent 2px),
+    repeating-conic-gradient(from 8deg, transparent 0 14deg, color-mix(in srgb, var(--neural-edge) 18%, transparent) 15deg 15.4deg, transparent 16deg 27deg);
+  opacity: .9;
+  filter: saturate(1.45);
+  animation: neuralSpin 18s linear infinite;
+}
+
+.centerCell {
+  position: absolute;
+  z-index: 12;
+  left: 50%;
+  top: 50%;
+  width: 190px;
+  height: 190px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  border: 2px solid color-mix(in srgb, var(--neural-edge) 52%, #a855f7 48%);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255,255,255,.12), transparent 23%),
+    radial-gradient(circle at 50% 50%, rgba(124,58,237,.34), transparent 56%),
+    linear-gradient(155deg, rgba(8, 28, 53, .98), rgba(4, 13, 31, .99));
+  box-shadow:
+    0 0 8px rgba(255,255,255,.32),
+    0 0 28px rgba(124,58,237,.62),
+    0 0 62px color-mix(in srgb, var(--neural-edge) 38%, transparent),
+    inset 0 0 34px rgba(124,58,237,.22);
+}
+
+.featureCell {
+  position: absolute;
+  z-index: 10;
+  width: 128px;
+  height: 128px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: .65rem;
+  border: 1.5px solid var(--feature-edge, #475569);
+  background: linear-gradient(155deg, rgba(7, 27, 48, .97), rgba(3, 14, 28, .99));
+  box-shadow:
+    0 0 7px color-mix(in srgb, var(--feature-edge, #475569) 80%, transparent),
+    0 0 26px color-mix(in srgb, var(--feature-edge, #475569) 34%, transparent),
+    inset 0 0 22px color-mix(in srgb, var(--feature-edge, #475569) 14%, transparent);
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+
+.featureCell:hover {
+  transform: translate(-50%, -50%) scale(1.055);
+  box-shadow:
+    0 0 9px color-mix(in srgb, var(--feature-edge, #475569) 92%, white 8%),
+    0 0 38px color-mix(in srgb, var(--feature-edge, #475569) 48%, transparent),
+    inset 0 0 28px color-mix(in srgb, var(--feature-edge, #475569) 18%, transparent);
+}
+
+.connectionLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  width: 100%;
+  height: 100%;
+  opacity: .86;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--neural-edge) 58%, transparent));
+}
+
+.statusComplete { --feature-edge: #34d399; }
+.statusRunning { --feature-edge: #22d3ee; }
+.statusWaiting { --feature-edge: #fbbf24; }
+.statusFailed { --feature-edge: #fb7185; }
+.statusIdle { --feature-edge: #64748b; opacity: .64; }
+
+.neuralPanel {
+  border: 1px solid rgba(148, 163, 184, .12);
+  background: linear-gradient(145deg, rgba(6, 20, 38, .96), rgba(3, 13, 27, .98));
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .28), inset 0 0 32px rgba(56, 189, 248, .025);
+}
+
+@keyframes neuralPulse {
+  0%, 100% { opacity: .76; transform: scale(.993); }
+  50% { opacity: 1; transform: scale(1.012); }
+}
+
+@keyframes neuralSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1024px) {
+  .heroNetwork { min-height: 560px; }
+  .centerCell { width: 160px; height: 160px; }
+  .featureCell { width: 112px; height: 112px; }
+}
+
+@media (max-width: 680px) {
+  .heroNetwork { min-height: 760px; }
+  .centerCell { width: 144px; height: 144px; top: 46%; }
+  .featureCell { width: 104px; height: 104px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroNetwork::before,
+  .heroNetwork::after { animation: none; }
+  .featureCell { transition: none; }
+}

@@ -1,5 +1,18 @@
+import type { CSSProperties } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, BrainCircuit, CircleCheck, CirclePause, Database, GitBranch, Layers3, ShieldCheck, Sparkles, TriangleAlert } from 'lucide-react'
+import {
+  ArrowLeft,
+  BrainCircuit,
+  CircleCheck,
+  CirclePause,
+  Clock3,
+  Database,
+  GitBranch,
+  Layers3,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+} from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import { requireUser } from '@/lib/supabase/auth'
@@ -7,6 +20,7 @@ import { createClient } from '@/lib/supabase/server'
 import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
 import { GovernedDomainContext } from '../../governed-domain-context'
 import type { MonitoringAgent, MonitoringDataset, MonitoringProject, MonitoringRun, MonitoringStep } from '../../job-monitor'
+import styles from './domain-neural-topology.module.css'
 
 type FeaturePresentation = {
   label: string
@@ -67,12 +81,12 @@ const FEATURE_PRESENTATION: Record<string, FeaturePresentation> = {
 }
 
 const PALETTES = [
-  { edge: '#22d3ee', secondary: '#3b82f6', glow: 'rgba(34,211,238,.28)' },
-  { edge: '#34d399', secondary: '#10b981', glow: 'rgba(52,211,153,.28)' },
-  { edge: '#a78bfa', secondary: '#7c3aed', glow: 'rgba(167,139,250,.28)' },
-  { edge: '#f59e0b', secondary: '#f97316', glow: 'rgba(245,158,11,.28)' },
-  { edge: '#f472b6', secondary: '#d946ef', glow: 'rgba(244,114,182,.28)' },
-  { edge: '#60a5fa', secondary: '#06b6d4', glow: 'rgba(96,165,250,.28)' },
+  { edge: '#22d3ee', secondary: '#7c3aed', glow: 'rgba(34,211,238,.34)' },
+  { edge: '#34d399', secondary: '#06b6d4', glow: 'rgba(52,211,153,.32)' },
+  { edge: '#a78bfa', secondary: '#3b82f6', glow: 'rgba(167,139,250,.34)' },
+  { edge: '#f59e0b', secondary: '#f97316', glow: 'rgba(245,158,11,.32)' },
+  { edge: '#f472b6', secondary: '#8b5cf6', glow: 'rgba(244,114,182,.32)' },
+  { edge: '#60a5fa', secondary: '#22d3ee', glow: 'rgba(96,165,250,.32)' },
 ] as const
 
 function paletteFor(key: string) {
@@ -113,10 +127,44 @@ function statusTone(status: string) {
   return 'border-slate-600/50 bg-slate-800/40 text-slate-400'
 }
 
+function statusColor(status: string) {
+  if (status === 'FAILED') return '#fb7185'
+  if (status === 'RUNNING') return '#22d3ee'
+  if (status === 'WAITING' || status === 'QUEUED') return '#fbbf24'
+  if (status === 'COMPLETE') return '#34d399'
+  return '#64748b'
+}
+
+function statusClass(status: string) {
+  if (status === 'FAILED') return styles.statusFailed
+  if (status === 'RUNNING') return styles.statusRunning
+  if (status === 'WAITING' || status === 'QUEUED') return styles.statusWaiting
+  if (status === 'COMPLETE') return styles.statusComplete
+  return styles.statusIdle
+}
+
 function stepProgress(steps: MonitoringStep[]) {
   if (!steps.length) return 0
   const complete = steps.filter((step) => ['SUCCEEDED', 'COMPLETED'].includes(step.status)).length
   return Math.round((complete / steps.length) * 100)
+}
+
+function featurePosition(index: number, total: number) {
+  const angle = (index / Math.max(total, 1)) * Math.PI * 2 - Math.PI / 2
+  const radiusX = total > 7 ? 35 : 33
+  const radiusY = total > 7 ? 36 : 34
+  return {
+    left: 50 + Math.cos(angle) * radiusX,
+    top: 50 + Math.sin(angle) * radiusY,
+  }
+}
+
+function durationLabel(run: MonitoringRun | null) {
+  if (!run?.started_at || !run.completed_at) return 'Not recorded'
+  const ms = Math.max(0, new Date(run.completed_at).getTime() - new Date(run.started_at).getTime())
+  const minutes = Math.floor(ms / 60000)
+  const seconds = Math.floor((ms % 60000) / 1000)
+  return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`
 }
 
 export default async function DomainDetailPage({
@@ -195,6 +243,7 @@ export default async function DomainDetailPage({
   const runningCount = features.filter((item) => item.status === 'RUNNING').length
   const waitingCount = features.filter((item) => ['WAITING', 'QUEUED'].includes(item.status)).length
   const failedCount = features.filter((item) => item.status === 'FAILED').length
+  const notExecutedCount = features.filter((item) => item.status === 'NOT_EXECUTED').length
   const overallProgress = features.length ? Math.round((completeCount / features.length) * 100) : 0
   const domainDatasets = [...new Map(domainRuns.flatMap((run) => {
     if (!run.dataset_id) return []
@@ -204,15 +253,22 @@ export default async function DomainDetailPage({
   const latestRun = domainRuns[0] ?? null
   const selectedFeature = requestedFeatureId ? features.find((item) => item.agent.id === requestedFeatureId) ?? null : null
   const palette = paletteFor(`${projectId}::${domainName}`)
+  const domainState = failedCount ? 'FAILED' : runningCount ? 'RUNNING' : waitingCount ? 'WAITING' : completeCount ? 'COMPLETE' : 'IDLE'
+  const latestAt = latestRun ? new Date(latestRun.created_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' }) : 'No recorded execution'
+  const topologyStyle = {
+    '--neural-edge': palette.edge,
+    '--neural-secondary': palette.secondary,
+    '--neural-glow': palette.glow,
+  } as CSSProperties
 
   return <main className="min-h-screen bg-[#020b17] text-slate-100">
-    <div className="mx-auto max-w-[1680px] px-4 py-5 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1760px] px-4 py-5 sm:px-6 lg:px-8">
       <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Link href="/monitoring" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-cyan-200/70 hover:text-cyan-100"><ArrowLeft className="h-4 w-4" />Back to Job Monitor</Link>
           <p className="mt-4 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300/55">Data Domain drilldown</p>
           <h1 className="mt-1 text-3xl font-black text-white sm:text-4xl">{domainName}</h1>
-          <p className="mt-1 text-sm text-slate-500">{project.name} · governed execution and evidence detail</p>
+          <p className="mt-1 text-sm text-slate-500">{project.name} · governed feature execution, datasets, lineage and evidence</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/agents" className="rounded-xl border border-cyan-300/35 bg-cyan-300/8 px-4 py-2.5 text-sm font-bold text-cyan-100 hover:bg-cyan-300/12">Run governed feature</Link>
@@ -220,78 +276,117 @@ export default async function DomainDetailPage({
         </div>
       </div>
 
-      <section className="relative overflow-hidden rounded-3xl border p-6 sm:p-8" style={{
-        borderColor: palette.edge,
-        background: `radial-gradient(circle at 16% 12%, ${palette.glow}, transparent 28%), radial-gradient(circle at 84% 70%, ${palette.secondary}33, transparent 34%), linear-gradient(145deg, #061526, #020b17)`,
-        boxShadow: `0 0 8px ${palette.edge}, 0 0 46px ${palette.glow}, inset 0 0 70px ${palette.glow}`,
-      }}>
-        <div className="relative z-10 grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="rounded-[44%_56%_52%_48%/47%_46%_54%_53%] border bg-black/25 p-7 text-center backdrop-blur" style={{ borderColor: palette.edge, boxShadow: `0 0 32px ${palette.glow}, inset 0 0 44px ${palette.glow}` }}>
-            <div className="mx-auto grid h-24 w-24 place-items-center rounded-full border border-cyan-200/30 bg-[#051421] shadow-[0_0_35px_rgba(34,211,238,.3)]">
-              <BrainCircuit className="h-11 w-11 text-cyan-200" />
-            </div>
-            <h2 className="mt-4 text-xl font-black text-white">Supervisor / Orchestrator</h2>
-            <p className="mt-1 text-xs text-cyan-100/65">Coordinates · Monitors · Routes · Evidences</p>
-            <div className="mt-5 text-4xl font-black text-white">{overallProgress}%</div>
-            <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Domain feature completion</p>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10"><div className="h-full rounded-full" style={{ width: `${overallProgress}%`, background: `linear-gradient(90deg, ${palette.edge}, ${palette.secondary})`, boxShadow: `0 0 16px ${palette.edge}` }} /></div>
+      <section className="grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)_290px]">
+        <aside className={`${styles.neuralPanel} rounded-3xl p-5`}>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200/55">Domain completion</p>
+          <div className="mt-3 text-5xl font-black text-white">{overallProgress}%</div>
+          <p className="mt-1 text-xs text-slate-500">{completeCount} of {features.length} features complete</p>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-950 ring-1 ring-white/10"><div className="h-full rounded-full" style={{ width: `${overallProgress}%`, background: `linear-gradient(90deg, ${palette.edge}, ${palette.secondary})`, boxShadow: `0 0 16px ${palette.edge}` }} /></div>
+
+          <div className="mt-5 space-y-2 text-sm">
+            {[
+              ['Total features', features.length, 'text-cyan-200'],
+              ['Completed', completeCount, 'text-emerald-300'],
+              ['Running', runningCount, 'text-cyan-300'],
+              ['Waiting', waitingCount, 'text-amber-300'],
+              ['Failed', failedCount, 'text-rose-300'],
+              ['Not executed', notExecutedCount, 'text-slate-400'],
+              ['Datasets', domainDatasets.length, 'text-violet-300'],
+            ].map(([label, value, tone]) => <div key={String(label)} className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5"><span className="text-slate-500">{label}</span><span className={`font-black ${tone}`}>{value}</span></div>)}
           </div>
 
-          <div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-              {[
-                ['Features', features.length, 'text-cyan-200'],
-                ['Complete', completeCount, 'text-emerald-300'],
-                ['Running', runningCount, 'text-cyan-300'],
-                ['Waiting', waitingCount, 'text-amber-300'],
-                ['Failed', failedCount, 'text-rose-300'],
-                ['Datasets', domainDatasets.length, 'text-violet-300'],
-              ].map(([label, value, tone]) => <div key={String(label)} className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                <p className={`text-2xl font-black ${tone}`}>{value}</p>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-              </div>)}
-            </div>
+          <div className="mt-5 border-t border-white/10 pt-4 text-xs text-slate-500">
+            <p>Last execution</p>
+            <p className="mt-1 font-semibold text-slate-300">{latestAt}</p>
+            <p className="mt-4">Latest runtime</p>
+            <p className="mt-1 font-semibold text-slate-300">{durationLabel(latestRun)}</p>
+          </div>
+        </aside>
 
-            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-300" /><div><p className="font-bold text-slate-200">Governed domain scope</p><p className="mt-1 text-xs leading-5 text-slate-500">{project.description || 'This view is derived from authorized persisted execution, catalog, governance, lineage, and evidence state for the selected Data Domain.'}</p></div></div>
+        <div className={styles.heroNetwork} style={topologyStyle}>
+          <svg aria-hidden="true" className={styles.connectionLayer} viewBox="0 0 100 100" preserveAspectRatio="none">
+            {features.map((item, index) => {
+              const position = featurePosition(index, features.length)
+              return <line key={item.agent.id} x1="50" y1="50" x2={position.left} y2={position.top} stroke={statusColor(item.status)} strokeWidth={item.status === 'NOT_EXECUTED' ? '.18' : '.35'} opacity={item.status === 'NOT_EXECUTED' ? '.28' : '.9'} />
+            })}
+          </svg>
+
+          <div className={styles.centerCell}>
+            <div>
+              <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-cyan-200/35 bg-[#061426] shadow-[0_0_28px_rgba(34,211,238,.28)]"><BrainCircuit className="h-9 w-9 text-cyan-100" /></div>
+              <p className="mt-3 text-lg font-black text-white">Supervisor /<br />Orchestrator</p>
+              <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black uppercase ${statusTone(domainState)}`}>{domainState}</span>
             </div>
           </div>
+
+          {features.map((item, index) => {
+            const position = featurePosition(index, features.length)
+            const Icon = item.status === 'COMPLETE' ? CircleCheck : item.status === 'FAILED' ? TriangleAlert : item.status === 'RUNNING' ? Sparkles : item.status === 'WAITING' || item.status === 'QUEUED' ? CirclePause : Layers3
+            const cellStyle = { left: `${position.left}%`, top: `${position.top}%` } as CSSProperties
+            const body = <div className={`${styles.featureCell} ${statusClass(item.status)} ${selectedFeature?.agent.id === item.agent.id ? 'ring-2 ring-white/70' : ''}`} style={cellStyle}>
+              <Icon className="h-5 w-5 text-current" />
+              <p className="mt-2 text-[11px] font-black leading-tight text-white">{item.feature.label}</p>
+              <p className="mt-1 text-[8px] leading-tight text-slate-400">{item.feature.activities.slice(0, 2).join(' · ')}</p>
+            </div>
+            return item.run
+              ? <Link key={item.agent.id} href={`/agents/runs/${encodeURIComponent(item.run.id)}`} aria-label={`Open ${item.feature.label} results`}>{body}</Link>
+              : <div key={item.agent.id}>{body}</div>
+          })}
+
+          <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-wrap justify-center gap-3 rounded-full border border-white/10 bg-[#020b17]/80 px-4 py-2 text-[9px] font-bold text-slate-400 backdrop-blur">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-300" />Completed</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-cyan-300" />Running</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-300" />Waiting</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-rose-300" />Failed</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-500" />Not executed</span>
+          </div>
+        </div>
+
+        <aside className={`${styles.neuralPanel} rounded-3xl p-5`}>
+          <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-cyan-300" /><h2 className="font-black text-white">Domain information</h2></div>
+          <div className="mt-4 space-y-3 text-xs">
+            <div className="flex justify-between gap-3 border-b border-white/[0.07] pb-2"><span className="text-slate-500">Governed scope</span><span className="text-right font-semibold text-slate-300">{project.name}</span></div>
+            <div className="flex justify-between gap-3 border-b border-white/[0.07] pb-2"><span className="text-slate-500">Domain</span><span className="text-right font-semibold text-slate-300">{domainName}</span></div>
+            <div className="flex justify-between gap-3 border-b border-white/[0.07] pb-2"><span className="text-slate-500">Status</span><span className={`rounded-full border px-2 py-0.5 font-black ${statusTone(domainState)}`}>{domainState}</span></div>
+            <div className="flex justify-between gap-3 border-b border-white/[0.07] pb-2"><span className="text-slate-500">Datasets</span><span className="font-semibold text-slate-300">{domainDatasets.length}</span></div>
+            <div className="flex justify-between gap-3 border-b border-white/[0.07] pb-2"><span className="text-slate-500">Recorded jobs</span><span className="font-semibold text-slate-300">{domainRuns.length}</span></div>
+            <div className="flex justify-between gap-3 border-b border-white/[0.07] pb-2"><span className="text-slate-500">Latest run</span><span className="max-w-[140px] truncate font-mono text-[10px] text-cyan-200">{latestRun?.id ?? 'None'}</span></div>
+          </div>
+          <div className="mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200/55">Execution context</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">This view is derived from authorized persisted execution, catalog, governance, lineage, and evidence state for this Data Domain.</p>
+            {latestRun ? <Link href={`/agents/runs/${encodeURIComponent(latestRun.id)}`} className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/8 px-3 py-2.5 text-xs font-black text-cyan-100 hover:bg-cyan-300/12">View latest execution details</Link> : null}
+          </div>
+        </aside>
+      </section>
+
+      <section className={`${styles.neuralPanel} mt-6 rounded-3xl p-5 sm:p-6`}>
+        <div className="flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
+          <div><p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200/55">DG / AI feature breakdown</p><h2 className="mt-1 text-xl font-black text-white">Feature execution and outcomes</h2><p className="mt-1 text-xs text-slate-500">Each feature stays tied to governed agents, recorded steps, durable outputs, and evidence.</p></div>
+          <span className="text-xs text-slate-500">{completeCount}/{features.length} completed</span>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {features.map(({ agent, feature, run, status, progress, dataset }) => {
+            const Icon = status === 'COMPLETE' ? CircleCheck : status === 'FAILED' ? TriangleAlert : status === 'RUNNING' ? Sparkles : status === 'WAITING' || status === 'QUEUED' ? Clock3 : Layers3
+            const body = <div className={`h-full rounded-2xl border p-4 transition ${run ? statusTone(status) : 'border-slate-800 bg-slate-950/45 text-slate-500'} ${selectedFeature?.agent.id === agent.id ? 'ring-2 ring-cyan-200/60' : ''}`}>
+              <div className="flex items-start justify-between gap-3"><div><span className="rounded-full border border-current/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide opacity-75">{feature.category}</span><h3 className="mt-2 font-black">{feature.label}</h3></div><Icon className="h-5 w-5 shrink-0" /></div>
+              <p className="mt-2 text-xs leading-5 opacity-70">{feature.description}</p>
+              <div className="mt-3 flex flex-wrap gap-1.5">{feature.activities.map((activity) => <span key={activity} className="rounded-full border border-current/15 bg-black/15 px-2 py-1 text-[9px] font-bold opacity-75">{activity}</span>)}</div>
+              <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide"><span>{run ? status : 'Not executed'}</span><span>{run ? `${progress}% steps` : 'No run'}</span></div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/30"><div className="h-full rounded-full bg-current transition-[width]" style={{ width: `${run ? progress : 0}%` }} /></div>
+              {dataset ? <p className="mt-3 truncate text-[10px] opacity-60">Dataset: {dataset.name}</p> : null}
+              {run ? <p className="mt-3 text-right text-[10px] font-bold text-cyan-100/75">View results →</p> : null}
+            </div>
+            return run ? <Link key={agent.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block min-h-[220px]">{body}</Link> : <div key={agent.id} className="min-h-[220px]">{body}</div>
+          })}
         </div>
       </section>
 
-      <div className="mt-6 grid gap-6 2xl:grid-cols-[minmax(0,1.4fr)_minmax(380px,.6fr)]">
-        <section className="rounded-3xl border border-white/10 bg-[#061426] p-5 sm:p-6">
-          <div className="flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
-            <div><p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200/55">DG / AI feature network</p><h2 className="mt-1 text-xl font-black text-white">What this domain can do</h2><p className="mt-1 text-xs text-slate-500">Completed and active capabilities are illuminated from durable execution state. Never-executed capabilities remain grey.</p></div>
-            <span className="text-xs text-slate-500">{completeCount}/{features.length} completed</span>
-          </div>
-
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {features.map(({ agent, feature, run, status, progress, dataset }) => {
-              const executed = Boolean(run)
-              const selected = selectedFeature?.agent.id === agent.id
-              const Icon = status === 'COMPLETE' ? CircleCheck : status === 'FAILED' ? TriangleAlert : status === 'RUNNING' ? Sparkles : status === 'WAITING' || status === 'QUEUED' ? CirclePause : Layers3
-              const body = <div className={`h-full rounded-2xl border p-4 transition ${executed ? statusTone(status) : 'border-slate-800 bg-slate-950/45 text-slate-500'} ${selected ? 'ring-2 ring-cyan-200/60' : ''}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div><span className="rounded-full border border-current/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide opacity-75">{feature.category}</span><h3 className="mt-2 font-black">{feature.label}</h3></div>
-                  <Icon className="h-5 w-5 shrink-0" />
-                </div>
-                <p className="mt-2 text-xs leading-5 opacity-70">{feature.description}</p>
-                <div className="mt-3 flex flex-wrap gap-1.5">{feature.activities.map((activity) => <span key={activity} className="rounded-full border border-current/15 bg-black/15 px-2 py-1 text-[9px] font-bold opacity-75">{activity}</span>)}</div>
-                <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide"><span>{executed ? status : 'Not executed'}</span><span>{executed ? `${progress}% steps` : 'No run'}</span></div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/30"><div className="h-full rounded-full bg-current transition-[width]" style={{ width: `${executed ? progress : 0}%` }} /></div>
-                {dataset ? <p className="mt-3 truncate text-[10px] opacity-60">Dataset: {dataset.name}</p> : null}
-              </div>
-              return run
-                ? <Link key={agent.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block min-h-[220px]">{body}</Link>
-                : <div key={agent.id} className="min-h-[220px]">{body}</div>
-            })}
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-[#061426] p-5 sm:p-6">
+      <div className="mt-6 grid gap-6 2xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,.9fr)]">
+        <section className={`${styles.neuralPanel} rounded-3xl p-5 sm:p-6`}>
           <div className="flex items-end justify-between gap-3 border-b border-white/10 pb-4"><div><p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200/55">Recent executions</p><h2 className="mt-1 text-xl font-black text-white">Domain jobs</h2></div><span className="text-xs text-slate-500">{domainRuns.length} recorded</span></div>
-          <div className="mt-4 max-h-[670px] space-y-2 overflow-auto pr-1">
+          <div className="mt-4 max-h-[560px] space-y-2 overflow-auto pr-1">
             {domainRuns.slice(0, 30).map((run) => {
               const agent = agents.find((item) => item.id === run.agent_definition_id)
               const feature = agent ? featureFor(agent) : null
@@ -303,27 +398,23 @@ export default async function DomainDetailPage({
             })}
           </div>
         </section>
-      </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <section className="rounded-3xl border border-white/10 bg-[#061426] p-5 sm:p-6">
+        <section className={`${styles.neuralPanel} rounded-3xl p-5 sm:p-6`}>
           <div className="flex items-end justify-between gap-3 border-b border-white/10 pb-4"><div><p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200/55">Governed assets</p><h2 className="mt-1 text-xl font-black text-white">Datasets in this domain</h2></div><Database className="h-5 w-5 text-cyan-300" /></div>
           <div className="mt-4 space-y-2">
-            {domainDatasets.map((dataset) => {
+            {domainDatasets.length ? domainDatasets.map((dataset) => {
               const runs = domainRuns.filter((run) => run.dataset_id === dataset.id)
               const latest = runs[0] ?? null
-              return <div key={dataset.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
-                <div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-200">{dataset.name}</p><p className="mt-1 text-[11px] text-slate-500">{runs.length} recorded execution(s) · {dataset.business_domain || 'Unassigned Data Domain'}</p></div>{latest ? <Link href={`/agents/runs/${encodeURIComponent(latest.id)}`} className="text-xs font-bold text-cyan-200 hover:text-cyan-100">Latest result →</Link> : null}</div>
-              </div>
-            })}
+              return <div key={dataset.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-200">{dataset.name}</p><p className="mt-1 text-[11px] text-slate-500">{runs.length} recorded execution(s) · {dataset.business_domain || 'Unassigned Data Domain'}</p></div>{latest ? <Link href={`/agents/runs/${encodeURIComponent(latest.id)}`} className="text-xs font-bold text-cyan-200 hover:text-cyan-100">Latest result →</Link> : null}</div></div>
+            }) : <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-slate-500">No dataset has a recorded execution in this domain yet.</div>}
           </div>
         </section>
-
-        <section className="rounded-3xl border border-white/10 bg-[#061426] p-5 sm:p-6">
-          <div className="flex items-end justify-between gap-3 border-b border-white/10 pb-4"><div><p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200/55">Relationships and evidence</p><h2 className="mt-1 text-xl font-black text-white">Lineage, impact, governance</h2></div><GitBranch className="h-5 w-5 text-violet-300" /></div>
-          {latestRun ? <GovernedDomainContext projectId={projectId} runId={latestRun.id} datasetId={latestRun.dataset_id} domainName={domainName} /> : <p className="mt-4 text-sm text-slate-500">No recorded execution is available for governed context.</p>}
-        </section>
       </div>
+
+      <section className={`${styles.neuralPanel} mt-6 rounded-3xl p-5 sm:p-6`}>
+        <div className="flex items-end justify-between gap-3 border-b border-white/10 pb-4"><div><p className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200/55">Relationships and evidence</p><h2 className="mt-1 text-xl font-black text-white">Lineage, impact, governance and execution evidence</h2></div><GitBranch className="h-5 w-5 text-violet-300" /></div>
+        {latestRun ? <div className="mt-4"><GovernedDomainContext projectId={projectId} runId={latestRun.id} datasetId={latestRun.dataset_id} domainName={domainName} /></div> : <p className="mt-4 text-sm text-slate-500">No recorded execution is available for governed context.</p>}
+      </section>
     </div>
   </main>
 }
