@@ -17,19 +17,18 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
 
   const typedRuns = (runs ?? []) as MonitoringRun[]
   const selectedRunId = requestedRunId && typedRuns.some((run) => run.id === requestedRunId) ? requestedRunId : null
-  const agentIds = [...new Set(typedRuns.map((run) => run.agent_definition_id))]
   const datasetIds = [...new Set(typedRuns.flatMap((run) => run.dataset_id ? [run.dataset_id] : []))]
   const projectIds = [...new Set(typedRuns.map((run) => run.project_id))]
   const runIds = typedRuns.map((run) => run.id)
 
   const [agentsResult, datasetsResult, projectsResult, stepsResult] = await Promise.all([
-    agentIds.length ? supabase.schema('agent').from('agent_definitions').select('id, name, version, agent_key').in('id', agentIds) : Promise.resolve({ data: [], error: null }),
+    supabase.schema('agent').from('agent_definitions').select('id, name, version, agent_key').eq('enabled', true).order('name'),
     datasetIds.length ? supabase.schema('catalog').from('datasets').select('id, name, business_domain').in('id', datasetIds) : Promise.resolve({ data: [], error: null }),
     projectIds.length ? supabase.schema('app').from('projects').select('id, name, description').in('id', projectIds) : Promise.resolve({ data: [], error: null }),
     runIds.length ? supabase.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, started_at, completed_at, error_code, error_message').in('agent_run_id', runIds).order('step_order') : Promise.resolve({ data: [], error: null }),
   ])
 
-  if (agentsResult.error) throw new Error(`Unable to load agent definitions: ${agentsResult.error.message}`)
+  if (agentsResult.error) throw new Error(`Unable to load enabled agent definitions: ${agentsResult.error.message}`)
   if (datasetsResult.error) throw new Error(`Unable to load datasets: ${datasetsResult.error.message}`)
   if (projectsResult.error) throw new Error(`Unable to load data-domain scopes: ${projectsResult.error.message}`)
   if (stepsResult.error) throw new Error(`Unable to load agent run steps: ${stepsResult.error.message}`)
