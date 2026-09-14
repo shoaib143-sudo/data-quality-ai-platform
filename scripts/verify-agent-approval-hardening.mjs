@@ -13,6 +13,7 @@ const delegationRevokeRoute = fs.readFileSync('app/api/agent-approvals/delegatio
 const delegationUi = fs.readFileSync('app/approvals/delegation-manager.tsx', 'utf8')
 const executionAudit = fs.readFileSync('lib/governance/agent-approval-audit.ts', 'utf8')
 const executionAuditMigration = fs.readFileSync('supabase/migrations/20260914054000_agent_approval_execution_audit.sql', 'utf8')
+const syntheticScopeMigration = fs.readFileSync('supabase/migrations/20260914224500_exclude_synthetic_bootstrap_approval_domains.sql', 'utf8')
 const profilingRoute = fs.readFileSync('app/api/agents/run/route.ts', 'utf8')
 const qualityRoute = fs.readFileSync('app/api/data-quality/run/route.ts', 'utf8')
 const supervisorRoute = fs.readFileSync('app/api/agents/supervisor/run/route.ts', 'utf8')
