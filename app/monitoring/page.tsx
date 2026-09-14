@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { ExecutionPathOverview } from './execution-path-overview'
 import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type MonitoringProject, type MonitoringRun, type MonitoringStep } from './job-monitor'
 import { JobTermination } from './job-termination'
 import { JobLogs } from './job-logs'
@@ -55,6 +56,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
 
       <JobHealth runs={typedRuns} steps={typedSteps} />
       <div className={`${styles.monitoringStage} mt-5`}>
+        <ExecutionPathOverview runs={typedRuns} agents={typedAgents} datasets={typedDatasets} projects={typedProjects} />
         <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialSteps={typedSteps} initialNow={new Date().toISOString()} initialRunId={selectedRunId} userId={user.id} />
       </div>
 
