@@ -8,9 +8,9 @@ import { JobLogs } from './job-logs'
 import { JobHealth } from './job-health'
 import styles from './organic-domain-cells.module.css'
 
-export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string }> }) {
+export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string; agent?: string; domain?: string }> }) {
   const user = await requireUser()
-  const { run: requestedRunId } = await searchParams
+  const { run: requestedRunId, agent: requestedAgentId, domain: requestedDomainKey } = await searchParams
   const supabase = await createClient()
   const { data: runs, error: runsError } = await supabase.schema('agent').from('agent_runs').select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message').order('created_at', { ascending: false }).limit(50)
   if (runsError) throw new Error(`Unable to load agent runs: ${runsError.message}`)
@@ -54,7 +54,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
 
       <JobHealth runs={typedRuns} steps={typedSteps} />
       <div className={`${styles.monitoringStage} mt-5`}>
-        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialSteps={typedSteps} initialNow={new Date().toISOString()} initialRunId={selectedRunId} userId={user.id} />
+        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialSteps={typedSteps} initialNow={new Date().toISOString()} initialRunId={selectedRunId} initialAgentId={requestedAgentId ?? null} initialDomainKey={requestedDomainKey ?? null} userId={user.id} />
       </div>
 
       <section id="job-termination" className="mt-7 scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
