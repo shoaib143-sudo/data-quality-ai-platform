@@ -3,7 +3,8 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
 import { queueDataQualityAutomation } from '@/lib/data-quality/queue'
-import { currentExecutionFingerprint, markApprovalExecuted, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
+import { currentExecutionFingerprint, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
+import { finalizeAgentApprovalExecution } from '@/lib/governance/agent-approval-audit'
 
 export const maxDuration = 300
 
@@ -112,7 +113,14 @@ export async function POST(request: Request) {
       idempotencyKey: rawIdempotencyKey ? `data-quality:manual:${rawIdempotencyKey}` : null,
     })
 
-    if (approvalRequestId) await markApprovalExecuted(approvalRequestId)
+    if (approvalRequestId) {
+      await finalizeAgentApprovalExecution({
+        requestId: approvalRequestId,
+        executorUserId: user.id,
+        executionEntityType: 'AGENT_RUN',
+        executionEntityId: queued.agentRunId,
+      })
+    }
     return NextResponse.json({
       accepted: true,
       execution_completed: false,
