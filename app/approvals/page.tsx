@@ -1,12 +1,17 @@
 import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
 import { loadApprovalInbox } from '@/lib/governance/approval-inbox'
+import { loadApprovalCoverageWorkspace } from '@/lib/governance/approval-coverage-service'
 import { ApprovalInbox } from './approval-inbox'
+import { ApprovalCoveragePanel } from './approval-coverage-panel'
 import { DelegationManager } from './delegation-manager'
 
 export default async function ApprovalsPage() {
   const user = await requireUser()
-  const items = await loadApprovalInbox(user.id)
+  const [items, coverage] = await Promise.all([
+    loadApprovalInbox(user.id),
+    loadApprovalCoverageWorkspace(user.id),
+  ])
 
   return (
     <main className="min-h-screen p-6 sm:p-8">
@@ -25,6 +30,7 @@ export default async function ApprovalsPage() {
           </div>
         </header>
         <ApprovalInbox items={items} />
+        <ApprovalCoveragePanel scopes={coverage.scopes} managedProjectCount={coverage.managedProjectCount} />
         <DelegationManager />
       </div>
     </main>
