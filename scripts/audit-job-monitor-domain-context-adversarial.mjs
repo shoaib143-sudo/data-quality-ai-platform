@@ -2,11 +2,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const monitor = readFileSync(new URL('../app/monitoring/job-monitor.tsx', import.meta.url), 'utf8')
+const domainDetail = readFileSync(new URL('../app/monitoring/domain/[projectId]/page.tsx', import.meta.url), 'utf8')
 const panel = readFileSync(new URL('../app/monitoring/governed-domain-context.tsx', import.meta.url), 'utf8')
 const route = readFileSync(new URL('../app/api/monitoring/domain-context/route.ts', import.meta.url), 'utf8')
 const policy = readFileSync(new URL('../lib/monitoring/domain-context-policy.ts', import.meta.url), 'utf8')
 
-assert.ok(monitor.includes('GovernedDomainContext'), 'selected execution must be wired to recorded governed context')
+assert.ok(domainDetail.includes('GovernedDomainContext'), 'dedicated domain drilldown must be wired to recorded governed context')
+assert.ok(domainDetail.includes('filterAuthorizedExecutionRuns'), 'dedicated domain drilldown must reapply resource authorization before presenting run state')
 assert.ok(route.includes("authorizeProject(user.id, projectId, 'catalog.read')"), 'domain context must use the shared governed read boundary')
 assert.ok(route.includes('loadDatasetGovernancePosture(projectId, datasetId)'), 'monitor must reuse the governed posture service instead of duplicating governance authority')
 assert.ok(route.includes('loadMonitoringDependencyEvidence'), 'monitor must reuse the governed dependency evidence projection instead of duplicating dependency reads')
@@ -40,7 +42,7 @@ const forbidden = [
   /all systems healthy/i,
 ]
 for (const pattern of forbidden) {
-  assert.equal(pattern.test(`${monitor}\n${panel}\n${route}`), false, `forbidden unsupported assertion present: ${pattern}`)
+  assert.equal(pattern.test(`${monitor}\n${domainDetail}\n${panel}\n${route}`), false, `forbidden unsupported assertion present: ${pattern}`)
 }
 
 console.log('Independent adversarial Job Monitor audit passed: shared dependency projection, no synthetic state, no raw queue diagnostics, client-safe failures, no inferred durable jobs, explicit dependency/capacity semantics, persona density, shared authorization, and recorded evidence provenance.')

@@ -59,7 +59,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
 
       <JobHealth runs={typedRuns} steps={typedSteps} />
       <div className={`${styles.monitoringStage} mt-5`}>
-        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialSteps={typedSteps} initialNow={new Date().toISOString()} initialRunId={selectedRunId} initialAgentId={requestedAgentId ?? null} initialDomainKey={requestedDomainKey ?? null} userId={user.id} />
+        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialNow={new Date().toISOString()} initialRunId={selectedRunId} initialAgentId={requestedAgentId ?? null} initialDomainKey={requestedDomainKey ?? null} userId={user.id} />
       </div>
 
       <section id="job-termination" className="mt-7 scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} cancellableProjectIds={cancellableProjectIds} /></section>

@@ -1,7 +1,6 @@
 'use client'
 
-import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
   BrainCircuit,
@@ -9,18 +8,13 @@ import {
   CircleCheck,
   CirclePause,
   Clock3,
-  Database,
   GitBranch,
-  Layers3,
   RefreshCw,
   Search,
-  ShieldCheck,
   Sparkles,
   TriangleAlert,
 } from 'lucide-react'
 
-import { ExecutionStatusBadge } from '@/components/app-shell/execution-status'
-import { GovernedDomainContext } from './governed-domain-context'
 
 export type MonitoringRun = {
   id: string
@@ -58,7 +52,6 @@ type Props = {
   initialAgents: MonitoringAgent[]
   initialDatasets: MonitoringDataset[]
   initialProjects: MonitoringProject[]
-  initialSteps: MonitoringStep[]
   initialNow: string
   initialRunId?: string | null
   initialAgentId?: string | null
@@ -98,7 +91,6 @@ const ACTIVE = new Set(['RUNNING', 'CREATED', 'PENDING'])
 const WAITING = new Set(['WAITING'])
 const QUEUED = new Set(['QUEUED'])
 const COMPLETE = new Set(['SUCCEEDED', 'COMPLETED'])
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-SG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Singapore' })
 const TIME_FORMATTER = new Intl.DateTimeFormat('en-SG', { timeStyle: 'short', timeZone: 'Asia/Singapore' })
 
 const FEATURE_PRESENTATION: Record<string, FeaturePresentation> = {
@@ -221,22 +213,6 @@ function statusMeta(status: CellStatus) {
   return { label: 'Idle', dot: 'bg-slate-400', ring: 'border-slate-500/35', glow: 'shadow-none', text: 'text-slate-300', soft: 'bg-slate-400/10' }
 }
 
-function relativeAge(run: MonitoringRun, now: Date) {
-  const end = run.completed_at ? new Date(run.completed_at) : now
-  const start = new Date(run.started_at ?? run.created_at)
-  const seconds = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000))
-  const minutes = Math.floor(seconds / 60)
-  if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-  if (minutes > 0) return `${minutes}m`
-  return `${seconds}s`
-}
-
-function stepProgress(steps: MonitoringStep[]) {
-  if (!steps.length) return { done: 0, total: 0, percent: 0 }
-  const done = steps.filter((step) => COMPLETE.has(step.status)).length
-  return { done, total: steps.length, percent: Math.round((done / steps.length) * 100) }
-}
-
 function StatusPill({ status }: { status: CellStatus }) {
   const meta = statusMeta(status)
   const Icon = status === 'COMPLETE' ? CircleCheck : status === 'FAILED' ? TriangleAlert : status === 'WAITING' ? Clock3 : status === 'QUEUED' ? CirclePause : Sparkles
@@ -313,7 +289,7 @@ function OrganicDomainCell({
   onSelectAgent: (agentId: string, runId: string | null) => void
 }) {
   const meta = statusMeta(cell.status)
-  const palette = domainPalette(cell.domainName)
+  const palette = domainPalette(cell.key)
   const visibleComponents = cell.components
   const denseNodes = visibleComponents.length > 8
   const featureProgress = cell.progressPercent
@@ -389,7 +365,6 @@ export function JobMonitor({
   initialAgents,
   initialDatasets,
   initialProjects,
-  initialSteps,
   initialNow,
   initialRunId = null,
   initialAgentId = null,
@@ -397,36 +372,26 @@ export function JobMonitor({
   userId: _userId,
 }: Props) {
   const [runs, setRuns] = useState(initialRuns)
-  const [steps, setSteps] = useState(initialSteps)
   const initialSelectedRun = initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialAgentId ? null : initialRuns[0]?.id ?? null
   const [selectedRunId, setSelectedRunId] = useState<string | null>(initialSelectedRun)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(initialAgentId ?? (initialSelectedRun ? initialRuns.find((run) => run.id === initialSelectedRun)?.agent_definition_id ?? null : null))
   const [selectedDomainKey, setSelectedDomainKey] = useState<string | null>(initialDomainKey)
-  const inspectorRef = useRef<HTMLElement | null>(null)
   const [statusFilter, setStatusFilter] = useState<CellStatus | 'ALL'>('ALL')
   const [search, setSearch] = useState('')
   const [lastUpdated, setLastUpdated] = useState(() => new Date(initialNow))
   const [refreshing, setRefreshing] = useState(false)
-  const [inspectorTab, setInspectorTab] = useState<'OVERVIEW' | 'FEATURES' | 'JOBS' | 'DATASETS' | 'EVIDENCE'>('OVERVIEW')
 
   const agents = useMemo(() => new Map(initialAgents.map((agent) => [agent.id, agent])), [initialAgents])
   const datasets = useMemo(() => new Map(initialDatasets.map((dataset) => [dataset.id, dataset])), [initialDatasets])
   const projects = useMemo(() => new Map(initialProjects.map((project) => [project.id, project])), [initialProjects])
-  const stepsByRun = useMemo(() => {
-    const map = new Map<string, MonitoringStep[]>()
-    for (const step of steps) map.set(step.agent_run_id, [...(map.get(step.agent_run_id) ?? []), step])
-    for (const list of map.values()) list.sort((a, b) => a.step_order - b.step_order)
-    return map
-  }, [steps])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
     try {
       const response = await fetch('/api/monitoring/runs', { cache: 'no-store' })
       if (!response.ok) return
-      const payload = await response.json() as { runs?: MonitoringRun[]; steps?: MonitoringStep[] }
+      const payload = await response.json() as { runs?: MonitoringRun[] }
       setRuns(payload.runs ?? [])
-      setSteps(payload.steps ?? [])
       setLastUpdated(new Date())
     } finally {
       setRefreshing(false)
@@ -498,16 +463,6 @@ export function JobMonitor({
   }, [domainCells, statusFilter, search, agents, datasets])
 
   const selectedCell = domainCells.find((cell) => cell.key === selectedDomainKey) ?? domainCells[0] ?? null
-  const selectedAgent = selectedAgentId ? agents.get(selectedAgentId) ?? null : null
-  const selectedFeature = selectedAgent ? featurePresentation(selectedAgent) : null
-  const selectedRun = selectedRunId ? runs.find((run) => run.id === selectedRunId) ?? null : null
-  const selectedDomainDatasets = selectedCell ? [...new Map(selectedCell.runs.flatMap((run) => {
-    if (!run.dataset_id) return []
-    const dataset = datasets.get(run.dataset_id)
-    return dataset ? [[run.dataset_id, dataset] as const] : []
-  })).values()] : []
-  const selectedSteps = selectedRun ? stepsByRun.get(selectedRun.id) ?? [] : []
-  const progress = stepProgress(selectedSteps)
 
   const activeJobs = runs.filter((run) => ACTIVE.has(run.status)).length
   const queuedJobs = runs.filter((run) => WAITING.has(run.status) || QUEUED.has(run.status)).length
@@ -522,37 +477,13 @@ export function JobMonitor({
     return lastUpdated.getTime() - at <= 24 * 60 * 60 * 1000
   }).length
 
-  function revealInspector() {
-    window.requestAnimationFrame(() => {
-      inspectorRef.current?.focus({ preventScroll: true })
-      inspectorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
-    })
-  }
-
-  function updateDrilldownUrl(cell: DomainCell, agentId: string | null, runId: string | null) {
-    const url = new URL(window.location.href)
-    url.searchParams.set('domain', cell.key)
-    if (agentId) url.searchParams.set('agent', agentId)
-    else url.searchParams.delete('agent')
-    if (runId) url.searchParams.set('run', runId)
-    else url.searchParams.delete('run')
-    url.hash = ''
-    window.history.replaceState(window.history.state, '', url)
-  }
-
   function openRunResults(runId: string) {
     window.location.assign(`/agents/runs/${encodeURIComponent(runId)}`)
   }
 
   function selectDomain(cell: DomainCell) {
-    const retainedRun = selectedRunId ? cell.runs.find((run) => run.id === selectedRunId) ?? null : null
-    const nextRun = retainedRun ?? cell.componentRuns[0] ?? cell.runs[0] ?? null
-    setSelectedDomainKey(cell.key)
-    setSelectedRunId(nextRun?.id ?? null)
-    setSelectedAgentId(nextRun?.agent_definition_id ?? null)
-    setInspectorTab('OVERVIEW')
-    updateDrilldownUrl(cell, nextRun?.agent_definition_id ?? null, nextRun?.id ?? null)
-    revealInspector()
+    const params = new URLSearchParams({ domain: cell.domainName })
+    window.location.assign(`/monitoring/domain/${encodeURIComponent(cell.project.id)}?${params.toString()}`)
   }
 
   function selectAgent(cell: DomainCell, agentId: string, runId: string | null) {
@@ -560,12 +491,8 @@ export function JobMonitor({
       openRunResults(runId)
       return
     }
-    setSelectedDomainKey(cell.key)
-    setSelectedAgentId(agentId)
-    setSelectedRunId(null)
-    setInspectorTab('FEATURES')
-    updateDrilldownUrl(cell, agentId, null)
-    revealInspector()
+    const params = new URLSearchParams({ domain: cell.domainName, feature: agentId })
+    window.location.assign(`/monitoring/domain/${encodeURIComponent(cell.project.id)}?${params.toString()}`)
   }
 
   return <section className="overflow-hidden rounded-3xl border border-cyan-300/10 bg-[#061426] shadow-[0_24px_80px_rgba(0,0,0,.35)]">
@@ -611,8 +538,8 @@ export function JobMonitor({
       </div>
     </div>
 
-    <div className="grid min-h-[720px] xl:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="relative overflow-hidden border-r border-white/[0.07] bg-[#03101d] p-5 sm:p-7">
+    <div className="min-h-[720px]">
+      <div className="relative overflow-hidden bg-[#03101d] p-5 sm:p-7">
         <div className="pointer-events-none absolute inset-0 opacity-45" style={{ backgroundImage: 'radial-gradient(circle at 50% 45%, rgba(14,165,233,.14), transparent 34%), radial-gradient(circle at 12% 20%, rgba(16,185,129,.06), transparent 20%), radial-gradient(circle at 87% 72%, rgba(139,92,246,.08), transparent 22%)' }} />
         <div className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px)', backgroundSize: '42px 42px' }} />
 
@@ -653,149 +580,6 @@ export function JobMonitor({
         </div>
       </div>
 
-      <aside id="job-monitor-inspector" ref={inspectorRef} tabIndex={-1} className="scroll-mt-6 bg-[#07182a] p-5 outline-none">
-        {selectedCell ? <div className="space-y-5">
-          <div className="border-b border-white/10 pb-4">
-            <p className="text-xs font-semibold text-slate-400">Selected Data Domain</p>
-            <div className="mt-2 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-2xl font-bold text-white">{selectedCell.domainName}</h3>
-                <p className="mt-1 text-xs text-slate-500">Governed scope · {selectedCell.project.name}</p>
-              </div>
-              <StatusPill status={selectedCell.status} />
-            </div>
-            {selectedCell.project.description ? <p className="mt-3 text-xs leading-5 text-slate-500">{selectedCell.project.description}</p> : null}
-            <div className="mt-4 grid grid-cols-5 overflow-hidden rounded-xl border border-white/10 bg-black/10 text-[10px] font-bold">
-              {(['OVERVIEW','FEATURES','JOBS','DATASETS','EVIDENCE'] as const).map((tab) => <button key={tab} type="button" onClick={() => setInspectorTab(tab)} className={`px-2 py-2.5 transition ${inspectorTab === tab ? 'bg-cyan-300/12 text-cyan-100' : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'}`}>{tab === 'FEATURES' ? 'DG / AI Features' : tab === 'JOBS' ? 'Jobs' : tab === 'DATASETS' ? 'Datasets' : tab === 'EVIDENCE' ? 'Lineage & Evidence' : 'Overview'}</button>)}
-            </div>
-          </div>
-
-          {inspectorTab === 'OVERVIEW' ? <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-cyan-100">{selectedCell.componentCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">DG / AI features</p></div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-sky-200">{selectedCell.datasetCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Datasets</p></div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-emerald-300">{selectedCell.completeCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Features complete</p></div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-rose-300">{selectedCell.failedCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Features failed</p></div>
-            </div>
-            <div className="rounded-xl border border-cyan-300/10 bg-cyan-300/[0.03] p-4">
-              <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><BrainCircuit className="h-4 w-4 text-cyan-300" /><p className="text-sm font-bold text-slate-200">Supervisor / Orchestrator</p></div><span className="text-lg font-black text-cyan-100">{selectedCell.progressPercent}%</span></div>
-              <p className="mt-2 text-xs leading-5 text-slate-500">Coordinates the domain feature network, reflects durable execution state, and routes you into recorded feature results without replacing governance authorization.</p>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-950/80 ring-1 ring-white/10"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 shadow-[0_0_16px_rgba(34,211,238,.65)]" style={{ width: `${selectedCell.progressPercent}%` }} /></div>
-              <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-400"><span className="rounded-full border border-white/10 px-2 py-1">Coordinate</span><span className="rounded-full border border-white/10 px-2 py-1">Monitor</span><span className="rounded-full border border-white/10 px-2 py-1">Route</span><span className="rounded-full border border-white/10 px-2 py-1">Evidence</span></div>
-            </div>
-          </div> : null}
-
-          {inspectorTab === 'FEATURES' ? <div>
-            <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold text-slate-200">DG / AI feature components</h4><span className="text-[10px] text-slate-500">{selectedCell.completeCount}/{selectedCell.componentCount} completed · latest recorded state</span></div>
-            <div className="max-h-[310px] space-y-2 overflow-auto pr-1">
-              {selectedCell.components.map((component) => {
-                const run = component.run
-                if (!run) return <button key={component.agent.id} type="button" onClick={() => selectAgent(selectedCell, component.agent.id, null)} className={`w-full rounded-xl border p-3 text-left transition ${selectedAgentId === component.agent.id ? 'border-slate-400/60 bg-slate-800/40 opacity-100' : 'border-slate-800/80 bg-slate-950/30 opacity-70 hover:border-slate-600/80 hover:opacity-90'}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><div className="flex items-center gap-2"><span className="rounded-full border border-slate-700 px-1.5 py-0.5 text-[8px] font-black text-slate-600">{component.feature.category}</span><p className="truncate text-sm font-semibold text-slate-500">{component.feature.label}</p></div><p className="mt-1 truncate text-[10px] text-slate-600">{component.feature.activities.join(' · ')}</p><p className="mt-0.5 text-[11px] text-slate-600">Not executed</p></div>
-                    <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-slate-600" />
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.04]" />
-                </button>
-                const meta = statusMeta(normalizeRunStatus(run.status))
-                const dataset = run.dataset_id ? datasets.get(run.dataset_id) : null
-                const p = stepProgress(stepsByRun.get(run.id) ?? [])
-                return <button key={component.agent.id} type="button" onClick={() => selectAgent(selectedCell, component.agent.id, run.id)} className={`w-full rounded-xl border p-3 text-left transition ${selectedRun?.id === run.id ? 'border-cyan-300/35 bg-cyan-300/[0.07]' : 'border-white/10 bg-white/[0.025] hover:border-white/20'}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><div className="flex items-center gap-2"><span className="rounded-full border border-cyan-300/20 px-1.5 py-0.5 text-[8px] font-black text-cyan-200/70">{component.feature.category}</span><p className="truncate text-sm font-semibold text-slate-200">{component.feature.label}</p></div><p className="mt-1 truncate text-[10px] text-slate-500">{component.feature.activities.join(' · ')}</p><p className="mt-0.5 truncate text-[11px] text-slate-500">{dataset?.name ?? 'No dataset'} · {relativeAge(run, lastUpdated)}</p></div>
-                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-cyan-300/70" style={{ width: `${p.percent}%` }} /></div>
-                </button>
-              })}
-            </div>
-          </div> : null}
-
-          {inspectorTab === 'FEATURES' && selectedAgent && !selectedRun ? <div className="border-t border-white/10 pt-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Selected execution path</p>
-            <div className="mt-2 rounded-xl border border-slate-700/70 bg-slate-950/30 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div><p className="font-semibold text-slate-300">{selectedFeature?.label ?? 'Governed feature'}</p><p className="mt-1 text-[11px] text-slate-500">{selectedFeature?.category ?? 'AI'} feature · {selectedFeature?.activities.join(' · ')}</p></div>
-                <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">Not executed</span>
-              </div>
-              <p className="mt-3 text-xs leading-5 text-slate-500">{selectedFeature?.description ?? 'This governed feature is available to the domain.'} No recorded execution exists for this domain yet, so progress, evidence, and diagnostics remain intentionally absent.</p>
-              <Link href="/agents" className="mt-4 flex w-full items-center justify-between rounded-xl border border-slate-600/60 bg-slate-800/30 px-4 py-3 text-sm font-bold text-slate-300 transition hover:bg-slate-800/50">
-                Open governed agent workspace
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div> : null}
-
-          {inspectorTab === 'FEATURES' && selectedRun ? <div className="border-t border-white/10 pt-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200/55">Selected execution</p>
-                <p className="mt-1 font-semibold text-white">{agents.get(selectedRun.agent_definition_id) ? featurePresentation(agents.get(selectedRun.agent_definition_id)!).label : 'Governed feature execution'}</p>
-              </div>
-              <ExecutionStatusBadge status={selectedRun.status} />
-            </div>
-            <div className="mt-3 space-y-2">
-              {selectedSteps.length ? selectedSteps.slice(0, 6).map((step) => {
-                const status = normalizeRunStatus(step.status)
-                const meta = statusMeta(status)
-                const Icon = status === 'COMPLETE' ? CircleCheck : status === 'FAILED' ? TriangleAlert : status === 'RUNNING' ? Sparkles : CirclePause
-                return <div key={step.id} className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-xs">
-                  <Icon className={`h-4 w-4 ${meta.text}`} />
-                  <span className="min-w-0 flex-1 truncate text-slate-300">{step.step_name}</span>
-                  <span className={meta.text}>{meta.label}</span>
-                </div>
-              }) : <div className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-slate-500">Execution steps are not yet recorded.</div>}
-            </div>
-            <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500"><span>{progress.done}/{progress.total} steps complete</span><span>{DATE_FORMATTER.format(new Date(selectedRun.created_at))}</span></div>
-            <Link href={`/agents/runs/${encodeURIComponent(selectedRun.id)}`} className="mt-4 flex w-full items-center justify-between rounded-xl border border-cyan-300/35 bg-cyan-300/[0.07] px-4 py-3 text-sm font-bold text-cyan-100 transition hover:bg-cyan-300/10">
-              Open output / results
-              <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div> : null}
-
-          {inspectorTab === 'JOBS' ? <div>
-            <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold text-slate-200">Recent domain executions</h4><span className="text-[10px] text-slate-500">{selectedCell.runs.length} recorded runs</span></div>
-            <div className="max-h-[430px] space-y-2 overflow-auto pr-1">
-              {selectedCell.runs.slice(0, 20).map((run) => {
-                const agent = agents.get(run.agent_definition_id)
-                const feature = agent ? featurePresentation(agent) : null
-                const meta = statusMeta(normalizeRunStatus(run.status))
-                const dataset = run.dataset_id ? datasets.get(run.dataset_id) : null
-                return <Link key={run.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 transition hover:border-cyan-300/25 hover:bg-cyan-300/[0.04]">
-                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{feature?.label ?? 'Governed execution'}</p><p className="mt-0.5 truncate text-[11px] text-slate-500">{dataset?.name ?? 'No dataset'} · {DATE_FORMATTER.format(new Date(run.created_at))}</p></div><span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} /></div>
-                  <div className="mt-2 flex items-center justify-between text-[10px]"><span className={meta.text}>{meta.label}</span><span className="text-cyan-200/65">Open results →</span></div>
-                </Link>
-              })}
-            </div>
-          </div> : null}
-
-          {inspectorTab === 'DATASETS' ? <div>
-            <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold text-slate-200">Governed datasets in this domain</h4><span className="text-[10px] text-slate-500">{selectedDomainDatasets.length} represented by recorded executions</span></div>
-            <div className="space-y-2">
-              {selectedDomainDatasets.length ? selectedDomainDatasets.map((dataset) => {
-                const datasetRuns = selectedCell.runs.filter((run) => run.dataset_id === dataset.id)
-                const latest = datasetRuns[0] ?? null
-                return <div key={dataset.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-                  <div className="flex items-start gap-3"><Database className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-200">{dataset.name}</p><p className="mt-0.5 text-[11px] text-slate-500">{dataset.business_domain || 'Unassigned Data Domain'} · {datasetRuns.length} recorded execution(s)</p></div>{latest ? <Link href={`/agents/runs/${encodeURIComponent(latest.id)}`} className="text-[10px] font-bold text-cyan-200 hover:text-cyan-100">Latest result →</Link> : null}</div>
-                </div>
-              }) : <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-slate-500">No dataset has a recorded execution in this domain yet.</div>}
-            </div>
-          </div> : null}
-
-          {inspectorTab === 'EVIDENCE' && selectedRun ? <GovernedDomainContext
-            projectId={selectedRun.project_id}
-            runId={selectedRun.id}
-            datasetId={selectedRun.dataset_id}
-            domainName={selectedCell.domainName}
-          /> : null}
-
-          <div className="grid gap-2 border-t border-white/10 pt-4 text-xs">
-            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><Database className="h-4 w-4 text-cyan-300" /><div><p className="font-semibold text-slate-300">Evidence boundary</p><p className="text-[11px] text-slate-500">Recorded context is loaded through authorized server APIs only</p></div></div>
-            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><ShieldCheck className="h-4 w-4 text-emerald-300" /><div><p className="font-semibold text-slate-300">Governed scope</p><p className="text-[11px] text-slate-500">Project authorization and execution controls remain enforced</p></div></div>
-            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><BrainCircuit className="h-4 w-4 text-violet-300" /><div><p className="font-semibold text-slate-300">AI execution</p><p className="text-[11px] text-slate-500">Organic cells visualize status, not authority</p></div></div>
-          </div>
-        </div> : <div className="grid h-full place-items-center text-center"><div><Layers3 className="mx-auto h-10 w-10 text-slate-600" /><p className="mt-3 text-sm font-semibold text-slate-400">No domain selected</p></div></div>}
-      </aside>
     </div>
   </section>
 }
