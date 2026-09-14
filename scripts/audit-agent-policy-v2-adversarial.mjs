@@ -276,7 +276,7 @@ attack('dataset resource ACL is revalidated immediately before profiling and Dat
   assert.match(profiling, /canViewDatasetResource\(user\.id, dataset\.id\)/)
   assert.ok(profiling.indexOf('canViewDatasetResource(user.id, dataset.id)') < profiling.indexOf('validateDataSourceForProfiling'))
   assert.equal((quality.match(/canViewDatasetResource\(user\.id, dataset\.id\)/g) ?? []).length, 2)
-  assert.ok(quality.indexOf('canViewDatasetResource(user.id, dataset.id)') < quality.indexOf('enabledQualityRuleCount'))
+  assert.ok(quality.indexOf('canViewDatasetResource(user.id, dataset.id)') < quality.indexOf('queueDataQualityAutomation({'))
 })
 
 attack('profiling and Data Quality preserve narrower execution capabilities', () => {
