@@ -1,599 +1,281 @@
-# Data Quality AI Platform --- Project State
+# DataNexus AI — Project State v2
 
-> Durable project checkpoint. Treat the repository, Supabase migration
-> history, and this file as the primary continuity sources.
+> Durable continuity checkpoint for the current production architecture. Repository state, Supabase migration history, deployed runtime evidence, and this document are the primary continuity sources. When documentation conflicts with runtime evidence, runtime evidence wins and documentation must be corrected.
 
-## 1. Project Identity
+## 1. Project identity
 
--   **Project:** `data-quality-ai-platform`
--   **Local path:**
-    `C:\Users\DEMO-D16695\Downloads\demo-pwc-supabase-auth-hardened-v3`
--   **Git branch:** `main`
--   **GitHub remote:**
-    `https://github.com/shoaib143-sudo/data-quality-ai-platform.git`
--   **Production URL:** `https://data-quality-ai-platform.vercel.app`
--   **Supabase project ref:** `tvjnavjxuehpesxcfvrx`
+- **Repository:** `shoaib143-sudo/data-quality-ai-platform`
+- **Default branch:** `main`
+- **Production URL:** `https://data-quality-ai-platform.vercel.app`
+- **Supabase project:** `tvjnavjxuehpesxcfvrx`
+- **Vercel project:** `data-quality-ai-platform`
+- **Current verified main head at this checkpoint:** `dbe511ad4f7664fdb398ff701df3601d4523d551`
+- **Current production change at that head:** `Align Job Monitor feature cells and neural links (#448)`
+- **Branch protection:** `main` protected with required contexts `certify`, `analyze`, `build`, and `revalidate`.
 
-## 2. Current Production Checkpoint
+## 2. Current production architecture
 
-The production dashboard is authenticated and currently shows:
+The application is no longer at the original static Agents placeholder state.
 
--   Datasets
--   Profiling
--   Data Quality
--   Observability
--   AI Agents
+### Agents workspace
 
-The **AI Agents** card is visible in production and links to `/agents`.
+`/agents` is authenticated and connected to live governed state. It currently supports:
 
-This was also independently shown in the user-provided production screenshot.
-The production dashboard currently renders five modules: Datasets, Profiling,
-Data Quality, Observability, and AI Agents.
+- live `agent.agent_definitions` registry reads;
+- live `agent.tool_definitions` display;
+- authenticated project and dataset-version context;
+- capability-aware execution eligibility;
+- conversational access separated from execution authority;
+- recent authorized agent-run history;
+- links into individual agent and run details;
+- server-side execution through trusted executor paths.
 
-## 3. Git Checkpoint
+The current Agents workspace must continue to preserve project/resource authorization and must not rely on UI-only permission checks.
 
-Most recently verified Git history:
+### Job Monitor
 
-``` text
-30a429b Add AI Agents dashboard
-59fb657 Initial production-ready application
-```
+The Job Monitor is production-deployed and includes domain-oriented topology plus `/monitoring/domain/[projectId]` drilldown. The domain view is authenticated, governed by authorized persisted execution state, and explicitly distinguishes recorded evidence from missing evidence instead of inferring nonexistent data.
 
-`30a429b` was verified as:
+The current domain drilldown exposes governed feature status, recent executions, domain context, durable orchestration context, lineage/evidence summaries, and links to run details. PR #448 additionally aligned feature cells and neural links on a common radial frame and added a dedicated radial-topology CI contract.
 
-``` text
-HEAD -> main
-origin/main
-```
+## 3. Agent Policy v2 — implemented production baseline
 
-The AI Agents dashboard change is therefore pushed to GitHub.
+Agent Policy v2 is implemented and post-implementation revalidated.
 
-### Important untracked items observed
+Frozen behavior:
 
-The following have existed as untracked files/directories and should NOT
-be blindly committed:
+- all 13 DataNexus personas may access the Agents workspace and Job Monitor for authorized conversational/read workflows;
+- `agent.execute` is not required for Ask, Query, Explain, Investigate, or Recommend;
+- execution authority remains separately permissioned;
+- resource ACL uses **DENY precedence**;
+- risk is server-authoritative;
+- material production mutation requires **Business + Governance** approval;
+- the same person cannot satisfy both approval axes for one request;
+- Business approver is Data Owner/Data Steward within governed scope;
+- Governance approver is separately scoped;
+- delegation is individual/scoped and retains `on_behalf_of` provenance;
+- approval/rejection comments are mandatory;
+- SLA remains 7/5/3/1 business days;
+- DataNexus, Email, and Teams are supported notification channels;
+- cross-channel approval replay is blocked;
+- execution fingerprint is immutable approval binding;
+- executor/policy/identity/fingerprint/decision evidence is audited;
+- Email/Teams fail closed when provider configuration is absent.
 
-``` text
-pnpm-workspace.yml
-supabase/
-supabase_backup_before_history_fix/
-supabase_backup_before_migration_repair/
-```
+### Synthetic approval-scope rule
 
-Backups should remain separate from production commits unless explicitly
-required.
+Only records explicitly marked `metadata.synthetic_bootstrap = true` are excluded by themselves. A domain remains real when supported by an actual dataset or non-synthetic CDE/KDE evidence.
 
-## 4. Supabase Migration State
+Validated real approval scopes include:
 
-The project previously had a migration-history mismatch between local
-files and the remote database.
+- Finance / Customer
+- Profiling Demo Project / Customer
+- Profiling Demo Project / general
+- Profiling Demo Project / PUB
 
-That issue was repaired.
+The synthetic-only Enterprise bootstrap evidence must not create a false production approval obligation.
 
-Current verified migration state:
+## 4. Approval authority and notification state
 
-``` text
-Local migration:  20260825000000
-Remote migration: 20260825000000
-Status:           synchronized
-```
+### Authority
 
-The migration file involved is:
+Current production evidence established both Business and Governance coverage for the real governed scopes above, with satisfiable separation of duties.
 
-``` text
-supabase/migrations/20260825000000_profiling_agent_hardening_v6.sql
-```
+### Delegation policy
 
-A `.bak` copy previously existed:
+Frozen for Runtime v2:
 
-``` text
-supabase/migrations/20260825000000_profiling_agent_hardening_v6.sql.bak
-```
+- delegator or Data Governance Admin may create/revoke/manage delegation;
+- delegate may view delegated authority but may not alter it.
 
-The `.bak` file is not a valid Supabase migration filename and must not
-be treated as a migration.
+### External notifications
 
-### Migration safety rule
+Frozen for Runtime v2:
 
-Do NOT run migration repair, reset, or destructive schema operations
-again unless current evidence shows they are necessary.
+- Email and Teams may carry a signed approval link;
+- notifications also provide a clear **Open in DataNexus** path;
+- DataNexus remains the authoritative decision system;
+- external tokens remain request/recipient/axis/channel/expiry bound and server-side authority is revalidated.
 
-Before any future migration change:
-
-1.  Check `git status`.
-2.  Check `npx supabase migration list`.
-3.  Back up relevant remote schema if appropriate.
-4.  Review the generated SQL.
-5.  Apply the smallest required change.
-6.  Re-check migration history.
-7.  Commit the migration separately from unrelated UI work.
-
-## 5. Remote Schema Evidence Collected
-
-Remote schema dumps were created during investigation:
-
-``` text
-supabase/remote_public_schema.sql
-supabase/remote_app_schema.sql
-supabase/remote_agent_schema.sql
-```
-
-These were used to inspect the actual remote database instead of
-guessing.
-
-### Public schema
-
-Observed public functions include:
-
--   `create_file_dataset`
--   `create_organization`
--   `create_project`
--   `list_dataset_versions`
--   `list_my_datasets`
--   `list_my_organizations`
--   `list_my_projects`
--   `set_updated_at_dataset_registry`
-
-### App schema
-
-Confirmed:
-
-``` text
-app.member_role
-app.organization_members
-app.organizations
-app.projects
-```
-
-Organization/project isolation is implemented through `app_private`
-membership/admin checks and RLS policies.
-
-## 6. Agent Schema
-
-The remote `agent` schema has been independently re-verified against the live Supabase project.
-The project is ACTIVE_HEALTHY in `ap-southeast-1`, running PostgreSQL 17.6.1.155.
-
-### Enums
-
-Observed:
-
-``` text
-agent.message_status
-agent.run_status
-agent.step_status
-```
-
-### `agent.agent_definitions`
-
-Confirmed fields include:
-
-``` text
-id
-agent_key
-name
-description
-version
-system_prompt
-configuration
-enabled
-created_at
-```
-
-### `agent.agent_runs`
-
-Confirmed fields include:
-
-``` text
-id
-agent_definition_id
-project_id
-dataset_id
-dataset_version_id
-parent_run_id
-correlation_id
-status
-input
-output
-error_code
-error_message
-started_at
-completed_at
-```
-
-### `agent.agent_run_steps`
-
-Confirmed fields include:
-
-``` text
-id
-agent_run_id
-step_name
-step_order
-status
-attempt
-input
-output
-started_at
-completed_at
-error_code
-error_message
-created_at
-```
-
-### `agent.agent_messages`
-
-Confirmed fields include:
-
-``` text
-id
-source_agent_run_id
-target_agent_run_id
-message_type
-correlation_id
-payload
-status
-created_at
-delivered_at
-processed_at
-```
-
-### `agent.agent_artifacts`
-
-Confirmed fields include:
-
-``` text
-id
-agent_run_id
-artifact_type
-artifact_version
-name
-payload
-storage_uri
-content_hash
-created_at
-```
-
-### `agent.tool_definitions`
-
-The table exists and is part of the agent registry. Live verification confirmed
-the exact columns are:
-
-``` text
-id
-agent_definition_id
-tool_key
-name
-description
-version
-input_schema
-output_schema
-execution_config
-enabled
-created_at
-```
-
-## 7. Security Principles
-
-The application must preserve the existing organization/project
-isolation.
+## 5. Production validation checkpoint
+
+The Agent Policy implementation was revalidated after later Job Monitor changes instead of relying on earlier evidence.
+
+Validation included:
+
+- Agent Policy v2 unit tests;
+- independent adversarial audit;
+- approval-hardening verification;
+- same-person dual-axis rejection;
+- mandatory comment enforcement;
+- revoked delegation rejection;
+- resource ACL/DENY precedence;
+- unauthorized execute/retry/cancel behavior;
+- replay protection;
+- fingerprint invalidation;
+- risk recomputation/fail-closed behavior;
+- production dual-approval enforcement;
+- synthetic-domain exclusion;
+- clean database reconstruction;
+- Navigation Integrity;
+- Persona Workspace Policy;
+- P0-P5 revalidation;
+- AI Red Team Assurance;
+- CodeQL/dependency security;
+- Production Security Posture;
+- Release Governance;
+- V6 Operational Certification;
+- production smoke/SLO checks.
+
+Post-implementation revalidation found and fixed two integration-contract defects: missing canonical registration for the Job Monitor domain route and a stale UX verification assumption. Those fixes were merged before the implementation was declared green.
+
+## 6. Migration and database safety
+
+The project previously experienced migration-history drift; therefore database work must remain forward-only and evidence driven.
 
 Rules:
 
--   Never bypass RLS for normal authenticated user operations.
--   Do not expose service-role credentials to the browser.
--   Use authenticated Supabase access for user-scoped reads/writes.
--   Agent runs must remain project-scoped.
--   Tool execution must be explicitly authorized.
--   Service/executor access should be isolated from end-user access.
--   Do not weaken existing RLS merely to make the UI work.
+1. Never reset or repair migration history without current evidence that repair is required.
+2. Use additive migrations first.
+3. Separate schema changes, backfills, read/write cutovers, and cleanup where practical.
+4. Do not let two parallel branches independently redefine the same table contract.
+5. Verify clean reconstruction for material schema changes.
+6. Never delete an index merely because an advisor labels it unused or duplicate; inspect query evidence first.
+7. Preserve RLS and project/organization isolation.
 
-## 8. Current Application Architecture
+## 7. Current security/performance review backlog
 
-Current dashboard modules:
+The Runtime v2 Phase-0 advisor review classified the current findings rather than treating them as an automatic migration queue.
 
-``` text
-/app/dashboard
-/app/datasets
-/app/profiling
-/app/data-quality
-/app/observability
-/app/agents
-```
+- service/control-plane tables with RLS but no user policies are intentional where `anon`/`authenticated` have no direct table privileges;
+- authenticated SECURITY DEFINER membership/runtime helpers remain intentional governed surfaces with explicit empty `search_path` and server-side authorization;
+- `governance.agent_risk_rank(text)` has one evidence-backed mutable-search-path hardening gap selected for immediate forward-only remediation;
+- leaked-password protection remains an external Supabase Auth configuration opportunity;
+- unindexed foreign keys and unused indexes remain benchmark-later candidates until representative workload evidence justifies changes;
+- an exact catalog-level duplicate-index comparison found no exact duplicate index pairs.
 
-Authentication routes/components are already present.
+See `Architecture/2026-09-15-supabase-advisor-and-index-review.md`.
 
-The dashboard uses authenticated user enforcement and links to the
-module pages.
+## 8. Runtime v2 frozen product decisions
 
-## 9. AI Agents Current State
+### Retention and evidence
 
-### Completed
+- agent-generated artifacts: configurable retention within **5–7 years**;
+- agent-to-agent messages: same lifecycle as execution/audit records;
+- Governance Admin legal hold prevents normal expiry/deletion.
 
--   AI Agents dashboard card added.
--   `/agents` route created.
--   Production deployment verified.
--   AI Agents card visible in production.
+### Cost and usage visibility
 
-### Current limitation
+- authorized project users may view cost/token usage for runs they are authorized to view;
+- admins receive aggregate reporting.
 
-`/app/agents/page.tsx` is currently a static placeholder.
+### Concurrency and execution budgets
 
-It currently presents:
+Use optimized configurable defaults rather than hard-coded limits. Admins may increase or reduce limits without code changes.
 
-``` text
-AI Agents
-Manage and run AI-powered data quality agents.
+Budgets include where applicable:
 
-Profiling Agent
-Analyze datasets, detect patterns and anomalies, and generate profiling results.
+- concurrent runs;
+- runtime duration;
+- token budget;
+- cost budget;
+- step count;
+- tool-call count;
+- delegation depth.
 
-Enabled
-Version 2.0
-```
+### Provider fallback
 
-It is NOT yet connected to the real agent registry.
+Automatic fallback is permitted only to **pre-approved providers/models** that satisfy the same or stronger data-residency, security, governance, and production-eligibility requirements.
 
-### Next implementation target
+### Agent versions
 
-Replace the placeholder with:
+A new version does **not** automatically become production default. Lifecycle requires explicit promotion to `ACTIVE`; previous versions remain available for rollback and immutable historical audit.
 
-``` text
-AI Agents
-    |
-    +-- agent.agent_definitions
-    |
-    +-- agent.tool_definitions
-    |
-    +-- Run Agent
-    |
-    +-- agent.agent_runs
-          |
-          +-- agent.agent_run_steps
-          +-- agent.agent_messages
-          +-- agent.agent_artifacts
-```
+### Tools
 
-The implementation must use the actual remote schema and existing RLS
-policies.
+Tools have independent governance even when their parent agent is enabled, including:
 
-## 10. Live Re-verification Findings
+- enable/disable state;
+- environment restrictions;
+- authorization;
+- schema validation;
+- limits and audit requirements.
 
-### Migration history
+### Multi-agent delegation
 
-Resolved and independently re-verified against the live project.
+Agent-to-agent delegation is explicit allow-list only, with configurable depth and budget limits. Handoff authorization must happen before side effects.
 
-``` text
-Local CLI history: 20260825000000
-Remote Supabase history: 20260825000000
-Migration name: profiling_agent_hardening_v6
-```
+## 9. Additional platform defaults approved for Runtime v2
 
-### Agent registry discrepancy — IMPORTANT
+- **RTO:** 4 hours
+- **RPO:** 15 minutes
+- **Approval validity:** configurable, default 7 days
+- **Material fingerprint change:** immediately invalidates existing approval
+- **Legal hold:** Governance Admin supported
+- **Kill switch:** global, project, agent, and tool scopes
+- **Execution budgets:** configurable and server-authoritative
+- **Model/provider production promotion:** explicit approval required
+- **Canary rollout:** required for material runtime/model/provider changes
+- **CRITICAL production mutations:** mandatory human approval remains
+- **Break-glass access:** time-limited, reason required, MFA where supported, enhanced audit, post-event review
 
-The live database contains **two enabled rows** with the same `agent_key`
-`profiling_agent`:
+## 10. Native-first architecture requirements
 
-``` text
-Profiling Agent | version 1.0 | enabled | 8 tools
-Profiling Agent | version 2.0 | enabled | 12 tools
-```
+ADR-007 and ADR-008 remain authoritative.
 
-This is real live database state and was not represented in the earlier
-checkpoint. It must be resolved deliberately before building execution
-selection logic. We must not guess which version should be canonical.
-
-### Agent RLS — independently verified
-
-All six agent tables have RLS enabled. Authenticated users currently have
-SELECT policies on enabled agent/tool definitions and project-scoped SELECT
-policies for runs, steps, messages, and artifacts. Anonymous users do not
-have SELECT privilege on these tables.
-
-### Security advisor findings — OPEN
-
-The live Supabase security advisor currently reports WARN-level findings for:
-
-- `public.create_file_dataset(...)` — authenticated users can execute a
-  `SECURITY DEFINER` function.
-- `public.create_organization(...)` — authenticated users can execute a
-  `SECURITY DEFINER` function.
-- `public.create_project(...)` — authenticated users can execute a
-  `SECURITY DEFINER` function.
-- Leaked password protection is disabled.
-
-These are not automatically defects; the intended security model must be
-verified before changing them. They are now explicit open security-review
-items.
-
-### Performance advisor findings — informational/warnings
-
-The live performance advisor reports duplicate indexes, including duplicate
-indexes in `agent.agent_runs`, `agent.agent_run_steps`, and other schemas,
-and unused-index notices. These are not part of the immediate agent UI
-implementation and must not be deleted blindly.
+For every significant Runtime v2 capability, perform a capability challenge using:
 
-### `pg_net`
-
-A previous schema diff warned about dropping `pg_net`. Live database verification
-now shows **no installed `pg_net` extension**. Therefore the prior diff warning
-was not evidence that an installed production `pg_net` extension should be
-removed. Do not add or remove extensions based solely on that historical diff.
+**Status:** `ADVANTAGE`, `PARITY`, `PARTIAL`, `GAP_REQUIRED`, `GAP_DEFERRED`, `NOT_APPLICABLE`
 
-### Supabase CLI
-
-Verified CLI version:
-
-``` text
-2.115.0
-```
-
-`supabase db query` without local Supabase/Docker attempted to connect
-to:
+**Disposition:** `KEEP`, `BUILD_NOW`, `BUILD_LATER`, `BORROW_PATTERN`, `EXTENSION_POINT`, `BENCHMARK_LATER`, `REJECT`, `NOT_APPLICABLE`
 
-``` text
-127.0.0.1:54322
-```
+DataNexus retains authority over identity, tenant/project scope, RLS/authorization, tool allowlists, mutation policy, risk, human approvals, evidence/audit, durable business-job truth, retries/idempotency, rollback/recovery, model routing/evaluation, learning authority, privacy, and secrets.
 
-Therefore local `db query` should not be used as a substitute for remote
-inspection unless the local Supabase stack is running.
+## 11. Runtime v2 implementation program
 
-For remote schema inspection, `npx supabase db dump --linked` was
-successfully used.
+Item 1 (secret rotation) is intentionally deferred as accepted operational risk.
 
-## 11. Working Rules
+Items 2–29 are sufficiently specified for autonomous implementation.
 
-1.  Verify before changing.
-2.  Do not guess database columns, RLS policies, or migration state.
-3.  Keep database changes separate from UI changes where practical.
-4.  Make small, recoverable changes.
-5.  Test before committing.
-6.  Commit meaningful milestones.
-7.  Push completed milestones to GitHub.
-8.  Re-check `git status` after each milestone.
-9.  Re-check Supabase migration history after migration changes.
-10. Keep backup directories outside normal production commits.
-11. Never expose secrets, service-role keys, or credentials in source
-    control.
-12. Prefer evidence from the repository and remote schema over
-    assumptions.
+Optimized execution phases:
 
-## 12. Checkpoint / Save Cadence
+1. **Phase 0 — Baseline/contracts:** documentation, advisor/index review, Runtime v2 contracts, capability-parity baseline.
+2. **Phase 1 — Governance/control-plane:** approval/delegation UX, notifications, ACL/tool validation, artifact/message governance.
+3. **Phase 2 — Runtime governance/observability:** SLA automation, approval revalidation, cost/telemetry, Job Monitor drilldown, concurrency/budgets.
+4. **Phase 3 — Runtime core:** durable state machine, agent version lifecycle, provider resilience, governed tool execution.
+5. **Phase 4 — Orchestration/recovery:** allow-listed multi-agent delegation, deterministic recovery, emergency controls, canary/promotion controls.
+6. **Phase 5 — Continuous evaluation:** trajectory evidence becomes a first-class artifact throughout implementation.
+7. **Phase 6 — Independent certification:** performance/load, chaos/failure, E2E acceptance, adversarial/security testing.
+8. **Phase 7 — Capability-parity certification:** explicit evidence-backed gap ledger.
+9. **Phase 8 — Production rollout:** preview → validated test → canary → monitored production → full production.
 
-At every meaningful milestone:
+## 12. Autonomous operating rules
 
-``` text
-1. Inspect current Git state
-2. Make the smallest change
-3. Run relevant checks/tests
-4. Review diff
-5. Commit
-6. Push to origin/main
-7. Verify git status
-8. Verify deployment when applicable
-9. Update this PROJECT_STATE.md
-```
+- Use 3–4 parallel streams where dependencies allow.
+- Do not ask routine implementation questions.
+- If a task requires user MFA/login/consent, new external account authorization, unresolved business policy, or an unsafe destructive action, mark it blocked and continue independent work.
+- If the same failure occurs twice without new evidence, stop repeating the same approach and choose a materially different approach or isolate the blocker.
+- Do not weaken tests, authorization, SLO thresholds, or governance merely to make CI pass.
+- Prefer reversible, additive, forward-only changes.
+- An item is complete only after relevant unit/negative/adversarial/integration validation, exact-head CI, preview/production checks where applicable, and evidence/documentation updates.
 
-For risky database changes:
+## 13. Immediate next work
 
-``` text
-1. Create/verify a recoverable checkpoint
-2. Back up relevant schema
-3. Review SQL
-4. Apply change
-5. Verify remote schema
-6. Verify migration history
-7. Update PROJECT_STATE.md
-8. Commit and push
-```
+Current Phase 0 workstreams:
 
-## 13. Current Work Queue
+- **Stream A:** update durable project state and consolidate architecture/decision records.
+- **Stream B:** Supabase security/performance advisor and duplicate/unused-index review.
+- **Stream C:** Runtime v2 master contracts and migration ownership boundaries.
+- **Stream D:** capability-parity baseline and acceptance evidence matrix.
 
-### Priority 1 --- Agent registry
+Do not revert to the old queue that treated `/agents` as a static placeholder; that state is obsolete.
 
--   Inspect exact `agent.tool_definitions` columns.
--   Inspect exact agent RLS policies.
--   Connect `/agents` to `agent.agent_definitions`.
--   Display enabled agents from the database.
+## 14. Continuity rule
 
-### Priority 2 --- Tool registry
+At the start of a future session:
 
--   Display tools associated with an agent.
--   Verify tool authorization and project scope.
--   Do not expose internal/service credentials.
-
-### Priority 3 --- Agent execution
-
--   Add project/dataset selection.
--   Create `agent.agent_runs`.
--   Execute through a secure server-side mechanism.
--   Track run status.
--   Persist steps/messages/artifacts as appropriate.
-
-### Priority 4 --- Observability
-
--   Display run history.
--   Display current/previous run status.
--   Display errors and outputs.
--   Preserve organization/project isolation.
-
-### Priority 5 --- Production hardening
-
--   End-to-end authenticated tests.
--   RLS tests.
--   Unauthorized cross-organization access tests.
--   Error handling.
--   Build verification.
--   Production smoke test.
-
-## 14. Re-verification Status
-
-The last confirmed production state is:
-
-``` text
-Git:
-30a429b Add AI Agents dashboard
-
-Supabase:
-20260825000000 local == remote
-
-Production:
-https://data-quality-ai-platform.vercel.app/dashboard
-
-UI:
-AI Agents card visible
-```
-
-This is the recovery baseline.
-
-## 15. Remaining Verification Gap
-
-The live Supabase project has been re-verified, but this session cannot directly
-prove the current local Windows working tree, current local file contents, or
-current GitHub working-tree cleanliness. The user previously showed:
-
-``` text
-main == origin/main
-30a429b Add AI Agents dashboard
-```
-
-but those local facts must be re-run at the start of the next session.
-
-Required local verification before claiming a fully closed checkpoint:
-
-``` powershell
-git status --short
-git log --oneline -5
-git rev-parse HEAD
-git rev-parse origin/main
-npx supabase migration list
-Get-Content .\app\dashboard\page.tsx
-Get-Content .\app\agents\page.tsx
-```
-
-## 16. Last Known Good State
-
-Before implementing agent execution, inspect:
-
-``` powershell
-Select-String -Path .\supabase\remote_agent_schema.sql `
-  -Pattern 'CREATE TABLE|CREATE POLICY|ALTER TABLE.*ENABLE ROW LEVEL SECURITY|GRANT|REVOKE' |
-  Select-Object LineNumber, Line
-
-Select-String -Path .\supabase\remote_agent_schema.sql `
-  -Pattern 'tool_definitions|tool_key|tool_name|tool_type|configuration|input_schema|output_schema' |
-  Select-Object LineNumber, Line
-```
-
-Then implement the agent registry against the verified schema.
-
-## 17. Session Continuity
-
-When continuing this project in a new session:
-
-1.  Read `PROJECT_STATE.md`.
-2.  Check `git status`.
-3.  Check `git log --oneline -5`.
-4.  Check `npx supabase migration list`.
-5.  Inspect the relevant current source files.
-6.  Verify the database schema before changing database-dependent code.
-7.  Continue from **Current Work Queue**, not from assumptions.
+1. Read `AGENTS.md`, ADR-007, ADR-008, and this file.
+2. Fetch current `main` and active PR state before changing code.
+3. Inspect relevant migrations and runtime contracts.
+4. Continue from the current Runtime v2 phase/workstream, not from historical placeholder-era assumptions.
+5. Reconcile documentation whenever runtime evidence has moved ahead of the checkpoint.
