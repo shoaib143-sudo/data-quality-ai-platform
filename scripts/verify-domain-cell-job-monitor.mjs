@@ -17,6 +17,7 @@ assert.match(monitor, /execution components inside/, 'Domain cell topology must 
 assert.match(monitor, /latestRunPerComponent\(projectRuns\)/, 'Domain cells must collapse repeated runs to the latest state per execution component.')
 assert.match(monitor, /datasetCount: new Set\(projectRuns\.flatMap/, 'Domain cells must expose dataset coverage inside the Data Domain.')
 assert.match(monitor, /Data Domain/, 'Domain-cell UI must identify the governed domain concept explicitly.')
+assert.match(monitor, /ExecutionStatusBadge status=\{selectedRun\.status\}/, 'Selected execution detail must use the shared execution status contract backed by the recorded run status.')
 assert.match(monitor, /Organic cells visualize status, not authority/, 'Visualization must not imply that visual topology changes authorization semantics.')
 assert.match(monitor, /Project authorization and execution controls remain enforced/, 'Monitor must preserve governed authorization semantics in the operator surface.')
 assert.match(monitor, /\/monitoring\?run=\$\{encodeURIComponent\(selectedRun\.id\)\}#job-logs/, 'Selected execution must retain a deep link into recorded execution diagnostics.')
@@ -26,7 +27,7 @@ assert.match(monitor, /cell\.domainName\.toLowerCase\(\)\.includes\(q\)/, 'Searc
 assert.doesNotMatch(monitor, /Math\.random/, 'Domain topology placement must remain deterministic.')
 assert.doesNotMatch(monitor, /SIMULATED DATA|simulated data/i, 'Production Job Monitor must not label real execution evidence as simulated.')
 
-console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, complete component representation, latest component-state aggregation, deterministic organic topology, filtering, live refresh, and deep-linked diagnostics.')
+console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, complete component representation, latest component-state aggregation, deterministic organic topology, shared execution status, filtering, live refresh, and deep-linked diagnostics.')
 
 await import('./test-domain-cell-job-monitor.mjs')
 await import('./audit-domain-cell-job-monitor-adversarial.mjs')
