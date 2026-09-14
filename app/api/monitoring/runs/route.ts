@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
 
@@ -25,6 +26,8 @@ export async function GET() {
 
     return NextResponse.json({ runs: visibleRuns, steps: steps ?? [] })
   } catch (error) {
+    const authError = authorizationErrorResponse(error)
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load monitoring data.' }, { status: 500 })
   }
 }
