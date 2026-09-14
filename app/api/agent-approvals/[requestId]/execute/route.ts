@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { currentExecutionFingerprint, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -8,7 +10,7 @@ function record(value: unknown): Record<string, unknown> {
 
 export async function POST(request: Request, context: { params: Promise<{ requestId: string }> }) {
   try {
-    await requireApiUser()
+    const user = await requireApiUser()
     const { requestId } = await context.params
     const admin = createAdminClient()
     const { data: approval, error } = await admin.schema('governance').from('agent_approval_requests')
@@ -17,12 +19,16 @@ export async function POST(request: Request, context: { params: Promise<{ reques
       .maybeSingle()
     if (error) throw new Error(`Unable to load execution request: ${error.message}`)
     if (!approval) return NextResponse.json({ error: 'Execution request was not found.' }, { status: 404 })
-    if (approval.status !== 'READY_TO_EXECUTE') {
-      return NextResponse.json({ error: `Execution request is not ready. Current status: ${approval.status}.` }, { status: 409 })
-    }
 
     const payload = record(approval.fingerprint_payload)
     const parameters = record(payload.parameters)
+    const currentFingerprint = await currentExecutionFingerprint({ requestId: approval.id, parameters })
+    await validateApprovalForExecution({
+      requestId: approval.id,
+      executorUserId: user.id,
+      currentFingerprint,
+    })
+
     let pathname: string
     let body: Record<string, unknown>
 
@@ -67,6 +73,8 @@ export async function POST(request: Request, context: { params: Promise<{ reques
       headers: { 'Content-Type': response.headers.get('content-type') ?? 'application/json' },
     })
   } catch (error) {
+    const authorization = authorizationErrorResponse(error)
+    if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to fulfill execution request.' }, { status: 500 })
   }
 }

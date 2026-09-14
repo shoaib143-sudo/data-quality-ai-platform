@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeDataset, authorizeProject } from '@/lib/auth/authorize'
 import { getAgentActionProfile } from './agent-action-catalog'
-import { resolveDatasetRiskContext } from './agent-risk-context'
+import { resolveDatasetRiskContext, resolveProjectRiskContext } from './agent-risk-context'
 import {
   approvalRequirement,
   type ApprovalAxis,
@@ -138,18 +138,16 @@ export async function currentExecutionFingerprint(input: {
   const policyVersion = String(projectPolicy?.policy_version ?? 'agent-policy-v2.0')
 
   if (String(request.target_type) !== 'DATASET') {
-    const payload = request.fingerprint_payload && typeof request.fingerprint_payload === 'object'
-      ? request.fingerprint_payload as Record<string, unknown>
-      : {}
+    const riskContext = await resolveProjectRiskContext(String(request.project_id))
     return createExecutionFingerprint({
       actionKey: profile.key,
       environment,
-      projectId: String(request.project_id),
-      resourceIds: Array.isArray(payload.resourceIds) ? payload.resourceIds.map(String) : [],
+      projectId: riskContext.projectId,
+      resourceIds: riskContext.resourceIds,
       parameters: input.parameters,
       policyVersion,
-      businessCriticality: String(request.business_criticality) as ExecutionFingerprintInput['businessCriticality'],
-      dataSensitivity: String(payload.dataSensitivity ?? 'LOW') as ExecutionFingerprintInput['dataSensitivity'],
+      businessCriticality: riskContext.businessCriticality,
+      dataSensitivity: riskContext.dataSensitivity,
       materialProductionMutation: profile.materialProductionMutation,
       financialImpact: profile.financialImpact,
       productionScope: profile.productionScope,

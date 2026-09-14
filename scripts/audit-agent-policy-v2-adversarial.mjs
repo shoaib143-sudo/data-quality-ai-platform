@@ -96,6 +96,14 @@ attack('execution fingerprint invalidates changed action, environment, policy or
   assert.notEqual(fp, createExecutionFingerprint({ ...base, parameters: { depth: 2 } }))
 })
 
+attack('project approvals recompute current CDE/KDE and sensitivity before execution', () => {
+  const service = fs.readFileSync('lib/governance/agent-approval-service.ts', 'utf8')
+  assert.match(service, /resolveProjectRiskContext\(String\(request\.project_id\)\)/)
+  assert.match(service, /resourceIds: riskContext\.resourceIds/)
+  assert.match(service, /businessCriticality: riskContext\.businessCriticality/)
+  assert.match(service, /dataSensitivity: riskContext\.dataSensitivity/)
+})
+
 attack('same-person dual-axis approval is rejected by database contract', () => {
   const sql = fs.readFileSync('supabase/migrations/20260913160500_preserve_delegated_approval_provenance.sql', 'utf8')
   assert.match(sql, /same individual cannot satisfy both approval axes/i)
@@ -192,17 +200,19 @@ attack('partial resource scope cannot expose cross-resource lineage', () => {
   assert.match(specialist, /scopedLineageEdges = fullProjectVisibility \? \(lineageTransformationEdgesResult\.data \?\? \[\]\) : \[\]/)
 })
 
-
 attack('external Email and Teams approvals are signed, user-bound and centrally authorized', () => {
   const token = fs.readFileSync('lib/governance/external-approval-token.ts', 'utf8')
-  const route = fs.readFileSync('app/api/agent-approvals/external/[token]/decision/route.ts', 'utf8')
+  const externalRoute = fs.readFileSync('app/api/agent-approvals/external/[token]/decision/route.ts', 'utf8')
+  const dataNexusRoute = fs.readFileSync('app/api/agent-approvals/[requestId]/decision/route.ts', 'utf8')
   const worker = fs.readFileSync('lib/governance/approval-notification-worker.ts', 'utf8')
   assert.match(token, /createHmac\('sha256'/)
   assert.match(token, /timingSafeEqual/)
   assert.match(token, /recipientUserId/)
-  assert.match(route, /payload\.recipientUserId !== user\.id/)
-  assert.match(route, /recordAgentApprovalDecision/)
-  assert.doesNotMatch(route, /channel:\s*text\(body/)
+  assert.match(externalRoute, /payload\.recipientUserId !== user\.id/)
+  assert.match(externalRoute, /recordAgentApprovalDecision/)
+  assert.doesNotMatch(externalRoute, /channel:\s*text\(body/)
+  assert.match(dataNexusRoute, /channel:\s*'DATANEXUS'/)
+  assert.doesNotMatch(dataNexusRoute, /body\?\.channel/)
   assert.match(worker, /createExternalApprovalToken/)
   assert.match(worker, /approvalUrl/)
 })
@@ -220,7 +230,9 @@ attack('ready execution requests require independent runtime capability and curr
   assert.match(service, /authorizeDataset\(input\.executorUserId/)
   assert.match(profiling, /validateApprovalForExecution/)
   assert.match(quality, /validateApprovalForExecution/)
-  assert.match(pickup, /READY_TO_EXECUTE/)
+  assert.match(pickup, /currentExecutionFingerprint/)
+  assert.match(pickup, /validateApprovalForExecution/)
+  assert.ok(pickup.indexOf('validateApprovalForExecution') < pickup.indexOf("approval.action_key === 'RUN_PROFILING'"))
 })
 
 attack('profiling and Data Quality preserve narrower execution capabilities', () => {
