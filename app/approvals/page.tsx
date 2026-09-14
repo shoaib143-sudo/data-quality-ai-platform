@@ -5,6 +5,7 @@ import { loadApprovalCoverageWorkspace } from '@/lib/governance/approval-coverag
 import { ApprovalInbox } from './approval-inbox'
 import { ApprovalCoveragePanel } from './approval-coverage-panel'
 import { DelegationManager } from './delegation-manager'
+import { DelegationAdminManager } from './delegation-admin-manager'
 
 export default async function ApprovalsPage() {
   const user = await requireUser()
@@ -32,6 +33,7 @@ export default async function ApprovalsPage() {
         <ApprovalInbox items={items} />
         <ApprovalCoveragePanel scopes={coverage.scopes} managedProjectCount={coverage.managedProjectCount} />
         <DelegationManager />
+        <DelegationAdminManager />
       </div>
     </main>
   )
