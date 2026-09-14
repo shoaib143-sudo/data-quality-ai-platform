@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BrainCircuit,
   ChevronRight,
@@ -61,6 +61,8 @@ type Props = {
   initialSteps: MonitoringStep[]
   initialNow: string
   initialRunId?: string | null
+  initialAgentId?: string | null
+  initialDomainKey?: string | null
   userId: string
 }
 
@@ -187,37 +189,42 @@ function RunNode({ run, label, selected, dense, onSelect }: { run: MonitoringRun
   </button>
 }
 
-function NotExecutedNode({ label, dense }: { label: string; dense: boolean }) {
-  return <div
-    className={`group relative grid place-items-center rounded-full border border-slate-700/60 bg-slate-900/55 opacity-70 ${dense ? 'h-8 w-8' : 'h-10 w-10'}`}
+function NotExecutedNode({ label, dense, selected, onSelect }: { label: string; dense: boolean; selected: boolean; onSelect: () => void }) {
+  return <button
+    type="button"
+    onClick={(event) => { event.stopPropagation(); onSelect() }}
+    className={`group relative grid place-items-center rounded-full border border-slate-700/60 bg-slate-900/55 opacity-70 transition duration-300 hover:scale-110 hover:opacity-90 ${dense ? 'h-8 w-8' : 'h-10 w-10'} ${selected ? 'scale-110 ring-2 ring-slate-400/70 opacity-100' : ''}`}
     title={`${label} · Not executed`}
-    aria-label={`${label}, not executed`}
+    aria-label={`${label}, not executed. Open drilldown.`}
   >
     <span className={`relative rounded-full bg-slate-600 ${dense ? 'h-2 w-2' : 'h-2.5 w-2.5'}`} />
-    <span className={`pointer-events-none absolute top-full mt-1 max-w-24 truncate rounded-md border border-slate-700/80 bg-[#061426]/95 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 shadow-lg ${dense ? 'hidden group-hover:block' : 'block'}`}>{label}</span>
-  </div>
+    <span className={`pointer-events-none absolute top-full mt-1 max-w-24 truncate rounded-md border border-slate-700/80 bg-[#061426]/95 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 shadow-lg ${dense ? 'hidden group-hover:block group-focus-visible:block' : 'block'}`}>{label}</span>
+  </button>
 }
 
 function OrganicDomainCell({
   cell,
   agents,
   selectedRunId,
+  selectedAgentId,
   selected,
   onSelectDomain,
-  onSelectRun,
+  onSelectAgent,
 }: {
   cell: DomainCell
   agents: Map<string, MonitoringAgent>
   selectedRunId: string | null
+  selectedAgentId: string | null
   selected: boolean
   onSelectDomain: () => void
-  onSelectRun: (id: string) => void
+  onSelectAgent: (agentId: string, runId: string | null) => void
 }) {
   const meta = statusMeta(cell.status)
   const visibleComponents = cell.components
   const denseNodes = visibleComponents.length > 10
   return <article
-    className={`group relative min-h-[340px] overflow-hidden rounded-[44%_56%_52%_48%/43%_45%_55%_57%] border bg-[#071a2c]/90 p-5 text-left transition duration-500 hover:-translate-y-1 hover:scale-[1.01] ${meta.ring} ${meta.glow} ${selected ? 'ring-2 ring-cyan-200/55' : ''}`}
+    onClick={onSelectDomain}
+    className={`group relative min-h-[340px] cursor-pointer overflow-hidden rounded-[44%_56%_52%_48%/43%_45%_55%_57%] border bg-[#071a2c]/90 p-5 text-left transition duration-500 hover:-translate-y-1 hover:scale-[1.01] ${meta.ring} ${meta.glow} ${selected ? 'ring-2 ring-cyan-200/55' : ''}`}
   >
     <div className="absolute inset-0 opacity-75" style={{ backgroundImage: 'radial-gradient(circle at 35% 28%, rgba(34,211,238,.16), transparent 28%), radial-gradient(circle at 72% 68%, rgba(59,130,246,.12), transparent 34%), radial-gradient(circle at 50% 50%, rgba(255,255,255,.04), transparent 48%)' }} />
     <div className="absolute inset-[13%] rounded-full border border-cyan-100/[0.06] shadow-[inset_0_0_70px_rgba(34,211,238,.07)]" />
@@ -253,8 +260,8 @@ function OrganicDomainCell({
         const position = organicNodePosition(index, visibleComponents.length)
         return <div key={component.agent.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${position.left}%`, top: `${position.top}%` }}>
           {component.run
-            ? <RunNode run={component.run} label={component.agent.name} selected={selectedRunId === component.run.id} dense={denseNodes} onSelect={() => onSelectRun(component.run!.id)} />
-            : <NotExecutedNode label={component.agent.name} dense={denseNodes} />}
+            ? <RunNode run={component.run} label={component.agent.name} selected={selectedRunId === component.run.id} dense={denseNodes} onSelect={() => onSelectAgent(component.agent.id, component.run!.id)} />
+            : <NotExecutedNode label={component.agent.name} dense={denseNodes} selected={selectedAgentId === component.agent.id} onSelect={() => onSelectAgent(component.agent.id, null)} />}
         </div>
       })}
     </div>
@@ -274,12 +281,17 @@ export function JobMonitor({
   initialSteps,
   initialNow,
   initialRunId = null,
+  initialAgentId = null,
+  initialDomainKey = null,
   userId: _userId,
 }: Props) {
   const [runs, setRuns] = useState(initialRuns)
   const [steps, setSteps] = useState(initialSteps)
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialRuns[0]?.id ?? null)
-  const [selectedDomainKey, setSelectedDomainKey] = useState<string | null>(null)
+  const initialSelectedRun = initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialAgentId ? null : initialRuns[0]?.id ?? null
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(initialSelectedRun)
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(initialAgentId ?? (initialSelectedRun ? initialRuns.find((run) => run.id === initialSelectedRun)?.agent_definition_id ?? null : null))
+  const [selectedDomainKey, setSelectedDomainKey] = useState<string | null>(initialDomainKey)
+  const inspectorRef = useRef<HTMLElement | null>(null)
   const [statusFilter, setStatusFilter] = useState<CellStatus | 'ALL'>('ALL')
   const [search, setSearch] = useState('')
   const [lastUpdated, setLastUpdated] = useState(() => new Date(initialNow))
@@ -380,7 +392,8 @@ export function JobMonitor({
   }, [domainCells, statusFilter, search, agents, datasets])
 
   const selectedCell = domainCells.find((cell) => cell.key === selectedDomainKey) ?? domainCells[0] ?? null
-  const selectedRun = runs.find((run) => run.id === selectedRunId) ?? selectedCell?.runs[0] ?? null
+  const selectedAgent = selectedAgentId ? agents.get(selectedAgentId) ?? null : null
+  const selectedRun = selectedRunId ? runs.find((run) => run.id === selectedRunId) ?? null : null
   const selectedSteps = selectedRun ? stepsByRun.get(selectedRun.id) ?? [] : []
   const progress = stepProgress(selectedSteps)
 
@@ -397,15 +410,39 @@ export function JobMonitor({
     return lastUpdated.getTime() - at <= 24 * 60 * 60 * 1000
   }).length
 
-  function selectDomain(cell: DomainCell) {
-    setSelectedDomainKey(cell.key)
-    if (!selectedRunId || !cell.runs.some((run) => run.id === selectedRunId)) setSelectedRunId(cell.componentRuns[0]?.id ?? cell.runs[0]?.id ?? null)
+  function revealInspector() {
+    window.requestAnimationFrame(() => {
+      inspectorRef.current?.focus({ preventScroll: true })
+      inspectorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+    })
   }
 
-  function selectRun(runId: string) {
-    const cell = domainCells.find((item) => item.runs.some((run) => run.id === runId))
-    if (cell) setSelectedDomainKey(cell.key)
+  function updateDrilldownUrl(cell: DomainCell, agentId: string | null, runId: string | null) {
+    const url = new URL(window.location.href)
+    url.searchParams.set('domain', cell.key)
+    if (agentId) url.searchParams.set('agent', agentId)
+    else url.searchParams.delete('agent')
+    if (runId) url.searchParams.set('run', runId)
+    else url.searchParams.delete('run')
+    window.history.replaceState(window.history.state, '', url)
+  }
+
+  function selectDomain(cell: DomainCell) {
+    const retainedRun = selectedRunId ? cell.runs.find((run) => run.id === selectedRunId) ?? null : null
+    const nextRun = retainedRun ?? cell.componentRuns[0] ?? cell.runs[0] ?? null
+    setSelectedDomainKey(cell.key)
+    setSelectedRunId(nextRun?.id ?? null)
+    setSelectedAgentId(nextRun?.agent_definition_id ?? null)
+    updateDrilldownUrl(cell, nextRun?.agent_definition_id ?? null, nextRun?.id ?? null)
+    revealInspector()
+  }
+
+  function selectAgent(cell: DomainCell, agentId: string, runId: string | null) {
+    setSelectedDomainKey(cell.key)
+    setSelectedAgentId(agentId)
     setSelectedRunId(runId)
+    updateDrilldownUrl(cell, agentId, runId)
+    revealInspector()
   }
 
   return <section className="overflow-hidden rounded-3xl border border-cyan-300/10 bg-[#061426] shadow-[0_24px_80px_rgba(0,0,0,.35)]">
@@ -471,9 +508,10 @@ export function JobMonitor({
             cell={cell}
             agents={agents}
             selectedRunId={selectedRunId}
+            selectedAgentId={selectedAgentId}
             selected={selectedCell?.key === cell.key}
             onSelectDomain={() => selectDomain(cell)}
-            onSelectRun={selectRun}
+            onSelectAgent={(agentId, runId) => selectAgent(cell, agentId, runId)}
           />)}
         </div> : <div className="relative z-10 grid min-h-[480px] place-items-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02]">
           <div className="text-center">
@@ -492,7 +530,7 @@ export function JobMonitor({
         </div>
       </div>
 
-      <aside className="bg-[#07182a] p-5">
+      <aside id="job-monitor-inspector" ref={inspectorRef} tabIndex={-1} className="scroll-mt-6 bg-[#07182a] p-5 outline-none">
         {selectedCell ? <div className="space-y-5">
           <div className="border-b border-white/10 pb-4">
             <p className="text-xs font-semibold text-slate-400">Selected Data Domain</p>
@@ -514,17 +552,17 @@ export function JobMonitor({
             <div className="max-h-[310px] space-y-2 overflow-auto pr-1">
               {selectedCell.components.map((component) => {
                 const run = component.run
-                if (!run) return <div key={component.agent.id} className="w-full rounded-xl border border-slate-800/80 bg-slate-950/30 p-3 text-left opacity-70">
+                if (!run) return <button key={component.agent.id} type="button" onClick={() => selectAgent(selectedCell, component.agent.id, null)} className={`w-full rounded-xl border p-3 text-left transition ${selectedAgentId === component.agent.id ? 'border-slate-400/60 bg-slate-800/40 opacity-100' : 'border-slate-800/80 bg-slate-950/30 opacity-70 hover:border-slate-600/80 hover:opacity-90'}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-500">{component.agent.name}</p><p className="mt-0.5 text-[11px] text-slate-600">No recorded execution</p></div>
                     <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-slate-600" />
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.04]" />
-                </div>
+                </button>
                 const meta = statusMeta(normalizeRunStatus(run.status))
                 const dataset = run.dataset_id ? datasets.get(run.dataset_id) : null
                 const p = stepProgress(stepsByRun.get(run.id) ?? [])
-                return <button key={component.agent.id} type="button" onClick={() => selectRun(run.id)} className={`w-full rounded-xl border p-3 text-left transition ${selectedRun?.id === run.id ? 'border-cyan-300/35 bg-cyan-300/[0.07]' : 'border-white/10 bg-white/[0.025] hover:border-white/20'}`}>
+                return <button key={component.agent.id} type="button" onClick={() => selectAgent(selectedCell, component.agent.id, run.id)} className={`w-full rounded-xl border p-3 text-left transition ${selectedRun?.id === run.id ? 'border-cyan-300/35 bg-cyan-300/[0.07]' : 'border-white/10 bg-white/[0.025] hover:border-white/20'}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{component.agent.name}</p><p className="mt-0.5 truncate text-[11px] text-slate-500">{dataset?.name ?? 'No dataset'} · {relativeAge(run, lastUpdated)}</p></div>
                     <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
@@ -534,6 +572,21 @@ export function JobMonitor({
               })}
             </div>
           </div>
+
+          {selectedAgent && !selectedRun ? <div className="border-t border-white/10 pt-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Selected execution path</p>
+            <div className="mt-2 rounded-xl border border-slate-700/70 bg-slate-950/30 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div><p className="font-semibold text-slate-300">{selectedAgent.name}</p><p className="mt-1 text-[11px] text-slate-500">v{selectedAgent.version} · {selectedAgent.agent_key}</p></div>
+                <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">Not executed</span>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-slate-500">This governed path is available in the execution repertoire, but this Data Domain has no recorded execution for it yet. No run, progress, evidence, or diagnostics are fabricated.</p>
+              <Link href="/agents" className="mt-4 flex w-full items-center justify-between rounded-xl border border-slate-600/60 bg-slate-800/30 px-4 py-3 text-sm font-bold text-slate-300 transition hover:bg-slate-800/50">
+                Open governed agent workspace
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div> : null}
 
           {selectedRun ? <div className="border-t border-white/10 pt-4">
             <div className="flex items-start justify-between gap-3">
