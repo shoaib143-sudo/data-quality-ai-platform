@@ -31,7 +31,9 @@ requireText(service, "hasProjectCapability(actorUserId, projectId, 'admin.manage
 requireText(service, 'assertGovernanceAdminLegalHoldAuthority(input.actorUserId, input.projectId)', 'Legal hold placement and release must use the dedicated Governance Admin authority gate.')
 requireText(service, "Agent artifact is outside the requested project.", 'Artifact legal holds must enforce project scope.')
 requireText(service, "Agent message is outside the requested project.", 'Message legal holds must enforce project scope.')
-requireText(service, 'AUDIT_RECORD legal hold is fail-closed', 'Unwired audit-record legal holds must fail closed.')
+requireText(service, ".from('audit_events')", 'Audit-record legal holds must resolve the immutable governance audit entity.')
+requireText(service, 'Audit record does not satisfy immutable audit-chain requirements.', 'Audit-record legal holds must verify hash-chain evidence before acceptance.')
+requireText(service, 'Audit record is outside the requested project.', 'Audit-record legal holds must enforce project scope.')
 requireText(service, 'if (retentionUntil > Date.now()) return true', 'Deletion must be blocked while retention is active.')
 requireText(service, ".eq('active', true)", 'Deletion checks must honor active legal holds.')
 
