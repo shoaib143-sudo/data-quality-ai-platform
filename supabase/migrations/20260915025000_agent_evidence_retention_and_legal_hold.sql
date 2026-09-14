@@ -31,6 +31,129 @@ alter table agent.agent_messages
   alter column retention_until set default (now() + interval '7 years'),
   alter column retention_until set not null;
 
+create or replace function agent.apply_artifact_retention_policy_internal()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, agent, app
+as $$
+declare
+  v_project_id uuid;
+  v_years integer := 7;
+begin
+  select r.project_id into v_project_id
+  from agent.agent_runs r
+  where r.id = new.agent_run_id;
+
+  if v_project_id is null then
+    raise exception 'Agent artifact requires a governed agent run project.';
+  end if;
+
+  select p.retention_years into v_years
+  from agent.evidence_retention_policies p
+  where p.project_id = v_project_id and p.active = true;
+
+  v_years := coalesce(v_years, 7);
+  if v_years < 5 or v_years > 7 then
+    raise exception 'Agent evidence retention policy is outside the approved 5-7 year range.';
+  end if;
+
+  new.retention_until := new.created_at + make_interval(years => v_years);
+  return new;
+end;
+$$;
+
+create or replace function agent.apply_message_retention_policy_internal()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, agent, app
+as $$
+declare
+  v_projects uuid[];
+  v_project_id uuid;
+  v_years integer := 7;
+begin
+  select array_agg(distinct r.project_id) into v_projects
+  from agent.agent_runs r
+  where r.id = any(array_remove(array[new.source_agent_run_id, new.target_agent_run_id]::uuid[], null));
+
+  if coalesce(cardinality(v_projects), 0) = 0 then
+    raise exception 'Agent message requires at least one governed agent run project.';
+  end if;
+  if cardinality(v_projects) <> 1 then
+    raise exception 'Cross-project agent messages are not allowed in the governed evidence lifecycle.';
+  end if;
+
+  v_project_id := v_projects[1];
+  select p.retention_years into v_years
+  from agent.evidence_retention_policies p
+  where p.project_id = v_project_id and p.active = true;
+
+  v_years := coalesce(v_years, 7);
+  if v_years < 5 or v_years > 7 then
+    raise exception 'Agent evidence retention policy is outside the approved 5-7 year range.';
+  end if;
+
+  new.retention_until := new.created_at + make_interval(years => v_years);
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_agent_artifact_retention_policy on agent.agent_artifacts;
+create trigger trg_agent_artifact_retention_policy
+before insert on agent.agent_artifacts
+for each row execute function agent.apply_artifact_retention_policy_internal();
+
+drop trigger if exists trg_agent_message_retention_policy on agent.agent_messages;
+create trigger trg_agent_message_retention_policy
+before insert on agent.agent_messages
+for each row execute function agent.apply_message_retention_policy_internal();
+
+create or replace function agent.set_evidence_retention_policy_internal(
+  p_project_id uuid,
+  p_retention_years integer,
+  p_updated_by uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, agent, app
+as $$
+begin
+  if p_retention_years < 5 or p_retention_years > 7 then
+    raise exception 'Agent evidence retention must be between 5 and 7 years.';
+  end if;
+
+  insert into agent.evidence_retention_policies(project_id, retention_years, active, updated_by, updated_at)
+  values (p_project_id, p_retention_years, true, p_updated_by, now())
+  on conflict (project_id) do update
+    set retention_years = excluded.retention_years,
+        active = true,
+        updated_by = excluded.updated_by,
+        updated_at = excluded.updated_at;
+
+  update agent.agent_artifacts a
+  set retention_until = a.created_at + make_interval(years => p_retention_years)
+  from agent.agent_runs r
+  where a.agent_run_id = r.id
+    and r.project_id = p_project_id;
+
+  update agent.agent_messages m
+  set retention_until = m.created_at + make_interval(years => p_retention_years)
+  where exists (
+    select 1 from agent.agent_runs r
+    where r.project_id = p_project_id
+      and r.id = any(array_remove(array[m.source_agent_run_id, m.target_agent_run_id]::uuid[], null))
+  );
+end;
+$$;
+
+revoke all on function agent.apply_artifact_retention_policy_internal() from public, anon, authenticated;
+revoke all on function agent.apply_message_retention_policy_internal() from public, anon, authenticated;
+revoke all on function agent.set_evidence_retention_policy_internal(uuid, integer, uuid) from public, anon, authenticated;
+grant execute on function agent.set_evidence_retention_policy_internal(uuid, integer, uuid) to service_role;
+
 create table if not exists agent.evidence_legal_holds (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references app.projects(id) on delete cascade,
