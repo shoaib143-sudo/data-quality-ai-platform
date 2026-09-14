@@ -251,11 +251,11 @@ export async function GET(request: Request) {
       profiling: profileRun ? {
         run: profileRun,
         findingCount: profileFindings.length,
-        findingsBySeverity: Object.fromEntries(profileFindings.reduce((counts, finding) => {
+        findingsBySeverity: profileFindings.reduce<Record<string, number>>((counts, finding) => {
           const severity = upper(finding.severity) || 'UNSPECIFIED'
-          counts.set(severity, (counts.get(severity) ?? 0) + 1)
+          counts[severity] = (counts[severity] ?? 0) + 1
           return counts
-        }, new Map<string, number>())),
+        }, {}),
         recentFindings: profileFindings.slice(0, 8),
       } : null,
       quality: {
