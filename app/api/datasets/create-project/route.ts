@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireApiUser } from '@/lib/auth/require-api-user'
-import { authorizeOrganizationAdmin, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizeOrganizationAdmin, AuthorizationError, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizeDataGovernanceSuperAdminForOrganization } from '@/lib/auth/data-governance-super-admin'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
@@ -19,7 +20,12 @@ export async function POST(request: Request) {
     if (!organizationId || !name) return NextResponse.json({ error: 'organizationId and project name are required.' }, { status: 400 })
     if (name.length > 120) return NextResponse.json({ error: 'Project name must be 120 characters or fewer.' }, { status: 400 })
 
-    await authorizeOrganizationAdmin(user.id, organizationId)
+    try {
+      await authorizeOrganizationAdmin(user.id, organizationId)
+    } catch (error) {
+      if (!(error instanceof AuthorizationError)) throw error
+      await authorizeDataGovernanceSuperAdminForOrganization(user.id, organizationId)
+    }
 
     const admin = createAdminClient()
     const baseSlug = slugify(name)

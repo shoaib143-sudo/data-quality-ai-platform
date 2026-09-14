@@ -8,9 +8,12 @@ import {
 export type AuthorizationCapability =
   | 'catalog.read'
   | 'catalog.update'
+  | 'catalog.delete'
   | 'profiling.read'
   | 'profiling.execute'
   | 'source.manage'
+  | 'source.delete'
+  | 'project.delete'
   | 'schedule.manage'
   | 'notification.manage'
   | 'workflow.manage'
