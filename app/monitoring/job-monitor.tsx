@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import {
   BrainCircuit,
   ChevronRight,
@@ -89,6 +90,7 @@ type DomainCell = {
   completeCount: number
   componentCount: number
   datasetCount: number
+  progressPercent: number
   latestAt: string
 }
 
@@ -314,8 +316,15 @@ function OrganicDomainCell({
   const palette = domainPalette(cell.domainName)
   const visibleComponents = cell.components
   const denseNodes = visibleComponents.length > 8
+  const featureProgress = cell.progressPercent
+  const domainStyle = {
+    '--domain-edge': palette.edge,
+    '--domain-glow': palette.glow,
+    '--domain-secondary': palette.secondary,
+  } as CSSProperties
   return <article
     onClick={onSelectDomain}
+    style={domainStyle}
     className={`group relative min-h-[410px] cursor-pointer overflow-hidden rounded-[44%_56%_52%_48%/43%_45%_55%_57%] border bg-[#071a2c]/90 p-5 text-left transition duration-500 hover:-translate-y-1 hover:scale-[1.01] ${meta.ring} ${meta.glow} ${selected ? 'ring-2 ring-cyan-200/55' : ''}`}
   >
     <div className="absolute inset-0 opacity-90" style={{ backgroundImage: `radial-gradient(circle at 32% 25%, ${palette.glow}, transparent 25%), radial-gradient(circle at 72% 70%, ${palette.secondary}22, transparent 34%), radial-gradient(circle at 50% 50%, rgba(255,255,255,.05), transparent 50%)` }} />
@@ -359,9 +368,18 @@ function OrganicDomainCell({
       })}
     </div>
 
-    <div className="absolute bottom-5 left-5 right-5 z-10 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-3 text-[11px] text-slate-400">
-      <span>{cell.completeCount}/{cell.componentCount} features complete · {cell.activeCount} active · {cell.failedCount} failed</span>
-      <button type="button" onClick={onSelectDomain} className="inline-flex items-center gap-1 font-semibold text-cyan-200/70 hover:text-cyan-100">View domain <ChevronRight className="h-3.5 w-3.5" /></button>
+    <div className="absolute bottom-5 left-[14%] right-[14%] z-30">
+      <div className="mb-2 flex items-center justify-between gap-3 text-[10px]">
+        <span className="font-semibold text-slate-300">{cell.completeCount}/{cell.componentCount} features complete</span>
+        <span className="font-black text-white">{featureProgress}%</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-slate-900/80 ring-1 ring-white/10">
+        <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${featureProgress}%`, background: `linear-gradient(90deg, ${palette.edge}, ${palette.secondary})`, boxShadow: `0 0 12px ${palette.edge}` }} />
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3 text-[10px] text-slate-400">
+        <span>{cell.activeCount} active · {cell.failedCount} failed</span>
+        <button type="button" onClick={(event) => { event.stopPropagation(); onSelectDomain() }} className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/25 px-3 py-1.5 font-bold text-white backdrop-blur transition hover:border-white/30 hover:bg-white/10">View Domain <ChevronRight className="h-3.5 w-3.5" /></button>
+      </div>
     </div>
   </article>
 }
@@ -389,7 +407,7 @@ export function JobMonitor({
   const [search, setSearch] = useState('')
   const [lastUpdated, setLastUpdated] = useState(() => new Date(initialNow))
   const [refreshing, setRefreshing] = useState(false)
-  const [inspectorTab, setInspectorTab] = useState<'OVERVIEW' | 'FEATURES' | 'JOBS' | 'EVIDENCE'>('OVERVIEW')
+  const [inspectorTab, setInspectorTab] = useState<'OVERVIEW' | 'FEATURES' | 'JOBS' | 'DATASETS' | 'EVIDENCE'>('OVERVIEW')
 
   const agents = useMemo(() => new Map(initialAgents.map((agent) => [agent.id, agent])), [initialAgents])
   const datasets = useMemo(() => new Map(initialDatasets.map((dataset) => [dataset.id, dataset])), [initialDatasets])
@@ -451,6 +469,7 @@ export function JobMonitor({
         completeCount: componentRuns.filter((run) => normalizeRunStatus(run.status) === 'COMPLETE').length,
         componentCount: components.length,
         datasetCount: new Set(projectRuns.flatMap((run) => run.dataset_id ? [run.dataset_id] : [])).size,
+        progressPercent: components.length ? Math.round((componentRuns.filter((run) => normalizeRunStatus(run.status) === 'COMPLETE').length / components.length) * 100) : 0,
         latestAt: projectRuns[0]?.created_at ?? initialNow,
       })
     }
@@ -482,6 +501,11 @@ export function JobMonitor({
   const selectedAgent = selectedAgentId ? agents.get(selectedAgentId) ?? null : null
   const selectedFeature = selectedAgent ? featurePresentation(selectedAgent) : null
   const selectedRun = selectedRunId ? runs.find((run) => run.id === selectedRunId) ?? null : null
+  const selectedDomainDatasets = selectedCell ? [...new Map(selectedCell.runs.flatMap((run) => {
+    if (!run.dataset_id) return []
+    const dataset = datasets.get(run.dataset_id)
+    return dataset ? [[run.dataset_id, dataset] as const] : []
+  })).values()] : []
   const selectedSteps = selectedRun ? stepsByRun.get(selectedRun.id) ?? [] : []
   const progress = stepProgress(selectedSteps)
 
@@ -512,6 +536,7 @@ export function JobMonitor({
     else url.searchParams.delete('agent')
     if (runId) url.searchParams.set('run', runId)
     else url.searchParams.delete('run')
+    url.hash = ''
     window.history.replaceState(window.history.state, '', url)
   }
 
@@ -640,8 +665,8 @@ export function JobMonitor({
               <StatusPill status={selectedCell.status} />
             </div>
             {selectedCell.project.description ? <p className="mt-3 text-xs leading-5 text-slate-500">{selectedCell.project.description}</p> : null}
-            <div className="mt-4 grid grid-cols-4 overflow-hidden rounded-xl border border-white/10 bg-black/10 text-[10px] font-bold">
-              {(['OVERVIEW','FEATURES','JOBS','EVIDENCE'] as const).map((tab) => <button key={tab} type="button" onClick={() => setInspectorTab(tab)} className={`px-2 py-2.5 transition ${inspectorTab === tab ? 'bg-cyan-300/12 text-cyan-100' : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'}`}>{tab === 'FEATURES' ? 'DG / AI Features' : tab === 'JOBS' ? 'Jobs' : tab === 'EVIDENCE' ? 'Evidence' : 'Overview'}</button>)}
+            <div className="mt-4 grid grid-cols-5 overflow-hidden rounded-xl border border-white/10 bg-black/10 text-[10px] font-bold">
+              {(['OVERVIEW','FEATURES','JOBS','DATASETS','EVIDENCE'] as const).map((tab) => <button key={tab} type="button" onClick={() => setInspectorTab(tab)} className={`px-2 py-2.5 transition ${inspectorTab === tab ? 'bg-cyan-300/12 text-cyan-100' : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'}`}>{tab === 'FEATURES' ? 'DG / AI Features' : tab === 'JOBS' ? 'Jobs' : tab === 'DATASETS' ? 'Datasets' : tab === 'EVIDENCE' ? 'Lineage & Evidence' : 'Overview'}</button>)}
             </div>
           </div>
 
@@ -653,8 +678,9 @@ export function JobMonitor({
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xl font-black text-rose-300">{selectedCell.failedCount}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Features failed</p></div>
             </div>
             <div className="rounded-xl border border-cyan-300/10 bg-cyan-300/[0.03] p-4">
-              <div className="flex items-center gap-2"><BrainCircuit className="h-4 w-4 text-cyan-300" /><p className="text-sm font-bold text-slate-200">Supervisor / Orchestrator</p></div>
+              <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><BrainCircuit className="h-4 w-4 text-cyan-300" /><p className="text-sm font-bold text-slate-200">Supervisor / Orchestrator</p></div><span className="text-lg font-black text-cyan-100">{selectedCell.progressPercent}%</span></div>
               <p className="mt-2 text-xs leading-5 text-slate-500">Coordinates the domain feature network, reflects durable execution state, and routes you into recorded feature results without replacing governance authorization.</p>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-950/80 ring-1 ring-white/10"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 shadow-[0_0_16px_rgba(34,211,238,.65)]" style={{ width: `${selectedCell.progressPercent}%` }} /></div>
               <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-400"><span className="rounded-full border border-white/10 px-2 py-1">Coordinate</span><span className="rounded-full border border-white/10 px-2 py-1">Monitor</span><span className="rounded-full border border-white/10 px-2 py-1">Route</span><span className="rounded-full border border-white/10 px-2 py-1">Evidence</span></div>
             </div>
           </div> : null}
@@ -740,6 +766,19 @@ export function JobMonitor({
                   <div className="mt-2 flex items-center justify-between text-[10px]"><span className={meta.text}>{meta.label}</span><span className="text-cyan-200/65">Open results →</span></div>
                 </Link>
               })}
+            </div>
+          </div> : null}
+
+          {inspectorTab === 'DATASETS' ? <div>
+            <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold text-slate-200">Governed datasets in this domain</h4><span className="text-[10px] text-slate-500">{selectedDomainDatasets.length} represented by recorded executions</span></div>
+            <div className="space-y-2">
+              {selectedDomainDatasets.length ? selectedDomainDatasets.map((dataset) => {
+                const datasetRuns = selectedCell.runs.filter((run) => run.dataset_id === dataset.id)
+                const latest = datasetRuns[0] ?? null
+                return <div key={dataset.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+                  <div className="flex items-start gap-3"><Database className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-200">{dataset.name}</p><p className="mt-0.5 text-[11px] text-slate-500">{dataset.business_domain || 'Unassigned Data Domain'} · {datasetRuns.length} recorded execution(s)</p></div>{latest ? <Link href={`/agents/runs/${encodeURIComponent(latest.id)}`} className="text-[10px] font-bold text-cyan-200 hover:text-cyan-100">Latest result →</Link> : null}</div>
+                </div>
+              }) : <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-slate-500">No dataset has a recorded execution in this domain yet.</div>}
             </div>
           </div> : null}
 
