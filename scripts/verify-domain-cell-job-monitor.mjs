@@ -19,6 +19,13 @@ assert.match(monitor, /const components: DomainComponent\[\] = initialAgents\.ma
 assert.match(monitor, /run: latestByAgent\.get\(agent\.id\) \?\? null/, 'Unexecuted possible paths must remain explicit null-backed presentation state rather than synthetic execution records.')
 assert.match(monitor, /function NotExecutedNode/, 'Unexecuted possible paths must have an explicit grey presentation node.')
 assert.match(monitor, /No recorded execution/, 'Selected-domain component list must distinguish never-executed paths from durable execution evidence.')
+assert.match(monitor, /function selectAgent\(cell: DomainCell, agentId: string, runId: string \| null\)/, 'Every agent path must have a drilldown selection handler, including paths with no run.')
+assert.match(monitor, /function selectDomain\(cell: DomainCell\)/, 'Every Data Domain must expose a drilldown selection handler.')
+assert.match(monitor, /id="job-monitor-inspector"/, 'Domain and agent drilldown must target an explicit inspector surface.')
+assert.match(monitor, /scrollIntoView\(\{ behavior: 'smooth'/, 'Drilldown must reveal the inspector instead of silently changing hidden local state.')
+assert.match(monitor, /window\.history\.replaceState/, 'Drilldown selection must be reflected in the URL for stable deep-link state.')
+assert.match(monitor, /NotExecutedNode[\s\S]*onSelect/, 'Grey never-executed paths must remain interactive rather than decorative.')
+assert.match(page, /agent\?: string; domain\?: string/, 'Job Monitor page must accept agent and domain drilldown query state.')
 assert.match(monitor, /datasetCount: new Set\(projectRuns\.flatMap/, 'Domain cells must expose dataset coverage inside the Data Domain.')
 assert.match(monitor, /Data Domain/, 'Domain-cell UI must identify the governed domain concept explicitly.')
 assert.match(monitor, /ExecutionStatusBadge status=\{selectedRun\.status\}/, 'Selected execution detail must use the shared execution status contract backed by the recorded run status.')
@@ -31,7 +38,7 @@ assert.match(monitor, /cell\.domainName\.toLowerCase\(\)\.includes\(q\)/, 'Searc
 assert.doesNotMatch(monitor, /Math\.random/, 'Domain topology placement must remain deterministic.')
 assert.doesNotMatch(monitor, /SIMULATED DATA|simulated data/i, 'Production Job Monitor must not label real execution evidence as simulated.')
 
-console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, full enabled-path representation with grey never-executed state, latest component-state aggregation, deterministic organic topology, shared execution status, filtering, live refresh, and deep-linked diagnostics.')
+console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, full enabled-path representation with grey never-executed state, latest component-state aggregation, deterministic organic topology, shared execution status, filtering, live refresh, and deep-linked diagnostics and interactive domain/agent drilldown.')
 
 await import('./test-domain-cell-job-monitor.mjs')
 await import('./audit-domain-cell-job-monitor-adversarial.mjs')
