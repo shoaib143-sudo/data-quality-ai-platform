@@ -13,7 +13,9 @@ assert.match(projection, /\.in\('agent_run_id', runIds\)/, 'target durable jobs 
 assert.match(projection, /job\.project_id !== dependency\.project_id \|\| parent\.project_id !== dependency\.project_id/, 'cross-project dependency edges must be discarded')
 assert.doesNotMatch(projection, /\.select\([^\n]*payload/, 'dependency projection must not read or expose durable job payloads')
 assert.doesNotMatch(projection, /service_role|SUPABASE_SERVICE_ROLE_KEY/, 'dependency projection must not embed service credentials')
-assert.match(projection, /slice\(0, 25\)/, 'project scope must be bounded')
-assert.match(projection, /slice\(0, 50\)/, 'run scope must be bounded')
+assert.match(projection, /function uniqueBounded\(values: string\[\], limit: number\)/, 'dependency projection must use one bounded input normalizer')
+assert.match(projection, /\.slice\(0, limit\)/, 'bounded input normalizer must enforce its caller-provided ceiling')
+assert.match(projection, /uniqueBounded\(input\.projectIds, 25\)/, 'project scope must be bounded to 25 authorized projects')
+assert.match(projection, /uniqueBounded\(input\.runIds, 50\)/, 'run scope must be bounded to 50 monitored runs')
 
 console.log('Independent adversarial dependency audit passed: authenticated route, authorization before privilege, bounded scope, no payload exposure, and cross-project isolation.')
