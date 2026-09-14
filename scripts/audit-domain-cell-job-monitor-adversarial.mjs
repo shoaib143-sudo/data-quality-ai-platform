@@ -20,7 +20,7 @@ assert.ok(!monitor.includes("componentRuns.slice(0, 8)"), 'domain topology must 
 assert.ok(monitor.includes("organicNodePosition(index, visibleComponents.length)"), 'organic layout must deterministically scale placement from the full possible component count')
 assert.ok(monitor.includes("dense={denseNodes}"), 'high component counts must use density adaptation rather than omission')
 assert.ok(monitor.includes("cell.domainName.toLowerCase().includes(q)"), 'domain search must operate on persisted domain names')
-assert.ok(monitor.includes("selectedCell.datasetCount"), 'selected Data Domain must expose dataset coverage')
+assert.ok(domainDetail.includes("domainDatasets"), 'dedicated Data Domain drilldown must expose governed dataset coverage')
 assert.ok(!monitor.includes('job-monitor-inspector'), 'overview must not masquerade an attached inspector as a domain drilldown')
 assert.ok(monitor.includes('/monitoring/domain/${encodeURIComponent(cell.project.id)}'), 'domain click must navigate to a dedicated drilldown route')
 assert.ok(monitor.includes('domainPalette(cell.key)'), 'same-named domains in different scopes must not be forced into the same palette')
