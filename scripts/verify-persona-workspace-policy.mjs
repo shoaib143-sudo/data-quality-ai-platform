@@ -77,6 +77,10 @@ for (const slug of personaSlugs) {
     `${slug} Agents workspace matches canonical agent.execute capability`,
     canAccessWorkspace(slug, 'agents') === expectedAgentExecutePersonas.has(slug),
   )
+  check(
+    `${slug} can enter the resource-scoped Job Monitor`,
+    canAccessWorkspace(slug, 'monitoring'),
+  )
 }
 
 const explicitlyNonWorkspaceRoutes = [
