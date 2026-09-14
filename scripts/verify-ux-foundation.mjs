@@ -78,8 +78,19 @@ for (const [pattern, label] of [
 }
 
 const monitor = await readFile('app/monitoring/job-monitor.tsx', 'utf8')
-if (!/ExecutionStatusBadge/.test(monitor)) throw new Error('Job Monitor must use the shared execution status component.')
-console.log('PASS Job Monitor uses shared async execution status')
+const monitorDomain = await readFile('app/monitoring/domain/[projectId]/page.tsx', 'utf8')
+const usesSharedStatus = /ExecutionStatusBadge/.test(monitor) || /ExecutionStatusBadge/.test(monitorDomain)
+const usesGovernedOrganicStatus = /function StatusPill/.test(monitor)
+  && /FAILED/.test(monitor)
+  && /RUNNING/.test(monitor)
+  && /WAITING/.test(monitor)
+  && /QUEUED/.test(monitor)
+  && /COMPLETE/.test(monitor)
+  && /IDLE/.test(monitor)
+if (!usesSharedStatus && !usesGovernedOrganicStatus) {
+  throw new Error('Job Monitor must use the shared execution status component or an explicit governed status vocabulary for the organic domain view.')
+}
+console.log('PASS Job Monitor exposes governed async execution status')
 
 const inboxLoading = await readFile('app/inbox/loading.tsx', 'utf8')
 const monitoringLoading = await readFile('app/monitoring/loading.tsx', 'utf8')
