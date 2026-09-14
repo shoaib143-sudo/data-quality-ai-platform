@@ -14,6 +14,18 @@ type OutboxRow = {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+const BASE_RETRY_MS = 15 * 60 * 1000
+const MAX_RETRY_MS = DAY_MS
+
+function maximumAttempts() {
+  const configured = Number.parseInt(process.env.DATANEXUS_APPROVAL_NOTIFICATION_MAX_ATTEMPTS ?? '', 10)
+  if (!Number.isFinite(configured)) return 5
+  return Math.min(20, Math.max(1, configured))
+}
+
+function retryDelayMs(attemptCount: number) {
+  return Math.min(MAX_RETRY_MS, BASE_RETRY_MS * (2 ** Math.min(Math.max(0, attemptCount), 8)))
+}
 
 function providerUrl(channel: ApprovalChannel): string | null {
   if (channel === 'EMAIL') return process.env.DATANEXUS_APPROVAL_EMAIL_WEBHOOK_URL?.trim() || null
@@ -36,6 +48,21 @@ async function mark(id: string, values: Record<string, unknown>) {
   if (error) throw new Error(`Unable to update approval notification outbox: ${error.message}`)
 }
 
+async function markFailure(row: OutboxRow, error: string) {
+  const attempts = row.attempt_count + 1
+  const deadLettered = attempts >= maximumAttempts()
+  const now = new Date()
+  await mark(row.id, {
+    status: deadLettered ? 'DEAD_LETTER' : 'FAILED',
+    attempt_count: attempts,
+    last_attempt_at: now.toISOString(),
+    next_attempt_at: new Date(now.getTime() + retryDelayMs(attempts)).toISOString(),
+    dead_lettered_at: deadLettered ? now.toISOString() : null,
+    last_error: error.slice(0, 2000),
+  })
+  return deadLettered ? 'DEAD_LETTER' : 'FAILED'
+}
+
 function appBaseUrl() {
   const explicit = process.env.DATANEXUS_APP_URL?.trim()
   if (explicit) return explicit.replace(/\/$/, '')
@@ -52,31 +79,29 @@ function externalApprovalTokenExpiry(payload: Record<string, unknown>) {
 }
 
 async function deliver(row: OutboxRow) {
+  const now = new Date().toISOString()
   if (row.channel === 'DATANEXUS') {
-    await mark(row.id, { status: 'SENT', sent_at: new Date().toISOString(), last_error: null })
+    await mark(row.id, {
+      status: 'SENT',
+      attempt_count: row.attempt_count + 1,
+      last_attempt_at: now,
+      sent_at: now,
+      dead_lettered_at: null,
+      last_error: null,
+    })
     return { id: row.id, channel: row.channel, status: 'SENT' }
   }
 
   const url = providerUrl(row.channel)
   if (!url) {
-    await mark(row.id, {
-      status: 'FAILED',
-      attempt_count: row.attempt_count + 1,
-      next_attempt_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      last_error: `${row.channel} approval notification provider is not configured.`,
-    })
-    return { id: row.id, channel: row.channel, status: 'FAILED', error: 'PROVIDER_NOT_CONFIGURED' }
+    const status = await markFailure(row, `${row.channel} approval notification provider is not configured.`)
+    return { id: row.id, channel: row.channel, status, error: 'PROVIDER_NOT_CONFIGURED' }
   }
 
   const email = await recipientEmail(row.recipient_user_id)
   if (!email) {
-    await mark(row.id, {
-      status: 'FAILED',
-      attempt_count: row.attempt_count + 1,
-      next_attempt_at: new Date(Date.now() + DAY_MS).toISOString(),
-      last_error: 'Recipient has no email address.',
-    })
-    return { id: row.id, channel: row.channel, status: 'FAILED', error: 'RECIPIENT_EMAIL_MISSING' }
+    const status = await markFailure(row, 'Recipient has no email address.')
+    return { id: row.id, channel: row.channel, status, error: 'RECIPIENT_EMAIL_MISSING' }
   }
 
   const payload = row.payload ?? {}
@@ -91,7 +116,10 @@ async function deliver(row: OutboxRow) {
     channel: row.channel,
     expiresAt: externalApprovalTokenExpiry(payload),
   })
-  const approvalUrl = `${appBaseUrl()}/approvals/external/${encodeURIComponent(token)}`
+  const baseUrl = appBaseUrl()
+  const approvalUrl = `${baseUrl}/approvals/external/${encodeURIComponent(token)}`
+  const approvalsPath = String(payload.approvalsUrl ?? `/approvals?request=${encodeURIComponent(row.approval_request_id)}`)
+  const openInDataNexusUrl = `${baseUrl}${approvalsPath.startsWith('/') ? approvalsPath : `/${approvalsPath}`}`
 
   const response = await fetch(url, {
     method: 'POST',
@@ -103,25 +131,23 @@ async function deliver(row: OutboxRow) {
       approvalAxis: axis,
       eventType: row.event_type,
       approvalUrl,
+      openInDataNexusUrl,
       payload,
     }),
   })
 
   if (!response.ok) {
-    const detail = (await response.text().catch(() => '')).slice(0, 1000)
-    await mark(row.id, {
-      status: 'FAILED',
-      attempt_count: row.attempt_count + 1,
-      next_attempt_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-      last_error: `${row.channel} provider returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
-    })
-    return { id: row.id, channel: row.channel, status: 'FAILED', error: `HTTP_${response.status}` }
+    const status = await markFailure(row, `${row.channel} provider returned HTTP ${response.status}.`)
+    return { id: row.id, channel: row.channel, status, error: `HTTP_${response.status}` }
   }
 
+  const sentAt = new Date().toISOString()
   await mark(row.id, {
     status: 'SENT',
     attempt_count: row.attempt_count + 1,
-    sent_at: new Date().toISOString(),
+    last_attempt_at: sentAt,
+    sent_at: sentAt,
+    dead_lettered_at: null,
     last_error: null,
   })
   return { id: row.id, channel: row.channel, status: 'SENT' }
@@ -143,13 +169,8 @@ export async function processApprovalNotificationOutbox(limit = 25) {
       results.push(await deliver(row))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Approval notification delivery failed.'
-      await mark(row.id, {
-        status: 'FAILED',
-        attempt_count: row.attempt_count + 1,
-        next_attempt_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-        last_error: message.slice(0, 2000),
-      }).catch(() => undefined)
-      results.push({ id: row.id, channel: row.channel, status: 'FAILED', error: message })
+      const status = await markFailure(row, message).catch(() => 'FAILED')
+      results.push({ id: row.id, channel: row.channel, status, error: message })
     }
   }
   return { processed: results.length, results }
