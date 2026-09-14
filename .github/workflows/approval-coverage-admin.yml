@@ -1,0 +1,32 @@
+name: Approval Coverage Administration
+
+on:
+  pull_request:
+    paths:
+      - 'app/approvals/**'
+      - 'lib/governance/approval-coverage-service.ts'
+      - 'scripts/verify-approval-coverage-admin.mjs'
+      - '.github/workflows/approval-coverage-admin.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/approvals/**'
+      - 'lib/governance/approval-coverage-service.ts'
+      - 'scripts/verify-approval-coverage-admin.mjs'
+      - '.github/workflows/approval-coverage-admin.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify approval coverage administration
+        run: node scripts/verify-approval-coverage-admin.mjs
