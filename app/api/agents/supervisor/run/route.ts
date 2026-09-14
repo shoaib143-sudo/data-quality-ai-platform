@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { runNativeSpecialistSupervisor } from '@/lib/agents/runtime/native-supervisor-service'
-import { currentExecutionFingerprint, markApprovalExecuted, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
+import { currentExecutionFingerprint, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
+import { finalizeAgentApprovalExecution } from '@/lib/governance/agent-approval-audit'
 
 export const maxDuration = 300
 
@@ -61,7 +62,14 @@ export async function POST(request: Request) {
       }),
     })
 
-    if (approvalRequestId) await markApprovalExecuted(approvalRequestId)
+    if (approvalRequestId) {
+      await finalizeAgentApprovalExecution({
+        requestId: approvalRequestId,
+        executorUserId: user.id,
+        executionEntityType: 'SUPERVISOR_RUN',
+        executionEntityId: result.supervisorRunId,
+      })
+    }
 
     return NextResponse.json({
       accepted: true,
