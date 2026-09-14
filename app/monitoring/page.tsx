@@ -6,6 +6,7 @@ import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type Monitori
 import { JobTermination } from './job-termination'
 import { JobLogs } from './job-logs'
 import { JobHealth } from './job-health'
+import styles from './organic-domain-cells.module.css'
 
 export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string }> }) {
   const user = await requireUser()
@@ -53,7 +54,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
       </header>
 
       <JobHealth runs={typedRuns} steps={typedSteps} />
-      <div className="mt-5">
+      <div className={`${styles.monitoringStage} mt-5`}>
         <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialSteps={typedSteps} initialNow={new Date().toISOString()} initialRunId={selectedRunId} userId={user.id} />
       </div>
 
