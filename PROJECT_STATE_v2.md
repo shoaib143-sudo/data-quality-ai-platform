@@ -9,8 +9,8 @@
 - **Production URL:** `https://data-quality-ai-platform.vercel.app`
 - **Supabase project:** `tvjnavjxuehpesxcfvrx`
 - **Vercel project:** `data-quality-ai-platform`
-- **Current verified main head at this checkpoint:** `31b7fb3f352a869ab712b0b069600645415d9ecd`
-- **Current production change at that head:** `Prioritize neural topology in domain drilldown (#447)`
+- **Current verified main head at this checkpoint:** `dbe511ad4f7664fdb398ff701df3601d4523d551`
+- **Current production change at that head:** `Align Job Monitor feature cells and neural links (#448)`
 - **Branch protection:** `main` protected with required contexts `certify`, `analyze`, `build`, and `revalidate`.
 
 ## 2. Current production architecture
@@ -36,7 +36,7 @@ The current Agents workspace must continue to preserve project/resource authoriz
 
 The Job Monitor is production-deployed and includes domain-oriented topology plus `/monitoring/domain/[projectId]` drilldown. The domain view is authenticated, governed by authorized persisted execution state, and explicitly distinguishes recorded evidence from missing evidence instead of inferring nonexistent data.
 
-The current domain drilldown exposes governed feature status, recent executions, domain context, durable orchestration context, lineage/evidence summaries, and links to run details.
+The current domain drilldown exposes governed feature status, recent executions, domain context, durable orchestration context, lineage/evidence summaries, and links to run details. PR #448 additionally aligned feature cells and neural links on a common radial frame and added a dedicated radial-topology CI contract.
 
 ## 3. Agent Policy v2 — implemented production baseline
 
@@ -145,13 +145,16 @@ Rules:
 
 ## 7. Current security/performance review backlog
 
-Historical Supabase advisor findings requiring evidence-based review include:
+The Runtime v2 Phase-0 advisor review classified the current findings rather than treating them as an automatic migration queue.
 
-- authenticated execution of selected `SECURITY DEFINER` functions such as organization/project/file-dataset creation;
-- leaked-password protection configuration;
-- duplicate/unused-index warnings across agent and other schemas.
+- service/control-plane tables with RLS but no user policies are intentional where `anon`/`authenticated` have no direct table privileges;
+- authenticated SECURITY DEFINER membership/runtime helpers remain intentional governed surfaces with explicit empty `search_path` and server-side authorization;
+- `governance.agent_risk_rank(text)` has one evidence-backed mutable-search-path hardening gap selected for immediate forward-only remediation;
+- leaked-password protection remains an external Supabase Auth configuration opportunity;
+- unindexed foreign keys and unused indexes remain benchmark-later candidates until representative workload evidence justifies changes;
+- an exact catalog-level duplicate-index comparison found no exact duplicate index pairs.
 
-These are review items, not presumed defects. Runtime behavior, function bodies, grants, RLS interaction, and query plans must be inspected before remediation.
+See `Architecture/2026-09-15-supabase-advisor-and-index-review.md`.
 
 ## 8. Runtime v2 frozen product decisions
 
