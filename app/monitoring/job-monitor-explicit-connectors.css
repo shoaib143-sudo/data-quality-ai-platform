@@ -1,0 +1,97 @@
+/*
+ * Explicit Job Monitor feature connectors.
+ *
+ * The previous topology used a conic-gradient spoke field. Because feature cells
+ * render opaque surfaces above that field, the rays visually disappeared beneath
+ * each cell and made the cells look detached. These rules draw one real connector
+ * from every feature endpoint back to the Supervisor on the same coordinate frame.
+ */
+
+/* Retire the decorative spoke field. Keep the subtle inner orbit from ::after. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"]::before {
+  background: none !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+  filter: none !important;
+  opacity: 0 !important;
+}
+
+/* Each positioned feature wrapper owns its physical nerve back to the centre. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div {
+  isolation: isolate !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 9.25rem !important;
+  height: 2px !important;
+  transform-origin: 0 50% !important;
+  border-radius: 999px !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--domain-edge) 96%, white 4%) 0%,
+    color-mix(in srgb, var(--domain-edge) 78%, transparent) 48%,
+    color-mix(in srgb, var(--domain-secondary) 72%, transparent) 100%
+  ) !important;
+  box-shadow:
+    0 0 4px color-mix(in srgb, var(--domain-edge) 90%, transparent),
+    0 0 11px color-mix(in srgb, var(--domain-edge) 56%, transparent) !important;
+  opacity: .96 !important;
+}
+
+/* The nerve passes underneath both endpoint cells, so it visibly touches their rims. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div > button {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/* Compass-specific vectors from each feature centre to the Supervisor centre. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(1)::before { transform: rotate(90deg) !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(2)::before { transform: rotate(135deg) !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(3)::before { transform: rotate(180deg) !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(4)::before { transform: rotate(225deg) !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(5)::before { transform: rotate(270deg) !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(6)::before { transform: rotate(315deg) !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(7)::before { transform: rotate(0deg) !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(8)::before { transform: rotate(45deg) !important; }
+
+/* Never-executed capabilities stay subdued, including their nerve. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:has(button[class*="border-slate"])::before {
+  background: linear-gradient(90deg, rgba(100,116,139,.72), rgba(71,85,105,.34)) !important;
+  box-shadow: 0 0 5px rgba(100,116,139,.24) !important;
+  opacity: .52 !important;
+}
+
+/* A small terminal glow makes the physical attachment legible at both ends. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div::after {
+  content: "" !important;
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 7px !important;
+  height: 7px !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 50% !important;
+  background: color-mix(in srgb, var(--domain-edge) 82%, white 18%) !important;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--domain-edge) 75%, transparent) !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:has(button[class*="border-slate"])::after {
+  background: #64748b !important;
+  box-shadow: none !important;
+  opacity: .55 !important;
+}
+
+@media (max-width: 700px) {
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div::before {
+    width: 9rem !important;
+    height: 1.5px !important;
+  }
+}
