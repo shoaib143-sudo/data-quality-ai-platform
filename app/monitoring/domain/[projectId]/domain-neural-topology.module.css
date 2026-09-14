@@ -146,6 +146,11 @@
   to { transform: rotate(360deg); }
 }
 
+/* At the viewport width used by the live app, lead with the neural topology instead of a tall summary card. */
+@media (max-width: 1279px) {
+  .heroNetwork { order: -1; }
+}
+
 @media (max-width: 1024px) {
   .heroNetwork { min-height: 560px; }
   .centerCell { width: 160px; height: 160px; }
