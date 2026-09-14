@@ -66,12 +66,15 @@ type Props = {
 
 type CellStatus = 'FAILED' | 'RUNNING' | 'WAITING' | 'QUEUED' | 'COMPLETE' | 'IDLE'
 
+type DomainComponent = { agent: MonitoringAgent; run: MonitoringRun | null }
+
 type DomainCell = {
   key: string
   domainName: string
   project: MonitoringProject
   runs: MonitoringRun[]
   componentRuns: MonitoringRun[]
+  components: DomainComponent[]
   status: CellStatus
   activeCount: number
   failedCount: number
@@ -184,6 +187,17 @@ function RunNode({ run, label, selected, dense, onSelect }: { run: MonitoringRun
   </button>
 }
 
+function NotExecutedNode({ label, dense }: { label: string; dense: boolean }) {
+  return <div
+    className={`group relative grid place-items-center rounded-full border border-slate-700/60 bg-slate-900/55 opacity-70 ${dense ? 'h-8 w-8' : 'h-10 w-10'}`}
+    title={`${label} · Not executed`}
+    aria-label={`${label}, not executed`}
+  >
+    <span className={`relative rounded-full bg-slate-600 ${dense ? 'h-2 w-2' : 'h-2.5 w-2.5'}`} />
+    <span className={`pointer-events-none absolute top-full mt-1 max-w-24 truncate rounded-md border border-slate-700/80 bg-[#061426]/95 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 shadow-lg ${dense ? 'hidden group-hover:block' : 'block'}`}>{label}</span>
+  </div>
+}
+
 function OrganicDomainCell({
   cell,
   agents,
@@ -200,17 +214,18 @@ function OrganicDomainCell({
   onSelectRun: (id: string) => void
 }) {
   const meta = statusMeta(cell.status)
-  const visibleRuns = cell.componentRuns
-  const denseNodes = visibleRuns.length > 10
+  const visibleComponents = cell.components
+  const denseNodes = visibleComponents.length > 10
   return <article
     className={`group relative min-h-[340px] overflow-hidden rounded-[44%_56%_52%_48%/43%_45%_55%_57%] border bg-[#071a2c]/90 p-5 text-left transition duration-500 hover:-translate-y-1 hover:scale-[1.01] ${meta.ring} ${meta.glow} ${selected ? 'ring-2 ring-cyan-200/55' : ''}`}
   >
     <div className="absolute inset-0 opacity-75" style={{ backgroundImage: 'radial-gradient(circle at 35% 28%, rgba(34,211,238,.16), transparent 28%), radial-gradient(circle at 72% 68%, rgba(59,130,246,.12), transparent 34%), radial-gradient(circle at 50% 50%, rgba(255,255,255,.04), transparent 48%)' }} />
     <div className="absolute inset-[13%] rounded-full border border-cyan-100/[0.06] shadow-[inset_0_0_70px_rgba(34,211,238,.07)]" />
     <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full opacity-30">
-      {visibleRuns.map((run, index) => {
-        const position = organicNodePosition(index, visibleRuns.length)
-        return <line key={run.id} x1="50%" y1="52%" x2={`${position.left}%`} y2={`${position.top}%`} stroke="rgba(103,232,249,.55)" strokeWidth="0.7" />
+      {visibleComponents.map((component, index) => {
+        const position = organicNodePosition(index, visibleComponents.length)
+        const stroke = component.run ? 'rgba(103,232,249,.55)' : 'rgba(100,116,139,.28)'
+        return <line key={component.agent.id} x1="50%" y1="52%" x2={`${position.left}%`} y2={`${position.top}%`} stroke={stroke} strokeWidth="0.7" />
       })}
     </svg>
 
@@ -233,12 +248,13 @@ function OrganicDomainCell({
       </div>
     </button>
 
-    <div className="absolute inset-[18%] z-20" aria-label={`${cell.componentCount} execution components inside ${cell.domainName}`}>
-      {visibleRuns.map((run, index) => {
-        const position = organicNodePosition(index, visibleRuns.length)
-        const label = agents.get(run.agent_definition_id)?.name ?? 'Execution'
-        return <div key={run.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${position.left}%`, top: `${position.top}%` }}>
-          <RunNode run={run} label={label} selected={selectedRunId === run.id} dense={denseNodes} onSelect={() => onSelectRun(run.id)} />
+    <div className="absolute inset-[18%] z-20" aria-label={`${cell.componentCount} possible execution components inside ${cell.domainName}`}>
+      {visibleComponents.map((component, index) => {
+        const position = organicNodePosition(index, visibleComponents.length)
+        return <div key={component.agent.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${position.left}%`, top: `${position.top}%` }}>
+          {component.run
+            ? <RunNode run={component.run} label={component.agent.name} selected={selectedRunId === component.run.id} dense={denseNodes} onSelect={() => onSelectRun(component.run!.id)} />
+            : <NotExecutedNode label={component.agent.name} dense={denseNodes} />}
         </div>
       })}
     </div>
@@ -321,6 +337,8 @@ export function JobMonitor({
       const projectRuns = group.runs
       const project = projects.get(group.projectId) ?? { id: group.projectId, name: `Scope ${group.projectId.slice(0, 8)}`, description: 'Governed execution scope' }
       const componentRuns = latestRunPerComponent(projectRuns)
+      const latestByAgent = new Map(componentRuns.map((run) => [run.agent_definition_id, run]))
+      const components: DomainComponent[] = initialAgents.map((agent) => ({ agent, run: latestByAgent.get(agent.id) ?? null }))
       const status = aggregateStatus(componentRuns)
       cells.push({
         key,
@@ -328,17 +346,18 @@ export function JobMonitor({
         project,
         runs: projectRuns,
         componentRuns,
+        components,
         status,
         activeCount: componentRuns.filter((run) => ACTIVE.has(run.status) || WAITING.has(run.status) || QUEUED.has(run.status)).length,
         failedCount: componentRuns.filter((run) => normalizeRunStatus(run.status) === 'FAILED').length,
         completeCount: componentRuns.filter((run) => normalizeRunStatus(run.status) === 'COMPLETE').length,
-        componentCount: componentRuns.length,
+        componentCount: components.length,
         datasetCount: new Set(projectRuns.flatMap((run) => run.dataset_id ? [run.dataset_id] : [])).size,
         latestAt: projectRuns[0]?.created_at ?? initialNow,
       })
     }
     return cells.sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
-  }, [runs, projects, datasets, initialNow])
+  }, [runs, projects, datasets, initialAgents, initialNow])
 
   useEffect(() => {
     if (selectedDomainKey && domainCells.some((cell) => cell.key === selectedDomainKey)) return
@@ -441,7 +460,7 @@ export function JobMonitor({
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-200/55">Governed topology</p>
             <h2 className="mt-1 text-xl font-bold text-white">Luminous Data Domain cells</h2>
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Each luminous organic cell is a persisted catalog Data Domain. Every execution component appears inside its domain membrane as a live status organelle, while the selected inspector resolves the broader governed component network from persisted governance, quality, lineage, evidence, and durable orchestration records. Unassigned executions remain explicit instead of being guessed into a domain.</p>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Each luminous organic cell is a persisted catalog Data Domain. Every enabled governed agent path appears inside its domain membrane. Recorded executions are lit by durable state, while paths that have never executed remain visible in grey. The selected inspector resolves the broader governed component network from persisted governance, quality, lineage, evidence, and orchestration records.</p>
           </div>
           <div className="hidden items-center gap-2 text-[11px] text-slate-500 sm:flex"><GitBranch className="h-4 w-4" /> Execution relationships remain inspectable in run details</div>
         </div>
@@ -469,7 +488,7 @@ export function JobMonitor({
             const meta = statusMeta(status)
             return <span key={status} className="inline-flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} />{meta.label}</span>
           })}
-          <span className="ml-auto text-slate-500">Cells show execution state · selected inspector resolves governed components and evidence</span>
+          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-slate-600" />Not executed</span><span className="ml-auto text-slate-500">Grey paths are possible but have no recorded execution</span>
         </div>
       </div>
 
@@ -493,14 +512,21 @@ export function JobMonitor({
           <div>
             <div className="mb-2 flex items-center justify-between"><h4 className="font-semibold text-slate-200">Execution components</h4><span className="text-[10px] text-slate-500">{selectedCell.runs.length} recent runs · latest state per component</span></div>
             <div className="max-h-[310px] space-y-2 overflow-auto pr-1">
-              {selectedCell.componentRuns.map((run) => {
+              {selectedCell.components.map((component) => {
+                const run = component.run
+                if (!run) return <div key={component.agent.id} className="w-full rounded-xl border border-slate-800/80 bg-slate-950/30 p-3 text-left opacity-70">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-500">{component.agent.name}</p><p className="mt-0.5 text-[11px] text-slate-600">No recorded execution</p></div>
+                    <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-slate-600" />
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.04]" />
+                </div>
                 const meta = statusMeta(normalizeRunStatus(run.status))
-                const agent = agents.get(run.agent_definition_id)
                 const dataset = run.dataset_id ? datasets.get(run.dataset_id) : null
                 const p = stepProgress(stepsByRun.get(run.id) ?? [])
-                return <button key={run.id} type="button" onClick={() => selectRun(run.id)} className={`w-full rounded-xl border p-3 text-left transition ${selectedRun?.id === run.id ? 'border-cyan-300/35 bg-cyan-300/[0.07]' : 'border-white/10 bg-white/[0.025] hover:border-white/20'}`}>
+                return <button key={component.agent.id} type="button" onClick={() => selectRun(run.id)} className={`w-full rounded-xl border p-3 text-left transition ${selectedRun?.id === run.id ? 'border-cyan-300/35 bg-cyan-300/[0.07]' : 'border-white/10 bg-white/[0.025] hover:border-white/20'}`}>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{agent?.name ?? 'Execution component'}</p><p className="mt-0.5 truncate text-[11px] text-slate-500">{dataset?.name ?? 'No dataset'} · {relativeAge(run, lastUpdated)}</p></div>
+                    <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{component.agent.name}</p><p className="mt-0.5 truncate text-[11px] text-slate-500">{dataset?.name ?? 'No dataset'} · {relativeAge(run, lastUpdated)}</p></div>
                     <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-cyan-300/70" style={{ width: `${p.percent}%` }} /></div>
