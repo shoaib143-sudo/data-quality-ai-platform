@@ -10,6 +10,7 @@ import { persistAgentRunResultArtifact } from '@/lib/agents/run-result-artifact'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
+import { resolveProjectConversationPolicy } from '@/lib/governance/conversation-policy'
 import { createGovernanceTelemetryProvider } from '@/lib/ai/governance-telemetry-provider'
 import { createGovernanceExecutionController } from '@/lib/ai/governance-execution-controller'
 import { isExecutionControlDeniedError } from '@/lib/ai/execution-controller'
@@ -22,6 +23,10 @@ const GOVERNED_AGENT_TARGET_TYPE = 'GOVERNANCE_AGENT'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
 async function recordStage(input: {
@@ -82,14 +87,49 @@ export async function POST(request: Request) {
     const projectId = text(body?.projectId ?? body?.project_id)
     const agentDefinitionId = text(body?.agentDefinitionId ?? body?.agent_definition_id)
     const question = text(body?.question)
+    const requestedDomain = text(body?.domain)
     if (!projectId || !agentDefinitionId) {
       return NextResponse.json({ error: 'projectId and agentDefinitionId are required.' }, { status: 400 })
     }
     if (question.length > 1000) return NextResponse.json({ error: 'question must be 1000 characters or fewer.' }, { status: 400 })
+    if (requestedDomain.length > 200) return NextResponse.json({ error: 'domain must be 200 characters or fewer.' }, { status: 400 })
 
     await authorizeProject(user.id, projectId, 'agent.converse')
+    const conversationStartedAt = Date.now()
+    const conversationPolicy = await resolveProjectConversationPolicy({
+      userId: user.id,
+      projectId,
+      requestedDomain: requestedDomain || null,
+    })
+    const conversationContext = {
+      effectivePersona: conversationPolicy.persona,
+      domain: conversationPolicy.appliedDomain,
+      responseDepth: conversationPolicy.settings.responseDepth,
+      evidenceDepth: conversationPolicy.settings.evidenceDepth,
+      recommendationStyle: conversationPolicy.settings.recommendationStyle,
+      defaultScope: conversationPolicy.settings.defaultScope,
+      policyEffect: 'PRESENTATION_ONLY' as const,
+    }
+
     const telemetry = createGovernanceTelemetryProvider()
     const traceContext = telemetryTraceContextFromRequest(request)
+    await recordStage({
+      telemetry,
+      traceContext,
+      projectId,
+      operation: 'governed_conversation_policy_resolution',
+      startedAt: conversationStartedAt,
+      attributes: {
+        effective_persona: conversationContext.effectivePersona,
+        domain: conversationContext.domain,
+        response_depth: conversationContext.responseDepth,
+        evidence_depth: conversationContext.evidenceDepth,
+        recommendation_style: conversationContext.recommendationStyle,
+        default_scope: conversationContext.defaultScope,
+        policy_effect: conversationContext.policyEffect,
+      },
+    })
+
     const controlStartedAt = Date.now()
     const executionControl = await createGovernanceExecutionController().assertAllowed({ projectId, agentDefinitionId })
     await recordStage({
@@ -158,6 +198,21 @@ export async function POST(request: Request) {
         execution_mode: result.output.mode,
       },
     })
+
+    const admin = createAdminClient()
+    const { data: runRow, error: runReadError } = await admin.schema('agent').from('agent_runs')
+      .select('input')
+      .eq('id', result.runId)
+      .eq('project_id', projectId)
+      .maybeSingle()
+    if (runReadError || !runRow) throw new Error(`Unable to persist governed conversation context: ${runReadError?.message ?? 'run not found'}`)
+    const { error: contextPersistError } = await admin.schema('agent').from('agent_runs').update({
+      input: {
+        ...record(runRow.input),
+        conversation_context: conversationContext,
+      },
+    }).eq('id', result.runId).eq('project_id', projectId)
+    if (contextPersistError) throw new Error(`Unable to persist governed conversation context: ${contextPersistError.message}`)
 
     let specialistOutput = result.output as Record<string, unknown>
     if (result.output.agent.key === 'investigator_agent') {
@@ -247,7 +302,7 @@ export async function POST(request: Request) {
       attributes: { agent_key: result.output.agent.key },
     })
 
-    return NextResponse.json({ accepted: true, runId: result.runId, output, artifact, memory }, { status: 200 })
+    return NextResponse.json({ accepted: true, runId: result.runId, output, artifact, memory, conversationContext }, { status: 200 })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
