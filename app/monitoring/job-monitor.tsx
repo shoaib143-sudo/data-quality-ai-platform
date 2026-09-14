@@ -17,6 +17,7 @@ import {
   Sparkles,
   TriangleAlert,
 } from 'lucide-react'
+import { ExecutionStatusBadge } from '@/components/app-shell/execution-status'
 
 export type MonitoringRun = {
   id: string
@@ -503,7 +504,7 @@ export function JobMonitor({
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200/55">Selected execution</p>
                 <p className="mt-1 font-semibold text-white">{agents.get(selectedRun.agent_definition_id)?.name ?? 'Agent execution'}</p>
               </div>
-              <StatusPill status={normalizeRunStatus(selectedRun.status)} />
+              <ExecutionStatusBadge status={selectedRun.status} />
             </div>
             <div className="mt-3 space-y-2">
               {selectedSteps.length ? selectedSteps.slice(0, 6).map((step) => {
