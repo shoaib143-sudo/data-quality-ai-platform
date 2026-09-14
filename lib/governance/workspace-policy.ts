@@ -73,6 +73,7 @@ export const workspacePrefixes: readonly [string, WorkspaceKey][] = [
   ['/scorecards', 'scorecards'],
   ['/workflows', 'workflows'],
   ['/platform', 'platform'],
+  ['/resource-access', 'platform'],
   ['/journeys', 'journeys'],
   ['/search', 'search'],
   ['/catalog', 'catalog'],
