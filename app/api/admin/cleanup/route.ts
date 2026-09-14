@@ -45,21 +45,29 @@ async function activeJobCount(projectId: string, entityIds?: string[]) {
   return count ?? 0
 }
 
-async function preflightDelete(targetKind: CleanupKind, id: string, projectId: string) {
+async function preflightDelete(targetKind: CleanupKind, id: string, projectId: string, organizationId: string) {
   const admin = createAdminClient()
   const blockers: string[] = []
 
   if (targetKind === 'PROJECT') {
-    const [jobs, datasets, sources] = await Promise.all([
+    const { data: organizationProjects, error: organizationProjectsError } = await admin.schema('app').from('projects').select('id').eq('organization_id', organizationId)
+    if (organizationProjectsError) throw new Error(`Unable to evaluate Super Admin continuity: ${organizationProjectsError.message}`)
+    const otherProjectIds = (organizationProjects ?? []).map(project => String(project.id)).filter(projectIdValue => projectIdValue !== id)
+    const [jobs, datasets, sources, remainingSuperAdmins] = await Promise.all([
       activeJobCount(projectId),
       admin.schema('catalog').from('datasets').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
       admin.schema('catalog').from('data_sources').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+      otherProjectIds.length
+        ? admin.schema('governance').from('project_role_bindings').select('id', { count: 'exact', head: true }).in('project_id', otherProjectIds).eq('role_key', 'DATA_GOVERNANCE_ADMIN').eq('active', true)
+        : Promise.resolve({ count: 0, error: null }),
     ])
     if (jobs > 0) blockers.push(`${jobs} active orchestration job(s)`)
     if (datasets.error) throw new Error(`Unable to evaluate project datasets: ${datasets.error.message}`)
     if (sources.error) throw new Error(`Unable to evaluate project sources: ${sources.error.message}`)
+    if (remainingSuperAdmins.error) throw new Error(`Unable to evaluate Super Admin continuity: ${remainingSuperAdmins.error.message}`)
     if ((datasets.count ?? 0) > 0) blockers.push(`${datasets.count} dataset(s) must be deleted first`)
     if ((sources.count ?? 0) > 0) blockers.push(`${sources.count} data source(s) must be deleted first`)
+    if ((remainingSuperAdmins.count ?? 0) === 0) blockers.push('this project contains the last active Data Governance Admin binding for the organization')
   }
 
   if (targetKind === 'SOURCE') {
@@ -141,13 +149,13 @@ export async function DELETE(request: Request) {
     if (!targetKind || !id) return NextResponse.json({ error: 'kind and id are required.' }, { status: 400 })
 
     const target = await resolveObject(targetKind, id)
-    await authorizeDataGovernanceSuperAdmin(user.id, target.projectId)
+    const superAdminContext = await authorizeDataGovernanceSuperAdmin(user.id, target.projectId)
 
     if (confirmation !== target.name) {
       return NextResponse.json({ error: 'Type the exact object name to confirm permanent deletion.' }, { status: 400 })
     }
 
-    const blockers = await preflightDelete(targetKind, id, target.projectId)
+    const blockers = await preflightDelete(targetKind, id, target.projectId, superAdminContext.organizationId)
     if (blockers.length) {
       return NextResponse.json({ error: 'Permanent deletion is blocked by governed dependencies.', blockers }, { status: 409 })
     }
