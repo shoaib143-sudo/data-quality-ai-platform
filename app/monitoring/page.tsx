@@ -2,19 +2,21 @@ import Link from 'next/link'
 
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
 import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type MonitoringProject, type MonitoringRun, type MonitoringStep } from './job-monitor'
-import { JobTermination } from './job-termination'
-import { JobLogs } from './job-logs'
 import { JobHealth } from './job-health'
 import styles from './organic-domain-cells.module.css'
-import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
-import { hasProjectCapability } from '@/lib/auth/authorize'
 
 export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string; agent?: string; domain?: string }> }) {
   const user = await requireUser()
   const { run: requestedRunId, agent: requestedAgentId, domain: requestedDomainKey } = await searchParams
   const supabase = await createClient()
-  const { data: runs, error: runsError } = await supabase.schema('agent').from('agent_runs').select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message').order('created_at', { ascending: false }).limit(50)
+  const { data: runs, error: runsError } = await supabase
+    .schema('agent')
+    .from('agent_runs')
+    .select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message')
+    .order('created_at', { ascending: false })
+    .limit(50)
   if (runsError) throw new Error(`Unable to load agent runs: ${runsError.message}`)
 
   const typedRuns = await filterAuthorizedExecutionRuns(user.id, (runs ?? []) as MonitoringRun[])
@@ -39,31 +41,40 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
   const typedDatasets = (datasetsResult.data ?? []) as MonitoringDataset[]
   const typedProjects = (projectsResult.data ?? []) as MonitoringProject[]
   const typedSteps = (stepsResult.data ?? []) as MonitoringStep[]
-  const cancellableProjectIds = (await Promise.all(projectIds.map(async projectId =>
-    (await hasProjectCapability(user.id, projectId, 'execution.cancel')) ? projectId : null,
-  ))).filter((projectId): projectId is string => Boolean(projectId))
 
-  return <main className="min-h-screen bg-[#04101f] text-slate-100">
-    <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
+  return <main className="min-h-screen bg-[#020b17] text-slate-100">
+    <div className="mx-auto max-w-[1760px] px-4 py-5 sm:px-6 lg:px-8">
       <header className="mb-5 flex flex-col gap-4 border-b border-cyan-400/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Link href="/home" className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300/70 transition hover:text-cyan-200">DataNexus AI</Link>
           <h1 className="mt-2 font-serif text-4xl tracking-[0.08em] text-white">JOB MONITOR</h1>
-          <p className="mt-1 text-sm text-slate-400">Domain Cells · live governed execution topology</p>
+          <p className="mt-1 text-sm text-slate-400">Living Data Domains · governed DG/AI feature execution</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/recovery" className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/30 hover:bg-cyan-400/5">Execution Recovery</Link>
-          <Link href="/agents" className="rounded-xl border border-cyan-300/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,.12)] transition hover:bg-cyan-400/15">Run an agent</Link>
+          <Link href="/agents" className="rounded-xl border border-cyan-300/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,.12)] transition hover:bg-cyan-400/15">Run governed feature</Link>
         </div>
       </header>
 
       <JobHealth runs={typedRuns} steps={typedSteps} />
       <div className={`${styles.monitoringStage} mt-5`}>
-        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialNow={new Date().toISOString()} initialRunId={selectedRunId} initialAgentId={requestedAgentId ?? null} initialDomainKey={requestedDomainKey ?? null} userId={user.id} />
+        <JobMonitor
+          initialRuns={typedRuns}
+          initialAgents={typedAgents}
+          initialDatasets={typedDatasets}
+          initialProjects={typedProjects}
+          initialNow={new Date().toISOString()}
+          initialRunId={selectedRunId}
+          initialAgentId={requestedAgentId ?? null}
+          initialDomainKey={requestedDomainKey ?? null}
+          userId={user.id}
+        />
       </div>
 
-      <section id="job-termination" className="mt-7 scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} cancellableProjectIds={cancellableProjectIds} /></section>
-      <section id="job-logs" className="mt-7 scroll-mt-6"><JobLogs initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialRunId={selectedRunId} /></section>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#061426] px-5 py-4 text-xs text-slate-500">
+        <span>Job Monitor is the domain-level execution surface. Select a domain to drill into feature results, datasets, lineage, impact and governed evidence.</span>
+        <Link href="/recovery" className="font-bold text-cyan-200/75 hover:text-cyan-100">Open execution recovery →</Link>
+      </div>
     </div>
   </main>
 }
