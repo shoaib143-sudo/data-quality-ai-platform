@@ -1,0 +1,36 @@
+name: Data Governance Super Admin Cleanup
+
+on:
+  pull_request:
+    paths:
+      - 'app/admin/cleanup/**'
+      - 'app/api/admin/cleanup/**'
+      - 'app/api/datasets/create-project/**'
+      - 'app/admin/layout.tsx'
+      - 'app/datasets/page.tsx'
+      - 'lib/auth/**'
+      - 'supabase/migrations/20260914184500_data_governance_admin_super_admin.sql'
+      - 'scripts/test-data-governance-super-admin-cleanup.mjs'
+  push:
+    branches: [main]
+    paths:
+      - 'app/admin/cleanup/**'
+      - 'app/api/admin/cleanup/**'
+      - 'lib/auth/**'
+      - 'supabase/migrations/20260914184500_data_governance_admin_super_admin.sql'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/test-data-governance-super-admin-cleanup.mjs
+      - run: pnpm build
