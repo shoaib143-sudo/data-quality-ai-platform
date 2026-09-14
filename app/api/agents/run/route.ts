@@ -7,7 +7,8 @@ import { sanitizeProfilingRequestInput } from '@/lib/profiling/request-input'
 import { claimDurableJobByAgentRun, enqueueDurableJob } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
 import { dispatchAdaptiveRounds } from '@/lib/orchestration/adaptive-dispatch'
-import { currentExecutionFingerprint, markApprovalExecuted, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
+import { currentExecutionFingerprint, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
+import { finalizeAgentApprovalExecution } from '@/lib/governance/agent-approval-audit'
 
 export const maxDuration = 300
 
@@ -65,7 +66,14 @@ export async function POST(request: Request) {
       if (existingJob?.agent_run_id) {
         const payload = existingJob.payload && typeof existingJob.payload === 'object' ? existingJob.payload as Record<string, unknown> : {}
         const profilingRunId = text(payload.profilingRunId)
-        if (approvalRequestId) await markApprovalExecuted(approvalRequestId)
+        if (approvalRequestId) {
+          await finalizeAgentApprovalExecution({
+            requestId: approvalRequestId,
+            executorUserId: user.id,
+            executionEntityType: 'AGENT_RUN',
+            executionEntityId: existingJob.agent_run_id,
+          })
+        }
         return NextResponse.json({
           accepted: true,
           reused: true,
@@ -206,7 +214,14 @@ export async function POST(request: Request) {
         }
       })
 
-      if (approvalRequestId) await markApprovalExecuted(approvalRequestId)
+      if (approvalRequestId) {
+        await finalizeAgentApprovalExecution({
+          requestId: approvalRequestId,
+          executorUserId: user.id,
+          executionEntityType: 'AGENT_RUN',
+          executionEntityId: activeAgentRunId,
+        })
+      }
       return NextResponse.json({
         accepted: true,
         reused: false,
