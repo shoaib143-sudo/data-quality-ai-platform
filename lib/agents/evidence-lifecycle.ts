@@ -58,7 +58,16 @@ async function assertEvidenceProject(input: {
     return
   }
 
-  throw new Error('AUDIT_RECORD legal hold is fail-closed until a concrete immutable audit entity is wired to this lifecycle service.')
+  const { data: auditEvent, error: auditError } = await admin.schema('governance').from('audit_events')
+    .select('id,project_id,event_hash,chain_version,chain_sequence')
+    .eq('id', input.evidenceId)
+    .maybeSingle()
+  if (auditError) throw new Error(`Unable to resolve immutable audit record scope: ${auditError.message}`)
+  if (!auditEvent) throw new Error('Immutable audit record was not found.')
+  if (!auditEvent.event_hash || Number(auditEvent.chain_version ?? 0) < 1) {
+    throw new Error('Audit record does not satisfy immutable audit-chain requirements.')
+  }
+  if (auditEvent.project_id !== input.projectId) throw new Error('Audit record is outside the requested project.')
 }
 
 export async function effectiveAgentEvidenceRetentionYears(projectId: string) {
