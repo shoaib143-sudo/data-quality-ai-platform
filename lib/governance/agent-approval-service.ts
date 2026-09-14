@@ -1,11 +1,14 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeDataset, authorizeProject } from '@/lib/auth/authorize'
+import { authorizeAgentAction } from './agent-authorization'
 import { getAgentActionProfile } from './agent-action-catalog'
 import { resolveDatasetRiskContext, resolveProjectRiskContext } from './agent-risk-context'
 import {
+  AGENT_POLICY_VERSION,
   approvalRequirement,
   type ApprovalAxis,
-  type ApprovalPolicyInput,
+  type BusinessCriticality,
+  type EnvironmentClass,
   type ExecutionFingerprintInput,
   type RiskLevel,
 } from './agent-policy-v2'
@@ -15,16 +18,24 @@ import { enqueueApprovalNotifications } from './approval-notifications'
 export type ApprovalChannel = 'DATANEXUS' | 'EMAIL' | 'TEAMS'
 export type ApprovalDecision = 'APPROVED' | 'REJECTED'
 
-export type CreateAgentApprovalRequestInput = ApprovalPolicyInput & {
-  projectId: string
+export type CreateAgentApprovalRequestInput = {
   requestedBy: string
-  domain: string
   actionKey: string
-  targetType: string
-  targetId: string
-  policyVersion: string
-  resourceIds: readonly string[]
+  projectId?: string | null
+  datasetId?: string | null
   parameters: Record<string, unknown>
+}
+
+type AuthoritativeApprovalContext = {
+  projectId: string
+  domain: string
+  environment: EnvironmentClass
+  policyVersion: string
+  targetType: 'PROJECT' | 'DATASET'
+  targetId: string
+  resourceIds: string[]
+  businessCriticality: BusinessCriticality
+  dataSensitivity: 'LOW' | 'MEDIUM' | 'HIGH' | 'RESTRICTED'
 }
 
 function addBusinessDays(start: Date, days: number): Date {
@@ -38,23 +49,94 @@ function addBusinessDays(start: Date, days: number): Date {
   return value
 }
 
+async function resolveAuthoritativeApprovalContext(input: CreateAgentApprovalRequestInput) {
+  const profile = getAgentActionProfile(input.actionKey)
+  const requestedProjectId = String(input.projectId ?? '').trim()
+  const requestedDatasetId = String(input.datasetId ?? '').trim()
+
+  let context: AuthoritativeApprovalContext
+  if (profile.target === 'DATASET') {
+    if (!requestedDatasetId) throw new Error('datasetId is required for this action.')
+    const riskContext = await resolveDatasetRiskContext(requestedDatasetId)
+    if (requestedProjectId && requestedProjectId !== riskContext.projectId) {
+      throw new Error('Dataset does not belong to the requested project.')
+    }
+    await authorizeAgentAction(input.requestedBy, profile.requestCapability, {
+      type: 'DATASET',
+      projectId: riskContext.projectId,
+      datasetId: requestedDatasetId,
+    })
+    context = {
+      projectId: riskContext.projectId,
+      domain: riskContext.domain,
+      environment: 'PRODUCTION',
+      policyVersion: AGENT_POLICY_VERSION,
+      targetType: 'DATASET',
+      targetId: requestedDatasetId,
+      resourceIds: [requestedDatasetId],
+      businessCriticality: riskContext.businessCriticality,
+      dataSensitivity: riskContext.dataSensitivity,
+    }
+  } else {
+    if (!requestedProjectId) throw new Error('projectId is required for this action.')
+    const riskContext = await resolveProjectRiskContext(requestedProjectId)
+    await authorizeAgentAction(input.requestedBy, profile.requestCapability, {
+      type: 'PROJECT',
+      projectId: riskContext.projectId,
+    })
+    context = {
+      projectId: riskContext.projectId,
+      domain: riskContext.domain,
+      environment: 'PRODUCTION',
+      policyVersion: AGENT_POLICY_VERSION,
+      targetType: 'PROJECT',
+      targetId: riskContext.projectId,
+      resourceIds: riskContext.resourceIds,
+      businessCriticality: riskContext.businessCriticality,
+      dataSensitivity: riskContext.dataSensitivity,
+    }
+  }
+
+  const admin = createAdminClient()
+  const { data: projectPolicy, error: policyError } = await admin.schema('governance')
+    .from('project_agent_policy_context')
+    .select('environment,policy_version')
+    .eq('project_id', context.projectId)
+    .maybeSingle()
+  if (policyError) throw new Error(`Unable to resolve project Agent Policy context: ${policyError.message}`)
+
+  context.environment = projectPolicy?.environment === 'NON_PRODUCTION' ? 'NON_PRODUCTION' : 'PRODUCTION'
+  context.policyVersion = String(projectPolicy?.policy_version ?? AGENT_POLICY_VERSION)
+  return { profile, context }
+}
+
 export async function createAgentApprovalRequest(input: CreateAgentApprovalRequestInput) {
   const admin = createAdminClient()
-  const requirement = approvalRequirement(input)
+  const { profile, context } = await resolveAuthoritativeApprovalContext(input)
+  const requirement = approvalRequirement({
+    environment: context.environment,
+    materialProductionMutation: profile.materialProductionMutation,
+    businessCriticality: context.businessCriticality,
+    dataSensitivity: context.dataSensitivity,
+    financialImpact: profile.financialImpact,
+    productionScope: profile.productionScope,
+    reversibility: profile.reversibility,
+    computeCost: profile.computeCost,
+  })
   const fingerprintInput: ExecutionFingerprintInput = {
-    actionKey: input.actionKey,
-    environment: input.environment,
-    projectId: input.projectId,
-    resourceIds: input.resourceIds,
+    actionKey: profile.key,
+    environment: context.environment,
+    projectId: context.projectId,
+    resourceIds: context.resourceIds,
     parameters: input.parameters,
-    policyVersion: input.policyVersion,
-    businessCriticality: input.businessCriticality,
-    dataSensitivity: input.dataSensitivity,
-    materialProductionMutation: input.materialProductionMutation,
-    financialImpact: input.financialImpact,
-    productionScope: input.productionScope,
-    reversibility: input.reversibility,
-    computeCost: input.computeCost,
+    policyVersion: context.policyVersion,
+    businessCriticality: context.businessCriticality,
+    dataSensitivity: context.dataSensitivity,
+    materialProductionMutation: profile.materialProductionMutation,
+    financialImpact: profile.financialImpact,
+    productionScope: profile.productionScope,
+    reversibility: profile.reversibility,
+    computeCost: profile.computeCost,
   }
   const executionFingerprint = createExecutionFingerprint(fingerprintInput)
   const fingerprintPayload = canonicalExecutionFingerprintPayload(fingerprintInput)
@@ -67,19 +149,19 @@ export async function createAgentApprovalRequest(input: CreateAgentApprovalReque
       : 'READY_TO_EXECUTE'
 
   const { data, error } = await admin.schema('governance').from('agent_approval_requests').insert({
-    project_id: input.projectId,
+    project_id: context.projectId,
     requested_by: input.requestedBy,
-    domain: input.domain,
-    environment: input.environment,
-    action_key: input.actionKey,
-    target_type: input.targetType,
-    target_id: input.targetId,
+    domain: context.domain,
+    environment: context.environment,
+    action_key: profile.key,
+    target_type: context.targetType,
+    target_id: context.targetId,
     risk_level: requirement.risk,
-    business_criticality: input.businessCriticality,
-    material_production_mutation: input.materialProductionMutation,
+    business_criticality: context.businessCriticality,
+    material_production_mutation: profile.materialProductionMutation,
     execution_fingerprint: executionFingerprint,
     fingerprint_payload: fingerprintPayload,
-    policy_version: input.policyVersion,
+    policy_version: context.policyVersion,
     status,
     sla_due_at: slaDueAt.toISOString(),
     requires_business_approval: requirement.requiresBusinessApproval,
@@ -88,7 +170,21 @@ export async function createAgentApprovalRequest(input: CreateAgentApprovalReque
 
   if (error || !data) throw new Error(`Unable to create agent approval request: ${error?.message ?? 'unknown error'}`)
   await enqueueApprovalNotifications(String(data.id), 'REQUESTED')
-  return data
+  return {
+    approval: data,
+    riskContext: {
+      projectId: context.projectId,
+      domain: context.domain,
+      environment: context.environment,
+      policyVersion: context.policyVersion,
+      targetType: context.targetType,
+      targetId: context.targetId,
+      resourceIds: context.resourceIds,
+      businessCriticality: context.businessCriticality,
+      dataSensitivity: context.dataSensitivity,
+      risk: requirement.risk,
+    },
+  }
 }
 
 export async function recordAgentApprovalDecision(input: {
@@ -135,7 +231,7 @@ export async function currentExecutionFingerprint(input: {
   if (policyError) throw new Error(`Unable to resolve project Agent Policy context: ${policyError.message}`)
 
   const environment = projectPolicy?.environment === 'NON_PRODUCTION' ? 'NON_PRODUCTION' : 'PRODUCTION'
-  const policyVersion = String(projectPolicy?.policy_version ?? 'agent-policy-v2.0')
+  const policyVersion = String(projectPolicy?.policy_version ?? AGENT_POLICY_VERSION)
 
   if (String(request.target_type) !== 'DATASET') {
     const riskContext = await resolveProjectRiskContext(String(request.project_id))
