@@ -20,6 +20,7 @@ import {
 
 import { ExecutionStatusBadge } from '@/components/app-shell/execution-status'
 import { createClient } from '@/lib/supabase/client'
+import { GovernedDomainContext } from './governed-domain-context'
 
 export type MonitoringRun = {
   id: string
@@ -440,7 +441,7 @@ export function JobMonitor({
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-200/55">Governed topology</p>
             <h2 className="mt-1 text-xl font-bold text-white">Luminous Data Domain cells</h2>
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Each luminous organic cell is a persisted catalog Data Domain. Every execution component appears inside its domain membrane as a live status organelle, while the nucleus summarizes domain health. Unassigned executions remain explicit instead of being guessed into a domain.</p>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Each luminous organic cell is a persisted catalog Data Domain. Every execution component appears inside its domain membrane as a live status organelle, while the selected inspector resolves the broader governed component network from persisted governance, quality, lineage, evidence, and durable orchestration records. Unassigned executions remain explicit instead of being guessed into a domain.</p>
           </div>
           <div className="hidden items-center gap-2 text-[11px] text-slate-500 sm:flex"><GitBranch className="h-4 w-4" /> Execution relationships remain inspectable in run details</div>
         </div>
@@ -468,7 +469,7 @@ export function JobMonitor({
             const meta = statusMeta(status)
             return <span key={status} className="inline-flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} />{meta.label}</span>
           })}
-          <span className="ml-auto text-slate-500">Cells represent Data Domain execution health · nodes represent components</span>
+          <span className="ml-auto text-slate-500">Cells show execution state · selected inspector resolves governed components and evidence</span>
         </div>
       </div>
 
@@ -535,10 +536,17 @@ export function JobMonitor({
             </Link>
           </div> : null}
 
+          {selectedRun ? <GovernedDomainContext
+            projectId={selectedRun.project_id}
+            runId={selectedRun.id}
+            datasetId={selectedRun.dataset_id}
+            domainName={selectedCell.domainName}
+          /> : null}
+
           <div className="grid gap-2 border-t border-white/10 pt-4 text-xs">
-            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><Database className="h-4 w-4 text-cyan-300" /><div><p className="font-semibold text-slate-300">Evidence</p><p className="text-[11px] text-slate-500">Datasets · findings · run artifacts</p></div></div>
-            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><ShieldCheck className="h-4 w-4 text-emerald-300" /><div><p className="font-semibold text-slate-300">Governed scope</p><p className="text-[11px] text-slate-500">Project authorization and execution controls remain enforced</p></div></div>
-            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><BrainCircuit className="h-4 w-4 text-violet-300" /><div><p className="font-semibold text-slate-300">AI execution</p><p className="text-[11px] text-slate-500">Organic cells visualize status, not authority</p></div></div>
+            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><Database className="h-4 w-4 text-cyan-300" /><div><p className="font-semibold text-slate-300">Evidence boundary</p><p className="text-[11px] text-slate-500">Recorded context is loaded through authorized server APIs only</p></div></div>
+            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><ShieldCheck className="h-4 w-4 text-emerald-300" /><div><p className="font-semibold text-slate-300">Governed scope</p><p className="text-[11px] text-slate-500">Project authorization and existing execution controls remain enforced</p></div></div>
+            <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><BrainCircuit className="h-4 w-4 text-violet-300" /><div><p className="font-semibold text-slate-300">AI execution</p><p className="text-[11px] text-slate-500">Organic cells visualize recorded state, not authority</p></div></div>
           </div>
         </div> : <div className="grid h-full place-items-center text-center"><div><Layers3 className="mx-auto h-10 w-10 text-slate-600" /><p className="mt-3 text-sm font-semibold text-slate-400">No domain selected</p></div></div>}
       </aside>
