@@ -1,4 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { AuthorizationError, authorizeProject } from '@/lib/auth/authorize'
+import { resolveLandingAccess } from './landing-access'
+import { authorizedDatasetScopeForProject } from './resource-authorization'
 import type { PersonaSlug } from './personas'
 import {
   resolveConversationDefaults,
@@ -68,4 +71,65 @@ export async function resolveConversationPolicy(input: {
     sanitizeConversationOverride(projectRow?.settings),
     sanitizeConversationOverride(userRow?.settings),
   )
+}
+
+export type ProjectConversationPolicyContext = {
+  projectId: string
+  appliedDomain: string | null
+  availableDomains: string[]
+  settings: PersonaConversationDefault
+  persona: PersonaSlug
+}
+
+export async function resolveProjectConversationPolicy(input: {
+  userId: string
+  projectId: string
+  requestedDomain?: string | null
+}): Promise<ProjectConversationPolicyContext> {
+  const authorization = await authorizeProject(input.userId, input.projectId, 'agent.converse')
+  const [landing, datasetScope] = await Promise.all([
+    resolveLandingAccess(input.userId),
+    authorizedDatasetScopeForProject(input.userId, input.projectId),
+  ])
+  if (landing.organizationId !== authorization.organizationId) {
+    throw new AuthorizationError('Conversation project is outside the active organization.', 403)
+  }
+
+  const admin = createAdminClient()
+  const domainRows = datasetScope.authorizedDatasetIds.length
+    ? await admin.schema('catalog').from('datasets')
+        .select('id,business_domain')
+        .eq('project_id', input.projectId)
+        .in('id', datasetScope.authorizedDatasetIds)
+    : { data: [], error: null }
+  if (domainRows.error) throw new Error(`Unable to resolve conversational domain scope: ${domainRows.error.message}`)
+
+  const availableDomains = Array.from(new Set((domainRows.data ?? [])
+    .map(row => String(row.business_domain ?? '').trim())
+    .filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b))
+
+  const requestedDomain = input.requestedDomain?.trim() || null
+  const appliedDomain = requestedDomain
+    ? availableDomains.find(domain => domain.toLowerCase() === requestedDomain.toLowerCase()) ?? null
+    : null
+  if (requestedDomain && !appliedDomain) {
+    throw new AuthorizationError('Requested conversation domain is not visible in this project.', 403)
+  }
+
+  const settings = await resolveConversationPolicy({
+    organizationId: authorization.organizationId,
+    userId: input.userId,
+    persona: landing.persona,
+    projectId: input.projectId,
+    domain: appliedDomain,
+  })
+
+  return {
+    projectId: input.projectId,
+    appliedDomain,
+    availableDomains,
+    settings,
+    persona: landing.persona,
+  }
 }

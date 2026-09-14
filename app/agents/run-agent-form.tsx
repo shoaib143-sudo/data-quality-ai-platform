@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { PersonaConversationDefault } from '@/lib/governance/persona-conversation-defaults'
 
@@ -24,6 +24,12 @@ export type DatasetVersionOption = {
   versionNumber: number
 }
 
+type ConversationContextPayload = {
+  settings: PersonaConversationDefault
+  appliedDomain: string | null
+  availableDomains: string[]
+}
+
 const GOVERNED_READ_AGENT_KEYS = new Set([
   'steward_agent',
   'governance_analyst_agent',
@@ -32,6 +38,15 @@ const GOVERNED_READ_AGENT_KEYS = new Set([
   'executive_agent',
   'support_agent',
 ])
+
+function preferredWorkerIds(agents: AgentOption[], settings: PersonaConversationDefault) {
+  const preferred = agents
+    .filter(agent => GOVERNED_READ_AGENT_KEYS.has(agent.agentKey) && settings.preferredAgentKeys.includes(agent.agentKey))
+    .map(agent => agent.id)
+  return preferred.length
+    ? preferred.slice(0, 6)
+    : agents.filter(agent => GOVERNED_READ_AGENT_KEYS.has(agent.agentKey)).slice(0, 3).map(agent => agent.id)
+}
 
 export function RunAgentForm({
   agents,
@@ -63,14 +78,10 @@ export function RunAgentForm({
   const [question, setQuestion] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
-  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>(() => {
-    const preferred = agents
-      .filter(agent => GOVERNED_READ_AGENT_KEYS.has(agent.agentKey) && conversationDefaults.preferredAgentKeys.includes(agent.agentKey))
-      .map(agent => agent.id)
-    return preferred.length
-      ? preferred.slice(0, 6)
-      : agents.filter(agent => GOVERNED_READ_AGENT_KEYS.has(agent.agentKey)).slice(0, 3).map(agent => agent.id)
-  })
+  const [conversationDomain, setConversationDomain] = useState('')
+  const [availableDomains, setAvailableDomains] = useState<string[]>([])
+  const [effectiveConversationDefaults, setEffectiveConversationDefaults] = useState(conversationDefaults)
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>(() => preferredWorkerIds(agents, conversationDefaults))
 
   const selectedAgent = useMemo(
     () => agents.find((agent) => agent.id === agentDefinitionId) ?? null,
@@ -97,8 +108,40 @@ export function RunAgentForm({
     [datasetVersions, projectId],
   )
 
+  useEffect(() => {
+    if (!projectId || !canConverseProject) {
+      setEffectiveConversationDefaults(conversationDefaults)
+      setAvailableDomains([])
+      return
+    }
+
+    const controller = new AbortController()
+    const params = new URLSearchParams({ projectId })
+    if (conversationDomain) params.set('domain', conversationDomain)
+
+    void fetch(`/api/agent-preferences/context?${params.toString()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    }).then(async response => {
+      const payload = await response.json() as ConversationContextPayload & { error?: string }
+      if (!response.ok) throw new Error(payload.error ?? 'Unable to resolve conversational defaults.')
+      setEffectiveConversationDefaults(payload.settings)
+      setAvailableDomains(payload.availableDomains ?? [])
+      setSelectedWorkerIds(preferredWorkerIds(agents, payload.settings))
+    }).catch(error => {
+      if (controller.signal.aborted) return
+      setEffectiveConversationDefaults(conversationDefaults)
+      setAvailableDomains([])
+      setStatus(error instanceof Error ? error.message : 'Unable to resolve conversational defaults.')
+    })
+
+    return () => controller.abort()
+  }, [agents, canConverseProject, conversationDefaults, conversationDomain, projectId])
+
   function handleProjectChange(value: string) {
     setProjectId(value)
+    setConversationDomain('')
+    setAvailableDomains([])
     const firstVersion = datasetVersions.find((version) => version.projectId === value)
     setDatasetVersionId(firstVersion?.id ?? '')
   }
@@ -178,7 +221,12 @@ export function RunAgentForm({
 
       if (governedReadAgent) {
         endpoint = '/api/agents/governance/run'
-        body = { agentDefinitionId, projectId, question: question.trim() || undefined }
+        body = {
+          agentDefinitionId,
+          projectId,
+          question: question.trim() || undefined,
+          domain: conversationDomain || undefined,
+        }
       } else if (nativeSupervisorAgent) {
         endpoint = '/api/agents/supervisor/run'
         body = {
@@ -301,15 +349,31 @@ export function RunAgentForm({
             </div>
           </div>
 
-          {governedReadAgent && conversationDefaults.suggestedPrompts.length ? (
+          {governedReadAgent && (effectiveConversationDefaults.suggestedPrompts.length > 0 || availableDomains.length > 0) ? (
             <div className="rounded-xl border bg-muted/20 p-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">Suggested for your persona</span>
-                <span>· {conversationDefaults.responseDepth.toLowerCase()} responses</span>
-                <span>· {conversationDefaults.evidenceDepth.toLowerCase().replace('_', ' ')} evidence</span>
+                <span className="font-semibold text-foreground">Effective conversation defaults</span>
+                <span>· {effectiveConversationDefaults.responseDepth.toLowerCase()} responses</span>
+                <span>· {effectiveConversationDefaults.evidenceDepth.toLowerCase().replace('_', ' ')} evidence</span>
+                <span>· user preference overrides project, domain, and persona UX defaults</span>
               </div>
+              {availableDomains.length > 0 ? (
+                <label className="mt-3 block max-w-sm space-y-1 text-xs">
+                  <span className="font-medium text-foreground">Conversation domain</span>
+                  <select
+                    value={conversationDomain}
+                    onChange={event => setConversationDomain(event.target.value)}
+                    disabled={running}
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Project-wide</option>
+                    {availableDomains.map(domain => <option key={domain} value={domain}>{domain}</option>)}
+                  </select>
+                  <span className="text-muted-foreground">Only domains from datasets you are currently authorized to view are available.</span>
+                </label>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                {conversationDefaults.suggestedPrompts.map((prompt) => (
+                {effectiveConversationDefaults.suggestedPrompts.map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
@@ -375,7 +439,7 @@ export function RunAgentForm({
                 className="w-full rounded-md border bg-background px-3 py-2"
                 disabled={running}
               />
-              <span className="text-xs text-muted-foreground">Read-only project evidence only · {question.length}/1000 characters</span>
+              <span className="text-xs text-muted-foreground">Read-only authorized evidence only · {question.length}/1000 characters</span>
             </label>
           )}
         </form>

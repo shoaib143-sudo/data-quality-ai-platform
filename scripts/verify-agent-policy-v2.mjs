@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { personaSlugs } from '../lib/governance/personas.ts'
 import {
   agentPolicyCapabilities,
@@ -71,6 +72,17 @@ check('CDE material production mutation is CRITICAL', evaluateRisk({
 const senior = resolveConversationDefaults('senior-leadership', null, { responseDepth: 'BALANCED' }, { responseDepth: 'DETAILED' })
 check('user preference overrides project and persona conversational defaults', senior.responseDepth === 'DETAILED')
 check('persona prompt defaults remain available when not overridden', senior.suggestedPrompts.length > 0)
+
+const conversationPolicy = fs.readFileSync('lib/governance/conversation-policy.ts', 'utf8')
+const conversationContextRoute = fs.readFileSync('app/api/agent-preferences/context/route.ts', 'utf8')
+const runAgentForm = fs.readFileSync('app/agents/run-agent-form.tsx', 'utf8')
+check('runtime conversational policy authorizes agent.converse before project resolution', conversationPolicy.includes("authorizeProject(input.userId, input.projectId, 'agent.converse')"))
+check('runtime conversational domains are derived from authorized dataset scope', conversationPolicy.includes('authorizedDatasetScopeForProject(input.userId, input.projectId)') && conversationPolicy.includes(".in('id', datasetScope.authorizedDatasetIds)"))
+check('unseen requested domain fails closed', conversationPolicy.includes('Requested conversation domain is not visible in this project.'))
+check('runtime conversational precedence resolves persona, domain, project and user', conversationPolicy.includes('resolveConversationPolicy({') && conversationPolicy.includes('domain: appliedDomain'))
+check('conversation context API is private and server resolved', conversationContextRoute.includes('resolveProjectConversationPolicy') && conversationContextRoute.includes("'Cache-Control': 'private, no-store'"))
+check('Agents UI refreshes effective conversational defaults when project/domain changes', runAgentForm.includes('/api/agent-preferences/context?') && runAgentForm.includes('effectiveConversationDefaults'))
+check('conversation domain is submitted only as context for server revalidation', runAgentForm.includes('domain: conversationDomain || undefined'))
 
 const failures = checks.filter(([, passed]) => !passed)
 for (const [name, passed] of checks) console.log(`${passed ? 'PASS' : 'FAIL'} ${name}`)
