@@ -427,21 +427,33 @@ export function JobMonitor({
     window.history.replaceState(window.history.state, '', url)
   }
 
+  function openRunResults(runId: string) {
+    window.location.assign(`/agents/runs/${encodeURIComponent(runId)}`)
+  }
+
   function selectDomain(cell: DomainCell) {
     const retainedRun = selectedRunId ? cell.runs.find((run) => run.id === selectedRunId) ?? null : null
     const nextRun = retainedRun ?? cell.componentRuns[0] ?? cell.runs[0] ?? null
+    if (nextRun) {
+      openRunResults(nextRun.id)
+      return
+    }
     setSelectedDomainKey(cell.key)
-    setSelectedRunId(nextRun?.id ?? null)
-    setSelectedAgentId(nextRun?.agent_definition_id ?? null)
-    updateDrilldownUrl(cell, nextRun?.agent_definition_id ?? null, nextRun?.id ?? null)
+    setSelectedRunId(null)
+    setSelectedAgentId(null)
+    updateDrilldownUrl(cell, null, null)
     revealInspector()
   }
 
   function selectAgent(cell: DomainCell, agentId: string, runId: string | null) {
+    if (runId) {
+      openRunResults(runId)
+      return
+    }
     setSelectedDomainKey(cell.key)
     setSelectedAgentId(agentId)
-    setSelectedRunId(runId)
-    updateDrilldownUrl(cell, agentId, runId)
+    setSelectedRunId(null)
+    updateDrilldownUrl(cell, agentId, null)
     revealInspector()
   }
 
@@ -609,8 +621,8 @@ export function JobMonitor({
               }) : <div className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-slate-500">Execution steps are not yet recorded.</div>}
             </div>
             <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500"><span>{progress.done}/{progress.total} steps complete</span><span>{DATE_FORMATTER.format(new Date(selectedRun.created_at))}</span></div>
-            <Link href={`/monitoring?run=${encodeURIComponent(selectedRun.id)}#job-logs`} className="mt-4 flex w-full items-center justify-between rounded-xl border border-cyan-300/35 bg-cyan-300/[0.07] px-4 py-3 text-sm font-bold text-cyan-100 transition hover:bg-cyan-300/10">
-              View execution details
+            <Link href={`/agents/runs/${encodeURIComponent(selectedRun.id)}`} className="mt-4 flex w-full items-center justify-between rounded-xl border border-cyan-300/35 bg-cyan-300/[0.07] px-4 py-3 text-sm font-bold text-cyan-100 transition hover:bg-cyan-300/10">
+              Open output / results
               <ChevronRight className="h-4 w-4" />
             </Link>
           </div> : null}
