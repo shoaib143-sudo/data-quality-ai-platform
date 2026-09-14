@@ -42,6 +42,9 @@ export const canonicalRoutes = {
   },
   dataQuality: '/data-quality',
   monitoring: '/monitoring',
+  monitoringDomain(projectId: string) {
+    return canonicalResourcePath('/monitoring/domain', projectId)
+  },
   pricingAuthority: '/pricing-authority',
 } as const
 
