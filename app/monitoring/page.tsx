@@ -1,8 +1,9 @@
 import Link from 'next/link'
 
 import { requireUser } from '@/lib/supabase/auth'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
+import { MONITORING_RUN_WINDOW } from '@/lib/monitoring/run-window'
 import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type MonitoringProject, type MonitoringRun, type MonitoringStep } from './job-monitor'
 import { JobHealth } from './job-health'
 import styles from './organic-domain-cells.module.css'
@@ -10,13 +11,13 @@ import styles from './organic-domain-cells.module.css'
 export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string; agent?: string; domain?: string }> }) {
   const user = await requireUser()
   const { run: requestedRunId, agent: requestedAgentId, domain: requestedDomainKey } = await searchParams
-  const supabase = await createClient()
-  const { data: runs, error: runsError } = await supabase
+  const admin = createAdminClient()
+  const { data: runs, error: runsError } = await admin
     .schema('agent')
     .from('agent_runs')
     .select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message')
     .order('created_at', { ascending: false })
-    .limit(50)
+    .limit(MONITORING_RUN_WINDOW)
   if (runsError) throw new Error(`Unable to load agent runs: ${runsError.message}`)
 
   const typedRuns = await filterAuthorizedExecutionRuns(user.id, (runs ?? []) as MonitoringRun[])
@@ -26,10 +27,10 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
   const runIds = typedRuns.map((run) => run.id)
 
   const [agentsResult, datasetsResult, projectsResult, stepsResult] = await Promise.all([
-    supabase.schema('agent').from('agent_definitions').select('id, name, version, agent_key').eq('enabled', true).order('name'),
-    datasetIds.length ? supabase.schema('catalog').from('datasets').select('id, name, business_domain').in('id', datasetIds) : Promise.resolve({ data: [], error: null }),
-    projectIds.length ? supabase.schema('app').from('projects').select('id, name, description').in('id', projectIds) : Promise.resolve({ data: [], error: null }),
-    runIds.length ? supabase.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, started_at, completed_at, error_code, error_message').in('agent_run_id', runIds).order('step_order') : Promise.resolve({ data: [], error: null }),
+    admin.schema('agent').from('agent_definitions').select('id, name, version, agent_key').eq('enabled', true).order('name'),
+    datasetIds.length ? admin.schema('catalog').from('datasets').select('id, project_id, name, business_domain').in('id', datasetIds) : Promise.resolve({ data: [], error: null }),
+    projectIds.length ? admin.schema('app').from('projects').select('id, name, description').in('id', projectIds) : Promise.resolve({ data: [], error: null }),
+    runIds.length ? admin.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, started_at, completed_at, error_code, error_message').in('agent_run_id', runIds).order('step_order') : Promise.resolve({ data: [], error: null }),
   ])
 
   if (agentsResult.error) throw new Error(`Unable to load enabled agent definitions: ${agentsResult.error.message}`)
