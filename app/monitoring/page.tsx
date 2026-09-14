@@ -6,31 +6,31 @@ import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type Monitori
 import { JobTermination } from './job-termination'
 import { JobLogs } from './job-logs'
 import { JobHealth } from './job-health'
+import styles from './organic-domain-cells.module.css'
 import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
 import { hasProjectCapability } from '@/lib/auth/authorize'
 
-export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string }> }) {
+export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string; agent?: string; domain?: string }> }) {
   const user = await requireUser()
-  const { run: requestedRunId } = await searchParams
+  const { run: requestedRunId, agent: requestedAgentId, domain: requestedDomainKey } = await searchParams
   const supabase = await createClient()
   const { data: runs, error: runsError } = await supabase.schema('agent').from('agent_runs').select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message').order('created_at', { ascending: false }).limit(50)
   if (runsError) throw new Error(`Unable to load agent runs: ${runsError.message}`)
 
   const typedRuns = await filterAuthorizedExecutionRuns(user.id, (runs ?? []) as MonitoringRun[])
   const selectedRunId = requestedRunId && typedRuns.some((run) => run.id === requestedRunId) ? requestedRunId : null
-  const agentIds = [...new Set(typedRuns.map((run) => run.agent_definition_id))]
   const datasetIds = [...new Set(typedRuns.flatMap((run) => run.dataset_id ? [run.dataset_id] : []))]
   const projectIds = [...new Set(typedRuns.map((run) => run.project_id))]
   const runIds = typedRuns.map((run) => run.id)
 
   const [agentsResult, datasetsResult, projectsResult, stepsResult] = await Promise.all([
-    agentIds.length ? supabase.schema('agent').from('agent_definitions').select('id, name, version, agent_key').in('id', agentIds) : Promise.resolve({ data: [], error: null }),
+    supabase.schema('agent').from('agent_definitions').select('id, name, version, agent_key').eq('enabled', true).order('name'),
     datasetIds.length ? supabase.schema('catalog').from('datasets').select('id, name, business_domain').in('id', datasetIds) : Promise.resolve({ data: [], error: null }),
     projectIds.length ? supabase.schema('app').from('projects').select('id, name, description').in('id', projectIds) : Promise.resolve({ data: [], error: null }),
     runIds.length ? supabase.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, started_at, completed_at, error_code, error_message').in('agent_run_id', runIds).order('step_order') : Promise.resolve({ data: [], error: null }),
   ])
 
-  if (agentsResult.error) throw new Error(`Unable to load agent definitions: ${agentsResult.error.message}`)
+  if (agentsResult.error) throw new Error(`Unable to load enabled agent definitions: ${agentsResult.error.message}`)
   if (datasetsResult.error) throw new Error(`Unable to load datasets: ${datasetsResult.error.message}`)
   if (projectsResult.error) throw new Error(`Unable to load data-domain scopes: ${projectsResult.error.message}`)
   if (stepsResult.error) throw new Error(`Unable to load agent run steps: ${stepsResult.error.message}`)
@@ -58,8 +58,8 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
       </header>
 
       <JobHealth runs={typedRuns} steps={typedSteps} />
-      <div className="mt-5">
-        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialSteps={typedSteps} initialNow={new Date().toISOString()} initialRunId={selectedRunId} userId={user.id} />
+      <div className={`${styles.monitoringStage} mt-5`}>
+        <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialSteps={typedSteps} initialNow={new Date().toISOString()} initialRunId={selectedRunId} initialAgentId={requestedAgentId ?? null} initialDomainKey={requestedDomainKey ?? null} userId={user.id} />
       </div>
 
       <section id="job-termination" className="mt-7 scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} cancellableProjectIds={cancellableProjectIds} /></section>
