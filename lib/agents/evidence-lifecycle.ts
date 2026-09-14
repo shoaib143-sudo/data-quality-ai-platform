@@ -85,14 +85,11 @@ export async function updateAgentEvidenceRetentionPolicy(input: {
   }
 
   const admin = createAdminClient()
-  const now = new Date().toISOString()
-  const { error } = await admin.schema('agent').from('evidence_retention_policies').upsert({
-    project_id: input.projectId,
-    retention_years: input.retentionYears,
-    active: true,
-    updated_by: input.actorUserId,
-    updated_at: now,
-  }, { onConflict: 'project_id' })
+  const { error } = await admin.schema('agent').rpc('set_evidence_retention_policy_internal', {
+    p_project_id: input.projectId,
+    p_retention_years: input.retentionYears,
+    p_updated_by: input.actorUserId,
+  })
   if (error) throw new Error(`Unable to update agent evidence retention policy: ${error.message}`)
 
   return { projectId: input.projectId, retentionYears: input.retentionYears }
