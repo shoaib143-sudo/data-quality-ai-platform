@@ -3,6 +3,7 @@ import fs from 'node:fs'
 
 const page = fs.readFileSync('app/monitoring/page.tsx', 'utf8')
 const monitor = fs.readFileSync('app/monitoring/job-monitor.tsx', 'utf8')
+const organicCss = fs.readFileSync('app/monitoring/organic-domain-cells.module.css', 'utf8')
 
 assert.match(page, /schema\('catalog'\)\.from\('datasets'\)\.select\('id, name, business_domain'\)/, 'Domain cell monitor must resolve persisted catalog business-domain metadata server-side.')
 assert.match(page, /schema\('app'\)\.from\('projects'\)\.select\('id, name, description'\)/, 'Domain cell monitor must retain governed project scope metadata server-side.')
@@ -42,6 +43,14 @@ assert.match(monitor, /Project authorization and execution controls remain enfor
 assert.match(monitor, /function openRunResults\(runId: string\)/, 'Executed feature drilldown must use the canonical persisted run results route.')
 assert.match(monitor, /window\.location\.assign\(`\/agents\/runs\/\$\{encodeURIComponent\(runId\)\}`\)/, 'Executed feature clicks must redirect to the canonical output/results window.')
 assert.match(monitor, /setInspectorTab\('OVERVIEW'\)/, 'Data Domain clicks must open the domain drilldown overview rather than forcing a single-run redirect.')
+assert.match(monitor, /url\.hash = ''/, 'Domain drilldown must clear stale job-log anchors so View Domain cannot jump to logs.')
+assert.match(monitor, /progressPercent:/, 'Domain cells must expose a persisted-state-derived feature progress percentage.')
+assert.match(monitor, /selectedCell\.progressPercent/, 'Domain drilldown must show domain-level feature progress.')
+assert.match(monitor, /inspectorTab === 'DATASETS'/, 'Domain drilldown must expose datasets represented by real executions.')
+assert.match(monitor, /Lineage & Evidence/, 'Domain drilldown must expose lineage and evidence as a first-class detail level.')
+assert.match(organicCss, /--domain-edge/, 'Organic cells must consume a per-domain palette instead of flattening all domains to cyan.')
+assert.match(organicCss, /color-mix\(in srgb, var\(--domain-edge\)/, 'Organic membranes must derive vibrant glow from each domain palette.')
+assert.doesNotMatch(organicCss, /> div:nth-of-type\(5\) > button \{\s*display: none/, 'View Domain must remain visible in the organic cell.')
 assert.match(monitor, /href=\{`\/agents\/runs\/\$\{encodeURIComponent\(selectedRun\.id\)\}`\}/, 'Selected execution must retain a direct link to recorded output/results.')
 assert.match(monitor, /\/api\/monitoring\/runs/, 'Live refresh must use the resource-scoped monitoring API.')
 assert.doesNotMatch(monitor, /createClient\(/, 'Job Monitor must not restore direct browser Supabase reads.')
@@ -52,7 +61,7 @@ assert.match(monitor, /cell\.domainName\.toLowerCase\(\)\.includes\(q\)/, 'Searc
 assert.doesNotMatch(monitor, /Math\.random/, 'Domain topology placement must remain deterministic.')
 assert.doesNotMatch(monitor, /SIMULATED DATA|simulated data/i, 'Production Job Monitor must not label real execution evidence as simulated.')
 
-console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, domain-centered DG/AI feature representation with grey never-executed state and central orchestration, latest component-state aggregation, deterministic organic topology, shared execution status, filtering, live refresh, and canonical output/results redirection and truthful grey-path drilldown.')
+console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, domain-centered DG/AI feature representation with grey never-executed state and central orchestration, latest component-state aggregation, deterministic organic topology, shared execution status, filtering, live refresh, and domain-level progress, one-level domain drilldown, canonical feature output/results, vibrant per-domain membranes, and truthful grey-path state.')
 
 await import('./test-domain-cell-job-monitor.mjs')
 await import('./audit-domain-cell-job-monitor-adversarial.mjs')

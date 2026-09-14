@@ -1,5 +1,8 @@
 .monitoringStage {
   --membrane-rgb: 34, 211, 238;
+  --domain-edge: #22d3ee;
+  --domain-secondary: #3b82f6;
+  --domain-glow: rgba(34, 211, 238, 0.36);
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) {
@@ -10,22 +13,22 @@
   min-height: 0 !important;
   aspect-ratio: 1 / 1;
   overflow: visible !important;
-  border-color: rgba(var(--membrane-rgb), 0.72) !important;
+  border-color: color-mix(in srgb, var(--domain-edge) 86%, white 14%) !important;
   border-radius: 49% 51% 48% 52% / 51% 48% 52% 49% !important;
   background:
     radial-gradient(circle at 50% 49%, rgba(3, 18, 34, 0.16) 0 19%, transparent 20%),
-    radial-gradient(circle at 38% 28%, rgba(var(--membrane-rgb), 0.15), transparent 31%),
-    radial-gradient(circle at 69% 68%, rgba(30, 100, 255, 0.12), transparent 37%),
-    radial-gradient(circle at 50% 50%, rgba(42, 106, 184, 0.1), transparent 59%),
+    radial-gradient(circle at 38% 28%, color-mix(in srgb, var(--domain-edge) 36%, transparent), transparent 31%),
+    radial-gradient(circle at 69% 68%, color-mix(in srgb, var(--domain-secondary) 30%, transparent), transparent 37%),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--domain-edge) 18%, transparent), transparent 59%),
     linear-gradient(145deg, rgba(4, 23, 43, 0.99), rgba(1, 12, 24, 0.995)) !important;
   box-shadow:
-    0 0 4px rgba(129, 235, 255, 0.88),
-    0 0 17px rgba(var(--membrane-rgb), 0.5),
-    0 0 46px rgba(22, 111, 255, 0.27),
-    0 0 92px rgba(11, 77, 192, 0.12),
-    inset 0 0 25px rgba(var(--membrane-rgb), 0.1),
-    inset 0 0 74px rgba(18, 83, 160, 0.09) !important;
-  filter: drop-shadow(0 0 14px rgba(40, 136, 255, 0.18));
+    0 0 5px color-mix(in srgb, var(--domain-edge) 88%, white 12%),
+    0 0 22px color-mix(in srgb, var(--domain-edge) 68%, transparent),
+    0 0 54px color-mix(in srgb, var(--domain-secondary) 44%, transparent),
+    0 0 112px color-mix(in srgb, var(--domain-edge) 24%, transparent),
+    inset 0 0 28px color-mix(in srgb, var(--domain-edge) 24%, transparent),
+    inset 0 0 82px color-mix(in srgb, var(--domain-secondary) 18%, transparent) !important;
+  filter: saturate(1.35) brightness(1.08) drop-shadow(0 0 18px color-mix(in srgb, var(--domain-edge) 32%, transparent));
   transform: translateZ(0);
 }
 
@@ -64,13 +67,13 @@
 .monitoringStage article:has(button[aria-label$=" Data Domain"])::before {
   z-index: 1;
   inset: 2.2% 2.7% 2.9% 2.1%;
-  border: 1px solid rgba(159, 238, 255, 0.46);
+  border: 1px solid color-mix(in srgb, var(--domain-edge) 62%, white 18%);
   border-radius: 51% 49% 52% 48% / 48% 52% 49% 51%;
   box-shadow:
-    0 0 7px rgba(var(--membrane-rgb), 0.62),
-    0 0 22px rgba(30, 121, 255, 0.28),
-    inset 0 0 16px rgba(var(--membrane-rgb), 0.17),
-    inset 0 0 44px rgba(33, 111, 224, 0.1);
+    0 0 9px color-mix(in srgb, var(--domain-edge) 74%, transparent),
+    0 0 28px color-mix(in srgb, var(--domain-secondary) 46%, transparent),
+    inset 0 0 18px color-mix(in srgb, var(--domain-edge) 32%, transparent),
+    inset 0 0 48px color-mix(in srgb, var(--domain-secondary) 22%, transparent);
   transform: rotate(-1.25deg);
 }
 
@@ -80,12 +83,12 @@
   border: 1px solid rgba(86, 170, 255, 0.13);
   border-radius: 48% 52% 49% 51% / 53% 47% 52% 48%;
   background:
-    radial-gradient(circle at 34% 31%, rgba(var(--membrane-rgb), 0.12), transparent 25%),
-    radial-gradient(circle at 70% 67%, rgba(51, 118, 255, 0.1), transparent 30%),
-    radial-gradient(circle at 50% 50%, rgba(60, 121, 194, 0.04), transparent 58%);
+    radial-gradient(circle at 34% 31%, color-mix(in srgb, var(--domain-edge) 28%, transparent), transparent 25%),
+    radial-gradient(circle at 70% 67%, color-mix(in srgb, var(--domain-secondary) 24%, transparent), transparent 30%),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--domain-edge) 10%, transparent), transparent 58%);
   box-shadow:
-    inset 0 0 36px rgba(var(--membrane-rgb), 0.09),
-    inset 0 0 78px rgba(15, 76, 156, 0.08);
+    inset 0 0 38px color-mix(in srgb, var(--domain-edge) 20%, transparent),
+    inset 0 0 84px color-mix(in srgb, var(--domain-secondary) 16%, transparent);
   animation: domain-cell-breathe 7.5s ease-in-out infinite;
 }
 
@@ -94,19 +97,19 @@
   overflow: hidden;
   border-radius: inherit;
   background-image:
-    radial-gradient(circle at 29% 26%, rgba(var(--membrane-rgb), 0.16), transparent 27%),
-    radial-gradient(circle at 73% 68%, rgba(41, 102, 255, 0.11), transparent 34%),
-    radial-gradient(circle at 49% 51%, rgba(117, 180, 255, 0.045), transparent 46%) !important;
+    radial-gradient(circle at 29% 26%, color-mix(in srgb, var(--domain-edge) 38%, transparent), transparent 27%),
+    radial-gradient(circle at 73% 68%, color-mix(in srgb, var(--domain-secondary) 32%, transparent), transparent 34%),
+    radial-gradient(circle at 49% 51%, color-mix(in srgb, var(--domain-edge) 14%, transparent), transparent 46%) !important;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(2) {
   inset: 12.5% !important;
-  border-color: rgba(116, 198, 255, 0.12) !important;
+  border-color: color-mix(in srgb, var(--domain-secondary) 28%, transparent) !important;
   border-radius: 50% 50% 47% 53% / 53% 47% 52% 48% !important;
   box-shadow:
-    inset 0 0 34px rgba(var(--membrane-rgb), 0.09),
-    inset 0 0 72px rgba(38, 101, 180, 0.07),
-    0 0 24px rgba(42, 132, 255, 0.06) !important;
+    inset 0 0 34px color-mix(in srgb, var(--domain-edge) 20%, transparent),
+    inset 0 0 72px color-mix(in srgb, var(--domain-secondary) 16%, transparent),
+    0 0 28px color-mix(in srgb, var(--domain-edge) 16%, transparent) !important;
   transform: rotate(1.2deg);
 }
 
@@ -134,7 +137,7 @@
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(3) > button:first-child h3 {
   font-size: 0.94rem !important;
-  text-shadow: 0 0 12px rgba(var(--membrane-rgb), 0.18);
+  text-shadow: 0 0 16px color-mix(in srgb, var(--domain-edge) 55%, transparent);
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(3) > span:last-child {
@@ -150,7 +153,7 @@
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > svg {
   z-index: 8;
   opacity: 0.54 !important;
-  filter: drop-shadow(0 0 3px rgba(var(--membrane-rgb), 0.28));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--domain-edge) 64%, transparent));
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > button[aria-label$="Data Domain summary"] {
@@ -187,9 +190,9 @@
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] button[aria-label*=","] {
   box-shadow:
-    0 0 5px rgba(222, 250, 255, 0.22),
-    0 0 19px rgba(var(--status-rgb), 0.13),
-    inset 0 0 12px rgba(255, 255, 255, 0.04);
+    0 0 6px rgba(238, 253, 255, 0.28),
+    0 0 24px color-mix(in srgb, var(--domain-edge) 36%, transparent),
+    inset 0 0 14px rgba(255, 255, 255, 0.06);
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] button[aria-label*=","] > span:first-child {
@@ -197,25 +200,20 @@
   filter: blur(7px);
 }
 
-/* Keep health counts available without recreating a rectangular card footer. */
+/* Keep domain-level progress and the View Domain action visible inside the cell. */
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(5) {
-  bottom: 5.8% !important;
-  left: 18% !important;
-  right: 18% !important;
-  justify-content: center !important;
-  border-top: 0 !important;
-  padding-top: 0 !important;
-  font-size: 9px !important;
-  color: rgba(160, 204, 225, 0.52) !important;
-  text-align: center;
+  bottom: 5.2% !important;
+  left: 14% !important;
+  right: 14% !important;
+  color: rgba(214, 239, 250, 0.82) !important;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(5) > button {
-  display: none !important;
+  display: inline-flex !important;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]):hover {
-  filter: drop-shadow(0 0 22px rgba(40, 136, 255, 0.31));
+  filter: saturate(1.5) brightness(1.12) drop-shadow(0 0 28px color-mix(in srgb, var(--domain-edge) 46%, transparent));
 }
 
 @keyframes domain-cell-breathe {
