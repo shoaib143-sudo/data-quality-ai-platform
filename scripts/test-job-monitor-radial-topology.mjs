@@ -22,9 +22,7 @@ const expected = [
 ]
 
 for (const [index, left, top] of expected) {
-  const escapedLeft = left.replace('%', '%')
-  const escapedTop = top.replace('%', '%')
-  const re = new RegExp(`nth-child\\(${index}\\) \\{ left: ${escapedLeft} !important; top: ${escapedTop} !important; \\}`)
+  const re = new RegExp(`nth-child\\(${index}\\) \\{ left: ${left} !important; top: ${top} !important; \\}`)
   assert.match(css, re, `Feature ${index} must stay on its deterministic compass position.`)
 }
 
