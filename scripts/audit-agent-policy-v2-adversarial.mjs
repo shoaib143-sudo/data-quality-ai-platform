@@ -79,6 +79,17 @@ attack('CDE/KDE risk floor cannot be downgraded below HIGH', () => {
   }
 })
 
+attack('browser cannot provide authoritative approval risk, environment or CDE/KDE inputs', () => {
+  const route = fs.readFileSync('app/api/agent-approvals/requests/route.ts', 'utf8')
+  const service = fs.readFileSync('lib/governance/agent-approval-service.ts', 'utf8')
+  assert.doesNotMatch(route, /body\?\.(environment|businessCriticality|business_criticality|dataSensitivity|data_sensitivity|risk|riskLevel|risk_level|materialProductionMutation|material_production_mutation)/)
+  assert.doesNotMatch(route, /resolveDatasetRiskContext|resolveProjectRiskContext|getAgentActionProfile|project_agent_policy_context/)
+  assert.match(service, /resolveAuthoritativeApprovalContext\(input\)/)
+  assert.match(service, /resolveDatasetRiskContext\(requestedDatasetId\)/)
+  assert.match(service, /resolveProjectRiskContext\(requestedProjectId\)/)
+  assert.match(service, /projectPolicy\?\.environment === 'NON_PRODUCTION' \? 'NON_PRODUCTION' : 'PRODUCTION'/)
+})
+
 attack('execution fingerprint invalidates changed action, environment, policy or parameters', () => {
   const base = {
     actionKey: 'PROFILE_DATASET',
@@ -114,6 +125,26 @@ attack('approval/rejection comment is mandatory at service and database boundari
   const migration = fs.readFileSync('supabase/migrations/20260913160000_agent_approval_authority_and_atomic_decisions.sql', 'utf8')
   assert.match(service, /Approval comment is required/)
   assert.match(migration, /Approval comment is required/)
+})
+
+attack('delegated authority cannot be widened, inherited wholesale or re-delegated', () => {
+  const service = fs.readFileSync('lib/governance/agent-approval-service.ts', 'utf8')
+  const route = fs.readFileSync('app/api/agent-approvals/delegations/route.ts', 'utf8')
+  assert.match(service, /Only current direct approval authority can be delegated/)
+  assert.match(service, /Delegation must include at least one explicitly scoped action/)
+  assert.match(service, /Delegation project scope cannot exceed the direct approval authority/)
+  assert.match(service, /Delegation cannot outlive the direct approval authority/)
+  assert.match(service, /Delegate must be an individual member of this DataNexus organization/)
+  assert.doesNotMatch(route, /body\?\.(axis|domain|approvalAxis|approval_axis)/)
+})
+
+attack('revoked delegation can only be revoked by its original delegator', () => {
+  const service = fs.readFileSync('lib/governance/agent-approval-service.ts', 'utf8')
+  const route = fs.readFileSync('app/api/agent-approvals/delegations/[delegationId]/revoke/route.ts', 'utf8')
+  assert.match(service, /Only the delegator can revoke this approval delegation/)
+  assert.match(service, /active: false/)
+  assert.match(service, /revoked_by: input\.revokedBy/)
+  assert.match(route, /revokedBy: user\.id/)
 })
 
 attack('Job Monitor refresh cannot kick worker execution', () => {
@@ -244,11 +275,13 @@ attack('profiling and Data Quality preserve narrower execution capabilities', ()
 attack('supervisor requests are approval-aware and independently authorized', () => {
   const catalog = fs.readFileSync('lib/governance/agent-action-catalog.ts', 'utf8')
   const request = fs.readFileSync('app/api/agent-approvals/requests/route.ts', 'utf8')
+  const service = fs.readFileSync('lib/governance/agent-approval-service.ts', 'utf8')
   const pickup = fs.readFileSync('app/api/agent-approvals/[requestId]/execute/route.ts', 'utf8')
   const supervisor = fs.readFileSync('app/api/agents/supervisor/run/route.ts', 'utf8')
   const form = fs.readFileSync('app/agents/run-agent-form.tsx', 'utf8')
   assert.match(catalog, /RUN_SUPERVISOR:[\s\S]*capability: 'agent\.execute'/)
-  assert.match(request, /resolveProjectRiskContext/)
+  assert.match(request, /createAgentApprovalRequest/)
+  assert.match(service, /resolveProjectRiskContext\(requestedProjectId\)/)
   assert.match(pickup, /approval\.action_key === 'RUN_SUPERVISOR'/)
   assert.match(supervisor, /validateApprovalForExecution/)
   assert.match(supervisor, /markApprovalExecuted/)
