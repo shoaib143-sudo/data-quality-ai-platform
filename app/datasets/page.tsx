@@ -6,6 +6,7 @@ import { RegisterDatasetForm, type OrganizationOption, type ProjectOption } from
 import { JdbcSourceForm } from './jdbc-source-form'
 import { SourceActions } from './source-actions'
 import { DatasetActions } from './dataset-actions'
+import { dataGovernanceSuperAdminOrganizationIds } from '@/lib/auth/data-governance-super-admin'
 
 type DatasetRow = { id: string; project_id: string; data_source_id: string | null; name: string; description: string | null; source_identifier: string | null; business_domain: string | null; status: string; created_at: string }
 type VersionRow = { id: string; dataset_id: string; version_number: number; source_uri: string | null; status: string; created_at: string }
@@ -48,6 +49,7 @@ function sourceTypeLabel(type: string) {
 export default async function DatasetsPage() {
   const user = await requireUser()
   const supabase = await createClient()
+  const governanceSuperAdminOrganizationIds = await dataGovernanceSuperAdminOrganizationIds(user.id)
 
   const [projectsResult, sourcesResult, readinessResult, datasetsResult, versionsResult, membershipsResult, executionSourcesResult, profileRunsResult, agentDefinitionResult] = await Promise.all([
     supabase.schema('app').from('projects').select('id, name').order('name'),
@@ -80,8 +82,9 @@ export default async function DatasetsPage() {
   const memberships = (membershipsResult.data ?? []) as MembershipRow[]
   const agentDefinition = agentDefinitionResult.data as AgentDefinitionRow | null
   const adminOrganizationIds = memberships.filter(m => ['OWNER', 'ADMIN'].includes(String(m.role))).map(m => m.organization_id)
-  const organizationsResult = adminOrganizationIds.length > 0
-    ? await supabase.schema('app').from('organizations').select('id, name').in('id', adminOrganizationIds).order('name')
+  const projectCreationOrganizationIds = [...new Set([...adminOrganizationIds, ...governanceSuperAdminOrganizationIds])]
+  const organizationsResult = projectCreationOrganizationIds.length > 0
+    ? await supabase.schema('app').from('organizations').select('id, name').in('id', projectCreationOrganizationIds).order('name')
     : { data: [], error: null }
   if (organizationsResult.error) throw new Error(`Unable to load organizations: ${organizationsResult.error.message}`)
   const organizations = (organizationsResult.data ?? []) as OrganizationOption[]
