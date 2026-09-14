@@ -1,43 +1,57 @@
 .monitoringStage {
-  --cell-shell: #061829;
+  --membrane-rgb: 34, 211, 238;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) {
-  --cell-rgb: 34, 211, 238;
+  --status-rgb: 34, 211, 238;
   isolation: isolate;
   justify-self: center;
-  width: min(100%, 540px);
+  width: min(100%, 440px);
   min-height: 0 !important;
-  aspect-ratio: 1.18 / 1;
-  border-radius: 47% 53% 49% 51% / 56% 43% 57% 44% !important;
+  aspect-ratio: 1 / 1;
+  overflow: visible !important;
+  border-color: rgba(var(--membrane-rgb), 0.72) !important;
+  border-radius: 49% 51% 48% 52% / 51% 48% 52% 49% !important;
   background:
-    radial-gradient(circle at 48% 50%, rgba(3, 15, 28, 0.24) 0 17%, transparent 18%),
-    radial-gradient(ellipse at 33% 24%, rgba(var(--cell-rgb), 0.17), transparent 35%),
-    radial-gradient(ellipse at 72% 72%, rgba(var(--cell-rgb), 0.11), transparent 38%),
-    radial-gradient(ellipse at 54% 48%, rgba(255, 255, 255, 0.045), transparent 52%),
-    linear-gradient(145deg, rgba(8, 31, 50, 0.98), rgba(3, 15, 27, 0.99)) !important;
-  filter: drop-shadow(0 0 18px rgba(var(--cell-rgb), 0.14));
+    radial-gradient(circle at 50% 49%, rgba(3, 18, 34, 0.16) 0 19%, transparent 20%),
+    radial-gradient(circle at 38% 28%, rgba(var(--membrane-rgb), 0.15), transparent 31%),
+    radial-gradient(circle at 69% 68%, rgba(30, 100, 255, 0.12), transparent 37%),
+    radial-gradient(circle at 50% 50%, rgba(42, 106, 184, 0.1), transparent 59%),
+    linear-gradient(145deg, rgba(4, 23, 43, 0.99), rgba(1, 12, 24, 0.995)) !important;
+  box-shadow:
+    0 0 4px rgba(129, 235, 255, 0.88),
+    0 0 17px rgba(var(--membrane-rgb), 0.5),
+    0 0 46px rgba(22, 111, 255, 0.27),
+    0 0 92px rgba(11, 77, 192, 0.12),
+    inset 0 0 25px rgba(var(--membrane-rgb), 0.1),
+    inset 0 0 74px rgba(18, 83, 160, 0.09) !important;
+  filter: drop-shadow(0 0 14px rgba(40, 136, 255, 0.18));
   transform: translateZ(0);
 }
 
 .monitoringStage article[class*="border-fuchsia-400"]:has(button[aria-label$=" Data Domain"]) {
-  --cell-rgb: 217, 70, 239;
+  --status-rgb: 217, 70, 239;
 }
 
 .monitoringStage article[class*="border-emerald-300"]:has(button[aria-label$=" Data Domain"]) {
-  --cell-rgb: 52, 211, 153;
+  --status-rgb: 52, 211, 153;
 }
 
 .monitoringStage article[class*="border-amber-300"]:has(button[aria-label$=" Data Domain"]) {
-  --cell-rgb: 251, 191, 36;
+  --status-rgb: 251, 191, 36;
 }
 
 .monitoringStage article[class*="border-sky-300"]:has(button[aria-label$=" Data Domain"]) {
-  --cell-rgb: 125, 211, 252;
+  --status-rgb: 125, 211, 252;
 }
 
 .monitoringStage article[class*="border-slate-500"]:has(button[aria-label$=" Data Domain"]) {
-  --cell-rgb: 148, 163, 184;
+  --status-rgb: 148, 163, 184;
+}
+
+.monitoringStage article[class*="ring-2"]:has(button[aria-label$=" Data Domain"]) {
+  outline: 1px solid rgba(186, 245, 255, 0.74);
+  outline-offset: 5px;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"])::before,
@@ -49,106 +63,200 @@
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"])::before {
   z-index: 1;
-  inset: 3.5% 4.5% 4.5% 3.5%;
-  border: 1px solid rgba(var(--cell-rgb), 0.2);
-  border-radius: 52% 48% 46% 54% / 45% 57% 43% 55%;
+  inset: 2.2% 2.7% 2.9% 2.1%;
+  border: 1px solid rgba(159, 238, 255, 0.46);
+  border-radius: 51% 49% 52% 48% / 48% 52% 49% 51%;
   box-shadow:
-    inset 0 0 26px rgba(var(--cell-rgb), 0.1),
-    inset 0 0 72px rgba(var(--cell-rgb), 0.07),
-    0 0 22px rgba(var(--cell-rgb), 0.08);
-  transform: rotate(-1.5deg);
+    0 0 7px rgba(var(--membrane-rgb), 0.62),
+    0 0 22px rgba(30, 121, 255, 0.28),
+    inset 0 0 16px rgba(var(--membrane-rgb), 0.17),
+    inset 0 0 44px rgba(33, 111, 224, 0.1);
+  transform: rotate(-1.25deg);
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"])::after {
   z-index: 0;
-  inset: 9% 8% 10% 9%;
-  border-radius: 44% 56% 54% 46% / 58% 45% 55% 42%;
+  inset: 8.5% 8% 8.7% 8.5%;
+  border: 1px solid rgba(86, 170, 255, 0.13);
+  border-radius: 48% 52% 49% 51% / 53% 47% 52% 48%;
   background:
-    radial-gradient(circle at 30% 32%, rgba(var(--cell-rgb), 0.14), transparent 26%),
-    radial-gradient(circle at 68% 66%, rgba(var(--cell-rgb), 0.09), transparent 30%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.03), transparent 58%);
-  box-shadow: inset 0 0 58px rgba(var(--cell-rgb), 0.08);
+    radial-gradient(circle at 34% 31%, rgba(var(--membrane-rgb), 0.12), transparent 25%),
+    radial-gradient(circle at 70% 67%, rgba(51, 118, 255, 0.1), transparent 30%),
+    radial-gradient(circle at 50% 50%, rgba(60, 121, 194, 0.04), transparent 58%);
+  box-shadow:
+    inset 0 0 36px rgba(var(--membrane-rgb), 0.09),
+    inset 0 0 78px rgba(15, 76, 156, 0.08);
   animation: domain-cell-breathe 7.5s ease-in-out infinite;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:first-of-type {
-  opacity: 1 !important;
+  opacity: 0.95 !important;
+  overflow: hidden;
+  border-radius: inherit;
   background-image:
-    radial-gradient(circle at 29% 26%, rgba(var(--cell-rgb), 0.19), transparent 26%),
-    radial-gradient(circle at 76% 65%, rgba(var(--cell-rgb), 0.12), transparent 34%),
-    radial-gradient(circle at 49% 51%, rgba(255, 255, 255, 0.045), transparent 43%) !important;
+    radial-gradient(circle at 29% 26%, rgba(var(--membrane-rgb), 0.16), transparent 27%),
+    radial-gradient(circle at 73% 68%, rgba(41, 102, 255, 0.11), transparent 34%),
+    radial-gradient(circle at 49% 51%, rgba(117, 180, 255, 0.045), transparent 46%) !important;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(2) {
-  inset: 12% 11% 13% 12% !important;
-  border-color: rgba(var(--cell-rgb), 0.13) !important;
-  border-radius: 49% 51% 46% 54% / 55% 44% 56% 45% !important;
+  inset: 12.5% !important;
+  border-color: rgba(116, 198, 255, 0.12) !important;
+  border-radius: 50% 50% 47% 53% / 53% 47% 52% 48% !important;
   box-shadow:
-    inset 0 0 58px rgba(var(--cell-rgb), 0.1),
-    0 0 28px rgba(var(--cell-rgb), 0.05) !important;
-  transform: rotate(2deg);
+    inset 0 0 34px rgba(var(--membrane-rgb), 0.09),
+    inset 0 0 72px rgba(38, 101, 180, 0.07),
+    0 0 24px rgba(42, 132, 255, 0.06) !important;
+  transform: rotate(1.2deg);
+}
+
+/* Fold the title into the cell instead of leaving a card-like header strip. */
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(3) {
+  position: absolute !important;
+  z-index: 30 !important;
+  top: 8.5%;
+  left: 15%;
+  right: 15%;
+  display: block !important;
+  text-align: center;
+}
+
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(3) > button:first-child {
+  display: block;
+  max-width: 78%;
+  margin: 0 auto;
+  text-align: center !important;
+}
+
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(3) > button:first-child p:first-child {
+  color: rgba(146, 229, 255, 0.48) !important;
+}
+
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(3) > button:first-child h3 {
+  font-size: 0.94rem !important;
+  text-shadow: 0 0 12px rgba(var(--membrane-rgb), 0.18);
+}
+
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(3) > span:last-child {
+  position: absolute;
+  top: -1px;
+  right: -3%;
+  padding: 0.28rem 0.48rem !important;
+  font-size: 9px !important;
+  opacity: 0.68;
+  backdrop-filter: blur(6px);
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > svg {
-  opacity: 0.44 !important;
-  filter: drop-shadow(0 0 3px rgba(var(--cell-rgb), 0.2));
+  z-index: 8;
+  opacity: 0.54 !important;
+  filter: drop-shadow(0 0 3px rgba(var(--membrane-rgb), 0.28));
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > button[aria-label$="Data Domain summary"] {
-  top: 53.5% !important;
+  top: 52% !important;
+  z-index: 24 !important;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) > button[aria-label$="Data Domain summary"] > div {
-  border-radius: 47% 53% 55% 45% / 54% 44% 56% 46% !important;
+  width: 6.6rem !important;
+  height: 6.6rem !important;
+  border-color: rgba(var(--status-rgb), 0.58) !important;
+  border-radius: 48% 52% 55% 45% / 54% 45% 55% 46% !important;
   background:
-    radial-gradient(circle at 42% 35%, rgba(var(--cell-rgb), 0.16), transparent 34%),
-    linear-gradient(145deg, rgba(8, 31, 47, 0.98), rgba(4, 18, 31, 0.98)) !important;
+    radial-gradient(circle at 44% 39%, rgba(var(--status-rgb), 0.28), transparent 24%),
+    radial-gradient(circle at 50% 50%, rgba(var(--status-rgb), 0.14), transparent 48%),
+    linear-gradient(145deg, rgba(8, 26, 45, 0.99), rgba(3, 14, 27, 0.99)) !important;
   box-shadow:
-    inset 0 0 32px rgba(var(--cell-rgb), 0.1),
-    0 0 28px rgba(var(--cell-rgb), 0.18) !important;
+    0 0 8px rgba(var(--status-rgb), 0.42),
+    0 0 29px rgba(var(--status-rgb), 0.24),
+    inset 0 0 24px rgba(var(--status-rgb), 0.13) !important;
+}
+
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) > button[aria-label$="Data Domain summary"] > div > div > div:first-child {
+  border-color: rgba(var(--status-rgb), 0.46) !important;
+  background-color: rgba(var(--status-rgb), 0.08) !important;
+  box-shadow: 0 0 16px rgba(var(--status-rgb), 0.16);
+}
+
+/* Spread the execution organelles closer to the membrane, like the original reference. */
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] {
+  inset: 9% !important;
+  z-index: 22 !important;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] button[aria-label*=","] {
   box-shadow:
-    inset 0 0 12px rgba(var(--cell-rgb), 0.08),
-    0 0 18px rgba(var(--cell-rgb), 0.12);
+    0 0 5px rgba(222, 250, 255, 0.22),
+    0 0 19px rgba(var(--status-rgb), 0.13),
+    inset 0 0 12px rgba(255, 255, 255, 0.04);
+}
+
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] button[aria-label*=","] > span:first-child {
+  opacity: 0.86 !important;
+  filter: blur(7px);
+}
+
+/* Keep health counts available without recreating a rectangular card footer. */
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(5) {
+  bottom: 5.8% !important;
+  left: 18% !important;
+  right: 18% !important;
+  justify-content: center !important;
+  border-top: 0 !important;
+  padding-top: 0 !important;
+  font-size: 9px !important;
+  color: rgba(160, 204, 225, 0.52) !important;
+  text-align: center;
+}
+
+.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(5) > button {
+  display: none !important;
 }
 
 .monitoringStage article:has(button[aria-label$=" Data Domain"]):hover {
-  filter: drop-shadow(0 0 28px rgba(var(--cell-rgb), 0.22));
+  filter: drop-shadow(0 0 22px rgba(40, 136, 255, 0.31));
 }
 
 @keyframes domain-cell-breathe {
   0%, 100% {
-    opacity: 0.78;
-    transform: scale(0.992) rotate(0deg);
+    opacity: 0.77;
+    transform: scale(0.994) rotate(0deg);
   }
   50% {
     opacity: 1;
-    transform: scale(1.012) rotate(0.8deg);
+    transform: scale(1.008) rotate(0.45deg);
   }
 }
 
 @media (min-width: 1536px) {
   .monitoringStage article:has(button[aria-label$=" Data Domain"]) {
-    width: min(100%, 470px);
-    aspect-ratio: 1.14 / 1;
+    width: min(100%, 410px);
   }
 }
 
 @media (max-width: 1023px) {
   .monitoringStage article:has(button[aria-label$=" Data Domain"]) {
-    width: min(100%, 620px);
-    aspect-ratio: 1.2 / 1;
+    width: min(100%, 500px);
   }
 }
 
 @media (max-width: 640px) {
   .monitoringStage article:has(button[aria-label$=" Data Domain"]) {
     width: 100%;
-    aspect-ratio: auto;
-    min-height: 360px !important;
-    border-radius: 42% 58% 51% 49% / 38% 44% 56% 62% !important;
+    aspect-ratio: 1 / 1;
+    min-height: 350px !important;
+  }
+
+  .monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(3) {
+    top: 7.5%;
+    left: 10%;
+    right: 10%;
+  }
+
+  .monitoringStage article:has(button[aria-label$=" Data Domain"]) > button[aria-label$="Data Domain summary"] > div {
+    width: 5.9rem !important;
+    height: 5.9rem !important;
   }
 }
 
