@@ -4,8 +4,14 @@ import fs from 'node:fs'
 const page = fs.readFileSync('app/monitoring/page.tsx', 'utf8')
 const monitor = fs.readFileSync('app/monitoring/job-monitor.tsx', 'utf8')
 const domainDetail = fs.readFileSync('app/monitoring/domain/[projectId]/page.tsx', 'utf8')
+const refreshRoute = fs.readFileSync('app/api/monitoring/runs/route.ts', 'utf8')
 
-assert.ok(page.includes("select('id, name, business_domain')"), 'monitor must source Data Domain identity from persisted catalog metadata')
+assert.ok(page.includes("select('id, project_id, name, business_domain')"), 'monitor must source Data Domain identity from persisted catalog metadata for authorized runs')
+assert.ok(page.includes('createAdminClient'), 'domain metadata enrichment must use the trusted server boundary after run authorization')
+assert.ok(page.includes('filterAuthorizedExecutionRuns'), 'monitor must preserve resource authorization before presenting execution state')
+assert.ok(page.includes('MONITORING_RUN_WINDOW'), 'monitor overview must use the shared execution snapshot window')
+assert.ok(refreshRoute.includes('MONITORING_RUN_WINDOW'), 'monitor refresh must use the same execution snapshot window')
+assert.ok(refreshRoute.includes('business_domain'), 'monitor refresh must preserve persisted Data Domain metadata')
 assert.ok(monitor.includes("return domain || 'Unassigned Data Domain'"), 'missing domain metadata must fail visibly into an unassigned bucket')
 assert.ok(monitor.includes("const key = \`${run.project_id}::${domainName}\`"), 'same-named domains from separate governed scopes must remain isolated')
 assert.ok(monitor.includes("if (!latest.has(run.agent_definition_id))"), 'repeated component runs must collapse deterministically to the latest record')
@@ -31,4 +37,4 @@ assert.ok(!monitor.includes('standing in for a Data Domain'), 'UI must not misre
 assert.ok(!monitor.includes('Math.random'), 'organic topology must remain deterministic')
 assert.ok(!/SIMULATED DATA|simulated data/i.test(monitor), 'production monitor must not present real evidence as simulated')
 
-console.log('Independent adversarial Domain Cell audit passed: no project-as-domain substitution, no cross-project merge, no hidden unassigned mapping, no component truncation, full enabled repertoire, dedicated authorized domain drilldown, no synthetic runs, scoped palettes, deterministic topology, density adaptation, and latest-state semantics.')
+console.log('Independent adversarial Domain Cell audit passed: authorized persisted-domain enrichment, shared snapshot semantics, no project-as-domain substitution, no cross-project merge, visible unassigned fallback, no component truncation, full enabled repertoire, dedicated authorized domain drilldown, no synthetic runs, scoped palettes, deterministic topology, density adaptation, and latest-state semantics.')
