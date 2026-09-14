@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
 import { loadApprovalInbox } from '@/lib/governance/approval-inbox'
 import { ApprovalInbox } from './approval-inbox'
+import { DelegationManager } from './delegation-manager'
 
 export default async function ApprovalsPage() {
   const user = await requireUser()
@@ -24,6 +25,7 @@ export default async function ApprovalsPage() {
           </div>
         </header>
         <ApprovalInbox items={items} />
+        <DelegationManager />
       </div>
     </main>
   )
