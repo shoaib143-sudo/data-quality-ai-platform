@@ -1,0 +1,54 @@
+name: Job Monitor Governed Domain Context
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/monitoring/**'
+      - 'app/api/monitoring/domain-context/**'
+      - 'lib/monitoring/**'
+      - 'lib/governance/dataset-governance-posture.ts'
+      - 'scripts/test-domain-cell-job-monitor.mjs'
+      - 'scripts/verify-domain-cell-job-monitor.mjs'
+      - 'scripts/audit-domain-cell-job-monitor-adversarial.mjs'
+      - 'scripts/test-job-monitor-domain-context.mjs'
+      - 'scripts/audit-job-monitor-domain-context-adversarial.mjs'
+      - '.github/workflows/job-monitor-governed-domain-context.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/monitoring/**'
+      - 'app/api/monitoring/domain-context/**'
+      - 'lib/monitoring/**'
+      - 'lib/governance/dataset-governance-posture.ts'
+      - 'scripts/test-domain-cell-job-monitor.mjs'
+      - 'scripts/verify-domain-cell-job-monitor.mjs'
+      - 'scripts/audit-domain-cell-job-monitor-adversarial.mjs'
+      - 'scripts/test-job-monitor-domain-context.mjs'
+      - 'scripts/audit-job-monitor-domain-context-adversarial.mjs'
+      - '.github/workflows/job-monitor-governed-domain-context.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Unit test recorded domain context policy
+        run: node --experimental-strip-types scripts/test-job-monitor-domain-context.mjs
+      - name: Preserve Domain Cell grouping and organic layout contracts
+        run: node scripts/test-domain-cell-job-monitor.mjs && node scripts/verify-domain-cell-job-monitor.mjs
+      - name: Independent adversarial domain context audit
+        run: node scripts/audit-job-monitor-domain-context-adversarial.mjs && node scripts/audit-domain-cell-job-monitor-adversarial.mjs
+      - name: Production build
+        run: pnpm run build
