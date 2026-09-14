@@ -266,6 +266,19 @@ attack('ready execution requests require independent runtime capability and curr
   assert.ok(pickup.indexOf('validateApprovalForExecution') < pickup.indexOf("approval.action_key === 'RUN_PROFILING'"))
 })
 
+attack('dataset resource ACL is revalidated immediately before profiling and Data Quality execution', () => {
+  const service = fs.readFileSync('lib/governance/agent-approval-service.ts', 'utf8')
+  const profiling = fs.readFileSync('app/api/agents/run/route.ts', 'utf8')
+  const quality = fs.readFileSync('app/api/data-quality/run/route.ts', 'utf8')
+  assert.match(service, /canViewDatasetResource\(input\.executorUserId, datasetId\)/)
+  assert.match(service, /not authorized to access this dataset resource/)
+  assert.ok(service.indexOf('canViewDatasetResource(input.executorUserId, datasetId)') < service.indexOf('authorizeDataset(input.executorUserId, datasetId, profile.capability)'))
+  assert.match(profiling, /canViewDatasetResource\(user\.id, dataset\.id\)/)
+  assert.ok(profiling.indexOf('canViewDatasetResource(user.id, dataset.id)') < profiling.indexOf('validateDataSourceForProfiling'))
+  assert.equal((quality.match(/canViewDatasetResource\(user\.id, dataset\.id\)/g) ?? []).length, 2)
+  assert.ok(quality.indexOf('canViewDatasetResource(user.id, dataset.id)') < quality.indexOf('enabledQualityRuleCount'))
+})
+
 attack('profiling and Data Quality preserve narrower execution capabilities', () => {
   const catalog = fs.readFileSync('lib/governance/agent-action-catalog.ts', 'utf8')
   assert.match(catalog, /RUN_PROFILING:[\s\S]*capability: 'profiling\.execute'/)

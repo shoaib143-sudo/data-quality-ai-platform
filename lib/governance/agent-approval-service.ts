@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { authorizeDataset, authorizeProject } from '@/lib/auth/authorize'
+import { authorizeDataset, authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
+import { canViewDatasetResource } from './resource-authorization'
 import { assertProjectBelongsToInstanceOrganization, resolveInstanceOrganizationMembership } from './instance-organization'
 import { authorizeAgentAction } from './agent-authorization'
 import { agentActionCatalog, getAgentActionProfile } from './agent-action-catalog'
@@ -307,7 +308,11 @@ export async function validateApprovalForExecution(input: {
 
   const profile = getAgentActionProfile(String(request.action_key))
   if (String(request.target_type) === 'DATASET') {
-    await authorizeDataset(input.executorUserId, String(request.target_id), profile.capability)
+    const datasetId = String(request.target_id)
+    if (!await canViewDatasetResource(input.executorUserId, datasetId)) {
+      throw new AuthorizationError('You are not authorized to access this dataset resource.')
+    }
+    await authorizeDataset(input.executorUserId, datasetId, profile.capability)
   } else {
     await authorizeProject(input.executorUserId, String(request.project_id), profile.capability)
   }
