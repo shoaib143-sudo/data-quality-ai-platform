@@ -33,6 +33,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ dependencies })
   } catch (error) {
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load monitoring dependencies.' }, { status: 500 })
+    console.error('[monitoring-dependencies] dependency evidence read failed', error)
+    return NextResponse.json({ error: 'Unable to load monitoring dependencies.' }, { status: 500 })
   }
 }
