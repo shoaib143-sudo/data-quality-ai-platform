@@ -5,6 +5,8 @@ import { runNativeSpecialistSupervisor } from '@/lib/agents/runtime/native-super
 import { currentExecutionFingerprint, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
 import { finalizeAgentApprovalExecution } from '@/lib/governance/agent-approval-audit'
 
+// markApprovalExecuted is superseded by the atomic finalizer so status and Living Tree audit provenance cannot diverge.
+
 export const maxDuration = 300
 
 function text(value: unknown) {
