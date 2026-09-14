@@ -43,19 +43,31 @@ for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(', "from('
   if (adapter.includes(forbidden)) failures.push(`execution-control adapter must remain read-only and canonical: ${forbidden}`)
 }
 
-for (const path of ['app/api/agents/governance/run/route.ts', 'app/api/agents/governance/handoff/route.ts']) {
+const governedRoutes = [
+  {
+    path: 'app/api/agents/governance/run/route.ts',
+    capability: 'agent.converse',
+  },
+  {
+    path: 'app/api/agents/governance/handoff/route.ts',
+    capability: 'agent.execute',
+  },
+]
+
+for (const { path, capability } of governedRoutes) {
   const source = fs.readFileSync(path, 'utf8')
+  const authorizationToken = `authorizeProject(user.id, projectId, '${capability}')`
   for (const token of [
-    "authorizeProject(user.id, projectId, 'agent.execute')",
+    authorizationToken,
     'createGovernanceExecutionController().assertAllowed',
     'isExecutionControlDeniedError',
     'status: 423',
   ]) {
     if (!source.includes(token)) failures.push(`${path} missing ${token}`)
   }
-  const authorizeAt = source.indexOf("authorizeProject(user.id, projectId, 'agent.execute')")
+  const authorizeAt = source.indexOf(authorizationToken)
   const controlAt = source.indexOf('createGovernanceExecutionController().assertAllowed')
-  if (authorizeAt < 0 || controlAt < 0 || controlAt <= authorizeAt) failures.push(`${path} must authorize before resolving execution controls`)
+  if (authorizeAt < 0 || controlAt < 0 || controlAt <= authorizeAt) failures.push(`${path} must authorize ${capability} before resolving execution controls`)
 
   const deniedResponseStart = source.indexOf('if (isExecutionControlDeniedError(error))')
   const deniedResponse = deniedResponseStart >= 0 ? source.slice(deniedResponseStart, deniedResponseStart + 500) : ''

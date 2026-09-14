@@ -19,7 +19,6 @@ import {
 } from 'lucide-react'
 
 import { ExecutionStatusBadge } from '@/components/app-shell/execution-status'
-import { createClient } from '@/lib/supabase/client'
 import { GovernedDomainContext } from './governed-domain-context'
 
 export type MonitoringRun = {
@@ -405,20 +404,12 @@ export function JobMonitor({
   const refresh = useCallback(async () => {
     setRefreshing(true)
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase.schema('agent').from('agent_runs').select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message').order('created_at', { ascending: false }).limit(50)
-      if (!error && data) {
-        const nextRuns = data as MonitoringRun[]
-        setRuns(nextRuns)
-        const ids = nextRuns.map((run) => run.id)
-        if (ids.length) {
-          const { data: nextSteps, error: stepError } = await supabase.schema('agent').from('agent_run_steps').select('id, agent_run_id, step_name, step_order, status, attempt, started_at, completed_at, error_code, error_message').in('agent_run_id', ids).order('step_order')
-          if (!stepError && nextSteps) setSteps(nextSteps as MonitoringStep[])
-        } else {
-          setSteps([])
-        }
-        setLastUpdated(new Date())
-      }
+      const response = await fetch('/api/monitoring/runs', { cache: 'no-store' })
+      if (!response.ok) return
+      const payload = await response.json() as { runs?: MonitoringRun[]; steps?: MonitoringStep[] }
+      setRuns(payload.runs ?? [])
+      setSteps(payload.steps ?? [])
+      setLastUpdated(new Date())
     } finally {
       setRefreshing(false)
     }

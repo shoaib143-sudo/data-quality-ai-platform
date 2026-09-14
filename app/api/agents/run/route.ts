@@ -7,6 +7,8 @@ import { sanitizeProfilingRequestInput } from '@/lib/profiling/request-input'
 import { claimDurableJobByAgentRun, enqueueDurableJob } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
 import { dispatchAdaptiveRounds } from '@/lib/orchestration/adaptive-dispatch'
+import { currentExecutionFingerprint, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
+import { finalizeAgentApprovalExecution } from '@/lib/governance/agent-approval-audit'
 
 export const maxDuration = 300
 
@@ -28,6 +30,7 @@ export async function POST(request: Request) {
     const requestedProjectId = text(rawInput.projectId ?? rawInput.project_id)
     const datasetVersionId = text(rawInput.datasetVersionId ?? rawInput.dataset_version_id)
     const agentDefinitionId = text(rawInput.agentDefinitionId ?? rawInput.agent_definition_id)
+    const approvalRequestId = text(rawInput.approvalRequestId ?? rawInput.approval_request_id)
     const rawIdempotencyKey = text(request.headers.get('idempotency-key') ?? rawInput.idempotencyKey ?? rawInput.idempotency_key)
     const idempotencyKey = rawIdempotencyKey ? `profiling:${rawIdempotencyKey}` : null
 
@@ -38,6 +41,18 @@ export async function POST(request: Request) {
     const { dataset, version: datasetVersion } = await authorizeDatasetVersion(user.id, datasetVersionId, 'profiling.execute')
     if (dataset.project_id !== requestedProjectId) return NextResponse.json({ error: 'Dataset version does not belong to the requested project.' }, { status: 400 })
     const projectId = dataset.project_id
+
+    if (approvalRequestId) {
+      const currentFingerprint = await currentExecutionFingerprint({
+        requestId: approvalRequestId,
+        parameters: { agentDefinitionId, datasetVersionId },
+      })
+      await validateApprovalForExecution({
+        requestId: approvalRequestId,
+        executorUserId: user.id,
+        currentFingerprint,
+      })
+    }
 
     if (idempotencyKey) {
       const { data: existingJob, error: existingError } = await admin
@@ -51,6 +66,14 @@ export async function POST(request: Request) {
       if (existingJob?.agent_run_id) {
         const payload = existingJob.payload && typeof existingJob.payload === 'object' ? existingJob.payload as Record<string, unknown> : {}
         const profilingRunId = text(payload.profilingRunId)
+        if (approvalRequestId) {
+          await finalizeAgentApprovalExecution({
+            requestId: approvalRequestId,
+            executorUserId: user.id,
+            executionEntityType: 'AGENT_RUN',
+            executionEntityId: existingJob.agent_run_id,
+          })
+        }
         return NextResponse.json({
           accepted: true,
           reused: true,
@@ -191,6 +214,14 @@ export async function POST(request: Request) {
         }
       })
 
+      if (approvalRequestId) {
+        await finalizeAgentApprovalExecution({
+          requestId: approvalRequestId,
+          executorUserId: user.id,
+          executionEntityType: 'AGENT_RUN',
+          executionEntityId: activeAgentRunId,
+        })
+      }
       return NextResponse.json({
         accepted: true,
         reused: false,

@@ -39,7 +39,7 @@ const checks = [
   ['DQ mutations remain governed-workflow only', /data_quality_agent:[\s\S]*mutationBoundary: 'GOVERNED_WORKFLOW_ONLY'/.test(registry)],
   ['every role has a tool allowlist', (registry.match(/^    toolAllowlist:/gm) ?? []).length === eightAgentKeys.length],
   ['every role has explicit handoff targets', (registry.match(/^    handoffTargets:/gm) ?? []).length === eightAgentKeys.length],
-  ['investigation contract is explicitly project scoped', investigation.includes('projectScoped: true') && investigation.includes("authorizationCapability: 'agent.execute'")],
+  ['investigation contract is explicitly project scoped', investigation.includes('projectScoped: true') && investigation.includes("authorizationCapability: 'agent.converse'")],
   ['investigation separates authoritative, observed, proposed and reference evidence', ['AUTHORITATIVE', 'OBSERVED_EVIDENCE', 'PROPOSED_NON_AUTHORITATIVE', 'REFERENCE_CONTEXT'].every((value) => investigation.includes(`'${value}'`))],
   ['provenance carries source id authority and observation time', investigation.includes('const ref = `${source}:${id}`') && investigation.includes('source,') && investigation.includes('authority: authorityFor(source, row)') && investigation.includes('observedAt: observedAt(row)')],
   ['investigation is bounded', investigation.includes('MAX_PROVENANCE_REFS = 1200') && investigation.includes('SOURCE_ROWS_PER_DOMAIN = 150') && investigation.includes('input.knowledgeMatches.slice(0, 20)') && investigation.includes('input.graph.edges.slice(0, 100)')],
@@ -54,9 +54,9 @@ const checks = [
   ['specialist audit records grounding evidence', specialist.includes('investigation_grounding_status') && specialist.includes('investigation_evidence_ref_count') && specialist.includes('investigation_referenced_evidence_count')],
   ['specialist evidence sources identify investigation contract', specialist.includes('governed_investigation.contract.v1')],
   ['governance agent API uses API-safe auth', governanceRoute.includes('requireApiUser') && !governanceRoute.includes('requireUser()')],
-  ['governance agent API preserves agent.execute authorization', governanceRoute.includes("authorizeProject(user.id, projectId, 'agent.execute')")],
+  ['governance agent API uses agent.converse authorization', governanceRoute.includes("authorizeProject(user.id, projectId, 'agent.converse')")],
   ['eight-agent registry API uses API-safe auth', registryRoute.includes('requireApiUser') && !registryRoute.includes('requireUser()')],
-  ['eight-agent registry API is project-authorized', registryRoute.includes("authorizeProject(user.id, projectId, 'agent.execute')")],
+  ['eight-agent registry API uses agent.view authorization', registryRoute.includes("authorizeProject(user.id, projectId, 'agent.view')")],
   ['registry API reports incomplete state instead of fabricating missing agents', registryRoute.includes("readiness: missingAgentKeys.length ? 'INCOMPLETE' : 'READY'") && registryRoute.includes('missingAgentKeys')],
 ]
 

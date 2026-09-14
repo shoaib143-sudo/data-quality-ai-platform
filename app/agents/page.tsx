@@ -3,6 +3,10 @@ import Link from 'next/link'
 import { RunAgentForm, type AgentOption, type DatasetVersionOption, type ProjectOption } from './run-agent-form'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { requireUser } from '@/lib/supabase/auth'
+import { hasProjectCapability } from '@/lib/auth/authorize'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { resolveConversationPolicy } from '@/lib/governance/conversation-policy'
+import { canViewDatasetResource, filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
 import { createClient } from '@/lib/supabase/server'
 
 type AgentDefinition = AgentOption & {
@@ -37,6 +41,8 @@ type DatasetVersionRow = {
 type AgentRun = {
   id: string
   agent_definition_id: string
+  project_id: string
+  dataset_id: string | null
   dataset_version_id: string | null
   status: string
   created_at: string
@@ -45,7 +51,13 @@ type AgentRun = {
 }
 
 export default async function AgentsPage() {
-  await requireUser()
+  const user = await requireUser()
+  const accessContext = await resolveLandingAccess(user.id)
+  const conversationDefaults = await resolveConversationPolicy({
+    organizationId: accessContext.organizationId,
+    userId: user.id,
+    persona: accessContext.persona,
+  })
   const supabase = await createClient()
 
   const [agentsResult, projectsResult, datasetsResult, versionsResult, runsResult] = await Promise.all([
@@ -56,16 +68,22 @@ export default async function AgentsPage() {
     supabase.schema('catalog').from('datasets').select('id, project_id, name').order('name'),
     supabase.schema('catalog').from('dataset_versions').select('id, dataset_id, version_number').order('version_number', { ascending: false }),
     supabase.schema('agent').from('agent_runs')
-      .select('id, agent_definition_id, dataset_version_id, status, created_at, completed_at, error_code')
+      .select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, completed_at, error_code')
       .order('created_at', { ascending: false }).limit(10),
   ])
 
   const agentsError = agentsResult.error
   const enabledAgents = (agentsResult.data ?? []) as AgentDefinition[]
   const projects = (projectsResult.data ?? []) as ProjectOption[]
-  const datasets = (datasetsResult.data ?? []) as DatasetRow[]
-  const versions = (versionsResult.data ?? []) as DatasetVersionRow[]
-  const runs = (runsResult.data ?? []) as AgentRun[]
+  const candidateDatasets = (datasetsResult.data ?? []) as DatasetRow[]
+  const datasetVisibility = await Promise.all(candidateDatasets.map(async dataset => ({
+    dataset,
+    allowed: await canViewDatasetResource(user.id, dataset.id),
+  })))
+  const datasets = datasetVisibility.filter(item => item.allowed).map(item => item.dataset)
+  const visibleDatasetIds = new Set(datasets.map(dataset => dataset.id))
+  const versions = ((versionsResult.data ?? []) as DatasetVersionRow[]).filter(version => visibleDatasetIds.has(version.dataset_id))
+  const runs = await filterAuthorizedExecutionRuns(user.id, (runsResult.data ?? []) as AgentRun[])
 
   if (projectsResult.error) throw new Error(`Unable to load projects: ${projectsResult.error.message}`)
   if (datasetsResult.error) throw new Error(`Unable to load datasets: ${datasetsResult.error.message}`)
@@ -87,6 +105,30 @@ export default async function AgentsPage() {
       versionNumber: version.version_number,
     }]
   })
+
+  const [
+    agentExecuteProjectIds,
+    profilingExecuteProjectIds,
+    qualityExecuteProjectIds,
+    conversationalProjectIds,
+    requestableProjectIds,
+  ] = await Promise.all([
+    Promise.all(projects.map(async (project) =>
+      (await hasProjectCapability(user.id, project.id, 'agent.execute')) ? project.id : null,
+    )).then(values => values.filter((projectId): projectId is string => Boolean(projectId))),
+    Promise.all(projects.map(async (project) =>
+      (await hasProjectCapability(user.id, project.id, 'profiling.execute')) ? project.id : null,
+    )).then(values => values.filter((projectId): projectId is string => Boolean(projectId))),
+    Promise.all(projects.map(async (project) =>
+      (await hasProjectCapability(user.id, project.id, 'quality.execute')) ? project.id : null,
+    )).then(values => values.filter((projectId): projectId is string => Boolean(projectId))),
+    Promise.all(projects.map(async (project) =>
+      (await hasProjectCapability(user.id, project.id, 'agent.converse')) ? project.id : null,
+    )).then(values => values.filter((projectId): projectId is string => Boolean(projectId))),
+    Promise.all(projects.map(async (project) =>
+      (await hasProjectCapability(user.id, project.id, 'agent.recommend')) ? project.id : null,
+    )).then(values => values.filter((projectId): projectId is string => Boolean(projectId))),
+  ])
 
   const agentOptions: AgentOption[] = enabledAgents.map((agent) => ({
     id: agent.id,
@@ -129,7 +171,17 @@ export default async function AgentsPage() {
           </p>
         </header>
 
-        <RunAgentForm agents={agentOptions} projects={projects} datasetVersions={datasetVersions} />
+        <RunAgentForm
+          agents={agentOptions}
+          projects={projects}
+          datasetVersions={datasetVersions}
+          agentExecuteProjectIds={agentExecuteProjectIds}
+          profilingExecuteProjectIds={profilingExecuteProjectIds}
+          qualityExecuteProjectIds={qualityExecuteProjectIds}
+          conversationalProjectIds={conversationalProjectIds}
+          requestableProjectIds={requestableProjectIds}
+          conversationDefaults={conversationDefaults}
+        />
 
         {agentsError ? (
           <section className="rounded-xl border border-red-200 p-6">

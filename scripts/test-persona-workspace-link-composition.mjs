@@ -25,7 +25,7 @@ assert.match(physicalAssetsPage,/>DataNexus AI<\/Link>/,'Physical Assets must us
 assert.match(policy,/'metadata-analyst': \[[^\]]*'lineage'[^\]]*\]/s,'Metadata Analyst must retain read lineage access.')
 assert.doesNotMatch(policy,/'metadata-analyst': \[[^\]]*'lineage-manage'/s,'Metadata Analyst must not silently gain lineage-manage.')
 assert.match(policy,/'source-system-owner': \[[^\]]*'datasets'[^\]]*\]/s,'Source System Owner must retain datasets access.')
-assert.doesNotMatch(policy,/'source-system-owner': \[[^\]]*'agents'/s,'Source System Owner must not silently gain agents access.')
+assert.match(policy,/'source-system-owner': \[[^\]]*'agents'[^\]]*\]/s,'Source System Owner must retain universal conversational Agents workspace access under Agent Policy v2.')
 assert.doesNotMatch(policy,/'source-system-owner': \[[^\]]*'discovery'/s,'Source System Owner must not silently gain discovery access.')
 assert.doesNotMatch(policy,/'senior-leadership': \[[^\]]*'discovery'/s,'Senior Leadership must not silently gain Discovery workspace access.')
 

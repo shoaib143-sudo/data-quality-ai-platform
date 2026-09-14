@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Bell, Compass, Database, Layers3, Search, ShieldCheck, Sparkles } from 'lucide-react'
+import { Activity, Bell, ClipboardCheck, Compass, Database, Layers3, Search, ShieldCheck, Sparkles } from 'lucide-react'
 import { SkipToContent } from '@/components/app-shell/skip-to-content'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-policy'
 import type { PersonaSlug } from '@/lib/governance/personas'
@@ -18,6 +18,8 @@ const navItems = [
   { href: '/catalog', label: 'Catalog', icon: Database },
   { href: '/data-quality', label: 'Quality', icon: ShieldCheck },
   { href: '/agents', label: 'Agents', icon: Sparkles },
+  { href: '/monitoring', label: 'Job Monitor', icon: Activity },
+  { href: '/approvals', label: 'Approvals', icon: ClipboardCheck },
 ]
 
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#061426]'

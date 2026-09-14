@@ -64,9 +64,10 @@ assertNoProjectWrites(loadKnowledge, 'loadKnowledge')
 assertNoProjectWrites(loadGraph, 'loadGraph')
 assertNoProjectWrites(loadContext, 'loadContext')
 
-const admissionIndex = specialist.indexOf("toolKey: 'governance_specialist_investigate'")
-const contextIndex = specialist.indexOf('loadContext(admin, input.projectId)', admissionIndex)
-assert.ok(admissionIndex >= 0 && contextIndex > admissionIndex, 'native tool admission must occur before specialist evidence loading')
+const admissionIndex = specialist.indexOf('admission = await admitNativeToolInvocation({')
+const scopeIndex = specialist.indexOf('authorizedDatasetScopeForProject(input.actorUserId, input.projectId)', admissionIndex)
+const contextIndex = specialist.indexOf('loadContext(admin, input.projectId,', admissionIndex)
+assert.ok(admissionIndex >= 0 && scopeIndex > admissionIndex && contextIndex > scopeIndex, 'native tool admission must occur before resource authorization and specialist evidence loading')
 contains(specialist, 'await completeNativeToolInvocation({', 'native completion evidence')
 contains(specialist, 'await failNativeToolInvocation({', 'native failure evidence')
 

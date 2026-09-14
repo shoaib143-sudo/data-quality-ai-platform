@@ -7,6 +7,8 @@ import { JobTermination } from './job-termination'
 import { JobLogs } from './job-logs'
 import { JobHealth } from './job-health'
 import styles from './organic-domain-cells.module.css'
+import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
+import { hasProjectCapability } from '@/lib/auth/authorize'
 
 export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string; agent?: string; domain?: string }> }) {
   const user = await requireUser()
@@ -15,7 +17,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
   const { data: runs, error: runsError } = await supabase.schema('agent').from('agent_runs').select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message').order('created_at', { ascending: false }).limit(50)
   if (runsError) throw new Error(`Unable to load agent runs: ${runsError.message}`)
 
-  const typedRuns = (runs ?? []) as MonitoringRun[]
+  const typedRuns = await filterAuthorizedExecutionRuns(user.id, (runs ?? []) as MonitoringRun[])
   const selectedRunId = requestedRunId && typedRuns.some((run) => run.id === requestedRunId) ? requestedRunId : null
   const datasetIds = [...new Set(typedRuns.flatMap((run) => run.dataset_id ? [run.dataset_id] : []))]
   const projectIds = [...new Set(typedRuns.map((run) => run.project_id))]
@@ -37,6 +39,9 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
   const typedDatasets = (datasetsResult.data ?? []) as MonitoringDataset[]
   const typedProjects = (projectsResult.data ?? []) as MonitoringProject[]
   const typedSteps = (stepsResult.data ?? []) as MonitoringStep[]
+  const cancellableProjectIds = (await Promise.all(projectIds.map(async projectId =>
+    (await hasProjectCapability(user.id, projectId, 'execution.cancel')) ? projectId : null,
+  ))).filter((projectId): projectId is string => Boolean(projectId))
 
   return <main className="min-h-screen bg-[#04101f] text-slate-100">
     <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
@@ -57,7 +62,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
         <JobMonitor initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialProjects={typedProjects} initialSteps={typedSteps} initialNow={new Date().toISOString()} initialRunId={selectedRunId} initialAgentId={requestedAgentId ?? null} initialDomainKey={requestedDomainKey ?? null} userId={user.id} />
       </div>
 
-      <section id="job-termination" className="mt-7 scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} /></section>
+      <section id="job-termination" className="mt-7 scroll-mt-6"><JobTermination initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} cancellableProjectIds={cancellableProjectIds} /></section>
       <section id="job-logs" className="mt-7 scroll-mt-6"><JobLogs initialRuns={typedRuns} initialAgents={typedAgents} initialDatasets={typedDatasets} initialRunId={selectedRunId} /></section>
     </div>
   </main>

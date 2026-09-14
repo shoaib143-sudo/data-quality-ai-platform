@@ -18,6 +18,8 @@ import { refreshAllPredictiveRisk } from '@/lib/governance/predictive-risk'
 import { applyAllPredictiveRiskGovernedActions } from '@/lib/governance/governed-autonomy'
 import { refreshAllAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { processGovernanceAgentJobs } from '@/lib/agents/governance-job-worker'
+import { processApprovalNotificationOutbox } from '@/lib/governance/approval-notification-worker'
+import { evaluateAgentApprovalSlaEscalations } from '@/lib/governance/approval-sla'
 
 export const maxDuration = 300
 
@@ -114,6 +116,8 @@ export async function GET(request: Request) {
     enqueueDailySemanticIndexJobs(100),
     cleanupExpiredObjectArtifacts(25),
   ])
+  const approvalSla = await evaluateAgentApprovalSlaEscalations(100)
+  const approvalNotifications = await processApprovalNotificationOutbox(25)
   const predictiveRisk = await refreshAllPredictiveRisk()
   const aiGovernanceIntelligence = await refreshAllAIGovernanceIntelligence()
   const governedAutonomy = await applyAllPredictiveRiskGovernedActions()
@@ -130,6 +134,8 @@ export async function GET(request: Request) {
     governanceAgentResults: dispatch.governanceAgentResults,
     semanticIndexScheduling,
     objectRetention,
+    approvalSla,
+    approvalNotifications,
     predictiveRisk,
     aiGovernanceIntelligence,
     governedAutonomy,
@@ -180,7 +186,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient()
     const { data: run, error: runError } = await admin.schema('agent').from('agent_runs').select('id,project_id').eq('id', agentRunId).maybeSingle()
     if (runError || !run) return NextResponse.json({ error: 'Agent run not found.' }, { status: 404 })
-    await authorizeProject(user.id, run.project_id, 'catalog.read')
+    await authorizeProject(user.id, run.project_id, 'execution.retry')
 
     const workerId = `user-kick:${user.id}:${crypto.randomUUID()}`
     const job = await claimDurableJobByAgentRun(workerId, agentRunId)

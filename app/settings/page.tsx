@@ -1,8 +1,24 @@
 import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { resolveConversationPolicy } from '@/lib/governance/conversation-policy'
+import { AgentPreferences } from './agent-preferences'
+import { createClient } from '@/lib/supabase/server'
 
 export default async function SettingsPage() {
-  await requireUser()
+  const user = await requireUser()
+  const access = await resolveLandingAccess(user.id)
+  const conversationDefaults = await resolveConversationPolicy({
+    organizationId: access.organizationId,
+    userId: user.id,
+    persona: access.persona,
+  })
+  const supabase = await createClient()
+  const { data: enabledAgents, error: agentsError } = await supabase.schema('agent').from('agent_definitions')
+    .select('agent_key,name')
+    .eq('enabled', true)
+    .order('name')
+  if (agentsError) throw new Error(`Unable to load enabled agents for preferences: ${agentsError.message}`)
 
   return (
     <main id="main-content" className="min-h-screen bg-slate-950 px-4 py-20 text-slate-100 sm:px-6">
@@ -21,6 +37,8 @@ export default async function SettingsPage() {
             <p className="mt-1 text-sm leading-6 text-slate-400">Open execution monitoring without changing execution authority.</p>
           </Link>
         </div>
+
+        <AgentPreferences initial={conversationDefaults} agents={(enabledAgents ?? []).map(agent => ({ key: String(agent.agent_key), name: String(agent.name) }))} />
 
         <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
           <p className="font-semibold text-white">Governed options</p>
