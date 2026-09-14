@@ -1,5 +1,6 @@
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
 
 export type AgentEvidenceType = 'ARTIFACT' | 'MESSAGE' | 'AUDIT_RECORD'
 
@@ -10,6 +11,16 @@ const MAX_RETENTION_YEARS = 7
 function assertRetentionYears(value: number) {
   if (!Number.isInteger(value) || value < MIN_RETENTION_YEARS || value > MAX_RETENTION_YEARS) {
     throw new Error(`Agent evidence retention must be between ${MIN_RETENTION_YEARS} and ${MAX_RETENTION_YEARS} years.`)
+  }
+}
+
+async function assertGovernanceAdminLegalHoldAuthority(actorUserId: string, projectId: string) {
+  const access = await resolveLandingAccess(actorUserId)
+  if (access.persona !== 'data-governance-admin') {
+    throw new Error('Data Governance Admin authority is required to manage agent evidence legal holds.')
+  }
+  if (!(await hasProjectCapability(actorUserId, projectId, 'admin.manage'))) {
+    throw new Error('admin.manage is required for the legal-hold project scope.')
   }
 }
 
@@ -96,9 +107,7 @@ export async function placeAgentEvidenceLegalHold(input: {
 }) {
   const reason = input.reason.trim()
   if (!reason) throw new Error('A legal-hold reason is required.')
-  if (!(await hasProjectCapability(input.actorUserId, input.projectId, 'admin.manage'))) {
-    throw new Error('admin.manage is required to place an agent evidence legal hold.')
-  }
+  await assertGovernanceAdminLegalHoldAuthority(input.actorUserId, input.projectId)
   await assertEvidenceProject(input)
 
   const admin = createAdminClient()
@@ -119,9 +128,7 @@ export async function releaseAgentEvidenceLegalHold(input: {
   projectId: string
   holdId: string
 }) {
-  if (!(await hasProjectCapability(input.actorUserId, input.projectId, 'admin.manage'))) {
-    throw new Error('admin.manage is required to release an agent evidence legal hold.')
-  }
+  await assertGovernanceAdminLegalHoldAuthority(input.actorUserId, input.projectId)
 
   const admin = createAdminClient()
   const { data: hold, error: holdError } = await admin.schema('agent').from('evidence_legal_holds')
