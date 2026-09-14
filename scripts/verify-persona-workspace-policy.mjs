@@ -63,6 +63,11 @@ for (const slug of personaSlugs) {
 check('dashboard remains Data Governance Admin only', personaSlugs.every(slug => canAccessWorkspace(slug, 'dashboard') === (slug === 'data-governance-admin')))
 check('platform controls remain Data Governance Admin only', personaSlugs.every(slug => canAccessWorkspace(slug, 'platform') === (slug === 'data-governance-admin')))
 check('organization admin is not granted by governance persona alone', personaSlugs.every(slug => !canAccessWorkspace(slug, 'admin', null)))
+check('resource access uses the platform workspace', workspaceForHref('/resource-access') === 'platform')
+for (const slug of personaSlugs) {
+  check(`${slug} resource access follows platform authorization`,
+    canAccessWorkspaceHref(slug, '/resource-access') === (slug === 'data-governance-admin'))
+}
 check('workspace prefixes are unique', new Set(workspacePrefixes.map(([prefix]) => prefix)).size === workspacePrefixes.length)
 
 for (const slug of personaSlugs) {
