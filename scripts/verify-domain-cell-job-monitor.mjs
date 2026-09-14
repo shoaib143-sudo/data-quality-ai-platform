@@ -31,14 +31,16 @@ assert.match(monitor, /Data Domain/, 'Domain-cell UI must identify the governed 
 assert.match(monitor, /ExecutionStatusBadge status=\{selectedRun\.status\}/, 'Selected execution detail must use the shared execution status contract backed by the recorded run status.')
 assert.match(monitor, /Organic cells visualize status, not authority/, 'Visualization must not imply that visual topology changes authorization semantics.')
 assert.match(monitor, /Project authorization and execution controls remain enforced/, 'Monitor must preserve governed authorization semantics in the operator surface.')
-assert.match(monitor, /\/monitoring\?run=\$\{encodeURIComponent\(selectedRun\.id\)\}#job-logs/, 'Selected execution must retain a deep link into recorded execution diagnostics.')
+assert.match(monitor, /function openRunResults\(runId: string\)/, 'Executed drilldown must use the canonical persisted run results route.')
+assert.match(monitor, /window\.location\.assign\(`\/agents\/runs\/\$\{encodeURIComponent\(runId\)\}`\)/, 'Executed agent and domain clicks must redirect to the canonical output/results window.')
+assert.match(monitor, /href=\{`\/agents\/runs\/\$\{encodeURIComponent\(selectedRun\.id\)\}`\}/, 'Selected execution must retain a direct link to recorded output/results.')
 assert.match(monitor, /setInterval\(\(\) => void refresh\(\), 5000\)/, 'Live status refresh must remain bounded.')
 assert.match(monitor, /statusFilter === 'ALL' \|\| cell\.status === statusFilter/, 'Status filtering must be applied to domain aggregates.')
 assert.match(monitor, /cell\.domainName\.toLowerCase\(\)\.includes\(q\)/, 'Search must include persisted Data Domain names.')
 assert.doesNotMatch(monitor, /Math\.random/, 'Domain topology placement must remain deterministic.')
 assert.doesNotMatch(monitor, /SIMULATED DATA|simulated data/i, 'Production Job Monitor must not label real execution evidence as simulated.')
 
-console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, full enabled-path representation with grey never-executed state, latest component-state aggregation, deterministic organic topology, shared execution status, filtering, live refresh, and deep-linked diagnostics and interactive domain/agent drilldown.')
+console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, full enabled-path representation with grey never-executed state, latest component-state aggregation, deterministic organic topology, shared execution status, filtering, live refresh, and canonical output/results redirection and truthful grey-path drilldown.')
 
 await import('./test-domain-cell-job-monitor.mjs')
 await import('./audit-domain-cell-job-monitor-adversarial.mjs')
