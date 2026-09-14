@@ -11,6 +11,11 @@ const externalRoute = fs.readFileSync('app/api/agent-approvals/external/[token]/
 const delegationRoute = fs.readFileSync('app/api/agent-approvals/delegations/route.ts', 'utf8')
 const delegationRevokeRoute = fs.readFileSync('app/api/agent-approvals/delegations/[delegationId]/revoke/route.ts', 'utf8')
 const delegationUi = fs.readFileSync('app/approvals/delegation-manager.tsx', 'utf8')
+const executionAudit = fs.readFileSync('lib/governance/agent-approval-audit.ts', 'utf8')
+const executionAuditMigration = fs.readFileSync('supabase/migrations/20260914054000_agent_approval_execution_audit.sql', 'utf8')
+const profilingRoute = fs.readFileSync('app/api/agents/run/route.ts', 'utf8')
+const qualityRoute = fs.readFileSync('app/api/data-quality/run/route.ts', 'utf8')
+const supervisorRoute = fs.readFileSync('app/api/agents/supervisor/run/route.ts', 'utf8')
 const notifications = fs.readFileSync('lib/governance/approval-notifications.ts', 'utf8')
 const notificationWorker = fs.readFileSync('lib/governance/approval-notification-worker.ts', 'utf8')
 
@@ -58,6 +63,19 @@ const validationAt = executeRoute.indexOf('validateApprovalForExecution')
 const dispatchAt = executeRoute.indexOf("approval.action_key === 'RUN_PROFILING'")
 assert.ok(validationAt >= 0 && dispatchAt > validationAt, 'approval execution facade must reauthorize before choosing a downstream action')
 assert.match(executeRoute, /currentExecutionFingerprint/, 'approval execution facade must validate the current execution fingerprint')
+
+assert.match(executionAudit, /finalize_agent_approval_execution/, 'execution finalization must use the central database transaction')
+assert.match(executionAuditMigration, /status <> 'READY_TO_EXECUTE'/, 'execution finalizer must fail closed unless approval is ready')
+assert.match(executionAuditMigration, /AGENT_POLICY_EXECUTION_AUTHORIZED/, 'execution finalizer must append a Living Tree audit event')
+assert.match(executionAuditMigration, /'execution_fingerprint', v_request\.execution_fingerprint/, 'execution audit must preserve the approved fingerprint')
+assert.match(executionAuditMigration, /'policy_version', v_request\.policy_version/, 'execution audit must preserve policy version')
+assert.match(executionAuditMigration, /'executor_user_id', p_executor_user_id/, 'execution audit must preserve the actual executor')
+assert.match(executionAuditMigration, /'approval_decisions', v_decisions/, 'execution audit must preserve approver and channel provenance')
+assert.match(executionAuditMigration, /'fingerprint_evidence', v_request\.fingerprint_payload/, 'execution audit must preserve approval evidence')
+for (const [name, route] of [['profiling', profilingRoute], ['quality', qualityRoute], ['supervisor', supervisorRoute]]) {
+  assert.match(route, /finalizeAgentApprovalExecution/, `${name} execution must finalize approval provenance`)
+  assert.match(route, /executorUserId: user\.id/, `${name} execution audit must bind current executor`)
+}
 
 assert.match(notifications, /slaDueAt: request\.sla_due_at/, 'approval notification payload must carry canonical SLA due time')
 assert.match(notificationWorker, /externalApprovalTokenExpiry\(payload\)/, 'external approval token expiry must derive from the notification SLA context')
