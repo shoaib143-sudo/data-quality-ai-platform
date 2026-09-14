@@ -90,6 +90,7 @@ export async function enqueueApprovalNotifications(
       domain: request.domain,
       riskLevel: request.risk_level,
       status: request.status,
+      slaDueAt: request.sla_due_at,
       approvalsUrl: `/approvals?request=${encodeURIComponent(approvalRequestId)}`,
       ...extraPayload,
     },

@@ -13,6 +13,8 @@ type OutboxRow = {
   attempt_count: number
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
 function providerUrl(channel: ApprovalChannel): string | null {
   if (channel === 'EMAIL') return process.env.DATANEXUS_APPROVAL_EMAIL_WEBHOOK_URL?.trim() || null
   if (channel === 'TEAMS') return process.env.DATANEXUS_APPROVAL_TEAMS_WEBHOOK_URL?.trim() || null
@@ -42,6 +44,13 @@ function appBaseUrl() {
   throw new Error('DATANEXUS_APP_URL or VERCEL_PROJECT_PRODUCTION_URL is required for external approval links.')
 }
 
+function externalApprovalTokenExpiry(payload: Record<string, unknown>) {
+  const now = Date.now()
+  const dueAt = new Date(String(payload.slaDueAt ?? '')).getTime()
+  if (Number.isFinite(dueAt)) return Math.max(now + DAY_MS, dueAt + DAY_MS)
+  return now + 8 * DAY_MS
+}
+
 async function deliver(row: OutboxRow) {
   if (row.channel === 'DATANEXUS') {
     await mark(row.id, { status: 'SENT', sent_at: new Date().toISOString(), last_error: null })
@@ -64,7 +73,7 @@ async function deliver(row: OutboxRow) {
     await mark(row.id, {
       status: 'FAILED',
       attempt_count: row.attempt_count + 1,
-      next_attempt_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      next_attempt_at: new Date(Date.now() + DAY_MS).toISOString(),
       last_error: 'Recipient has no email address.',
     })
     return { id: row.id, channel: row.channel, status: 'FAILED', error: 'RECIPIENT_EMAIL_MISSING' }
@@ -80,7 +89,7 @@ async function deliver(row: OutboxRow) {
     recipientUserId: row.recipient_user_id,
     axis: axis as 'BUSINESS' | 'GOVERNANCE',
     channel: row.channel,
-    expiresAt: Date.now() + 8 * 24 * 60 * 60 * 1000,
+    expiresAt: externalApprovalTokenExpiry(payload),
   })
   const approvalUrl = `${appBaseUrl()}/approvals/external/${encodeURIComponent(token)}`
 
