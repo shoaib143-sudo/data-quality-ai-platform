@@ -1,0 +1,220 @@
+/*
+ * Final Job Monitor topology guard.
+ *
+ * This layer intentionally uses higher specificity than the older organic-cell
+ * stylesheet so the Supervisor, neural membrane, feature frame and progress rail
+ * cannot drift back into separate coordinate systems when CSS chunk ordering changes.
+ */
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) {
+  min-height: 535px !important;
+  border-radius: 30px !important;
+  background:
+    radial-gradient(circle at 50% 52%, color-mix(in srgb, var(--domain-edge) 18%, transparent), transparent 34%),
+    radial-gradient(circle at 50% 52%, color-mix(in srgb, var(--domain-secondary) 12%, transparent), transparent 58%),
+    linear-gradient(145deg, rgba(4, 18, 34, .99), rgba(2, 10, 20, .995)) !important;
+}
+
+/* One stable 370px coordinate frame for membrane, Supervisor, spokes and features. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"])::before,
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"])::after,
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] {
+  left: 50% !important;
+  right: auto !important;
+  top: 52% !important;
+  bottom: auto !important;
+  width: min(76%, 370px) !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+  inset: auto !important;
+  transform: translate(-50%, -50%) !important;
+  transform-origin: center !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"])::before {
+  border-width: 2px !important;
+  border-radius: 50% !important;
+  background:
+    repeating-conic-gradient(from 0deg,
+      transparent 0deg 5deg,
+      color-mix(in srgb, var(--domain-edge) 24%, transparent) 5.5deg 6.3deg,
+      transparent 7deg 15deg),
+    radial-gradient(circle at 50% 50%, transparent 0 27%, color-mix(in srgb, var(--domain-edge) 15%, transparent) 28% 55%, transparent 70%),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--domain-secondary) 22%, transparent), transparent 72%) !important;
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--domain-edge) 92%, white 8%),
+    0 0 30px color-mix(in srgb, var(--domain-edge) 72%, transparent),
+    0 0 70px color-mix(in srgb, var(--domain-secondary) 48%, transparent),
+    0 0 118px color-mix(in srgb, var(--domain-edge) 28%, transparent),
+    inset 0 0 34px color-mix(in srgb, var(--domain-edge) 28%, transparent),
+    inset 0 0 80px rgba(0,0,0,.18) !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"])::after {
+  border-radius: 50% !important;
+  transform: translate(-50%, -50%) scale(1.08) rotate(7deg) !important;
+  opacity: .92 !important;
+}
+
+/* Keep legacy decorative layers centered instead of allowing the old left-shifted layout to win. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:first-of-type,
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(2) {
+  left: 50% !important;
+  right: auto !important;
+  top: 52% !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 50% !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:first-of-type {
+  width: min(70%, 340px) !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(2) {
+  width: min(62%, 305px) !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+}
+
+/* Header remains above the topology. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(3) {
+  position: absolute !important;
+  left: 5% !important;
+  right: 5% !important;
+  top: 4.5% !important;
+  z-index: 40 !important;
+}
+
+/* Do not render the stale full-card SVG geometry. The feature frame owns the nerves. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > svg {
+  display: none !important;
+}
+
+/* Supervisor nucleus is exactly centered in the same frame. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > button[aria-label$="Data Domain summary"] {
+  left: 50% !important;
+  top: 52% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 34 !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > button[aria-label$="Data Domain summary"] > div {
+  width: 7.25rem !important;
+  height: 7.25rem !important;
+  border-width: 2px !important;
+  box-shadow:
+    0 0 9px color-mix(in srgb, var(--domain-edge) 72%, white 8%),
+    0 0 30px color-mix(in srgb, var(--domain-edge) 46%, transparent),
+    0 0 58px color-mix(in srgb, var(--domain-secondary) 36%, transparent),
+    inset 0 0 30px rgba(139,92,246,.18) !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] {
+  z-index: 30 !important;
+}
+
+/* Eight spokes terminate at the same deterministic compass positions as the nodes. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"]::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+  border-radius: 50% !important;
+  background:
+    repeating-conic-gradient(
+      from -0.8deg,
+      color-mix(in srgb, var(--domain-edge) 78%, white 8%) 0deg 1.6deg,
+      transparent 1.8deg 45deg
+    ) !important;
+  -webkit-mask: radial-gradient(circle, transparent 0 23%, #000 24% 79%, transparent 80%) !important;
+  mask: radial-gradient(circle, transparent 0 23%, #000 24% 79%, transparent 80%) !important;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--domain-edge) 80%, transparent)) !important;
+  opacity: .9 !important;
+  z-index: 0 !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"]::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 13% !important;
+  pointer-events: none !important;
+  border-radius: 50% !important;
+  border: 1px solid color-mix(in srgb, var(--domain-edge) 24%, transparent) !important;
+  box-shadow: 0 0 22px color-mix(in srgb, var(--domain-edge) 20%, transparent) !important;
+  z-index: 0 !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div {
+  z-index: 2 !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(1) { left: 50% !important; top: 10% !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(2) { left: 78% !important; top: 22% !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(3) { left: 90% !important; top: 50% !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(4) { left: 78% !important; top: 78% !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(5) { left: 50% !important; top: 90% !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(6) { left: 22% !important; top: 78% !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(7) { left: 10% !important; top: 50% !important; }
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] > div:nth-child(8) { left: 22% !important; top: 22% !important; }
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] button {
+  width: 4.8rem !important;
+  height: 4.8rem !important;
+  border-radius: 50% !important;
+  opacity: 1 !important;
+  backdrop-filter: blur(9px) !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] button span[class*="max-w"] {
+  max-width: 68px !important;
+  font-size: 8px !important;
+  line-height: 1.08 !important;
+}
+
+/* Progress rail is visually isolated from the neural frame. */
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(5) {
+  left: 8% !important;
+  right: 8% !important;
+  top: auto !important;
+  bottom: 4.5% !important;
+  width: auto !important;
+  transform: none !important;
+  z-index: 36 !important;
+}
+
+.monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > div:nth-of-type(5)::before {
+  display: none !important;
+}
+
+@media (max-width: 1279px) {
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) {
+    min-height: 565px !important;
+  }
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"])::before,
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"])::after,
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] {
+    width: min(72%, 390px) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) {
+    min-height: 610px !important;
+  }
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"])::before,
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"])::after,
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] {
+    top: 50% !important;
+    width: min(82%, 360px) !important;
+  }
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) > button[aria-label$="Data Domain summary"] {
+    top: 50% !important;
+  }
+  .monitoringStage.monitoringStage article:has(button[aria-label$=" Data Domain"]) div[aria-label*="execution components inside"] button {
+    width: 4.35rem !important;
+    height: 4.35rem !important;
+  }
+}
