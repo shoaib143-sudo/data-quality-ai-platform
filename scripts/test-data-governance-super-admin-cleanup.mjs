@@ -27,6 +27,7 @@ expect(consoleUi.includes('Permanent delete is exclusive to Data Governance Admi
 expect(consoleUi.includes('external database/catalog/schema objects'), 'UI must distinguish external native hierarchy from DataNexus-owned folders.')
 expect(migration.includes("'catalog.delete','source.delete','project.delete'"), 'Super Admin migration must add explicit destructive capabilities.')
 expect(migration.includes("'admin.manage'"), 'Super Admin migration must include platform administration capability.')
+expect(migration.includes("p_capability <> all(array['catalog.delete','source.delete','project.delete']"), 'Organization OWNER/ADMIN must not inherit destructive capabilities through the generic capability shortcut.')
 expect(createProject.includes('authorizeDataGovernanceSuperAdminForOrganization'), 'Super Admin must be able to create projects inside its governed organization boundary.')
 
 if (!process.exitCode) console.log('Data Governance Super Admin cleanup contract passed.')
