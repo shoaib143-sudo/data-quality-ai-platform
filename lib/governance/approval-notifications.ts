@@ -7,6 +7,29 @@ const channels: readonly ApprovalChannel[] = ['DATANEXUS', 'EMAIL', 'TEAMS']
 
 type EligibleRecipient = { userId: string; axis: 'BUSINESS' | 'GOVERNANCE' }
 
+function eventDiscriminator(eventType: ApprovalNotificationEvent, extraPayload: Record<string, unknown>) {
+  if (eventType === 'REMINDER') {
+    const explicit = String(extraPayload.reminderKey ?? '').trim()
+    return explicit || new Date().toISOString().slice(0, 10)
+  }
+  if (eventType === 'DECIDED') {
+    return [extraPayload.axis, extraPayload.decision, extraPayload.channel].map(value => String(value ?? '')).join(':')
+  }
+  if (eventType === 'ESCALATED') return String(extraPayload.escalationKey ?? extraPayload.status ?? 'escalated')
+  return 'initial'
+}
+
+function dedupeKey(input: {
+  approvalRequestId: string
+  recipientUserId: string
+  channel: ApprovalChannel
+  eventType: ApprovalNotificationEvent
+  axis: 'BUSINESS' | 'GOVERNANCE'
+  discriminator: string
+}) {
+  return [input.approvalRequestId, input.recipientUserId, input.channel, input.eventType, input.axis, input.discriminator].join(':')
+}
+
 async function eligibleRecipients(request: Record<string, unknown>): Promise<EligibleRecipient[]> {
   const admin = createAdminClient()
   const projectId = String(request.project_id ?? '')
@@ -78,11 +101,20 @@ export async function enqueueApprovalNotifications(
   const recipients = await eligibleRecipients(request as Record<string, unknown>)
   if (!recipients.length) return { queued: 0, recipients: 0 }
 
+  const discriminator = eventDiscriminator(eventType, extraPayload)
   const rows = recipients.flatMap(recipient => channels.map(channel => ({
     approval_request_id: approvalRequestId,
     recipient_user_id: recipient.userId,
     channel,
     event_type: eventType,
+    dedupe_key: dedupeKey({
+      approvalRequestId,
+      recipientUserId: recipient.userId,
+      channel,
+      eventType,
+      axis: recipient.axis,
+      discriminator,
+    }),
     payload: {
       approvalRequestId,
       approvalAxis: recipient.axis,
@@ -96,7 +128,10 @@ export async function enqueueApprovalNotifications(
     },
   })))
 
-  const { error: insertError } = await admin.schema('governance').from('agent_approval_notification_outbox').insert(rows)
+  const { data: inserted, error: insertError } = await admin.schema('governance')
+    .from('agent_approval_notification_outbox')
+    .upsert(rows, { onConflict: 'dedupe_key', ignoreDuplicates: true })
+    .select('id')
   if (insertError) throw new Error(`Unable to enqueue approval notifications: ${insertError.message}`)
-  return { queued: rows.length, recipients: recipients.length }
+  return { queued: inserted?.length ?? 0, recipients: recipients.length }
 }
