@@ -1,5 +1,8 @@
 name: Data Governance Super Admin Cleanup
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
