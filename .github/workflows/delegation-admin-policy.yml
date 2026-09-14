@@ -1,0 +1,32 @@
+name: Delegation Administration Policy
+
+on:
+  pull_request:
+    paths:
+      - 'app/approvals/**'
+      - 'app/api/agent-approvals/delegations/**'
+      - 'lib/governance/delegation-admin-service.ts'
+      - 'lib/governance/agent-approval-service.ts'
+      - 'scripts/verify-delegation-admin-policy.mjs'
+      - '.github/workflows/delegation-admin-policy.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/approvals/**'
+      - 'app/api/agent-approvals/delegations/**'
+      - 'lib/governance/delegation-admin-service.ts'
+      - 'lib/governance/agent-approval-service.ts'
+      - 'scripts/verify-delegation-admin-policy.mjs'
+      - '.github/workflows/delegation-admin-policy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Verify delegation administration policy
+        run: node scripts/verify-delegation-admin-policy.mjs
