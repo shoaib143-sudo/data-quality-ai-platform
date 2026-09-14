@@ -13,6 +13,43 @@ function assertRetentionYears(value: number) {
   }
 }
 
+async function assertEvidenceProject(input: {
+  projectId: string
+  evidenceType: AgentEvidenceType
+  evidenceId: string
+}) {
+  const admin = createAdminClient()
+  if (input.evidenceType === 'ARTIFACT') {
+    const { data: artifact, error } = await admin.schema('agent').from('agent_artifacts')
+      .select('agent_run_id').eq('id', input.evidenceId).maybeSingle()
+    if (error) throw new Error(`Unable to resolve agent artifact scope: ${error.message}`)
+    if (!artifact?.agent_run_id) throw new Error('Agent artifact was not found.')
+    const { data: run, error: runError } = await admin.schema('agent').from('agent_runs')
+      .select('project_id').eq('id', artifact.agent_run_id).maybeSingle()
+    if (runError) throw new Error(`Unable to resolve agent artifact project: ${runError.message}`)
+    if (!run || run.project_id !== input.projectId) throw new Error('Agent artifact is outside the requested project.')
+    return
+  }
+
+  if (input.evidenceType === 'MESSAGE') {
+    const { data: message, error } = await admin.schema('agent').from('agent_messages')
+      .select('source_agent_run_id,target_agent_run_id').eq('id', input.evidenceId).maybeSingle()
+    if (error) throw new Error(`Unable to resolve agent message scope: ${error.message}`)
+    if (!message) throw new Error('Agent message was not found.')
+    const runIds = [...new Set([message.source_agent_run_id, message.target_agent_run_id].filter(Boolean))] as string[]
+    if (!runIds.length) throw new Error('Agent message has no governed run scope.')
+    const { data: runs, error: runsError } = await admin.schema('agent').from('agent_runs')
+      .select('id,project_id').in('id', runIds)
+    if (runsError) throw new Error(`Unable to resolve agent message projects: ${runsError.message}`)
+    if ((runs ?? []).length !== runIds.length || (runs ?? []).some(run => run.project_id !== input.projectId)) {
+      throw new Error('Agent message is outside the requested project.')
+    }
+    return
+  }
+
+  throw new Error('AUDIT_RECORD legal hold is fail-closed until a concrete immutable audit entity is wired to this lifecycle service.')
+}
+
 export async function effectiveAgentEvidenceRetentionYears(projectId: string) {
   const admin = createAdminClient()
   const { data, error } = await admin.schema('agent').from('evidence_retention_policies')
@@ -62,6 +99,7 @@ export async function placeAgentEvidenceLegalHold(input: {
   if (!(await hasProjectCapability(input.actorUserId, input.projectId, 'admin.manage'))) {
     throw new Error('admin.manage is required to place an agent evidence legal hold.')
   }
+  await assertEvidenceProject(input)
 
   const admin = createAdminClient()
   const { data, error } = await admin.schema('agent').from('evidence_legal_holds').insert({
@@ -87,9 +125,7 @@ export async function releaseAgentEvidenceLegalHold(input: {
 
   const admin = createAdminClient()
   const { data: hold, error: holdError } = await admin.schema('agent').from('evidence_legal_holds')
-    .select('id,project_id,active')
-    .eq('id', input.holdId)
-    .maybeSingle()
+    .select('id,project_id,active').eq('id', input.holdId).maybeSingle()
   if (holdError) throw new Error(`Unable to resolve agent evidence legal hold: ${holdError.message}`)
   if (!hold || hold.project_id !== input.projectId || !hold.active) throw new Error('Active legal hold not found in the requested project.')
 
@@ -110,6 +146,7 @@ export async function isAgentEvidenceDeletionBlocked(input: {
   evidenceId: string
   retentionUntil: string
 }) {
+  await assertEvidenceProject(input)
   const retentionUntil = new Date(input.retentionUntil).getTime()
   if (!Number.isFinite(retentionUntil)) throw new Error('Agent evidence retention timestamp is invalid.')
   if (retentionUntil > Date.now()) return true
