@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { ApprovalAxis } from './agent-policy-v2'
 import { getAgentActionProfile } from './agent-action-catalog'
 import { authorizeDataset, authorizeProject } from '@/lib/auth/authorize'
+import { canViewDatasetResource } from './resource-authorization'
 
 export type ApprovalInboxItem = {
   request: Record<string, unknown>
@@ -9,6 +10,59 @@ export type ApprovalInboxItem = {
   decisions: Record<string, unknown>[]
   isRequester: boolean
   canExecute: boolean
+}
+
+const clientRequestFields = [
+  'id',
+  'domain',
+  'environment',
+  'action_key',
+  'target_type',
+  'target_id',
+  'risk_level',
+  'business_criticality',
+  'material_production_mutation',
+  'policy_version',
+  'status',
+  'sla_due_at',
+  'requested_at',
+  'approved_at',
+  'executed_at',
+  'invalidated_at',
+  'invalidation_reason',
+  'requires_business_approval',
+  'requires_governance_approval',
+] as const
+
+export function approvalRequestClientView(request: Record<string, unknown>) {
+  return Object.fromEntries(clientRequestFields.map(key => [key, request[key] ?? null]))
+}
+
+function approvalDecisionClientView(decision: Record<string, unknown>) {
+  return {
+    id: decision.id ?? null,
+    approval_axis: decision.approval_axis ?? null,
+    decision: decision.decision ?? null,
+    comment: decision.comment ?? null,
+    channel: decision.channel ?? null,
+    decided_at: decision.decided_at ?? null,
+    delegated: Boolean(decision.on_behalf_of_user_id),
+  }
+}
+
+async function canViewApprovalScope(userId: string, request: Record<string, unknown>) {
+  try {
+    if (String(request.target_type) === 'DATASET') {
+      const datasetId = String(request.target_id ?? '')
+      if (!datasetId || !await canViewDatasetResource(userId, datasetId)) return false
+      await authorizeDataset(userId, datasetId, 'agent.view')
+      return true
+    }
+    await authorizeProject(userId, String(request.project_id ?? ''), 'agent.view')
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function loadApprovalInbox(userId: string): Promise<ApprovalInboxItem[]> {
@@ -24,6 +78,8 @@ export async function loadApprovalInbox(userId: string): Promise<ApprovalInboxIt
 
   for (const row of requests ?? []) {
     const request = row as Record<string, unknown>
+    if (!await canViewApprovalScope(userId, request)) continue
+
     const isRequester = String(request.requested_by) === userId
     const eligibleAxes: ApprovalAxis[] = []
 
@@ -65,7 +121,7 @@ export async function loadApprovalInbox(userId: string): Promise<ApprovalInboxIt
   const ids = visible.map(item => String(item.request.id))
   const { data: decisions, error: decisionError } = ids.length
     ? await admin.schema('governance').from('agent_approval_decisions')
-        .select('id,approval_request_id,approval_axis,approver_user_id,on_behalf_of_user_id,decision,comment,channel,decided_at')
+        .select('id,approval_request_id,approval_axis,on_behalf_of_user_id,decision,comment,channel,decided_at')
         .in('approval_request_id', ids)
         .order('decided_at')
     : { data: [], error: null }
@@ -74,11 +130,12 @@ export async function loadApprovalInbox(userId: string): Promise<ApprovalInboxIt
   const byRequest = new Map<string, Record<string, unknown>[]>()
   for (const decision of decisions ?? []) {
     const key = String(decision.approval_request_id)
-    byRequest.set(key, [...(byRequest.get(key) ?? []), decision as Record<string, unknown>])
+    byRequest.set(key, [...(byRequest.get(key) ?? []), approvalDecisionClientView(decision as Record<string, unknown>)])
   }
 
   return visible.map(item => ({
     ...item,
+    request: approvalRequestClientView(item.request),
     decisions: byRequest.get(String(item.request.id)) ?? [],
   }))
 }

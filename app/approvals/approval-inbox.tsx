@@ -46,7 +46,7 @@ export function ApprovalInbox({ items }: { items: ApprovalInboxItem[] }) {
       const response = await fetch(`/api/agent-approvals/${encodeURIComponent(requestId)}/decision`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ axis, decision, comment, channel: 'DATANEXUS' }),
+        body: JSON.stringify({ axis, decision, comment }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error ?? 'Unable to record approval decision.')
@@ -102,7 +102,7 @@ export function ApprovalInbox({ items }: { items: ApprovalInboxItem[] }) {
                     <span className="font-semibold">{value(decision, 'approval_axis')} · {value(decision, 'decision')}</span>
                     <span className="ml-2 text-xs text-muted-foreground">via {value(decision, 'channel')}</span>
                     <p className="mt-1 text-muted-foreground">{value(decision, 'comment')}</p>
-                    {value(decision, 'on_behalf_of_user_id') ? <p className="mt-1 text-xs text-muted-foreground">Delegated approval recorded on behalf of the delegator.</p> : null}
+                    {decision.delegated === true ? <p className="mt-1 text-xs text-muted-foreground">Delegated approval recorded on behalf of the delegator.</p> : null}
                   </div>
                 ))}
               </div>
