@@ -120,7 +120,7 @@ const checks = [
     'runWithTelemetryTraceContext(traceContext',
   ]],
   ['app/api/agents/governance/run/route.ts', [
-    "authorizeProject(user.id, projectId, 'agent.execute')",
+    "authorizeProject(user.id, projectId, 'agent.converse')",
     "const GOVERNED_AGENT_ACTION_KEY = 'RUN_GOVERNANCE_AGENT'",
     "const GOVERNED_AGENT_TARGET_TYPE = 'GOVERNANCE_AGENT'",
     'createGovernanceExecutionController().assertAllowed',
@@ -193,11 +193,11 @@ const traceAt = autonomyRoute.indexOf('telemetryTraceContextFromRequest(request)
 if (authAt < 0 || traceAt < 0 || traceAt <= authAt) failures.push('Autonomy request trace context must be established only after project authorization.')
 
 const agentRoute = fs.readFileSync('app/api/agents/governance/run/route.ts', 'utf8')
-const agentAuthAt = agentRoute.indexOf("authorizeProject(user.id, projectId, 'agent.execute')")
+const agentAuthAt = agentRoute.indexOf("authorizeProject(user.id, projectId, 'agent.converse')")
 const executionControlAt = agentRoute.indexOf('createGovernanceExecutionController().assertAllowed')
 const policyDecisionAt = agentRoute.indexOf('createGovernancePolicyDecisionProvider().decide')
 const specialistExecutionAt = agentRoute.indexOf('executeGovernanceSpecialistAgent({')
-if (agentAuthAt < 0 || executionControlAt <= agentAuthAt) failures.push('Governed agent execution control must run after project authorization.')
+if (agentAuthAt < 0 || executionControlAt <= agentAuthAt) failures.push('Governed conversational agent execution control must run after agent.converse project authorization.')
 if (policyDecisionAt <= executionControlAt) failures.push('Governed agent policy decision must run after execution-control preflight.')
 if (specialistExecutionAt <= policyDecisionAt) failures.push('Governed agent policy decision must run before specialist execution.')
 if (/body\?\.(actionKey|action_key|targetType|target_type|riskLevel|risk_level|confidence)/.test(agentRoute)) {
@@ -231,4 +231,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Governed autonomy safety, exact-version pinning, governed-agent route and durable admission, observable PDP, and ADR-006 PolicyDecisionProvider contracts verified.')
+console.log('Governed autonomy safety, exact-version pinning, governed conversational-agent route and durable admission, observable PDP, and ADR-006 PolicyDecisionProvider contracts verified.')
