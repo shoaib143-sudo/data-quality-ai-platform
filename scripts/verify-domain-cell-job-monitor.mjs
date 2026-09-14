@@ -14,7 +14,7 @@ assert.match(monitor, /const visibleRuns = cell\.componentRuns\b/, 'Every latest
 assert.doesNotMatch(monitor, /componentRuns\.slice\(0,\s*8\)/, 'Domain cells must not silently truncate execution components.')
 assert.match(monitor, /organicNodePosition\(index, visibleRuns\.length\)/, 'Organic component placement must remain deterministic and scale across rings.')
 assert.match(monitor, /execution components inside/, 'Domain cell topology must expose an accessible component-count description.')
-assert.match(monitor, /latestRunPerComponent\(projectRuns\)/, 'Domain cells must collapse repeated runs to the latest state per execution component.')
+assert.match(monitor, /latestRunPerComponent\(projectRuns\)/, 'Domain cells must collapse repeated runs to the latest execution state per execution component.')
 assert.match(monitor, /datasetCount: new Set\(projectRuns\.flatMap/, 'Domain cells must expose dataset coverage inside the Data Domain.')
 assert.match(monitor, /Data Domain/, 'Domain-cell UI must identify the governed domain concept explicitly.')
 assert.match(monitor, /ExecutionStatusBadge status=\{selectedRun\.status\}/, 'Selected execution detail must use the shared execution status contract backed by the recorded run status.')
@@ -30,7 +30,8 @@ assert.match(monitor, /cell\.domainName\.toLowerCase\(\)\.includes\(q\)/, 'Searc
 assert.doesNotMatch(monitor, /Math\.random/, 'Domain topology placement must remain deterministic.')
 assert.doesNotMatch(monitor, /SIMULATED DATA|simulated data/i, 'Production Job Monitor must not label real execution evidence as simulated.')
 
-console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, complete component representation, latest component-state aggregation, deterministic organic topology, shared execution status, resource-scoped refresh, filtering, and deep-linked diagnostics.')
+console.log('Domain Cell Job Monitor contract verified: persisted business-domain grouping, governed scope, complete component representation, latest component-state aggregation, deterministic organic topology, shared execution status, resource-scoped refresh, filtering, live refresh, and deep-linked diagnostics.')
 
 await import('./test-domain-cell-job-monitor.mjs')
 await import('./audit-domain-cell-job-monitor-adversarial.mjs')
+await import('./verify-job-monitor-dependency-evidence.mjs')
