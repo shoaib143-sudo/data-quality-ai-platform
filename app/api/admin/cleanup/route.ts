@@ -34,6 +34,7 @@ async function resolveObject(targetKind: CleanupKind, id: string) {
 }
 
 async function activeJobCount(projectId: string, entityIds?: string[]) {
+  if (entityIds && entityIds.length === 0) return 0
   const admin = createAdminClient()
   let query = admin.schema('orchestration').from('job_queue').select('id', { count: 'exact', head: true })
     .eq('project_id', projectId)
