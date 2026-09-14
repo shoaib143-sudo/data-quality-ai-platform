@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
+import { authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAgentApprovalRequest } from '@/lib/governance/agent-approval-service'
 import { approvalRequestClientView, loadApprovalInbox } from '@/lib/governance/approval-inbox'
 
@@ -11,6 +12,8 @@ export async function GET() {
     const items = await loadApprovalInbox(user.id)
     return NextResponse.json({ items }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
+    const authError = authorizationErrorResponse(error)
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to list approval requests.' }, { status: 500 })
   }
 }
@@ -42,6 +45,8 @@ export async function POST(request: Request) {
       },
     }, { status: 201 })
   } catch (error) {
+    const authError = authorizationErrorResponse(error)
+    if (authError) return NextResponse.json({ error: authError.error }, { status: authError.status })
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to create approval request.' }, { status: 400 })
   }
 }
