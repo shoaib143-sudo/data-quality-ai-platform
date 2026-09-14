@@ -15,7 +15,7 @@ assert.doesNotMatch(monitor, /componentRuns\.slice\(0,\s*8\)/, 'Domain cells mus
 assert.match(monitor, /organicNodePosition\(index, visibleComponents\.length\)/, 'Organic component placement must remain deterministic and scale across rings.')
 assert.match(monitor, /possible execution components inside/, 'Domain cell topology must expose an accessible component-count description.')
 assert.match(monitor, /latestRunPerComponent\(projectRuns\)/, 'Domain cells must collapse repeated runs to the latest execution state per execution component.')
-assert.match(monitor, /const components: DomainComponent\[\] = initialAgents\.map/, 'Every enabled production agent must be materialized as a possible domain-cell component without creating a run.')
+assert.match(monitor, /const components: DomainComponent\[\] = initialAgents\.filter\(\(agent\) => !isSupervisorAgent\(agent\)\)\.map/, 'Every enabled governed feature must be materialized around the central supervisor without creating a run.')
 assert.match(monitor, /run: latestByAgent\.get\(agent\.id\) \?\? null/, 'Unexecuted possible paths must remain explicit null-backed presentation state rather than synthetic execution records.')
 assert.match(monitor, /function NotExecutedNode/, 'Unexecuted possible features must have an explicit grey presentation node.')
 assert.match(monitor, /const FEATURE_PRESENTATION: Record<string, FeaturePresentation>/, 'Internal agent definitions must map to governed DG/AI feature presentation.')
