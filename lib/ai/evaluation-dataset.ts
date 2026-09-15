@@ -54,6 +54,7 @@ export type VerifiedEvaluationCase = {
   problemType: string
   context: EvaluationDatasetJson
   verifiedOutcome: {
+    effective: boolean
     effectiveness: number
     confidence: number
     checks: EvaluationDatasetJson
@@ -92,10 +93,9 @@ function boundedLimit(value: number | undefined) {
   return Math.min(value, 500)
 }
 
-function numberInUnitInterval(value: number | string | null, label: string) {
+function numberInUnitInterval(value: number | string | null) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) return null
-  if (label === 'effectiveness' && parsed <= 0) return null
   return parsed
 }
 
@@ -107,12 +107,12 @@ function hasSyntheticBootstrap(value: unknown): boolean {
   )
 }
 
-function allChecksPassed(checks: EvaluationDatasetJson) {
+function hasCompleteVerificationChecks(checks: EvaluationDatasetJson) {
   const entries = Object.values(checks)
   if (entries.length === 0) return false
   return entries.every((value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-    return (value as Record<string, unknown>).passed === true
+    return typeof (value as Record<string, unknown>).passed === 'boolean'
   })
 }
 
@@ -130,15 +130,15 @@ function projectCase(
   if (learningCase.decision_status !== 'VERIFIED' || learningCase.outcome_status !== 'VERIFIED') return null
   if (!learningCase.source_agent_run_id || hasSyntheticBootstrap(learningCase.evidence)) return null
 
-  const effectiveness = numberInUnitInterval(learningCase.effectiveness, 'effectiveness')
-  const confidence = numberInUnitInterval(learningCase.confidence, 'confidence')
+  const effectiveness = numberInUnitInterval(learningCase.effectiveness)
+  const confidence = numberInUnitInterval(learningCase.confidence)
   if (effectiveness == null || confidence == null) return null
 
-  if (learning.project_id !== learningCase.project_id || learning.status !== 'VERIFIED' || learning.effective !== true) return null
+  if (learning.project_id !== learningCase.project_id || learning.status !== 'VERIFIED' || typeof learning.effective !== 'boolean') return null
   if (learning.source_agent_run_id !== learningCase.source_agent_run_id) return null
   if (!learning.outcome || learning.outcome.status !== 'VERIFIED' || !learning.outcome.verified_at) return null
   if (learning.outcome.id !== learning.remediation_outcome_id) return null
-  if (!allChecksPassed(learning.outcome.checks)) return null
+  if (!hasCompleteVerificationChecks(learning.outcome.checks)) return null
 
   const verificationAgentRunId = learning.verification_agent_run_id ?? learning.outcome.verification_agent_run_id
   if (!verificationAgentRunId && !learning.outcome.verification_job_id) return null
@@ -158,6 +158,7 @@ function projectCase(
     problemType: learningCase.problem_type,
     context: learningCase.context,
     verifiedOutcome: {
+      effective: learning.effective,
       effectiveness,
       confidence,
       checks: learning.outcome.checks,
