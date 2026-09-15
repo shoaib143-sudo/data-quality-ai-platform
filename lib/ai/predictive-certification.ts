@@ -10,6 +10,8 @@ export type PredictiveCertificationReason =
   | 'ACCURACY_TOO_LOW'
 
 export type PredictiveCertificationPolicy = {
+  policyId: string
+  policyVersion: string
   minimumShadowCases: number
   minimumEffectiveCases: number
   minimumIneffectiveCases: number
@@ -42,6 +44,12 @@ export type PredictiveCertificationResult = {
   productionPredictionEnabled: false
 }
 
+function requiredText(value: string, label: string) {
+  const normalized = value.trim()
+  if (!normalized) throw new Error(`${label} is required`)
+  return normalized
+}
+
 function positiveInteger(value: number, label: string) {
   if (!Number.isInteger(value) || value < 1) throw new Error(`${label} must be a positive integer`)
   return value
@@ -71,14 +79,15 @@ export function certifyPredictiveReadiness(input: {
   shadow: GovernedShadowEvaluationResult
   policy: PredictiveCertificationPolicy
 }): PredictiveCertificationResult {
-  const projectId = input.projectId.trim()
-  if (!projectId) throw new Error('projectId is required')
+  const projectId = requiredText(input.projectId, 'projectId')
   if (input.shadow.projectId !== projectId) throw new Error('shadow projectId must match projectId')
   if (!input.shadow.candidateModelVersionId.trim()) throw new Error('candidateModelVersionId is required')
 
   assertNonAuthoritativeShadow(input.shadow)
 
   const policy: PredictiveCertificationPolicy = {
+    policyId: requiredText(input.policy.policyId, 'policyId'),
+    policyVersion: requiredText(input.policy.policyVersion, 'policyVersion'),
     minimumShadowCases: positiveInteger(input.policy.minimumShadowCases, 'minimumShadowCases'),
     minimumEffectiveCases: positiveInteger(input.policy.minimumEffectiveCases, 'minimumEffectiveCases'),
     minimumIneffectiveCases: positiveInteger(input.policy.minimumIneffectiveCases, 'minimumIneffectiveCases'),
