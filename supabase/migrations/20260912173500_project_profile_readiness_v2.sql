@@ -98,8 +98,7 @@ as $$
       lsm.discovery_run_id,
       lsm.manifest_hash,
       lsm.completed_at as discovery_completed_at,
-      (dc.source_type in ('JDBC', 'FILE', 'CSV')) as readiness_policy_onboarded,
-      (dc.source_type in ('FILE', 'CSV')) as file_policy,
+      (dc.source_type = 'JDBC') as readiness_policy_onboarded,
       (dc.dataset_status = 'ACTIVE') as dataset_active,
       (dc.source_status = 'ACTIVE') as source_active,
       (dc.operational_state = 'OBSERVED_READY') as source_observed_ready,
@@ -121,21 +120,20 @@ as $$
         when not readiness_policy_onboarded then 'NOT_ASSESSED'
         when dataset_active
          and source_active
+         and source_observed_ready
+         and governed_scope_ready
          and execution_binding_ready
-         and (
-           file_policy
-           or (source_observed_ready and governed_scope_ready and discovery_evidence_ready)
-         ) then 'READY'
+         and discovery_evidence_ready then 'READY'
         else 'BLOCKED'
       end as readiness_state,
       jsonb_strip_nulls(jsonb_build_object(
         'READINESS_RULE_NOT_ONBOARDED', case when not readiness_policy_onboarded then true end,
         'DATASET_NOT_ACTIVE', case when readiness_policy_onboarded and not dataset_active then true end,
         'SOURCE_NOT_ACTIVE', case when readiness_policy_onboarded and not source_active then true end,
-        'SOURCE_NOT_OBSERVED_READY', case when readiness_policy_onboarded and not file_policy and not source_observed_ready then true end,
-        'GOVERNED_SCOPE_NOT_READY', case when readiness_policy_onboarded and not file_policy and not governed_scope_ready then true end,
+        'SOURCE_NOT_OBSERVED_READY', case when readiness_policy_onboarded and not source_observed_ready then true end,
+        'GOVERNED_SCOPE_NOT_READY', case when readiness_policy_onboarded and not governed_scope_ready then true end,
         'EXECUTION_SOURCE_NOT_BOUND', case when readiness_policy_onboarded and not execution_binding_ready then true end,
-        'DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE', case when readiness_policy_onboarded and not file_policy and not discovery_evidence_ready then true end
+        'DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE', case when readiness_policy_onboarded and not discovery_evidence_ready then true end
       )) as blockers,
       jsonb_strip_nulls(jsonb_build_object(
         'READINESS_RULE_NOT_ONBOARDED', case when not readiness_policy_onboarded then jsonb_build_object(
@@ -199,7 +197,7 @@ as $$
         'dataset_id', dataset_id,
         'source_id', source_id,
         'source_type', source_type,
-        'readiness_policy', case source_type when 'JDBC' then 'JDBC_V1' when 'FILE' then 'FILE_V1' when 'CSV' then 'CSV_V1' else null end,
+        'readiness_policy', case when readiness_policy_onboarded then 'JDBC_V1' else null end,
         'authority_semantics', 'DETERMINISTIC_DERIVED_READINESS_NO_AGENT_OVERRIDE',
         'dataset_version_id', dataset_version_id,
         'execution_source_id', execution_source_id,
