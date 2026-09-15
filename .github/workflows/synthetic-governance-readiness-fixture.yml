@@ -27,7 +27,7 @@ jobs:
           version: 10
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - name: Verify governed JDBC readiness fixture contract
         run: node scripts/verify-synthetic-governance-readiness-fixture.mjs
