@@ -18,9 +18,6 @@ jobs:
   certify:
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -73,21 +70,22 @@ jobs:
         run: node scripts/verify-journey-operational-certification.mjs
       - name: Production build
         run: pnpm run build
-      - name: Record live governance database verification state
+      - name: Authenticated live database contracts
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         shell: bash
         run: |
-          if [[ -n "$NEXT_PUBLIC_SUPABASE_URL" && -n "$SUPABASE_SERVICE_ROLE_KEY" ]]; then
-            echo 'Live governance database credentials are available; authenticated database verification will run.'
-          else
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
             {
               echo '## Live governance database verification'
               echo 'Status: NOT_MEASURED in CI because the required Supabase credentials are not configured for this workflow.'
               echo 'This is not a PASS. Release evidence must include a separate authenticated live database validation.'
             } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-      - name: Authenticated live database contracts
-        if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
-        run: pnpm run verify:database
+          echo 'Live governance database credentials are available; authenticated database verification will run.'
+          pnpm run verify:database
 
   runtime-slo:
     runs-on: ubuntu-latest
