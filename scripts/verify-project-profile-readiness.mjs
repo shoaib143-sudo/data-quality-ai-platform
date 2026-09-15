@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-const migration = fs.readFileSync('supabase/migrations/20260912173500_project_profile_readiness_v2.sql','utf8')
+const migration = fs.readFileSync('supabase/migrations/20260915231500_onboard_file_profile_readiness.sql','utf8')
 const admissionMigration = fs.readFileSync('supabase/migrations/20260912174600_project_profile_readiness_admission_gate.sql','utf8')
 const gate = fs.readFileSync('lib/profiling/readiness-gate.ts','utf8')
 const executor = fs.readFileSync('lib/agents/executors/profiling-executor.ts','utf8')
