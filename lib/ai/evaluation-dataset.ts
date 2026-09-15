@@ -94,6 +94,8 @@ function boundedLimit(value: number | undefined) {
 }
 
 function numberInUnitInterval(value: number | string | null) {
+  if (value == null) return null
+  if (typeof value === 'string' && !value.trim()) return null
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) return null
   return parsed
