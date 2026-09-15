@@ -80,7 +80,7 @@ function scalarType(value: unknown): ComparableType | null {
 
 function isSyntheticOrTestMetadata(metadata: Record<string, unknown> | null | undefined) {
   if (!metadata) return false
-  for (const key of ['is_synthetic', 'synthetic', 'is_test', 'test', 'is_demo', 'demo']) {
+  for (const key of ['is_synthetic', 'synthetic', 'synthetic_bootstrap', 'is_test', 'test', 'is_demo', 'demo']) {
     if (metadata[key] === true) return true
   }
   const environment = typeof metadata.environment === 'string' ? metadata.environment.trim().toUpperCase() : ''
