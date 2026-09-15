@@ -32,6 +32,8 @@ jobs:
         run: node scripts/verify-workflow-action-pinning.mjs
       - name: Report workflow action inventory
         run: node scripts/report-workflow-action-inventory.mjs
+      - name: Verify workflow action allowlist
+        run: node scripts/verify-workflow-action-allowlist.mjs
       - name: Verify least-privilege workflow posture
         run: node scripts/verify-workflow-security-posture.mjs
       - name: Exercise governance negative and failure cases
