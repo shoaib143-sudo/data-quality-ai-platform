@@ -1,18 +1,16 @@
 BEGIN;
 
-CREATE SCHEMA IF NOT EXISTS orchestration;
-
-CREATE TABLE IF NOT EXISTS orchestration.autonomy_policies (
+CREATE TABLE IF NOT EXISTS governance.autonomy_policies (
     project_id uuid PRIMARY KEY REFERENCES app.projects(id) ON DELETE CASCADE,
     mode text NOT NULL DEFAULT 'OFF' CHECK (mode IN ('OFF','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS')),
     enabled boolean NOT NULL DEFAULT false,
     policy_version text NOT NULL DEFAULT '1.0',
     maximum_risk_tier text NOT NULL DEFAULT 'NONE' CHECK (maximum_risk_tier IN ('NONE','LOW','MEDIUM','HIGH','CRITICAL')),
-    allowed_agent_keys jsonb NOT NULL DEFAULT '[]'::jsonb,
-    allowed_tool_keys jsonb NOT NULL DEFAULT '[]'::jsonb,
-    allowed_model_classes jsonb NOT NULL DEFAULT '[]'::jsonb,
-    allowed_mutation_classes jsonb NOT NULL DEFAULT '[]'::jsonb,
-    approval_required_actions jsonb NOT NULL DEFAULT '[]'::jsonb,
+    allowed_agent_keys jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(allowed_agent_keys) = 'array'),
+    allowed_tool_keys jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(allowed_tool_keys) = 'array'),
+    allowed_model_classes jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(allowed_model_classes) = 'array'),
+    allowed_mutation_classes jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(allowed_mutation_classes) = 'array'),
+    approval_required_actions jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(approval_required_actions) = 'array'),
     auto_remediation_enabled boolean NOT NULL DEFAULT false,
     auto_rollback_enabled boolean NOT NULL DEFAULT false,
     max_execution_budget numeric(18,6) NOT NULL DEFAULT 0 CHECK (max_execution_budget >= 0),
@@ -25,16 +23,17 @@ CREATE TABLE IF NOT EXISTS orchestration.autonomy_policies (
     emergency_stop boolean NOT NULL DEFAULT false,
     updated_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CHECK ((mode = 'OFF' AND enabled = false) OR (mode <> 'OFF' AND enabled = true))
 );
 
-CREATE TABLE IF NOT EXISTS orchestration.governance_orchestrator_runs (
+CREATE TABLE IF NOT EXISTS governance.governance_orchestrator_runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES app.projects(id) ON DELETE CASCADE,
     actor_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
     policy_version text NOT NULL,
     mode text NOT NULL CHECK (mode IN ('OFF','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS')),
-    goal_hash text NOT NULL,
+    goal_hash text NOT NULL CHECK (length(goal_hash) = 64),
     supervisor_run_id uuid REFERENCES agent.agent_runs(id) ON DELETE SET NULL,
     ai_capability_e2e_run_id uuid REFERENCES governance.ai_capability_e2e_runs(id) ON DELETE SET NULL,
     status text NOT NULL CHECK (status IN ('CREATED','BLOCKED_POLICY','WAITING_APPROVAL','RUNNING','SUCCEEDED','FAILED','BLOCKED_EXTERNAL')),
@@ -45,14 +44,16 @@ CREATE TABLE IF NOT EXISTS orchestration.governance_orchestrator_runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_governance_orchestrator_runs_project_created
-ON orchestration.governance_orchestrator_runs(project_id, created_at DESC);
+ON governance.governance_orchestrator_runs(project_id, created_at DESC);
 
-ALTER TABLE orchestration.autonomy_policies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orchestration.governance_orchestrator_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE governance.autonomy_policies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE governance.governance_orchestrator_runs ENABLE ROW LEVEL SECURITY;
 
--- Server-authoritative control plane. Client authority remains behind project authorization APIs.
-REVOKE ALL ON TABLE orchestration.autonomy_policies FROM public, anon, authenticated;
-REVOKE ALL ON TABLE orchestration.governance_orchestrator_runs FROM public, anon, authenticated;
+-- Server-authoritative control plane. Browser clients never receive direct DML rights.
+REVOKE ALL ON TABLE governance.autonomy_policies FROM public, anon, authenticated;
+REVOKE ALL ON TABLE governance.governance_orchestrator_runs FROM public, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE governance.autonomy_policies TO service_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE governance.governance_orchestrator_runs TO service_role;
 
 INSERT INTO agent.agent_definitions (
     agent_key,
