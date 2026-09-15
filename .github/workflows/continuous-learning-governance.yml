@@ -1,0 +1,34 @@
+name: Continuous Learning Governance
+
+on:
+  pull_request:
+    paths:
+      - 'lib/ai/continuous-learning-governance.ts'
+      - 'scripts/test-continuous-learning-governance.mjs'
+      - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
+      - '.github/workflows/continuous-learning-governance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/ai/continuous-learning-governance.ts'
+      - 'scripts/test-continuous-learning-governance.mjs'
+      - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
+      - '.github/workflows/continuous-learning-governance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Run continuous learning governance tests
+        run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
+      - name: Run independent continuous learning governance adversarial audit
+        run: node scripts/audit-continuous-learning-governance-adversarial.mjs
