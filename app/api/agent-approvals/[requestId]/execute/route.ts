@@ -27,6 +27,7 @@ export async function POST(request: Request, context: { params: Promise<{ reques
       requestId: approval.id,
       executorUserId: user.id,
       currentFingerprint,
+      expectedActionKey: String(approval.action_key),
     })
 
     let pathname: string

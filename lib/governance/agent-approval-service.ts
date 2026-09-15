@@ -283,6 +283,7 @@ export async function validateApprovalForExecution(input: {
   requestId: string
   executorUserId: string
   currentFingerprint: string
+  expectedActionKey: string
 }) {
   const admin = createAdminClient()
   const { data: request, error } = await admin.schema('governance').from('agent_approval_requests')
@@ -291,6 +292,10 @@ export async function validateApprovalForExecution(input: {
     .maybeSingle()
   if (error) throw new Error(`Unable to load approval request: ${error.message}`)
   if (!request) throw new Error('Approval request was not found.')
+
+  if (String(request.action_key) !== input.expectedActionKey) {
+    throw new AuthorizationError('Approval request action does not match the requested execution route.')
+  }
 
   if (request.execution_fingerprint !== input.currentFingerprint) {
     await admin.schema('governance').from('agent_approval_requests').update({

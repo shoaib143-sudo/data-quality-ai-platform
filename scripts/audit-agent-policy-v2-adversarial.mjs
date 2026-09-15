@@ -266,6 +266,20 @@ attack('ready execution requests require independent runtime capability and curr
   assert.ok(pickup.indexOf('validateApprovalForExecution') < pickup.indexOf("approval.action_key === 'RUN_PROFILING'"))
 })
 
+attack('approval identity is bound to the canonical execution action before fingerprint validation', () => {
+  const service = fs.readFileSync('lib/governance/agent-approval-service.ts', 'utf8')
+  const profiling = fs.readFileSync('app/api/agents/run/route.ts', 'utf8')
+  const quality = fs.readFileSync('app/api/data-quality/run/route.ts', 'utf8')
+  const supervisor = fs.readFileSync('app/api/agents/supervisor/run/route.ts', 'utf8')
+  const pickup = fs.readFileSync('app/api/agent-approvals/[requestId]/execute/route.ts', 'utf8')
+  assert.match(service, /String\(request\.action_key\) !== input\.expectedActionKey/)
+  assert.ok(service.indexOf('String(request.action_key) !== input.expectedActionKey') < service.indexOf('request.execution_fingerprint !== input.currentFingerprint'))
+  assert.match(profiling, /expectedActionKey: 'RUN_PROFILING'/)
+  assert.match(quality, /expectedActionKey: 'RUN_DATA_QUALITY'/)
+  assert.match(supervisor, /expectedActionKey: 'RUN_SUPERVISOR'/)
+  assert.match(pickup, /expectedActionKey: String\(approval\.action_key\)/)
+})
+
 attack('dataset resource ACL is revalidated immediately before profiling and Data Quality execution', () => {
   const service = fs.readFileSync('lib/governance/agent-approval-service.ts', 'utf8')
   const profiling = fs.readFileSync('app/api/agents/run/route.ts', 'utf8')

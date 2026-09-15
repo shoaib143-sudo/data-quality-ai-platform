@@ -42,6 +42,7 @@ export async function POST(request: Request) {
         requestId: approvalRequestId,
         executorUserId: user.id,
         currentFingerprint,
+        expectedActionKey: 'RUN_SUPERVISOR',
       })
     }
 
