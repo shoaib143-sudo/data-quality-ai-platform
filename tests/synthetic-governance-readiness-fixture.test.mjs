@@ -7,6 +7,10 @@ const migrations = [
   'supabase/migrations/20260915131000_reconcile_synthetic_governance_readiness_fixture.sql',
 ].map(path => fs.readFileSync(path, 'utf8'))
 const runtimeAssertion = fs.readFileSync('scripts/assert-synthetic-governance-suite.sql', 'utf8')
+const hashHardening = fs.readFileSync(
+  'supabase/migrations/20260915185000_harden_synthetic_readiness_hash_resolution.sql',
+  'utf8',
+)
 
 function validateScopeRules(sql) {
   return sql.includes("jsonb_build_object('include',jsonb_build_array('profiling_validation.synthetic_customers'))")
@@ -33,4 +37,11 @@ test('runtime assertion fails closed on failed status, empty checks, and false c
   assert.match(runtimeAssertion, /bool_and\(value = 'true'::jsonb\)/)
   assert.match(runtimeAssertion, /coalesce\([\s\S]*false[\s\S]*\) is not true/)
   assert.match(runtimeAssertion, /rollback;/)
+})
+
+test('hash hardening preserves restricted search path and ACLs', () => {
+  assert.match(hashHardening, /pg_catalog\.encode\(extensions\.digest\(/)
+  assert.match(hashHardening, /set search_path = pg_catalog, governance, profiling, catalog, orchestration, app/)
+  assert.match(hashHardening, /revoke execute[\s\S]*public, anon, authenticated/)
+  assert.match(hashHardening, /grant execute[\s\S]*service_role/)
 })
