@@ -159,7 +159,7 @@ test('delayed drift availability fails closed at program boundary', () => {
     policy: { policyId: 'learning-policy', policyVersion: '1', minimumVerifiedLearningCases: 4, minimumEffectiveCases: 2, minimumIneffectiveCases: 2 },
     learningEvidence: learningEvidence(), driftObservations: [drift({ evidenceAvailableAt: '2026-09-02T00:00:00Z' })],
     trainingDataHash: 'sha256:delayed-drift', reproducibilityRef: 'repro:delayed-drift', evidenceCutoffAt: '2026-09-01T00:00:00Z',
-  }), /drift evidence must not be available after evidenceCutoffAt/)
+  }), /drift observation must not be available after evidenceCutoffAt/)
 })
 
 test('cross-category duplicate provenance fails closed', () => {
@@ -168,5 +168,5 @@ test('cross-category duplicate provenance fails closed', () => {
     policy: { policyId: 'learning-policy', policyVersion: '1', minimumVerifiedLearningCases: 4, minimumEffectiveCases: 2, minimumIneffectiveCases: 2 },
     learningEvidence: learningEvidence(), driftObservations: [drift({ evidenceRef: 'learning:e1' })],
     trainingDataHash: 'sha256:duplicate-lineage', reproducibilityRef: 'repro:duplicate-lineage', evidenceCutoffAt: '2026-09-01T00:00:00Z',
-  }), /duplicate evidence reference/)
+  }), /duplicate governance evidence reference/)
 })
