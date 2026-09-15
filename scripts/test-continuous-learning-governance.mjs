@@ -15,8 +15,10 @@ function evidence(id, effective, overrides = {}) {
     evidenceRef: `case:${id}`,
     projectId: 'project-1',
     verifiedAt: `2026-09-0${id}T00:00:00Z`,
+    evidenceAvailableAt: `2026-09-0${id}T01:00:00Z`,
     effective,
     verified: true,
+    persisted: true,
     synthetic: false,
     ...overrides,
   }
@@ -56,8 +58,8 @@ function request(overrides = {}) {
     policy,
     learningEvidence: [evidence(1, true), evidence(2, false), evidence(3, true), evidence(4, false)],
     driftObservations: [drift()],
-    trainingDataHash: 'sha256:training-data-v2',
-    reproducibilityRef: 'model-v2:dataset:v2:evaluation:v1',
+    trainingDataHash: 'sha256:training-data-v3',
+    reproducibilityRef: 'model-v2:dataset:v3:evaluation:v1',
     evidenceCutoffAt: '2026-09-10T00:00:00Z',
     ...overrides,
   }
@@ -65,7 +67,7 @@ function request(overrides = {}) {
 
 test('sufficient verified real evidence is human-review eligible only', () => {
   const result = assessContinuousLearningGovernance(request())
-  assert.equal(result.version, 'continuous-learning-governance-v2')
+  assert.equal(result.version, 'continuous-learning-governance-v3')
   assert.equal(result.status, 'ELIGIBLE_FOR_REVIEW')
   assert.deepEqual(result.reasons, ['READY_FOR_HUMAN_MODEL_REVIEW'])
   assert.equal(result.automaticRetrainingAllowed, false)
@@ -100,12 +102,36 @@ test('cross-project evidence is rejected', () => {
 
 test('future learning evidence and drift observation time are rejected', () => {
   assert.throws(
-    () => assessContinuousLearningGovernance(request({ learningEvidence: [evidence(1, true, { verifiedAt: '2026-09-11T00:00:00Z' })] })),
-    /must not be available after evidenceCutoffAt/,
+    () => assessContinuousLearningGovernance(request({ learningEvidence: [evidence(1, true, { verifiedAt: '2026-09-11T00:00:00Z', evidenceAvailableAt: '2026-09-11T01:00:00Z' })] })),
+    /learning evidence must not be available after evidenceCutoffAt/,
   )
   assert.throws(
-    () => assessContinuousLearningGovernance(request({ driftObservations: [drift({ observedAt: '2026-09-11T00:00:00Z' })] })),
+    () => assessContinuousLearningGovernance(request({ driftObservations: [drift({ observedAt: '2026-09-11T00:00:00Z', evidenceAvailableAt: '2026-09-11T01:00:00Z' })] })),
     /drift observation must not be available after evidenceCutoffAt/,
+  )
+})
+
+test('learning verified before cutoff but available after cutoff is rejected', () => {
+  assert.throws(
+    () => assessContinuousLearningGovernance(request({
+      learningEvidence: [evidence(1, true, { verifiedAt: '2026-09-01T00:00:00Z', evidenceAvailableAt: '2026-09-11T00:00:00Z' })],
+    })),
+    /learning evidence must not be available after evidenceCutoffAt/,
+  )
+})
+
+test('evidence availability cannot precede underlying observation or verification', () => {
+  assert.throws(
+    () => assessContinuousLearningGovernance(request({
+      learningEvidence: [evidence(1, true, { verifiedAt: '2026-09-05T00:00:00Z', evidenceAvailableAt: '2026-09-04T00:00:00Z' })],
+    })),
+    /learning evidence cannot be available before verifiedAt/,
+  )
+  assert.throws(
+    () => assessContinuousLearningGovernance(request({
+      driftObservations: [drift({ observedAt: '2026-09-05T00:00:00Z', evidenceAvailableAt: '2026-09-04T00:00:00Z' })],
+    })),
+    /drift evidence cannot be available before observedAt/,
   )
 })
 
@@ -118,10 +144,14 @@ test('drift observed before cutoff but available after cutoff is rejected', () =
   )
 })
 
-test('synthetic and duplicate learning evidence are rejected', () => {
+test('synthetic unpersisted and duplicate learning evidence are rejected', () => {
   assert.throws(
     () => assessContinuousLearningGovernance(request({ learningEvidence: [evidence(1, true, { synthetic: true })] })),
     /synthetic evidence is not eligible/,
+  )
+  assert.throws(
+    () => assessContinuousLearningGovernance(request({ learningEvidence: [evidence(1, true, { persisted: false })] })),
+    /learning evidence must be persisted evidence/,
   )
   assert.throws(
     () => assessContinuousLearningGovernance(request({ learningEvidence: [evidence(1, true), evidence(1, false)] })),
