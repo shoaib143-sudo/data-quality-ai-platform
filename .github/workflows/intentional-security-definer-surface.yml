@@ -1,0 +1,35 @@
+name: Intentional SECURITY DEFINER Surface
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20260823000000_foundation_app_catalog_agent.sql'
+      - 'supabase/migrations/20260903170000_restore_authenticated_membership_helper_execution.sql'
+      - 'supabase/migrations/20260912054005_harden_runtime_interrupt_authorization_order.sql'
+      - 'scripts/verify-intentional-security-definer-surface.mjs'
+      - '.github/workflows/intentional-security-definer-surface.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20260823000000_foundation_app_catalog_agent.sql'
+      - 'supabase/migrations/20260903170000_restore_authenticated_membership_helper_execution.sql'
+      - 'supabase/migrations/20260912054005_harden_runtime_interrupt_authorization_order.sql'
+      - 'scripts/verify-intentional-security-definer-surface.mjs'
+      - '.github/workflows/intentional-security-definer-surface.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-security-definer-surface:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify intentional SECURITY DEFINER surface
+        run: node scripts/verify-intentional-security-definer-surface.mjs
