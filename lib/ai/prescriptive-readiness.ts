@@ -86,6 +86,9 @@ function assertNonAuthoritativePredictiveCertification(result: PredictiveCertifi
   ) {
     throw new Error('Prescriptive readiness requires non-authoritative predictive certification evidence')
   }
+  if (result.evidenceRefs.length === 0 || result.evidenceRefs.some((ref) => !ref.trim())) {
+    throw new Error('Predictive certification evidenceRefs must contain provenance references')
+  }
 }
 
 function isEligibleObservedIntervention(
@@ -95,8 +98,9 @@ function isEligibleObservedIntervention(
 ) {
   if (item.projectId !== projectId) return false
   if (!item.persisted || item.syntheticOrTest || !item.adjudicated) return false
-  if (!requiredText(item.id, 'intervention.id')) return false
-  if (!requiredText(item.interventionKey, 'intervention.interventionKey')) return false
+  requiredText(item.id, 'intervention.id')
+  requiredText(item.interventionKey, 'intervention.interventionKey')
+  if (item.evidenceRefs.length === 0 || item.evidenceRefs.some((ref) => !ref.trim())) return false
   const observedAt = timestamp(item.observedAt, 'intervention.observedAt')
   const evidenceAvailableAt = timestamp(item.evidenceAvailableAt, 'intervention.evidenceAvailableAt')
   if (observedAt > cutoff || evidenceAvailableAt > cutoff) return false
