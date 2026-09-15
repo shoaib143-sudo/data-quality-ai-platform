@@ -6,6 +6,14 @@ language plpgsql
 set search_path = pg_catalog, governance
 as $function$
 begin
+  if tg_op = 'UPDATE'
+     and (
+       old.requires_business_approval is distinct from new.requires_business_approval
+       or old.requires_governance_approval is distinct from new.requires_governance_approval
+     ) then
+    raise exception 'Approval requirement flags are immutable after request creation';
+  end if;
+
   if new.status = 'READY_TO_EXECUTE'
      and (new.requires_business_approval or new.requires_governance_approval) then
     if new.approved_at is null then
@@ -17,18 +25,38 @@ begin
     if new.approval_expires_at <= statement_timestamp() then
       raise exception 'Human-approved execution request is already expired';
     end if;
+
+    if tg_op = 'UPDATE'
+       and old.status = 'READY_TO_EXECUTE'
+       and (
+         new.approved_at is distinct from old.approved_at
+         or new.approval_expires_at is distinct from old.approval_expires_at
+       ) then
+      raise exception 'Approval validity evidence is immutable once execution is ready';
+    end if;
   end if;
 
   if new.status = 'EXECUTED'
-     and old.status is distinct from 'EXECUTED'
-     and (new.requires_business_approval or new.requires_governance_approval) then
-    if old.status <> 'READY_TO_EXECUTE' then
+     and (tg_op = 'INSERT' or old.status is distinct from 'EXECUTED')
+     and (
+       new.requires_business_approval
+       or new.requires_governance_approval
+       or (
+         tg_op = 'UPDATE'
+         and (old.requires_business_approval or old.requires_governance_approval)
+       )
+     ) then
+    if tg_op <> 'UPDATE' or old.status is distinct from 'READY_TO_EXECUTE' then
       raise exception 'Human-approved execution request must be READY_TO_EXECUTE before execution';
     end if;
-    if new.approved_at is null or new.approval_expires_at is null then
+    if old.approved_at is null or old.approval_expires_at is null then
       raise exception 'Human-approved execution request is missing approval validity evidence';
     end if;
-    if new.approval_expires_at <= statement_timestamp() then
+    if new.approved_at is distinct from old.approved_at
+       or new.approval_expires_at is distinct from old.approval_expires_at then
+      raise exception 'Approval validity evidence cannot change during execution finalization';
+    end if;
+    if old.approval_expires_at <= statement_timestamp() then
       raise exception 'Human-approved execution request expired before execution';
     end if;
   end if;
