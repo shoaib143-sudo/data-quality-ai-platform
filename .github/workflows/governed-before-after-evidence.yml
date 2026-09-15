@@ -1,0 +1,34 @@
+name: Governed Before After Evidence
+
+on:
+  pull_request:
+    paths:
+      - 'lib/data-quality/governed-before-after-evidence.ts'
+      - 'lib/data-quality/governed-before-after-evidence-service.ts'
+      - 'app/api/analytics/governed-before-after-evidence/route.ts'
+      - 'scripts/verify-governed-before-after-evidence.mjs'
+      - '.github/workflows/governed-before-after-evidence.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/data-quality/governed-before-after-evidence.ts'
+      - 'lib/data-quality/governed-before-after-evidence-service.ts'
+      - 'app/api/analytics/governed-before-after-evidence/route.ts'
+      - 'scripts/verify-governed-before-after-evidence.mjs'
+      - '.github/workflows/governed-before-after-evidence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify governed before-after evidence contracts
+        run: node scripts/verify-governed-before-after-evidence.mjs
