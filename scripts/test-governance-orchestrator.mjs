@@ -45,6 +45,12 @@ test('policy rejects excess risk, cost and non allowlisted executors', () => {
   assert.equal(evaluateAutonomyPolicy(policy, { riskTier: 'LOW', actionKey: 'RUN', agentKey: 'rogue_agent' }).allowed, false)
 })
 
+test('policy fails closed on malformed numeric budgets and estimates', () => {
+  assert.equal(evaluateAutonomyPolicy({ ...policy, maxExecutionBudget: Number.NaN }, { riskTier: 'LOW', actionKey: 'RUN' }).allowed, false)
+  assert.equal(evaluateAutonomyPolicy(policy, { riskTier: 'LOW', actionKey: 'RUN', estimatedExecutionCost: -1 }).allowed, false)
+  assert.equal(evaluateAutonomyPolicy(policy, { riskTier: 'LOW', actionKey: 'RUN', estimatedModelCost: Number.POSITIVE_INFINITY }).allowed, false)
+})
+
 test('guided and explicit actions require approval without bypass', () => {
   assert.equal(evaluateAutonomyPolicy({ ...policy, mode: 'GUIDED' }, { riskTier: 'LOW', actionKey: 'RUN' }).requiresApproval, true)
   assert.equal(evaluateAutonomyPolicy(policy, { riskTier: 'LOW', actionKey: 'HIGH_RISK_ACTION' }).requiresApproval, true)
@@ -54,12 +60,16 @@ test('blast radius limits fail closed', () => {
   assert.deepEqual(validateBlastRadius(policy, { datasetsChanged: 2, projectsAffected: 2, remediationActionsThisHour: 1 }), [
     'Dataset blast-radius limit exceeded.', 'Project blast-radius limit exceeded.', 'Remediation rate limit exceeded.',
   ])
+  assert.ok(validateBlastRadius(policy, { datasetsChanged: -1, projectsAffected: 1, remediationActionsThisHour: 0 }).includes('Blast-radius measurements must be non-negative integers.'))
+  assert.ok(validateBlastRadius({ ...policy, maxProjectsAffectedPerRun: -1 }, { datasetsChanged: 0, projectsAffected: 0, remediationActionsThisHour: 0 }).includes('Blast-radius policy limits are invalid.'))
 })
 
-test('plan validation rejects unknown dependencies and cycles', () => {
+test('plan validation rejects unknown dependencies, cycles, duplicates and missing evidence contracts', () => {
   const base = { domain: 'GOVERNANCE', version: '1.0', mandatoryForE2E: true, executorType: 'AGENT', executorKey: 'x', requiredCapability: 'agent.execute', riskTier: 'LOW', evidenceContract: ['evidence'], certificationGate: 'gate', enabled: true }
   assert.ok(validateCapabilityPlan([{ ...base, capabilityKey: 'a', dependencies: ['missing'] }]).some(message => message.includes('unknown dependency')))
   assert.ok(validateCapabilityPlan([{ ...base, capabilityKey: 'a', dependencies: ['b'] }, { ...base, capabilityKey: 'b', dependencies: ['a'] }]).some(message => message.includes('cycle')))
+  assert.ok(validateCapabilityPlan([{ ...base, capabilityKey: 'a', dependencies: [] }, { ...base, capabilityKey: 'a', dependencies: [] }]).some(message => message.includes('unique')))
+  assert.ok(validateCapabilityPlan([{ ...base, capabilityKey: 'a', evidenceContract: [], dependencies: [] }]).some(message => message.includes('evidence requirements')))
 })
 
 test('canonical coverage fails closed when any capability is missing', () => {
@@ -67,20 +77,41 @@ test('canonical coverage fails closed when any capability is missing', () => {
   assert.equal(summary.accounted, 74); assert.equal(summary.unaccounted, 1); assert.equal(summary.certificationEligible, false)
 })
 
-test('canonical coverage rejects duplicate and out of range capability identities', () => {
+test('canonical coverage rejects duplicate and out of range capability identities without inflating accounting', () => {
   const duplicated = canonicalRows(); duplicated[74] = { ...duplicated[74], capability_sr_no: 74 }
-  assert.equal(summarizeCanonicalCapabilityLedger(duplicated).certificationEligible, false)
+  const duplicateSummary = summarizeCanonicalCapabilityLedger(duplicated)
+  assert.equal(duplicateSummary.certificationEligible, false)
+  assert.equal(duplicateSummary.accountingCoveragePct, 74 / 75 * 100)
+
   const outOfRange = canonicalRows(); outOfRange[74] = { ...outOfRange[74], capability_sr_no: 76 }
-  assert.equal(summarizeCanonicalCapabilityLedger(outOfRange).certificationEligible, false)
+  const outOfRangeSummary = summarizeCanonicalCapabilityLedger(outOfRange)
+  assert.equal(outOfRangeSummary.certificationEligible, false)
+  assert.equal(outOfRangeSummary.accounted, 74)
+  assert.equal(outOfRangeSummary.unaccounted, 1)
+  assert.equal(outOfRangeSummary.outOfRangeRows, 1)
+  assert.ok(outOfRangeSummary.accountingCoveragePct <= 100)
 })
 
-test('canonical coverage cannot certify blocked failed or inconclusive outcomes', () => {
+test('canonical coverage cannot certify blocked failed inconclusive or logically inconsistent outcomes', () => {
   const blocked = canonicalRows(); blocked[0] = { ...blocked[0], execution_state: 'BLOCKED', verification_state: 'UNKNOWN', blocker_code: 'POLICY' }
   assert.equal(summarizeCanonicalCapabilityLedger(blocked).certificationEligible, false)
   const failed = canonicalRows(); failed[1] = { ...failed[1], execution_state: 'FAILED', verification_state: 'FAILED' }
   assert.equal(summarizeCanonicalCapabilityLedger(failed).certificationEligible, false)
   const inconclusive = canonicalRows(); inconclusive[2] = { ...inconclusive[2], verification_state: 'INCONCLUSIVE' }
   assert.equal(summarizeCanonicalCapabilityLedger(inconclusive).certificationEligible, false)
+  const inconsistent = canonicalRows(); inconsistent[3] = { ...inconsistent[3], execution_state: 'NOT_RUN', verification_state: 'VERIFIED' }
+  const inconsistentSummary = summarizeCanonicalCapabilityLedger(inconsistent)
+  assert.equal(inconsistentSummary.inconsistentVerification, 1)
+  assert.equal(inconsistentSummary.certificationEligible, false)
+})
+
+test('canonical coverage remains bounded under malformed ledgers', () => {
+  const tooMany = [...canonicalRows(), { ...canonicalRows()[0], capability_sr_no: 1 }, { ...canonicalRows()[1], capability_sr_no: 999 }]
+  const summary = summarizeCanonicalCapabilityLedger(tooMany)
+  assert.ok(summary.accountingCoveragePct <= 100)
+  assert.ok(summary.executionCoveragePct <= 100)
+  assert.ok(summary.certificationCoveragePct <= 100)
+  assert.equal(summary.certificationEligible, false)
 })
 
 test('canonical coverage certifies only all 75 executed and independently verified exactly once', () => {
