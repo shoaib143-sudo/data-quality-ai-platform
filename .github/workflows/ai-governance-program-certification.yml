@@ -1,0 +1,78 @@
+name: AI Governance Program Certification
+
+on:
+  pull_request:
+    paths:
+      - 'lib/ai/governed-shadow-evaluation.ts'
+      - 'lib/ai/predictive-certification.ts'
+      - 'lib/ai/prescriptive-readiness.ts'
+      - 'lib/ai/prescriptive-review-gate.ts'
+      - 'lib/ai/continuous-learning-governance.ts'
+      - 'scripts/test-ai-governance-program-certification.mjs'
+      - 'scripts/test-governed-shadow-evaluation.mjs'
+      - 'scripts/audit-governed-shadow-evaluation-adversarial.mjs'
+      - 'scripts/test-predictive-certification.mjs'
+      - 'scripts/audit-predictive-certification-adversarial.mjs'
+      - 'scripts/test-prescriptive-readiness.mjs'
+      - 'scripts/audit-prescriptive-readiness-adversarial.mjs'
+      - 'scripts/test-prescriptive-review-gate.mjs'
+      - 'scripts/audit-prescriptive-review-gate-adversarial.mjs'
+      - 'scripts/test-continuous-learning-governance.mjs'
+      - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
+      - '.github/workflows/ai-governance-program-certification.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/ai/governed-shadow-evaluation.ts'
+      - 'lib/ai/predictive-certification.ts'
+      - 'lib/ai/prescriptive-readiness.ts'
+      - 'lib/ai/prescriptive-review-gate.ts'
+      - 'lib/ai/continuous-learning-governance.ts'
+      - 'scripts/test-ai-governance-program-certification.mjs'
+      - 'scripts/test-governed-shadow-evaluation.mjs'
+      - 'scripts/audit-governed-shadow-evaluation-adversarial.mjs'
+      - 'scripts/test-predictive-certification.mjs'
+      - 'scripts/audit-predictive-certification-adversarial.mjs'
+      - 'scripts/test-prescriptive-readiness.mjs'
+      - 'scripts/audit-prescriptive-readiness-adversarial.mjs'
+      - 'scripts/test-prescriptive-review-gate.mjs'
+      - 'scripts/audit-prescriptive-review-gate-adversarial.mjs'
+      - 'scripts/test-continuous-learning-governance.mjs'
+      - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
+      - '.github/workflows/ai-governance-program-certification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Run program integration certification
+        run: node --experimental-strip-types --test scripts/test-ai-governance-program-certification.mjs
+      - name: Revalidate governed shadow evaluation
+        run: node --experimental-strip-types --test scripts/test-governed-shadow-evaluation.mjs
+      - name: Audit governed shadow evaluation adversarially
+        run: node scripts/audit-governed-shadow-evaluation-adversarial.mjs
+      - name: Revalidate predictive certification
+        run: node --experimental-strip-types --test scripts/test-predictive-certification.mjs
+      - name: Audit predictive certification adversarially
+        run: node scripts/audit-predictive-certification-adversarial.mjs
+      - name: Revalidate prescriptive readiness
+        run: node --experimental-strip-types --test scripts/test-prescriptive-readiness.mjs
+      - name: Audit prescriptive readiness adversarially
+        run: node scripts/audit-prescriptive-readiness-adversarial.mjs
+      - name: Revalidate prescriptive review gate
+        run: node --experimental-strip-types --test scripts/test-prescriptive-review-gate.mjs
+      - name: Audit prescriptive review gate adversarially
+        run: node scripts/audit-prescriptive-review-gate-adversarial.mjs
+      - name: Revalidate continuous learning governance
+        run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
+      - name: Audit continuous learning governance adversarially
+        run: node scripts/audit-continuous-learning-governance-adversarial.mjs
