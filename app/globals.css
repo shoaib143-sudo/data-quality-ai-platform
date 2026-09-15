@@ -81,6 +81,7 @@
   --sidebar-accent-foreground: oklch(0.96 0.02 245);
   --sidebar-border: oklch(0.29 0.04 245);
   --sidebar-ring: oklch(0.81 0.18 195);
+  --dn-legacy-canvas: #061426;
   --dn-neon-cyan: 34 211 238;
   --dn-neon-blue: 59 130 246;
   --dn-neon-violet: 168 85 247;
@@ -128,7 +129,7 @@
   }
 
   :where(a, button, input, select, textarea, summary, [role='button']):focus-visible {
-    outline: 2px solid rgb(var(--dn-neon-cyan));
+    outline: 2px solid rgb(34 211 238);
     outline-offset: 2px;
     box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12), 0 0 18px rgba(34, 211, 238, 0.12);
   }
