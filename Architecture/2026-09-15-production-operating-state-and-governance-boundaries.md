@@ -66,15 +66,19 @@ Security-sensitive and production-relevant changes require validation against th
 
 A stale successful run is not valid evidence for a moved head. Required checks must not be weakened simply to allow merge.
 
+The live repository ruleset `Protect main certification` enforces this boundary on the default branch. It is active with no bypass actors, requires strict/current status checks, allows squash merge only, requires linear history and resolved conversations, and binds the GitHub Actions contexts `build`, `analyze`, `revalidate`, `certify`, `runtime-slo`, `clean-database-reconstruction`, `dependency-audit`, and `repository-governance`.
+
 ### 8. Repository workflows use least privilege
 
 Secrets with production or service-role authority must be scoped to the smallest workflow step that consumes them. Workflow-level or job-level exposure of sensitive credentials is rejected by repository-governance tests unless a separately reviewed requirement explicitly justifies it.
 
-GitHub Actions references remain immutable/pinned, workflow permissions remain explicit, and repository-controlled settings policy is versioned in the repository.
+GitHub Actions references remain immutable/pinned, workflow permissions remain explicit, and repository-controlled settings policy is versioned in the repository. The action dependency inventory/allowlist hardening must preserve these controls and must not replace exact SHA pinning.
 
 ### 9. Account control-plane settings remain outside application authority
 
 Controls such as Supabase Auth leaked-password protection and GitHub administrative settings are not to be simulated through application code or database grants. When the connected engineering integrations cannot mutate those account-level controls, the item is recorded as `BLOCKED_EXTERNAL` with the exact administrator action required.
+
+The main-branch certification ruleset is currently verified active and is therefore not an external blocker. Other account/organization settings remain governed by the committed `.github/REPOSITORY_SETTINGS.md` baseline when direct verification or mutation is unavailable.
 
 An external administration blocker does not invalidate independent application implementation that has otherwise passed its certification requirements, but it must not be mislabeled as completed.
 
