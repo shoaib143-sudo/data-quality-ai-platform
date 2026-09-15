@@ -25,12 +25,20 @@ for (const required of [
 }
 
 assert.ok(
-  trendSource.includes("input.previous.result.analysis.status === 'OK' && previousSampleSize >= minimumSampleSize"),
+  trendSource.includes("const previousReady = previousAnalysis.status === 'OK' && previousSampleSize >= minimumSampleSize"),
   'Previous-window observed rates must require an independently sufficient sample.',
 )
 assert.ok(
-  trendSource.includes("input.current.result.analysis.status === 'OK' && currentSampleSize >= minimumSampleSize"),
+  trendSource.includes("const currentReady = currentAnalysis.status === 'OK' && currentSampleSize >= minimumSampleSize"),
   'Current-window observed rates must require an independently sufficient sample.',
+)
+assert.ok(
+  trendSource.includes("if (!previousReady || !currentReady)"),
+  'Observed trend rates must fail closed when either window is insufficient.',
+)
+assert.ok(
+  trendSource.includes("if (previousAnalysis.status !== 'OK' || currentAnalysis.status !== 'OK')"),
+  'Outcome counts must only be read after explicit discriminated-union narrowing.',
 )
 assert.ok(
   !trendSource.includes('predictionProbability'),
