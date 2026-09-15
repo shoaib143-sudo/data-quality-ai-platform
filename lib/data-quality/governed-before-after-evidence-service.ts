@@ -17,7 +17,7 @@ function objectValue(value: unknown): Record<string, unknown> {
 }
 
 function explicitSyntheticOrTestFlag(metadata: Record<string, unknown>) {
-  for (const key of ['is_synthetic', 'synthetic', 'is_test', 'test', 'is_demo', 'demo']) {
+  for (const key of ['is_synthetic', 'synthetic', 'synthetic_bootstrap', 'is_test', 'test', 'is_demo', 'demo']) {
     if (metadata[key] === true) return true
   }
   const environment = typeof metadata.environment === 'string' ? metadata.environment.trim().toUpperCase() : ''
