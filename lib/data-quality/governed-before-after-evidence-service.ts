@@ -16,6 +16,28 @@ function objectValue(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function explicitSyntheticOrTestFlag(metadata: Record<string, unknown>) {
+  for (const key of ['is_synthetic', 'synthetic', 'is_test', 'test', 'is_demo', 'demo']) {
+    if (metadata[key] === true) return true
+  }
+  const environment = typeof metadata.environment === 'string' ? metadata.environment.trim().toUpperCase() : ''
+  return environment === 'TEST' || environment === 'DEMO' || environment === 'SYNTHETIC'
+}
+
+function mergeMetadataPreservingExclusionFlags(
+  evidenceContext: unknown,
+  runtimeEvidence: unknown,
+): Record<string, unknown> {
+  const context = objectValue(evidenceContext)
+  const runtime = objectValue(runtimeEvidence)
+  const explicitlyExcluded = explicitSyntheticOrTestFlag(context) || explicitSyntheticOrTestFlag(runtime)
+  return {
+    ...context,
+    ...runtime,
+    ...(explicitlyExcluded ? { synthetic: true } : {}),
+  }
+}
+
 export async function runGovernedBeforeAfterEvidenceAnalysis(input: {
   projectId: string
   windowStart: string
@@ -87,10 +109,7 @@ export async function runGovernedBeforeAfterEvidenceAnalysis(input: {
       beforeEvidence: objectValue(row.before_evidence),
       afterEvidence: objectValue(row.after_evidence),
       outcomeLabel: row.outcome_type ?? null,
-      metadata: {
-        ...objectValue(row.evidence_context),
-        ...objectValue(row.runtime_evidence),
-      },
+      metadata: mergeMetadataPreservingExclusionFlags(row.evidence_context, row.runtime_evidence),
     })),
   ]
 
