@@ -34,6 +34,14 @@ export type HistoricalCase = {
   hasDownstreamImpactEvidence?: boolean
 }
 
+export type ObservedOutcomeEvidence = {
+  executionSucceeded: boolean | null
+  verifiedOutcomeClass: CanonicalOutcomeClass | null
+  adjudicationState: AdjudicationState
+  observedAt: string | null
+  evidenceAvailableAt: string | null
+}
+
 export type CaseAssessment = {
   learningEligible: boolean
   exclusionReason: string | null
@@ -102,6 +110,12 @@ function clampUnit(value: number | null | undefined): number {
 function isSyntheticOrTestSource(sourceKind: string): boolean {
   const normalized = sourceKind.trim().toUpperCase()
   return normalized.includes('SYNTHETIC') || normalized.includes('DEMO') || normalized.includes('TEST')
+}
+
+export function canonicalOutcomeFromObservedEvidence(input: ObservedOutcomeEvidence): CanonicalOutcomeClass | null {
+  if (input.adjudicationState !== 'ADJUDICATED') return null
+  if (!input.verifiedOutcomeClass || !input.observedAt || !input.evidenceAvailableAt) return null
+  return input.verifiedOutcomeClass
 }
 
 export function assessLearningCase(input: HistoricalCase, evidenceCutoffAt: string): CaseAssessment {
@@ -203,8 +217,4 @@ export function buildAnalysisEvidenceEnvelope(input: Omit<AnalysisEvidenceEnvelo
   if (input.confidence != null && (input.confidence < 0 || input.confidence > 1)) throw new Error('confidence must be between 0 and 1.')
 
   return { contractVersion: ANALYSIS_CONTRACT_VERSION, ...input }
-}
-
-export function executionStateDoesNotDetermineOutcome(): true {
-  return true
 }
