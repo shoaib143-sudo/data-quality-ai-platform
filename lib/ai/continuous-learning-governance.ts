@@ -1,4 +1,4 @@
-export const CONTINUOUS_LEARNING_GOVERNANCE_VERSION = 'continuous-learning-governance-v1' as const
+export const CONTINUOUS_LEARNING_GOVERNANCE_VERSION = 'continuous-learning-governance-v2' as const
 
 export type LearningEvidence = {
   evidenceRef: string
@@ -10,8 +10,12 @@ export type LearningEvidence = {
 }
 
 export type DriftObservation = {
+  evidenceRef: string
   metricKey: string
   observedAt: string
+  evidenceAvailableAt: string
+  persisted: true
+  synthetic: false
   referenceValue: number
   currentValue: number
 }
@@ -25,9 +29,12 @@ export type ModelChangePolicy = {
 }
 
 export type HumanOverride = {
+  evidenceRef: string
   reviewerId: string
   reason: string
   recordedAt: string
+  persisted: true
+  synthetic: false
 }
 
 export type ContinuousLearningGovernanceResult = {
@@ -73,6 +80,13 @@ function positiveInteger(value: number, label: string) {
   return value
 }
 
+function addEvidenceRef(refs: Set<string>, value: string, label: string) {
+  const ref = requiredText(value, label)
+  if (refs.has(ref)) throw new Error(`duplicate governance evidence reference: ${ref}`)
+  refs.add(ref)
+  return ref
+}
+
 export function assessContinuousLearningGovernance(input: {
   projectId: string
   currentModelVersionId: string
@@ -103,6 +117,7 @@ export function assessContinuousLearningGovernance(input: {
   const cutoff = timestamp(input.evidenceCutoffAt, 'evidenceCutoffAt')
 
   const evidenceRefs = new Set<string>()
+  let verifiedLearningCaseCount = 0
   let effectiveCaseCount = 0
   let ineffectiveCaseCount = 0
   for (const evidence of input.learningEvidence) {
@@ -112,16 +127,20 @@ export function assessContinuousLearningGovernance(input: {
     if (timestamp(evidence.verifiedAt, 'learningEvidence.verifiedAt') > cutoff) {
       throw new Error('learning evidence must not be available after evidenceCutoffAt')
     }
-    const ref = requiredText(evidence.evidenceRef, 'learningEvidence.evidenceRef')
-    if (evidenceRefs.has(ref)) throw new Error(`duplicate learning evidence reference: ${ref}`)
-    evidenceRefs.add(ref)
+    addEvidenceRef(evidenceRefs, evidence.evidenceRef, 'learningEvidence.evidenceRef')
+    verifiedLearningCaseCount += 1
     if (evidence.effective) effectiveCaseCount += 1
     else ineffectiveCaseCount += 1
   }
 
   const driftObservations = (input.driftObservations ?? []).map((observation) => {
-    requiredText(observation.metricKey, 'driftObservation.metricKey')
-    if (timestamp(observation.observedAt, 'driftObservation.observedAt') > cutoff) {
+    const evidenceRef = addEvidenceRef(evidenceRefs, observation.evidenceRef, 'driftObservation.evidenceRef')
+    const metricKey = requiredText(observation.metricKey, 'driftObservation.metricKey')
+    if (observation.persisted !== true) throw new Error('drift observation must be persisted evidence')
+    if (observation.synthetic !== false) throw new Error('synthetic drift evidence is not eligible for continuous learning')
+    const observedAt = timestamp(observation.observedAt, 'driftObservation.observedAt')
+    const evidenceAvailableAt = timestamp(observation.evidenceAvailableAt, 'driftObservation.evidenceAvailableAt')
+    if (observedAt > cutoff || evidenceAvailableAt > cutoff) {
       throw new Error('drift observation must not be available after evidenceCutoffAt')
     }
     if (!Number.isFinite(observation.referenceValue) || !Number.isFinite(observation.currentValue)) {
@@ -129,23 +148,29 @@ export function assessContinuousLearningGovernance(input: {
     }
     return {
       ...observation,
+      evidenceRef,
+      metricKey,
       absoluteDelta: Number(Math.abs(observation.currentValue - observation.referenceValue).toFixed(12)),
     }
-  }).sort((a, b) => a.metricKey.localeCompare(b.metricKey))
+  }).sort((a, b) => a.metricKey.localeCompare(b.metricKey) || a.evidenceRef.localeCompare(b.evidenceRef))
 
   let humanOverride: HumanOverride | null = null
   if (input.humanOverride) {
+    if (input.humanOverride.persisted !== true) throw new Error('human override must be persisted evidence')
+    if (input.humanOverride.synthetic !== false) throw new Error('synthetic human override is not eligible for model governance')
     humanOverride = {
+      evidenceRef: addEvidenceRef(evidenceRefs, input.humanOverride.evidenceRef, 'humanOverride.evidenceRef'),
       reviewerId: requiredText(input.humanOverride.reviewerId, 'humanOverride.reviewerId'),
       reason: requiredText(input.humanOverride.reason, 'humanOverride.reason'),
       recordedAt: input.humanOverride.recordedAt,
+      persisted: true,
+      synthetic: false,
     }
     if (timestamp(humanOverride.recordedAt, 'humanOverride.recordedAt') > cutoff) {
       throw new Error('human override must not be recorded after evidenceCutoffAt')
     }
   }
 
-  const verifiedLearningCaseCount = evidenceRefs.size
   const reasons: string[] = []
   if (verifiedLearningCaseCount < policy.minimumVerifiedLearningCases) reasons.push('INSUFFICIENT_VERIFIED_LEARNING_CASES')
   if (effectiveCaseCount < policy.minimumEffectiveCases || ineffectiveCaseCount < policy.minimumIneffectiveCases) {
