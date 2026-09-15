@@ -46,7 +46,7 @@ $fixture$;
     returning id into v_scope_id;
 
     insert into catalog.source_scope_versions(scope_id,project_id,source_id,version_number,scope_mode,native_selection,rules,scope_hash,created_by,frozen_at)
-    values(v_scope_id,v_project_id,v_data_source_id,1,'SNAPSHOT',jsonb_build_object('synthetic',true),jsonb_build_object('include',['profiling_validation.synthetic_customers']),encode(digest('synthetic-scope-'||v_suffix,'sha256'),'hex'),v_reviewer_id,now())
+    values(v_scope_id,v_project_id,v_data_source_id,1,'SNAPSHOT',jsonb_build_object('synthetic',true),jsonb_build_object('include',jsonb_build_array('profiling_validation.synthetic_customers')),encode(digest('synthetic-scope-'||v_suffix,'sha256'),'hex'),v_reviewer_id,now())
     returning id into v_scope_version_id;
 
     update catalog.source_scopes
