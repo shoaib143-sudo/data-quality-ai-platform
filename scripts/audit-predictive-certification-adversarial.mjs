@@ -11,6 +11,10 @@ for (const required of [
   "'INSUFFICIENT_CLASS_COVERAGE'",
   "'BRIER_SCORE_TOO_HIGH'",
   "'ACCURACY_TOO_LOW'",
+  'policyId: string',
+  'policyVersion: string',
+  "requiredText(input.policy.policyId, 'policyId')",
+  "requiredText(input.policy.policyVersion, 'policyVersion')",
   'result.predictiveProbabilityExposed !== false',
   'result.rowLevelPredictionsExposed !== false',
   'result.shadowDecisionAuthority !== false',
@@ -36,6 +40,7 @@ for (const required of [
   'poor accuracy fails closed',
   'cross-project shadow evidence is rejected',
   'authoritative or exposed shadow evidence is rejected',
+  'unversioned certification policy fails closed',
   'invalid policy thresholds fail closed',
 ]) {
   assert.ok(tests.includes(required), `Predictive certification adversarial test missing: ${required}`)
