@@ -35,6 +35,8 @@ jobs:
         run: node scripts/verify-p0-p4-revalidation.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
+      - name: Verify DataNexus Governance Orchestrator contracts
+        run: node --experimental-strip-types scripts/test-governance-orchestrator.mjs
       - name: Verify data plane provider configuration
         run: pnpm run verify:data-plane-config
       - name: Verify data plane projection operations
