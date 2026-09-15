@@ -274,7 +274,7 @@ attack('dataset resource ACL is revalidated immediately before profiling and Dat
   assert.match(service, /not authorized to access this dataset resource/)
   assert.ok(service.indexOf('canViewDatasetResource(input.executorUserId, datasetId)') < service.indexOf('authorizeDataset(input.executorUserId, datasetId, profile.capability)'))
   assert.match(profiling, /canViewDatasetResource\(user\.id, dataset\.id\)/)
-  assert.ok(profiling.indexOf('canViewDatasetResource(user.id, dataset.id)') < profiling.indexOf('validateDataSourceForProfiling'))
+  assert.ok(profiling.indexOf('canViewDatasetResource(user.id, dataset.id)') < profiling.indexOf('validateDataSourceForProfiling(admin'))
   assert.equal((quality.match(/canViewDatasetResource\(user\.id, dataset\.id\)/g) ?? []).length, 2)
   assert.ok(quality.indexOf('canViewDatasetResource(user.id, dataset.id)') < quality.indexOf('queueDataQualityAutomation({'))
 })
