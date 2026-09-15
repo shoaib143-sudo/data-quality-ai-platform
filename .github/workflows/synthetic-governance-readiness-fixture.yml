@@ -5,6 +5,7 @@ on:
     paths:
       - 'supabase/migrations/20260915130000_fix_synthetic_governance_readiness_fixture.sql'
       - 'supabase/migrations/20260915131000_reconcile_synthetic_governance_readiness_fixture.sql'
+      - 'supabase/migrations/20260915185000_harden_synthetic_readiness_hash_resolution.sql'
       - 'scripts/verify-synthetic-governance-readiness-fixture.mjs'
       - 'tests/synthetic-governance-readiness-fixture.test.mjs'
       - '.github/workflows/synthetic-governance-readiness-fixture.yml'
@@ -13,6 +14,7 @@ on:
     paths:
       - 'supabase/migrations/20260915130000_fix_synthetic_governance_readiness_fixture.sql'
       - 'supabase/migrations/20260915131000_reconcile_synthetic_governance_readiness_fixture.sql'
+      - 'supabase/migrations/20260915185000_harden_synthetic_readiness_hash_resolution.sql'
       - 'scripts/verify-synthetic-governance-readiness-fixture.mjs'
       - 'tests/synthetic-governance-readiness-fixture.test.mjs'
       - '.github/workflows/synthetic-governance-readiness-fixture.yml'
