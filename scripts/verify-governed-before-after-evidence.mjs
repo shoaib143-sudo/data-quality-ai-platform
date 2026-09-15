@@ -24,6 +24,8 @@ for (const required of [
   "synthetic_demo_test_excluded: true",
   "same_key_required: true",
   "same_scalar_type_required: true",
+  "source_qualified_record_ids: true",
+  "return `${row.source}:${row.id}`",
 ]) {
   assert.ok(analysisSource.includes(required), `Before/after analysis contract is missing: ${required}`)
 }
