@@ -3,6 +3,7 @@ name: Governed Real Case Analysis
 on:
   pull_request:
     paths:
+      - 'app/api/analytics/governed-real-cases/route.ts'
       - 'lib/data-quality/governed-real-case-analysis.ts'
       - 'lib/data-quality/governed-real-case-analysis-service.ts'
       - 'supabase/migrations/20260915111000_governed_real_case_analysis_hardening.sql'
@@ -11,6 +12,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'app/api/analytics/governed-real-cases/route.ts'
       - 'lib/data-quality/governed-real-case-analysis.ts'
       - 'lib/data-quality/governed-real-case-analysis-service.ts'
       - 'supabase/migrations/20260915111000_governed_real_case_analysis_hardening.sql'
