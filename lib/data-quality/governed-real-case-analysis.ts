@@ -8,6 +8,7 @@ import {
   type HistoricalCase,
   type HistoricalOutcomeAnalysis,
 } from '@/lib/data-quality/governed-analysis-foundation'
+import { isExplicitSyntheticTestOrBootstrapEvidence } from '@/lib/data-quality/production-evidence-eligibility'
 
 export const REAL_CASE_ANALYSIS_VERSION = 'real-case-analysis-v1' as const
 
@@ -189,7 +190,8 @@ export function buildGovernedRealCaseAnalysis(input: {
   minimumSampleSize?: number
 }): GovernedRealCaseResult {
   const outcomeRows = input.outcomeRows ?? []
-  const cases = input.rows.map((row) => mapPersistedLearningCase(row, matchUniqueVerifiedOutcome(row, outcomeRows)))
+  const productionRows = input.rows.filter((row) => !isExplicitSyntheticTestOrBootstrapEvidence(row.evidence))
+  const cases = productionRows.map((row) => mapPersistedLearningCase(row, matchUniqueVerifiedOutcome(row, outcomeRows)))
   const assessments = cases.map((candidate) => {
     const assessment = assessLearningCase(candidate, input.evidenceCutoffAt)
     return {
@@ -234,11 +236,12 @@ export function buildGovernedRealCaseAnalysis(input: {
     analysisType: 'REAL_CASE_OUTCOME_DISTRIBUTION',
     metricKey: 'governed_real_case_outcome_distribution',
     metricVersion: REAL_CASE_ANALYSIS_VERSION,
-    calculationMethod: 'Project-scoped count of unique, persisted, adjudicated canonical learning cases with observed outcome evidence available on or before the evidence cutoff. A uniquely matched VERIFIED governed action outcome may enrich the canonical case; execution state alone never determines outcome success.',
+    calculationMethod: 'Project-scoped count of unique, persisted, adjudicated canonical learning cases with observed outcome evidence available on or before the evidence cutoff. Explicit synthetic, demo, test, and synthetic bootstrap evidence is excluded before candidate assessment. A uniquely matched VERIFIED governed action outcome may enrich the canonical case; execution state alone never determines outcome success.',
     filters: {
       status: 'ACTIVE',
       project_id: input.projectId,
       synthetic_demo_test_excluded: true,
+      synthetic_bootstrap_metadata_excluded: true,
       adjudication_required: true,
       verified_action_outcome_enrichment_requires_unique_source_agent_run_match: true,
     },
