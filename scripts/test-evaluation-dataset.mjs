@@ -72,6 +72,7 @@ assert.equal(dataset.datasetKind, 'verified_production_cases')
 assert.equal(dataset.projectId, projectId)
 assert.equal(dataset.cases.length, 1)
 assert.equal(dataset.cases[0].caseId, 'case-verified')
+assert.equal(dataset.cases[0].verifiedOutcome.effective, true)
 assert.equal(dataset.cases[0].verifiedOutcome.effectiveness, 1)
 assert.equal(dataset.cases[0].verifiedOutcome.confidence, 0.95)
 assert.equal(dataset.cases[0].verifiedOutcome.verifiedAt, '2026-09-08T09:22:02.000Z')
@@ -88,9 +89,9 @@ assert.equal('recommendation' in dataset.cases[0], false, 'AI recommendation pro
 
 for (const mutation of [
   { name: 'unverified case decision', case: { ...baseCase, decision_status: 'OBSERVED' }, learning },
-  { name: 'ineffective learning', case: baseCase, learning: { ...learning, effective: false } },
-  { name: 'failed verification check', case: baseCase, learning: { ...learning, outcome: { ...learning.outcome, checks: { material_improvement: { passed: false } } } } },
   { name: 'missing verification identity', case: baseCase, learning: { ...learning, verification_agent_run_id: null, outcome: { ...learning.outcome, verification_agent_run_id: null, verification_job_id: null } } },
+  { name: 'missing effective label', case: baseCase, learning: { ...learning, effective: null } },
+  { name: 'incomplete verification check', case: baseCase, learning: { ...learning, outcome: { ...learning.outcome, checks: { material_improvement: { note: 'missing passed boolean' } } } } },
 ]) {
   const isolated = new VerifiedEvaluationDatasetBuilder({
     listLearningCases: async () => [mutation.case],
@@ -99,6 +100,26 @@ for (const mutation of [
   const result = await isolated.build({ projectId })
   assert.equal(result.cases.length, 0, mutation.name)
 }
+
+for (const mutation of [
+  { name: 'verified ineffective learning', case: { ...baseCase, id: 'case-ineffective', effectiveness: '0', evidence: { ...baseCase.evidence, source_id: 'learning-ineffective' } }, learning: { ...learning, id: 'learning-ineffective', source_agent_run_id: 'source-run', effective: false } },
+  { name: 'verified failed check outcome', case: { ...baseCase, id: 'case-failed-check', effectiveness: '0', evidence: { ...baseCase.evidence, source_id: 'learning-failed-check' } }, learning: { ...learning, id: 'learning-failed-check', source_agent_run_id: 'source-run', effective: false, outcome: { ...learning.outcome, checks: { material_improvement: { passed: false } } } } },
+]) {
+  const isolated = new VerifiedEvaluationDatasetBuilder({
+    listLearningCases: async () => [mutation.case],
+    listDataQualityLearning: async () => [mutation.learning],
+  })
+  const result = await isolated.build({ projectId })
+  assert.equal(result.cases.length, 1, mutation.name)
+  assert.equal(result.cases[0].verifiedOutcome.effective, false, mutation.name)
+  assert.equal(result.cases[0].verifiedOutcome.effectiveness, 0, mutation.name)
+}
+
+const missingNumeric = new VerifiedEvaluationDatasetBuilder({
+  listLearningCases: async () => [{ ...baseCase, effectiveness: null }],
+  listDataQualityLearning: async () => [learning],
+})
+assert.equal((await missingNumeric.build({ projectId })).cases.length, 0, 'missing effectiveness evidence must fail closed')
 
 await assert.rejects(builder.build({ projectId: '   ' }), /projectId is required/)
 await assert.rejects(builder.build({ projectId, limit: 0 }), /limit must be a positive integer/)
