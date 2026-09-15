@@ -70,7 +70,7 @@ export type ProjectAuthorization = {
   capability: AuthorizationCapability
 }
 
-async function hasOrganizationWideDataGovernanceSuperAdminCapability(
+export async function hasOrganizationWideDataGovernanceSuperAdminCapability(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
   organizationId: string,
