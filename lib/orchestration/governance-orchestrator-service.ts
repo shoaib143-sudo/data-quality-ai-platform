@@ -1,14 +1,11 @@
+import { createHash } from 'node:crypto'
+
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runNativeSpecialistSupervisor } from '@/lib/agents/runtime/native-supervisor-service'
 import {
   evaluateAutonomyPolicy,
-  mandatoryAiGovernanceCapabilities,
-  summarizeCapabilityCoverage,
   validateBlastRadius,
-  validateCapabilityPlan,
   type AutonomyPolicy,
-  type CapabilityDescriptor,
-  type CapabilityResult,
 } from '@/lib/orchestration/governance-orchestrator'
 
 const SPECIALIST_KEYS = [
@@ -19,6 +16,9 @@ const SPECIALIST_KEYS = [
   'executive_agent',
   'support_agent',
 ] as const
+
+const REQUIRED_AUTONOMOUS_AGENTS = ['governance_orchestrator_agent', ...SPECIALIST_KEYS] as const
+const CANONICAL_CAPABILITY_COUNT = 75
 
 export const DEFAULT_AUTONOMY_POLICY: AutonomyPolicy = {
   mode: 'OFF',
@@ -40,6 +40,53 @@ export const DEFAULT_AUTONOMY_POLICY: AutonomyPolicy = {
   maxRemediationActionsPerHour: 0,
   maxConcurrentModelCalls: 0,
   emergencyStop: false,
+}
+
+export type CanonicalCapabilityResultRow = {
+  capability_sr_no: number
+  module: string
+  capability: string
+  execution_state: 'NOT_RUN' | 'EXECUTED' | 'BLOCKED' | 'FAILED'
+  verification_state: 'UNKNOWN' | 'VERIFIED' | 'FAILED' | 'INCONCLUSIVE'
+  blocker_code: string | null
+}
+
+export function summarizeCanonicalCapabilityLedger(rows: CanonicalCapabilityResultRow[]) {
+  const unique = new Set(rows.map(row => row.capability_sr_no))
+  const accounted = unique.size
+  const duplicateRows = rows.length - accounted
+  const executed = rows.filter(row => row.execution_state === 'EXECUTED').length
+  const blocked = rows.filter(row => row.execution_state === 'BLOCKED').length
+  const failed = rows.filter(row => row.execution_state === 'FAILED').length
+  const verified = rows.filter(row => row.verification_state === 'VERIFIED').length
+  const verificationFailed = rows.filter(row => row.verification_state === 'FAILED').length
+  const inconclusive = rows.filter(row => row.verification_state === 'INCONCLUSIVE').length
+  const unaccounted = Math.max(0, CANONICAL_CAPABILITY_COUNT - accounted)
+  return {
+    mandatory: CANONICAL_CAPABILITY_COUNT,
+    accounted,
+    executed,
+    verified,
+    blocked,
+    failed,
+    verificationFailed,
+    inconclusive,
+    unaccounted,
+    duplicateRows,
+    accountingCoveragePct: accounted / CANONICAL_CAPABILITY_COUNT * 100,
+    executionCoveragePct: executed / CANONICAL_CAPABILITY_COUNT * 100,
+    certificationCoveragePct: verified / CANONICAL_CAPABILITY_COUNT * 100,
+    certificationEligible:
+      rows.length === CANONICAL_CAPABILITY_COUNT &&
+      accounted === CANONICAL_CAPABILITY_COUNT &&
+      duplicateRows === 0 &&
+      executed === CANONICAL_CAPABILITY_COUNT &&
+      verified === CANONICAL_CAPABILITY_COUNT &&
+      blocked === 0 &&
+      failed === 0 &&
+      verificationFailed === 0 &&
+      inconclusive === 0,
+  }
 }
 
 function asPolicy(row: Record<string, unknown> | null): AutonomyPolicy {
@@ -119,69 +166,99 @@ async function resolveSpecialists() {
   return byKey
 }
 
-function runtimeCapabilityDescriptors(): CapabilityDescriptor[] {
-  return SPECIALIST_KEYS.map((key, index) => ({
-    capabilityKey: `governance.specialist.${key}`,
-    domain: 'GOVERNANCE',
-    version: '1.0',
-    mandatoryForE2E: true,
-    executorType: 'AGENT',
-    executorKey: key,
-    requiredCapability: 'agent.execute',
-    riskTier: 'LOW',
-    dependencies: index === 0 ? [] : index === 1 ? ['governance.specialist.steward_agent'] : [],
-    evidenceContract: ['agent_run', 'agent_run_steps'],
-    certificationGate: 'canonical-agent-evidence',
-    enabled: true,
-  }))
+function requiredAgentPolicyFailure(policy: AutonomyPolicy) {
+  const missing = REQUIRED_AUTONOMOUS_AGENTS.filter(key => !policy.allowedAgentKeys.includes(key))
+  return missing.length ? `Autonomy policy does not permit required agents: ${missing.join(', ')}.` : null
 }
 
-async function persistCoverageRun(input: {
+async function insertOrchestratorRun(input: {
   projectId: string
   actorUserId: string
   policy: AutonomyPolicy
-  descriptors: CapabilityDescriptor[]
-  results: CapabilityResult[]
-  supervisorRunId?: string | null
+  goal: string
+  status: string
+  decisionTrace: Record<string, unknown>
 }) {
   const admin = createAdminClient()
-  const summary = summarizeCapabilityCoverage(input.descriptors, input.results)
-  const { data: run, error } = await admin.schema('orchestration').from('coverage_runs').insert({
+  const goalHash = createHash('sha256').update(input.goal).digest('hex')
+  const { data, error } = await admin.schema('orchestration').from('governance_orchestrator_runs').insert({
     project_id: input.projectId,
     actor_user_id: input.actorUserId,
     policy_version: input.policy.policyVersion,
     mode: input.policy.mode,
-    supervisor_run_id: input.supervisorRunId ?? null,
-    mandatory_count: summary.mandatory,
-    accounted_count: summary.accounted,
-    executed_count: summary.executed,
-    passed_count: summary.passed,
-    failed_count: summary.failed,
-    blocked_count: summary.blocked,
-    not_measured_count: summary.notMeasured,
-    accounting_coverage_pct: summary.accountingCoveragePct,
-    execution_coverage_pct: summary.executionCoveragePct,
-    certification_coverage_pct: summary.certificationCoveragePct,
-    certification_eligible: summary.certificationEligible,
-    status: summary.certificationEligible ? 'CERTIFIABLE' : 'INCOMPLETE',
+    goal_hash: goalHash,
+    status: input.status,
+    decision_trace: input.decisionTrace,
+    started_at: input.status === 'RUNNING' ? new Date().toISOString() : null,
+    completed_at: ['BLOCKED_POLICY','WAITING_APPROVAL','BLOCKED_EXTERNAL','FAILED'].includes(input.status) ? new Date().toISOString() : null,
   }).select('id').single()
-  if (error || !run) throw new Error(`Unable to persist coverage run: ${error?.message ?? 'unknown error'}`)
+  if (error || !data) throw new Error(`Unable to create orchestrator run: ${error?.message ?? 'unknown error'}`)
+  return String(data.id)
+}
 
-  const resultByKey = new Map(input.results.map(row => [row.capabilityKey, row]))
-  const rows = input.descriptors.map(descriptor => {
-    const result = resultByKey.get(descriptor.capabilityKey)
-    return {
-      coverage_run_id: run.id,
-      capability_key: descriptor.capabilityKey,
-      mandatory_for_e2e: descriptor.mandatoryForE2E,
-      outcome: result?.outcome ?? null,
-      evidence_refs: result?.evidenceRefs ?? [],
-      reason: result?.reason ?? 'No capability result was produced.',
-    }
+async function updateOrchestratorRun(orchestratorRunId: string, patch: Record<string, unknown>) {
+  const admin = createAdminClient()
+  const { error } = await admin.schema('orchestration').from('governance_orchestrator_runs').update(patch).eq('id', orchestratorRunId)
+  if (error) throw new Error(`Unable to update orchestrator run: ${error.message}`)
+}
+
+async function createCanonicalCapabilityRun(projectId: string, orchestratorRunId: string, policy: AutonomyPolicy) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('governance').rpc('create_ai_capability_e2e_run', {
+    p_project_id: projectId,
+    p_metadata: {
+      orchestrator_run_id: orchestratorRunId,
+      policy_version: policy.policyVersion,
+      autonomy_mode: policy.mode,
+      source: 'datanexus_governance_orchestrator',
+    },
   })
-  const { error: detailError } = await admin.schema('orchestration').from('coverage_run_capabilities').insert(rows)
-  if (detailError) throw new Error(`Unable to persist capability coverage evidence: ${detailError.message}`)
-  return { coverageRunId: String(run.id), summary }
+  if (error || !data) throw new Error(`Unable to create canonical AI capability run: ${error?.message ?? 'unknown error'}`)
+  return String(data)
+}
+
+async function attachProjectDatasetVersions(projectId: string, capabilityRunId: string) {
+  const admin = createAdminClient()
+  const { data: datasets, error: datasetError } = await admin.schema('catalog').from('datasets')
+    .select('id').eq('project_id', projectId).eq('status', 'ACTIVE')
+  if (datasetError) throw new Error(`Unable to resolve project datasets: ${datasetError.message}`)
+  const datasetIds = (datasets ?? []).map(row => String(row.id))
+  if (!datasetIds.length) return [] as string[]
+  const { data: versions, error: versionError } = await admin.schema('catalog').from('dataset_versions')
+    .select('id,dataset_id,version_number,status')
+    .in('dataset_id', datasetIds)
+    .eq('status', 'AVAILABLE')
+    .order('version_number', { ascending: false })
+  if (versionError) throw new Error(`Unable to resolve project dataset versions: ${versionError.message}`)
+
+  const latestByDataset = new Map<string, string>()
+  for (const row of versions ?? []) {
+    const datasetId = String(row.dataset_id)
+    if (!latestByDataset.has(datasetId)) latestByDataset.set(datasetId, String(row.id))
+  }
+  const versionIds = [...latestByDataset.values()]
+  for (const datasetVersionId of versionIds) {
+    const { error } = await admin.schema('governance').rpc('attach_ai_capability_e2e_dataset_version', {
+      p_run_id: capabilityRunId,
+      p_dataset_version_id: datasetVersionId,
+    })
+    if (error) throw new Error(`Unable to attach dataset version ${datasetVersionId}: ${error.message}`)
+  }
+  return versionIds
+}
+
+async function loadCanonicalCapabilityRows(capabilityRunId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('governance').from('ai_capability_e2e_results')
+    .select('capability_sr_no,module,capability,execution_state,verification_state,blocker_code')
+    .eq('run_id', capabilityRunId)
+    .order('capability_sr_no')
+  if (error) throw new Error(`Unable to load canonical capability ledger: ${error.message}`)
+  return (data ?? []) as CanonicalCapabilityResultRow[]
+}
+
+async function canonicalCoverage(capabilityRunId: string) {
+  return summarizeCanonicalCapabilityLedger(await loadCanonicalCapabilityRows(capabilityRunId))
 }
 
 export async function runGovernanceOrchestrator(input: {
@@ -197,87 +274,173 @@ export async function runGovernanceOrchestrator(input: {
     estimatedExecutionCost: 0,
     estimatedModelCost: 0,
   })
-  const descriptors = [...runtimeCapabilityDescriptors(), ...mandatoryAiGovernanceCapabilities]
-  const planFailures = validateCapabilityPlan(descriptors)
-  if (planFailures.length) throw new Error(`Governance orchestrator plan is invalid: ${planFailures.join(' ')}`)
   const blastRadiusFailures = validateBlastRadius(policy, { datasetsChanged: 0, projectsAffected: 1, remediationActionsThisHour: 0 })
-  if (blastRadiusFailures.length) throw new Error(blastRadiusFailures.join(' '))
+  const agentPolicyFailure = policy.mode === 'OFF' ? null : requiredAgentPolicyFailure(policy)
+  const policyFailures = [
+    ...(decision.allowed ? [] : [decision.reason]),
+    ...blastRadiusFailures,
+    ...(agentPolicyFailure ? [agentPolicyFailure] : []),
+  ]
 
-  if (!decision.allowed) {
-    const results = descriptors.map(row => ({ capabilityKey: row.capabilityKey, outcome: 'BLOCKED_POLICY' as const, evidenceRefs: [], reason: decision.reason }))
-    const persisted = await persistCoverageRun({ ...input, policy, descriptors, results })
-    return { status: 'BLOCKED_POLICY' as const, policy, decision, ...persisted }
+  if (policyFailures.length) {
+    const orchestratorRunId = await insertOrchestratorRun({
+      ...input,
+      policy,
+      status: 'BLOCKED_POLICY',
+      decisionTrace: { decision, policy_failures: policyFailures },
+    })
+    return {
+      status: 'BLOCKED_POLICY' as const,
+      orchestratorRunId,
+      policy,
+      decision,
+      policyFailures,
+      summary: summarizeCanonicalCapabilityLedger([]),
+    }
   }
+
   if (decision.requiresApproval) {
-    const results = descriptors.map(row => ({ capabilityKey: row.capabilityKey, outcome: 'BLOCKED_POLICY' as const, evidenceRefs: [], reason: 'Approval is required before orchestrator dispatch.' }))
-    const persisted = await persistCoverageRun({ ...input, policy, descriptors, results })
-    return { status: 'WAITING_APPROVAL' as const, policy, decision, ...persisted }
+    const orchestratorRunId = await insertOrchestratorRun({
+      ...input,
+      policy,
+      status: 'WAITING_APPROVAL',
+      decisionTrace: { decision, reason: 'Approval is required before orchestrator dispatch.' },
+    })
+    return {
+      status: 'WAITING_APPROVAL' as const,
+      orchestratorRunId,
+      policy,
+      decision,
+      summary: summarizeCanonicalCapabilityLedger([]),
+    }
   }
 
-  const specialists = await resolveSpecialists()
-  const supervisor = await runNativeSpecialistSupervisor({
-    projectId: input.projectId,
-    actorUserId: input.actorUserId,
-    goal: input.goal,
-    workers: [
-      { workerId: 'steward', agentDefinitionId: specialists.get('steward_agent')!, question: 'Assess stewardship, classification and governance evidence for this goal.' },
-      { workerId: 'analyst', agentDefinitionId: specialists.get('governance_analyst_agent')!, question: 'Evaluate governance policies, controls, risks and certification evidence.', dependsOn: ['steward'] },
-      { workerId: 'architect', agentDefinitionId: specialists.get('architect_agent')!, question: 'Evaluate schema, lineage, contract and architecture evidence.', dependsOn: ['analyst'] },
-      { workerId: 'executive', agentDefinitionId: specialists.get('executive_agent')!, question: 'Summarize governance scorecard and executive risk evidence.', dependsOn: ['analyst'] },
-      { workerId: 'investigator', agentDefinitionId: specialists.get('investigator_agent')!, question: 'Investigate anomalies, incidents, profile history and remediation evidence.', dependsOn: ['architect'] },
-      { workerId: 'support', agentDefinitionId: specialists.get('support_agent')!, question: 'Validate operational support, recovery and observability evidence.', dependsOn: ['investigator'] },
-    ],
-  })
-
-  const specialistResults: CapabilityResult[] = SPECIALIST_KEYS.map((key, index) => ({
-    capabilityKey: `governance.specialist.${key}`,
-    outcome: supervisor.status === 'SUCCEEDED' ? 'EXECUTED_AND_PASSED' : 'EXECUTED_AND_FAILED',
-    evidenceRefs: supervisor.childRunIds[index] ? [`agent_run:${supervisor.childRunIds[index]}`] : [],
-    reason: supervisor.status === 'SUCCEEDED' ? null : `Native supervisor ended with ${supervisor.status}.`,
-  }))
-
-  // AI platform capabilities must be independently proven from canonical evidence.
-  // The orchestrator deliberately does not self-certify them from its own claims.
-  const aiResults: CapabilityResult[] = mandatoryAiGovernanceCapabilities.map(row => ({
-    capabilityKey: row.capabilityKey,
-    outcome: row.capabilityKey === 'ai.agent.execution' || row.capabilityKey === 'ai.agent.delegation'
-      ? (supervisor.status === 'SUCCEEDED' ? 'EXECUTED_AND_PASSED' : 'EXECUTED_AND_FAILED')
-      : 'NOT_MEASURED',
-    evidenceRefs: row.capabilityKey === 'ai.agent.execution' || row.capabilityKey === 'ai.agent.delegation'
-      ? [`supervisor_run:${supervisor.supervisorRunId}`, ...supervisor.childRunIds.map(id => `agent_run:${id}`)]
-      : [],
-    reason: row.capabilityKey === 'ai.agent.execution' || row.capabilityKey === 'ai.agent.delegation'
-      ? null
-      : 'Independent canonical evidence gate has not yet attached evidence for this capability.',
-  }))
-
-  const persisted = await persistCoverageRun({
+  const orchestratorRunId = await insertOrchestratorRun({
     ...input,
     policy,
-    descriptors,
-    results: [...specialistResults, ...aiResults],
-    supervisorRunId: supervisor.supervisorRunId,
+    status: 'RUNNING',
+    decisionTrace: { decision, policy_version: policy.policyVersion, mode: policy.mode },
   })
 
-  return {
-    status: supervisor.status,
-    policy,
-    decision,
-    supervisorRunId: supervisor.supervisorRunId,
-    childRunIds: supervisor.childRunIds,
-    planHash: supervisor.planHash,
-    ...persisted,
+  try {
+    const capabilityRunId = await createCanonicalCapabilityRun(input.projectId, orchestratorRunId, policy)
+    await updateOrchestratorRun(orchestratorRunId, { ai_capability_e2e_run_id: capabilityRunId })
+    const datasetVersionIds = await attachProjectDatasetVersions(input.projectId, capabilityRunId)
+    if (!datasetVersionIds.length) {
+      await updateOrchestratorRun(orchestratorRunId, {
+        status: 'BLOCKED_EXTERNAL',
+        completed_at: new Date().toISOString(),
+        decision_trace: {
+          decision,
+          blocker: 'No AVAILABLE dataset version exists for this project. Canonical certification requires at least one attached dataset version.',
+        },
+      })
+      return {
+        status: 'BLOCKED_EXTERNAL' as const,
+        orchestratorRunId,
+        capabilityRunId,
+        policy,
+        decision,
+        summary: await canonicalCoverage(capabilityRunId),
+      }
+    }
+
+    const specialists = await resolveSpecialists()
+    const supervisor = await runNativeSpecialistSupervisor({
+      projectId: input.projectId,
+      actorUserId: input.actorUserId,
+      goal: input.goal,
+      workers: [
+        { workerId: 'steward', agentDefinitionId: specialists.get('steward_agent')!, question: 'Assess stewardship, classification and governance evidence for this goal.' },
+        { workerId: 'analyst', agentDefinitionId: specialists.get('governance_analyst_agent')!, question: 'Evaluate governance policies, controls, risks and certification evidence.', dependsOn: ['steward'] },
+        { workerId: 'architect', agentDefinitionId: specialists.get('architect_agent')!, question: 'Evaluate schema, lineage, contract and architecture evidence.', dependsOn: ['analyst'] },
+        { workerId: 'executive', agentDefinitionId: specialists.get('executive_agent')!, question: 'Summarize governance scorecard and executive risk evidence.', dependsOn: ['analyst'] },
+        { workerId: 'investigator', agentDefinitionId: specialists.get('investigator_agent')!, question: 'Investigate anomalies, incidents, profile history and remediation evidence.', dependsOn: ['architect'] },
+        { workerId: 'support', agentDefinitionId: specialists.get('support_agent')!, question: 'Validate operational support, recovery and observability evidence.', dependsOn: ['investigator'] },
+      ],
+    })
+
+    const finalStatus = supervisor.status === 'SUCCEEDED' ? 'SUCCEEDED' : supervisor.status === 'WAITING_APPROVAL' ? 'WAITING_APPROVAL' : 'FAILED'
+    await updateOrchestratorRun(orchestratorRunId, {
+      supervisor_run_id: supervisor.supervisorRunId,
+      status: finalStatus,
+      completed_at: finalStatus === 'WAITING_APPROVAL' ? null : new Date().toISOString(),
+      decision_trace: {
+        decision,
+        capability_run_id: capabilityRunId,
+        dataset_version_count: datasetVersionIds.length,
+        supervisor_status: supervisor.status,
+        plan_hash: supervisor.planHash,
+        child_run_ids: supervisor.childRunIds,
+        certification_authority: 'governance.ai_capability_e2e_runs',
+        self_certification: false,
+      },
+    })
+
+    return {
+      status: supervisor.status,
+      orchestratorRunId,
+      capabilityRunId,
+      policy,
+      decision,
+      supervisorRunId: supervisor.supervisorRunId,
+      childRunIds: supervisor.childRunIds,
+      planHash: supervisor.planHash,
+      summary: await canonicalCoverage(capabilityRunId),
+    }
+  } catch (error) {
+    await updateOrchestratorRun(orchestratorRunId, {
+      status: 'FAILED',
+      completed_at: new Date().toISOString(),
+      decision_trace: {
+        decision,
+        error: error instanceof Error ? error.message.slice(0, 1000) : 'Unknown orchestrator failure.',
+      },
+    }).catch(() => undefined)
+    throw error
   }
 }
 
 export async function getLatestCoverageRun(projectId: string) {
   const admin = createAdminClient()
-  const { data, error } = await admin.schema('orchestration').from('coverage_runs')
-    .select('*,coverage_run_capabilities(*)')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (error) throw new Error(`Unable to load latest coverage run: ${error.message}`)
-  return data
+  const { data: orchestratorRun, error } = await admin.schema('orchestration').from('governance_orchestrator_runs')
+    .select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  if (error) throw new Error(`Unable to load latest orchestrator run: ${error.message}`)
+  if (!orchestratorRun) return null
+  const capabilityRunId = orchestratorRun.ai_capability_e2e_run_id ? String(orchestratorRun.ai_capability_e2e_run_id) : null
+  const summary = capabilityRunId ? await canonicalCoverage(capabilityRunId) : summarizeCanonicalCapabilityLedger([])
+  return { ...orchestratorRun, capabilityRunId, summary }
+}
+
+export async function finalizeGovernanceOrchestratorCertification(input: {
+  projectId: string
+  orchestratorRunId: string
+}) {
+  const admin = createAdminClient()
+  const { data: row, error } = await admin.schema('orchestration').from('governance_orchestrator_runs')
+    .select('id,project_id,ai_capability_e2e_run_id,status').eq('id', input.orchestratorRunId).eq('project_id', input.projectId).maybeSingle()
+  if (error) throw new Error(`Unable to resolve orchestrator certification run: ${error.message}`)
+  if (!row) throw new Error('Governance orchestrator run was not found.')
+  if (!row.ai_capability_e2e_run_id) throw new Error('Governance orchestrator run has no canonical capability evidence run.')
+
+  const capabilityRunId = String(row.ai_capability_e2e_run_id)
+  const { data: finalized, error: finalizeError } = await admin.schema('governance').rpc('finalize_ai_capability_e2e_run', {
+    p_run_id: capabilityRunId,
+  })
+  if (finalizeError) throw new Error(`Independent capability certification failed: ${finalizeError.message}`)
+  const result = finalized as Record<string, unknown>
+  const assessment = String(result.assessment_state ?? 'NOT_ASSESSED')
+  const summary = await canonicalCoverage(capabilityRunId)
+
+  await updateOrchestratorRun(input.orchestratorRunId, {
+    status: assessment === 'PASS' ? 'SUCCEEDED' : 'FAILED',
+    completed_at: new Date().toISOString(),
+    decision_trace: {
+      certification_authority: 'governance.finalize_ai_capability_e2e_run',
+      assessment_state: assessment,
+      self_certification: false,
+    },
+  })
+
+  return { capabilityRunId, assessmentState: assessment, summary, canonical: result }
 }
