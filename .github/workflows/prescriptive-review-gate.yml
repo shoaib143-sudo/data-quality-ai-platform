@@ -4,16 +4,26 @@ on:
   pull_request:
     paths:
       - 'lib/ai/prescriptive-review-gate.ts'
+      - 'lib/ai/prescriptive-readiness.ts'
       - 'scripts/test-prescriptive-review-gate.mjs'
+      - 'scripts/test-prescriptive-readiness.mjs'
+      - 'scripts/test-prescriptive-readiness-provenance.mjs'
       - 'scripts/audit-prescriptive-review-gate-adversarial.mjs'
+      - 'scripts/audit-prescriptive-readiness-adversarial.mjs'
       - '.github/workflows/prescriptive-review-gate.yml'
+      - '.github/workflows/prescriptive-readiness.yml'
   push:
     branches: [main]
     paths:
       - 'lib/ai/prescriptive-review-gate.ts'
+      - 'lib/ai/prescriptive-readiness.ts'
       - 'scripts/test-prescriptive-review-gate.mjs'
+      - 'scripts/test-prescriptive-readiness.mjs'
+      - 'scripts/test-prescriptive-readiness-provenance.mjs'
       - 'scripts/audit-prescriptive-review-gate-adversarial.mjs'
+      - 'scripts/audit-prescriptive-readiness-adversarial.mjs'
       - '.github/workflows/prescriptive-review-gate.yml'
+      - '.github/workflows/prescriptive-readiness.yml'
 
 permissions:
   contents: read
@@ -28,7 +38,11 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+      - name: Run prescriptive readiness tests
+        run: node --experimental-strip-types --test scripts/test-prescriptive-readiness.mjs scripts/test-prescriptive-readiness-provenance.mjs
       - name: Run prescriptive review gate tests
         run: node --experimental-strip-types --test scripts/test-prescriptive-review-gate.mjs
-      - name: Run independent prescriptive adversarial audit
+      - name: Run independent prescriptive readiness adversarial audit
+        run: node scripts/audit-prescriptive-readiness-adversarial.mjs
+      - name: Run independent prescriptive review gate adversarial audit
         run: node scripts/audit-prescriptive-review-gate-adversarial.mjs
