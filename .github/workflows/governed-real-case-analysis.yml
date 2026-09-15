@@ -6,8 +6,10 @@ on:
       - 'app/api/analytics/governed-real-cases/route.ts'
       - 'lib/data-quality/governed-real-case-analysis.ts'
       - 'lib/data-quality/governed-real-case-analysis-service.ts'
+      - 'lib/data-quality/production-evidence-eligibility.ts'
       - 'supabase/migrations/20260915111000_governed_real_case_analysis_hardening.sql'
       - 'scripts/verify-governed-real-case-analysis.mjs'
+      - 'scripts/test-production-evidence-eligibility.mjs'
       - '.github/workflows/governed-real-case-analysis.yml'
   push:
     branches: [main]
@@ -15,8 +17,10 @@ on:
       - 'app/api/analytics/governed-real-cases/route.ts'
       - 'lib/data-quality/governed-real-case-analysis.ts'
       - 'lib/data-quality/governed-real-case-analysis-service.ts'
+      - 'lib/data-quality/production-evidence-eligibility.ts'
       - 'supabase/migrations/20260915111000_governed_real_case_analysis_hardening.sql'
       - 'scripts/verify-governed-real-case-analysis.mjs'
+      - 'scripts/test-production-evidence-eligibility.mjs'
       - '.github/workflows/governed-real-case-analysis.yml'
 
 permissions:
@@ -34,3 +38,5 @@ jobs:
           node-version: 24
       - name: Verify governed real-case analysis contracts
         run: node scripts/verify-governed-real-case-analysis.mjs
+      - name: Test production evidence eligibility
+        run: node --experimental-strip-types scripts/test-production-evidence-eligibility.mjs
