@@ -5,11 +5,18 @@ const source = fs.readFileSync('lib/ai/prescriptive-review-gate.ts', 'utf8')
 const tests = fs.readFileSync('scripts/test-prescriptive-review-gate.mjs', 'utf8')
 
 for (const required of [
-  "PRESCRIPTIVE_REVIEW_GATE_VERSION = 'prescriptive-review-gate-v1'",
+  "PRESCRIPTIVE_REVIEW_GATE_VERSION = 'prescriptive-review-gate-v2'",
   "status: 'REVIEW_REQUIRED' | 'NOT_READY'",
   "'PREDICTIVE_NOT_ELIGIBLE'",
+  "'PRESCRIPTIVE_READINESS_NOT_ELIGIBLE'",
   "'NO_CANDIDATES'",
   "'READY_FOR_HUMAN_REVIEW'",
+  "input.readiness.status !== 'ELIGIBLE_FOR_HUMAN_REVIEW'",
+  'input.readiness.projectId !== projectId',
+  'input.readiness.candidateModelVersionId !== candidateModelVersionId',
+  'Prescriptive readiness evidenceRefs must contain provenance references',
+  'prescriptivePolicyId',
+  'prescriptivePolicyVersion',
   'candidateRankingApplied: false',
   'expectedImpactClaimed: false',
   'causalEffectClaimed: false',
@@ -20,8 +27,6 @@ for (const required of [
   'automaticActionAllowed: false',
   'currentAuthorizationRequiredAtExecution: true',
   'humanDecisionRequired: true',
-  "input.predictive.status !== 'ELIGIBLE_FOR_REVIEW'",
-  'candidates: []',
   'candidate.requiresApproval !== true',
   'duplicate prescriptive candidateId',
 ]) {
@@ -42,8 +47,11 @@ for (const forbidden of [
 
 for (const required of [
   'predictive NOT_READY suppresses prescriptive candidates',
-  'cross-project predictive evidence is rejected',
-  'authoritative predictive evidence is rejected',
+  'prescriptive readiness NOT_READY suppresses candidates even when predictive evidence is eligible',
+  'cross-project predictive or readiness evidence is rejected',
+  'candidate model mismatch between predictive and readiness evidence is rejected',
+  'authoritative predictive or readiness evidence is rejected',
+  'missing predictive or readiness provenance is rejected',
   'candidate without approval or evidence is rejected',
   'duplicate candidate ids are rejected',
   'candidate ordering is deterministic and not a ranking claim',
