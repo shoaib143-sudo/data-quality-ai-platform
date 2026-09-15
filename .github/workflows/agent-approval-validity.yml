@@ -8,6 +8,7 @@ on:
       - 'supabase/migrations/20260915103000_agent_approval_execution_expiry_guard.sql'
       - 'scripts/verify-agent-approval-validity.mjs'
       - 'scripts/test-agent-approval-validity.sql'
+      - 'scripts/audit-agent-approval-validity-adversarial.mjs'
       - '.github/workflows/agent-approval-validity.yml'
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - 'supabase/migrations/20260915103000_agent_approval_execution_expiry_guard.sql'
       - 'scripts/verify-agent-approval-validity.mjs'
       - 'scripts/test-agent-approval-validity.sql'
+      - 'scripts/audit-agent-approval-validity-adversarial.mjs'
       - '.github/workflows/agent-approval-validity.yml'
 
 permissions:
@@ -47,6 +49,8 @@ jobs:
           node-version: 24
       - name: Verify approval validity and expiry contract
         run: node scripts/verify-agent-approval-validity.mjs
+      - name: Run independent approval validity adversarial audit
+        run: node scripts/audit-agent-approval-validity-adversarial.mjs
       - name: Run approval validity database negative tests
         env:
           PGPASSWORD: postgres
