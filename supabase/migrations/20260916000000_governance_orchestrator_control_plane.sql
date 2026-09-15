@@ -28,54 +28,31 @@ CREATE TABLE IF NOT EXISTS orchestration.autonomy_policies (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS orchestration.coverage_runs (
+CREATE TABLE IF NOT EXISTS orchestration.governance_orchestrator_runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id uuid NOT NULL REFERENCES app.projects(id) ON DELETE CASCADE,
     actor_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
     policy_version text NOT NULL,
     mode text NOT NULL CHECK (mode IN ('OFF','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS')),
+    goal_hash text NOT NULL,
     supervisor_run_id uuid REFERENCES agent.agent_runs(id) ON DELETE SET NULL,
-    mandatory_count integer NOT NULL CHECK (mandatory_count >= 0),
-    accounted_count integer NOT NULL CHECK (accounted_count >= 0),
-    executed_count integer NOT NULL CHECK (executed_count >= 0),
-    passed_count integer NOT NULL CHECK (passed_count >= 0),
-    failed_count integer NOT NULL CHECK (failed_count >= 0),
-    blocked_count integer NOT NULL CHECK (blocked_count >= 0),
-    not_measured_count integer NOT NULL CHECK (not_measured_count >= 0),
-    accounting_coverage_pct numeric(7,3) NOT NULL CHECK (accounting_coverage_pct >= 0 AND accounting_coverage_pct <= 100),
-    execution_coverage_pct numeric(7,3) NOT NULL CHECK (execution_coverage_pct >= 0 AND execution_coverage_pct <= 100),
-    certification_coverage_pct numeric(7,3) NOT NULL CHECK (certification_coverage_pct >= 0 AND certification_coverage_pct <= 100),
-    certification_eligible boolean NOT NULL DEFAULT false,
-    status text NOT NULL CHECK (status IN ('INCOMPLETE','CERTIFIABLE','CERTIFIED','FAILED')),
+    ai_capability_e2e_run_id uuid REFERENCES governance.ai_capability_e2e_runs(id) ON DELETE SET NULL,
+    status text NOT NULL CHECK (status IN ('CREATED','BLOCKED_POLICY','WAITING_APPROVAL','RUNNING','SUCCEEDED','FAILED','BLOCKED_EXTERNAL')),
+    decision_trace jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(decision_trace) = 'object'),
+    started_at timestamptz,
+    completed_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS orchestration.coverage_run_capabilities (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    coverage_run_id uuid NOT NULL REFERENCES orchestration.coverage_runs(id) ON DELETE CASCADE,
-    capability_key text NOT NULL,
-    mandatory_for_e2e boolean NOT NULL DEFAULT true,
-    outcome text CHECK (outcome IS NULL OR outcome IN ('EXECUTED_AND_PASSED','EXECUTED_AND_FAILED','BLOCKED_POLICY','BLOCKED_EXTERNAL','NOT_APPLICABLE','NOT_MEASURED')),
-    evidence_refs jsonb NOT NULL DEFAULT '[]'::jsonb,
-    reason text,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (coverage_run_id, capability_key)
-);
-
-CREATE INDEX IF NOT EXISTS idx_coverage_runs_project_created
-ON orchestration.coverage_runs(project_id, created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_coverage_run_capabilities_run
-ON orchestration.coverage_run_capabilities(coverage_run_id);
+CREATE INDEX IF NOT EXISTS idx_governance_orchestrator_runs_project_created
+ON orchestration.governance_orchestrator_runs(project_id, created_at DESC);
 
 ALTER TABLE orchestration.autonomy_policies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orchestration.coverage_runs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orchestration.coverage_run_capabilities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orchestration.governance_orchestrator_runs ENABLE ROW LEVEL SECURITY;
 
--- These tables are server-authoritative. Authenticated clients never receive direct DML rights.
+-- Server-authoritative control plane. Client authority remains behind project authorization APIs.
 REVOKE ALL ON TABLE orchestration.autonomy_policies FROM public, anon, authenticated;
-REVOKE ALL ON TABLE orchestration.coverage_runs FROM public, anon, authenticated;
-REVOKE ALL ON TABLE orchestration.coverage_run_capabilities FROM public, anon, authenticated;
+REVOKE ALL ON TABLE orchestration.governance_orchestrator_runs FROM public, anon, authenticated;
 
 INSERT INTO agent.agent_definitions (
     agent_key,
@@ -89,14 +66,16 @@ INSERT INTO agent.agent_definitions (
 VALUES (
     'governance_orchestrator_agent',
     'DataNexus Governance Orchestrator',
-    'Coordinates governed Data Governance and AI capabilities through existing specialist agents and deterministic policy boundaries. It does not self-certify.',
+    'Coordinates governed Data Governance and AI capabilities through existing specialist agents, deterministic policy boundaries, and the canonical run-scoped 75-capability evidence ledger. It does not self-certify.',
     '1.0',
-    'Coordinate only authorized governed capabilities. Never bypass authorization, approval, evidence, tenant isolation, budgets, emergency controls, or independent certification. Treat canonical persisted evidence as authoritative over agent claims.',
+    'Coordinate only authorized governed capabilities. Never bypass authorization, approval, evidence, tenant isolation, budgets, emergency controls, or independent certification. Treat governance.ai_capability_e2e_* canonical persisted evidence as authoritative over agent claims.',
     jsonb_build_object(
         'authority', 'ORCHESTRATOR_ONLY',
         'self_certification', false,
         'default_mode', 'OFF',
-        'runtime', 'native_supervisor'
+        'runtime', 'native_supervisor',
+        'capability_ledger', 'governance.ai_capability_e2e_runs',
+        'mandatory_capability_count', 75
     ),
     true
 )
