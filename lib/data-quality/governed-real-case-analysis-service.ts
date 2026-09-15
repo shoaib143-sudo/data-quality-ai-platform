@@ -1,5 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildGovernedRealCaseAnalysis, type PersistedLearningCaseRow } from '@/lib/data-quality/governed-real-case-analysis'
+import {
+  buildGovernedRealCaseAnalysis,
+  type GovernedActionOutcomeRow,
+  type PersistedLearningCaseRow,
+} from '@/lib/data-quality/governed-real-case-analysis'
 
 function assertTimestamp(value: string, fieldName: string) {
   const parsed = Date.parse(value)
@@ -25,7 +29,7 @@ export async function runGovernedRealCaseAnalysis(input: {
   const { data, error } = await admin
     .schema('agent')
     .from('agent_learning_cases')
-    .select('id,project_id,case_key,source_kind,decision_status,outcome_status,confidence,evidence,occurred_at,created_at,updated_at')
+    .select('id,project_id,source_agent_run_id,case_key,source_kind,decision_status,outcome_status,confidence,evidence,occurred_at,created_at,updated_at')
     .eq('project_id', input.projectId)
     .eq('status', 'ACTIVE')
     .gte('occurred_at', input.windowStart)
@@ -37,10 +41,26 @@ export async function runGovernedRealCaseAnalysis(input: {
 
   if (error) throw new Error(`Unable to load governed historical learning cases: ${error.message}`)
 
+  const { data: outcomeData, error: outcomeError } = await admin
+    .schema('governance')
+    .from('governed_action_outcomes')
+    .select('id,project_id,source_agent_run_id,verification_key,decision_state,execution_state,verification_state,outcome_type,effectiveness,verified_at,recorded_at')
+    .eq('project_id', input.projectId)
+    .eq('verification_state', 'VERIFIED')
+    .not('source_agent_run_id', 'is', null)
+    .lte('verified_at', input.evidenceCutoffAt)
+    .lte('recorded_at', input.evidenceCutoffAt)
+    .order('verified_at', { ascending: true })
+    .limit(1000)
+
+  if (outcomeError) throw new Error(`Unable to load verified governed action outcomes: ${outcomeError.message}`)
+
   const rows = (data ?? []) as PersistedLearningCaseRow[]
+  const outcomeRows = (outcomeData ?? []) as GovernedActionOutcomeRow[]
   const result = buildGovernedRealCaseAnalysis({
     projectId: input.projectId,
     rows,
+    outcomeRows,
     windowStart: input.windowStart,
     windowEnd: input.windowEnd,
     evidenceCutoffAt: input.evidenceCutoffAt,
