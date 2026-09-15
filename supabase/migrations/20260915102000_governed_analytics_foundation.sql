@@ -16,6 +16,7 @@ create table if not exists governance.learning_case_assessments (
   assessed_at timestamptz not null default now(),
   assessed_by uuid,
   constraint learning_case_assessments_case_unique unique (learning_case_id),
+  constraint learning_case_assessments_adjudication_check check (adjudication_state in ('UNADJUDICATED', 'PENDING', 'ADJUDICATED')),
   constraint learning_case_assessments_confidence_check check (outcome_confidence is null or (outcome_confidence >= 0 and outcome_confidence <= 1)),
   constraint learning_case_assessments_quality_check check (case_quality_score is null or (case_quality_score >= 0 and case_quality_score <= 1)),
   constraint learning_case_assessments_cutoff_check check (last_observed_at is null or last_observed_at <= evidence_cutoff_at),
