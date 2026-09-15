@@ -26,6 +26,8 @@ function shadow(overrides = {}) {
 }
 
 const policy = {
+  policyId: 'predictive-governance-policy',
+  policyVersion: 'v1',
   minimumShadowCases: 20,
   minimumEffectiveCases: 5,
   minimumIneffectiveCases: 5,
@@ -37,6 +39,8 @@ test('eligible shadow evidence is review-only, never auto-promoted', () => {
   const result = certifyPredictiveReadiness({ projectId: 'project-1', shadow: shadow(), policy })
   assert.equal(result.status, 'ELIGIBLE_FOR_REVIEW')
   assert.deepEqual(result.reasons, ['ELIGIBLE_FOR_REVIEW'])
+  assert.equal(result.policy.policyId, 'predictive-governance-policy')
+  assert.equal(result.policy.policyVersion, 'v1')
   assert.equal(result.automaticPromotionAllowed, false)
   assert.equal(result.humanReviewRequired, true)
   assert.equal(result.productionPredictionEnabled, false)
@@ -86,6 +90,17 @@ test('authoritative or exposed shadow evidence is rejected', () => {
   assert.throws(
     () => certifyPredictiveReadiness({ projectId: 'project-1', shadow: shadow({ rowLevelPredictionsExposed: true }), policy }),
     /non-authoritative historical shadow evidence/,
+  )
+})
+
+test('unversioned certification policy fails closed', () => {
+  assert.throws(
+    () => certifyPredictiveReadiness({ projectId: 'project-1', shadow: shadow(), policy: { ...policy, policyId: '' } }),
+    /policyId is required/,
+  )
+  assert.throws(
+    () => certifyPredictiveReadiness({ projectId: 'project-1', shadow: shadow(), policy: { ...policy, policyVersion: '' } }),
+    /policyVersion is required/,
   )
 })
 
