@@ -6,6 +6,7 @@ import { ProfileMenu } from '@/components/app-shell/profile-menu'
 import { FloatingDataNexusAgent } from '@/components/ai/floating-datanexus-agent'
 import './globals.css'
 import './legacy-dark-compat.css'
+import './product-consistency.css'
 
 const inter = Inter({
   subsets: ['latin'],
