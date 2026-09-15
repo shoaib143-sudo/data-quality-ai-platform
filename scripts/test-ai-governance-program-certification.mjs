@@ -55,7 +55,8 @@ const prescriptivePolicy = () => ({
 function learningEvidence() {
   return [1,2,3,4].map((id) => ({
     evidenceRef: `learning:e${id}`, projectId: 'project-a', verifiedAt: `2026-08-0${id}T00:00:00Z`,
-    effective: id % 2 === 1, verified: true, synthetic: false,
+    evidenceAvailableAt: `2026-08-0${id}T01:00:00Z`, effective: id % 2 === 1,
+    verified: true, persisted: true, synthetic: false,
   }))
 }
 
@@ -117,7 +118,7 @@ test('governed intelligence chain reaches human review without autonomous author
     trainingDataHash: 'sha256:test-training-data', reproducibilityRef: 'repro:program-certification',
     evidenceCutoffAt: '2026-09-01T00:00:00Z',
   })
-  assert.equal(continuous.version, 'continuous-learning-governance-v2')
+  assert.equal(continuous.version, 'continuous-learning-governance-v3')
   assert.equal(continuous.status, 'ELIGIBLE_FOR_REVIEW')
   assert.equal(continuous.automaticRetrainingAllowed, false)
   assert.equal(continuous.automaticPromotionAllowed, false)
@@ -151,6 +152,17 @@ test('human override cannot bypass insufficient continuous-learning evidence', (
   assert.equal(result.status, 'NOT_READY')
   assert.equal(result.overrideCanBypassReadiness, false)
   assert.ok(result.evidenceRefs.includes('override:reviewer-1:2026-08-20'))
+})
+
+test('delayed learning evidence availability fails closed at program boundary', () => {
+  const delayed = learningEvidence()
+  delayed[0] = { ...delayed[0], verifiedAt: '2026-08-01T00:00:00Z', evidenceAvailableAt: '2026-09-02T00:00:00Z' }
+  assert.throws(() => assessContinuousLearningGovernance({
+    projectId: 'project-a', currentModelVersionId: 'model-v1', candidateModelVersionId: 'model-v2',
+    policy: { policyId: 'learning-policy', policyVersion: '1', minimumVerifiedLearningCases: 4, minimumEffectiveCases: 2, minimumIneffectiveCases: 2 },
+    learningEvidence: delayed, driftObservations: [drift()],
+    trainingDataHash: 'sha256:delayed-learning', reproducibilityRef: 'repro:delayed-learning', evidenceCutoffAt: '2026-09-01T00:00:00Z',
+  }), /learning evidence must not be available after evidenceCutoffAt/)
 })
 
 test('delayed drift availability fails closed at program boundary', () => {
