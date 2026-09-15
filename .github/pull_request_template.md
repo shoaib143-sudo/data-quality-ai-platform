@@ -2,6 +2,8 @@
 
 Describe the change and the production or governance outcome it is intended to achieve.
 
+PR titles must use `type(optional-scope): Capitalized summary`. Allowed types are `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `security`, and `test`.
+
 ## Release checklist
 
 - [ ] Scope is limited to the intended change.
@@ -12,6 +14,10 @@ Describe the change and the production or governance outcome it is intended to a
 - [ ] `CodeQL Security / analyze` passes.
 - [ ] `P0-P5 Revalidation / revalidate` passes.
 - [ ] `V6 Operational Certification / certify` passes.
+- [ ] `V6 Operational Certification / runtime-slo` passes.
+- [ ] `V6 Operational Certification / clean-database-reconstruction` passes.
+- [ ] `Dependency Security Audit / dependency-audit` passes.
+- [ ] `Repository Governance / repository-governance` passes.
 - [ ] Deployment/runtime impact and rollback behavior are understood.
 - [ ] Production readiness will be verified after merge when the change affects runtime behavior.
 

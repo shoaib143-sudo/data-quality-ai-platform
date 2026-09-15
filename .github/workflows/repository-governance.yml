@@ -1,0 +1,38 @@
+name: Repository Governance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  repository-governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify repository governance contract
+        run: node scripts/verify-github-governance.mjs
+      - name: Verify immutable action references
+        run: node scripts/verify-workflow-action-pinning.mjs
+      - name: Verify least-privilege workflow posture
+        run: node scripts/verify-workflow-security-posture.mjs
+      - name: Exercise governance negative and failure cases
+        run: node --test tests/github-governance-contract.test.mjs tests/pull-request-title-policy.test.mjs
+      - name: Validate pull request title
+        run: node scripts/verify-pull-request-title.mjs

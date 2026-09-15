@@ -39,6 +39,7 @@
     "verify:governance-reviews": "node scripts/verify-governed-review-boundaries.mjs",
     "verify:control-intelligence": "node scripts/verify-governance-control-intelligence.mjs",
     "verify:readiness": "node scripts/verify-production-readiness.mjs",
+    "verify:github-governance": "node scripts/verify-github-governance.mjs && node scripts/verify-workflow-action-pinning.mjs && node scripts/verify-workflow-security-posture.mjs && node --test tests/github-governance-contract.test.mjs tests/pull-request-title-policy.test.mjs",
     "verify:provider-fallback": "node --experimental-strip-types scripts/test-provider-read-fallback.mjs",
     "verify:knowledge-model": "node scripts/verify-governance-knowledge-model.mjs",
     "verify:quality-intelligence": "node scripts/verify-quality-intelligence.mjs",
