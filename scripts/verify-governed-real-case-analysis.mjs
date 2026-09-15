@@ -5,6 +5,7 @@ import path from 'node:path'
 const root = process.cwd()
 const analysisSource = fs.readFileSync(path.join(root, 'lib/data-quality/governed-real-case-analysis.ts'), 'utf8')
 const serviceSource = fs.readFileSync(path.join(root, 'lib/data-quality/governed-real-case-analysis-service.ts'), 'utf8')
+const routeSource = fs.readFileSync(path.join(root, 'app/api/analytics/governed-real-cases/route.ts'), 'utf8')
 const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20260915111000_governed_real_case_analysis_hardening.sql'), 'utf8')
 
 for (const required of [
@@ -60,6 +61,21 @@ for (const required of [
 ]) {
   assert.ok(serviceSource.includes(required), `Real-case service boundary is missing: ${required}`)
 }
+
+for (const required of [
+  'await requireUser()',
+  "await authorizeProject(user.id, projectId, 'agent.view')",
+  'persist: false',
+  'historical_context_never_authorizes_action: true',
+  'current_authorization_required: true',
+  'predictive_probability_exposed: false',
+  'read_request_persists_learning_state: false',
+]) {
+  assert.ok(routeSource.includes(required), `Governed real-case API boundary is missing: ${required}`)
+}
+
+assert.ok(!routeSource.includes('createAdminClient'), 'The public route must not bypass project authorization with a direct admin client.')
+assert.ok(!routeSource.includes('persist: true'), 'A read analytics request must not mutate learning state.')
 
 for (const required of [
   'drop constraint if exists learning_case_assessments_case_unique',
