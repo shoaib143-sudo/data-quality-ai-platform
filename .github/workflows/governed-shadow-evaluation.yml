@@ -1,0 +1,34 @@
+name: Governed Shadow Evaluation
+
+on:
+  pull_request:
+    paths:
+      - 'lib/ai/governed-shadow-evaluation.ts'
+      - 'scripts/test-governed-shadow-evaluation.mjs'
+      - 'scripts/audit-governed-shadow-evaluation-adversarial.mjs'
+      - '.github/workflows/governed-shadow-evaluation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/ai/governed-shadow-evaluation.ts'
+      - 'scripts/test-governed-shadow-evaluation.mjs'
+      - 'scripts/audit-governed-shadow-evaluation-adversarial.mjs'
+      - '.github/workflows/governed-shadow-evaluation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Run governed shadow evaluation tests
+        run: node --experimental-strip-types --test scripts/test-governed-shadow-evaluation.mjs
+      - name: Run independent governed shadow evaluation adversarial audit
+        run: node scripts/audit-governed-shadow-evaluation-adversarial.mjs
