@@ -25,6 +25,16 @@ type Policy = {
   emergencyStop: boolean
 }
 
+const governedAgents = [
+  'governance_orchestrator_agent',
+  'steward_agent',
+  'governance_analyst_agent',
+  'architect_agent',
+  'investigator_agent',
+  'executive_agent',
+  'support_agent',
+]
+
 const defaultPolicy: Policy = {
   mode: 'OFF', enabled: false, policyVersion: '1.0', maximumRiskTier: 'NONE',
   allowedAgentKeys: [], allowedToolKeys: [], allowedModelClasses: [], allowedMutationClasses: [], approvalRequiredActions: [],
@@ -33,10 +43,11 @@ const defaultPolicy: Policy = {
   maxRemediationActionsPerHour: 0, maxConcurrentModelCalls: 0, emergencyStop: false,
 }
 
-export function AutonomyConsole({ projects, executableProjectIds, manageableProjectIds }: {
+export function AutonomyConsole({ projects, executableProjectIds, manageableProjectIds, certifiableProjectIds }: {
   projects: ProjectOption[]
   executableProjectIds: string[]
   manageableProjectIds: string[]
+  certifiableProjectIds: string[]
 }) {
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [policy, setPolicy] = useState<Policy>(defaultPolicy)
@@ -46,6 +57,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const [busy, setBusy] = useState(false)
   const canExecute = executableProjectIds.includes(projectId)
   const canManage = manageableProjectIds.includes(projectId)
+  const canCertify = certifiableProjectIds.includes(projectId)
   const project = useMemo(() => projects.find(row => row.id === projectId), [projects, projectId])
 
   useEffect(() => {
@@ -74,7 +86,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       enabled: mode !== 'OFF',
       maximumRiskTier: mode === 'OFF' ? 'NONE' : current.maximumRiskTier === 'NONE' ? 'LOW' : current.maximumRiskTier,
       policyVersion: `ui-${Date.now()}`,
-      allowedAgentKeys: mode === 'OFF' ? [] : Array.from(new Set([...current.allowedAgentKeys, 'governance_orchestrator_agent'])),
+      allowedAgentKeys: mode === 'OFF' ? [] : Array.from(new Set([...current.allowedAgentKeys, ...governedAgents])),
     }))
   }
 
@@ -103,8 +115,26 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       const body = await response.json()
       if (!response.ok && response.status !== 202 && response.status !== 409) throw new Error(body.error || 'Orchestrator execution failed.')
       setCoverage(body)
-      setMessage(body.status === 'SUCCEEDED' ? 'Orchestrator execution completed.' : `Orchestrator status: ${body.status ?? 'UNKNOWN'}.`)
+      setMessage(body.status === 'SUCCEEDED' ? 'Orchestrator execution completed. Canonical evidence still requires independent certification.' : `Orchestrator status: ${body.status ?? 'UNKNOWN'}.`)
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Orchestrator execution failed.') }
+    finally { setBusy(false) }
+  }
+
+  async function certify() {
+    const orchestratorRunId = typeof coverage?.orchestratorRunId === 'string'
+      ? coverage.orchestratorRunId
+      : typeof coverage?.id === 'string' ? coverage.id : ''
+    if (!projectId || !canCertify || !orchestratorRunId) return
+    setBusy(true); setMessage('')
+    try {
+      const response = await fetch('/api/agents/governance-orchestrator/certify', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, orchestratorRunId }),
+      })
+      const body = await response.json()
+      setCoverage(current => ({ ...(current ?? {}), ...body, summary: body.summary ?? current?.summary }))
+      if (!response.ok) throw new Error(body.error || `Certification result: ${body.assessmentState ?? 'NOT_ASSESSED'}.`)
+      setMessage('Independent canonical certification passed.')
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Independent certification failed.') }
     finally { setBusy(false) }
   }
 
@@ -113,6 +143,9 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   }
 
   const summary = (coverage?.summary ?? coverage) as Record<string, unknown> | null
+  const orchestratorRunId = typeof coverage?.orchestratorRunId === 'string'
+    ? coverage.orchestratorRunId
+    : typeof coverage?.id === 'string' ? coverage.id : ''
   return (
     <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
       <section className="dn-workspace-panel rounded-xl border p-5 space-y-5">
@@ -166,16 +199,22 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
           <p className="text-sm font-medium">Execution goal</p>
           <textarea value={goal} onChange={event => setGoal(event.target.value)} rows={5} maxLength={2000} className="mt-2 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
         </div>
-        <button type="button" onClick={runOrchestrator} disabled={!canExecute || busy || policy.mode === 'OFF'} className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">
-          {busy ? 'Working…' : 'Run DataNexus Governance Orchestrator'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={runOrchestrator} disabled={!canExecute || busy || policy.mode === 'OFF'} className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">
+            {busy ? 'Working…' : 'Run DataNexus Governance Orchestrator'}
+          </button>
+          <button type="button" onClick={certify} disabled={!canCertify || busy || !orchestratorRunId} className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">
+            Independent certification
+          </button>
+        </div>
         {!canExecute && <p className="text-xs text-muted-foreground">You do not have agent execution permission for {project?.name ?? 'this project'}.</p>}
+        {!canCertify && <p className="text-xs text-muted-foreground">Certification requires separate certification.review authority.</p>}
         {message && <p className="rounded-lg border p-3 text-sm">{message}</p>}
       </section>
 
       <section className="dn-workspace-panel rounded-xl border p-5 lg:col-span-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="font-semibold">Capability coverage</h2><p className="text-xs text-muted-foreground">Independent certification requires canonical evidence for every mandatory capability.</p></div>
+          <div><h2 className="font-semibold">Canonical capability coverage</h2><p className="text-xs text-muted-foreground">PASS requires exactly 75 executed capabilities and 75 independently verified capabilities with canonical run-scoped evidence.</p></div>
           <span className="rounded-full border px-3 py-1 text-xs">Mode: {policy.mode.replaceAll('_',' ')}</span>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -184,7 +223,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
           <Metric label="Certification coverage" value={summary?.certificationCoveragePct} />
         </div>
         <div className="mt-4 text-xs text-muted-foreground">
-          Certification eligible: {String(summary?.certificationEligible ?? false)} · Unaccounted: {String(summary?.unaccounted ?? 'n/a')} · Not measured: {String(summary?.notMeasured ?? summary?.not_measured_count ?? 'n/a')}
+          Certification eligible: {String(summary?.certificationEligible ?? false)} · Unaccounted: {String(summary?.unaccounted ?? 'n/a')} · Blocked: {String(summary?.blocked ?? 'n/a')} · Failed: {String(summary?.failed ?? 'n/a')}
         </div>
       </section>
     </div>
