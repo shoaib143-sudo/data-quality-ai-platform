@@ -43,6 +43,8 @@ const forbidden = [
   ["jsonb_build_object('include',['profiling_validation.synthetic_customers'])", 'scope rules must not use JavaScript-style array syntax in SQL'],
 ]
 
+const hashResolutionPath = 'supabase/migrations/20260915185000_harden_synthetic_readiness_hash_resolution.sql'
+
 let failed = false
 
 for (const migration of migrations) {
@@ -74,6 +76,20 @@ for (const migration of migrations) {
     } else {
       console.log(`PASS: ${message}`)
     }
+  }
+}
+
+const hashResolutionSql = fs.readFileSync(hashResolutionPath, 'utf8')
+for (const [needle, message] of [
+  ['pg_catalog.encode(extensions.digest(', 'runtime hashes must resolve pgcrypto under the restricted search path'],
+  ["strpos(v_source, 'encode(digest(') = 0", 'hash hardening must fail closed when the historical expression changes'],
+  ['revoke execute on function governance.run_synthetic_governance_integration_suite() from public, anon, authenticated', 'hash hardening must preserve the suite ACL boundary'],
+]) {
+  if (!hashResolutionSql.includes(needle)) {
+    console.error(`FAIL: ${message}`)
+    failed = true
+  } else {
+    console.log(`PASS: ${message}`)
   }
 }
 
