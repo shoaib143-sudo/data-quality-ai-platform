@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - name: Verify governed JDBC readiness fixture contract
+      - name: Verify governed JDBC readiness fixture and reconciliation contracts
         run: node scripts/verify-synthetic-governance-readiness-fixture.mjs
       - name: Exercise readiness fixture negative cases
         run: node --test tests/synthetic-governance-readiness-fixture.test.mjs
