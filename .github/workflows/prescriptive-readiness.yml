@@ -5,6 +5,7 @@ on:
     paths:
       - 'lib/ai/prescriptive-readiness.ts'
       - 'scripts/test-prescriptive-readiness.mjs'
+      - 'scripts/test-prescriptive-readiness-provenance.mjs'
       - 'scripts/audit-prescriptive-readiness-adversarial.mjs'
       - '.github/workflows/prescriptive-readiness.yml'
   push:
@@ -12,6 +13,7 @@ on:
     paths:
       - 'lib/ai/prescriptive-readiness.ts'
       - 'scripts/test-prescriptive-readiness.mjs'
+      - 'scripts/test-prescriptive-readiness-provenance.mjs'
       - 'scripts/audit-prescriptive-readiness-adversarial.mjs'
       - '.github/workflows/prescriptive-readiness.yml'
 
@@ -29,6 +31,6 @@ jobs:
         with:
           node-version: '24'
       - name: Run prescriptive readiness tests
-        run: node --experimental-strip-types --test scripts/test-prescriptive-readiness.mjs
+        run: node --experimental-strip-types --test scripts/test-prescriptive-readiness.mjs scripts/test-prescriptive-readiness-provenance.mjs
       - name: Run independent prescriptive readiness adversarial audit
         run: node scripts/audit-prescriptive-readiness-adversarial.mjs
