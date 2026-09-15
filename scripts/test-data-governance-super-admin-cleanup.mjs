@@ -23,6 +23,7 @@ expect(authorize.includes('hasOrganizationWideDataGovernanceSuperAdminCapability
 expect(authorize.includes(".eq('role_key', 'DATA_GOVERNANCE_ADMIN')"), 'Organization-wide Super Admin fallback must require the explicit DATA_GOVERNANCE_ADMIN role.')
 expect(authorize.includes("role.capabilities.includes(capability)"), 'Organization-wide Super Admin fallback must still enforce the governed role capability allowlist.')
 expect(authorize.includes(".eq('organization_id', organizationId)"), 'Organization-wide Super Admin authority must remain constrained to the governed organization boundary.')
+expect(authorize.includes(".in('project_id', projectIds)"), 'Organization-wide Super Admin bindings must be resolved only from projects inside the governed organization.')
 expect(authorize.includes(".eq('active', true)"), 'Organization-wide Super Admin authority must require an active role binding.')
 expect(authorize.includes('binding.expires_at'), 'Organization-wide Super Admin authority must respect binding expiry.')
 expect(cleanup.includes('authorizeDataGovernanceSuperAdmin(user.id, target.projectId)'), 'Destructive cleanup must authorize the exact Super Admin role on the server.')
