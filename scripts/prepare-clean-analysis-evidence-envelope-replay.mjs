@@ -12,6 +12,34 @@ const target = path.join(targetDir, filename)
 if (fs.existsSync(target)) throw new Error(`Replay helper already exists: ${filename}`)
 
 const sql = `
+create table if not exists governance.learning_case_assessments (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  learning_case_id uuid not null references agent.agent_learning_cases(id) on delete cascade,
+  evidence_cutoff_at timestamptz not null,
+  learning_eligible boolean not null default false,
+  learning_exclusion_reason text,
+  adjudication_state text not null default 'UNADJUDICATED',
+  outcome_confidence numeric,
+  case_quality_score numeric,
+  case_quality_version text not null default 'case-quality-v1',
+  quality_factors jsonb not null default '{}'::jsonb,
+  last_observed_at timestamptz,
+  assessed_at timestamptz not null default now(),
+  assessed_by uuid,
+  constraint learning_case_assessments_case_cutoff_unique unique (learning_case_id, evidence_cutoff_at),
+  constraint learning_case_assessments_adjudication_check check (adjudication_state in ('UNADJUDICATED', 'PENDING', 'ADJUDICATED')),
+  constraint learning_case_assessments_confidence_check check (outcome_confidence is null or (outcome_confidence >= 0 and outcome_confidence <= 1)),
+  constraint learning_case_assessments_quality_check check (case_quality_score is null or (case_quality_score >= 0 and case_quality_score <= 1)),
+  constraint learning_case_assessments_cutoff_check check (last_observed_at is null or last_observed_at <= evidence_cutoff_at),
+  constraint learning_case_assessments_exclusion_check check (learning_eligible or learning_exclusion_reason is not null)
+);
+
+create index if not exists idx_learning_case_assessments_project_eligible
+  on governance.learning_case_assessments (project_id, learning_eligible, evidence_cutoff_at desc);
+
+alter table governance.learning_case_assessments enable row level security;
+
 create table if not exists governance.metric_definition_versions (
   id uuid primary key default gen_random_uuid(),
   metric_definition_id uuid not null references profiling.metric_definitions(id) on delete restrict,
@@ -64,4 +92,4 @@ alter table governance.analysis_evidence_envelopes enable row level security;
 `
 
 fs.writeFileSync(target, `${sql.trim()}\n`)
-console.log(`RECONSTRUCTED ${filename}: production contains governance.metric_definition_versions and governance.analysis_evidence_envelopes before the repository records their creation; disposable replay restores their verified live relation contracts so later hardening can be replayed.`)
+console.log(`RECONSTRUCTED ${filename}: production contains governance.learning_case_assessments, governance.metric_definition_versions, and governance.analysis_evidence_envelopes before the repository records their creation; disposable replay restores the verified live analytics-foundation relation contracts so later hardening can be replayed.`)
