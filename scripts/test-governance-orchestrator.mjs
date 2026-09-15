@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import test from 'node:test'
 import {
+  CANONICAL_AI_CAPABILITY_COUNT,
   evaluateAutonomyPolicy,
-  mandatoryAiGovernanceCapabilities,
-  summarizeCapabilityCoverage,
+  summarizeCanonicalCapabilityLedger,
   validateBlastRadius,
   validateCapabilityPlan,
 } from '../lib/orchestration/governance-orchestrator.ts'
@@ -30,10 +31,25 @@ const policy = {
   emergencyStop: false,
 }
 
-test('mandatory AI capability inventory is unique and complete enough to fail closed', () => {
-  assert.equal(mandatoryAiGovernanceCapabilities.length, 19)
-  assert.equal(new Set(mandatoryAiGovernanceCapabilities.map(row => row.capabilityKey)).size, 19)
-  assert.ok(mandatoryAiGovernanceCapabilities.every(row => row.mandatoryForE2E && row.evidenceContract.length > 0))
+function canonicalRows(overrides = {}) {
+  return Array.from({ length: CANONICAL_AI_CAPABILITY_COUNT }, (_, index) => ({
+    capability_sr_no: index + 1,
+    module: 'TEST',
+    capability: `Capability ${index + 1}`,
+    execution_state: 'EXECUTED',
+    verification_state: 'VERIFIED',
+    blocker_code: null,
+    ...overrides,
+  }))
+}
+
+test('canonical capability count remains 75 and integration reuses existing ledger', () => {
+  assert.equal(CANONICAL_AI_CAPABILITY_COUNT, 75)
+  const migration = fs.readFileSync('supabase/migrations/20260916000000_governance_orchestrator_control_plane.sql', 'utf8')
+  const service = fs.readFileSync('lib/orchestration/governance-orchestrator-service.ts', 'utf8')
+  assert.match(migration, /governance\.ai_capability_e2e_runs/)
+  assert.match(service, /create_ai_capability_e2e_run/)
+  assert.doesNotMatch(migration, /create table if not exists orchestration\.coverage_runs/i)
 })
 
 test('OFF and emergency stop deny execution', () => {
@@ -65,37 +81,40 @@ test('plan validation rejects unknown dependencies and cycles', () => {
     domain: 'GOVERNANCE', version: '1.0', mandatoryForE2E: true, executorType: 'AGENT', executorKey: 'x',
     requiredCapability: 'agent.execute', riskTier: 'LOW', evidenceContract: ['evidence'], certificationGate: 'gate', enabled: true,
   }
-  const unknown = validateCapabilityPlan([{ ...base, capabilityKey: 'a', dependencies: ['missing'] }])
-  assert.ok(unknown.some(message => message.includes('unknown dependency')))
-  const cycle = validateCapabilityPlan([
+  assert.ok(validateCapabilityPlan([{ ...base, capabilityKey: 'a', dependencies: ['missing'] }]).some(message => message.includes('unknown dependency')))
+  assert.ok(validateCapabilityPlan([
     { ...base, capabilityKey: 'a', dependencies: ['b'] },
     { ...base, capabilityKey: 'b', dependencies: ['a'] },
-  ])
-  assert.ok(cycle.some(message => message.includes('cycle')))
+  ]).some(message => message.includes('cycle')))
 })
 
-test('coverage cannot certify missing, blocked, failed, not measured or duplicate results', () => {
-  const descriptors = mandatoryAiGovernanceCapabilities.slice(0, 2)
-  assert.equal(summarizeCapabilityCoverage(descriptors, []).certificationEligible, false)
-  assert.equal(summarizeCapabilityCoverage(descriptors, [
-    { capabilityKey: descriptors[0].capabilityKey, outcome: 'EXECUTED_AND_PASSED', evidenceRefs: ['x'], reason: null },
-    { capabilityKey: descriptors[1].capabilityKey, outcome: 'NOT_MEASURED', evidenceRefs: [], reason: 'no evidence' },
-  ]).certificationEligible, false)
-  assert.equal(summarizeCapabilityCoverage(descriptors, [
-    { capabilityKey: descriptors[0].capabilityKey, outcome: 'EXECUTED_AND_PASSED', evidenceRefs: ['x'], reason: null },
-    { capabilityKey: descriptors[0].capabilityKey, outcome: 'EXECUTED_AND_PASSED', evidenceRefs: ['x'], reason: null },
-    { capabilityKey: descriptors[1].capabilityKey, outcome: 'EXECUTED_AND_PASSED', evidenceRefs: ['y'], reason: null },
-  ]).certificationEligible, false)
+test('canonical coverage fails closed when any capability is missing', () => {
+  const summary = summarizeCanonicalCapabilityLedger(canonicalRows().slice(0, 74))
+  assert.equal(summary.accounted, 74)
+  assert.equal(summary.unaccounted, 1)
+  assert.equal(summary.certificationEligible, false)
 })
 
-test('coverage certifies only when every mandatory capability passes exactly once', () => {
-  const descriptors = mandatoryAiGovernanceCapabilities.slice(0, 3)
-  const summary = summarizeCapabilityCoverage(descriptors, descriptors.map(row => ({
-    capabilityKey: row.capabilityKey,
-    outcome: 'EXECUTED_AND_PASSED',
-    evidenceRefs: ['canonical:evidence'],
-    reason: null,
-  })))
+test('canonical coverage rejects duplicate and out of range capability identities', () => {
+  const duplicated = canonicalRows()
+  duplicated[74] = { ...duplicated[74], capability_sr_no: 74 }
+  assert.equal(summarizeCanonicalCapabilityLedger(duplicated).certificationEligible, false)
+  const outOfRange = canonicalRows()
+  outOfRange[74] = { ...outOfRange[74], capability_sr_no: 76 }
+  assert.equal(summarizeCanonicalCapabilityLedger(outOfRange).certificationEligible, false)
+})
+
+test('canonical coverage cannot certify blocked failed unknown or inconclusive outcomes', () => {
+  const blocked = canonicalRows(); blocked[0] = { ...blocked[0], execution_state: 'BLOCKED', verification_state: 'UNKNOWN', blocker_code: 'POLICY' }
+  assert.equal(summarizeCanonicalCapabilityLedger(blocked).certificationEligible, false)
+  const failed = canonicalRows(); failed[1] = { ...failed[1], execution_state: 'FAILED', verification_state: 'FAILED' }
+  assert.equal(summarizeCanonicalCapabilityLedger(failed).certificationEligible, false)
+  const inconclusive = canonicalRows(); inconclusive[2] = { ...inconclusive[2], verification_state: 'INCONCLUSIVE' }
+  assert.equal(summarizeCanonicalCapabilityLedger(inconclusive).certificationEligible, false)
+})
+
+test('canonical coverage certifies only all 75 executed and independently verified exactly once', () => {
+  const summary = summarizeCanonicalCapabilityLedger(canonicalRows())
   assert.equal(summary.accountingCoveragePct, 100)
   assert.equal(summary.executionCoveragePct, 100)
   assert.equal(summary.certificationCoveragePct, 100)
