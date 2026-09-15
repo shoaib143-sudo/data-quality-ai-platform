@@ -4,6 +4,7 @@ import path from 'node:path'
 
 const root = process.cwd()
 const analysisSource = fs.readFileSync(path.join(root, 'lib/data-quality/governed-real-case-analysis.ts'), 'utf8')
+const eligibilitySource = fs.readFileSync(path.join(root, 'lib/data-quality/production-evidence-eligibility.ts'), 'utf8')
 const serviceSource = fs.readFileSync(path.join(root, 'lib/data-quality/governed-real-case-analysis-service.ts'), 'utf8')
 const routeSource = fs.readFileSync(path.join(root, 'app/api/analytics/governed-real-cases/route.ts'), 'utf8')
 const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20260915111000_governed_real_case_analysis_hardening.sql'), 'utf8')
@@ -20,12 +21,27 @@ for (const required of [
   "case 'PARTIAL':",
   "canonicalOutcomeFromVerifiedActionOutcome",
   "matchUniqueVerifiedOutcome",
+  'isExplicitSyntheticTestOrBootstrapEvidence',
+  'const productionRows = input.rows.filter',
+  'synthetic_bootstrap_metadata_excluded: true',
   "analysisType: 'REAL_CASE_OUTCOME_DISTRIBUTION'",
   "predictive_probability_exposed: false",
   "canonical_source: 'agent.agent_learning_cases'",
   "verified_outcome_enrichment_source: 'governance.governed_action_outcomes'",
 ]) {
   assert.ok(analysisSource.includes(required), `Real-case analysis contract is missing: ${required}`)
+}
+
+for (const required of [
+  "'synthetic_bootstrap'",
+  "'is_synthetic'",
+  "'is_test'",
+  "'is_demo'",
+  "environment === 'TEST'",
+  'visit(record.metadata, depth + 1)',
+  'visit(record.evidence, depth + 1)',
+]) {
+  assert.ok(eligibilitySource.includes(required), `Production evidence exclusion contract is missing: ${required}`)
 }
 
 assert.ok(
