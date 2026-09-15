@@ -21,10 +21,13 @@ for (const required of [
   assert.ok(source.includes(required), `Shadow evaluation adversarial boundary missing: ${required}`)
 }
 
+const resultContract = source.split('export type GovernedShadowEvaluationResult = {')[1]?.split('\n}\n\nfunction requiredText')[0] ?? ''
+assert.ok(resultContract, 'Shadow evaluation result contract must exist.')
+assert.ok(!resultContract.includes('predictions:'), 'Shadow evaluation result must not expose row-level prediction arrays.')
+assert.ok(!resultContract.includes('predictedEffectiveProbability'), 'Shadow evaluation result must not expose row-level probabilities.')
 assert.ok(!source.includes('executeAction'), 'Shadow evaluation must not gain execution authority.')
 assert.ok(!source.includes('authorize('), 'Shadow evaluation core must not silently mint authorization.')
 assert.ok(!source.includes('Math.random'), 'Shadow evaluation must remain deterministic.')
-assert.ok(!source.includes('predictions:'), 'Shadow evaluation result must not expose row-level prediction arrays.')
 
 for (const required of [
   'NOT_READY backtesting fails closed',
