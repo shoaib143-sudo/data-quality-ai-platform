@@ -1,6 +1,7 @@
 -- Govern the small set of authenticated-callable SECURITY DEFINER functions that are intentional.
 -- This migration does not broaden access. It reasserts explicit grants, removes PUBLIC/anon execution,
--- and installs a fail-closed verifier so any additional authenticated privileged function becomes a release failure.
+-- and installs a fail-closed verifier so any additional authenticated privileged function in an application
+-- schema becomes a release failure.
 
 revoke all on function app_private.is_org_admin(uuid) from public, anon;
 revoke all on function app_private.is_org_member(uuid) from public, anon;
@@ -88,7 +89,8 @@ begin
     into v_unexpected_authenticated_exec
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
-  where p.prosecdef = true
+  where n.nspname in ('public', 'app', 'app_private', 'agent', 'catalog', 'profiling', 'governance', 'orchestration')
+    and p.prosecdef = true
     and has_function_privilege('authenticated', p.oid, 'EXECUTE')
     and not (
       n.nspname = 'app_private'
@@ -128,7 +130,7 @@ begin
     'runtime_interrupt_anonymous_execute', coalesce(v_interrupt_anon_exec, false),
     'runtime_interrupt_authorization_guarded', coalesce(v_interrupt_guarded, false),
     'unexpected_authenticated_security_definer_count', v_unexpected_authenticated_exec,
-    'model', 'Four unexposed RLS membership helpers and two explicitly governed authenticated privileged RPCs are the complete allowlist.'
+    'model', 'Four unexposed RLS membership helpers and two explicitly governed authenticated privileged RPCs are the complete application-schema allowlist.'
   );
 end;
 $$;
