@@ -217,7 +217,11 @@ export function buildGovernedBeforeAfterEvidenceAnalysis(input: {
     : null
 
   const sourceRecordIds = casesWithComparableEvidence.map((candidate) => candidate.sourceRecordId).sort()
-  const freshnessValues = scopedRows.map((row) => row.evidenceAvailableAt).sort()
+  const comparableSourceRecordIds = new Set(sourceRecordIds)
+  const freshnessValues = scopedRows
+    .filter((row) => comparableSourceRecordIds.has(qualifiedSourceRecordId(row)))
+    .map((row) => row.evidenceAvailableAt)
+    .sort()
   const dataFreshnessAt = freshnessValues.length > 0 ? freshnessValues[freshnessValues.length - 1] : null
 
   const envelope = buildAnalysisEvidenceEnvelope({
