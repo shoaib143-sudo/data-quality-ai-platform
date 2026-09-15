@@ -80,6 +80,7 @@ create table profiling.dataset_execution_sources (
 );
 
 \ir ../supabase/migrations/20260912173500_project_profile_readiness_v2.sql
+\ir ../supabase/migrations/20260915231500_onboard_file_profile_readiness.sql
 
 -- Project 1: a fully READY JDBC dataset with two versions. Only latest is executable.
 insert into catalog.data_sources(id,project_id,source_type,status) values
@@ -143,7 +144,7 @@ $$;
 insert into catalog.discovery_manifests(id,project_id,source_id,scope_id,scope_version_id,discovery_run_id,failed_item_count,truncated,complete,manifest_hash,created_at,completed_at) values
 ('00000000-0000-0000-0000-00000000001d','00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-00000000001c','00000000-0000-0000-0000-00000000001e',0,false,true,repeat('c',64),now()-interval '5 minutes',now()-interval '4 minutes');
 
--- Individual blockers fail closed and recover deterministically.
+-- Individual JDBC blockers fail closed and recover deterministically.
 do $$
 declare r jsonb;
 begin
@@ -170,9 +171,9 @@ begin
 end
 $$;
 
--- Project 2: a source whose readiness policy is not onboarded is NOT_ASSESSED.
+-- Project 2: an unknown source type remains NOT_ASSESSED.
 insert into catalog.data_sources(id,project_id,source_type,status) values
-('00000000-0000-0000-0000-000000000022','00000000-0000-0000-0000-000000000020','FILE','ACTIVE');
+('00000000-0000-0000-0000-000000000022','00000000-0000-0000-0000-000000000020','OBJECT_STORE','ACTIVE');
 insert into catalog.datasets(id,project_id,data_source_id,status) values
 ('00000000-0000-0000-0000-000000000021','00000000-0000-0000-0000-000000000020','00000000-0000-0000-0000-000000000022','ACTIVE');
 
@@ -183,6 +184,52 @@ begin
   if r->>'state' <> 'NOT_ASSESSED' or not (r->'blockers' ? 'READINESS_RULE_NOT_ONBOARDED') then raise exception 'unonboarded source must be NOT_ASSESSED: %', r; end if;
   r := catalog.verify_project_profile_readiness('00000000-0000-0000-0000-000000000020');
   if r->>'state' <> 'NOT_ASSESSED' then raise exception 'only unassessed datasets must yield NOT_ASSESSED project: %', r; end if;
+end
+$$;
+
+-- Project 3: FILE_V1 fails closed without an execution binding, then becomes READY when bound.
+insert into catalog.data_sources(id,project_id,source_type,status) values
+('00000000-0000-0000-0000-000000000042','00000000-0000-0000-0000-000000000040','FILE','ACTIVE');
+insert into catalog.datasets(id,project_id,data_source_id,status) values
+('00000000-0000-0000-0000-000000000041','00000000-0000-0000-0000-000000000040','00000000-0000-0000-0000-000000000042','ACTIVE');
+insert into catalog.dataset_versions(id,dataset_id,version_number,created_at) values
+('00000000-0000-0000-0000-000000000043','00000000-0000-0000-0000-000000000041',1,now());
+
+do $$
+declare r jsonb;
+begin
+  r := catalog.verify_dataset_profile_readiness('00000000-0000-0000-0000-000000000040','00000000-0000-0000-0000-000000000041');
+  if r->>'state' <> 'BLOCKED' or r->>'readiness_policy' <> 'FILE_V1' or not (r->'blockers' ? 'EXECUTION_SOURCE_NOT_BOUND') then raise exception 'FILE_V1 missing binding did not fail closed: %', r; end if;
+end
+$$;
+
+insert into profiling.dataset_execution_sources(id,dataset_version_id,active) values
+('00000000-0000-0000-0000-000000000044','00000000-0000-0000-0000-000000000043',true);
+
+do $$
+declare r jsonb;
+begin
+  r := catalog.verify_dataset_profile_readiness('00000000-0000-0000-0000-000000000040','00000000-0000-0000-0000-000000000041');
+  if r->>'state' <> 'READY' or r->>'readiness_policy' <> 'FILE_V1' or not (r->>'profiling_ready')::boolean then raise exception 'FILE_V1 expected READY after validated binding: %', r; end if;
+  if r->'blockers' ? 'SOURCE_NOT_OBSERVED_READY' or r->'blockers' ? 'GOVERNED_SCOPE_NOT_READY' or r->'blockers' ? 'DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE' then raise exception 'FILE_V1 incorrectly inherited JDBC-only blockers: %', r; end if;
+end
+$$;
+
+-- Project 4: CSV_V1 uses the same validated file execution-binding policy.
+insert into catalog.data_sources(id,project_id,source_type,status) values
+('00000000-0000-0000-0000-000000000052','00000000-0000-0000-0000-000000000050','CSV','ACTIVE');
+insert into catalog.datasets(id,project_id,data_source_id,status) values
+('00000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000050','00000000-0000-0000-0000-000000000052','ACTIVE');
+insert into catalog.dataset_versions(id,dataset_id,version_number,created_at) values
+('00000000-0000-0000-0000-000000000053','00000000-0000-0000-0000-000000000051',1,now());
+insert into profiling.dataset_execution_sources(id,dataset_version_id,active) values
+('00000000-0000-0000-0000-000000000054','00000000-0000-0000-0000-000000000053',true);
+
+do $$
+declare r jsonb;
+begin
+  r := catalog.verify_dataset_profile_readiness('00000000-0000-0000-0000-000000000050','00000000-0000-0000-0000-000000000051');
+  if r->>'state' <> 'READY' or r->>'readiness_policy' <> 'CSV_V1' or not (r->>'profiling_ready')::boolean then raise exception 'CSV_V1 expected READY after validated binding: %', r; end if;
 end
 $$;
 

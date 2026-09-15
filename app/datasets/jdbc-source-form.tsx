@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CheckCircle2, CircleAlert, Loader2, Lightbulb, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, CircleAlert, Loader2, Lightbulb, ShieldCheck, UploadCloud } from 'lucide-react'
 import { ConnectionPrerequisites } from './connection-prerequisites'
 import { NativeHierarchyPicker } from './native-hierarchy-picker'
 import type { NativeHierarchyResult } from '@/lib/connectors/native-hierarchy'
@@ -65,6 +65,7 @@ export function JdbcSourceForm({ projects, organizations, initialSource }: { pro
   // normalized include/exclude arrays; no prefixed IDs are persisted.
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState(false)
   const selected = useMemo(() => CONNECTIONS.find(item => item.id === connectionKind) ?? CONNECTIONS[1], [connectionKind])
@@ -135,6 +136,60 @@ export function JdbcSourceForm({ projects, organizations, initialSource }: { pro
     setCredentialRef(payload.credentialRef)
     if (connectionKind === 'databricks') setToken(''); else setPassword('')
     return payload.credentialRef as string
+  }
+
+  async function uploadLocalFile(file: File | null) {
+    if (!file) return
+    setStatus(null); setError(false); setColumns([]); setRowCount(null)
+    if (!projectId || !name.trim()) { setError(true); setStatus('Project and connection name are required before uploading a local file.'); return }
+    setBusy(true); setUploadingFile(true)
+    let uploadedPath: string | null = null
+    try {
+      const uploadResponse = await fetch('/api/datasets/source/upload-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, fileName: file.name, size: file.size, contentType: file.type }),
+      })
+      const uploadPayload = await uploadResponse.json()
+      if (!uploadResponse.ok) throw new Error(uploadPayload.error ?? 'Local file upload authorization failed.')
+
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { error: storageError } = await supabase.storage.from(uploadPayload.bucket).uploadToSignedUrl(
+        uploadPayload.path,
+        uploadPayload.token,
+        file,
+        { contentType: file.type || 'application/octet-stream', cacheControl: '3600' },
+      )
+      if (storageError) throw new Error(`Local file upload failed: ${storageError.message}`)
+      uploadedPath = String(uploadPayload.path)
+
+      const discoveryResponse = await fetch('/api/datasets/source/discover-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, sourceUri: uploadPayload.sourceUri }),
+      })
+      const discovery = await discoveryResponse.json()
+      if (!discoveryResponse.ok) throw new Error(discovery.error ?? 'Uploaded file scan failed.')
+
+      setJdbcUrl(uploadPayload.sourceUri)
+      setColumns(discovery.columns ?? [])
+      setRowCount(typeof discovery.rowCount === 'number' ? discovery.rowCount : null)
+      uploadedPath = null
+      const warning = Array.isArray(discovery.warnings) && discovery.warnings.length ? ` ${discovery.warnings.join(' ')}` : ''
+      setStatus(`${file.name} uploaded to private project storage and scanned. ${discovery.columns?.length ?? 0} profile fields discovered. Select Save & make ready to register the connection.${warning}`)
+    } catch (e) {
+      if (uploadedPath) {
+        await fetch('/api/datasets/source/upload-file', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, path: uploadedPath }),
+        }).catch(() => undefined)
+      }
+      setError(true); setStatus(e instanceof Error ? e.message : 'Local file upload failed.')
+    } finally {
+      setUploadingFile(false); setBusy(false)
+    }
   }
 
   async function discover() {
@@ -233,6 +288,11 @@ export function JdbcSourceForm({ projects, organizations, initialSource }: { pro
       <div className="md:col-span-2 rounded-xl border border-violet-100 bg-violet-50/60 p-4"><div className="flex items-start gap-3"><Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" /><div><div className="text-xs font-semibold text-violet-900">Tips for {selected.label}</div><ul className="mt-2 grid gap-1.5 text-xs leading-5 text-violet-900/80 sm:grid-cols-3">{selected.tips.map(tip => <li key={tip}>• {tip}</li>)}</ul></div></div></div>
       {createProjectOpen && organizations.length > 0 && <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50/50 p-4"><div className="grid gap-3 md:grid-cols-3"><select value={organizationId} onChange={e => setOrganizationId(e.target.value)} className="rounded-lg border bg-white px-3 py-2 text-sm">{organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="New project name" className="rounded-lg border bg-white px-3 py-2 text-sm" /><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={busy || !newProjectName.trim()} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Create</button><button type="button" onClick={() => setCreateProjectOpen(false)} className="rounded-lg border px-3 py-2 text-xs">Cancel</button></div></div></div>}
       {field('Connection name', name, setName, `${selected.label} connection`)}
+      {isFile && <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+        <div className="flex items-start gap-3"><UploadCloud className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" /><div><div className="text-sm font-semibold text-slate-900">Upload from this computer</div><p className="mt-1 text-xs text-slate-600">Choose a local file. DataNexus uploads it to private project storage, scans its metadata and keeps the resulting storage path as this connection source.</p></div></div>
+        <input type="file" accept={isCsv ? ".csv,text/csv" : ".csv,.json,.jsonl,.ndjson,.txt,.md,.markdown,.log,.xml,.yaml,.yml,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp"} disabled={busy || !projectId || !name.trim()} onChange={event => { const file = event.currentTarget.files?.[0] ?? null; event.currentTarget.value = ''; void uploadLocalFile(file) }} className="mt-3 block w-full rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm" />
+        <p className="mt-2 text-[11px] text-slate-500">{uploadingFile ? 'Uploading and scanning…' : 'Maximum upload size is enforced by the server. Existing URL and storage path input remains available below.'}</p>
+      </div>}
       {isFile ? field(isCsv ? 'CSV URL / storage path' : 'File URL / storage path', jdbcUrl, setJdbcUrl, selected.placeholder) : <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4"><div className="mb-3 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /><span className="text-sm font-semibold">{selected.label} connection details</span></div><div className="grid gap-3 md:grid-cols-2">
         {connectionKind === 'jdbc' && field('JDBC driver', driver, setDriver, 'Driver / product name', 'text', false)}
         {connectionKind !== 'jdbc' && connectionKind !== 'databricks' && field('Host', host, value => { setHost(value); resetHierarchy() }, 'database.example.com')}

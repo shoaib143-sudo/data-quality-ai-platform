@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-const migration = fs.readFileSync('supabase/migrations/20260912173500_project_profile_readiness_v2.sql', 'utf8')
+const migration = fs.readFileSync('supabase/migrations/20260915231500_onboard_file_profile_readiness.sql', 'utf8')
 const admissionMigration = fs.readFileSync('supabase/migrations/20260912174600_project_profile_readiness_admission_gate.sql', 'utf8')
 const aiToolMigration = fs.readFileSync('supabase/migrations/20260912183000_profile_readiness_ai_remediation_tool.sql', 'utf8')
 const gate = fs.readFileSync('lib/profiling/readiness-gate.ts', 'utf8')
@@ -29,7 +29,7 @@ const gateIndex = executor.indexOf('assertDatasetVersionProfileReady(projectId, 
 const admissionIndex = executor.indexOf('admitNativeToolInvocation({')
 
 check('Empty-project fail-open resistance', migration.includes("when datasets_assessed = 0 then 'NOT_ASSESSED'"), 'A project with no datasets must never become READY by vacuous truth.')
-check('Unknown-source fail-open resistance', migration.includes("(dc.source_type = 'JDBC') as readiness_policy_onboarded") && migration.includes('READINESS_RULE_NOT_ONBOARDED') && !/else\s+true\s+end\s+as\s+discovery_evidence_ready/i.test(migration), 'A source without an explicit readiness policy must be NOT_ASSESSED rather than implicitly ready.')
+check('Unknown-source fail-open resistance', migration.includes("(dc.source_type in ('JDBC', 'FILE', 'CSV')) as readiness_policy_onboarded") && migration.includes("(dc.source_type in ('FILE', 'CSV')) as file_policy") && migration.includes("when not readiness_policy_onboarded then 'NOT_ASSESSED'") && migration.includes('READINESS_RULE_NOT_ONBOARDED') && !/else\s+true\s+end\s+as\s+discovery_evidence_ready/i.test(migration), 'Only the explicit JDBC, FILE, and CSV readiness-policy allowlist may become assessed; every other source type must remain NOT_ASSESSED.')
 check('Current-scope evidence binding', migration.includes('sc.scope_id = m.scope_id') && migration.includes('sc.scope_version_id = m.scope_version_id'), 'Discovery evidence from an obsolete scope or scope version must not authorize profiling.')
 check('Latest-successful evidence semantics', migration.includes('m.complete = true') && migration.includes('m.truncated = false') && migration.includes('m.failed_item_count = 0') && migration.includes('m.completed_at is not null'), 'Readiness must derive only from completed, complete, non-truncated, zero-failure evidence.')
 check('Old dataset-version fencing', migration.includes('DATASET_VERSION_NOT_LATEST'), 'A stale dataset version must not borrow readiness from the latest version.')
