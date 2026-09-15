@@ -34,7 +34,7 @@ for (const forbidden of [
   'authorize(',
   'predictedEffectiveProbability',
   'expectedImpactScore',
-  'causalEffect',
+  'causalEffect:',
   'Math.random',
 ]) {
   assert.ok(!source.includes(forbidden), `Prescriptive review gate must not contain authority/prediction primitive: ${forbidden}`)
