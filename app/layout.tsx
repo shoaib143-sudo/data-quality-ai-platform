@@ -40,7 +40,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="dn-page antialiased">
-        <div className={inter.variable}>
+        <div
+          className={inter.variable}
+          style={{ fontFamily: 'var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif' }}
+        >
           {children}
           <ProfileMenu />
           <Suspense fallback={null}><FloatingDataNexusAgent /></Suspense>
