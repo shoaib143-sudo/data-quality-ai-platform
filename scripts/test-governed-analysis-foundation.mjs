@@ -6,6 +6,7 @@ import {
   assessLearningCase,
   analyzeHistoricalOutcomes,
   buildAnalysisEvidenceEnvelope,
+  canonicalOutcomeFromObservedEvidence,
   deduplicateHistoricalCases,
 } from '../lib/data-quality/governed-analysis-foundation.ts'
 
@@ -15,6 +16,7 @@ for (const required of [
   'governance.learning_case_assessments',
   'evidence_cutoff_at timestamptz not null',
   'learning_eligible boolean not null default false',
+  "adjudication_state in ('UNADJUDICATED', 'PENDING', 'ADJUDICATED')",
   'governance.metric_definition_versions',
   'references profiling.metric_definitions(id) on delete restrict',
   'governance.analysis_evidence_envelopes',
@@ -52,6 +54,29 @@ assert.equal(assessLearningCase({ ...base, persisted: false }, cutoff).exclusion
 assert.equal(assessLearningCase({ ...base, adjudicationState: 'PENDING' }, cutoff).exclusionReason, 'OUTCOME_NOT_ADJUDICATED')
 assert.equal(assessLearningCase({ ...base, evidenceAvailableAt: '2026-09-02T00:00:00.000Z' }, cutoff).exclusionReason, 'EVIDENCE_AFTER_CUTOFF')
 
+assert.equal(
+  canonicalOutcomeFromObservedEvidence({
+    executionSucceeded: true,
+    verifiedOutcomeClass: null,
+    adjudicationState: 'ADJUDICATED',
+    observedAt: '2026-08-20T00:00:00.000Z',
+    evidenceAvailableAt: '2026-08-21T00:00:00.000Z',
+  }),
+  null,
+  'Successful execution alone must not be treated as a successful remediation or business outcome.',
+)
+assert.equal(
+  canonicalOutcomeFromObservedEvidence({
+    executionSucceeded: false,
+    verifiedOutcomeClass: 'SUCCESS',
+    adjudicationState: 'ADJUDICATED',
+    observedAt: '2026-08-20T00:00:00.000Z',
+    evidenceAvailableAt: '2026-08-21T00:00:00.000Z',
+  }),
+  'SUCCESS',
+  'Canonical outcome follows verified observed evidence rather than raw execution status.',
+)
+
 const duplicateOlder = { ...base, id: 'case-old', evidenceAvailableAt: '2026-08-19T00:00:00.000Z' }
 assert.equal(deduplicateHistoricalCases([duplicateOlder, base]).length, 1, 'Duplicate case identity must not inflate the learning population.')
 assert.equal(deduplicateHistoricalCases([duplicateOlder, base])[0].id, 'case-1', 'Latest eligible representation should win within one canonical case identity.')
@@ -66,7 +91,7 @@ assert.equal(analysis.status, 'OK')
 assert.equal(analysis.sampleSize, 5)
 assert.equal(analysis.outcomeCounts.SUCCESS, 5)
 
-const envelope = buildAnalysisEvidenceEnvelope({
+const envelopeInput = {
   projectId: 'project-a',
   analysisType: 'OUTCOME_TREND',
   metricKey: 'remediation_success_rate',
@@ -84,11 +109,12 @@ const envelope = buildAnalysisEvidenceEnvelope({
   evidenceLineage: { source: 'agent.agent_learning_cases' },
   reproducibilityRef: 'governed-analysis:test:v1',
   algorithmVersion: 'count-v1',
-})
+}
+const envelope = buildAnalysisEvidenceEnvelope(envelopeInput)
 assert.equal(envelope.contractVersion, ANALYSIS_CONTRACT_VERSION)
 
 assert.throws(
-  () => buildAnalysisEvidenceEnvelope({ ...envelope, contractVersion: undefined, windowEnd: '2026-09-02T00:00:00.000Z' }),
+  () => buildAnalysisEvidenceEnvelope({ ...envelopeInput, windowEnd: '2026-09-02T00:00:00.000Z' }),
   /evidence cutoff/,
   'Future evidence must not cross the historical cutoff.',
 )
