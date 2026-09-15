@@ -1,10 +1,17 @@
 import { Analytics } from '@vercel/analytics/next'
 import { Suspense } from 'react'
 import type { Metadata, Viewport } from 'next'
+import { Inter } from 'next/font/google'
 import { ProfileMenu } from '@/components/app-shell/profile-menu'
 import { FloatingDataNexusAgent } from '@/components/ai/floating-datanexus-agent'
 import './globals.css'
 import './legacy-dark-compat.css'
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+})
 
 export const metadata: Metadata = {
   title: 'DataNexus AI',
@@ -22,7 +29,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: 'dark',
-  themeColor: '#061426',
+  themeColor: '#050b17',
 }
 
 export default function RootLayout({
@@ -32,7 +39,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="dn-page antialiased">
+      <body className={`${inter.variable} dn-page antialiased`}>
         {children}
         <ProfileMenu />
         <Suspense fallback={null}><FloatingDataNexusAgent /></Suspense>
