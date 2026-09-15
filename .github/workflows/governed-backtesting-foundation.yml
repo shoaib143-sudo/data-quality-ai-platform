@@ -6,6 +6,7 @@ on:
       - 'lib/ai/evaluation-dataset.ts'
       - 'lib/ai/governed-backtesting.ts'
       - 'scripts/test-governed-backtesting.mjs'
+      - 'scripts/audit-governed-backtesting-adversarial.mjs'
       - '.github/workflows/governed-backtesting-foundation.yml'
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - 'lib/ai/evaluation-dataset.ts'
       - 'lib/ai/governed-backtesting.ts'
       - 'scripts/test-governed-backtesting.mjs'
+      - 'scripts/audit-governed-backtesting-adversarial.mjs'
       - '.github/workflows/governed-backtesting-foundation.yml'
 
 permissions:
@@ -30,3 +32,5 @@ jobs:
           node-version: '24'
       - name: Run governed backtesting contracts
         run: node --experimental-strip-types --test scripts/test-governed-backtesting.mjs
+      - name: Run independent governed backtesting adversarial audit
+        run: node scripts/audit-governed-backtesting-adversarial.mjs
