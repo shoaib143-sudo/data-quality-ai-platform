@@ -292,7 +292,7 @@ export async function validateApprovalForExecution(input: {
   if (!request) throw new Error('Approval request was not found.')
 
   const requiresHumanApproval = request.requires_business_approval === true || request.requires_governance_approval === true
-  if (requiresHumanApproval) {
+  if (request.status === 'READY_TO_EXECUTE' && requiresHumanApproval) {
     const expiryValue = String(request.approval_expires_at ?? '').trim()
     const approvalExpiresAt = expiryValue ? new Date(expiryValue).getTime() : Number.NaN
     if (!Number.isFinite(approvalExpiresAt)) {
