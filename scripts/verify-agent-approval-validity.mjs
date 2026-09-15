@@ -24,9 +24,12 @@ requireText(migration, 'idx_agent_approval_requests_ready_expiry', 'Executable a
 
 requireText(executionGuard, 'enforce_agent_approval_execution_validity', 'Database finalization must have an independent approval-validity guard.')
 requireText(executionGuard, "new.status = 'EXECUTED'", 'Database guard must protect execution finalization.')
-requireText(executionGuard, "old.status <> 'READY_TO_EXECUTE'", 'Human-approved execution must not skip READY_TO_EXECUTE.')
-requireText(executionGuard, 'new.approval_expires_at <= statement_timestamp()', 'Database guard must reject expired approval evidence.')
-requireText(executionGuard, 'missing approval validity evidence', 'Database guard must reject missing approval evidence.')
+requireText(executionGuard, "old.status is distinct from 'READY_TO_EXECUTE'", 'Human-approved execution must not skip READY_TO_EXECUTE.')
+requireText(executionGuard, 'old.approval_expires_at <= statement_timestamp()', 'Database finalization must evaluate the previously persisted expiry evidence.')
+requireText(executionGuard, 'Approval requirement flags are immutable after request creation', 'Approval requirement flags must not be downgradeable after request creation.')
+requireText(executionGuard, 'Approval validity evidence is immutable once execution is ready', 'Ready approval validity evidence must be immutable.')
+requireText(executionGuard, 'Approval validity evidence cannot change during execution finalization', 'Execution finalization must not permit approval evidence substitution.')
+requireText(executionGuard, "tg_op <> 'UPDATE'", 'Insert-as-executed must be rejected for human-approved requests.')
 requireText(executionGuard, 'set search_path = pg_catalog, governance', 'Database finalization guard must pin its search_path.')
 requireText(executionGuard, 'revoke all on function governance.enforce_agent_approval_execution_validity() from public, anon, authenticated', 'Database guard must not be directly callable by end-user roles.')
 
@@ -41,6 +44,9 @@ requireText(dynamicTests, 'expected seven-day approval validity', 'Dynamic tests
 requireText(dynamicTests, 'expected READY_TO_EXECUTE without approval evidence to fail', 'Dynamic tests must cover missing validity evidence.')
 requireText(dynamicTests, 'expected expired human approval execution to fail', 'Dynamic tests must cover expired approval execution.')
 requireText(dynamicTests, 'expected direct pending-to-executed transition to fail', 'Dynamic tests must cover illegal execution state transitions.')
+requireText(dynamicTests, 'expected insert-as-executed human approval to fail', 'Dynamic tests must cover direct insert-as-executed bypass attempts.')
+requireText(dynamicTests, 'expected approval requirement downgrade to fail', 'Dynamic tests must cover approval requirement downgrade attempts.')
+requireText(dynamicTests, 'expected approval expiry extension to fail', 'Dynamic tests must cover approval validity extension attempts.')
 requireText(dynamicTests, 'Agent approval validity dynamic and negative tests passed.', 'Dynamic approval validity test suite must expose a success marker.')
 
 console.log('Agent approval validity and expiry contract verified.')
