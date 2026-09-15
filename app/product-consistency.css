@@ -1,0 +1,156 @@
+/*
+ * Whole-product DataNexus visual consistency layer.
+ *
+ * This file intentionally sits outside Tailwind cascade layers and is imported
+ * after the legacy bridge. That makes shared product tokens win over older
+ * page-local light utility classes without requiring a risky one-shot rewrite
+ * of every routed workspace.
+ */
+
+html.dark .dn-page main.min-h-screen {
+  background: transparent !important;
+  color: rgb(241 245 249) !important;
+}
+
+html.dark .dn-page :is(header, section, article, nav, aside)[class*='bg-white'],
+html.dark .dn-page :is(header, section, article, nav, aside)[class*='from-'][class*='to-white'] {
+  background: linear-gradient(145deg, rgba(9, 27, 48, 0.97), rgba(6, 20, 36, 0.96)) !important;
+  border-color: rgba(103, 232, 249, 0.14) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22), 0 0 20px rgba(34, 211, 238, 0.035) !important;
+}
+
+html.dark .dn-page :is(div, li)[class*='bg-white'][class*='border-'],
+html.dark .dn-page :is(div, li)[class*='bg-slate-50'][class*='border-'],
+html.dark .dn-page :is(div, li)[class*='bg-gray-50'][class*='border-'] {
+  background: rgba(6, 20, 36, 0.9) !important;
+  border-color: rgba(103, 232, 249, 0.11) !important;
+}
+
+html.dark .dn-page [class*='bg-blue-50'],
+html.dark .dn-page [class*='bg-violet-50'],
+html.dark .dn-page [class*='bg-purple-50'] {
+  background-color: rgba(59, 130, 246, 0.09) !important;
+}
+
+html.dark .dn-page [class*='bg-emerald-50'] {
+  background-color: rgba(16, 185, 129, 0.09) !important;
+}
+
+html.dark .dn-page [class*='bg-amber-50'] {
+  background-color: rgba(245, 158, 11, 0.09) !important;
+}
+
+html.dark .dn-page [class*='bg-red-50'] {
+  background-color: rgba(244, 63, 94, 0.09) !important;
+}
+
+html.dark .dn-page [class*='text-slate-950'],
+html.dark .dn-page [class*='text-slate-900'],
+html.dark .dn-page [class*='text-gray-950'],
+html.dark .dn-page [class*='text-gray-900'] {
+  color: rgb(248 250 252) !important;
+}
+
+html.dark .dn-page [class*='text-slate-800'],
+html.dark .dn-page [class*='text-slate-700'],
+html.dark .dn-page [class*='text-gray-800'],
+html.dark .dn-page [class*='text-gray-700'] {
+  color: rgb(203 213 225) !important;
+}
+
+html.dark .dn-page [class*='text-slate-600'],
+html.dark .dn-page [class*='text-slate-500'],
+html.dark .dn-page [class*='text-gray-600'],
+html.dark .dn-page [class*='text-gray-500'] {
+  color: rgb(148 163 184) !important;
+}
+
+html.dark .dn-page [class*='text-blue-700'],
+html.dark .dn-page [class*='text-blue-600'] {
+  color: rgb(103 232 249) !important;
+}
+
+html.dark .dn-page [class*='text-purple-700'],
+html.dark .dn-page [class*='text-purple-600'],
+html.dark .dn-page [class*='text-violet-700'],
+html.dark .dn-page [class*='text-violet-600'] {
+  color: rgb(196 181 253) !important;
+}
+
+html.dark .dn-page [class*='border-slate-'],
+html.dark .dn-page [class*='border-gray-'],
+html.dark .dn-page [class*='border-blue-100'],
+html.dark .dn-page [class*='border-purple-100'],
+html.dark .dn-page [class*='border-violet-100'] {
+  border-color: rgba(103, 232, 249, 0.13) !important;
+}
+
+html.dark .dn-page :is(input, select, textarea) {
+  background: rgba(5, 17, 32, 0.96) !important;
+  border-color: rgba(103, 232, 249, 0.16) !important;
+  color: rgb(241 245 249) !important;
+}
+
+html.dark .dn-page :is(input, select, textarea):hover {
+  border-color: rgba(34, 211, 238, 0.34) !important;
+}
+
+html.dark .dn-page table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+html.dark .dn-page table thead {
+  background: rgba(5, 17, 32, 0.94) !important;
+  color: rgb(148 163 184) !important;
+}
+
+html.dark .dn-page table tbody tr {
+  border-color: rgba(103, 232, 249, 0.08) !important;
+}
+
+html.dark .dn-page table tbody tr:hover {
+  background: rgba(34, 211, 238, 0.035) !important;
+}
+
+html.dark .dn-page .dn-workspace-panel {
+  border: 1px solid rgba(103, 232, 249, 0.14);
+  border-radius: 0.9rem;
+  background: linear-gradient(145deg, rgba(9, 27, 48, 0.97), rgba(6, 20, 36, 0.96));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22), 0 0 20px rgba(34, 211, 238, 0.035);
+}
+
+html.dark .dn-page .dn-workspace-inset {
+  border: 1px solid rgba(103, 232, 249, 0.11);
+  border-radius: 0.72rem;
+  background: rgba(5, 17, 32, 0.86);
+}
+
+html.dark .dn-page .dn-workspace-accent {
+  border-color: rgba(34, 211, 238, 0.32) !important;
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.05), 0 0 22px rgba(34, 211, 238, 0.07) !important;
+}
+
+html.dark .dn-page .dn-metric-table th,
+html.dark .dn-page .dn-metric-table td {
+  padding: 0.72rem 0.8rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+html.dark .dn-page .dn-metric-table th:not(:first-child),
+html.dark .dn-page .dn-metric-table td:not(:first-child) {
+  text-align: right;
+}
+
+html.dark .dn-page .dn-metric-table tbody tr[data-selected='true'] {
+  background: rgba(34, 211, 238, 0.065) !important;
+  box-shadow: inset 2px 0 rgb(34 211 238);
+}
+
+@media (max-width: 640px) {
+  html.dark .dn-page main.min-h-screen {
+    padding-left: 0.65rem !important;
+    padding-right: 0.65rem !important;
+  }
+}

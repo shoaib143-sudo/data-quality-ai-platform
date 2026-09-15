@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Activity, AlertTriangle, ArrowLeft, CheckCircle2, FileWarning, Gauge, ShieldAlert, Sparkles } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { ColumnMetricsExplorer, type ColumnMetricRow } from './column-metrics-explorer'
 
 function label(value: string) {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (match) => match.toUpperCase())
@@ -14,17 +15,17 @@ function scorePercent(value: number | null | undefined) {
 
 function statusClass(status: string) {
   const normalized = status.toUpperCase()
-  if (normalized === 'SUCCEEDED' || normalized === 'COMPLETED') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
-  if (normalized === 'FAILED' || normalized === 'CANCELLED') return 'border-red-200 bg-red-50 text-red-700'
-  return 'border-amber-200 bg-amber-50 text-amber-700'
+  if (normalized === 'SUCCEEDED' || normalized === 'COMPLETED') return 'dn-status-good'
+  if (normalized === 'FAILED' || normalized === 'CANCELLED') return 'dn-status-risk'
+  return 'dn-status-warn'
 }
 
 function scoreClass(value: number | null | undefined) {
   if (value === null || value === undefined) return 'text-slate-400'
-  if (value >= 0.9) return 'text-emerald-600'
-  if (value >= 0.75) return 'text-blue-600'
-  if (value >= 0.6) return 'text-amber-600'
-  return 'text-red-600'
+  if (value >= 0.9) return 'text-emerald-300'
+  if (value >= 0.75) return 'text-cyan-300'
+  if (value >= 0.6) return 'text-amber-300'
+  return 'text-rose-300'
 }
 
 export default async function ProfilingPage() {
@@ -40,7 +41,7 @@ export default async function ProfilingPage() {
 
   const latestRun = runs?.[0]
   const investigation = latestRun?.summary && typeof latestRun.summary === 'object' && !Array.isArray(latestRun.summary)
-    ? (latestRun.summary as Record<string, unknown>).investigation as Record<string, any> | null
+    ? (latestRun.summary as Record<string, unknown>).investigation as Record<string, unknown> | null
     : null
 
   const [{ data: scores }, { data: findings }, { data: profileColumns }, { data: metrics }] = latestRun
@@ -61,6 +62,24 @@ export default async function ProfilingPage() {
     metricsByColumn.set(metric.profile_column_id, current)
   }
 
+  const columnRows: ColumnMetricRow[] = (profileColumns ?? []).map((column) => {
+    const columnMetrics = metricsByColumn.get(column.id) ?? []
+    const value = (metricKey: string) => {
+      const metric = columnMetrics.find((item) => item.metric_key === metricKey)?.numeric_value
+      return metric === null || metric === undefined ? null : Number(metric)
+    }
+    return {
+      id: column.id,
+      name: column.column_name,
+      type: column.inferred_type ?? column.source_type ?? 'unknown type',
+      metricCount: columnMetrics.length,
+      nullRate: value('null_rate'),
+      distinctRate: value('distinct_rate'),
+      uniqueRate: value('unique_rate'),
+      sensitiveRate: value('sensitive_match_rate'),
+    }
+  })
+
   const severityCounts = (findings ?? []).reduce<Record<string, number>>((counts, finding) => {
     const severity = String(finding.severity ?? 'INFO').toUpperCase()
     counts[severity] = (counts[severity] ?? 0) + 1
@@ -71,52 +90,65 @@ export default async function ProfilingPage() {
   const completed = latestRun?.status === 'COMPLETED'
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_5%_0%,_rgba(219,234,254,0.9),_transparent_30%),radial-gradient(circle_at_95%_5%,_rgba(243,232,255,0.8),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_55%,_#f8fafc_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 hover:text-blue-800"><ArrowLeft className="h-4 w-4" /> Executive summary</Link>
-        <header className="rounded-3xl border border-blue-100 bg-white/95 p-7 shadow-sm sm:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-5">
+    <main className="min-h-screen px-4 py-4 text-slate-100 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[86rem] space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-300 hover:text-cyan-200"><ArrowLeft className="h-4 w-4" /> Executive summary</Link>
+          <Link href="/datasets" className="dn-control px-3 py-2 text-xs font-semibold text-slate-300 hover:text-cyan-200">Datasets & Connections</Link>
+        </div>
+
+        <header className="dn-workspace-panel p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700"><Sparkles className="h-3.5 w-3.5" /> Profiling intelligence</div>
-              <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Turn data into decision confidence</h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Profiling provides the evidence behind data quality, risks and governance decisions. Incomplete runs stay visible as incomplete and are never presented as trusted results.</p>
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/10 bg-cyan-400/5 px-3 py-1.5 text-xs font-bold text-cyan-300"><Sparkles className="h-3.5 w-3.5" /> Profiling intelligence</div>
+              <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-50">Turn data into decision confidence</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Profiling provides evidence behind data quality, risk and governance decisions. Incomplete runs stay visible and are never presented as trusted results.</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-right"><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Latest outcome</div><div className="mt-1 flex items-center justify-end gap-2"><span className={`rounded-full border px-3 py-1 text-xs font-bold ${latestRun ? statusClass(latestRun.status) : 'border-slate-200 bg-white text-slate-500'}`}>{latestRun?.status ?? 'NO RUN'}</span></div></div>
+            <div className="dn-workspace-inset px-4 py-3 text-right">
+              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Latest outcome</div>
+              <span className={`mt-1 inline-flex rounded-full border px-3 py-1 text-xs font-bold ${latestRun ? statusClass(latestRun.status) : 'border-slate-700 text-slate-400'}`}>{latestRun?.status ?? 'NO RUN'}</span>
+            </div>
           </div>
         </header>
 
         {latestRun ? (
           <>
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {[
                 ['Rows', latestRun.row_count ?? 0],
                 ['Columns', latestRun.column_count ?? 0],
                 ['Metrics', metrics?.length ?? 0],
                 ['Findings', findings?.length ?? 0],
                 ['Started', latestRun.started_at ? new Date(latestRun.started_at).toLocaleString() : 'N/A'],
-              ].map(([name, value]) => <div key={name} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="text-xs font-semibold uppercase tracking-wider text-slate-400">{name}</div><div className="mt-2 text-xl font-black text-slate-900">{String(value)}</div></div>)}
+              ].map(([name, value]) => <div key={name} className="dn-workspace-panel p-4"><div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{name}</div><div className="mt-1.5 text-xl font-black text-slate-100">{String(value)}</div></div>)}
             </section>
 
-            {latestRun.error_message ? <section className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800 shadow-sm"><div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>{latestRun.error_code ?? 'Profiling error'}:</strong> {latestRun.error_message}</div></div></section> : null}
+            {latestRun.error_message ? <section className="dn-workspace-panel border-rose-400/20 p-4 text-sm text-rose-200"><div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" /><div><strong>{latestRun.error_code ?? 'Profiling error'}:</strong> {latestRun.error_message}</div></div></section> : null}
 
-            <section className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-7">
-                <div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2"><Gauge className="h-5 w-5 text-emerald-600" /><h2 className="text-xl font-bold">Quality confidence</h2></div><p className="mt-1 text-sm text-slate-500">Deterministic scores calculated from persisted profiling evidence.</p></div><div className={`text-4xl font-black ${scoreClass(score?.overall_score)}`}>{scorePercent(score?.overall_score)}</div></div>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  {([['Completeness', score?.completeness_score], ['Validity', score?.validity_score], ['Uniqueness', score?.uniqueness_score], ['Accuracy', score?.accuracy_score], ['Overall', score?.overall_score]] as const).map(([name, value]) => <div key={name} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="text-xs font-semibold text-slate-500">{name}</div><div className={`mt-1 text-xl font-black ${scoreClass(value)}`}>{scorePercent(value)}</div></div>)}
+            <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="dn-workspace-panel p-5">
+                <div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2"><Gauge className="h-5 w-5 text-emerald-300" /><h2 className="text-lg font-bold">Quality confidence</h2></div><p className="mt-1 text-sm text-slate-500">Deterministic scores from persisted profiling evidence.</p></div><div className={`text-4xl font-black ${scoreClass(score?.overall_score)}`}>{scorePercent(score?.overall_score)}</div></div>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  {([['Completeness', score?.completeness_score], ['Validity', score?.validity_score], ['Uniqueness', score?.uniqueness_score], ['Accuracy', score?.accuracy_score], ['Overall', score?.overall_score]] as const).map(([name, value]) => <div key={name} className="dn-workspace-inset p-3"><div className="text-xs font-semibold text-slate-500">{name}</div><div className={`mt-1 text-lg font-black ${scoreClass(value)}`}>{scorePercent(value)}</div></div>)}
                 </div>
               </div>
-              <div className="rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm sm:p-7"><div className="flex items-center gap-2"><FileWarning className="h-5 w-5 text-amber-600" /><h2 className="text-xl font-bold">Governance exposure</h2></div><div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-2xl border border-red-100 bg-white p-4"><div className="text-xs font-semibold text-slate-500">Critical</div><div className="mt-1 text-3xl font-black text-red-600">{criticalCount}</div></div><div className="rounded-2xl border border-amber-100 bg-white p-4"><div className="text-xs font-semibold text-slate-500">High or critical</div><div className="mt-1 text-3xl font-black text-amber-600">{priorityCount}</div></div></div><p className="mt-4 text-sm leading-6 text-slate-600">{completed ? 'These findings are persisted evidence from the completed run.' : 'The run is not complete. Findings and scores must not be treated as final until the run completes.'}</p></div>
+              <div className="dn-workspace-panel p-5"><div className="flex items-center gap-2"><FileWarning className="h-5 w-5 text-amber-300" /><h2 className="text-lg font-bold">Governance exposure</h2></div><div className="mt-4 grid grid-cols-2 gap-2"><div className="dn-workspace-inset p-3"><div className="text-xs font-semibold text-slate-500">Critical</div><div className="mt-1 text-2xl font-black text-rose-300">{criticalCount}</div></div><div className="dn-workspace-inset p-3"><div className="text-xs font-semibold text-slate-500">High or critical</div><div className="mt-1 text-2xl font-black text-amber-300">{priorityCount}</div></div></div><p className="mt-3 text-sm leading-6 text-slate-400">{completed ? 'These findings are persisted evidence from the completed run.' : 'The run is not complete. Findings and scores must not be treated as final until the run completes.'}</p></div>
             </section>
 
-            {investigation ? <section className="rounded-3xl border border-purple-100 bg-white p-6 shadow-sm sm:p-7"><div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-purple-50 text-purple-600"><Sparkles className="h-5 w-5" /></div><div><h2 className="text-xl font-bold">Governance insight</h2><p className="mt-1 text-sm text-slate-500">Evidence first interpretation of the persisted profile.</p></div></div><div className="mt-6 grid gap-4 lg:grid-cols-2">{[['Business issue', investigation.business_issue], ['Business impact', investigation.business_impact], ['Technical evidence', investigation.technical_summary], ['Confidence', scorePercent(Number(investigation.confidence ?? 0))]].map(([name, value]) => <div key={String(name)} className="rounded-2xl border border-slate-200 bg-slate-50 p-5"><div className="text-xs font-bold uppercase tracking-wider text-slate-400">{String(name)}</div><p className="mt-2 text-sm leading-6 text-slate-700">{String(value ?? 'N/A')}</p></div>)}</div></section> : null}
+            {investigation ? <section className="dn-workspace-panel p-5"><div className="flex items-start gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-violet-300/15 bg-violet-400/10 text-violet-300"><Sparkles className="h-4 w-4" /></div><div><h2 className="text-lg font-bold">Governance insight</h2><p className="mt-1 text-sm text-slate-500">Evidence-first interpretation of the persisted profile.</p></div></div><div className="mt-4 grid gap-3 lg:grid-cols-2">{[['Business issue', investigation.business_issue], ['Business impact', investigation.business_impact], ['Technical evidence', investigation.technical_summary], ['Confidence', scorePercent(Number(investigation.confidence ?? 0))]].map(([name, value]) => <div key={String(name)} className="dn-workspace-inset p-4"><div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{String(name)}</div><p className="mt-2 text-sm leading-6 text-slate-300">{String(value ?? 'N/A')}</p></div>)}</div></section> : null}
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7"><div className="flex flex-wrap items-center justify-between gap-4"><div><div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-600" /><h2 className="text-xl font-bold">Findings and priority actions</h2></div><p className="mt-1 text-sm text-slate-500">Observed issues that can be acted on through governance and remediation.</p></div><div className="flex flex-wrap gap-2 text-xs">{Object.entries(severityCounts).map(([severity, count]) => <span key={severity} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-semibold text-slate-600">{severity}: {count}</span>)}</div></div>{findings?.length ? <div className="mt-5 space-y-3">{findings.map((finding) => <article key={finding.id} className="rounded-2xl border border-slate-200 bg-white p-5 hover:border-blue-200 hover:shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-slate-900">{finding.title}</h3><div className="mt-1 text-xs font-medium text-slate-500">{finding.severity} · {label(finding.finding_type)} · confidence {scorePercent(finding.confidence)}</div></div>{finding.created_at ? <time className="text-xs text-slate-400">{new Date(finding.created_at).toLocaleString()}</time> : null}</div><p className="mt-3 text-sm leading-6 text-slate-600">{finding.description}</p>{finding.recommendation ? <div className="mt-3 rounded-xl bg-blue-50 p-3 text-sm text-slate-700"><span className="font-bold">Recommended action:</span>{' '}{typeof finding.recommendation === 'object' && finding.recommendation !== null ? Object.entries(finding.recommendation).map(([key, value]) => `${label(key)}: ${String(value)}`).join(' · ') : String(finding.recommendation)}</div> : null}</article>)}</div> : <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-sm text-emerald-800"><CheckCircle2 className="mr-2 inline h-4 w-4" /> No findings were generated for this run.</div>}</section>
+            <section className="dn-workspace-panel p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-300" /><h2 className="text-lg font-bold">Findings and priority actions</h2></div><p className="mt-1 text-sm text-slate-500">Observed issues ready for governance or remediation.</p></div><div className="flex flex-wrap gap-2 text-xs">{Object.entries(severityCounts).map(([severity, count]) => <span key={severity} className="dn-control px-2.5 py-1 font-semibold text-slate-300">{severity}: {count}</span>)}</div></div>{findings?.length ? <div className="mt-4 space-y-2">{findings.map((finding) => <article key={finding.id} className="dn-workspace-inset p-4 transition hover:border-cyan-300/25"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-slate-100">{finding.title}</h3><div className="mt-1 text-xs font-medium text-slate-500">{finding.severity} · {label(finding.finding_type)} · confidence {scorePercent(finding.confidence)}</div></div>{finding.created_at ? <time className="text-xs text-slate-500">{new Date(finding.created_at).toLocaleString()}</time> : null}</div><p className="mt-2 text-sm leading-6 text-slate-300">{finding.description}</p>{finding.recommendation ? <div className="mt-3 rounded-lg border border-cyan-300/10 bg-cyan-400/5 p-3 text-sm text-slate-300"><span className="font-bold text-cyan-200">Recommended action:</span>{' '}{typeof finding.recommendation === 'object' && finding.recommendation !== null ? Object.entries(finding.recommendation).map(([key, value]) => `${label(key)}: ${String(value)}`).join(' · ') : String(finding.recommendation)}</div> : null}</article>)}</div> : <div className="mt-4 rounded-lg border border-emerald-400/15 bg-emerald-400/5 p-4 text-sm text-emerald-200"><CheckCircle2 className="mr-2 inline h-4 w-4" /> No findings were generated for this run.</div>}</section>
 
-            <section className="rounded-3xl border border-blue-100 bg-white p-6 shadow-sm sm:p-7"><div className="flex items-center gap-2"><Activity className="h-5 w-5 text-blue-600" /><h2 className="text-xl font-bold">Column metrics</h2></div><p className="mt-1 text-sm text-slate-500">Persisted evidence behind this profiling run.</p>{profileColumns?.length ? <div className="mt-5 grid gap-4 lg:grid-cols-2">{profileColumns.map((column) => { const columnMetrics = metricsByColumn.get(column.id) ?? []; const nullRate = columnMetrics.find((metric) => metric.metric_key === 'null_rate')?.numeric_value; const distinctRate = columnMetrics.find((metric) => metric.metric_key === 'distinct_rate')?.numeric_value; const uniqueRate = columnMetrics.find((metric) => metric.metric_key === 'unique_rate')?.numeric_value; const sensitiveRate = columnMetrics.find((metric) => metric.metric_key === 'sensitive_match_rate')?.numeric_value; return <div key={column.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-5"><div className="flex items-center justify-between gap-3"><div><div className="font-bold text-slate-900">{column.column_name}</div><div className="text-xs text-slate-500">{column.inferred_type ?? column.source_type ?? 'unknown type'}</div></div><span className="text-xs font-semibold text-slate-400">{columnMetrics.length} metrics</span></div><div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">{[['Null', nullRate], ['Distinct', distinctRate], ['Unique', uniqueRate], ['Sensitive', sensitiveRate]].map(([name, value]) => <div key={String(name)}><span className="text-slate-500">{String(name)}</span><br /><strong>{scorePercent(value as number | null | undefined)}</strong></div>)}</div></div> })}</div> : <p className="mt-5 text-sm text-slate-500">No profiled columns are available.</p>}</section>
+            <section className="dn-workspace-panel p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><div className="flex items-center gap-2"><Activity className="h-5 w-5 text-cyan-300" /><h2 className="text-lg font-bold">Column metrics</h2></div><p className="mt-1 text-sm text-slate-500">Aligned, sortable and filterable persisted evidence for this run.</p></div>
+                <span className="dn-control px-3 py-1.5 text-xs font-semibold text-slate-400">{columnRows.length} columns</span>
+              </div>
+              {columnRows.length ? <ColumnMetricsExplorer rows={columnRows} /> : <p className="mt-4 text-sm text-slate-500">No profiled columns are available.</p>}
+            </section>
           </>
         ) : (
-          <section className="rounded-3xl border border-blue-100 bg-white p-10 text-center shadow-sm"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Activity className="h-7 w-7" /></div><h2 className="mt-5 text-xl font-bold">No profiling evidence yet</h2><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Connect a ready source, register a dataset and run profiling. Until evidence exists, the platform will not manufacture a score or risk result.</p><Link href="/datasets" className="mt-5 inline-flex rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700">Go to datasets</Link></section>
+          <section className="dn-workspace-panel p-10 text-center"><div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-cyan-300/15 bg-cyan-400/5 text-cyan-300"><Activity className="h-6 w-6" /></div><h2 className="mt-4 text-xl font-bold">No profiling evidence yet</h2><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Connect a ready source, register a dataset and run profiling. Until evidence exists, the platform will not present derived profiling results as trusted.</p><Link href="/datasets" className="mt-4 inline-flex rounded-lg border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/15">Go to Datasets & Connections</Link></section>
         )}
       </div>
     </main>
