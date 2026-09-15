@@ -1,0 +1,32 @@
+name: Agent Approval Validity
+
+on:
+  pull_request:
+    paths:
+      - 'lib/governance/agent-approval-service.ts'
+      - 'supabase/migrations/20260915090000_agent_approval_validity_expiry.sql'
+      - 'scripts/verify-agent-approval-validity.mjs'
+      - '.github/workflows/agent-approval-validity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/governance/agent-approval-service.ts'
+      - 'supabase/migrations/20260915090000_agent_approval_validity_expiry.sql'
+      - 'scripts/verify-agent-approval-validity.mjs'
+      - '.github/workflows/agent-approval-validity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify approval validity and expiry
+        run: node scripts/verify-agent-approval-validity.mjs
