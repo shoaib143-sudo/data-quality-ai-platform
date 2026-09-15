@@ -30,6 +30,8 @@ jobs:
         run: node scripts/verify-github-governance.mjs
       - name: Verify immutable action references
         run: node scripts/verify-workflow-action-pinning.mjs
+      - name: Report workflow action inventory
+        run: node scripts/report-workflow-action-inventory.mjs
       - name: Verify least-privilege workflow posture
         run: node scripts/verify-workflow-security-posture.mjs
       - name: Exercise governance negative and failure cases
