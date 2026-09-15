@@ -11,14 +11,25 @@ function parseTimestamp(value: string, fieldName: string) {
   return parsed
 }
 
+function daysInUtcMonth(year: number, monthIndex: number) {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+}
+
 function advanceBucket(startMs: number, granularity: RealCaseBucketGranularity) {
   const start = new Date(startMs)
   if (granularity === 'DAY') return startMs + 24 * 60 * 60 * 1000
   if (granularity === 'WEEK') return startMs + 7 * 24 * 60 * 60 * 1000
+
+  const sourceMonth = start.getUTCMonth()
+  const absoluteTargetMonth = sourceMonth + 1
+  const targetYear = start.getUTCFullYear() + Math.floor(absoluteTargetMonth / 12)
+  const targetMonth = absoluteTargetMonth % 12
+  const targetDay = Math.min(start.getUTCDate(), daysInUtcMonth(targetYear, targetMonth))
+
   return Date.UTC(
-    start.getUTCFullYear(),
-    start.getUTCMonth() + 1,
-    start.getUTCDate(),
+    targetYear,
+    targetMonth,
+    targetDay,
     start.getUTCHours(),
     start.getUTCMinutes(),
     start.getUTCSeconds(),
