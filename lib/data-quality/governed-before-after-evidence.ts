@@ -87,6 +87,10 @@ function isSyntheticOrTestMetadata(metadata: Record<string, unknown> | null | un
   return environment === 'TEST' || environment === 'DEMO' || environment === 'SYNTHETIC'
 }
 
+function qualifiedSourceRecordId(row: Pick<BeforeAfterEvidenceRow, 'source' | 'id'>) {
+  return `${row.source}:${row.id}`
+}
+
 export function compareEvidenceObjects(
   beforeEvidence: Record<string, unknown>,
   afterEvidence: Record<string, unknown>,
@@ -177,12 +181,12 @@ export function buildGovernedBeforeAfterEvidenceAnalysis(input: {
       const evidenceAvailableAt = timestamp(row.evidenceAvailableAt, 'row.evidenceAvailableAt')
       return observedAt >= windowStart && observedAt <= windowEnd && evidenceAvailableAt <= cutoff
     })
-    .sort((a, b) => a.id.localeCompare(b.id))
+    .sort((a, b) => qualifiedSourceRecordId(a).localeCompare(qualifiedSourceRecordId(b)))
 
   const cases = scopedRows.map((row) => {
     const comparison = compareEvidenceObjects(row.beforeEvidence, row.afterEvidence)
     return {
-      sourceRecordId: row.id,
+      sourceRecordId: qualifiedSourceRecordId(row),
       source: row.source,
       observedAt: row.observedAt,
       outcomeLabel: row.outcomeLabel,
@@ -228,6 +232,7 @@ export function buildGovernedBeforeAfterEvidenceAnalysis(input: {
       synthetic_demo_test_excluded: true,
       same_key_required: true,
       same_scalar_type_required: true,
+      source_qualified_record_ids: true,
     },
     windowStart: input.windowStart,
     windowEnd: input.windowEnd,
