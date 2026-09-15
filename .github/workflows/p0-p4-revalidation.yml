@@ -21,9 +21,6 @@ jobs:
   revalidate:
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -81,7 +78,14 @@ jobs:
       - name: Provider fallback contracts
         run: pnpm run verify:provider-fallback
       - name: Live governance database contracts
-        if: ${{ env.NEXT_PUBLIC_SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' }}
-        run: pnpm run verify:database
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Live database verification skipped because its protected credentials are unavailable."
+            exit 0
+          fi
+          pnpm run verify:database
       - name: Production build
         run: pnpm run build
