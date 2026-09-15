@@ -53,16 +53,19 @@ PR #499 established the repository-governance baseline, required V6 reconstructi
 
 PR #511 was merged after exact-head V6, Quality Gate, CodeQL, dependency-security, production-security, recovery, release-governance, P0–P5, and repository-governance checks passed. It scopes privileged database credentials to the verification steps that consume them and records the live GitHub settings baseline.
 
+The live GitHub ruleset `Protect main certification` is active on the default branch with no bypass actors. It prevents deletion and force-pushes, requires linear history and pull requests, permits squash merge only, requires current branches and resolved conversations, and binds the eight GitHub Actions contexts `build`, `analyze`, `revalidate`, `certify`, `runtime-slo`, `clean-database-reconstruction`, `dependency-audit`, and `repository-governance`.
+
 PR #497 was closed unmerged because its narrow pgcrypto patch was superseded by the stronger implementation merged through PR #498. It is not an outstanding implementation dependency.
 
 ## Explicit external controls
 
-The following items are **not application implementation defects** and remain external account-administration controls:
+The following item is **not an application implementation defect** and remains an external account-administration control:
 
 1. Supabase leaked-password protection: the connected Supabase tooling exposes database mutation but no Auth configuration mutation. This remains `BLOCKED_EXTERNAL` until an authorized account administrator changes the Auth setting.
-2. GitHub live administrative settings: repository-controlled policy is committed and tested, but any GitHub settings that the installed integration cannot mutate remain `BLOCKED_EXTERNAL` until an authorized repository administrator applies the committed `.github/REPOSITORY_SETTINGS.md` baseline.
 
-No code, security threshold, test, RLS boundary, authorization rule, or certification requirement should be weakened to bypass either external control.
+Repository-level GitHub branch certification protection is no longer blocked: the intended `Protect main certification` ruleset is verified active. Any additional GitHub account/organization setting that is not represented by that ruleset remains subject to the committed `.github/REPOSITORY_SETTINGS.md` baseline and should be verified by an authorized administrator rather than simulated in application code.
+
+No code, security threshold, test, RLS boundary, authorization rule, or certification requirement should be weakened to bypass an external control.
 
 ## Operating status
 
@@ -71,6 +74,7 @@ Database security implementation: **DONE**
 Clean reconstruction and release certification: **DONE**  
 Production synthetic governance verification: **VALIDATED**  
 Repository-controlled GitHub hardening: **DONE**  
-Account-level Supabase/GitHub administration: **BLOCKED_EXTERNAL where noted above**
+Live main certification ruleset: **VALIDATED**  
+Supabase leaked-password protection: **BLOCKED_EXTERNAL**
 
 Future work should begin from this state rather than reopening completed architecture or reimplementing already certified controls.
