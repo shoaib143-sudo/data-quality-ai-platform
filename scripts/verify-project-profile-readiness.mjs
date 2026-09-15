@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-const migration = fs.readFileSync('supabase/migrations/20260912173500_project_profile_readiness_v2.sql','utf8')
+const migration = fs.readFileSync('supabase/migrations/20260915231500_onboard_file_profile_readiness.sql','utf8')
 const admissionMigration = fs.readFileSync('supabase/migrations/20260912174600_project_profile_readiness_admission_gate.sql','utf8')
 const gate = fs.readFileSync('lib/profiling/readiness-gate.ts','utf8')
 const executor = fs.readFileSync('lib/agents/executors/profiling-executor.ts','utf8')
@@ -15,7 +15,11 @@ const requiredMigration = [
   "when ready_count = datasets_assessed then 'READY'",
   "when ready_count > 0 then 'PARTIALLY_READY'",
   "when blocked_count > 0 then 'BLOCKED'",
-  "dc.source_type = 'JDBC'",
+  "dc.source_type in ('JDBC', 'FILE', 'CSV')",
+  "dc.source_type in ('FILE', 'CSV')",
+  "when 'JDBC' then 'JDBC_V1'",
+  "when 'FILE' then 'FILE_V1'",
+  "when 'CSV' then 'CSV_V1'",
   "m.complete = true",
   "m.truncated = false",
   "m.failed_item_count = 0",
