@@ -23,6 +23,7 @@ const checks = [
   [adapter.includes(".from('data_quality_recommendation_learning')"), 'adapter reads canonical DQ recommendation learning'],
   [adapter.includes(".from('data_quality_remediation_outcomes')"), 'adapter reads canonical remediation outcomes'],
   [adapter.includes(".eq('status', 'VERIFIED')"), 'adapter prefilters verified canonical evidence'],
+  [!adapter.includes(".eq('effective', true)"), 'adapter must not prefilter verified ineffective outcomes'],
   [retrievalContract.includes("'HUMAN_REVIEWED' | 'GOVERNED_IMPORT'"), 'retrieval labels require explicit governed authority class'],
   [retrievalContract.includes('requires at least one positive relevance judgment'), 'retrieval labels fail closed without a positive judgment'],
   [retrievalAdapter.includes(".from('ai_retrieval_evaluation_case_effective')"), 'retrieval adapter reads canonical effective case versions'],
