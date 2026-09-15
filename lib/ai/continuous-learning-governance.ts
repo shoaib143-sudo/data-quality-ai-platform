@@ -1,11 +1,13 @@
-export const CONTINUOUS_LEARNING_GOVERNANCE_VERSION = 'continuous-learning-governance-v2' as const
+export const CONTINUOUS_LEARNING_GOVERNANCE_VERSION = 'continuous-learning-governance-v3' as const
 
 export type LearningEvidence = {
   evidenceRef: string
   projectId: string
   verifiedAt: string
+  evidenceAvailableAt: string
   effective: boolean
   verified: true
+  persisted: true
   synthetic: false
 }
 
@@ -123,8 +125,14 @@ export function assessContinuousLearningGovernance(input: {
   for (const evidence of input.learningEvidence) {
     if (evidence.projectId !== projectId) throw new Error('learning evidence projectId must match projectId')
     if (evidence.verified !== true) throw new Error('continuous learning requires verified evidence')
+    if (evidence.persisted !== true) throw new Error('learning evidence must be persisted evidence')
     if (evidence.synthetic !== false) throw new Error('synthetic evidence is not eligible for continuous learning')
-    if (timestamp(evidence.verifiedAt, 'learningEvidence.verifiedAt') > cutoff) {
+    const verifiedAt = timestamp(evidence.verifiedAt, 'learningEvidence.verifiedAt')
+    const evidenceAvailableAt = timestamp(evidence.evidenceAvailableAt, 'learningEvidence.evidenceAvailableAt')
+    if (evidenceAvailableAt < verifiedAt) {
+      throw new Error('learning evidence cannot be available before verifiedAt')
+    }
+    if (verifiedAt > cutoff || evidenceAvailableAt > cutoff) {
       throw new Error('learning evidence must not be available after evidenceCutoffAt')
     }
     addEvidenceRef(evidenceRefs, evidence.evidenceRef, 'learningEvidence.evidenceRef')
@@ -140,6 +148,9 @@ export function assessContinuousLearningGovernance(input: {
     if (observation.synthetic !== false) throw new Error('synthetic drift evidence is not eligible for continuous learning')
     const observedAt = timestamp(observation.observedAt, 'driftObservation.observedAt')
     const evidenceAvailableAt = timestamp(observation.evidenceAvailableAt, 'driftObservation.evidenceAvailableAt')
+    if (evidenceAvailableAt < observedAt) {
+      throw new Error('drift evidence cannot be available before observedAt')
+    }
     if (observedAt > cutoff || evidenceAvailableAt > cutoff) {
       throw new Error('drift observation must not be available after evidenceCutoffAt')
     }
