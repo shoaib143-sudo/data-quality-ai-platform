@@ -5,14 +5,18 @@ on:
     paths:
       - 'supabase/migrations/20260915130000_fix_synthetic_governance_readiness_fixture.sql'
       - 'supabase/migrations/20260915131000_reconcile_synthetic_governance_readiness_fixture.sql'
+      - 'supabase/migrations/20260915185000_harden_synthetic_readiness_hash_resolution.sql'
       - 'scripts/verify-synthetic-governance-readiness-fixture.mjs'
+      - 'tests/synthetic-governance-readiness-fixture.test.mjs'
       - '.github/workflows/synthetic-governance-readiness-fixture.yml'
   push:
     branches: [main]
     paths:
       - 'supabase/migrations/20260915130000_fix_synthetic_governance_readiness_fixture.sql'
       - 'supabase/migrations/20260915131000_reconcile_synthetic_governance_readiness_fixture.sql'
+      - 'supabase/migrations/20260915185000_harden_synthetic_readiness_hash_resolution.sql'
       - 'scripts/verify-synthetic-governance-readiness-fixture.mjs'
+      - 'tests/synthetic-governance-readiness-fixture.test.mjs'
       - '.github/workflows/synthetic-governance-readiness-fixture.yml'
 
 permissions:
@@ -33,3 +37,5 @@ jobs:
           cache: pnpm
       - name: Verify governed JDBC readiness fixture and reconciliation contracts
         run: node scripts/verify-synthetic-governance-readiness-fixture.mjs
+      - name: Exercise readiness fixture negative cases
+        run: node --test tests/synthetic-governance-readiness-fixture.test.mjs

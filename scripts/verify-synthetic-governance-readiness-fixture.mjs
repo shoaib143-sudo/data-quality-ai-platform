@@ -24,6 +24,7 @@ const requiredChecks = [
   ['data_source_id,metadata', 'synthetic dataset must bind the governed data source'],
   ['insert into catalog.source_scopes', 'synthetic fixture must create a governed source scope'],
   ['insert into catalog.source_scope_versions', 'synthetic fixture must create a governed scope version'],
+  ["jsonb_build_object('include',jsonb_build_array('profiling_validation.synthetic_customers'))", 'scope rules must use valid PostgreSQL JSON array construction'],
   ['current_version_id=v_scope_version_id', 'synthetic scope version must become current'],
   ["'COMPLETED',1,jsonb_build_object('synthetic',true)", 'synthetic discovery run must be completed'],
   ['insert into catalog.discovered_assets', 'synthetic fixture must persist a current discovered asset'],
@@ -39,7 +40,10 @@ const forbidden = [
   ['disable trigger', 'readiness enforcement must not be disabled'],
   ['session_replication_role', 'trigger enforcement must not be bypassed'],
   ["values(v_project_id,'Synthetic JDBC Source '||left(v_suffix,12),'CSV'", 'fixture must not use a non-onboarded readiness source type'],
+  ["jsonb_build_object('include',['profiling_validation.synthetic_customers'])", 'scope rules must not use JavaScript-style array syntax in SQL'],
 ]
+
+const hashResolutionPath = 'supabase/migrations/20260915185000_harden_synthetic_readiness_hash_resolution.sql'
 
 let failed = false
 
@@ -72,6 +76,20 @@ for (const migration of migrations) {
     } else {
       console.log(`PASS: ${message}`)
     }
+  }
+}
+
+const hashResolutionSql = fs.readFileSync(hashResolutionPath, 'utf8')
+for (const [needle, message] of [
+  ['pg_catalog.encode(extensions.digest(', 'runtime hashes must resolve pgcrypto under the restricted search path'],
+  ["strpos(v_source, 'encode(digest(') = 0", 'hash hardening must fail closed when the historical expression changes'],
+  ['revoke execute on function governance.run_synthetic_governance_integration_suite() from public, anon, authenticated', 'hash hardening must preserve the suite ACL boundary'],
+]) {
+  if (!hashResolutionSql.includes(needle)) {
+    console.error(`FAIL: ${message}`)
+    failed = true
+  } else {
+    console.log(`PASS: ${message}`)
   }
 }
 

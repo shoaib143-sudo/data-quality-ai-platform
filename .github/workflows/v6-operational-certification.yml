@@ -168,4 +168,7 @@ jobs:
           pnpm dlx supabase@2.117.0 start
           trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
           pnpm dlx supabase@2.117.0 db reset --local
+          DB_URL="$(pnpm dlx supabase@2.117.0 status -o env | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
+          test -n "$DB_URL"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-synthetic-governance-suite.sql"
           pnpm dlx supabase@2.117.0 migration list --local
