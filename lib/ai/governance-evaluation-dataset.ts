@@ -34,7 +34,6 @@ export function createGovernanceEvaluationDatasetBuilder() {
         .eq('project_id', projectId)
         .in('id', ids)
         .eq('status', 'VERIFIED')
-        .eq('effective', true)
 
       if (learningError) throw new Error(`Unable to read verified recommendation learning: ${learningError.message}`)
       if (!learningRows?.length) return []
