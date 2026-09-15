@@ -39,11 +39,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} dn-page antialiased`}>
-        {children}
-        <ProfileMenu />
-        <Suspense fallback={null}><FloatingDataNexusAgent /></Suspense>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+      <body className="dn-page antialiased">
+        <div className={inter.variable}>
+          {children}
+          <ProfileMenu />
+          <Suspense fallback={null}><FloatingDataNexusAgent /></Suspense>
+          {process.env.NODE_ENV === 'production' && <Analytics />}
+        </div>
       </body>
     </html>
   )
