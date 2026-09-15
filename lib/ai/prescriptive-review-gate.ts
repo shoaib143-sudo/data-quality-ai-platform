@@ -1,6 +1,7 @@
 import type { PredictiveCertificationResult } from './predictive-certification'
+import type { PrescriptiveReadinessResult } from './prescriptive-readiness'
 
-export const PRESCRIPTIVE_REVIEW_GATE_VERSION = 'prescriptive-review-gate-v1' as const
+export const PRESCRIPTIVE_REVIEW_GATE_VERSION = 'prescriptive-review-gate-v2' as const
 
 export type PrescriptiveCandidate = {
   candidateId: string
@@ -14,6 +15,7 @@ export type PrescriptiveCandidate = {
 
 export type PrescriptiveReviewReason =
   | 'PREDICTIVE_NOT_ELIGIBLE'
+  | 'PRESCRIPTIVE_READINESS_NOT_ELIGIBLE'
   | 'NO_CANDIDATES'
   | 'READY_FOR_HUMAN_REVIEW'
 
@@ -23,6 +25,8 @@ export type PrescriptiveReviewGateResult = {
   candidateModelVersionId: string
   predictivePolicyId: string
   predictivePolicyVersion: string
+  prescriptivePolicyId: string
+  prescriptivePolicyVersion: string
   status: 'REVIEW_REQUIRED' | 'NOT_READY'
   reasons: PrescriptiveReviewReason[]
   candidates: PrescriptiveCandidate[]
@@ -57,6 +61,27 @@ function assertPredictiveBoundary(result: PredictiveCertificationResult) {
   ) {
     throw new Error('Prescriptive review requires non-authoritative predictive certification evidence')
   }
+  if (result.evidenceRefs.length === 0 || result.evidenceRefs.some((ref) => !ref.trim())) {
+    throw new Error('Predictive certification evidenceRefs must contain provenance references')
+  }
+}
+
+function assertReadinessBoundary(result: PrescriptiveReadinessResult) {
+  if (
+    result.recommendationRankingEnabled !== false ||
+    result.recommendationGenerationEnabled !== false ||
+    result.causalEffectClaimed !== false ||
+    result.predictiveProbabilityExposed !== false ||
+    result.decisionAuthority !== false ||
+    result.executionAuthority !== false ||
+    result.autonomousActionAllowed !== false ||
+    result.humanReviewRequired !== true
+  ) {
+    throw new Error('Prescriptive review requires non-authoritative prescriptive readiness evidence')
+  }
+  if (result.evidenceRefs.length === 0 || result.evidenceRefs.some((ref) => !ref.trim())) {
+    throw new Error('Prescriptive readiness evidenceRefs must contain provenance references')
+  }
 }
 
 function validateCandidate(candidate: PrescriptiveCandidate): PrescriptiveCandidate {
@@ -67,7 +92,7 @@ function validateCandidate(candidate: PrescriptiveCandidate): PrescriptiveCandid
   const rationale = requiredText(candidate.rationale, 'rationale')
   if (candidate.requiresApproval !== true) throw new Error('Prescriptive candidates must require approval')
 
-  const evidenceRefs = [...new Set(candidate.evidenceRefs.map((value) => requiredText(value, 'evidenceRef'))) ].sort()
+  const evidenceRefs = [...new Set(candidate.evidenceRefs.map((value) => requiredText(value, 'evidenceRef')))].sort()
   if (evidenceRefs.length === 0) throw new Error('Prescriptive candidates require evidenceRefs')
 
   return {
@@ -81,63 +106,80 @@ function validateCandidate(candidate: PrescriptiveCandidate): PrescriptiveCandid
   }
 }
 
+function notReadyResult(input: {
+  projectId: string
+  candidateModelVersionId: string
+  predictivePolicyId: string
+  predictivePolicyVersion: string
+  prescriptivePolicyId: string
+  prescriptivePolicyVersion: string
+  reason: Exclude<PrescriptiveReviewReason, 'READY_FOR_HUMAN_REVIEW'>
+}): PrescriptiveReviewGateResult {
+  return {
+    version: PRESCRIPTIVE_REVIEW_GATE_VERSION,
+    projectId: input.projectId,
+    candidateModelVersionId: input.candidateModelVersionId,
+    predictivePolicyId: input.predictivePolicyId,
+    predictivePolicyVersion: input.predictivePolicyVersion,
+    prescriptivePolicyId: input.prescriptivePolicyId,
+    prescriptivePolicyVersion: input.prescriptivePolicyVersion,
+    status: 'NOT_READY',
+    reasons: [input.reason],
+    candidates: [],
+    candidateRankingApplied: false,
+    expectedImpactClaimed: false,
+    causalEffectClaimed: false,
+    recommendationAuthority: false,
+    decisionAuthority: false,
+    executionAuthority: false,
+    promotionAuthority: false,
+    automaticActionAllowed: false,
+    currentAuthorizationRequiredAtExecution: true,
+    humanDecisionRequired: true,
+  }
+}
+
 export function buildPrescriptiveReviewGate(input: {
   projectId: string
   predictive: PredictiveCertificationResult
+  readiness: PrescriptiveReadinessResult
   candidates: PrescriptiveCandidate[]
 }): PrescriptiveReviewGateResult {
   const projectId = requiredText(input.projectId, 'projectId')
   if (input.predictive.projectId !== projectId) throw new Error('predictive projectId must match projectId')
+  if (input.readiness.projectId !== projectId) throw new Error('readiness projectId must match projectId')
   assertPredictiveBoundary(input.predictive)
+  assertReadinessBoundary(input.readiness)
 
   const predictivePolicyId = requiredText(input.predictive.policy.policyId, 'predictive.policy.policyId')
   const predictivePolicyVersion = requiredText(input.predictive.policy.policyVersion, 'predictive.policy.policyVersion')
+  const prescriptivePolicyId = requiredText(input.readiness.policy.policyId, 'readiness.policy.policyId')
+  const prescriptivePolicyVersion = requiredText(input.readiness.policy.policyVersion, 'readiness.policy.policyVersion')
   const candidateModelVersionId = requiredText(input.predictive.candidateModelVersionId, 'candidateModelVersionId')
 
+  if (input.readiness.candidateModelVersionId !== candidateModelVersionId) {
+    throw new Error('readiness candidateModelVersionId must match predictive candidateModelVersionId')
+  }
+
+  const base = {
+    projectId,
+    candidateModelVersionId,
+    predictivePolicyId,
+    predictivePolicyVersion,
+    prescriptivePolicyId,
+    prescriptivePolicyVersion,
+  }
+
   if (input.predictive.status !== 'ELIGIBLE_FOR_REVIEW') {
-    return {
-      version: PRESCRIPTIVE_REVIEW_GATE_VERSION,
-      projectId,
-      candidateModelVersionId,
-      predictivePolicyId,
-      predictivePolicyVersion,
-      status: 'NOT_READY',
-      reasons: ['PREDICTIVE_NOT_ELIGIBLE'],
-      candidates: [],
-      candidateRankingApplied: false,
-      expectedImpactClaimed: false,
-      causalEffectClaimed: false,
-      recommendationAuthority: false,
-      decisionAuthority: false,
-      executionAuthority: false,
-      promotionAuthority: false,
-      automaticActionAllowed: false,
-      currentAuthorizationRequiredAtExecution: true,
-      humanDecisionRequired: true,
-    }
+    return notReadyResult({ ...base, reason: 'PREDICTIVE_NOT_ELIGIBLE' })
+  }
+
+  if (input.readiness.status !== 'ELIGIBLE_FOR_HUMAN_REVIEW') {
+    return notReadyResult({ ...base, reason: 'PRESCRIPTIVE_READINESS_NOT_ELIGIBLE' })
   }
 
   if (input.candidates.length === 0) {
-    return {
-      version: PRESCRIPTIVE_REVIEW_GATE_VERSION,
-      projectId,
-      candidateModelVersionId,
-      predictivePolicyId,
-      predictivePolicyVersion,
-      status: 'NOT_READY',
-      reasons: ['NO_CANDIDATES'],
-      candidates: [],
-      candidateRankingApplied: false,
-      expectedImpactClaimed: false,
-      causalEffectClaimed: false,
-      recommendationAuthority: false,
-      decisionAuthority: false,
-      executionAuthority: false,
-      promotionAuthority: false,
-      automaticActionAllowed: false,
-      currentAuthorizationRequiredAtExecution: true,
-      humanDecisionRequired: true,
-    }
+    return notReadyResult({ ...base, reason: 'NO_CANDIDATES' })
   }
 
   const candidates = input.candidates.map(validateCandidate)
@@ -151,10 +193,7 @@ export function buildPrescriptiveReviewGate(input: {
 
   return {
     version: PRESCRIPTIVE_REVIEW_GATE_VERSION,
-    projectId,
-    candidateModelVersionId,
-    predictivePolicyId,
-    predictivePolicyVersion,
+    ...base,
     status: 'REVIEW_REQUIRED',
     reasons: ['READY_FOR_HUMAN_REVIEW'],
     candidates,
