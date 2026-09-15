@@ -3,7 +3,7 @@ import test from 'node:test'
 import { VerifiedEvaluationDatasetBuilder } from '../lib/ai/evaluation-dataset.ts'
 import { buildGovernedBacktestReadiness } from '../lib/ai/governed-backtesting.ts'
 
-function learningCase(id, sourceId, verifiedAt, effectiveness, evidence = {}) {
+function learningCase(id, sourceId, verifiedAt, effectiveness, evidence = {}, confidence = 0.9) {
   return {
     id,
     project_id: 'project-1',
@@ -15,7 +15,7 @@ function learningCase(id, sourceId, verifiedAt, effectiveness, evidence = {}) {
     decision_status: 'VERIFIED',
     outcome_status: 'VERIFIED',
     effectiveness,
-    confidence: 0.9,
+    confidence,
     evidence: { source_id: sourceId, ...evidence },
     status: 'ACTIVE',
     occurred_at: verifiedAt,
@@ -62,6 +62,23 @@ test('verified evaluation dataset preserves both positive and negative outcomes'
   assert.equal(dataset.cases.length, 2)
   assert.deepEqual(dataset.cases.map((item) => item.verifiedOutcome.effective).sort(), [false, true])
   assert.equal(dataset.cases.find((item) => item.caseId === 'negative')?.verifiedOutcome.effectiveness, 0)
+})
+
+test('missing numeric evaluation evidence fails closed instead of coercing null to zero', async () => {
+  const candidates = [
+    learningCase('missing-effectiveness', 'learning-missing-effectiveness', '2026-01-01T00:00:00Z', null),
+    learningCase('missing-confidence', 'learning-missing-confidence', '2026-01-01T00:00:00Z', 0, {}, null),
+  ]
+  const learning = [
+    learningRow('learning-missing-effectiveness', 'missing-effectiveness', false, '2026-01-02T00:00:00Z'),
+    learningRow('learning-missing-confidence', 'missing-confidence', false, '2026-01-02T00:00:00Z'),
+  ]
+  const builder = new VerifiedEvaluationDatasetBuilder({
+    async listLearningCases() { return candidates },
+    async listDataQualityLearning() { return learning },
+  })
+  const dataset = await builder.build({ projectId: 'project-1' })
+  assert.equal(dataset.cases.length, 0)
 })
 
 test('incomplete verification evidence fails closed', async () => {
