@@ -84,10 +84,12 @@ export function buildGovernedRealCaseTrendComparison(input: {
   }
 
   const minimumSampleSize = Math.max(1, input.minimumSampleSize ?? 5)
-  const previousSampleSize = input.previous.result.analysis.sampleSize
-  const currentSampleSize = input.current.result.analysis.sampleSize
-  const previousReady = input.previous.result.analysis.status === 'OK' && previousSampleSize >= minimumSampleSize
-  const currentReady = input.current.result.analysis.status === 'OK' && currentSampleSize >= minimumSampleSize
+  const previousAnalysis = input.previous.result.analysis
+  const currentAnalysis = input.current.result.analysis
+  const previousSampleSize = previousAnalysis.sampleSize
+  const currentSampleSize = currentAnalysis.sampleSize
+  const previousReady = previousAnalysis.status === 'OK' && previousSampleSize >= minimumSampleSize
+  const currentReady = currentAnalysis.status === 'OK' && currentSampleSize >= minimumSampleSize
 
   const sourceRecordIds = [
     ...input.previous.result.envelope.sourceRecordIds,
@@ -122,8 +124,8 @@ export function buildGovernedRealCaseTrendComparison(input: {
     dataFreshnessAt: freshest,
     confidence: null,
     uncertainty: {
-      previous_status: input.previous.result.analysis.status,
-      current_status: input.current.result.analysis.status,
+      previous_status: previousAnalysis.status,
+      current_status: currentAnalysis.status,
       minimum_sample_size_per_window: minimumSampleSize,
       predictive_probability_exposed: false,
       causal_effect_claimed: false,
@@ -164,8 +166,12 @@ export function buildGovernedRealCaseTrendComparison(input: {
     }
   }
 
-  const previousOutcomeCounts = input.previous.result.analysis.outcomeCounts
-  const currentOutcomeCounts = input.current.result.analysis.outcomeCounts
+  if (previousAnalysis.status !== 'OK' || currentAnalysis.status !== 'OK') {
+    throw new Error('Trend comparison readiness invariant was violated.')
+  }
+
+  const previousOutcomeCounts = previousAnalysis.outcomeCounts
+  const currentOutcomeCounts = currentAnalysis.outcomeCounts
   const previousObservedRates = observedRates(previousOutcomeCounts, previousSampleSize)
   const currentObservedRates = observedRates(currentOutcomeCounts, currentSampleSize)
   const observedRateDelta = Object.fromEntries(
