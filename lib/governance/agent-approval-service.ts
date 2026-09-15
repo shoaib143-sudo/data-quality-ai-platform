@@ -291,6 +291,30 @@ export async function validateApprovalForExecution(input: {
   if (error) throw new Error(`Unable to load approval request: ${error.message}`)
   if (!request) throw new Error('Approval request was not found.')
 
+  const requiresHumanApproval = request.requires_business_approval === true || request.requires_governance_approval === true
+  if (requiresHumanApproval) {
+    const expiryValue = String(request.approval_expires_at ?? '').trim()
+    const approvalExpiresAt = expiryValue ? new Date(expiryValue).getTime() : Number.NaN
+    if (!Number.isFinite(approvalExpiresAt)) {
+      await admin.schema('governance').from('agent_approval_requests').update({
+        status: 'INVALIDATED',
+        invalidated_at: new Date().toISOString(),
+        invalidation_reason: 'Approval validity evidence is missing for a human-approved execution request.',
+        updated_at: new Date().toISOString(),
+      }).eq('id', input.requestId)
+      throw new Error('Approval validity evidence is missing for a human-approved execution request.')
+    }
+    if (approvalExpiresAt <= Date.now()) {
+      await admin.schema('governance').from('agent_approval_requests').update({
+        status: 'INVALIDATED',
+        invalidated_at: new Date().toISOString(),
+        invalidation_reason: 'Approval validity expired before execution.',
+        updated_at: new Date().toISOString(),
+      }).eq('id', input.requestId)
+      throw new Error('The execution request was invalidated because its approval expired.')
+    }
+  }
+
   if (request.execution_fingerprint !== input.currentFingerprint) {
     await admin.schema('governance').from('agent_approval_requests').update({
       status: 'INVALIDATED',
