@@ -33,6 +33,6 @@ jobs:
       - name: Verify least-privilege workflow posture
         run: node scripts/verify-workflow-security-posture.mjs
       - name: Exercise governance negative and failure cases
-        run: node --test tests/github-governance-contract.test.mjs tests/pull-request-title-policy.test.mjs
+        run: node --test tests/github-governance-contract.test.mjs tests/pull-request-title-policy.test.mjs tests/workflow-credential-scope.test.mjs
       - name: Validate pull request title
         run: node scripts/verify-pull-request-title.mjs
