@@ -3,6 +3,7 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
 import { queueDataQualityAutomation } from '@/lib/data-quality/queue'
+import { canViewDatasetResource } from '@/lib/governance/resource-authorization'
 import { currentExecutionFingerprint, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
 import { finalizeAgentApprovalExecution } from '@/lib/governance/agent-approval-audit'
 
@@ -37,6 +38,9 @@ export async function GET(request: Request) {
     if (!datasetVersionId) return NextResponse.json({ error: 'datasetVersionId is required.' }, { status: 400 })
 
     const { dataset, version } = await authorizeDatasetVersion(user.id, datasetVersionId, 'quality.execute')
+    if (!await canViewDatasetResource(user.id, dataset.id)) {
+      throw new AuthorizationError('You are not authorized to access this dataset resource.')
+    }
     const admin = createAdminClient()
     const enabledRuleCount = await enabledQualityRuleCount(admin, dataset.id, version.id)
     return NextResponse.json(
@@ -60,6 +64,9 @@ export async function POST(request: Request) {
     if (!datasetVersionId) return NextResponse.json({ error: 'datasetVersionId is required.' }, { status: 400 })
 
     const { dataset, version } = await authorizeDatasetVersion(user.id, datasetVersionId, 'quality.execute')
+    if (!await canViewDatasetResource(user.id, dataset.id)) {
+      throw new AuthorizationError('You are not authorized to access this dataset resource.')
+    }
     if (approvalRequestId) {
       if (!agentDefinitionId) return NextResponse.json({ error: 'agentDefinitionId is required to fulfill this execution request.' }, { status: 400 })
       const currentFingerprint = await currentExecutionFingerprint({
@@ -70,6 +77,7 @@ export async function POST(request: Request) {
         requestId: approvalRequestId,
         executorUserId: user.id,
         currentFingerprint,
+        expectedActionKey: 'RUN_DATA_QUALITY',
       })
     }
     const admin = createAdminClient()

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeDatasetVersion, AuthorizationError } from '@/lib/auth/authorize'
 import { validateDataSourceForProfiling } from '@/lib/profiling/source-validation'
+import { canViewDatasetResource } from '@/lib/governance/resource-authorization'
 import { sanitizeProfilingRequestInput } from '@/lib/profiling/request-input'
 import { claimDurableJobByAgentRun, enqueueDurableJob } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
@@ -39,6 +40,9 @@ export async function POST(request: Request) {
     }
 
     const { dataset, version: datasetVersion } = await authorizeDatasetVersion(user.id, datasetVersionId, 'profiling.execute')
+    if (!await canViewDatasetResource(user.id, dataset.id)) {
+      throw new AuthorizationError('You are not authorized to access this dataset resource.')
+    }
     if (dataset.project_id !== requestedProjectId) return NextResponse.json({ error: 'Dataset version does not belong to the requested project.' }, { status: 400 })
     const projectId = dataset.project_id
 
@@ -51,6 +55,7 @@ export async function POST(request: Request) {
         requestId: approvalRequestId,
         executorUserId: user.id,
         currentFingerprint,
+        expectedActionKey: 'RUN_PROFILING',
       })
     }
 
