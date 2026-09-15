@@ -1,0 +1,34 @@
+name: Governed Real Case Trends
+
+on:
+  pull_request:
+    paths:
+      - 'lib/data-quality/governed-real-case-trends.ts'
+      - 'lib/data-quality/governed-real-case-trend-service.ts'
+      - 'app/api/analytics/governed-real-case-trends/route.ts'
+      - 'scripts/verify-governed-real-case-trends.mjs'
+      - '.github/workflows/governed-real-case-trends.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/data-quality/governed-real-case-trends.ts'
+      - 'lib/data-quality/governed-real-case-trend-service.ts'
+      - 'app/api/analytics/governed-real-case-trends/route.ts'
+      - 'scripts/verify-governed-real-case-trends.mjs'
+      - '.github/workflows/governed-real-case-trends.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Verify governed real-case trend contracts
+        run: node scripts/verify-governed-real-case-trends.mjs
