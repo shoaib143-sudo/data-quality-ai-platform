@@ -14,16 +14,34 @@ for (const required of [
   "case 'VERIFIED':",
   "return 'ADJUDICATED'",
   "return 'UNADJUDICATED'",
+  "case 'EFFECTIVE':",
+  "case 'INEFFECTIVE':",
+  "case 'PARTIAL':",
+  "canonicalOutcomeFromVerifiedActionOutcome",
+  "matchUniqueVerifiedOutcome",
   "analysisType: 'REAL_CASE_OUTCOME_DISTRIBUTION'",
   "predictive_probability_exposed: false",
-  "source: 'agent.agent_learning_cases'",
+  "canonical_source: 'agent.agent_learning_cases'",
+  "verified_outcome_enrichment_source: 'governance.governed_action_outcomes'",
 ]) {
   assert.ok(analysisSource.includes(required), `Real-case analysis contract is missing: ${required}`)
 }
 
 assert.ok(
   !analysisSource.includes("case 'VERIFIED':\n      return 'SUCCESS'"),
-  'A VERIFIED outcome status must not be silently converted into outcome success.',
+  'A VERIFIED status must not be silently converted into outcome success.',
+)
+assert.ok(
+  analysisSource.includes("normalized(row.verification_state) !== 'VERIFIED' || !row.verified_at"),
+  'Governed action outcomes must be verified before they can enrich a canonical learning case.',
+)
+assert.ok(
+  analysisSource.includes('return matches.length === 1 ? matches[0] : null'),
+  'Ambiguous outcome correlation must fail closed instead of duplicating or guessing case identity.',
+)
+assert.ok(
+  analysisSource.includes("normalized(verifiedOutcome.execution_state) !== 'NOT_EXECUTED'"),
+  'Execution state may only contribute execution evidence and must remain separate from outcome classification.',
 )
 
 for (const required of [
@@ -33,6 +51,10 @@ for (const required of [
   ".lte('occurred_at', input.windowEnd)",
   ".lte('created_at', input.evidenceCutoffAt)",
   ".lte('updated_at', input.evidenceCutoffAt)",
+  ".from('governed_action_outcomes')",
+  ".eq('verification_state', 'VERIFIED')",
+  ".not('source_agent_run_id', 'is', null)",
+  ".lte('verified_at', input.evidenceCutoffAt)",
   "onConflict: 'learning_case_id,evidence_cutoff_at'",
   ".from('analysis_evidence_envelopes')",
 ]) {
