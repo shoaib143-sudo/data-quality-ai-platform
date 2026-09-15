@@ -10,10 +10,11 @@ export default async function AutonomousGovernancePage() {
   const { data, error } = await supabase.schema('app').from('projects').select('id,name').order('name')
   if (error) throw new Error(`Unable to load projects: ${error.message}`)
   const projects = (data ?? []).map(row => ({ id: String(row.id), name: String(row.name) }))
-  const [viewable, executable, manageable] = await Promise.all([
+  const [viewable, executable, manageable, certifiable] = await Promise.all([
     Promise.all(projects.map(async project => (await hasProjectCapability(user.id, project.id, 'agent.view')) ? project.id : null)),
     Promise.all(projects.map(async project => (await hasProjectCapability(user.id, project.id, 'agent.execute')) ? project.id : null)),
     Promise.all(projects.map(async project => (await hasProjectCapability(user.id, project.id, 'admin.manage')) ? project.id : null)),
+    Promise.all(projects.map(async project => (await hasProjectCapability(user.id, project.id, 'certification.review')) ? project.id : null)),
   ])
   const viewableIds = new Set(viewable.filter((id): id is string => Boolean(id)))
   return (
@@ -27,13 +28,14 @@ export default async function AutonomousGovernancePage() {
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">DataNexus Governance Orchestrator</p>
           <h1 className="mt-2 text-2xl font-semibold">Autonomous Governance</h1>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Configure governed autonomy per project, execute the orchestrator through the existing native supervisor, and inspect mandatory capability coverage. Full Autonomous is bounded by deterministic policy and cannot self-certify.
+            Configure governed autonomy per project, execute the orchestrator through the existing native supervisor, and inspect the canonical 75-capability evidence ledger. Full Autonomous is bounded by deterministic policy and independent certification authority.
           </p>
         </header>
         <AutonomyConsole
           projects={projects.filter(project => viewableIds.has(project.id))}
           executableProjectIds={executable.filter((id): id is string => Boolean(id))}
           manageableProjectIds={manageable.filter((id): id is string => Boolean(id))}
+          certifiableProjectIds={certifiable.filter((id): id is string => Boolean(id))}
         />
       </div>
     </main>
