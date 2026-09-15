@@ -17,9 +17,16 @@ $decl$;
   v_manifest_id uuid;
 $decl$;
   v_fixture_old text := $fixture$
-    insert into catalog.datasets(project_id,name,source_identifier,business_domain,metadata) values(v_project_id,'Synthetic Governed Dataset','profiling_validation.synthetic_customers','TEST',jsonb_build_object('synthetic',true,'profiling_ready',true)) returning id into v_dataset_id;
-    insert into catalog.dataset_versions(dataset_id,version_number,source_uri,status,row_count,column_count,schema_hash,metadata) values(v_dataset_id,1,'table://profiling_validation.synthetic_customers','AVAILABLE',10,0,'schema-v1',jsonb_build_object('synthetic',true,'profiling_ready',true)) returning id into v_version_id;
-    insert into profiling.dataset_execution_sources(dataset_version_id,source_type,source_uri,execution_config,active) values(v_version_id,'TABLE','table://profiling_validation.synthetic_customers',jsonb_build_object('schema','profiling_validation','table','synthetic_customers'),true);
+    insert into catalog.datasets(project_id,name,source_identifier,business_domain,metadata)
+    values(v_project_id,'Synthetic Governed Dataset','profiling_validation.synthetic_customers','TEST',jsonb_build_object('synthetic',true,'profiling_ready',true))
+    returning id into v_dataset_id;
+
+    insert into catalog.dataset_versions(dataset_id,version_number,source_uri,status,row_count,column_count,schema_hash,metadata)
+    values(v_dataset_id,1,'table://profiling_validation.synthetic_customers','AVAILABLE',10,0,'schema-v1',jsonb_build_object('synthetic',true,'profiling_ready',true))
+    returning id into v_version_id;
+
+    insert into profiling.dataset_execution_sources(dataset_version_id,source_type,source_uri,execution_config,active)
+    values(v_version_id,'TABLE','table://profiling_validation.synthetic_customers',jsonb_build_object('schema','profiling_validation','table','synthetic_customers'),true);
 $fixture$;
   v_fixture_new text := $fixture$
     insert into catalog.data_sources(project_id,name,source_type,connection_metadata,status)
