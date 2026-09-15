@@ -1,4 +1,3 @@
-export type CapabilityOutcome = 'EXECUTED_AND_PASSED' | 'EXECUTED_AND_FAILED' | 'BLOCKED_POLICY' | 'BLOCKED_EXTERNAL' | 'NOT_APPLICABLE' | 'NOT_MEASURED'
 export type AutonomyMode = 'OFF' | 'GUIDED' | 'GOVERNED_AUTO' | 'FULL_AUTONOMOUS'
 export type RiskTier = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 
@@ -15,13 +14,6 @@ export type CapabilityDescriptor = {
   evidenceContract: string[]
   certificationGate: string | null
   enabled: boolean
-}
-
-export type CapabilityResult = {
-  capabilityKey: string
-  outcome: CapabilityOutcome
-  evidenceRefs: string[]
-  reason: string | null
 }
 
 export type AutonomyPolicy = {
@@ -45,6 +37,17 @@ export type AutonomyPolicy = {
   maxConcurrentModelCalls: number
   emergencyStop: boolean
 }
+
+export type CanonicalCapabilityResultRow = {
+  capability_sr_no: number
+  module: string
+  capability: string
+  execution_state: 'NOT_RUN' | 'EXECUTED' | 'BLOCKED' | 'FAILED'
+  verification_state: 'UNKNOWN' | 'VERIFIED' | 'FAILED' | 'INCONCLUSIVE'
+  blocker_code: string | null
+}
+
+export const CANONICAL_AI_CAPABILITY_COUNT = 75
 
 const riskRank: Record<RiskTier, number> = { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 }
 
@@ -104,62 +107,43 @@ export function validateCapabilityPlan(descriptors: CapabilityDescriptor[]) {
   return [...new Set(failures)]
 }
 
-export function summarizeCapabilityCoverage(descriptors: CapabilityDescriptor[], results: CapabilityResult[]) {
-  const required = descriptors.filter(row => row.enabled && row.mandatoryForE2E)
-  const requiredKeys = new Set(required.map(row => row.capabilityKey))
-  const matching = results.filter(row => requiredKeys.has(row.capabilityKey))
-  const duplicateResults = matching.length - new Set(matching.map(row => row.capabilityKey)).size
-  const byKey = new Map(matching.map(row => [row.capabilityKey, row]))
-  const values = [...byKey.values()]
-  const passed = values.filter(row => row.outcome === 'EXECUTED_AND_PASSED').length
-  const failed = values.filter(row => row.outcome === 'EXECUTED_AND_FAILED').length
-  const blocked = values.filter(row => row.outcome === 'BLOCKED_POLICY' || row.outcome === 'BLOCKED_EXTERNAL').length
-  const notMeasured = values.filter(row => row.outcome === 'NOT_MEASURED').length
-  const mandatory = required.length
-  const accounted = byKey.size
-  const executed = passed + failed
+export function summarizeCanonicalCapabilityLedger(rows: CanonicalCapabilityResultRow[]) {
+  const unique = new Set(rows.map(row => row.capability_sr_no))
+  const accounted = unique.size
+  const duplicateRows = rows.length - accounted
+  const outOfRangeRows = rows.filter(row => !Number.isInteger(row.capability_sr_no) || row.capability_sr_no < 1 || row.capability_sr_no > CANONICAL_AI_CAPABILITY_COUNT).length
+  const executed = rows.filter(row => row.execution_state === 'EXECUTED').length
+  const blocked = rows.filter(row => row.execution_state === 'BLOCKED').length
+  const failed = rows.filter(row => row.execution_state === 'FAILED').length
+  const verified = rows.filter(row => row.verification_state === 'VERIFIED').length
+  const verificationFailed = rows.filter(row => row.verification_state === 'FAILED').length
+  const inconclusive = rows.filter(row => row.verification_state === 'INCONCLUSIVE').length
+  const unaccounted = Math.max(0, CANONICAL_AI_CAPABILITY_COUNT - accounted)
   return {
-    mandatory, accounted, executed, passed, failed, blocked, notMeasured,
-    unaccounted: Math.max(0, mandatory - accounted),
-    duplicateResults,
-    accountingCoveragePct: mandatory === 0 ? 100 : accounted / mandatory * 100,
-    executionCoveragePct: mandatory === 0 ? 100 : executed / mandatory * 100,
-    certificationCoveragePct: mandatory === 0 ? 100 : passed / mandatory * 100,
-    certificationEligible: duplicateResults === 0 && mandatory === accounted && passed === mandatory && failed === 0 && blocked === 0 && notMeasured === 0,
+    mandatory: CANONICAL_AI_CAPABILITY_COUNT,
+    accounted,
+    executed,
+    verified,
+    blocked,
+    failed,
+    verificationFailed,
+    inconclusive,
+    unaccounted,
+    duplicateRows,
+    outOfRangeRows,
+    accountingCoveragePct: accounted / CANONICAL_AI_CAPABILITY_COUNT * 100,
+    executionCoveragePct: executed / CANONICAL_AI_CAPABILITY_COUNT * 100,
+    certificationCoveragePct: verified / CANONICAL_AI_CAPABILITY_COUNT * 100,
+    certificationEligible:
+      rows.length === CANONICAL_AI_CAPABILITY_COUNT &&
+      accounted === CANONICAL_AI_CAPABILITY_COUNT &&
+      duplicateRows === 0 &&
+      outOfRangeRows === 0 &&
+      executed === CANONICAL_AI_CAPABILITY_COUNT &&
+      verified === CANONICAL_AI_CAPABILITY_COUNT &&
+      blocked === 0 &&
+      failed === 0 &&
+      verificationFailed === 0 &&
+      inconclusive === 0,
   }
 }
-
-export const mandatoryAiGovernanceCapabilities: CapabilityDescriptor[] = [
-  ['ai.agent.execution','AI_AGENTS','AGENT','native_supervisor_agent',['agent_run','agent_run_steps']],
-  ['ai.agent.delegation','AI_AGENTS','AGENT','native_supervisor_agent',['parent_run_id','correlation_id']],
-  ['ai.conversation.governed','AI_AGENTS','AGENT','governance_specialist_agent',['authorization_decision','response_evidence']],
-  ['ai.recommendation.governed','AI_AGENTS','AGENT','governance_specialist_agent',['recommendation','evidence_refs']],
-  ['ai.tool.execution','AI_AGENTS','TOOL','governance_specialist_investigate',['tool_key','tool_result']],
-  ['ai.retrieval.authorized','RETRIEVAL','RETRIEVAL','governed_retrieval',['retrieval_scope','source_refs']],
-  ['ai.rag.grounded','RETRIEVAL','RETRIEVAL','governed_rag',['context_refs','grounded_answer']],
-  ['ai.grounding.citations','EVALUATION','CERTIFIER','grounding_evaluator',['citation_refs']],
-  ['ai.model.routing','MODEL_RUNTIME','MODEL','model_gateway',['model_policy','selected_model']],
-  ['ai.provider.fallback','MODEL_RUNTIME','MODEL','provider_fallback',['fallback_reason','provider_attempts']],
-  ['ai.budget.enforcement','MODEL_RUNTIME','CERTIFIER','budget_enforcement',['budget_snapshot','usage']],
-  ['ai.prompt.governance','SECURITY','CERTIFIER','prompt_governance',['prompt_version']],
-  ['ai.output.structured','EVALUATION','CERTIFIER','structured_output',['schema_validation']],
-  ['ai.evaluation.independent','EVALUATION','CERTIFIER','evaluation_engine',['evaluation_result']],
-  ['ai.redteam.controls','SECURITY','CERTIFIER','red_team_assurance',['adversarial_case','control_result']],
-  ['ai.approval.boundary','GOVERNANCE','CERTIFIER','approval_boundary',['approval_decision']],
-  ['ai.recovery.controlled','RECOVERY','WORKFLOW','execution_recovery',['failure_class','recovery_action']],
-  ['ai.observability.decision_trace','OBSERVABILITY','CERTIFIER','decision_trace',['decision_trace']],
-  ['ai.audit.complete','CERTIFICATION','CERTIFIER','audit_evidence',['audit_event_refs']],
-].map(([capabilityKey, domain, executorType, executorKey, evidenceContract]) => ({
-  capabilityKey: capabilityKey as string,
-  domain: domain as string,
-  version: '1.0',
-  mandatoryForE2E: true,
-  executorType: executorType as CapabilityDescriptor['executorType'],
-  executorKey: executorKey as string,
-  requiredCapability: 'agent.execute',
-  riskTier: 'LOW' as RiskTier,
-  dependencies: [],
-  evidenceContract: evidenceContract as string[],
-  certificationGate: 'independent-evidence',
-  enabled: true,
-}))
