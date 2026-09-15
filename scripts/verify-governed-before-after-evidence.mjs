@@ -26,6 +26,8 @@ for (const required of [
   "same_scalar_type_required: true",
   "source_qualified_record_ids: true",
   "return `${row.source}:${row.id}`",
+  'const comparableSourceRecordIds = new Set(sourceRecordIds)',
+  '.filter((row) => comparableSourceRecordIds.has(qualifiedSourceRecordId(row)))',
 ]) {
   assert.ok(analysisSource.includes(required), `Before/after analysis contract is missing: ${required}`)
 }
@@ -41,6 +43,10 @@ assert.ok(
 assert.ok(
   analysisSource.includes("metadata[key] === true") && analysisSource.includes("environment === 'TEST'"),
   'Synthetic/test/demo metadata must be excluded from production analysis.',
+)
+assert.ok(
+  analysisSource.indexOf('const comparableSourceRecordIds = new Set(sourceRecordIds)') < analysisSource.indexOf('const dataFreshnessAt'),
+  'Evidence freshness must be derived from the same comparable source records represented in the evidence envelope.',
 )
 assert.ok(
   !analysisSource.includes('predictionProbability') && !analysisSource.includes('causalEffect'),
