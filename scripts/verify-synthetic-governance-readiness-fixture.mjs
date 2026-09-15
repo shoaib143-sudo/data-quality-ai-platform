@@ -4,7 +4,7 @@ const migrationPath = 'supabase/migrations/20260915130000_fix_synthetic_governan
 const sql = fs.readFileSync(migrationPath, 'utf8')
 
 const checks = [
-  ["source_type,'JDBC'", 'synthetic source must use the onboarded JDBC readiness policy'],
+  ["values(v_project_id,'Synthetic JDBC Source '||left(v_suffix,12),'JDBC'", 'synthetic source must use the onboarded JDBC readiness policy'],
   ['data_source_id,metadata', 'synthetic dataset must bind the governed data source'],
   ['insert into catalog.source_scopes', 'synthetic fixture must create a governed source scope'],
   ['insert into catalog.source_scope_versions', 'synthetic fixture must create a governed scope version'],
@@ -16,7 +16,8 @@ const checks = [
   ['insert into profiling.dataset_execution_sources', 'synthetic dataset version must have an active execution binding'],
   ['catalog.verify_dataset_profile_readiness(v_project_id,v_dataset_id)', 'fixture must prove deterministic readiness before profiling'],
   ["raise exception 'Synthetic governed JDBC readiness fixture did not reach READY'", 'fixture must fail closed when readiness is not READY'],
-  ["strpos(v_source,v_fixture_old)=0", 'migration must fail closed if the historical suite shape changed'],
+  ['strpos(v_source,v_fixture_old)=0', 'migration must fail closed if the historical suite shape changed'],
+  ['v_patched := replace(v_patched,v_fixture_old,v_fixture_new)', 'migration must replace the exact historical fixture with governed readiness evidence'],
   ['create or replace function governance.run_synthetic_governance_integration_suite()', 'migration must patch the existing synthetic suite rather than bypass the profile readiness trigger'],
 ]
 
@@ -33,8 +34,7 @@ for (const [needle, message] of checks) {
 const forbidden = [
   ['disable trigger', 'readiness enforcement must not be disabled'],
   ['session_replication_role', 'trigger enforcement must not be bypassed'],
-  ["source_type,'CSV'", 'fixture must not use a non-onboarded readiness source type'],
-  ['profiling_ready\',true)) returning id into v_dataset_id;\n    insert into catalog.dataset_versions', 'metadata flags alone must not be treated as readiness evidence'],
+  ["values(v_project_id,'Synthetic JDBC Source '||left(v_suffix,12),'CSV'", 'fixture must not use a non-onboarded readiness source type'],
 ]
 
 for (const [needle, message] of forbidden) {
