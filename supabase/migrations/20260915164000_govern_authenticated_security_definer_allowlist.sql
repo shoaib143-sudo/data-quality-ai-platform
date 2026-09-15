@@ -32,6 +32,7 @@ declare
   v_interrupt_anon_exec boolean;
   v_interrupt_guarded boolean;
   v_unexpected_authenticated_exec integer;
+  v_unexpected_authenticated_functions jsonb;
   v_valid boolean;
 begin
   select split_part(setting, '=', 2)
@@ -85,8 +86,21 @@ begin
     and pg_get_function_identity_arguments(p.oid) = 'p_interrupt_id uuid, p_decision text, p_action_payload_hash text, p_response jsonb'
     and p.prosecdef = true;
 
-  select count(*)
-    into v_unexpected_authenticated_exec
+  select
+    count(*),
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'function',
+          format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)),
+          'owner',
+          pg_get_userbyid(p.proowner)
+        )
+        order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)
+      ),
+      '[]'::jsonb
+    )
+    into v_unexpected_authenticated_exec, v_unexpected_authenticated_functions
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname in ('public', 'app', 'app_private', 'agent', 'catalog', 'profiling', 'governance', 'orchestration')
@@ -130,6 +144,7 @@ begin
     'runtime_interrupt_anonymous_execute', coalesce(v_interrupt_anon_exec, false),
     'runtime_interrupt_authorization_guarded', coalesce(v_interrupt_guarded, false),
     'unexpected_authenticated_security_definer_count', v_unexpected_authenticated_exec,
+    'unexpected_authenticated_security_definer_functions', v_unexpected_authenticated_functions,
     'model', 'Four unexposed RLS membership helpers and two explicitly governed authenticated privileged RPCs are the complete application-schema allowlist.'
   );
 end;
