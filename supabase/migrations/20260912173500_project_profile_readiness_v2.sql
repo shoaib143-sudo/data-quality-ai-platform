@@ -98,8 +98,8 @@ as $$
       lsm.discovery_run_id,
       lsm.manifest_hash,
       lsm.completed_at as discovery_completed_at,
-      (dc.source_type in ('JDBC','FILE','CSV')) as readiness_policy_onboarded,
-      (dc.source_type in ('FILE','CSV')) as file_policy,
+      (dc.source_type in ('JDBC', 'FILE', 'CSV')) as readiness_policy_onboarded,
+      (dc.source_type in ('FILE', 'CSV')) as file_policy,
       (dc.dataset_status = 'ACTIVE') as dataset_active,
       (dc.source_status = 'ACTIVE') as source_active,
       (dc.operational_state = 'OBSERVED_READY') as source_observed_ready,
@@ -122,7 +122,10 @@ as $$
         when dataset_active
          and source_active
          and execution_binding_ready
-         and (file_policy or (source_observed_ready and governed_scope_ready and discovery_evidence_ready)) then 'READY'
+         and (
+           file_policy
+           or (source_observed_ready and governed_scope_ready and discovery_evidence_ready)
+         ) then 'READY'
         else 'BLOCKED'
       end as readiness_state,
       jsonb_strip_nulls(jsonb_build_object(
@@ -231,7 +234,7 @@ as $$
 $$;
 
 comment on function catalog.verify_dataset_profile_readiness(uuid, uuid) is
-  'Returns deterministic per-dataset profiling readiness and UI-ready remediation evidence without mutating lifecycle authority. JDBC_V1, FILE_V1, and CSV_V1 are onboarded source readiness policies; file policies use validated execution-source evidence.';
+  'Returns deterministic per-dataset profiling readiness and UI-ready remediation evidence without mutating lifecycle authority. JDBC_V1 is the currently onboarded source readiness policy.';
 
 create or replace function catalog.verify_dataset_version_profile_readiness(
   p_project_id uuid,
