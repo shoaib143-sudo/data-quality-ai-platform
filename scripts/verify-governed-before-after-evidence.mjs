@@ -53,6 +53,9 @@ for (const required of [
   ".lte('recorded_at', input.evidenceCutoffAt)",
   'persist?: boolean',
   ".from('analysis_evidence_envelopes')",
+  'explicitSyntheticOrTestFlag(context) || explicitSyntheticOrTestFlag(runtime)',
+  "...(explicitlyExcluded ? { synthetic: true } : {})",
+  'mergeMetadataPreservingExclusionFlags(row.evidence_context, row.runtime_evidence)',
 ]) {
   assert.ok(serviceSource.includes(required), `Before/after service contract is missing: ${required}`)
 }
