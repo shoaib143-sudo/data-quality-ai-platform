@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - 'supabase/migrations/20260915130000_fix_synthetic_governance_readiness_fixture.sql'
+      - 'supabase/migrations/20260915131000_reconcile_synthetic_governance_readiness_fixture.sql'
       - 'scripts/verify-synthetic-governance-readiness-fixture.mjs'
       - '.github/workflows/synthetic-governance-readiness-fixture.yml'
   push:
     branches: [main]
     paths:
       - 'supabase/migrations/20260915130000_fix_synthetic_governance_readiness_fixture.sql'
+      - 'supabase/migrations/20260915131000_reconcile_synthetic_governance_readiness_fixture.sql'
       - 'scripts/verify-synthetic-governance-readiness-fixture.mjs'
       - '.github/workflows/synthetic-governance-readiness-fixture.yml'
 
@@ -29,5 +31,5 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - name: Verify governed JDBC readiness fixture contract
+      - name: Verify governed JDBC readiness fixture and reconciliation contracts
         run: node scripts/verify-synthetic-governance-readiness-fixture.mjs

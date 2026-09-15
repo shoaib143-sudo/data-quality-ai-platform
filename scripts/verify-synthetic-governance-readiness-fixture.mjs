@@ -1,9 +1,25 @@
 import fs from 'node:fs'
 
-const migrationPath = 'supabase/migrations/20260915130000_fix_synthetic_governance_readiness_fixture.sql'
-const sql = fs.readFileSync(migrationPath, 'utf8')
+const migrations = [
+  {
+    path: 'supabase/migrations/20260915130000_fix_synthetic_governance_readiness_fixture.sql',
+    failClosedMarkers: [
+      'strpos(v_source,v_fixture_old)=0',
+      'v_patched := replace(v_patched,v_fixture_old,v_fixture_new)',
+    ],
+  },
+  {
+    path: 'supabase/migrations/20260915131000_reconcile_synthetic_governance_readiness_fixture.sql',
+    failClosedMarkers: [
+      'strpos(v_source,v_decl_anchor)=0',
+      'strpos(v_source,v_fixture_compact)=0',
+      'v_patched := replace(v_source,v_decl_anchor,v_decl_new)',
+      'v_patched := replace(v_patched,v_fixture_compact,v_fixture_new)',
+    ],
+  },
+]
 
-const checks = [
+const requiredChecks = [
   ["values(v_project_id,'Synthetic JDBC Source '||left(v_suffix,12),'JDBC'", 'synthetic source must use the onboarded JDBC readiness policy'],
   ['data_source_id,metadata', 'synthetic dataset must bind the governed data source'],
   ['insert into catalog.source_scopes', 'synthetic fixture must create a governed source scope'],
@@ -16,20 +32,8 @@ const checks = [
   ['insert into profiling.dataset_execution_sources', 'synthetic dataset version must have an active execution binding'],
   ['catalog.verify_dataset_profile_readiness(v_project_id,v_dataset_id)', 'fixture must prove deterministic readiness before profiling'],
   ["raise exception 'Synthetic governed JDBC readiness fixture did not reach READY'", 'fixture must fail closed when readiness is not READY'],
-  ['strpos(v_source,v_fixture_old)=0', 'migration must fail closed if the historical suite shape changed'],
-  ['v_patched := replace(v_patched,v_fixture_old,v_fixture_new)', 'migration must replace the exact historical fixture with governed readiness evidence'],
   ['create or replace function governance.run_synthetic_governance_integration_suite()', 'migration must patch the existing synthetic suite rather than bypass the profile readiness trigger'],
 ]
-
-let failed = false
-for (const [needle, message] of checks) {
-  if (!sql.includes(needle)) {
-    console.error(`FAIL: ${message}`)
-    failed = true
-  } else {
-    console.log(`PASS: ${message}`)
-  }
-}
 
 const forbidden = [
   ['disable trigger', 'readiness enforcement must not be disabled'],
@@ -37,14 +41,39 @@ const forbidden = [
   ["values(v_project_id,'Synthetic JDBC Source '||left(v_suffix,12),'CSV'", 'fixture must not use a non-onboarded readiness source type'],
 ]
 
-for (const [needle, message] of forbidden) {
-  if (sql.toLowerCase().includes(needle.toLowerCase())) {
-    console.error(`FAIL: ${message}`)
-    failed = true
-  } else {
-    console.log(`PASS: ${message}`)
+let failed = false
+
+for (const migration of migrations) {
+  const sql = fs.readFileSync(migration.path, 'utf8')
+  console.log(`VERIFY ${migration.path}`)
+
+  for (const [needle, message] of requiredChecks) {
+    if (!sql.includes(needle)) {
+      console.error(`FAIL: ${message}`)
+      failed = true
+    } else {
+      console.log(`PASS: ${message}`)
+    }
+  }
+
+  for (const marker of migration.failClosedMarkers) {
+    if (!sql.includes(marker)) {
+      console.error(`FAIL: migration must retain fail-closed reconciliation marker: ${marker}`)
+      failed = true
+    } else {
+      console.log(`PASS: fail-closed reconciliation marker retained: ${marker}`)
+    }
+  }
+
+  for (const [needle, message] of forbidden) {
+    if (sql.toLowerCase().includes(needle.toLowerCase())) {
+      console.error(`FAIL: ${message}`)
+      failed = true
+    } else {
+      console.log(`PASS: ${message}`)
+    }
   }
 }
 
 if (failed) process.exit(1)
-console.log('Synthetic governance readiness fixture contract verified.')
+console.log('Synthetic governance readiness fixture and reconciliation contracts verified.')
