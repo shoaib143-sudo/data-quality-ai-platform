@@ -26,7 +26,11 @@ test('rejects the original JavaScript-style SQL array regression', () => {
 })
 
 test('runtime assertion fails closed on failed status, empty checks, and false checks', () => {
+  assert.match(runtimeAssertion, /insert into auth\.users/)
+  assert.match(runtimeAssertion, /insert into app\.organization_members/)
+  assert.match(runtimeAssertion, /'OWNER'/)
   assert.match(runtimeAssertion, /status' is distinct from 'PASSED'/)
   assert.match(runtimeAssertion, /bool_and\(value = 'true'::jsonb\)/)
   assert.match(runtimeAssertion, /coalesce\([\s\S]*false[\s\S]*\) is not true/)
+  assert.match(runtimeAssertion, /rollback;/)
 })
