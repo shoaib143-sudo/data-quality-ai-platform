@@ -2,12 +2,11 @@ import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import {
-  DEFAULT_AUTONOMY_POLICY,
   getLatestCoverageRun,
   getProjectAutonomyPolicy,
   runGovernanceOrchestrator,
   upsertProjectAutonomyPolicy,
-} from '@/lib/orchestration/governance-orchestrator-service'
+} from '@/lib/orchestration/governance-orchestrator-service-v2'
 import type { AutonomyMode, AutonomyPolicy, RiskTier } from '@/lib/orchestration/governance-orchestrator'
 
 export const maxDuration = 300
@@ -32,8 +31,7 @@ function policyFromBody(body: Record<string, unknown>): AutonomyPolicy {
   if (mode === 'OFF' && enabled) throw new Error('OFF mode cannot be enabled.')
   if (mode !== 'OFF' && !enabled) throw new Error('Non-OFF modes must be explicitly enabled.')
   return {
-    mode,
-    enabled,
+    mode, enabled,
     policyVersion: text(body.policyVersion ?? body.policy_version) || `policy-${Date.now()}`,
     maximumRiskTier: risk,
     allowedAgentKeys: arrayOfText(body.allowedAgentKeys ?? body.allowed_agent_keys),
@@ -57,14 +55,10 @@ function policyFromBody(body: Record<string, unknown>): AutonomyPolicy {
 export async function GET(request: Request) {
   try {
     const user = await requireApiUser()
-    const url = new URL(request.url)
-    const projectId = text(url.searchParams.get('projectId'))
+    const projectId = text(new URL(request.url).searchParams.get('projectId'))
     if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
     await authorizeProject(user.id, projectId, 'agent.view')
-    const [policy, latestCoverageRun] = await Promise.all([
-      getProjectAutonomyPolicy(projectId),
-      getLatestCoverageRun(projectId),
-    ])
+    const [policy, latestCoverageRun] = await Promise.all([getProjectAutonomyPolicy(projectId), getLatestCoverageRun(projectId)])
     return NextResponse.json({ policy, latestCoverageRun })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
@@ -87,8 +81,7 @@ export async function PUT(request: Request) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
     const message = error instanceof Error ? error.message : 'Unable to update autonomy policy.'
-    const status = message.startsWith('Invalid ') || message.includes('mode') ? 400 : 500
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: message }, { status: message.startsWith('Invalid ') || message.includes('mode') ? 400 : 500 })
   }
 }
 
@@ -102,7 +95,7 @@ export async function POST(request: Request) {
     if (goal.length > 2000) return NextResponse.json({ error: 'goal must be 2000 characters or fewer.' }, { status: 400 })
     await authorizeProject(user.id, projectId, 'agent.execute')
     const result = await runGovernanceOrchestrator({ projectId, actorUserId: user.id, goal })
-    const status = result.status === 'BLOCKED_POLICY' ? 409 : result.status === 'WAITING_APPROVAL' ? 202 : result.status === 'SUCCEEDED' ? 200 : 409
+    const status = result.status === 'WAITING_APPROVAL' ? 202 : result.status === 'SUCCEEDED' ? 200 : 409
     return NextResponse.json({ accepted: result.status === 'SUCCEEDED', ...result }, { status })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
@@ -110,5 +103,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Governance orchestrator execution failed.' }, { status: 500 })
   }
 }
-
-export { DEFAULT_AUTONOMY_POLICY }
