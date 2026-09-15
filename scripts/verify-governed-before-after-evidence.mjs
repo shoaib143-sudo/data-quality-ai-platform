@@ -26,6 +26,7 @@ for (const required of [
   "same_scalar_type_required: true",
   "source_qualified_record_ids: true",
   "return `${row.source}:${row.id}`",
+  "'synthetic_bootstrap'",
   'const comparableSourceRecordIds = new Set(sourceRecordIds)',
   '.filter((row) => comparableSourceRecordIds.has(qualifiedSourceRecordId(row)))',
 ]) {
@@ -61,6 +62,7 @@ for (const required of [
   ".lte('recorded_at', input.evidenceCutoffAt)",
   'persist?: boolean',
   ".from('analysis_evidence_envelopes')",
+  "'synthetic_bootstrap'",
   'explicitSyntheticOrTestFlag(context) || explicitSyntheticOrTestFlag(runtime)',
   "...(explicitlyExcluded ? { synthetic: true } : {})",
   'mergeMetadataPreservingExclusionFlags(row.evidence_context, row.runtime_evidence)',
