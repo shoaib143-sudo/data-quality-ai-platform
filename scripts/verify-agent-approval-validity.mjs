@@ -19,6 +19,7 @@ requireText(migration, "new.status = 'READY_TO_EXECUTE'", 'Expiry derivation mus
 requireText(migration, 'new.approved_at + make_interval(days => v_validity_days)', 'Expiry must be based on final approval time plus configured validity.')
 requireText(migration, 'set search_path = pg_catalog, governance', 'Approval expiry trigger function must pin its search_path.')
 requireText(migration, 'idx_agent_approval_requests_ready_expiry', 'Executable approval expiry must be indexed for operational inspection.')
+requireText(service, "request.status === 'READY_TO_EXECUTE' && requiresHumanApproval", 'Expiry invalidation must only mutate executable human-approved requests.')
 requireText(service, 'Approval validity evidence is missing for a human-approved execution request.', 'Human-approved requests without expiry evidence must fail closed.')
 requireText(service, 'The execution request was invalidated because its approval expired.', 'Expired approval must be rejected before execution.')
 requireText(service, "invalidation_reason: 'Approval validity expired before execution.'", 'Expiry invalidation must persist an explicit audit reason.')
