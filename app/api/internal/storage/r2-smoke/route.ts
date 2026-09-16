@@ -7,8 +7,12 @@ import type { StorageReference } from '@/lib/storage/contracts'
 export const dynamic = 'force-dynamic'
 
 function allowedPreview() {
+  const allowedRef = process.env.R2_SMOKE_ALLOWED_REF?.trim()
+  const currentRef = process.env.VERCEL_GIT_COMMIT_REF?.trim()
   return process.env.VERCEL_ENV === 'preview'
-    && process.env.VERCEL_GIT_COMMIT_REF === 'r2-prereq-hardening-20260916'
+    && Boolean(allowedRef)
+    && Boolean(currentRef)
+    && currentRef === allowedRef
 }
 
 function previewOrigin() {
@@ -23,7 +27,7 @@ function allowsOrigin(header: string | null, origin: string) {
 
 async function runSmokeProbe(request: Request) {
   if (!allowedPreview()) {
-    return NextResponse.json({ error: 'R2 smoke probe is available only on the designated preview branch.' }, { status: 404 })
+    return NextResponse.json({ error: 'R2 smoke probe is not enabled for this preview branch.' }, { status: 404 })
   }
   if (!requireInternalBearer(request)) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
