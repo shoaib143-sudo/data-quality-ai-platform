@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { inflateRawSync, inflateSync } from 'node:zlib'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseCsv } from '@/lib/profiling/csv-source'
+import { decodeTextBytes } from '@/lib/profiling/text-decoding'
 import { extractWithOcrSpace } from '@/lib/profiling/ocr-space'
 import { safeRemoteFileFetch } from '@/lib/profiling/safe-remote-file'
 
@@ -71,9 +72,10 @@ export async function loadFileSource(
   const contentHash=createHash('sha256').update(bytes).digest('hex')
   const fileName=sourceName(resolvedSourceUri)
   const extension=fileName.includes('.')?fileName.split('.').pop()!.toLowerCase():''
-  const decoded=new TextDecoder('utf-8',{fatal:false}).decode(bytes)
+  const decodedText=decodeTextBytes(bytes)
+  const decoded=decodedText.text
   const format=detectFormat(decoded,contentType,extension)
-  const metadata:Record<string,unknown>={file_name:fileName,extension:extension||null,content_type:contentType,byte_size:bytes.byteLength,sha256:contentHash,source_uri:resolvedSourceUri}
+  const metadata:Record<string,unknown>={file_name:fileName,extension:extension||null,content_type:contentType,byte_size:bytes.byteLength,sha256:contentHash,source_uri:resolvedSourceUri,text_encoding:decodedText.encoding,text_bom:decodedText.hadBom}
 
   if(format==='csv')return parsedResult(parseCsv(decoded,maxRows),contentHash,resolvedSourceUri,contentType,format,metadata)
   if(format==='json')return parsedResult(parseJson(decoded,maxRows),contentHash,resolvedSourceUri,contentType,format,metadata)
