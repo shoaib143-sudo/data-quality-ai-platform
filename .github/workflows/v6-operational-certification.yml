@@ -190,4 +190,5 @@ jobs:
           test -n "$DB_URL"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-synthetic-governance-suite.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-assignment.sql"
+          DB_URL="$DB_URL" bash "$ROOT/scripts/test-direct-approval-authority-concurrency.sh"
           pnpm dlx supabase@2.117.0 migration list --local
