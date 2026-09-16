@@ -15,14 +15,16 @@ const requiredFiles = [
   'scripts/recovery/create-portable-backup.mjs',
   'scripts/recovery/restore-portable-backup-local.mjs',
   'scripts/test-recovery-assurance.mjs',
+  'scripts/test-durable-worker-scheduler-authority.mjs',
   'scripts/verify-recovery-source-authority.mjs',
   'scripts/verify-portable-recovery.mjs',
   'scripts/verify-full-platform-recovery-scopes.mjs',
+  'lib/recovery/durable-worker-scheduler-authority.mjs',
   'supabase/config.toml',
   'supabase/functions/profiling-executor/index.ts',
   'supabase/functions/profiling-executor/deno.json',
-  'supabase/functions/connection-health-check/index.ts',
   'supabase/migrations/20260912000000_recovery_assurance_v2.sql',
+  'supabase/migrations/20260916103000_durable_worker_scheduler_authority.sql',
   '.github/workflows/recovery-assurance.yml',
 ]
 
@@ -110,6 +112,7 @@ if (manifest.secretPolicy?.storeSecretValuesInRepository !== false) {
 console.log('PASS recoverable production platform manifest')
 
 await import('./test-recovery-assurance.mjs')
+await import('./test-durable-worker-scheduler-authority.mjs')
 await import('./verify-recovery-source-authority.mjs')
 await import('./verify-portable-recovery.mjs')
 await import('./verify-full-platform-recovery-scopes.mjs')
