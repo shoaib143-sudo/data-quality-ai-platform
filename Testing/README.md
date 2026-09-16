@@ -482,3 +482,29 @@ Automation requirements:
 10. Production synthetic tests must be non-destructive, isolated, automatically cleaned up, and safe to repeat.
 
 Any scenario that requires manual intervention is a gap in the automation harness and cannot count toward automated certification coverage.
+
+
+## Extended certification specifications
+
+The following specifications close additional Data Governance, AI, agentic, operational, and certification-system risks:
+
+- [Fully Automated Certification Architecture](./AUTOMATION_ARCHITECTURE.md)
+- [AI Statistical Reliability and Non-Regression](./AI_STATISTICAL_RELIABILITY.md)
+- [Agent Trajectory and Long-Horizon Certification](./AGENT_TRAJECTORY_TEST_PLAN.md)
+- [Sequestered AI Evaluations](./SEQUESTERED_EVALS.md)
+- [Privacy Test Plan](./PRIVACY_TEST_PLAN.md)
+- [Governance Policy Correctness](./GOVERNANCE_POLICY_CORRECTNESS.md)
+- [Provenance and Explanation Fidelity](./PROVENANCE_EXPLAINABILITY.md)
+- [Migration and Backward Compatibility](./MIGRATION_COMPATIBILITY_PLAN.md)
+- [Backup, Restore, and Disaster Recovery](./BACKUP_RESTORE_DR_PLAN.md)
+- [Software Supply Chain and Build Provenance](./SUPPLY_CHAIN_PROVENANCE.md)
+- [Certification Harness Self-Testing](./CERTIFICATION_HARNESS_SELF_TEST.md)
+- [Observability and Alerting](./OBSERVABILITY_ALERTING_TEST_PLAN.md)
+- [Cost and Resource Guardrails](./COST_RESOURCE_GUARDRAILS.md)
+- [Accessibility and Browser Matrix](./ACCESSIBILITY_BROWSER_MATRIX.md)
+
+### Coverage preservation rule
+
+The documents in this directory are cumulative. New testing dimensions extend the certification model and must not silently replace or narrow previously defined coverage. The Feature Registry and Certification Matrix are the control points used to map every applicable requirement to executable automated evidence.
+
+When requirements conflict or become obsolete, changes must be explicit and reviewable rather than achieved by deleting coverage. Mandatory-suite count reductions, skipped suites, missing evidence, and unmapped critical features are certification failures unless an intentional scope change is recorded.
