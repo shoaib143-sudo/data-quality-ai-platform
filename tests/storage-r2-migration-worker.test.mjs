@@ -42,6 +42,14 @@ test('R2 migration worker verifies source and target bytes before READY', () => 
   assert.match(route, /SOURCE_HEAD_TARGET_HEAD_TARGET_SHA256/)
 })
 
+test('R2 migration worker revalidates source metadata and checksum fail closed', () => {
+  assert.match(route, /source content type can no longer be observed/)
+  assert.match(route, /source content type no longer matches its registry metadata/)
+  assert.match(route, /source bytes do not match verified registry checksum/)
+  assert.match(route, /SKIPPED_SOURCE_UNSUPPORTED_CHECKSUM/)
+  assert.match(route, /source\.checksum_algorithm !== 'sha256'/)
+})
+
 test('R2 migration worker is idempotent and never treats an unverified source as migratable', () => {
   assert.match(route, /SKIPPED_ALREADY_READY/)
   assert.match(route, /SKIPPED_SOURCE_NOT_INTEGRITY_READY/)

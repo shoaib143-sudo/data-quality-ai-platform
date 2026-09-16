@@ -132,6 +132,10 @@ export async function POST(request: Request) {
       results.push({ sourceStorageObjectId: source.id, action: 'SKIPPED_SOURCE_NOT_INTEGRITY_READY' })
       continue
     }
+    if (source.checksum && source.checksum_algorithm !== 'sha256') {
+      results.push({ sourceStorageObjectId: source.id, action: 'SKIPPED_SOURCE_UNSUPPORTED_CHECKSUM' })
+      continue
+    }
     if (Number(source.size_bytes) > objectLimit) {
       results.push({ sourceStorageObjectId: source.id, action: 'SKIPPED_OBJECT_TOO_LARGE', sizeBytes: Number(source.size_bytes), limitBytes: objectLimit })
       continue
@@ -201,7 +205,10 @@ export async function POST(request: Request) {
       }
       const sourceObservedType = normalizedContentType(sourceHead.contentType)
       const sourceExpectedType = normalizedContentType(source.content_type)
-      if (sourceExpectedType && sourceObservedType && sourceExpectedType !== sourceObservedType) {
+      if (sourceExpectedType && !sourceObservedType) {
+        throw new Error('Verified Supabase source content type can no longer be observed.')
+      }
+      if (sourceExpectedType && sourceExpectedType !== sourceObservedType) {
         throw new Error('Verified Supabase source content type no longer matches its registry metadata.')
       }
 
