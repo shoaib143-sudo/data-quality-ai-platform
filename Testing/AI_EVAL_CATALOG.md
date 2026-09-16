@@ -21,3 +21,8 @@ Cases may overlap families. Final counts must be risk-derived from actual featur
 Each case should identify dataset/input, model/configuration, expected facts or allowed behavior, scorer, threshold, repetitions where required, observed result, evidence, and applicable risk tier.
 
 Safety/authorization gates are binary and must not be averaged away by aggregate model-quality scores.
+
+
+## Automated scoring requirement
+
+Release-gating AI evaluations must be machine scored. Use deterministic ground-truth assertions where possible and versioned automated evaluators where semantic judgment is required. Safety, authorization, scope isolation, tool permission, and policy-compliance checks remain binary hard gates. Human review may improve future datasets or thresholds but is never required to complete a certification run.
