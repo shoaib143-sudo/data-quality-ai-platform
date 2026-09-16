@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { buildExecutiveSlides, renderGovernanceReportPdf, renderGovernanceReportPptx } from '../lib/orchestration/governance-report-export.ts'
+import { buildExecutiveNarrationScript } from '../lib/orchestration/governance-report-narration.ts'
 
 const report = {
   schemaVersion: '1.0',
@@ -60,4 +61,12 @@ test('pdf export emits a complete PDF document from the same canonical story', (
   assert.ok(pdf.includes(Buffer.from('/Type /Catalog')))
   assert.ok(pdf.includes(Buffer.from('%%EOF')))
   assert.ok(pdf.length > 1000)
+})
+
+test('narration script stays evidence-only when scores and business impact are not measured', () => {
+  const script = buildExecutiveNarrationScript(report)
+  assert.match(script, /No governed overall or dimension score is being narrated/)
+  assert.match(script, /Business impact is not claimed/)
+  assert.match(script, /1 issue remains unresolved/)
+  assert.doesNotMatch(script, /saved \$|revenue increased|risk reduced by/)
 })
