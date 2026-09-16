@@ -12,6 +12,8 @@ on:
       - 'scripts/verify-governance-runtime-wiring.mjs'
       - 'scripts/verify-certification-best-practice-hardening-v2.mjs'
       - 'scripts/test-certification-best-practice-hardening-v2.mjs'
+      - 'scripts/evaluate-post-implementation-certification.mjs'
+      - 'scripts/test-post-implementation-certification-decision.mjs'
       - 'scripts/test-governance-*.mjs'
       - 'scripts/test-governed-handoff.mjs'
       - 'scripts/audit-governance-orchestrator-final-assurance.mjs'
@@ -73,6 +75,8 @@ jobs:
         run: |
           node scripts/verify-certification-best-practice-hardening-v2.mjs
           node --test scripts/test-certification-best-practice-hardening-v2.mjs
+      - name: Exercise fail-closed certification decision engine
+        run: node --test scripts/test-post-implementation-certification-decision.mjs
       - name: Verify platform recovery assurance
         run: pnpm run verify:recovery-assurance
       - name: Verify governance orchestrator runtime wiring
