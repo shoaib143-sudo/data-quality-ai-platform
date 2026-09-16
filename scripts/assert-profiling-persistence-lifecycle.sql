@@ -93,9 +93,19 @@ begin
     select 1
     from profiling.profile_run_governance_insights
     where profile_run_id=v_run_id
+      and dataset_version_id=v_version_id
       and run_status='COMPLETED'
+      and row_count=2
+      and column_count=1
       and overall_score=1
+      and completeness_score=1
+      and uniqueness_score=1
+      and validity_score=1
       and total_findings=1
+      and high_findings=0
+      and medium_findings=0
+      and info_findings=0
+      and investigation_present=false
   ) then
     raise exception 'Governance insight projection missing or inconsistent';
   end if;
