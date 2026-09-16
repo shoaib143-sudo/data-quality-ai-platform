@@ -5,11 +5,15 @@ import test from 'node:test'
 const routePath = new URL('../app/api/agents/governance-orchestrator/approvals/route.ts', import.meta.url)
 const servicePath = new URL('../lib/orchestration/governance-orchestrator-approval-service.ts', import.meta.url)
 const uiPath = new URL('../app/agents/autonomous-governance/orchestrator-approval-inbox.tsx', import.meta.url)
+const executeRoutePath = new URL('../app/api/agent-approvals/[requestId]/execute/route.ts', import.meta.url)
+const orchestratorRoutePath = new URL('../app/api/agents/governance-orchestrator/route.ts', import.meta.url)
 
-const [route, service, ui] = await Promise.all([
+const [route, service, ui, executeRoute, orchestratorRoute] = await Promise.all([
   readFile(routePath, 'utf8'),
   readFile(servicePath, 'utf8'),
   readFile(uiPath, 'utf8'),
+  readFile(executeRoutePath, 'utf8'),
+  readFile(orchestratorRoutePath, 'utf8'),
 ])
 
 test('approval decision uses existing governed approval authority and audit RPC', () => {
@@ -51,4 +55,17 @@ test('approval UI exposes required decision evidence and authorized actions', ()
   assert.match(ui, />Reject</)
   assert.match(ui, /!approval\.canDecide/)
   assert.match(ui, /Runtime remains WAITING_APPROVAL/)
+})
+
+
+test('approval inbox execution resumes orchestrator through exact-run service', () => {
+  assert.match(executeRoute, /parameters\.orchestratorRunId/)
+  assert.match(executeRoute, /resumeGovernanceOrchestratorAfterApproval\(/)
+  assert.match(executeRoute, /reviewerUserId: user\.id/)
+  assert.match(executeRoute, /goal,/)
+  assert.match(executeRoute, /predates resumable execution payloads/)
+})
+
+test('new governed orchestrator approvals fingerprint the exact goal required for resume', () => {
+  assert.match(orchestratorRoute, /goalHash: createHash\('sha256'\)\.update\(goal\)\.digest\('hex'\),\s*goal,/)
 })
