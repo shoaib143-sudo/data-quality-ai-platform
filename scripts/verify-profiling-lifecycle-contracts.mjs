@@ -36,6 +36,7 @@ requireMatch(validatorMigration, /v_summary_overall\s+is\s+not\s+distinct\s+from
 
 requireMatch(databaseVerifier, /completedProfilePageSize\s*=\s*500/, 'Live database verification must page through the completed profiling estate.')
 requireMatch(databaseVerifier, /\.range\(from,\s*from\s*\+\s*completedProfilePageSize\s*-\s*1\)/, 'Live database verification must not silently truncate completed profiling runs.')
+requireMatch(databaseVerifier, /page\.length\s*<\s*completedProfilePageSize/, 'Live database pagination must terminate only after the final partial page.')
 requireMatch(databaseVerifier, /latestProfileByDatasetVersion/, 'Live database verification must inspect the latest completed profile for each dataset version.')
 requireMatch(databaseVerifier, /rpc\('validate_metric_execution_contract'/, 'Live database verification must execute the profiling contract validator.')
 requireMatch(databaseVerifier, /score_consistent/, 'Live database verification must gate score consistency.')
