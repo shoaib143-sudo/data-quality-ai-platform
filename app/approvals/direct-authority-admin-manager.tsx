@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type ApprovalAxis = 'BUSINESS' | 'GOVERNANCE'
@@ -20,6 +21,7 @@ function toIso(value: string) {
 }
 
 export function DirectAuthorityAdminManager() {
+  const router = useRouter()
   const [workspace, setWorkspace] = useState<Workspace>(emptyWorkspace)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -87,8 +89,9 @@ export function DirectAuthorityAdminManager() {
       setReason('')
       setActionKeys([])
       setEndsAt('')
-      setStatus(`${approvalAxis} approval authority assigned. Refresh coverage to verify the governed scope.`)
+      setStatus(`${approvalAxis} approval authority assigned. Coverage refreshed.`)
       await load()
+      router.refresh()
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Unable to assign direct approval authority.')
     } finally {
