@@ -10,6 +10,8 @@ declare
   v_metric jsonb;
   v_metrics jsonb := '[]'::jsonb;
   v_contract jsonb;
+  v_metric_count integer;
+  v_finding_count integer;
   v_definition record;
 begin
   select id into v_project_id from app.projects order by created_at asc limit 1;
@@ -86,7 +88,55 @@ begin
   if not exists(select 1 from profiling.profile_runs where id=v_run_id and status='COMPLETED' and completed_at is not null) then
     raise exception 'Final profiling run state missing';
   end if;
+
+  select count(*) into v_metric_count from profiling.profile_metrics where profile_run_id=v_run_id;
+  select count(*) into v_finding_count from profiling.profile_findings where profile_run_id=v_run_id;
+
+  begin
+    perform profiling.persist_profiling_results(
+      v_run_id,
+      gen_random_uuid(),
+      v_metrics,
+      '[]'::jsonb,
+      jsonb_build_object('completeness_score',1,'uniqueness_score',1,'validity_score',1,'accuracy_score',null,'overall_score',1),
+      jsonb_build_object('score',jsonb_build_object('completeness_score',1,'uniqueness_score',1,'validity_score',1,'accuracy_score',null,'overall_score',1)),
+      'COMPLETED'
+    );
+    raise exception 'Mismatched dataset version persistence unexpectedly succeeded';
+  exception
+    when others then
+      if sqlerrm = 'Mismatched dataset version persistence unexpectedly succeeded' then raise; end if;
+      if sqlerrm not like 'Profiling run % was not found for dataset version %' then
+        raise exception 'Unexpected mismatched-version failure: %',sqlerrm;
+      end if;
+  end;
+
+  if (select count(*) from profiling.profile_metrics where profile_run_id=v_run_id) <> v_metric_count
+     or (select count(*) from profiling.profile_findings where profile_run_id=v_run_id) <> v_finding_count then
+    raise exception 'Failed persistence attempt mutated completed artifacts';
+  end if;
+
+  update profiling.profile_runs set status='CANCELLED' where id=v_run_id;
+  begin
+    perform profiling.persist_profiling_results(
+      v_run_id,v_version_id,v_metrics,'[]'::jsonb,
+      jsonb_build_object('completeness_score',1,'uniqueness_score',1,'validity_score',1,'accuracy_score',null,'overall_score',1),
+      jsonb_build_object('score',jsonb_build_object('completeness_score',1,'uniqueness_score',1,'validity_score',1,'accuracy_score',null,'overall_score',1)),
+      'COMPLETED'
+    );
+    raise exception 'Cancelled run persistence unexpectedly succeeded';
+  exception
+    when others then
+      if sqlerrm = 'Cancelled run persistence unexpectedly succeeded' then raise; end if;
+      if sqlerrm not like 'Profiling run % has been cancelled' then
+        raise exception 'Unexpected cancelled-run failure: %',sqlerrm;
+      end if;
+  end;
+
+  if not exists(select 1 from profiling.profile_runs where id=v_run_id and status='CANCELLED') then
+    raise exception 'Cancelled run state was not preserved';
+  end if;
 end
-$$;
+$;
 
 rollback;
