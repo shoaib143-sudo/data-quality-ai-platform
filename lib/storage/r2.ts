@@ -130,7 +130,7 @@ function presign(
   const scope = `${date}/${REGION}/${SERVICE}/aws4_request`
   const url = objectUrl(bucket, key)
   const signedHeaders: Record<string, string> = { host: url.host }
-  if (method === 'PUT' && contentType) signedHeaders['content-type'] = contentType.trim().toLowerCase()
+  if (method === 'PUT' && contentType) signedHeaders['content-type'] = contentType.trim()
   const signedHeaderNames = Object.keys(signedHeaders).sort()
   const signedHeaderList = signedHeaderNames.join(';')
 
