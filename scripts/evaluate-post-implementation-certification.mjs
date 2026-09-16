@@ -10,6 +10,7 @@ const contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'))
 const manifest = JSON.parse(fs.readFileSync(evidencePath, 'utf8'))
 const fail = message => { throw new Error(message) }
 
+if (manifest.schemaVersion !== 1) fail('Certification evidence manifest schemaVersion must be 1.')
 const claimLevel = String(manifest.claimLevel || '')
 if (!['CERTIFIED', 'PRODUCTION_VERIFIED'].includes(claimLevel)) fail('Certification evidence claimLevel must be CERTIFIED or PRODUCTION_VERIFIED.')
 const sourceCommit = String(manifest.sourceCommit || '').toLowerCase()
@@ -22,7 +23,15 @@ const independentProducer = String(manifest.independentAssuranceProducer || '').
 if (!implementationProducer || !independentProducer) fail('Implementation and independent assurance producer identities are required.')
 if (implementationProducer === independentProducer) fail('Independent assurance producer must differ from the implementation producer.')
 
-const acceptance = new Map((manifest.acceptancePaths || []).map(item => [item?.path, item]))
+if (!Array.isArray(manifest.acceptancePaths)) fail('Certification acceptancePaths must be an array.')
+const acceptance = new Map()
+const knownAcceptancePaths = new Set(contract.requiredAcceptancePaths || [])
+for (const item of manifest.acceptancePaths) {
+  const pathName = String(item?.path || '')
+  if (!knownAcceptancePaths.has(pathName)) fail(`Unknown acceptance path ${pathName || '<missing>'}.`)
+  if (acceptance.has(pathName)) fail(`Duplicate acceptance path ${pathName} is ambiguous.`)
+  acceptance.set(pathName, item)
+}
 for (const requiredPath of contract.requiredAcceptancePaths || []) {
   const item = acceptance.get(requiredPath)
   if (!item) fail(`Missing required acceptance path ${requiredPath}.`)
@@ -32,13 +41,16 @@ for (const requiredPath of contract.requiredAcceptancePaths || []) {
 
 const now = Date.now()
 const allowedFutureSkewMs = 5 * 60 * 1000
-const records = Array.isArray(manifest.evidenceRecords) ? manifest.evidenceRecords : []
+if (!Array.isArray(manifest.evidenceRecords)) fail('Certification evidenceRecords must be an array.')
+const records = manifest.evidenceRecords
 const recordsByClass = new Map()
+const knownEvidenceClasses = new Set((contract.mandatoryEvidenceClasses || []).map(item => item.id))
 for (const record of records) {
-  if (!record || typeof record !== 'object') fail('Certification evidence record must be an object.')
+  if (!record || typeof record !== 'object' || Array.isArray(record)) fail('Certification evidence record must be an object.')
   for (const field of contract.requiredEvidenceRecordFields || []) {
     if (!(field in record)) fail(`Certification evidence record for ${record.evidenceClass || '<unknown>'} is missing ${field}.`)
   }
+  if (!knownEvidenceClasses.has(record.evidenceClass)) fail(`Unknown certification evidence class ${record.evidenceClass || '<missing>'}.`)
   if (!contract.resultStates.includes(record.result)) fail(`Evidence class ${record.evidenceClass} has invalid result ${record.result}.`)
   if (String(record.sourceCommit || '').toLowerCase() !== sourceCommit) fail(`Evidence class ${record.evidenceClass} is bound to a different source commit.`)
   if (typeof record.environment !== 'string' || !record.environment.trim()) fail(`Evidence class ${record.evidenceClass} requires environment.`)
@@ -61,11 +73,12 @@ const requiredClasses = (contract.mandatoryEvidenceClasses || []).filter(item =>
 for (const evidenceClass of requiredClasses) {
   const classRecords = recordsByClass.get(evidenceClass.id) || []
   if (classRecords.length === 0) fail(`Missing required evidence class ${evidenceClass.id}.`)
-  if (classRecords.some(record => ['FAIL', 'NOT_MEASURED', 'WAIVED'].includes(record.result))) {
+  if (classRecords.length !== 1) fail(`Required evidence class ${evidenceClass.id} must have exactly one authoritative record; found ${classRecords.length}.`)
+  const satisfying = classRecords[0]
+  if (['FAIL', 'NOT_MEASURED', 'WAIVED'].includes(satisfying.result)) {
     fail(`Required evidence class ${evidenceClass.id} contains a non-certifying result.`)
   }
-  const satisfying = classRecords.find(record => record.result === 'PASS' || record.result === 'NOT_APPLICABLE')
-  if (!satisfying) fail(`Required evidence class ${evidenceClass.id} has no satisfying result.`)
+  if (!['PASS', 'NOT_APPLICABLE'].includes(satisfying.result)) fail(`Required evidence class ${evidenceClass.id} has no satisfying result.`)
   if (satisfying.result === 'NOT_APPLICABLE' && (typeof satisfying.notApplicableJustification !== 'string' || satisfying.notApplicableJustification.trim().length < 20)) {
     fail(`NOT_APPLICABLE evidence class ${evidenceClass.id} requires a concrete justification.`)
   }
@@ -77,7 +90,15 @@ for (const evidenceClass of requiredClasses) {
 const requiredRevalidationKeys = Object.entries(contract.postImplementationRevalidation || {})
   .filter(([, required]) => required === true)
   .map(([key]) => key)
-const revalidation = new Map((manifest.revalidation || []).map(item => [item?.gate, item]))
+if (!Array.isArray(manifest.revalidation)) fail('Certification revalidation must be an array.')
+const knownRevalidationGates = new Set(requiredRevalidationKeys)
+const revalidation = new Map()
+for (const item of manifest.revalidation) {
+  const gate = String(item?.gate || '')
+  if (!knownRevalidationGates.has(gate)) fail(`Unknown post-implementation revalidation gate ${gate || '<missing>'}.`)
+  if (revalidation.has(gate)) fail(`Duplicate post-implementation revalidation gate ${gate} is ambiguous.`)
+  revalidation.set(gate, item)
+}
 for (const gate of requiredRevalidationKeys) {
   const item = revalidation.get(gate)
   if (!item) fail(`Missing post-implementation revalidation gate ${gate}.`)
