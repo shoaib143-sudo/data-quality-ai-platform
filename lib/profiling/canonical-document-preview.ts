@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import {
+  detectPromptInjectionEvidence,
   detectSensitiveTextEvidence,
   readableDocumentEvidence,
   summarizeDocumentEvidence,
@@ -26,6 +27,7 @@ export type CanonicalDocumentPreview = {
   samples: CanonicalPreviewSample[]
   readableText: string[]
   sensitiveEvidence: ReturnType<typeof detectSensitiveTextEvidence>
+  promptInjectionEvidence: ReturnType<typeof detectPromptInjectionEvidence>
   source?: 'PERSISTED_DOCUMENT_EVIDENCE' | 'GOVERNED_SOURCE_READER'
   extractionMethod?: string | null
   warnings?: string[]
@@ -67,6 +69,7 @@ export function canonicalizeDocumentPreview(
     samples,
     readableText: evidence.readable,
     sensitiveEvidence: detectSensitiveTextEvidence(evidence.readable),
+    promptInjectionEvidence: detectPromptInjectionEvidence(evidence.readable),
     source: 'PERSISTED_DOCUMENT_EVIDENCE',
   }
 }
@@ -103,6 +106,7 @@ export async function loadCanonicalDocumentPreviewFromSource(
     }],
     readableText: evidence.readable,
     sensitiveEvidence: detectSensitiveTextEvidence(evidence.readable),
+    promptInjectionEvidence: detectPromptInjectionEvidence(evidence.readable),
     source: 'GOVERNED_SOURCE_READER',
     extractionMethod: typeof loaded.metadata.text_extraction_method === 'string' ? loaded.metadata.text_extraction_method : null,
     warnings: loaded.warnings,
