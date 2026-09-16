@@ -21,7 +21,10 @@ export async function GET(request: Request) {
 
     if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
     if (!['pptx', 'pdf'].includes(format)) return NextResponse.json({ error: 'format must be pptx or pdf.' }, { status: 400 })
-    await authorizeProject(user.id, projectId, 'agent.view')
+
+    // Exporting creates a portable copy of governed evidence and therefore requires
+    // the dedicated report-export capability rather than ordinary read access.
+    await authorizeProject(user.id, projectId, 'report.export')
 
     const stored = await getLatestGovernanceOutcomeReport({ projectId, orchestratorRunId })
     if (!stored) return NextResponse.json({ error: 'No governed outcome report is available for export.' }, { status: 404 })
@@ -37,7 +40,9 @@ export async function GET(request: Request) {
       headers: {
         'Content-Type': mime,
         'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': String(bytes.byteLength),
         'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
         'X-DataNexus-Report-Hash': stored.reportHash,
       },
     })
