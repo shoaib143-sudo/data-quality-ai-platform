@@ -23,7 +23,24 @@ function isAuthPage(pathname: string) {
   return pathname === '/login' || pathname === '/signup'
 }
 
+function hasSupabaseAuthCookie(request: NextRequest) {
+  return request.cookies
+    .getAll()
+    .some(({ name }) => name.startsWith('sb-') && name.includes('-auth-token'))
+}
+
 export async function updateSession(request: NextRequest) {
+  const { pathname, search } = request.nextUrl
+  const protectedPath = isProtectedPath(pathname)
+  const authPage = isAuthPage(pathname)
+
+  // Anonymous public requests do not need a remote Supabase claims lookup.
+  // Protected routes still fail closed through getClaims(), and auth pages
+  // with a Supabase session cookie still verify claims before redirecting.
+  if (!protectedPath && (!authPage || !hasSupabaseAuthCookie(request))) {
+    return NextResponse.next({ request })
+  }
+
   let response = NextResponse.next({ request })
   const { url, publishableKey } = getSupabaseEnv()
 
@@ -43,9 +60,8 @@ export async function updateSession(request: NextRequest) {
 
   const { data, error } = await supabase.auth.getClaims()
   const authenticated = !error && Boolean(data?.claims?.sub)
-  const { pathname, search } = request.nextUrl
 
-  if (isProtectedPath(pathname) && !authenticated) {
+  if (protectedPath && !authenticated) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/login'
     redirectUrl.search = ''
@@ -53,7 +69,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  if (authenticated && isAuthPage(pathname)) {
+  if (authenticated && authPage) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/dashboard'
     redirectUrl.search = ''
