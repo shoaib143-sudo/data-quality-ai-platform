@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fast-path PR gate: keep security, migration, type, governance and build safety
+# while deferring expensive end-to-end certification to the exact merged main SHA.
+node scripts/verify-p0-p4-revalidation.mjs
+node scripts/audit-user-facing-admin-routes.mjs
+node scripts/verify-migration-version-uniqueness.mjs
+pnpm exec tsc --noEmit
+pnpm run verify:github-governance
+pnpm run verify:profiling-explorer
+pnpm run build
