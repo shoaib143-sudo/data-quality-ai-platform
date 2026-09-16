@@ -7,6 +7,11 @@ import {
   runGovernanceOrchestrator,
   upsertProjectAutonomyPolicy,
 } from '@/lib/orchestration/governance-orchestrator-service-v2'
+import {
+  getLatestGovernanceOutcomeReport,
+  normalizeReportingPreference,
+  persistRunReportingPreference,
+} from '@/lib/orchestration/governance-outcome-report-service'
 import type { AutonomyMode, AutonomyPolicy, RiskTier } from '@/lib/orchestration/governance-orchestrator'
 
 export const maxDuration = 300
@@ -58,8 +63,12 @@ export async function GET(request: Request) {
     const projectId = text(new URL(request.url).searchParams.get('projectId'))
     if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
     await authorizeProject(user.id, projectId, 'agent.view')
-    const [policy, latestCoverageRun] = await Promise.all([getProjectAutonomyPolicy(projectId), getLatestCoverageRun(projectId)])
-    return NextResponse.json({ policy, latestCoverageRun })
+    const [policy, latestCoverageRun, latestReport] = await Promise.all([
+      getProjectAutonomyPolicy(projectId),
+      getLatestCoverageRun(projectId),
+      getLatestGovernanceOutcomeReport({ projectId }),
+    ])
+    return NextResponse.json({ policy, latestCoverageRun, latestReport })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
@@ -94,9 +103,21 @@ export async function POST(request: Request) {
     if (!projectId || !goal) return NextResponse.json({ error: 'projectId and goal are required.' }, { status: 400 })
     if (goal.length > 2000) return NextResponse.json({ error: 'goal must be 2000 characters or fewer.' }, { status: 400 })
     await authorizeProject(user.id, projectId, 'agent.execute')
+
+    const reportingInput = body?.reporting && typeof body.reporting === 'object' && !Array.isArray(body.reporting)
+      ? body.reporting as Record<string, unknown>
+      : null
+    const reporting = normalizeReportingPreference(reportingInput ? {
+      enabled: reportingInput.enabled === true,
+      persona: text(reportingInput.persona) as never,
+      depth: text(reportingInput.depth) as never,
+    } : null)
+
     const result = await runGovernanceOrchestrator({ projectId, actorUserId: user.id, goal })
+    await persistRunReportingPreference({ projectId, orchestratorRunId: result.orchestratorRunId, preference: reporting })
+
     const status = result.status === 'WAITING_APPROVAL' ? 202 : result.status === 'SUCCEEDED' ? 200 : 409
-    return NextResponse.json({ accepted: result.status === 'SUCCEEDED', ...result }, { status })
+    return NextResponse.json({ accepted: result.status === 'SUCCEEDED', reporting, ...result }, { status })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
