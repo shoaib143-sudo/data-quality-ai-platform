@@ -2,11 +2,18 @@ import Link from 'next/link'
 import { Activity } from 'lucide-react'
 
 import ProfilingDashboard from '@/app/profiling/profiling-dashboard'
-import { canonicalizeDocumentPreview } from '@/lib/profiling/canonical-document-preview'
+import {
+  canonicalizeDocumentPreview,
+  loadCanonicalDocumentPreviewFromSource,
+} from '@/lib/profiling/canonical-document-preview'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
 type SearchParams = Promise<{ runId?: string }>
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
 
 export default async function ProfilingPage({ searchParams }: { searchParams: SearchParams }) {
   await requireUser()
@@ -40,7 +47,7 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
   const versionResult = await supabase
     .schema('catalog')
     .from('dataset_versions')
-    .select('dataset_id')
+    .select('dataset_id,source_uri')
     .eq('id', run.dataset_version_id)
     .maybeSingle()
   if (versionResult.error || !versionResult.data) throw new Error(`Unable to resolve profiling dataset version: ${versionResult.error?.message ?? 'dataset version not found'}`)
@@ -53,7 +60,7 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
     .maybeSingle()
   if (datasetResult.error || !datasetResult.data) throw new Error(`Unable to resolve profiling dataset: ${datasetResult.error?.message ?? 'dataset not found'}`)
 
-  const [columnsResult, metricsResult, distributionsResult, findingsResult, documentResult] = await Promise.all([
+  const [columnsResult, metricsResult, distributionsResult, findingsResult, documentResult, executionSourceResult] = await Promise.all([
     supabase.schema('profiling').from('profile_columns')
       .select('id,column_name,source_type,inferred_type,semantic_type,nullable,total_count,non_null_count,null_count,distinct_count,distinct_percentage')
       .eq('profile_run_id', run.id)
@@ -79,6 +86,13 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase.schema('profiling').from('dataset_execution_sources')
+      .select('source_type,source_uri,execution_config,active,updated_at')
+      .eq('dataset_version_id', run.dataset_version_id)
+      .eq('active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ])
 
   if (columnsResult.error) throw new Error(`Unable to load profiling columns: ${columnsResult.error.message}`)
@@ -86,6 +100,7 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
   if (distributionsResult.error) throw new Error(`Unable to load profiling distributions: ${distributionsResult.error.message}`)
   if (findingsResult.error) throw new Error(`Unable to load profiling findings: ${findingsResult.error.message}`)
   if (documentResult.error) throw new Error(`Unable to load governed sample document: ${documentResult.error.message}`)
+  if (executionSourceResult.error) throw new Error(`Unable to load governed preview execution source: ${executionSourceResult.error.message}`)
 
   const chunksResult = documentResult.data
     ? await supabase.schema('governance').from('document_chunks')
@@ -97,10 +112,30 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
 
   if (chunksResult.error) throw new Error(`Unable to load governed sample evidence: ${chunksResult.error.message}`)
 
-  const canonicalPreview = canonicalizeDocumentPreview(chunksResult.data ?? [], {
+  let canonicalPreview = canonicalizeDocumentPreview(chunksResult.data ?? [], {
     documentPresent: Boolean(documentResult.data),
     maxSamples: 50,
   })
+
+  const executionSource = executionSourceResult.data
+  const sourceType = String(executionSource?.source_type ?? '').toUpperCase()
+  if (canonicalPreview.evidenceState !== 'READABLE' && executionSource && ['FILE', 'CSV'].includes(sourceType)) {
+    const executionConfig = record(executionSource.execution_config)
+    const connectionMetadata = record(executionConfig.connection_metadata)
+    try {
+      const sourcePreview = await loadCanonicalDocumentPreviewFromSource(
+        supabase,
+        {
+          sourceUri: typeof executionSource.source_uri === 'string' ? executionSource.source_uri : versionResult.data.source_uri,
+          executionConfig: { ...connectionMetadata, ...executionConfig },
+        },
+        { maxSamples: 50 },
+      )
+      if (sourcePreview.evidenceState === 'READABLE') canonicalPreview = sourcePreview
+    } catch {
+      // Preview remains fail-closed to persisted canonical evidence. A presentation request must never bypass governed source access.
+    }
+  }
 
   const columns = (columnsResult.data ?? []) as any[]
   const metrics = [...((metricsResult.data ?? []) as any[])]
