@@ -77,13 +77,17 @@ export function buildBoundedDebuggerInput(input: DebuggerInput): DebuggerInput {
   }
 }
 
-function failureSignalFromCode(code: string | null | undefined): FailureSignal {
+export function failureSignalFromCode(code: string | null | undefined): FailureSignal {
   const normalized = String(code ?? '').toUpperCase()
-  if (normalized.includes('APPROVAL')) return { code: normalized, approvalRequired: true }
-  if (normalized.includes('POLICY') || normalized.includes('DENIED')) return { code: normalized, policyDenied: true }
-  if (normalized.includes('SECURITY') || normalized.includes('AUTHORIZATION') || normalized.includes('CROSS_PROJECT')) {
+
+  // Security-sensitive failures must be recognized before generic DENIED/POLICY
+  // matching. Otherwise codes such as AUTHORIZATION_DENIED or
+  // CROSS_PROJECT_DENIED could be downgraded to an ordinary policy block.
+  if (normalized.includes('SECURITY') || normalized.includes('AUTHORIZATION') || normalized.includes('CROSS_PROJECT') || normalized.includes('TENANT')) {
     return { code: normalized, securityRelevant: true }
   }
+  if (normalized.includes('APPROVAL')) return { code: normalized, approvalRequired: true }
+  if (normalized.includes('POLICY') || normalized.includes('DENIED')) return { code: normalized, policyDenied: true }
   if (['NATIVE_', 'SUPERVISOR_', 'LEASE_', 'EXECUTOR_', 'CONTRACT_', 'RUNTIME_'].some(prefix => normalized.includes(prefix))) {
     return { code: normalized, runtimeDefect: true }
   }

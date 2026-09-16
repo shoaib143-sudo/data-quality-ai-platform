@@ -58,6 +58,19 @@ export type DebuggerInput = {
   lastKnownGoodCheckpoint?: string | null
 }
 
+export function failureSignalFromCode(code: string | null | undefined): FailureSignal {
+  const normalized = String(code ?? '').toUpperCase()
+  if (normalized.includes('SECURITY') || normalized.includes('AUTHORIZATION') || normalized.includes('CROSS_PROJECT') || normalized.includes('TENANT')) {
+    return { code: normalized, securityRelevant: true }
+  }
+  if (normalized.includes('APPROVAL')) return { code: normalized, approvalRequired: true }
+  if (normalized.includes('POLICY') || normalized.includes('DENIED')) return { code: normalized, policyDenied: true }
+  if (['NATIVE_', 'SUPERVISOR_', 'LEASE_', 'EXECUTOR_', 'CONTRACT_', 'RUNTIME_'].some(prefix => normalized.includes(prefix))) {
+    return { code: normalized, runtimeDefect: true }
+  }
+  return { code: normalized, ambiguous: true }
+}
+
 export function classifyGovernanceFailure(signal: FailureSignal): FailureClassification {
   const attempt = Number.isInteger(signal.attempt) && (signal.attempt ?? 0) >= 0 ? Number(signal.attempt) : 0
   const maxAttempts = Number.isInteger(signal.maxAttempts) && (signal.maxAttempts ?? 0) >= 0 ? Number(signal.maxAttempts) : 0

@@ -1,12 +1,33 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { canMarkOriginalStepSucceeded, classifyGovernanceFailure, debuggerOutcomeRequiresOriginalStepRevalidation, validateDebuggerInput } from '../lib/orchestration/governance-recovery.ts'
+import { canMarkOriginalStepSucceeded, classifyGovernanceFailure, debuggerOutcomeRequiresOriginalStepRevalidation, failureSignalFromCode, validateDebuggerInput } from '../lib/orchestration/governance-recovery.ts'
 
 test('security incidents always escalate without retry', () => {
   const result = classifyGovernanceFailure({ securityRelevant: true, retryable: true, attempt: 0, maxAttempts: 3 })
   assert.equal(result.disposition, 'SECURITY_ESCALATION')
   assert.equal(result.retryAllowed, false)
+})
+
+test('security-sensitive failure codes cannot be downgraded by generic denied matching', () => {
+  for (const code of ['AUTHORIZATION_DENIED', 'CROSS_PROJECT_DENIED', 'TENANT_BOUNDARY_DENIED', 'SECURITY_POLICY_DENIED']) {
+    const signal = failureSignalFromCode(code)
+    assert.equal(signal.securityRelevant, true, code)
+    assert.equal(signal.policyDenied, undefined, code)
+    assert.equal(classifyGovernanceFailure(signal).disposition, 'SECURITY_ESCALATION', code)
+  }
+})
+
+test('ordinary policy denials remain policy blocked', () => {
+  const signal = failureSignalFromCode('POLICY_DENIED')
+  assert.equal(signal.policyDenied, true)
+  assert.equal(classifyGovernanceFailure(signal).disposition, 'BLOCKED_POLICY')
+})
+
+test('approval and runtime codes retain their governed routes', () => {
+  assert.equal(classifyGovernanceFailure(failureSignalFromCode('APPROVAL_REQUIRED')).disposition, 'REQUIRES_APPROVAL')
+  assert.equal(classifyGovernanceFailure(failureSignalFromCode('SUPERVISOR_LEASE_LOST')).disposition, 'DEBUGGER_REQUIRED')
+  assert.equal(classifyGovernanceFailure(failureSignalFromCode('UNKNOWN_FAILURE')).disposition, 'FAIL_CLOSED')
 })
 
 test('policy denial blocks before retry logic', () => {
