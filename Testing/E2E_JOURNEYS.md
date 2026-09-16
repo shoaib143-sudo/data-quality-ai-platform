@@ -18,3 +18,8 @@
 ## E2E rule
 
 Critical journeys use production-equivalent UI and real integration boundaries. Each journey records exact commit/deployment, actor/persona, inputs, run/request IDs, fingerprints, API result, authoritative DB/storage state, audit evidence, and final UI state.
+
+
+## Unattended execution requirement
+
+Every golden journey must execute end to end without human clicks. Automated browser identities perform UI interactions, approval personas are exercised by the harness, waits use deterministic state/event polling rather than operator observation, and all assertions are machine evaluated. Approval workflow tests use synthetic authorized personas and test-scoped authority; they do not bypass separation of duties.
