@@ -10,7 +10,7 @@ function allowedPreview() {
 }
 
 function previewOrigin() {
-  const host = process.env.VERCEL_URL?.trim()
+  const host = process.env.VERCEL_BRANCH_URL?.trim() || process.env.VERCEL_URL?.trim()
   return host ? `https://${host}` : undefined
 }
 
