@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireInternalBearer } from '@/lib/security/internal-bearer'
 
 export const dynamic = 'force-dynamic'
-
-function authorized(request: Request) {
-  const expected = process.env.CRON_SECRET?.trim()
-  if (!expected) return false
-  return (request.headers.get('authorization') ?? '') === `Bearer ${expected}`
-}
 
 type StorageRow = {
   id: string
@@ -31,7 +26,7 @@ type DatasetRow = {
 }
 
 export async function GET(request: Request) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+  if (!requireInternalBearer(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
 
   const admin = createAdminClient()
   const [storageResult, versionsResult, datasetsResult] = await Promise.all([
