@@ -56,6 +56,7 @@
     "verify:lineage-governance": "node scripts/verify-lineage-change-governance.mjs",
     "verify:lineage-explorer": "node scripts/verify-lineage-explorer.mjs",
     "verify:recovery-assurance": "node scripts/verify-recovery-assurance.mjs",
+    "verify:r2-prerequisites": "node scripts/verify-r2-prerequisites.mjs",
     "verify:database": "node scripts/verify-governance-database.mjs",
     "verify:production": "node scripts/verify-production.mjs",
     "benchmark:production": "node scripts/benchmark-production.mjs",
