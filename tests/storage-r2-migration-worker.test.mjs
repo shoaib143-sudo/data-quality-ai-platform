@@ -39,7 +39,16 @@ test('R2 migration worker verifies source and target bytes before READY', () => 
   assert.match(route, /SHA256_MISMATCH/)
   assert.match(route, /state: 'READY'/)
   assert.match(route, /verified_at: verifiedAt/)
-  assert.match(route, /SOURCE_HEAD_TARGET_HEAD_TARGET_SHA256/)
+  assert.match(route, /SOURCE_HEAD_SOURCE_SHA256_TARGET_HEAD_TARGET_SHA256/)
+})
+
+test('R2 migration worker persists verified source SHA-256 before target READY', () => {
+  assert.match(route, /persistVerifiedSourceChecksum/)
+  assert.match(route, /checksum_algorithm: 'sha256'/)
+  assert.match(route, /\.is\('checksum', null\)/)
+  assert.match(route, /Supabase source checksum changed concurrently during migration verification/)
+  assert.match(route, /await persistVerifiedSourceChecksum\(admin, source, checksum\)/)
+  assert.match(route, /sourceChecksumPersisted: true/)
 })
 
 test('R2 migration worker revalidates source metadata and checksum fail closed', () => {

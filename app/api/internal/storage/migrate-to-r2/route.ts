@@ -77,6 +77,52 @@ async function targetChecksum(storage: ReturnType<typeof createObjectStorage>, r
   return { checksum: sha256(bytes), sizeBytes: bytes.byteLength }
 }
 
+async function persistVerifiedSourceChecksum(
+  admin: ReturnType<typeof createAdminClient>,
+  source: SourceRow,
+  checksum: string,
+) {
+  if (source.checksum_algorithm === 'sha256' && source.checksum === checksum) return
+  if (source.checksum && source.checksum !== checksum) {
+    throw new Error('Supabase source checksum changed before migration persistence.')
+  }
+  if (source.checksum_algorithm && source.checksum_algorithm !== 'sha256') {
+    throw new Error('Supabase source uses an unsupported checksum algorithm.')
+  }
+
+  const now = new Date().toISOString()
+  const { data: updated, error: updateError } = await admin
+    .schema('catalog')
+    .from('storage_objects')
+    .update({ checksum_algorithm: 'sha256', checksum, updated_at: now })
+    .eq('id', source.id)
+    .eq('provider', 'supabase')
+    .eq('state', 'READY')
+    .is('checksum', null)
+    .select('checksum, checksum_algorithm')
+    .maybeSingle()
+  if (updateError) throw new Error(`Unable to persist verified source checksum: ${updateError.message}`)
+  if (updated) {
+    source.checksum = updated.checksum
+    source.checksum_algorithm = updated.checksum_algorithm
+    return
+  }
+
+  const { data: current, error: currentError } = await admin
+    .schema('catalog')
+    .from('storage_objects')
+    .select('state, checksum, checksum_algorithm')
+    .eq('id', source.id)
+    .eq('provider', 'supabase')
+    .maybeSingle()
+  if (currentError || !current) throw new Error(`Unable to confirm persisted source checksum: ${currentError?.message ?? 'missing source'}`)
+  if (current.state !== 'READY' || current.checksum_algorithm !== 'sha256' || current.checksum !== checksum) {
+    throw new Error('Supabase source checksum changed concurrently during migration verification.')
+  }
+  source.checksum = current.checksum
+  source.checksum_algorithm = current.checksum_algorithm
+}
+
 export async function POST(request: Request) {
   if (!requireInternalBearer(request)) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
@@ -221,6 +267,7 @@ export async function POST(request: Request) {
       if (source.checksum_algorithm === 'sha256' && source.checksum && source.checksum !== checksum) {
         throw new Error('Supabase source bytes do not match verified registry checksum.')
       }
+      await persistVerifiedSourceChecksum(admin, source, checksum)
 
       const { error: copyingError } = await admin
         .schema('catalog')
@@ -281,7 +328,7 @@ export async function POST(request: Request) {
           updated_at: verifiedAt,
           metadata: {
             ...(target.metadata ?? {}),
-            migration_verification: 'SOURCE_HEAD_TARGET_HEAD_TARGET_SHA256',
+            migration_verification: 'SOURCE_HEAD_SOURCE_SHA256_TARGET_HEAD_TARGET_SHA256',
             source_storage_object_id: source.id,
             copied_at: verifiedAt,
           },
@@ -296,6 +343,7 @@ export async function POST(request: Request) {
         action: 'COPIED_AND_VERIFIED',
         sizeBytes: bytes.byteLength,
         checksumAlgorithm: 'sha256',
+        sourceChecksumPersisted: true,
       })
     } catch (migrationError) {
       const failedAt = new Date().toISOString()
