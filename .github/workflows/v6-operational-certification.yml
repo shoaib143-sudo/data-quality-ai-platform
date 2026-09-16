@@ -189,4 +189,5 @@ jobs:
           DB_URL="$(pnpm dlx supabase@2.117.0 status -o env | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
           test -n "$DB_URL"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-synthetic-governance-suite.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-assignment.sql"
           pnpm dlx supabase@2.117.0 migration list --local
