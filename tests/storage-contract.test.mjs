@@ -7,6 +7,8 @@ const r2 = fs.readFileSync(new URL('../lib/storage/r2.ts', import.meta.url), 'ut
 const supabase = fs.readFileSync(new URL('../lib/storage/supabase.ts', import.meta.url), 'utf8')
 const factory = fs.readFileSync(new URL('../lib/storage/factory.ts', import.meta.url), 'utf8')
 const uploadRoute = fs.readFileSync(new URL('../app/api/datasets/source/upload-file/route.ts', import.meta.url), 'utf8')
+const completionRoute = fs.readFileSync(new URL('../app/api/datasets/source/upload-file/complete/route.ts', import.meta.url), 'utf8')
+const migration = fs.readFileSync(new URL('../supabase/migrations/20260916153000_provider_neutral_storage_registry.sql', import.meta.url), 'utf8')
 
 test('storage contract exposes required provider-neutral operations', () => {
   for (const operation of ['putObject', 'getObject', 'headObject', 'deleteObject', 'exists', 'createUploadAuthorization', 'createDownloadAuthorization']) {
@@ -74,4 +76,38 @@ test('upload endpoint rejects empty, oversized, and unsupported files', () => {
 
 test('R2 upload response tells clients which signed headers must be sent', () => {
   assert.match(uploadRoute, /uploadHeaders: authorization\.requiredHeaders/)
+})
+
+test('upload authorization creates a durable provider-neutral registry record first', () => {
+  assert.match(uploadRoute, /schema\('catalog'\)/)
+  assert.match(uploadRoute, /from\('storage_objects'\)/)
+  assert.match(uploadRoute, /state: 'PENDING'/)
+  assert.match(uploadRoute, /state: 'UPLOADING'/)
+  assert.match(uploadRoute, /storageObjectId/)
+})
+
+test('storage registry is application-owned, RLS protected, and linked to dataset versions', () => {
+  assert.match(migration, /create table if not exists catalog\.storage_objects/)
+  assert.match(migration, /alter table catalog\.storage_objects enable row level security/)
+  assert.match(migration, /app_private\.is_project_member/)
+  assert.match(migration, /app_private\.is_project_admin/)
+  assert.match(migration, /dataset_versions[\s\S]*storage_object_id/)
+  assert.doesNotMatch(migration, /alter table storage\.(objects|buckets)/)
+})
+
+test('completion lifecycle verifies object existence, size and content type before READY', () => {
+  assert.match(completionRoute, /headObject/)
+  assert.match(completionRoute, /state: 'VERIFYING'/)
+  assert.match(completionRoute, /SIZE_MISMATCH/)
+  assert.match(completionRoute, /CONTENT_TYPE_MISMATCH/)
+  assert.match(completionRoute, /state: 'QUARANTINED'/)
+  assert.match(completionRoute, /state: 'READY'/)
+  assert.match(completionRoute, /verified_at/)
+})
+
+test('completion endpoint is idempotent for already READY objects and fails closed for deleted or quarantined objects', () => {
+  assert.match(completionRoute, /row\.state === 'READY'/)
+  assert.match(completionRoute, /idempotent: true/)
+  assert.match(completionRoute, /row\.state === 'DELETED'/)
+  assert.match(completionRoute, /row\.state === 'QUARANTINED'/)
 })
