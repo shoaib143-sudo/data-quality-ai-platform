@@ -24,20 +24,20 @@ export type ProfilingGovernanceInsight = {
   investigationPresent: boolean
 }
 
-function optionalNumber(value: unknown) {
+export function optionalNumber(value: unknown) {
   if (value == null) return null
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) throw new Error('Canonical profiling governance insight contains an invalid numeric value')
   return parsed
 }
 
-function requiredCount(value: unknown) {
+export function requiredCount(value: unknown) {
   const parsed = Number(value)
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error('Canonical profiling governance insight contains an invalid count')
   return parsed
 }
 
-function parseRow(row: Record<string, unknown>): ProfilingGovernanceInsight {
+export function parseProfilingGovernanceInsightRow(row: Record<string, unknown>): ProfilingGovernanceInsight {
   if (typeof row.profile_run_id !== 'string' || typeof row.dataset_version_id !== 'string' || typeof row.dataset_id !== 'string' || typeof row.project_id !== 'string') {
     throw new Error('Canonical profiling governance insight identity is invalid')
   }
@@ -82,5 +82,5 @@ export async function listProfilingGovernanceInsights(projectId: string, limit =
     .order('started_at', { ascending: false })
     .limit(limit)
   if (error) throw new Error(`Unable to load profiling governance insights: ${error.message}`)
-  return (data ?? []).map((row) => parseRow(row as Record<string, unknown>))
+  return (data ?? []).map((row) => parseProfilingGovernanceInsightRow(row as Record<string, unknown>))
 }
