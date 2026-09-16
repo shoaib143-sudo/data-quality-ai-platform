@@ -10,6 +10,7 @@ on:
       - 'lib/governance/agent-approval-service.ts'
       - 'scripts/verify-delegation-admin-policy.mjs'
       - 'scripts/assert-direct-approval-authority-assignment.sql'
+      - 'scripts/test-direct-approval-authority-concurrency.sh'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
       - '.github/workflows/v6-operational-certification.yml'
@@ -23,6 +24,7 @@ on:
       - 'lib/governance/agent-approval-service.ts'
       - 'scripts/verify-delegation-admin-policy.mjs'
       - 'scripts/assert-direct-approval-authority-assignment.sql'
+      - 'scripts/test-direct-approval-authority-concurrency.sh'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
       - '.github/workflows/v6-operational-certification.yml'
@@ -89,3 +91,4 @@ jobs:
           DB_URL="$(pnpm dlx supabase@2.117.0 status -o env | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
           test -n "$DB_URL"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-assignment.sql"
+          DB_URL="$DB_URL" bash "$ROOT/scripts/test-direct-approval-authority-concurrency.sh"
