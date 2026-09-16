@@ -26,6 +26,7 @@ on:
       - 'docs/recovery-portable-backup-and-local-restore.md'
       - 'docs/recovery-full-platform-scopes.md'
       - '.github/workflows/recovery-assurance.yml'
+      - '.github/workflows/repository-governance.yml'
       - 'infra/**'
       - 'vercel.json'
   workflow_dispatch:
@@ -56,6 +57,16 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify repository governance after consolidation
+        run: |
+          node scripts/verify-github-governance.mjs
+          node scripts/verify-fast-path-ci.mjs
+          node scripts/verify-workflow-action-pinning.mjs
+          node scripts/verify-workflow-security-posture.mjs
+      - name: Verify post-implementation certification contract
+        run: |
+          node scripts/verify-post-implementation-certification-contract.mjs
+          node --test scripts/test-post-implementation-certification-contract.mjs
       - name: Verify platform recovery assurance
         run: pnpm run verify:recovery-assurance
       - name: Verify governance orchestrator runtime wiring
