@@ -93,6 +93,16 @@ function quantiles(value: unknown) {
   })
 }
 
+function preferredColumnId(columns: ExplorerColumn[], requested: string | null | undefined) {
+  if (requested && columns.some((column) => column.id === requested)) return requested
+  const preferredNames = ['text', 'content', 'value']
+  for (const name of preferredNames) {
+    const match = columns.find((column) => column.column_name.toLowerCase() === name)
+    if (match) return match.id
+  }
+  return columns[0]?.id ?? 'ALL'
+}
+
 export default function ProfilingExplorer({
   findings,
   columns,
@@ -108,7 +118,7 @@ export default function ProfilingExplorer({
   initialColumnId?: string | null
   initialFindingId?: string | null
 }) {
-  const validInitialColumn = initialColumnId && columns.some((column) => column.id === initialColumnId) ? initialColumnId : 'ALL'
+  const validInitialColumn = preferredColumnId(columns, initialColumnId)
   const validInitialFinding = initialFindingId && findings.some((finding) => finding.id === initialFindingId) ? initialFindingId : null
   const [query, setQuery] = useState('')
   const [severity, setSeverity] = useState('ALL')
@@ -175,12 +185,20 @@ export default function ProfilingExplorer({
     { label: 'Type confidence', value: percent(number(selectedColumn.confidence)) },
   ] : []
 
+  const hasEvidence = columns.length > 0 || metrics.length > 0 || distributions.length > 0
+
   return (
-    <section className="rounded-xl border p-6">
+    <section className="rounded-xl border bg-background p-6 shadow-sm">
       <div>
         <h2 className="font-semibold">Interactive Findings & Column Metrics Drill-down</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Filter persisted findings and inspect exact metric evidence, column statistics, histograms and quantiles from the selected profiling run.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Inspect persisted profiling evidence even when the run produced no findings. A useful evidence column is selected automatically.</p>
       </div>
+
+      {!findings.length && hasEvidence ? (
+        <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          No deterministic findings were generated for this run. Persisted column statistics and metrics are still available below.
+        </div>
+      ) : null}
 
       {focusedFindingId ? (
         <div className="mt-4 flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
@@ -190,11 +208,11 @@ export default function ProfilingExplorer({
       ) : null}
 
       <div className="mt-5 grid gap-3 md:grid-cols-4">
-        <input value={query} onChange={(event) => { clearSemanticFocus(); setQuery(event.target.value) }} placeholder="Search findings" className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Search findings" />
-        <select value={severity} onChange={(event) => { clearSemanticFocus(); setSeverity(event.target.value) }} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Filter by severity">
+        <input value={query} onChange={(event) => { clearSemanticFocus(); setQuery(event.target.value) }} placeholder="Search findings" className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Search findings" disabled={!findings.length} />
+        <select value={severity} onChange={(event) => { clearSemanticFocus(); setSeverity(event.target.value) }} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Filter by severity" disabled={!findings.length}>
           <option value="ALL">All severities</option>{severities.map((value) => <option key={value} value={value}>{label(value)}</option>)}
         </select>
-        <select value={findingType} onChange={(event) => { clearSemanticFocus(); setFindingType(event.target.value) }} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Filter by finding type">
+        <select value={findingType} onChange={(event) => { clearSemanticFocus(); setFindingType(event.target.value) }} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Filter by finding type" disabled={!findings.length}>
           <option value="ALL">All finding types</option>{findingTypes.map((value) => <option key={value} value={value}>{label(value)}</option>)}
         </select>
         <select value={columnId} onChange={(event) => { clearSemanticFocus(); setColumnId(event.target.value) }} className="rounded-md border bg-background px-3 py-2 text-sm" aria-label="Drill down to column">
@@ -212,7 +230,7 @@ export default function ProfilingExplorer({
                 <div className="mt-1 text-xs text-muted-foreground">{label(finding.finding_type)} · confidence {percent(finding.confidence)}</div>
                 <p className="mt-2 text-muted-foreground">{finding.description}</p>
               </article>
-            )) : <p className="text-sm text-muted-foreground">No findings match the active filters.</p>}
+            )) : <p className="text-sm text-muted-foreground">{findings.length ? 'No findings match the active filters.' : 'No deterministic findings were persisted for this run.'}</p>}
           </div>
         </div>
 
@@ -230,10 +248,10 @@ export default function ProfilingExplorer({
                     <span>{label(metric.metric_key)}</span>
                     <span className="max-w-[55%] break-all text-right font-medium">{metric.numeric_value !== null ? String(metric.numeric_value) : metric.text_value !== null ? metric.text_value : metric.boolean_value !== null ? String(metric.boolean_value) : metric.json_value !== null ? JSON.stringify(metric.json_value) : 'N/A'}</span>
                   </div>
-                )) : <p className="text-sm text-muted-foreground">No persisted metrics are available for this column.</p>}
+                )) : <p className="text-sm text-muted-foreground">No persisted metrics are available for this column. Core statistics above are still persisted profiling evidence.</p>}
               </div>
             </>
-          ) : <p className="mt-2 text-sm text-muted-foreground">Select a column to inspect its persisted metric evidence and distributions.</p>}
+          ) : <p className="mt-2 text-sm text-muted-foreground">{columns.length ? 'Select a column to inspect its persisted metric evidence and distributions.' : 'No persisted column evidence is available for this run.'}</p>}
         </div>
       </div>
 
