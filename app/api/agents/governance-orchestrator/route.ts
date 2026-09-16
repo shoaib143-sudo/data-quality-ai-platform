@@ -1,6 +1,9 @@
+import { createHash } from 'node:crypto'
+
 import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { createAgentApprovalRequest } from '@/lib/governance/agent-approval-service'
 import {
   getLatestCoverageRun,
   getProjectAutonomyPolicy,
@@ -94,9 +97,34 @@ export async function POST(request: Request) {
     if (!projectId || !goal) return NextResponse.json({ error: 'projectId and goal are required.' }, { status: 400 })
     if (goal.length > 2000) return NextResponse.json({ error: 'goal must be 2000 characters or fewer.' }, { status: 400 })
     await authorizeProject(user.id, projectId, 'agent.execute')
+
     const result = await runGovernanceOrchestrator({ projectId, actorUserId: user.id, goal })
+    let approvalRequestId: string | null = null
+    let approvalStatus: string | null = null
+
+    if (result.status === 'WAITING_APPROVAL') {
+      const { approval } = await createAgentApprovalRequest({
+        requestedBy: user.id,
+        actionKey: 'RUN_SUPERVISOR',
+        projectId,
+        parameters: {
+          orchestratorRunId: result.orchestratorRunId,
+          policyVersion: result.policy.policyVersion,
+          autonomyMode: result.policy.mode,
+          goalHash: createHash('sha256').update(goal).digest('hex'),
+        },
+      })
+      approvalRequestId = String(approval.id)
+      approvalStatus = String(approval.status)
+    }
+
     const status = result.status === 'WAITING_APPROVAL' ? 202 : result.status === 'SUCCEEDED' ? 200 : 409
-    return NextResponse.json({ accepted: result.status === 'SUCCEEDED', ...result }, { status })
+    return NextResponse.json({
+      accepted: result.status === 'SUCCEEDED',
+      approvalRequestId,
+      approvalStatus,
+      ...result,
+    }, { status })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
