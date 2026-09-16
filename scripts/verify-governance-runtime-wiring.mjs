@@ -3,7 +3,9 @@ import fs from 'node:fs'
 const route = fs.readFileSync('app/api/agents/governance-orchestrator/route.ts', 'utf8')
 const reporting = fs.readFileSync('lib/orchestration/governance-outcome-report-service.ts', 'utf8')
 const recovery = fs.readFileSync('lib/orchestration/governance-recovery-service.ts', 'utf8')
+const service = fs.readFileSync('lib/orchestration/governance-orchestrator-service-v2.ts', 'utf8')
 const migration = fs.readFileSync('supabase/migrations/20260916110000_governance_runtime_debugger_evidence.sql', 'utf8')
+const policyNamespaceMigration = fs.readFileSync('supabase/migrations/20260916112000_orchestrator_autonomy_policy_namespace.sql', 'utf8')
 
 function requireText(source, token, label) {
   if (!source.includes(token)) throw new Error(`Missing ${label}: ${token}`)
@@ -34,8 +36,16 @@ requireText(recovery, 'originalStepReexecuted: false', 'original step not fabric
 requireText(recovery, 'originalExitGatePassed: false', 'original exit gate not fabricated as passed')
 requireText(recovery, 'Do not mutate runtime, policy, source data, schemas, credentials, or governance truth.', 'debugger mutation prohibition')
 
+requireText(service, "const ORCHESTRATOR_POLICY_TABLE = 'orchestrator_autonomy_policies'", 'dedicated orchestrator policy authority')
+requireText(service, 'from(ORCHESTRATOR_POLICY_TABLE)', 'orchestrator policy reads and writes')
+rejectText(service, ".from('autonomy_policies')", 'legacy action-level autonomy table binding')
+requireText(policyNamespaceMigration, 'CREATE TABLE IF NOT EXISTS governance.orchestrator_autonomy_policies', 'dedicated orchestrator policy table')
+requireText(policyNamespaceMigration, 'project_id uuid PRIMARY KEY', 'one orchestrator policy per project')
+requireText(policyNamespaceMigration, 'REVOKE ALL ON TABLE governance.orchestrator_autonomy_policies FROM public, anon, authenticated', 'browser DML denial')
+requireText(policyNamespaceMigration, 'Distinct from governance.autonomy_policies', 'legacy policy authority separation')
+
 requireText(migration, 'ADD COLUMN IF NOT EXISTS debugger_run_id', 'debugger evidence binding')
 requireText(migration, 'REFERENCES agent.agent_runs(id)', 'debugger run foreign key')
 requireText(migration, 'This evidence does not prove the failed business step succeeded.', 'debugger evidence truth boundary')
 
-console.log('Governance runtime recovery and persisted-evidence reporting wiring verified.')
+console.log('Governance runtime recovery, policy namespace, and persisted-evidence reporting wiring verified.')

@@ -12,6 +12,7 @@ import {
 
 const SPECIALIST_KEYS = ['steward_agent','governance_analyst_agent','architect_agent','investigator_agent','executive_agent','support_agent'] as const
 const REQUIRED_AUTONOMOUS_AGENTS = ['governance_orchestrator_agent', ...SPECIALIST_KEYS] as const
+const ORCHESTRATOR_POLICY_TABLE = 'orchestrator_autonomy_policies'
 
 export const DEFAULT_AUTONOMY_POLICY: AutonomyPolicy = {
   mode: 'OFF', enabled: false, policyVersion: 'default-off-v1', maximumRiskTier: 'NONE',
@@ -41,14 +42,14 @@ function asPolicy(row: Record<string, unknown> | null): AutonomyPolicy {
 
 export async function getProjectAutonomyPolicy(projectId: string): Promise<AutonomyPolicy> {
   const admin = createAdminClient()
-  const { data, error } = await admin.schema('governance').from('autonomy_policies').select('*').eq('project_id', projectId).maybeSingle()
+  const { data, error } = await admin.schema('governance').from(ORCHESTRATOR_POLICY_TABLE).select('*').eq('project_id', projectId).maybeSingle()
   if (error) throw new Error(`Unable to load autonomy policy: ${error.message}`)
   return asPolicy(data as Record<string, unknown> | null)
 }
 
 export async function upsertProjectAutonomyPolicy(projectId: string, actorUserId: string, policy: AutonomyPolicy) {
   const admin = createAdminClient()
-  const { error } = await admin.schema('governance').from('autonomy_policies').upsert({
+  const { error } = await admin.schema('governance').from(ORCHESTRATOR_POLICY_TABLE).upsert({
     project_id: projectId, mode: policy.mode, enabled: policy.enabled, policy_version: policy.policyVersion,
     maximum_risk_tier: policy.maximumRiskTier, allowed_agent_keys: policy.allowedAgentKeys, allowed_tool_keys: policy.allowedToolKeys,
     allowed_model_classes: policy.allowedModelClasses, allowed_mutation_classes: policy.allowedMutationClasses,
