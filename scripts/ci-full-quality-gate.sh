@@ -4,6 +4,7 @@ set -euo pipefail
 node scripts/verify-p0-p4-revalidation.mjs
 node scripts/verify-post-implementation-certification-contract.mjs
 node --test scripts/test-post-implementation-certification-contract.mjs
+node --experimental-strip-types --test scripts/test-certification-independence.mjs
 pnpm exec tsc --noEmit
 pnpm run verify:data-plane-config
 pnpm run verify:data-plane-operations
