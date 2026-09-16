@@ -15,7 +15,7 @@ function generate(tempDir) {
   const output = path.join(tempDir, 'inventory.json')
   const result = spawnSync(process.execPath, [generator, output], {
     cwd: root,
-    env: { ...process.env, DATANEXUS_SOURCE_COMMIT: sourceCommit },
+    env: { ...process.env, GITHUB_SHA: sourceCommit, DATANEXUS_SOURCE_COMMIT: sourceCommit },
     encoding: 'utf8',
     maxBuffer: 20 * 1024 * 1024,
   })
@@ -26,7 +26,7 @@ function generate(tempDir) {
 function verify(file, commit = sourceCommit) {
   return spawnSync(process.execPath, [verifier, file], {
     cwd: root,
-    env: { ...process.env, DATANEXUS_SOURCE_COMMIT: commit },
+    env: { ...process.env, GITHUB_SHA: commit, DATANEXUS_SOURCE_COMMIT: commit },
     encoding: 'utf8',
   })
 }
