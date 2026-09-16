@@ -3,6 +3,7 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { currentExecutionFingerprint, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
+import { resumeGovernanceOrchestratorAfterApproval } from '@/lib/orchestration/governance-orchestrator-approval-service'
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -46,6 +47,21 @@ export async function POST(request: Request, context: { params: Promise<{ reques
         ...parameters,
         approvalRequestId: approval.id,
       }
+    } else if (approval.action_key === 'RUN_SUPERVISOR' && typeof parameters.orchestratorRunId === 'string') {
+      const goal = typeof parameters.goal === 'string' ? parameters.goal.trim() : ''
+      if (!goal) {
+        return NextResponse.json({
+          error: 'This governed orchestrator request predates resumable execution payloads. Submit a new governed run so the exact goal can be bound to the approval request.',
+        }, { status: 409 })
+      }
+      const result = await resumeGovernanceOrchestratorAfterApproval({
+        projectId: String(approval.project_id),
+        orchestratorRunId: parameters.orchestratorRunId,
+        approvalRequestId: String(approval.id),
+        reviewerUserId: user.id,
+        goal,
+      })
+      return NextResponse.json(result, { status: result.status === 'SUCCEEDED' ? 200 : result.status === 'WAITING_APPROVAL' ? 202 : 409 })
     } else if (approval.action_key === 'RUN_SUPERVISOR') {
       pathname = '/api/agents/supervisor/run'
       body = {
