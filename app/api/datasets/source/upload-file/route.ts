@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createObjectStorage, defaultStorageProvider } from '@/lib/storage/factory'
 
 const SUPABASE_DATASET_BUCKET = 'dataset-files'
@@ -61,6 +62,7 @@ function datasetBucket(provider: 'supabase' | 'r2') {
 }
 
 export async function POST(request: Request) {
+  let storageObjectId: string | undefined
   try {
     const user = await requireUser()
     const body = await request.json()
@@ -91,28 +93,76 @@ export async function POST(request: Request) {
     const storage = createObjectStorage(provider)
     const bucket = datasetBucket(provider)
     const objectKey = `projects/${projectId}/uploads/${Date.now()}-${crypto.randomUUID()}-${fileName}`
-    const authorization = await storage.createUploadAuthorization({
-      bucket,
-      key: objectKey,
-      contentType,
-      expiresInSeconds: SIGNED_URL_TTL_SECONDS,
-    })
+    const persistedKey = provider === 'r2' && r2Prefix() ? `${r2Prefix()}/${objectKey}` : objectKey
+    const admin = createAdminClient()
+    const { data: storageObject, error: registryError } = await admin
+      .schema('catalog')
+      .from('storage_objects')
+      .insert({
+        project_id: projectId,
+        provider,
+        bucket,
+        object_key: persistedKey,
+        object_type: 'DATASET_SOURCE',
+        owner_type: 'UPLOAD',
+        original_filename: fileName,
+        content_type: contentType,
+        expected_size_bytes: size,
+        state: 'PENDING',
+        created_by: user.id,
+        metadata: { extension: ext },
+      })
+      .select('id')
+      .single()
+    if (registryError || !storageObject?.id) {
+      throw new Error(`Unable to register dataset upload: ${registryError?.message ?? 'missing storage object id'}`)
+    }
+    storageObjectId = storageObject.id
 
-    return NextResponse.json({
-      provider: authorization.provider,
-      bucket: authorization.bucket,
-      path: authorization.key,
-      key: authorization.key,
-      token: authorization.token,
-      uploadUrl: authorization.url,
-      uploadHeaders: authorization.requiredHeaders,
-      expiresAt: authorization.expiresAt,
-      sourceUri: `${authorization.provider}://${authorization.bucket}/${authorization.key}`,
-      file: { name: fileName, size, contentType, extension: ext },
-    })
+    try {
+      const authorization = await storage.createUploadAuthorization({
+        bucket,
+        key: objectKey,
+        contentType,
+        expiresInSeconds: SIGNED_URL_TTL_SECONDS,
+      })
+      const { error: stateError } = await admin
+        .schema('catalog')
+        .from('storage_objects')
+        .update({ state: 'UPLOADING', updated_at: new Date().toISOString() })
+        .eq('id', storageObjectId)
+        .eq('project_id', projectId)
+      if (stateError) throw new Error(`Unable to activate dataset upload: ${stateError.message}`)
+
+      return NextResponse.json({
+        storageObjectId,
+        provider: authorization.provider,
+        bucket: authorization.bucket,
+        path: authorization.key,
+        key: authorization.key,
+        token: authorization.token,
+        uploadUrl: authorization.url,
+        uploadHeaders: authorization.requiredHeaders,
+        expiresAt: authorization.expiresAt,
+        sourceUri: `${authorization.provider}://${authorization.bucket}/${authorization.key}`,
+        file: { name: fileName, size, contentType, extension: ext },
+      })
+    } catch (authorizationError) {
+      await admin
+        .schema('catalog')
+        .from('storage_objects')
+        .update({
+          state: 'FAILED',
+          updated_at: new Date().toISOString(),
+          metadata: { extension: ext, failure_stage: 'AUTHORIZATION' },
+        })
+        .eq('id', storageObjectId)
+        .eq('project_id', projectId)
+      throw authorizationError
+    }
   } catch (error) {
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Dataset file upload authorization failed.' }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Dataset file upload authorization failed.', storageObjectId }, { status: 500 })
   }
 }
 
@@ -122,6 +172,7 @@ export async function DELETE(request: Request) {
     const body = await request.json()
     const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : ''
     const path = typeof body.path === 'string' ? body.path.trim() : ''
+    const storageObjectId = typeof body.storageObjectId === 'string' ? body.storageObjectId.trim() : ''
     const requestedProvider = body.provider === 'r2' || body.provider === 'supabase' ? body.provider : defaultStorageProvider()
     if (!projectId || !path) return NextResponse.json({ error: 'projectId and path are required.' }, { status: 400 })
 
@@ -133,6 +184,20 @@ export async function DELETE(request: Request) {
     const key = requestedProvider === 'r2' && prefix ? `${prefix}/${objectKey}` : objectKey
 
     await storage.deleteObject({ provider: requestedProvider, bucket, key })
+
+    const admin = createAdminClient()
+    let update = admin
+      .schema('catalog')
+      .from('storage_objects')
+      .update({ state: 'DELETED', deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('project_id', projectId)
+      .eq('provider', requestedProvider)
+      .eq('bucket', bucket)
+      .eq('object_key', key)
+    if (storageObjectId) update = update.eq('id', storageObjectId)
+    const { error: registryError } = await update
+    if (registryError) throw new Error(`Object deleted but registry update failed: ${registryError.message}`)
+
     return NextResponse.json({ removed: true })
   } catch (error) {
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
