@@ -1,0 +1,23 @@
+name: Post-Implementation Certification Contract
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certification-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify fail-closed certification contract
+        run: node scripts/verify-post-implementation-certification-contract.mjs
+      - name: Run certification contract negative and failure tests
+        run: node --test scripts/test-post-implementation-certification-contract.mjs

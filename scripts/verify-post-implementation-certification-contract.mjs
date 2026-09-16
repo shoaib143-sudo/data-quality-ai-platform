@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 
-const contract = JSON.parse(fs.readFileSync('infra/platform-assurance/post-implementation-certification-contract.json', 'utf8'))
+const contractPath = process.env.DATANEXUS_CERTIFICATION_CONTRACT_PATH || 'infra/platform-assurance/post-implementation-certification-contract.json'
+const contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'))
 const fail = (message) => { throw new Error(message) }
 const same = (actual, expected) => JSON.stringify(actual) === JSON.stringify(expected)
 
@@ -24,6 +25,8 @@ const requiredTruthRules = {
   certifiedCommitMustEqualProductionSourceCommit: true,
   databaseMigrationHistoryMustBeReconciled: true,
   independentPostImplementationEvidenceRequired: true,
+  independentEvidenceProducerMayEqualImplementationProducer: false,
+  recoveryMaySubstituteForOriginalStepReexecution: false,
 }
 for (const [key, expected] of Object.entries(requiredTruthRules)) {
   if (contract.truthRules?.[key] !== expected) fail(`Certification truth rule ${key} must remain ${expected}.`)
@@ -77,17 +80,9 @@ for (const item of classes) {
 }
 
 for (const id of [
-  'SOURCE_RELEASE_INTEGRITY',
-  'CI_WORKFLOW_SECURITY',
-  'AUTHORIZATION_AND_ISOLATION',
-  'DATABASE_AUTHORITY_AND_RLS',
-  'MIGRATION_AND_RECONSTRUCTION',
-  'BUILD_PROVENANCE',
-  'DEPLOYMENT_PROVENANCE',
-  'PRODUCTION_RUNTIME_JOURNEY',
-  'RECOVERY_ROLLBACK_AND_COMPENSATION',
-  'AI_GOVERNANCE_AND_EVALUATION',
-  'RESIDUAL_RISK_AND_EXCEPTION_GOVERNANCE',
+  'SOURCE_RELEASE_INTEGRITY', 'CI_WORKFLOW_SECURITY', 'AUTHORIZATION_AND_ISOLATION', 'DATABASE_AUTHORITY_AND_RLS',
+  'MIGRATION_AND_RECONSTRUCTION', 'BUILD_PROVENANCE', 'DEPLOYMENT_PROVENANCE', 'PRODUCTION_RUNTIME_JOURNEY',
+  'RECOVERY_ROLLBACK_AND_COMPENSATION', 'AI_GOVERNANCE_AND_EVALUATION', 'RESIDUAL_RISK_AND_EXCEPTION_GOVERNANCE',
 ]) {
   if (classes.find(item => item.id === id)?.riskTier !== 'R3') fail(`${id} must remain an R3 certification boundary.`)
 }
@@ -97,19 +92,9 @@ for (const id of ['BUILD_PROVENANCE', 'DEPLOYMENT_PROVENANCE', 'PRODUCTION_RUNTI
 }
 
 const personas = [
-  'senior-leadership',
-  'business-user',
-  'data-owner',
-  'data-product-owner',
-  'data-steward',
-  'data-governance-specialist',
-  'compliance-risk-officer',
-  'privacy-security-officer',
-  'data-governance-admin',
-  'data-custodian',
-  'source-system-owner',
-  'metadata-analyst',
-  'data-quality-analyst',
+  'senior-leadership', 'business-user', 'data-owner', 'data-product-owner', 'data-steward',
+  'data-governance-specialist', 'compliance-risk-officer', 'privacy-security-officer', 'data-governance-admin',
+  'data-custodian', 'source-system-owner', 'metadata-analyst', 'data-quality-analyst',
 ]
 if (!same(contract.canonicalPersonas, personas)) fail('Production persona E2E certification must cover all 13 canonical personas.')
 
@@ -125,7 +110,37 @@ for (const binding of ['certifiedSourceCommit', 'buildOrDeploymentProvenance', '
   if (!contract.productionVerificationBindings?.includes(binding)) fail(`Production verification must bind ${binding}.`)
 }
 
+const requiredRevalidation = [
+  'exactHeadAfterFinalChange', 'independentAdversarialAudit', 'unitAndPropertyTests', 'stateTransitionAndConcurrencyTests',
+  'negativeAndFailureTests', 'cleanDatabaseReconstruction', 'integrationAndEndToEndTests',
+  'authorizationTenantIsolationAndRlsTests', 'aiEvaluationAndPromptInjectionRedTeam', 'compromisedAgentAndToolMisuseAudit',
+  'chaosAndDependencyFailureTests', 'recoveryRollbackAndCompensationTests', 'shadowAndCanaryValidation',
+  'previewValidationWhenApplicable', 'productionValidationWhenApplicable', 'evidenceAndDocumentationRefresh',
+  'independentGateProducerMustDifferFromImplementationProducer',
+]
+for (const key of requiredRevalidation) {
+  if (contract.postImplementationRevalidation?.[key] !== true) fail(`Post-implementation revalidation gate ${key} must remain enabled.`)
+}
+
+const requiredControlBindings = [
+  'qualityGate', 'p0ToP5Revalidation', 'operationalCertification', 'repositoryGovernance', 'aiGovernanceCertification',
+  'aiRedTeamAssurance', 'productionSecurityPosture', 'productionVerificationBackbone', 'releaseProvenance',
+  'recoveryAssurance', 'governedShadowEvaluation',
+]
+for (const key of requiredControlBindings) {
+  const control = contract.repositoryControlBindings?.[key]
+  if (!control || !fs.existsSync(control)) fail(`Certification repository control ${key} must bind an existing workflow.`)
+}
+
+if (contract.bestPracticeAlignment?.claim !== 'CONTROL_MAPPING_ONLY_NOT_EXTERNAL_CERTIFICATION') {
+  fail('Best-practice mapping must not be represented as external certification.')
+}
+for (const reference of ['NIST_SP_800_218_SSDF_1_1', 'NIST_CSF_2_0', 'OWASP_ASVS_5_0_0', 'OWASP_GENAI_LLM_TOP_10_2026', 'SLSA_1_2_PROVENANCE']) {
+  if (!contract.bestPracticeAlignment?.references?.includes(reference)) fail(`Missing required best-practice reference ${reference}.`)
+}
+
 if (!contract.completionRule?.CERTIFIED?.includes('NOT_MEASURED')) fail('CERTIFIED completion rule must explicitly reject NOT_MEASURED evidence.')
+if (!contract.completionRule?.CERTIFIED?.includes('exact final head')) fail('CERTIFIED completion rule must require post-implementation revalidation on the exact final head.')
 if (!contract.completionRule?.PRODUCTION_VERIFIED?.includes('exact source/build/deployment/database/runtime binding')) fail('PRODUCTION_VERIFIED must require exact production provenance binding.')
 
-console.log(`Post-implementation certification contract verified: ${classes.length} evidence classes, ${personas.length} personas, ${requiredScopes.length} implementation scopes.`)
+console.log(`Post-implementation certification contract verified: ${classes.length} evidence classes, ${personas.length} personas, ${requiredScopes.length} implementation scopes, ${requiredRevalidation.length} revalidation gates.`)
