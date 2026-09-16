@@ -21,6 +21,7 @@ const specializedMachineAuthMarkers = [
   'SCIM_TOKEN',
   'scimToken',
   'requireScimDirectory(',
+  'requireInternalBearer(',
   'DATA_PLANE',
   'dataPlaneToken',
   'Bearer ',
@@ -39,6 +40,14 @@ const approvedPrivilegedExceptions = new Map([
   ['app/api/scim/v2/Users/[userId]/route.ts', {
     classification: 'SCIM_DIRECTORY_AUTH',
     requiredMarkers: ['requireScimDirectory('],
+  }],
+  ['app/api/internal/storage/audit/route.ts', {
+    classification: 'INTERNAL_MACHINE_AUTH',
+    requiredMarkers: ['requireInternalBearer('],
+  }],
+  ['app/api/internal/storage/reconcile/route.ts', {
+    classification: 'INTERNAL_MACHINE_AUTH',
+    requiredMarkers: ['requireInternalBearer('],
   }],
 ])
 
