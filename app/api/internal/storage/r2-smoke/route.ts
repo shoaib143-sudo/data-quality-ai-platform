@@ -3,6 +3,7 @@ import { createObjectStorage } from '@/lib/storage/factory'
 import { requireInternalBearer } from '@/lib/security/internal-bearer'
 import type { StorageReference } from '@/lib/storage/contracts'
 
+// requireInternalBearer validates the CRON_SECRET using constant-time comparison.
 export const dynamic = 'force-dynamic'
 
 function allowedPreview() {
@@ -44,12 +45,7 @@ async function runSmokeProbe(request: Request) {
   const diagnostics: Record<string, number | null | string> = { expectedSizeBytes, origin }
 
   try {
-    reference = await storage.putObject({
-      bucket,
-      key,
-      body: payload,
-      contentType: 'text/plain',
-    })
+    reference = await storage.putObject({ bucket, key, body: payload, contentType: 'text/plain' })
     stages.put = true
 
     const head = await storage.headObject(reference)
@@ -65,7 +61,6 @@ async function runSmokeProbe(request: Request) {
 
     await storage.deleteObject(reference)
     stages.delete = true
-
     const afterDelete = await storage.headObject(reference)
     stages.absentAfterDelete = !afterDelete.exists
 
@@ -97,10 +92,7 @@ async function runSmokeProbe(request: Request) {
 
     const browserPut = await fetch(uploadAuthorization.url, {
       method: 'PUT',
-      headers: {
-        ...(uploadAuthorization.requiredHeaders ?? {}),
-        origin,
-      },
+      headers: { ...(uploadAuthorization.requiredHeaders ?? {}), origin },
       body: payload,
     })
     diagnostics.presignedPutStatus = browserPut.status
@@ -115,10 +107,7 @@ async function runSmokeProbe(request: Request) {
     const browserHead = await storage.headObject(browserReference)
     stages.presignedHead = browserHead.exists && browserHead.sizeBytes === expectedSizeBytes
 
-    const downloadAuthorization = await storage.createDownloadAuthorization({
-      reference: browserReference,
-      expiresInSeconds: 120,
-    })
+    const downloadAuthorization = await storage.createDownloadAuthorization({ reference: browserReference, expiresInSeconds: 120 })
     if (!downloadAuthorization.url) throw new Error('R2 presigned download URL was not returned.')
     const browserGet = await fetch(downloadAuthorization.url, { headers: { origin } })
     const browserBody = await browserGet.text()
