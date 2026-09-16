@@ -121,3 +121,19 @@ test('production source binding cannot be removed', () => {
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /certifiedSourceCommit/)
 })
+
+test('CERTIFIED evidence cannot be silently downgraded to production-only', () => {
+  const result = verify(mutated(contract => {
+    contract.mandatoryEvidenceClasses.find(item => item.id === 'AUTHORIZATION_AND_ISOLATION').requiredFor = ['PRODUCTION_VERIFIED']
+  }))
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /AUTHORIZATION_AND_ISOLATION requiredFor must remain exactly CERTIFIED -> PRODUCTION_VERIFIED/)
+})
+
+test('production evidence cannot be weakened into IMPLEMENTED evidence', () => {
+  const result = verify(mutated(contract => {
+    contract.mandatoryEvidenceClasses.find(item => item.id === 'BUILD_PROVENANCE').requiredFor = ['IMPLEMENTED', 'PRODUCTION_VERIFIED']
+  }))
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /BUILD_PROVENANCE requiredFor must remain exactly PRODUCTION_VERIFIED/)
+})
