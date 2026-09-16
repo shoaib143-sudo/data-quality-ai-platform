@@ -103,6 +103,54 @@ test('missing adversarial acceptance evidence is rejected', () => {
   assert.match(result.stderr, /UNAUTHORIZED_ADVERSARIAL/)
 })
 
+test('duplicate acceptance paths fail closed instead of last-write-wins', () => {
+  const manifest = baseManifest()
+  manifest.acceptancePaths.push({ ...manifest.acceptancePaths[0] })
+  const result = evaluate(manifest)
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /Duplicate acceptance path/)
+})
+
+test('duplicate evidence records fail closed instead of selecting a convenient record', () => {
+  const manifest = baseManifest()
+  manifest.evidenceRecords.push({ ...manifest.evidenceRecords[0] })
+  const result = evaluate(manifest)
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /exactly one authoritative record/)
+})
+
+test('unknown evidence classes are rejected', () => {
+  const manifest = baseManifest()
+  manifest.evidenceRecords.push({ ...manifest.evidenceRecords[0], evidenceClass: 'UNKNOWN_CLASS' })
+  const result = evaluate(manifest)
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /Unknown certification evidence class/)
+})
+
+test('duplicate revalidation gates fail closed instead of last-write-wins', () => {
+  const manifest = baseManifest()
+  manifest.revalidation.push({ ...manifest.revalidation[0] })
+  const result = evaluate(manifest)
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /Duplicate post-implementation revalidation gate/)
+})
+
+test('unknown revalidation gates are rejected', () => {
+  const manifest = baseManifest()
+  manifest.revalidation.push({ gate: 'inventedGate', result: 'PASS', evidenceRef: 'evidence://invented' })
+  const result = evaluate(manifest)
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /Unknown post-implementation revalidation gate/)
+})
+
+test('manifest schema version is fail-closed', () => {
+  const manifest = baseManifest()
+  manifest.schemaVersion = 2
+  const result = evaluate(manifest)
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /schemaVersion must be 1/)
+})
+
 test('PRODUCTION_VERIFIED requires production-only evidence from production', () => {
   const manifest = baseManifest('PRODUCTION_VERIFIED')
   const productionClass = contract.mandatoryEvidenceClasses.find(item => item.requiredFor.includes('PRODUCTION_VERIFIED') && !item.requiredFor.includes('CERTIFIED'))
