@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -31,163 +31,17 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Verify P0-P4 security and evidence boundaries
-        run: node scripts/verify-p0-p4-revalidation.mjs
-      - name: TypeScript
-        run: pnpm exec tsc --noEmit
-      - name: Verify DataNexus Governance Orchestrator contracts
-        run: node --experimental-strip-types scripts/test-governance-orchestrator.mjs
-      - name: Verify data plane provider configuration
-        run: pnpm run verify:data-plane-config
-      - name: Verify data plane projection operations
-        run: pnpm run verify:data-plane-operations
-      - name: Verify governed agent portfolio
-        run: pnpm run verify:agent-portfolio
-      - name: Verify governed agent specialization
-        run: pnpm run verify:agent-specialization
-      - name: Verify specialist governance intelligence consumption
-        run: node scripts/verify-specialist-governance-intelligence.mjs
-      - name: Verify agent memory and learning
-        run: pnpm run verify:agent-memory-learning
-      - name: Verify ADR-006 TelemetryProvider contract
-        run: pnpm run verify:telemetry-provider
-      - name: Verify ADR-006 EvaluationEngine contract
-        run: pnpm run verify:evaluation-engine
-      - name: Verify ADR-006 Intelligent Router contract
-        run: pnpm run verify:intelligent-router
-      - name: Verify ADR-006 governed RoutingPolicy contract
-        run: pnpm run verify:routing-policy
-      - name: Verify ADR-006 route-decision telemetry
-        run: pnpm run verify:route-telemetry
-      - name: Verify ADR-006 emergency execution controller enforcement
-        run: pnpm run verify:execution-controller
-      - name: Verify ADR-006 canonical AI cost accounting
-        run: node scripts/verify-adr006-cost-accounting.mjs
-      - name: Verify investigation and prediction
-        run: pnpm run verify:investigation-prediction
-      - name: Verify governed autonomy safety
-        run: pnpm run verify:governed-autonomy
-      - name: Verify AI governance due diligence contracts
-        run: pnpm run verify:ai-due-diligence
-      - name: Verify AI system governance lifecycle authority
-        run: node scripts/verify-ai-system-governance.mjs
-      - name: Verify evidence backed 75 capability matrix
-        run: node scripts/verify-ai-capability-matrix.mjs
-      - name: Verify governance document semantic refresh
-        run: node scripts/verify-governance-document-semantic-refresh.mjs
-      - name: Verify governance reference corpus and embedding readiness
-        run: node scripts/verify-governance-reference-readiness.mjs
-      - name: Verify governed human review boundaries
-        run: pnpm run verify:governance-reviews
-      - name: Verify governance control intelligence
-        run: pnpm run verify:control-intelligence
-      - name: Verify governance control operability
-        run: node scripts/verify-governance-control-operability.mjs
-      - name: Verify governance intelligence brief truth contract
-        run: node scripts/verify-governance-intelligence-brief.mjs
-      - name: Verify production readiness contracts
-        run: pnpm run verify:readiness
-      - name: Verify provider read fallback behavior
-        run: pnpm run verify:provider-fallback
-      - name: Verify governance knowledge model
-        run: pnpm run verify:knowledge-model
-      - name: Verify quality intelligence
-        run: pnpm run verify:quality-intelligence
-      - name: Verify FILE onboarding contracts
-        run: pnpm run verify:file-onboarding
-      - name: Verify provider-native database hierarchy
-        run: node scripts/verify-native-hierarchy-connectors.mjs
-      - name: Verify catalog identity, versioning and change detection
-        run: node scripts/verify-catalog-identity-versioning.mjs
-      - name: Verify catalog reconciliation FK indexes
-        run: node scripts/verify-catalog-reconciliation-indexes.mjs
-      - name: Verify catalog control plane FK indexes
-        run: node scripts/verify-catalog-control-plane-indexes.mjs
-      - name: Verify catalog source policy/capability FK indexes
-        run: node scripts/verify-catalog-source-policy-capability-indexes.mjs
-      - name: Verify profiling quality-rule FK indexes
-        run: node scripts/verify-profiling-quality-rule-indexes.mjs
-      - name: Verify governance risk prediction FK indexes
-        run: node scripts/verify-governance-risk-prediction-indexes.mjs
-      - name: Verify AI governance suggestion FK indexes
-        run: node scripts/verify-ai-governance-suggestion-indexes.mjs
-      - name: Verify glossary governance FK indexes
-        run: node scripts/verify-glossary-governance-indexes.mjs
-      - name: Verify control scope FK indexes
-        run: node scripts/verify-control-scope-indexes.mjs
-      - name: Verify workflow event FK indexes
-        run: node scripts/verify-workflow-event-indexes.mjs
-      - name: Verify autonomy event/policy FK indexes
-        run: node scripts/verify-autonomy-event-policy-indexes.mjs
-      - name: Verify autonomy policy/version FK indexes
-        run: node scripts/verify-autonomy-policy-version-indexes.mjs
-      - name: Verify source operational readiness evidence
-        run: node scripts/verify-source-operational-readiness.mjs
-      - name: Verify onboarding operational evidence boundary
-        run: node scripts/verify-onboarding-operational-evidence.mjs
-      - name: Verify governed JDBC discovery evidence
-        run: node scripts/verify-jdbc-discovery-evidence.mjs
-      - name: Verify governance report source evidence
-        run: node scripts/verify-governance-report-source-evidence.mjs
-      - name: Verify Generic JDBC production acceptance contract
-        run: node scripts/verify-generic-jdbc-acceptance.mjs
-      - name: Verify Supabase security advisor hardening contract
-        run: node scripts/verify-security-advisor-hardening.mjs
-      - name: Verify non-lineage enterprise acceptance contract
-        run: node scripts/verify-non-lineage-enterprise-acceptance.mjs
-      - name: Verify AI lineage suggestion truth boundary
-        run: node scripts/verify-ai-lineage-suggestions.mjs
-      - name: Verify Databricks Web UI connection flow
-        run: node scripts/verify-databricks-web-ui-flow.mjs
-      - name: Verify Databricks multiple schema scope
-        run: node --experimental-strip-types scripts/test-databricks-schema-scope.mjs
-      - name: Verify profiling lifecycle contracts
-        run: pnpm run verify:profiling-lifecycle
-      - name: Verify profiling explorer evidence contracts
-        run: pnpm run verify:profiling-explorer
-      - name: Verify governance architecture contracts
-        run: pnpm run verify:governance
-      - name: Verify semantic governance contracts
-        run: pnpm run verify:semantic
-      - name: Verify governed business glossary semantics
-        run: node scripts/verify-business-glossary-semantics.mjs
-      - name: Verify governed ownership and stewardship
-        run: node scripts/verify-ownership-stewardship.mjs
-      - name: Verify governed classification and privacy
-        run: node scripts/verify-classification-privacy.mjs
-      - name: Verify profiling remediation contracts
-        run: pnpm run verify:remediation
-      - name: Verify profiling recommendation learning contracts
-        run: pnpm run verify:learning
-      - name: Verify automatic remediation reprofile contracts
-        run: pnpm run verify:reprofile
-      - name: Verify autonomous governance operations contracts
-        run: pnpm run verify:autonomous
-      - name: Verify lineage change governance contracts
-        run: pnpm run verify:lineage-governance
-      - name: Verify atomic lineage ingestion
-        run: node scripts/verify-lineage-atomic-ingestion.mjs
-      - name: Verify lineage scoped extraction and catalog identity
-        run: node scripts/verify-lineage-source-identity.mjs
-      - name: Verify governed manual lineage writes
-        run: node scripts/verify-lineage-manual-write-boundary.mjs
-      - name: Verify lineage explorer overlay contracts
-        run: pnpm run verify:lineage-explorer
-      - name: Verify live governance database contracts
+      - name: Fast-path pull request gate
+        if: github.event_name == 'pull_request'
+        run: bash scripts/ci-fast-path.sh
+      - name: Full post-merge quality certification
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "Live database verification skipped because its protected credentials are unavailable."
-            exit 0
-          fi
-          pnpm run verify:database
-      - name: Verify Domain Cell Job Monitor contract
-        run: node scripts/verify-domain-cell-job-monitor.mjs
-      - name: Production build
-        run: pnpm run build
+        run: bash scripts/ci-full-quality-gate.sh
       - name: Production HTTP SLO smoke benchmark
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           BENCHMARK_REQUESTS: '25'
           BENCHMARK_CONCURRENCY: '5'
@@ -198,11 +52,13 @@ jobs:
           BENCHMARK_MIN_SUCCESSFUL_REQUESTS: '25'
         run: pnpm run benchmark:production
       - name: Setup Java
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
       - name: Validate JDBC bridge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: services/jdbc-bridge
         run: mvn -B test package

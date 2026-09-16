@@ -28,6 +28,8 @@ jobs:
           node-version: 24
       - name: Verify repository governance contract
         run: node scripts/verify-github-governance.mjs
+      - name: Verify fast-path CI safety model
+        run: node scripts/verify-fast-path-ci.mjs
       - name: Verify immutable action references
         run: node scripts/verify-workflow-action-pinning.mjs
       - name: Verify least-privilege workflow posture
