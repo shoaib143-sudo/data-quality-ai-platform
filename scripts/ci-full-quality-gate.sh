@@ -3,6 +3,7 @@ set -euo pipefail
 
 node scripts/verify-p0-p4-revalidation.mjs
 node scripts/verify-post-implementation-certification-contract.mjs
+node scripts/verify-certification-evidence-evaluator.mjs
 node --test scripts/test-post-implementation-certification-contract.mjs
 node --test scripts/test-certification-evidence-evaluator.mjs
 node --experimental-strip-types --test scripts/test-certification-independence.mjs
