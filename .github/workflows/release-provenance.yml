@@ -7,10 +7,13 @@ on:
       - 'lib/release-assurance/deployed-artifact-provenance.mjs'
       - 'scripts/generate-reference-build-manifest.mjs'
       - 'scripts/generate-deployed-artifact-provenance.mjs'
+      - 'scripts/generate-release-dependency-inventory.mjs'
       - 'scripts/verify-release-provenance-contract.mjs'
       - 'scripts/verify-deployed-artifact-provenance-contract.mjs'
+      - 'scripts/verify-release-dependency-inventory.mjs'
       - 'scripts/test-reference-build-manifest.mjs'
       - 'scripts/test-deployed-artifact-provenance.mjs'
+      - 'scripts/test-release-dependency-inventory.mjs'
       - 'scripts/adversarial-deployed-artifact-provenance.mjs'
       - 'vercel.json'
       - '.github/workflows/release-provenance.yml'
@@ -46,6 +49,12 @@ jobs:
         run: node scripts/verify-deployed-artifact-provenance-contract.mjs
       - name: Deployed artifact unit and negative/failure tests
         run: node scripts/test-deployed-artifact-provenance.mjs
+      - name: Generate exact-head production dependency inventory
+        run: node scripts/generate-release-dependency-inventory.mjs release-evidence/dependency-inventory.json
+      - name: Verify dependency inventory source, lockfile and integrity bindings
+        run: node scripts/verify-release-dependency-inventory.mjs release-evidence/dependency-inventory.json
+      - name: Dependency inventory negative and failure tests
+        run: node --test scripts/test-release-dependency-inventory.mjs
       - name: Independent automated adversarial deployed-artifact audit
         run: node scripts/adversarial-deployed-artifact-provenance.mjs
 
@@ -81,14 +90,19 @@ jobs:
           tar -czf release-evidence/reference-build.tgz "${items[@]}"
       - name: Generate source and migration bindings
         run: node scripts/generate-reference-build-manifest.mjs release-evidence/reference-build.tgz
-      - name: Sign reference build and manifest provenance
+      - name: Generate exact-head production dependency inventory
+        run: node scripts/generate-release-dependency-inventory.mjs release-evidence/dependency-inventory.json
+      - name: Verify exact-head production dependency inventory
+        run: node scripts/verify-release-dependency-inventory.mjs release-evidence/dependency-inventory.json
+      - name: Sign reference build, manifest and dependency inventory provenance
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-path: |
             release-evidence/reference-build.tgz
             release-evidence/reference-build-manifest.json
-      - name: Verify signed reference build and manifest
+            release-evidence/dependency-inventory.json
+      - name: Verify signed release evidence
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -96,6 +110,7 @@ jobs:
           set -euo pipefail
           gh attestation verify release-evidence/reference-build.tgz --repo "$GITHUB_REPOSITORY"
           gh attestation verify release-evidence/reference-build-manifest.json --repo "$GITHUB_REPOSITORY"
+          gh attestation verify release-evidence/dependency-inventory.json --repo "$GITHUB_REPOSITORY"
       - name: Preserve attestation bundle
         shell: bash
         env:
