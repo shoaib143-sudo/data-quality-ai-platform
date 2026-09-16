@@ -22,6 +22,8 @@ on:
       - 'lib/orchestration/governance-outcome-report*.ts'
       - 'lib/orchestration/governance-report-*.ts'
       - 'lib/orchestration/governance-recovery*.ts'
+      - 'lib/orchestration/governance-orchestrator-approval-service.ts'
+      - 'app/agents/autonomous-governance/**'
       - 'supabase/migrations/**'
       - 'supabase/functions/**'
       - 'supabase/config.toml'
@@ -87,6 +89,7 @@ jobs:
           node --experimental-strip-types scripts/test-governance-outcome-report.mjs
           node --experimental-strip-types scripts/test-governance-report-export.mjs
           node --experimental-strip-types scripts/test-governance-recovery.mjs
+          node --experimental-strip-types scripts/test-governance-orchestrator-approval.mjs
           node --experimental-strip-types scripts/test-governed-handoff.mjs
       - name: Run independent orchestrator adversarial concurrency and chaos audit
         run: node --experimental-strip-types scripts/audit-governance-orchestrator-final-assurance.mjs
