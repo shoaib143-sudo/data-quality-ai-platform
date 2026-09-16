@@ -4,6 +4,7 @@ import { documentEvidenceState } from '@/lib/profiling/document-evidence'
 import { loadFileSource, type FileSourceConfig, type FileSourceResult } from '@/lib/profiling/file-source-adapter'
 import { extractWithOcrSpace } from '@/lib/profiling/ocr-space'
 import { safeRemoteFileFetch } from '@/lib/profiling/safe-remote-file'
+import { resolveProviderNeutralFileConfig, sanitizeProviderNeutralFileResult } from '@/lib/profiling/provider-neutral-file-source'
 
 const OCR_EXTENSIONS = new Set(['pdf','png','jpg','jpeg','gif','webp','bmp','tif','tiff'])
 
@@ -118,7 +119,9 @@ export async function loadGovernedFileSource(
   config: FileSourceConfig,
   options: { maxRows?: number; maxBytes?: number } = {},
 ): Promise<FileSourceResult> {
-  const loaded = await loadFileSource(supabase, config, options)
+  const resolved = await resolveProviderNeutralFileConfig(config)
+  const rawLoaded = await loadFileSource(supabase, resolved.config, options)
+  const loaded = sanitizeProviderNeutralFileResult(rawLoaded, resolved.canonicalSourceUri, resolved.provider)
   const extension = String(loaded.metadata.extension ?? '').toLowerCase()
   const canOcr = OCR_EXTENSIONS.has(extension)
 
@@ -136,7 +139,7 @@ export async function loadGovernedFileSource(
       : Number.isFinite(initialByteSize) && initialByteSize >= 0
         ? initialByteSize
         : null
-    const original = await loadOriginalBytes(supabase, config, loaded.contentHash, maxBytes)
+    const original = await loadOriginalBytes(supabase, resolved.config, loaded.contentHash, maxBytes)
     const ocr = await extractWithOcrSpace({
       bytes: original.bytes,
       fileName: String(loaded.metadata.file_name ?? `document.${extension || 'bin'}`),
