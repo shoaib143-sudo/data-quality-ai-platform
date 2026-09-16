@@ -11,6 +11,7 @@ import {
   upsertProjectAutonomyPolicy,
 } from '@/lib/orchestration/governance-orchestrator-service-v2'
 import {
+  assembleAndPersistGovernanceOutcomeReport,
   getLatestGovernanceOutcomeReport,
   normalizeReportingPreference,
   persistRunReportingPreference,
@@ -137,10 +138,15 @@ export async function POST(request: Request) {
       approvalStatus = String(approval.status)
     }
 
+    const generatedReport = reporting.enabled
+      ? await assembleAndPersistGovernanceOutcomeReport({ projectId, orchestratorRunId: result.orchestratorRunId })
+      : null
+
     const status = result.status === 'WAITING_APPROVAL' ? 202 : result.status === 'SUCCEEDED' ? 200 : 409
     return NextResponse.json({
       accepted: result.status === 'SUCCEEDED',
       reporting,
+      generatedReport,
       approvalRequestId,
       approvalStatus,
       ...result,
