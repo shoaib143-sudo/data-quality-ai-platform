@@ -227,10 +227,11 @@ export class R2StorageAdapter implements ObjectStorage {
     const response = await signedFetch('HEAD', bucket, key)
     if (response.status === 404) return { exists: false }
     if (!response.ok) throw new Error(`R2 HEAD failed with status ${response.status}.`)
-    const size = Number(response.headers.get('content-length'))
+    const contentLength = response.headers.get('content-length')
+    const parsedSize = contentLength === null ? undefined : Number(contentLength)
     return {
       exists: true,
-      sizeBytes: Number.isFinite(size) ? size : undefined,
+      sizeBytes: parsedSize !== undefined && Number.isFinite(parsedSize) ? parsedSize : undefined,
       contentType: response.headers.get('content-type') ?? undefined,
       etag: response.headers.get('etag')?.replace(/^"|"$/g, ''),
     }
