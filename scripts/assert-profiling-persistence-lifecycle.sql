@@ -1,6 +1,6 @@
 begin;
 
-do $$
+do $do$
 declare
   v_project_id uuid;
   v_dataset_id uuid;
@@ -136,7 +136,7 @@ begin
   if not exists(select 1 from profiling.profile_runs where id=v_run_id and status='CANCELLED') then
     raise exception 'Cancelled run state was not preserved';
   end if;
-end
-$;
+end;
+$do$;
 
 rollback;
