@@ -31,7 +31,9 @@ export type CanonicalDocumentPreview = {
   warnings?: string[]
 }
 
-const UNREADABLE_PLACEHOLDER = 'Readable text is unavailable from the governed document representation. Binary or encoded glyph streams are intentionally hidden; re-run extraction/OCR to refresh readable evidence.'
+// Keep this wording aligned with the dashboard's existing fail-closed extraction-unavailable
+// detector until the dashboard carries DocumentEvidenceState as a first-class prop.
+const UNREADABLE_PLACEHOLDER = 'Readable text is unavailable from the governed document representation. Binary glyph streams are intentionally hidden, including encoded glyph streams; re-run extraction/OCR to refresh readable evidence.'
 const EMPTY_PLACEHOLDER = 'No readable text sample was persisted for this document.'
 
 export function canonicalizeDocumentPreview(
