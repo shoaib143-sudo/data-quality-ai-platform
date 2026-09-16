@@ -9,7 +9,7 @@ function allowedPreview() {
     && process.env.VERCEL_GIT_COMMIT_REF === 'r2-prereq-hardening-20260916'
 }
 
-export async function POST() {
+async function runSmokeProbe() {
   if (!allowedPreview()) {
     return NextResponse.json({ error: 'R2 smoke probe is available only on the designated preview branch.' }, { status: 404 })
   }
@@ -21,7 +21,7 @@ export async function POST() {
   const payload = `datanexus-r2-conformance:${crypto.randomUUID()}`
   const key = `_assurance/${Date.now()}-${crypto.randomUUID()}.txt`
   let reference: StorageReference | undefined
-  const stages: Record<string, boolean | number> = {}
+  const stages: Record<string, boolean> = {}
 
   try {
     reference = await storage.putObject({
@@ -47,7 +47,7 @@ export async function POST() {
     const afterDelete = await storage.headObject(reference)
     stages.absentAfterDelete = !afterDelete.exists
 
-    const passed = Object.values(stages).every((value) => value === true)
+    const passed = Object.values(stages).every(Boolean)
     return NextResponse.json({ passed, stages }, { status: passed ? 200 : 500 })
   } catch (error) {
     if (reference) {
@@ -63,4 +63,12 @@ export async function POST() {
       error: error instanceof Error ? error.message : 'R2 smoke probe failed.',
     }, { status: 500 })
   }
+}
+
+export async function GET() {
+  return runSmokeProbe()
+}
+
+export async function POST() {
+  return runSmokeProbe()
 }
