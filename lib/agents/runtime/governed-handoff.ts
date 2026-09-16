@@ -42,8 +42,8 @@ export type PersistedGateResult = {
 export type HandoffValidationContext = {
   projectId: string
   targetAgent: string
-  allowedSourceAgents: string[]
-  allowedHandoffTargets: Record<string, string[]>
+  allowedSourceAgents: readonly string[]
+  allowedHandoffTargets: Readonly<Record<string, readonly string[]>>
   policySnapshotId: string
   dependencySatisfied: boolean
   evidenceExists: (type: string, id: string, hash?: string | null) => boolean
