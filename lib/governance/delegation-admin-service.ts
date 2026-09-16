@@ -5,6 +5,7 @@ import type { RiskLevel } from './agent-policy-v2'
 import { assertProjectBelongsToInstanceOrganization, resolveInstanceOrganizationMembership } from './instance-organization'
 
 const riskRank: Record<RiskLevel, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 }
+type ApprovalAxis = 'BUSINESS' | 'GOVERNANCE'
 
 async function managedProjectIds(userId: string, organizationId: string) {
   const admin = createAdminClient()
@@ -21,19 +22,43 @@ async function managedProjectIds(userId: string, organizationId: string) {
   return checks.filter(project => project.allowed).map(({ allowed: _allowed, ...project }) => project)
 }
 
+async function loadManagedDomains(projectIds: string[]) {
+  if (!projectIds.length) return [] as { projectId: string; domain: string }[]
+  const admin = createAdminClient()
+  const [datasetsResult, cdeResult] = await Promise.all([
+    admin.schema('catalog').from('datasets').select('project_id,business_domain').in('project_id', projectIds),
+    admin.schema('governance').from('critical_data_elements').select('project_id,domain').in('project_id', projectIds),
+  ])
+  if (datasetsResult.error) throw new Error(`Unable to load governed dataset domains: ${datasetsResult.error.message}`)
+  if (cdeResult.error) throw new Error(`Unable to load governed CDE domains: ${cdeResult.error.message}`)
+
+  const unique = new Map<string, { projectId: string; domain: string }>()
+  for (const row of datasetsResult.data ?? []) {
+    const projectId = String(row.project_id)
+    const domain = String(row.business_domain ?? '').trim()
+    if (domain) unique.set(`${projectId}:${domain.toLowerCase()}`, { projectId, domain })
+  }
+  for (const row of cdeResult.data ?? []) {
+    const projectId = String(row.project_id)
+    const domain = String(row.domain ?? '').trim()
+    if (domain) unique.set(`${projectId}:${domain.toLowerCase()}`, { projectId, domain })
+  }
+  return [...unique.values()].sort((a, b) => a.projectId.localeCompare(b.projectId) || a.domain.localeCompare(b.domain))
+}
+
 export async function loadGovernanceAdminDelegationWorkspace(userId: string) {
   const admin = createAdminClient()
   const membership = await resolveInstanceOrganizationMembership(userId)
   const projects = await managedProjectIds(userId, membership.organizationId)
   const projectIds = projects.map(project => String(project.id))
   if (!projectIds.length) {
-    return { managedProjects: [], authorities: [], delegations: [], members: [], actionKeys: Object.keys(agentActionCatalog) }
+    return { managedProjects: [], managedDomains: [], authorities: [], delegations: [], members: [], actionKeys: Object.keys(agentActionCatalog) }
   }
 
   const now = new Date().toISOString()
-  const [authoritiesResult, delegationsResult, membersResult] = await Promise.all([
+  const [authoritiesResult, delegationsResult, membersResult, managedDomains] = await Promise.all([
     admin.schema('governance').from('agent_approval_authorities')
-      .select('id,user_id,project_id,domain,approval_axis,source_role_key,starts_at,ends_at,reason')
+      .select('id,user_id,project_id,domain,approval_axis,source_role_key,action_keys,max_risk,starts_at,ends_at,reason')
       .eq('active', true)
       .lte('starts_at', now)
       .or(`ends_at.is.null,ends_at.gt.${now}`)
@@ -46,6 +71,7 @@ export async function loadGovernanceAdminDelegationWorkspace(userId: string) {
     admin.schema('app').from('organization_members')
       .select('user_id,role')
       .eq('organization_id', membership.organizationId),
+    loadManagedDomains(projectIds),
   ])
 
   if (authoritiesResult.error) throw new Error(`Unable to load governance-admin approval authorities: ${authoritiesResult.error.message}`)
@@ -71,6 +97,7 @@ export async function loadGovernanceAdminDelegationWorkspace(userId: string) {
 
   return {
     managedProjects: projects,
+    managedDomains,
     authorities,
     delegations: (delegationsResult.data ?? []).map(row => ({
       ...row,
@@ -83,6 +110,74 @@ export async function loadGovernanceAdminDelegationWorkspace(userId: string) {
     })),
     actionKeys: Object.keys(agentActionCatalog),
   }
+}
+
+export async function createGovernanceAdminApprovalAuthority(input: {
+  adminUserId: string
+  approverUserId: string
+  projectId: string
+  domain: string
+  approvalAxis: ApprovalAxis
+  actionKeys: readonly string[]
+  maxRisk: RiskLevel
+  startsAt?: string | null
+  endsAt?: string | null
+  reason: string
+}) {
+  if (!input.reason.trim()) throw new Error('Authority assignment reason is required.')
+  if (!input.projectId.trim()) throw new Error('Direct approval authority assignment must be project scoped.')
+  if (!input.approverUserId.trim()) throw new Error('An approver is required.')
+  if (!input.domain.trim()) throw new Error('A governed project domain is required.')
+  if (!['BUSINESS','GOVERNANCE'].includes(input.approvalAxis)) throw new Error('Approval axis is invalid.')
+  if (!(input.maxRisk in riskRank)) throw new Error('Authority maximum risk is invalid.')
+  if (input.adminUserId === input.approverUserId) throw new Error('Administrators cannot assign direct approval authority to themselves.')
+
+  const actionKeys = [...new Set(input.actionKeys.map(value => String(value).trim()).filter(Boolean))]
+  if (!actionKeys.length) throw new Error('Authority assignment must include at least one explicitly scoped action.')
+  for (const actionKey of actionKeys) getAgentActionProfile(actionKey)
+
+  const projectId = input.projectId.trim()
+  const domain = input.domain.trim()
+  await assertProjectBelongsToInstanceOrganization(projectId)
+  if (!await hasProjectCapability(input.adminUserId, projectId, 'admin.manage')) {
+    throw new Error('Data Governance Admin authority is required for this project.')
+  }
+
+  const admin = createAdminClient()
+  const membership = await resolveInstanceOrganizationMembership(input.adminUserId)
+  const { data: approverMembership, error: approverMembershipError } = await admin.schema('app').from('organization_members')
+    .select('user_id')
+    .eq('organization_id', membership.organizationId)
+    .eq('user_id', input.approverUserId)
+    .maybeSingle()
+  if (approverMembershipError) throw new Error(`Unable to validate approver membership: ${approverMembershipError.message}`)
+  if (!approverMembership) throw new Error('Approver must be an individual member of this DataNexus organization.')
+
+  const managedDomains = await loadManagedDomains([projectId])
+  if (!managedDomains.some(row => row.projectId === projectId && row.domain.toLowerCase() === domain.toLowerCase())) {
+    throw new Error('Approval domain is not governed by this project.')
+  }
+
+  const startsAt = input.startsAt ? new Date(input.startsAt) : new Date()
+  const endsAt = input.endsAt ? new Date(input.endsAt) : null
+  if (!Number.isFinite(startsAt.getTime())) throw new Error('Authority start time is invalid.')
+  if (endsAt && !Number.isFinite(endsAt.getTime())) throw new Error('Authority end time is invalid.')
+  if (endsAt && endsAt <= startsAt) throw new Error('Authority end time must be after its start time.')
+
+  const { data, error } = await admin.schema('governance').rpc('assign_agent_approval_authority', {
+    p_actor_user_id: input.adminUserId,
+    p_subject_user_id: input.approverUserId,
+    p_project_id: projectId,
+    p_domain: domain,
+    p_approval_axis: input.approvalAxis,
+    p_action_keys: actionKeys,
+    p_max_risk: input.maxRisk,
+    p_starts_at: startsAt.toISOString(),
+    p_ends_at: endsAt?.toISOString() ?? null,
+    p_reason: input.reason.trim(),
+  })
+  if (error || !data) throw new Error(`Unable to assign direct approval authority: ${error?.message ?? 'unknown error'}`)
+  return data
 }
 
 export async function createGovernanceAdminApprovalDelegation(input: {
@@ -123,7 +218,7 @@ export async function createGovernanceAdminApprovalDelegation(input: {
   if (!delegateMembership) throw new Error('Delegate must be an individual member of this DataNexus organization.')
 
   const { data: authority, error: authorityError } = await admin.schema('governance').from('agent_approval_authorities')
-    .select('id,user_id,project_id,domain,approval_axis,active,starts_at,ends_at')
+    .select('id,user_id,project_id,domain,approval_axis,action_keys,max_risk,active,starts_at,ends_at')
     .eq('id', input.authorityId)
     .eq('active', true)
     .maybeSingle()
@@ -136,6 +231,14 @@ export async function createGovernanceAdminApprovalDelegation(input: {
   }
   if (String(authority.user_id) === input.delegateUserId) {
     throw new Error('A user cannot delegate approval authority to themselves.')
+  }
+  const authorityActionKeys = Array.isArray(authority.action_keys) ? authority.action_keys.map(String) : []
+  if (actionKeys.some(actionKey => !authorityActionKeys.includes(actionKey))) {
+    throw new Error('Delegation action scope cannot exceed the direct approval authority.')
+  }
+  const authorityMaxRisk = String(authority.max_risk) as RiskLevel
+  if (!(authorityMaxRisk in riskRank) || riskRank[input.maxRisk] > riskRank[authorityMaxRisk]) {
+    throw new Error('Delegation risk ceiling cannot exceed the direct approval authority.')
   }
 
   const now = new Date()
