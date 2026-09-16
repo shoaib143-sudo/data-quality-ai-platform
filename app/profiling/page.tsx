@@ -100,13 +100,11 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
   const persistedChunks = chunksResult.data ?? []
   const evidence = summarizeDocumentEvidence(persistedChunks.map((chunk) => chunk.content))
   const readableByIndex = new Map<number, string>()
-  let readableCursor = 0
   for (const chunk of persistedChunks) {
     const raw = String(chunk.content ?? '')
     const state = summarizeDocumentEvidence([raw])
     if (state.state === 'READABLE' && state.readable[0]) {
       readableByIndex.set(Number(chunk.chunk_index), state.readable[0])
-      readableCursor += 1
     }
   }
 
