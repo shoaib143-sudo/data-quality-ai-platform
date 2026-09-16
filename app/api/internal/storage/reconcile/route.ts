@@ -4,6 +4,7 @@ import { createObjectStorage } from '@/lib/storage/factory'
 import { requireInternalBearer } from '@/lib/security/internal-bearer'
 import type { StorageProvider, StorageReference } from '@/lib/storage/contracts'
 
+// requireInternalBearer validates the CRON_SECRET using constant-time comparison.
 export const dynamic = 'force-dynamic'
 
 const DEFAULT_STALE_MINUTES = 30
