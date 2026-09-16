@@ -1,0 +1,49 @@
+name: Governance Orchestrator Final Wiring
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/agents/governance-orchestrator/**'
+      - 'lib/orchestration/governance-outcome-report*.ts'
+      - 'lib/orchestration/governance-report-*.ts'
+      - 'lib/orchestration/governance-recovery*.ts'
+      - 'scripts/test-governance-*.mjs'
+      - 'scripts/verify-governance-runtime-wiring.mjs'
+      - 'supabase/migrations/20260916110000_governance_runtime_debugger_evidence.sql'
+      - '.github/workflows/governance-orchestrator-final-wiring.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final-wiring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify runtime wiring contract
+        run: node scripts/verify-governance-runtime-wiring.mjs
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+      - name: Test orchestrator contracts
+        run: |
+          node --experimental-strip-types scripts/test-governance-orchestrator.mjs
+          node --experimental-strip-types scripts/test-governance-outcome-report.mjs
+          node --experimental-strip-types scripts/test-governance-report-export.mjs
+          node --experimental-strip-types scripts/test-governance-recovery.mjs
+          node --experimental-strip-types scripts/test-governed-handoff.mjs
+      - name: Build
+        run: pnpm run build
