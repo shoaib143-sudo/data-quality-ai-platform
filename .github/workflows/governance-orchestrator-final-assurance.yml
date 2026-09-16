@@ -1,0 +1,51 @@
+name: Governance Orchestrator Final Assurance
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/agents/governance-orchestrator/**'
+      - 'lib/agents/runtime/governed-handoff*.ts'
+      - 'lib/orchestration/governance-outcome-report*.ts'
+      - 'lib/orchestration/governance-report-*.ts'
+      - 'lib/orchestration/governance-recovery*.ts'
+      - 'scripts/audit-governance-orchestrator-final-assurance.mjs'
+      - 'scripts/verify-post-implementation-certification-contract.mjs'
+      - 'infra/platform-assurance/post-implementation-certification-contract.json'
+      - '.github/workflows/governance-orchestrator-final-assurance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final-assurance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify post-implementation certification contract
+        run: node scripts/verify-post-implementation-certification-contract.mjs
+      - name: Typecheck integrated candidate
+        run: pnpm exec tsc --noEmit
+      - name: Run final independent adversarial, concurrency and chaos audit
+        run: node --experimental-strip-types scripts/audit-governance-orchestrator-final-assurance.mjs
+      - name: Re-run deterministic reporting, recovery and handoff contracts
+        run: |
+          node --experimental-strip-types scripts/test-governance-outcome-report.mjs
+          node --experimental-strip-types scripts/test-governance-report-export.mjs
+          node --experimental-strip-types scripts/test-governance-recovery.mjs
+          node --experimental-strip-types scripts/test-governed-handoff.mjs
+      - name: Build integrated candidate
+        run: pnpm run build
