@@ -49,6 +49,10 @@ const approvedPrivilegedExceptions = new Map([
     classification: 'INTERNAL_MACHINE_AUTH',
     requiredMarkers: ['requireInternalBearer('],
   }],
+  ['app/api/internal/storage/verify-uploaded/route.ts', {
+    classification: 'INTERNAL_MACHINE_AUTH',
+    requiredMarkers: ['requireInternalBearer('],
+  }],
 ])
 
 const pinnedInteractiveBoundaries = new Map([
