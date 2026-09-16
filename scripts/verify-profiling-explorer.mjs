@@ -69,7 +69,7 @@ requireMatch(governedFileSource, /time-of-check\/time-of-use drift/, 'Governed O
 requireMatch(governedFileSource, /technical safety ceiling/, 'Governed OCR fallback must retain the source byte ceiling on its second read.')
 requireMatch(canonicalPreview, /loadGovernedFileSource/, 'Canonical data preview must reuse the governed FILE reader rather than implement a separate extraction path.')
 requireMatch(canonicalPreview, /loadCanonicalDocumentPreviewFromSource/, 'Canonical preview must expose a source-backed path that includes native extraction and OCR fallback.')
-requireMatch(canonicalPreview, /Binary or encoded glyph streams are intentionally hidden/, 'Canonical preview must fail closed when readable text is unavailable.')
+requireMatch(canonicalPreview, /Readable text is unavailable[\s\S]*Binary or encoded glyph streams are never presented/, 'Canonical preview must fail closed when readable text is unavailable.')
 requireMatch(canonicalPreview, /sanitizePersistedMetricForPresentation/, 'Persisted profiling metrics must share a canonical presentation sanitizer.')
 
 console.log(JSON.stringify({
