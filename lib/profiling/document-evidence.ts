@@ -1,5 +1,10 @@
 export type DocumentEvidenceState = 'READABLE' | 'UNREADABLE' | 'EMPTY'
 
+export type PromptInjectionEvidence = {
+  type: 'instruction_override' | 'role_impersonation' | 'prompt_exfiltration' | 'tool_coercion'
+  count: number
+}
+
 const CONTROL_CHARACTER = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g
 const REPLACEMENT_CHARACTER = /\uFFFD/g
 
@@ -60,6 +65,33 @@ export function detectSensitiveTextEvidence(values: string[]) {
     { type: 'Email', regex: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi },
     { type: 'Phone Number', regex: /(?:\+?\d[\d().\-\s]{7,}\d)/g },
   ]
+  return patterns.flatMap(({ type, regex }) => {
+    const matches = joined.match(regex) ?? []
+    return matches.length ? [{ type, count: matches.length }] : []
+  })
+}
+
+export function detectPromptInjectionEvidence(values: string[]): PromptInjectionEvidence[] {
+  const joined = values.join('\n')
+  const patterns: Array<{ type: PromptInjectionEvidence['type']; regex: RegExp }> = [
+    {
+      type: 'instruction_override',
+      regex: /\b(?:ignore|disregard|override|forget)\b[^\n.!?]{0,80}\b(?:previous|prior|earlier|system|developer)\b[^\n.!?]{0,80}\b(?:instruction|instructions|prompt|message|messages|rule|rules)\b/gi,
+    },
+    {
+      type: 'role_impersonation',
+      regex: /\b(?:you are now|act as|pretend to be|assume the role of)\b[^\n.!?]{0,120}\b(?:system|developer|administrator|admin|assistant|chatgpt|agent)\b/gi,
+    },
+    {
+      type: 'prompt_exfiltration',
+      regex: /\b(?:reveal|show|print|repeat|expose|return)\b[^\n.!?]{0,100}\b(?:system prompt|developer message|hidden prompt|internal instructions|secret instructions)\b/gi,
+    },
+    {
+      type: 'tool_coercion',
+      regex: /\b(?:use|call|invoke|execute|run)\b[^\n.!?]{0,100}\b(?:tool|function|command|shell|terminal|browser|sql|database)\b[^\n.!?]{0,100}\b(?:without|bypass|ignore|skip)\b[^\n.!?]{0,80}\b(?:approval|authorization|permission|policy|guardrail|review)\b/gi,
+    },
+  ]
+
   return patterns.flatMap(({ type, regex }) => {
     const matches = joined.match(regex) ?? []
     return matches.length ? [{ type, count: matches.length }] : []
