@@ -165,6 +165,7 @@ async function signedFetch(
   key: string,
   body?: BodyInit,
   contentType?: string,
+  extraHeaders: Record<string, string> = {},
 ) {
   const { accessKeyId, secretAccessKey } = config()
   const now = new Date()
@@ -177,6 +178,7 @@ async function signedFetch(
     host: url.host,
     'x-amz-content-sha256': hash,
     'x-amz-date': amz,
+    ...extraHeaders,
   }
   if (contentType) headers['content-type'] = contentType
 
@@ -191,6 +193,20 @@ async function signedFetch(
   requestHeaders.set('authorization', authorization)
   requestHeaders.delete('host')
   return fetch(url, { method, headers: requestHeaders, body })
+}
+
+async function sizeFromRange(bucket: string, key: string) {
+  const response = await signedFetch('GET', bucket, key, undefined, undefined, { range: 'bytes=0-0' })
+  try {
+    if (response.status !== 206) return undefined
+    const contentRange = response.headers.get('content-range')
+    const match = contentRange?.match(/\/(\d+)$/)
+    if (!match) return undefined
+    const total = Number(match[1])
+    return Number.isFinite(total) ? total : undefined
+  } finally {
+    await response.body?.cancel().catch(() => undefined)
+  }
 }
 
 export class R2StorageAdapter implements ObjectStorage {
@@ -229,9 +245,11 @@ export class R2StorageAdapter implements ObjectStorage {
     if (!response.ok) throw new Error(`R2 HEAD failed with status ${response.status}.`)
     const contentLength = response.headers.get('content-length')
     const parsedSize = contentLength === null ? undefined : Number(contentLength)
+    const headSize = parsedSize !== undefined && Number.isFinite(parsedSize) ? parsedSize : undefined
+    const sizeBytes = headSize ?? await sizeFromRange(bucket, key)
     return {
       exists: true,
-      sizeBytes: parsedSize !== undefined && Number.isFinite(parsedSize) ? parsedSize : undefined,
+      sizeBytes,
       contentType: response.headers.get('content-type') ?? undefined,
       etag: response.headers.get('etag')?.replace(/^"|"$/g, ''),
     }
