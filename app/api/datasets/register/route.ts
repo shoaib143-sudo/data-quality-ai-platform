@@ -14,6 +14,12 @@ function jdbcTableParts(sourceIdentifier: string, defaultSchema = 'public') {
   return null
 }
 
+function storageSourceUri(provider: string, bucket: string, key: string) {
+  if (provider === 'r2') return `r2://${bucket}/${key}`
+  if (provider === 'supabase') return `storage://${bucket}/${key}`
+  throw new Error(`Unsupported storage provider: ${provider}`)
+}
+
 export async function POST(request: Request) {
   let datasetId: string | null = null
   let versionId: string | null = null
@@ -21,8 +27,11 @@ export async function POST(request: Request) {
     const user = await requireApiUser()
     const body = await request.json()
     const projectId = text(body.projectId), sourceId = text(body.sourceId), name = text(body.name)
-    const description = text(body.description), sourceIdentifier = text(body.sourceIdentifier), businessDomain = text(body.businessDomain)
-    if (!projectId || !sourceId || !name || !sourceIdentifier) return NextResponse.json({ error: 'projectId, sourceId, name, and sourceIdentifier are required.' }, { status: 400 })
+    const description = text(body.description), requestedSourceIdentifier = text(body.sourceIdentifier), businessDomain = text(body.businessDomain)
+    const storageObjectId = text(body.storageObjectId)
+    if (!projectId || !sourceId || !name || (!requestedSourceIdentifier && !storageObjectId)) {
+      return NextResponse.json({ error: 'projectId, sourceId, name, and either sourceIdentifier or storageObjectId are required.' }, { status: 400 })
+    }
 
     await authorizeProject(user.id, projectId, 'catalog.update')
     const admin = createAdminClient()
@@ -34,17 +43,55 @@ export async function POST(request: Request) {
     const wasConfigured = String(source.status ?? '').toUpperCase() === 'CONFIGURED'
     if (wasConfigured) await authorizeProject(user.id, projectId, 'source.manage')
 
+    let effectiveSourceIdentifier = requestedSourceIdentifier
+    let verifiedStorageObject: { id: string; provider: string; bucket: string; object_key: string; content_type: string | null; size_bytes: number | null } | null = null
     const connectionMetadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? { ...(source.connection_metadata as Record<string, unknown>) } : {}
+
+    if (storageObjectId) {
+      if (!['file', 'csv'].includes(sourceType)) {
+        return NextResponse.json({ error: 'storageObjectId can only be used with FILE/CSV data sources.' }, { status: 400 })
+      }
+      const { data: storageObject, error: storageError } = await admin
+        .schema('catalog')
+        .from('storage_objects')
+        .select('id, project_id, provider, bucket, object_key, content_type, size_bytes, state')
+        .eq('id', storageObjectId)
+        .eq('project_id', projectId)
+        .maybeSingle()
+      if (storageError) throw new Error(`Unable to resolve storage object: ${storageError.message}`)
+      if (!storageObject) return NextResponse.json({ error: 'Storage object was not found in this project.' }, { status: 404 })
+      if (storageObject.state !== 'READY') {
+        return NextResponse.json({ error: `Storage object is not ready for dataset registration (state=${storageObject.state}).` }, { status: 409 })
+      }
+      if (!['r2', 'supabase'].includes(storageObject.provider)) throw new Error(`Unsupported storage provider: ${storageObject.provider}`)
+
+      effectiveSourceIdentifier = storageSourceUri(storageObject.provider, storageObject.bucket, storageObject.object_key)
+      verifiedStorageObject = {
+        id: storageObject.id,
+        provider: storageObject.provider,
+        bucket: storageObject.bucket,
+        object_key: storageObject.object_key,
+        content_type: storageObject.content_type,
+        size_bytes: storageObject.size_bytes == null ? null : Number(storageObject.size_bytes),
+      }
+      connectionMetadata.storage_provider = storageObject.provider
+      connectionMetadata.storage_bucket = storageObject.bucket
+      connectionMetadata.storage_path = storageObject.object_key
+      connectionMetadata.storage_object_id = storageObject.id
+      connectionMetadata.content_type = storageObject.content_type
+      connectionMetadata.size_bytes = storageObject.size_bytes
+    }
+
     if (wasConfigured && sourceType === 'jdbc') {
       const defaultSchema = typeof connectionMetadata.schema === 'string' && connectionMetadata.schema.trim() ? connectionMetadata.schema.trim() : 'public'
-      const jdbcParts = jdbcTableParts(sourceIdentifier, defaultSchema)
+      const jdbcParts = jdbcTableParts(effectiveSourceIdentifier, defaultSchema)
       if (!jdbcParts) return NextResponse.json({ error: 'Configured JDBC connections require a schema.table source identifier.' }, { status: 400 })
       connectionMetadata.schema = jdbcParts.schema
       connectionMetadata.table = jdbcParts.table
     }
 
     const validationSource = { ...source, connection_metadata: connectionMetadata }
-    let sourceValidation = await validateDataSourceForProfiling(admin, validationSource, sourceIdentifier)
+    let sourceValidation = await validateDataSourceForProfiling(admin, validationSource, effectiveSourceIdentifier)
     const sourceReady = sourceValidation.valid
 
     if (!sourceReady && wasConfigured && sourceType === 'jdbc') {
@@ -70,10 +117,16 @@ export async function POST(request: Request) {
       data_source_id: source.id,
       name,
       description: description || null,
-      source_identifier: sourceIdentifier,
+      source_identifier: effectiveSourceIdentifier,
       owner_user_id: user.id,
       business_domain: businessDomain || null,
-      metadata: { registration: 'manual', registered_source_type: source.source_type, source_validation: sourceValidation, profiling_ready: sourceReady },
+      metadata: {
+        registration: 'manual',
+        registered_source_type: source.source_type,
+        source_validation: sourceValidation,
+        profiling_ready: sourceReady,
+        storage_object_id: verifiedStorageObject?.id ?? null,
+      },
     }).select('id, project_id, data_source_id, name, description, source_identifier, business_domain, status, created_at').single()
     if (datasetError || !dataset) throw new Error(`Unable to register dataset: ${datasetError?.message ?? 'unknown error'}`)
     datasetId = dataset.id
@@ -85,19 +138,20 @@ export async function POST(request: Request) {
     const { data: version, error: versionError } = await admin.schema('catalog').from('dataset_versions').insert({
       dataset_id: dataset.id,
       version_number: versionNumber,
-      source_uri: sourceIdentifier,
+      source_uri: effectiveSourceIdentifier,
+      storage_object_id: verifiedStorageObject?.id ?? null,
       status: sourceReady ? 'AVAILABLE' : 'PROCESSING',
       observed_at: new Date().toISOString(),
-      metadata: { registration: 'manual', source_type: source.source_type, source_validation: sourceValidation, profiling_ready: sourceReady },
-    }).select('id, dataset_id, version_number, source_uri, status, observed_at, created_at').single()
+      metadata: { registration: 'manual', source_type: source.source_type, source_validation: sourceValidation, profiling_ready: sourceReady, storage_object_id: verifiedStorageObject?.id ?? null },
+    }).select('id, dataset_id, version_number, source_uri, storage_object_id, status, observed_at, created_at').single()
     if (versionError || !version) throw new Error(`Unable to create dataset version: ${versionError?.message ?? 'unknown error'}`)
     versionId = version.id
 
     const { error: executionSourceError } = await admin.schema('profiling').from('dataset_execution_sources').insert({
       dataset_version_id: version.id,
       source_type: executionType,
-      source_uri: sourceIdentifier,
-      execution_config: { ...connectionMetadata, source_id: source.id, source_type: source.source_type, connection_metadata: connectionMetadata, validation: sourceValidation },
+      source_uri: effectiveSourceIdentifier,
+      execution_config: { ...connectionMetadata, source_id: source.id, source_type: source.source_type, connection_metadata: connectionMetadata, validation: sourceValidation, storage_object_id: verifiedStorageObject?.id ?? null },
       active: sourceReady,
     })
     if (executionSourceError) throw new Error(`Unable to configure profiling source: ${executionSourceError.message}`)
@@ -108,6 +162,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       dataset,
       version,
+      storage_object_id: verifiedStorageObject?.id ?? null,
       profiling_ready: sourceReady,
       source_validation: sourceValidation,
       execution_type: executionType,
