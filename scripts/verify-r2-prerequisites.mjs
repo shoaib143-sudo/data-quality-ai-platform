@@ -45,7 +45,7 @@ if (accountId && endpoint) {
 
 const bucket = process.env.R2_BUCKET?.trim()
 if (bucket && bucket !== 'datanexus-r2') {
-  warnings.push(`R2_BUCKET is '${bucket}', while the approved single-bucket architecture uses 'datanexus-r2'.`)
+  warnings.push('R2_BUCKET differs from the approved single-bucket architecture.')
 }
 
 const prefix = process.env.R2_PREFIX?.trim()
