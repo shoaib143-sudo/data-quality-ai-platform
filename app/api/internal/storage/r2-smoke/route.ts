@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createObjectStorage } from '@/lib/storage/factory'
+import { requireInternalBearer } from '@/lib/security/internal-bearer'
 import type { StorageReference } from '@/lib/storage/contracts'
 
 export const dynamic = 'force-dynamic'
@@ -7,12 +8,6 @@ export const dynamic = 'force-dynamic'
 function allowedPreview() {
   return process.env.VERCEL_ENV === 'preview'
     && process.env.VERCEL_GIT_COMMIT_REF === 'r2-prereq-hardening-20260916'
-}
-
-function authorized(request: Request) {
-  const expected = process.env.CRON_SECRET?.trim()
-  if (!expected) return false
-  return (request.headers.get('authorization') ?? '') === `Bearer ${expected}`
 }
 
 function previewOrigin() {
@@ -29,7 +24,7 @@ async function runSmokeProbe(request: Request) {
   if (!allowedPreview()) {
     return NextResponse.json({ error: 'R2 smoke probe is available only on the designated preview branch.' }, { status: 404 })
   }
-  if (!authorized(request)) {
+  if (!requireInternalBearer(request)) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
