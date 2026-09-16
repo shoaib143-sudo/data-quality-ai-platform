@@ -178,24 +178,53 @@ export async function DELETE(request: Request) {
 
     await authorizeProject(user.id, projectId, 'source.manage')
     const objectKey = canonicalUploadPath(projectId, path)
-    const storage = createObjectStorage(requestedProvider)
     const bucket = datasetBucket(requestedProvider)
     const prefix = r2Prefix()
     const key = requestedProvider === 'r2' && prefix ? `${prefix}/${objectKey}` : objectKey
-
-    await storage.deleteObject({ provider: requestedProvider, bucket, key })
-
     const admin = createAdminClient()
-    let update = admin
+
+    let registryQuery = admin
       .schema('catalog')
       .from('storage_objects')
-      .update({ state: 'DELETED', deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .select('id, state')
       .eq('project_id', projectId)
       .eq('provider', requestedProvider)
       .eq('bucket', bucket)
       .eq('object_key', key)
-    if (storageObjectId) update = update.eq('id', storageObjectId)
-    const { error: registryError } = await update
+    if (storageObjectId) registryQuery = registryQuery.eq('id', storageObjectId)
+    const { data: registryObject, error: registryLookupError } = await registryQuery.maybeSingle()
+    if (registryLookupError) throw new Error(`Unable to verify upload cleanup target: ${registryLookupError.message}`)
+    if (!registryObject) return NextResponse.json({ error: 'Registered upload object not found.' }, { status: 404 })
+    if (registryObject.state === 'READY') {
+      return NextResponse.json({ error: 'READY dataset sources cannot be removed through upload cleanup.' }, { status: 409 })
+    }
+    if (registryObject.state === 'DELETED') {
+      return NextResponse.json({ removed: true, idempotent: true })
+    }
+
+    const { data: referencedVersion, error: referenceError } = await admin
+      .schema('catalog')
+      .from('dataset_versions')
+      .select('id')
+      .eq('storage_object_id', registryObject.id)
+      .limit(1)
+      .maybeSingle()
+    if (referenceError) throw new Error(`Unable to verify dataset version references: ${referenceError.message}`)
+    if (referencedVersion) {
+      return NextResponse.json({ error: 'Storage object is referenced by a dataset version and cannot be removed through upload cleanup.' }, { status: 409 })
+    }
+
+    const storage = createObjectStorage(requestedProvider)
+    await storage.deleteObject({ provider: requestedProvider, bucket, key })
+
+    const now = new Date().toISOString()
+    const { error: registryError } = await admin
+      .schema('catalog')
+      .from('storage_objects')
+      .update({ state: 'DELETED', deleted_at: now, updated_at: now })
+      .eq('id', registryObject.id)
+      .eq('project_id', projectId)
+      .neq('state', 'READY')
     if (registryError) throw new Error(`Object deleted but registry update failed: ${registryError.message}`)
 
     return NextResponse.json({ removed: true })
