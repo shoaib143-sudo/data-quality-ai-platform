@@ -14,6 +14,7 @@ const sourceValidation = fs.readFileSync(new URL('../lib/profiling/source-valida
 const governedFileSource = fs.readFileSync(new URL('../lib/profiling/governed-file-source.ts', import.meta.url), 'utf8')
 const providerNeutralFileSource = fs.readFileSync(new URL('../lib/profiling/provider-neutral-file-source.ts', import.meta.url), 'utf8')
 const migration = fs.readFileSync(new URL('../supabase/migrations/20260916153000_provider_neutral_storage_registry.sql', import.meta.url), 'utf8')
+const invariantMigration = fs.readFileSync(new URL('../supabase/migrations/20260917000500_enforce_dataset_version_storage_object_invariants.sql', import.meta.url), 'utf8')
 
 test('storage contract exposes required provider-neutral operations', () => {
   for (const operation of ['putObject', 'getObject', 'headObject', 'deleteObject', 'exists', 'createUploadAuthorization', 'createDownloadAuthorization']) {
@@ -106,6 +107,13 @@ test('storage registry is application-owned, RLS protected, and linked to datase
   assert.match(migration, /app_private\.is_project_admin/)
   assert.match(migration, /dataset_versions[\s\S]*storage_object_id/)
   assert.doesNotMatch(migration, /alter table storage\.(objects|buckets)/)
+})
+
+test('database prevents cross-project or non-ready dataset version storage links', () => {
+  assert.match(invariantMigration, /Storage object project does not match dataset project/)
+  assert.match(invariantMigration, /Dataset versions may reference only READY storage objects/)
+  assert.match(invariantMigration, /trg_dataset_versions_storage_object_invariants/)
+  assert.match(invariantMigration, /state <> 'READY' or \(verified_at is not null and size_bytes is not null\)/)
 })
 
 test('completion lifecycle verifies object existence, size and content type before READY', () => {
