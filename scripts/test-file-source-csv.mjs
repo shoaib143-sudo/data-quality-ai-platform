@@ -63,3 +63,7 @@ test('suffix-like source headers cannot collide with generated duplicate names',
 test('blank fallback headers cannot collide with explicit fallback-like names', () => {
   assert.deepEqual(normalizeCsvHeaders(['','column_1','']),['column_1','column_1__2','column_3'])
 })
+
+test('preexisting suffix claims force later duplicates to the next free suffix', () => {
+  assert.deepEqual(normalizeCsvHeaders(['name__2','name','name']),['name__2','name','name__3'])
+})
