@@ -12,12 +12,14 @@ function requireNoMatch(text, pattern, message) {
   if (pattern.test(text)) throw new Error(message)
 }
 
-const [page, explorer, dashboard, governedFileSource, documentEvidence] = await Promise.all([
+const [page, profilingPage, explorer, dashboard, governedFileSource, documentEvidence, canonicalPreview] = await Promise.all([
   source('app/profiling/explorer/page.tsx'),
+  source('app/profiling/page.tsx'),
   source('app/profiling/profiling-explorer.tsx'),
   source('app/profiling/profiling-dashboard.tsx'),
   source('lib/profiling/governed-file-source.ts'),
   source('lib/profiling/document-evidence.ts'),
+  source('lib/profiling/canonical-document-preview.ts'),
 ])
 
 requireMatch(page, /from\('profile_columns'\)[\s\S]*total_count[\s\S]*null_count[\s\S]*blank_count[\s\S]*zero_count[\s\S]*distinct_count[\s\S]*distinct_percentage/, 'Profiling explorer page must load persisted column statistics.')
@@ -25,6 +27,10 @@ requireMatch(page, /from\('profile_distributions'\)[\s\S]*distribution_type[\s\S
 requireMatch(page, /distributions=\{\(distributions\s*\?\?\s*\[\]\)\s+as\s+any\}/, 'Profiling explorer page must pass distributions to the client explorer.')
 requireMatch(page, /hasUnreadableControlText[\s\S]*sanitizeExplorerMetric[\s\S]*UNREADABLE_BINARY_OR_GLYPH_TEXT[\s\S]*safeMetrics/, 'Profiling explorer must suppress unreadable persisted binary/glyph metrics before rendering.')
 requireMatch(page, /metrics=\{safeMetrics as any\}/, 'Profiling explorer must render sanitized persisted metrics only.')
+
+requireMatch(profilingPage, /canonicalizeDocumentPreview/, 'Profiling sample preview must use the canonical governed document preview boundary.')
+requireMatch(profilingPage, /samples=\{canonicalPreview\.samples\}/, 'Dashboard sample preview must render canonical document evidence only.')
+requireMatch(profilingPage, /canonicalPreview\.sensitiveEvidence/, 'Sensitive-data presentation must consume the same canonical readable document evidence as sample preview.')
 
 requireMatch(explorer, /type\s+ExplorerDistribution/, 'Profiling explorer must define the persisted distribution contract.')
 requireMatch(explorer, /preferredColumnId/, 'Profiling explorer must automatically select useful persisted evidence instead of opening empty.')
@@ -53,6 +59,10 @@ requireMatch(documentEvidence, /detectSensitiveTextEvidence/, 'Readable document
 requireMatch(governedFileSource, /nativeTextIsReadable/, 'Governed FILE loading must reject unreadable native PDF text.')
 requireMatch(governedFileSource, /metadataOnlyFallback/, 'Unreadable native PDF text must fail closed to metadata-only evidence.')
 requireMatch(governedFileSource, /Unreadable native text was replaced with governed OCR text/, 'Governed PDF loading must prefer readable OCR evidence when native text is rejected.')
+requireMatch(canonicalPreview, /loadGovernedFileSource/, 'Canonical data preview must reuse the governed FILE reader rather than implement a separate extraction path.')
+requireMatch(canonicalPreview, /loadCanonicalDocumentPreviewFromSource/, 'Canonical preview must expose a source-backed path that includes native extraction and OCR fallback.')
+requireMatch(canonicalPreview, /Binary or encoded glyph streams are intentionally hidden/, 'Canonical preview must fail closed when readable text is unavailable.')
+requireMatch(canonicalPreview, /sanitizePersistedMetricForPresentation/, 'Persisted profiling metrics must share a canonical presentation sanitizer.')
 
 console.log(JSON.stringify({
   valid: true,
@@ -68,5 +78,8 @@ console.log(JSON.stringify({
     noFabricatedHistograms: true,
     explorerEvidenceWithoutFindings: true,
     explorerUnreadableMetricSuppression: true,
+    canonicalDocumentPreview: true,
+    governedSourceReaderReuse: true,
+    sharedSensitiveEvidence: true,
   },
 }, null, 2))
