@@ -3,6 +3,7 @@ import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specia
 import {
   canMarkOriginalStepSucceeded,
   classifyGovernanceFailure,
+  failureSignalFromCode,
   validateDebuggerInput,
   type DebuggerInput,
   type FailureSignal,
@@ -75,23 +76,6 @@ export function buildBoundedDebuggerInput(input: DebuggerInput): DebuggerInput {
     sanitizedInput: input.sanitizedInput,
     previousAttempts: Number.isInteger(input.previousAttempts) && input.previousAttempts >= 0 ? input.previousAttempts : 0,
   }
-}
-
-export function failureSignalFromCode(code: string | null | undefined): FailureSignal {
-  const normalized = String(code ?? '').toUpperCase()
-
-  // Security-sensitive failures must be recognized before generic DENIED/POLICY
-  // matching. Otherwise codes such as AUTHORIZATION_DENIED or
-  // CROSS_PROJECT_DENIED could be downgraded to an ordinary policy block.
-  if (normalized.includes('SECURITY') || normalized.includes('AUTHORIZATION') || normalized.includes('CROSS_PROJECT') || normalized.includes('TENANT')) {
-    return { code: normalized, securityRelevant: true }
-  }
-  if (normalized.includes('APPROVAL')) return { code: normalized, approvalRequired: true }
-  if (normalized.includes('POLICY') || normalized.includes('DENIED')) return { code: normalized, policyDenied: true }
-  if (['NATIVE_', 'SUPERVISOR_', 'LEASE_', 'EXECUTOR_', 'CONTRACT_', 'RUNTIME_'].some(prefix => normalized.includes(prefix))) {
-    return { code: normalized, runtimeDefect: true }
-  }
-  return { code: normalized, ambiguous: true }
 }
 
 async function resolveRuntimeDebuggerDefinition() {
