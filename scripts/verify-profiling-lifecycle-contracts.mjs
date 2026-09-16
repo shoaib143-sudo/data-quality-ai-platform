@@ -34,6 +34,9 @@ requireMatch(validatorMigration, /v_run_column_count\s*=\s*profile_column_count/
 requireMatch(validatorMigration, /nullif\(v_run_schema_hash,\s*''\)\s+is\s+not\s+null/, 'Completed profile contract must require a schema hash.')
 requireMatch(validatorMigration, /v_summary_overall\s+is\s+not\s+distinct\s+from\s+v_overall/, 'Summary and persisted overall scores must be identical.')
 
+requireMatch(databaseVerifier, /completedProfilePageSize\s*=\s*500/, 'Live database verification must page through the completed profiling estate.')
+requireMatch(databaseVerifier, /\.range\(from,\s*from\s*\+\s*completedProfilePageSize\s*-\s*1\)/, 'Live database verification must not silently truncate completed profiling runs.')
+requireMatch(databaseVerifier, /page\.length\s*<\s*completedProfilePageSize/, 'Live database pagination must terminate only after the final partial page.')
 requireMatch(databaseVerifier, /latestProfileByDatasetVersion/, 'Live database verification must inspect the latest completed profile for each dataset version.')
 requireMatch(databaseVerifier, /rpc\('validate_metric_execution_contract'/, 'Live database verification must execute the profiling contract validator.')
 requireMatch(databaseVerifier, /score_consistent/, 'Live database verification must gate score consistency.')
@@ -49,6 +52,7 @@ console.log(JSON.stringify({
     canonicalSummaryScore: true,
     scoreConsistencyValidation: true,
     completedFactValidation: true,
+    paginatedEstateValidation: true,
     latestEstateValidation: true,
   },
 }, null, 2))
