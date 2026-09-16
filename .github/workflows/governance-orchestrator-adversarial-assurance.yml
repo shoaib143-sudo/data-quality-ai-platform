@@ -18,9 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - name: Checkout exact revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Run fail-closed adversarial audit
         run: node --experimental-strip-types scripts/audit-governance-orchestrator-adversarial.mjs
