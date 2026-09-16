@@ -12,20 +12,17 @@ declare
   v_contract jsonb;
   v_definition record;
 begin
-  insert into app.organizations(name,slug,metadata)
-  values ('Profiling lifecycle runtime','profiling-lifecycle-' || left(gen_random_uuid()::text,8),jsonb_build_object('synthetic',true));
-
   select id into v_project_id from app.projects order by created_at asc limit 1;
   if v_project_id is null then
     raise exception 'Profiling lifecycle acceptance requires a reconstructed project fixture';
   end if;
 
-  insert into catalog.datasets(project_id,name,description,source_type,metadata)
-  values (v_project_id,'Synthetic profiling lifecycle','Disposable runtime acceptance dataset','FILE',jsonb_build_object('synthetic',true))
+  insert into catalog.datasets(project_id,name,description,source_identifier,metadata)
+  values (v_project_id,'Synthetic profiling lifecycle','Disposable runtime acceptance dataset','runtime://synthetic',jsonb_build_object('synthetic',true))
   returning id into v_dataset_id;
 
-  insert into catalog.dataset_versions(dataset_id,version_label,schema_snapshot,metadata)
-  values (v_dataset_id,'runtime-acceptance',jsonb_build_object('columns',jsonb_build_array(jsonb_build_object('name','id','type','text'))),jsonb_build_object('synthetic',true))
+  insert into catalog.dataset_versions(dataset_id,version_number,source_uri,schema_hash,row_count,column_count,status,metadata)
+  values (v_dataset_id,1,'runtime://synthetic/v1','runtime-schema',2,1,'READY',jsonb_build_object('synthetic',true))
   returning id into v_version_id;
 
   insert into profiling.profile_runs(dataset_version_id,status,engine_name,engine_version,row_count,column_count,schema_hash,summary)
