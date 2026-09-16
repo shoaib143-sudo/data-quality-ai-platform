@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createObjectStorage } from '@/lib/storage/factory'
+import { requireInternalBearer } from '@/lib/security/internal-bearer'
 import type { StorageReference } from '@/lib/storage/contracts'
 
+// requireInternalBearer validates the CRON_SECRET using constant-time comparison.
 export const dynamic = 'force-dynamic'
 
 function allowedPreview() {
@@ -19,9 +21,12 @@ function allowsOrigin(header: string | null, origin: string) {
   return header === '*' || header.split(',').map((value) => value.trim()).includes(origin)
 }
 
-async function runSmokeProbe() {
+async function runSmokeProbe(request: Request) {
   if (!allowedPreview()) {
     return NextResponse.json({ error: 'R2 smoke probe is available only on the designated preview branch.' }, { status: 404 })
+  }
+  if (!requireInternalBearer(request)) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
   const storage = createObjectStorage('r2')
@@ -40,12 +45,7 @@ async function runSmokeProbe() {
   const diagnostics: Record<string, number | null | string> = { expectedSizeBytes, origin }
 
   try {
-    reference = await storage.putObject({
-      bucket,
-      key,
-      body: payload,
-      contentType: 'text/plain',
-    })
+    reference = await storage.putObject({ bucket, key, body: payload, contentType: 'text/plain' })
     stages.put = true
 
     const head = await storage.headObject(reference)
@@ -61,7 +61,6 @@ async function runSmokeProbe() {
 
     await storage.deleteObject(reference)
     stages.delete = true
-
     const afterDelete = await storage.headObject(reference)
     stages.absentAfterDelete = !afterDelete.exists
 
@@ -93,10 +92,7 @@ async function runSmokeProbe() {
 
     const browserPut = await fetch(uploadAuthorization.url, {
       method: 'PUT',
-      headers: {
-        ...(uploadAuthorization.requiredHeaders ?? {}),
-        origin,
-      },
+      headers: { ...(uploadAuthorization.requiredHeaders ?? {}), origin },
       body: payload,
     })
     diagnostics.presignedPutStatus = browserPut.status
@@ -111,10 +107,7 @@ async function runSmokeProbe() {
     const browserHead = await storage.headObject(browserReference)
     stages.presignedHead = browserHead.exists && browserHead.sizeBytes === expectedSizeBytes
 
-    const downloadAuthorization = await storage.createDownloadAuthorization({
-      reference: browserReference,
-      expiresInSeconds: 120,
-    })
+    const downloadAuthorization = await storage.createDownloadAuthorization({ reference: browserReference, expiresInSeconds: 120 })
     if (!downloadAuthorization.url) throw new Error('R2 presigned download URL was not returned.')
     const browserGet = await fetch(downloadAuthorization.url, { headers: { origin } })
     const browserBody = await browserGet.text()
@@ -148,10 +141,10 @@ async function runSmokeProbe() {
   }
 }
 
-export async function GET() {
-  return runSmokeProbe()
+export async function GET(request: Request) {
+  return runSmokeProbe(request)
 }
 
-export async function POST() {
-  return runSmokeProbe()
+export async function POST(request: Request) {
+  return runSmokeProbe(request)
 }

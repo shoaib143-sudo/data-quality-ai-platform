@@ -1,19 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createObjectStorage } from '@/lib/storage/factory'
+import { requireInternalBearer } from '@/lib/security/internal-bearer'
 import type { StorageProvider, StorageReference } from '@/lib/storage/contracts'
 
+// requireInternalBearer validates the CRON_SECRET using constant-time comparison.
 export const dynamic = 'force-dynamic'
 
 const DEFAULT_STALE_MINUTES = 30
 const MAX_BATCH = 100
-
-function authorized(request: Request) {
-  const expected = process.env.CRON_SECRET?.trim()
-  if (!expected) return false
-  const header = request.headers.get('authorization') ?? ''
-  return header === `Bearer ${expected}`
-}
 
 function staleMinutes() {
   const parsed = Number(process.env.STORAGE_RECONCILE_STALE_MINUTES)
@@ -25,7 +20,7 @@ function normalizedContentType(value?: string | null) {
 }
 
 export async function POST(request: Request) {
-  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+  if (!requireInternalBearer(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
 
   const admin = createAdminClient()
   const cutoff = new Date(Date.now() - staleMinutes() * 60_000).toISOString()
