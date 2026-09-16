@@ -43,6 +43,13 @@ export type ReleaseAssuranceInput = {
     exactHeadSha: string
     contexts: Record<string, EvidenceState>
   }
+  platformCertification?: TimedEvidence & {
+    claimLevel: 'CERTIFIED'
+    sourceCommitSha: string
+    decisionRef: string
+    independentProducer: string
+    implementationProducer: string
+  }
   build?: {
     builderIdentity: string
     buildId: string
@@ -109,7 +116,7 @@ export type ReleaseAssuranceResult = {
 
 const SHA40 = /^[a-f0-9]{40}$/i
 const SHA256 = /^sha256:[a-f0-9]{64}$/i
-const REQUIRED_CONTEXTS = ['build', 'analyze', 'revalidate', 'certify'] as const
+const REQUIRED_CONTEXTS = ['build', 'analyze', 'revalidate', 'certify', 'release-governance'] as const
 const REQUIRED_PATHS: AcceptancePath[] = ['NORMAL', 'ADVERSARIAL', 'DEGRADED']
 const EXPECTED_REPOSITORY = 'shoaib143-sudo/data-quality-ai-platform'
 const EXPECTED_PROTECTED_BRANCH = 'main'
@@ -138,7 +145,18 @@ export function evaluateReleaseAssurance(input: ReleaseAssuranceInput): ReleaseA
   if (!SHA40.test(sourceSha)) blockers.push('SOURCE_COMMIT_INVALID')
   if (input.certification.exactHeadSha !== sourceSha) blockers.push('CERTIFICATION_HEAD_MISMATCH')
   for (const context of REQUIRED_CONTEXTS) {
-    if (input.certification.contexts[context] !== 'PASS') blockers.push(`PROTECTED_CONTEXT_${context.toUpperCase()}_NOT_PASS`)
+    if (input.certification.contexts[context] !== 'PASS') blockers.push(`PROTECTED_CONTEXT_${context.toUpperCase().replaceAll('-', '_')}_NOT_PASS`)
+  }
+
+  if (!input.platformCertification) blockers.push('PLATFORM_CERTIFICATION_DECISION_MISSING')
+  else {
+    if (input.platformCertification.claimLevel !== 'CERTIFIED') blockers.push('PLATFORM_CERTIFICATION_CLAIM_INVALID')
+    if (input.platformCertification.sourceCommitSha !== sourceSha) blockers.push('PLATFORM_CERTIFICATION_SOURCE_MISMATCH')
+    if (!input.platformCertification.decisionRef.trim()) blockers.push('PLATFORM_CERTIFICATION_DECISION_REF_MISSING')
+    if (!input.platformCertification.independentProducer.trim()) blockers.push('PLATFORM_CERTIFICATION_PRODUCER_MISSING')
+    if (!input.platformCertification.implementationProducer.trim()) blockers.push('PLATFORM_IMPLEMENTATION_PRODUCER_MISSING')
+    if (input.platformCertification.independentProducer === input.platformCertification.implementationProducer) blockers.push('PLATFORM_CERTIFICATION_NOT_INDEPENDENT')
+    if (!isPassingFreshEvidence(input.platformCertification, now)) blockers.push('PLATFORM_CERTIFICATION_NOT_FRESH_PASS')
   }
 
   const certified = blockers.length === 0
@@ -228,12 +246,8 @@ export function evaluateReleaseAssurance(input: ReleaseAssuranceInput): ReleaseA
     if (!isPassingFreshEvidence(input.residualRiskSnapshot, now)) blockers.push('RESIDUAL_RISK_SNAPSHOT_NOT_FRESH_PASS')
     for (const risk of input.residualRiskSnapshot.risks) {
       const reviewBy = new Date(risk.reviewBy)
-      if (Number.isNaN(reviewBy.getTime()) || reviewBy.getTime() < now.getTime()) {
-        blockers.push(`RESIDUAL_RISK_${risk.id}_EXPIRED`)
-      }
-      if (risk.riskTier === 'R3' && risk.status !== 'CLOSED') {
-        blockers.push(`RESIDUAL_RISK_${risk.id}_R3_OPEN`)
-      }
+      if (Number.isNaN(reviewBy.getTime()) || reviewBy.getTime() < now.getTime()) blockers.push(`RESIDUAL_RISK_${risk.id}_EXPIRED`)
+      if (risk.riskTier === 'R3' && risk.status !== 'CLOSED') blockers.push(`RESIDUAL_RISK_${risk.id}_R3_OPEN`)
     }
   }
 
