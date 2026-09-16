@@ -48,5 +48,12 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
+      - name: Syntax-check storage TypeScript without executing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --experimental-strip-types --check "$file"
+          done < <(find lib/storage app/api/internal/storage app/api/datasets/source/upload-file -type f -name '*.ts' -print0)
       - name: Run storage contract, negative, adversarial, and cutover guards
         run: node --test tests/storage-*.test.mjs
