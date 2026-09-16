@@ -460,3 +460,25 @@ This strategy is implemented through the following version-controlled specificat
 - [Certification Gates](./CERTIFICATION_GATES.md)
 
 The planning envelope for the mature suite is approximately 4,000 to 8,000 meaningful software tests and AI evaluations, subject to refinement from the repository-derived Feature Registry. Raw test count is not a certification gate.
+
+
+## Automation-only execution policy
+
+All DataNexus certification tests and AI evaluations are designed for **100% unattended execution**. Certification must not depend on a person clicking UI controls, choosing test outcomes, entering credentials interactively, interpreting screenshots, or manually resetting fixtures.
+
+Human activity is limited to defining or approving product requirements, risk policy, acceptance thresholds, and exceptional business decisions. Those activities define what automation verifies; they are not steps inside a certification run.
+
+Automation requirements:
+
+1. Browser E2E uses automated browser drivers and synthetic test identities.
+2. Authentication uses CI-safe test identity/session provisioning through approved secret stores, never interactive login.
+3. Test data and certification projects are provisioned and reset automatically.
+4. AI evaluations use machine-executable deterministic assertions and versioned automated scorers. No manual grading is a release gate.
+5. Fault injection, concurrency, retries, time manipulation, authority expiry/revocation, and recovery are orchestrated automatically.
+6. UI/API/DB/storage/audit reconciliation is machine asserted.
+7. Screenshots, traces, logs, request IDs, fingerprints, database assertions, and deployment metadata are captured automatically.
+8. Tests clean up their own mutable fixtures or use isolated disposable namespaces.
+9. CI returns an unambiguous PASS, FAIL, or BLOCKED result without human interpretation.
+10. Production synthetic tests must be non-destructive, isolated, automatically cleaned up, and safe to repeat.
+
+Any scenario that requires manual intervention is a gap in the automation harness and cannot count toward automated certification coverage.
