@@ -25,6 +25,12 @@ type Policy = {
   emergencyStop: boolean
 }
 
+type ReportingPreference = {
+  enabled: boolean
+  persona: 'EXECUTIVE' | 'GOVERNANCE_COUNCIL' | 'DATA_STEWARD' | 'AUDIT'
+  depth: 'EXECUTIVE' | 'GOVERNANCE' | 'AUDIT'
+}
+
 const governedAgents = [
   'governance_orchestrator_agent',
   'steward_agent',
@@ -43,6 +49,8 @@ const defaultPolicy: Policy = {
   maxRemediationActionsPerHour: 0, maxConcurrentModelCalls: 0, emergencyStop: false,
 }
 
+const defaultReporting: ReportingPreference = { enabled: false, persona: 'EXECUTIVE', depth: 'EXECUTIVE' }
+
 export function AutonomyConsole({ projects, executableProjectIds, manageableProjectIds, certifiableProjectIds }: {
   projects: ProjectOption[]
   executableProjectIds: string[]
@@ -52,6 +60,8 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [policy, setPolicy] = useState<Policy>(defaultPolicy)
   const [coverage, setCoverage] = useState<Record<string, unknown> | null>(null)
+  const [latestReport, setLatestReport] = useState<Record<string, unknown> | null>(null)
+  const [reporting, setReporting] = useState<ReportingPreference>(defaultReporting)
   const [goal, setGoal] = useState('Run governed end-to-end Data Governance and AI assurance for this project.')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -71,6 +81,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
         if (!cancelled) {
           setPolicy(body.policy ?? defaultPolicy)
           setCoverage(body.latestCoverageRun ?? null)
+          setLatestReport(body.latestReport ?? null)
           setMessage('')
         }
       })
@@ -110,12 +121,16 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
     setBusy(true); setMessage('')
     try {
       const response = await fetch('/api/agents/governance-orchestrator', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, goal }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, goal, reporting }),
       })
       const body = await response.json()
       if (!response.ok && response.status !== 202 && response.status !== 409) throw new Error(body.error || 'Orchestrator execution failed.')
       setCoverage(body)
-      setMessage(body.status === 'SUCCEEDED' ? 'Orchestrator execution completed. Canonical evidence still requires independent certification.' : `Orchestrator status: ${body.status ?? 'UNKNOWN'}.`)
+      setMessage(body.status === 'SUCCEEDED'
+        ? reporting.enabled
+          ? 'Orchestrator execution completed. Reporting is opted in and will use canonical persisted evidence only.'
+          : 'Orchestrator execution completed. Reporting was not requested for this run.'
+        : `Orchestrator status: ${body.status ?? 'UNKNOWN'}.`)
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Orchestrator execution failed.') }
     finally { setBusy(false) }
   }
@@ -143,6 +158,9 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   }
 
   const summary = (coverage?.summary ?? coverage) as Record<string, unknown> | null
+  const reportPayload = latestReport && typeof latestReport.report === 'object' && latestReport.report !== null
+    ? latestReport.report as Record<string, unknown>
+    : null
   const orchestratorRunId = typeof coverage?.orchestratorRunId === 'string'
     ? coverage.orchestratorRunId
     : typeof coverage?.id === 'string' ? coverage.id : ''
@@ -199,6 +217,32 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
           <p className="text-sm font-medium">Execution goal</p>
           <textarea value={goal} onChange={event => setGoal(event.target.value)} rows={5} maxLength={2000} className="mt-2 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
         </div>
+
+        <div className="rounded-lg border p-4 space-y-3">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" checked={reporting.enabled} onChange={event => setReporting(current => ({ ...current, enabled: event.target.checked }))} />
+            Generate governance outcome report for this execution
+          </label>
+          <p className="text-xs text-muted-foreground">Optional and opt-in. Reports may only use canonical persisted evidence and omit unsupported claims.</p>
+          {reporting.enabled && <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm">Audience
+              <select value={reporting.persona} onChange={event => setReporting(current => ({ ...current, persona: event.target.value as ReportingPreference['persona'] }))} className="mt-1 w-full rounded-lg border bg-background px-3 py-2">
+                <option value="EXECUTIVE">CDO / Executive</option>
+                <option value="GOVERNANCE_COUNCIL">Governance Council</option>
+                <option value="DATA_STEWARD">Data Steward</option>
+                <option value="AUDIT">Audit</option>
+              </select>
+            </label>
+            <label className="text-sm">Reporting depth
+              <select value={reporting.depth} onChange={event => setReporting(current => ({ ...current, depth: event.target.value as ReportingPreference['depth'] }))} className="mt-1 w-full rounded-lg border bg-background px-3 py-2">
+                <option value="EXECUTIVE">Executive</option>
+                <option value="GOVERNANCE">Governance</option>
+                <option value="AUDIT">Audit</option>
+              </select>
+            </label>
+          </div>}
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={runOrchestrator} disabled={!canExecute || busy || policy.mode === 'OFF'} className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">
             {busy ? 'Working…' : 'Run DataNexus Governance Orchestrator'}
@@ -211,6 +255,18 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
         {!canCertify && <p className="text-xs text-muted-foreground">Certification requires separate certification.review authority.</p>}
         {message && <p className="rounded-lg border p-3 text-sm">{message}</p>}
       </section>
+
+      {reportPayload && <section className="dn-workspace-panel rounded-xl border p-5 lg:col-span-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">{String(reportPayload.title ?? 'Governance Outcome Report')}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{String(reportPayload.openingSummary ?? '')}</p>
+          </div>
+          <span className="rounded-full border px-3 py-1 text-xs">Evidence-backed report</span>
+        </div>
+        <p className="mt-4 text-sm">{String(reportPayload.unresolvedStatement ?? '')}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{String(reportPayload.assuranceStatement ?? '')}</p>
+      </section>}
 
       <section className="dn-workspace-panel rounded-xl border p-5 lg:col-span-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
