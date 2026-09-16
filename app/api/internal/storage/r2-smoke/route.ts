@@ -9,6 +9,12 @@ function allowedPreview() {
     && process.env.VERCEL_GIT_COMMIT_REF === 'r2-prereq-hardening-20260916'
 }
 
+function authorized(request: Request) {
+  const expected = process.env.CRON_SECRET?.trim()
+  if (!expected) return false
+  return (request.headers.get('authorization') ?? '') === `Bearer ${expected}`
+}
+
 function previewOrigin() {
   const host = process.env.VERCEL_BRANCH_URL?.trim() || process.env.VERCEL_URL?.trim()
   return host ? `https://${host}` : undefined
@@ -19,9 +25,12 @@ function allowsOrigin(header: string | null, origin: string) {
   return header === '*' || header.split(',').map((value) => value.trim()).includes(origin)
 }
 
-async function runSmokeProbe() {
+async function runSmokeProbe(request: Request) {
   if (!allowedPreview()) {
     return NextResponse.json({ error: 'R2 smoke probe is available only on the designated preview branch.' }, { status: 404 })
+  }
+  if (!authorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
   const storage = createObjectStorage('r2')
@@ -148,10 +157,10 @@ async function runSmokeProbe() {
   }
 }
 
-export async function GET() {
-  return runSmokeProbe()
+export async function GET(request: Request) {
+  return runSmokeProbe(request)
 }
 
-export async function POST() {
-  return runSmokeProbe()
+export async function POST(request: Request) {
+  return runSmokeProbe(request)
 }
