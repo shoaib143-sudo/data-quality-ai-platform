@@ -9,8 +9,10 @@ on:
       - 'lib/governance/delegation-admin-service.ts'
       - 'lib/governance/agent-approval-service.ts'
       - 'scripts/verify-delegation-admin-policy.mjs'
+      - 'scripts/assert-direct-approval-authority-assignment.sql'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
+      - '.github/workflows/v6-operational-certification.yml'
   push:
     branches: [main]
     paths:
@@ -20,11 +22,17 @@ on:
       - 'lib/governance/delegation-admin-service.ts'
       - 'lib/governance/agent-approval-service.ts'
       - 'scripts/verify-delegation-admin-policy.mjs'
+      - 'scripts/assert-direct-approval-authority-assignment.sql'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
+      - '.github/workflows/v6-operational-certification.yml'
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
@@ -34,3 +42,50 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Verify delegation and direct authority administration policy
         run: node scripts/verify-delegation-admin-policy.mjs
+
+  authority-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Reconstruct database and execute direct authority matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE"
+          WORK="$RUNNER_TEMP/direct-authority-runtime"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
+          cd "$WORK"
+          pnpm dlx supabase@2.117.0 init
+          SOURCE_MIGRATION_DIR="$ROOT/supabase/migrations" TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-migration-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-agent-status-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-audit-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-jdbc-fixture-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-observability-incident-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-lineage-legacy-constraint-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-remediation-knowledge-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-intelligence-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-policy-boundary-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-operational-policy-boundary-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-control-evidence-syntax-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-catalog-reconcile-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-membership-helper-acl-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-synthetic-suite-rollback-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-analysis-evidence-envelope-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-security-definer-acl-replay.mjs"
+          pnpm dlx supabase@2.117.0 start
+          trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
+          pnpm dlx supabase@2.117.0 db reset --local
+          DB_URL="$(pnpm dlx supabase@2.117.0 status -o env | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
+          test -n "$DB_URL"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-assignment.sql"
