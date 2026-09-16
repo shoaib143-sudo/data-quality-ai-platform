@@ -5,18 +5,22 @@ on:
     paths:
       - 'app/approvals/**'
       - 'app/api/agent-approvals/delegations/**'
+      - 'app/api/agent-approvals/authorities/**'
       - 'lib/governance/delegation-admin-service.ts'
       - 'lib/governance/agent-approval-service.ts'
       - 'scripts/verify-delegation-admin-policy.mjs'
+      - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
   push:
     branches: [main]
     paths:
       - 'app/approvals/**'
       - 'app/api/agent-approvals/delegations/**'
+      - 'app/api/agent-approvals/authorities/**'
       - 'lib/governance/delegation-admin-service.ts'
       - 'lib/governance/agent-approval-service.ts'
       - 'scripts/verify-delegation-admin-policy.mjs'
+      - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
 
 permissions:
@@ -28,5 +32,5 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Verify delegation administration policy
+      - name: Verify delegation and direct authority administration policy
         run: node scripts/verify-delegation-admin-policy.mjs

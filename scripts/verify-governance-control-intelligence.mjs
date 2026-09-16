@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { verifyDurableWorkerSchedulerAuthority } from '../lib/recovery/durable-worker-scheduler-authority.mjs'
 
 const migrationPath = 'supabase/migrations/20260905062116_governance_control_intelligence_engine.sql'
 const gateMigrationPath = 'supabase/migrations/20260905062857_include_governance_control_intelligence_in_formal_gate.sql'
@@ -6,15 +7,18 @@ const issueProjectionPath = 'supabase/migrations/20260905063911_project_control_
 const collectorMigrationPath = 'supabase/migrations/20260905064557_automated_governance_control_evidence_collection.sql'
 const collectorFixPath = 'supabase/migrations/20260905064901_fix_automated_control_evidence_upsert_found_state.sql'
 const continuousMigrationPath = 'supabase/migrations/20260905065604_continuous_governance_control_intelligence_reconciliation.sql'
+const schedulerMigrationPath = 'supabase/migrations/20260916103000_durable_worker_scheduler_authority.sql'
 const migration = fs.readFileSync(migrationPath, 'utf8')
 const gateMigration = fs.readFileSync(gateMigrationPath, 'utf8')
 const issueProjection = fs.readFileSync(issueProjectionPath, 'utf8')
 const collectorMigration = fs.readFileSync(collectorMigrationPath, 'utf8')
 const collectorFix = fs.readFileSync(collectorFixPath, 'utf8')
 const continuousMigration = fs.readFileSync(continuousMigrationPath, 'utf8')
+const schedulerMigration = fs.readFileSync(schedulerMigrationPath, 'utf8')
 const aiGovernanceSweep = fs.readFileSync('lib/governance/ai-governance-intelligence.ts', 'utf8')
 const workerRoute = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
-const vercelConfig = fs.readFileSync('vercel.json', 'utf8')
+const vercelConfig = JSON.parse(fs.readFileSync('vercel.json', 'utf8'))
+const scheduler = verifyDurableWorkerSchedulerAuthority({ migrationSql: schedulerMigration, vercelConfig })
 const files = {
   propose: fs.readFileSync('app/api/governance/controls/propose/route.ts', 'utf8'),
   review: fs.readFileSync('app/api/governance/controls/review/route.ts', 'utf8'),
@@ -80,7 +84,7 @@ const checks = [
   ['AI governance sweep invokes control reconciliation', /rpc\('refresh_all_governance_control_intelligence'\)/.test(aiGovernanceSweep) && /Promise\.all/.test(aiGovernanceSweep)],
   ['AI governance sweep propagates control failures', /failure_count/.test(aiGovernanceSweep) && /throw new Error\(`Governance control intelligence reconciliation reported/.test(aiGovernanceSweep)],
   ['scheduled worker invokes AI governance sweep', /refreshAllAIGovernanceIntelligence\(\)/.test(workerRoute)],
-  ['worker runs every minute', /"path"\s*:\s*"\/api\/jobs\/worker"/.test(vercelConfig) && /"schedule"\s*:\s*"\* \* \* \* \*"/.test(vercelConfig)],
+  ['worker runs every minute', scheduler.authority === 'SUPABASE_PG_CRON' && scheduler.schedule === '* * * * *' && scheduler.command === 'select orchestration.kick_durable_worker();'],
   ['AI governance read model exposes control posture', /controlPosture:\s*ControlPosture/.test(aiGovernanceSweep) && /proposedControls/.test(aiGovernanceSweep) && /activeControls/.test(aiGovernanceSweep) && /openFindings/.test(aiGovernanceSweep)],
   ['control posture reads definitions evaluations and findings', /from\('control_definitions'\)/.test(aiGovernanceSweep) && /from\('control_evaluations'\)/.test(aiGovernanceSweep) && /from\('governance_findings'\)/.test(aiGovernanceSweep)],
   ['control posture excludes raw control evidence payloads', !/from\('control_evidence'\)/.test(aiGovernanceSweep)],
