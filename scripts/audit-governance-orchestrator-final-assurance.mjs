@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
+// Exact-head rerun after reconciling the integration branch with current protected main.
 import { buildGovernanceOutcomeReport } from '../lib/orchestration/governance-outcome-report.ts'
 import { renderGovernanceReportPdf, renderGovernanceReportPptx } from '../lib/orchestration/governance-report-export.ts'
 import { buildExecutiveNarrationScript } from '../lib/orchestration/governance-report-narration.ts'
