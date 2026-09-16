@@ -1,6 +1,7 @@
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
+import { sanitizePersistedMetricForPresentation } from '@/lib/profiling/canonical-document-preview'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import ProfilingExplorer from '@/app/profiling/profiling-explorer'
@@ -24,31 +25,6 @@ function text(value: unknown) {
 
 function numeric(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-function hasUnreadableControlText(value: unknown): boolean {
-  if (typeof value === 'string') {
-    if (!value) return false
-    const controls = value.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g)?.length ?? 0
-    return controls >= 3 && controls / Math.max(value.length, 1) >= 0.01
-  }
-  if (Array.isArray(value)) return value.some(hasUnreadableControlText)
-  if (value && typeof value === 'object') return Object.values(value as Record<string, unknown>).some(hasUnreadableControlText)
-  return false
-}
-
-function sanitizeExplorerMetric<T extends {
-  text_value: string | null
-  json_value: unknown
-}>(metric: T): T {
-  const textUnreadable = hasUnreadableControlText(metric.text_value)
-  const jsonUnreadable = hasUnreadableControlText(metric.json_value)
-  if (!textUnreadable && !jsonUnreadable) return metric
-  return {
-    ...metric,
-    text_value: textUnreadable ? '[Unreadable binary/glyph evidence hidden]' : metric.text_value,
-    json_value: jsonUnreadable ? { evidence_state: 'UNREADABLE_BINARY_OR_GLYPH_TEXT', display: 'Persisted binary/glyph evidence hidden from explorer.' } : metric.json_value,
-  }
 }
 
 export default async function ProfilingExplorerPage({ searchParams }: { searchParams: ExplorerSearchParams }) {
@@ -119,7 +95,7 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
   if (distributionsError) throw new Error(`Unable to load profiling distributions: ${distributionsError.message}`)
   if (workflowResult.error) throw new Error(`Unable to load profiling governance workflow: ${workflowResult.error.message}`)
 
-  const safeMetrics = (metrics ?? []).map(sanitizeExplorerMetric)
+  const safeMetrics = (metrics ?? []).map(sanitizePersistedMetricForPresentation)
   const workflow = workflowResult.data
   const outcomeResult = workflow
     ? await supabase.schema('governance').from('profiling_remediation_outcomes')
