@@ -37,6 +37,7 @@ jobs:
       - name: PR fast-path certification preflight
         if: github.event_name == 'pull_request'
         run: |
+          node scripts/verify-journey-operational-certification.mjs
           node scripts/audit-user-facing-admin-routes.mjs
           node scripts/verify-migration-version-uniqueness.mjs
           node scripts/verify-clean-membership-helper-acl-replay.mjs
