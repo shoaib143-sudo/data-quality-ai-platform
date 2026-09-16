@@ -95,18 +95,24 @@ console.log(`PASS active execution source inventory -> ${activeSources ?? 0} act
 if ((deadEvents ?? 0) > 0) throw new Error(`${deadEvents} governance outbox events reached DEAD state in the previous 24 hours.`)
 console.log('PASS governance outbox has no recent DEAD events')
 
-const { data: completedProfiles, error: completedProfilesError } = await supabase
-  .schema('profiling')
-  .from('profile_runs')
-  .select('id,dataset_version_id,completed_at,started_at')
-  .eq('status', 'COMPLETED')
-  .order('completed_at', { ascending: false, nullsFirst: false })
-  .order('started_at', { ascending: false, nullsFirst: false })
-  .limit(500)
-if (completedProfilesError) throw new Error(`Unable to inspect completed profiling runs: ${completedProfilesError.message}`)
+const completedProfiles = []
+const completedProfilePageSize = 500
+for (let from = 0; ; from += completedProfilePageSize) {
+  const { data: page, error: completedProfilesError } = await supabase
+    .schema('profiling')
+    .from('profile_runs')
+    .select('id,dataset_version_id,completed_at,started_at')
+    .eq('status', 'COMPLETED')
+    .order('completed_at', { ascending: false, nullsFirst: false })
+    .order('started_at', { ascending: false, nullsFirst: false })
+    .range(from, from + completedProfilePageSize - 1)
+  if (completedProfilesError) throw new Error(`Unable to inspect completed profiling runs: ${completedProfilesError.message}`)
+  completedProfiles.push(...(page ?? []))
+  if (!page || page.length < completedProfilePageSize) break
+}
 
 const latestProfileByDatasetVersion = new Map()
-for (const run of completedProfiles ?? []) {
+for (const run of completedProfiles) {
   if (!run.dataset_version_id || latestProfileByDatasetVersion.has(run.dataset_version_id)) continue
   latestProfileByDatasetVersion.set(run.dataset_version_id, run)
 }
