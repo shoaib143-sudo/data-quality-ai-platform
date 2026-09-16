@@ -57,7 +57,7 @@ function evaluate(manifest) {
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
   const result = spawnSync(process.execPath, [evaluator, manifestPath], {
     cwd: root,
-    env: { ...process.env, DATANEXUS_SOURCE_COMMIT: sourceCommit },
+    env: { ...process.env, GITHUB_SHA: sourceCommit, DATANEXUS_SOURCE_COMMIT: sourceCommit },
     encoding: 'utf8',
   })
   fs.rmSync(tempDir, { recursive: true, force: true })
