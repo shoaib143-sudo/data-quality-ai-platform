@@ -8,6 +8,7 @@ const supabase = fs.readFileSync(new URL('../lib/storage/supabase.ts', import.me
 const factory = fs.readFileSync(new URL('../lib/storage/factory.ts', import.meta.url), 'utf8')
 const uploadRoute = fs.readFileSync(new URL('../app/api/datasets/source/upload-file/route.ts', import.meta.url), 'utf8')
 const completionRoute = fs.readFileSync(new URL('../app/api/datasets/source/upload-file/complete/route.ts', import.meta.url), 'utf8')
+const reconcileRoute = fs.readFileSync(new URL('../app/api/internal/storage/reconcile/route.ts', import.meta.url), 'utf8')
 const registerRoute = fs.readFileSync(new URL('../app/api/datasets/register/route.ts', import.meta.url), 'utf8')
 const sourceValidation = fs.readFileSync(new URL('../lib/profiling/source-validation.ts', import.meta.url), 'utf8')
 const governedFileSource = fs.readFileSync(new URL('../lib/profiling/governed-file-source.ts', import.meta.url), 'utf8')
@@ -143,4 +144,14 @@ test('governed profiling reads resolve R2 at execution time and sanitize tempora
   assert.match(governedFileSource, /resolveProviderNeutralFileConfig/)
   assert.match(governedFileSource, /sanitizeProviderNeutralFileResult/)
   assert.match(governedFileSource, /loadOriginalBytes\(supabase, resolved\.config/)
+})
+
+test('stale storage reconciliation is authenticated, non-destructive and never marks recovered objects READY', () => {
+  assert.match(reconcileRoute, /CRON_SECRET/)
+  assert.match(reconcileRoute, /\.in\('state', \['PENDING', 'UPLOADING', 'VERIFYING'\]\)/)
+  assert.match(reconcileRoute, /state: 'UPLOADED'/)
+  assert.match(reconcileRoute, /state: 'FAILED'/)
+  assert.doesNotMatch(reconcileRoute, /state: 'READY'/)
+  assert.doesNotMatch(reconcileRoute, /deleteObject/)
+  assert.match(reconcileRoute, /destructiveActions: 0/)
 })
