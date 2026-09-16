@@ -68,6 +68,12 @@ test('server-side R2 writes reject unsupported body types rather than hashing an
   assert.doesNotMatch(r2, /const payload = typeof body === 'string' \|\| Buffer\.isBuffer\(body\) \? body : ''/)
 })
 
+test('R2 HEAD does not misreport a missing content-length header as zero bytes', () => {
+  assert.match(r2, /const contentLength = response\.headers\.get\('content-length'\)/)
+  assert.match(r2, /contentLength === null \? undefined : Number\(contentLength\)/)
+  assert.doesNotMatch(r2, /const size = Number\(response\.headers\.get\('content-length'\)\)/)
+})
+
 test('upload cleanup never trusts a client-supplied bucket', () => {
   assert.doesNotMatch(uploadRoute, /body\.bucket/)
   assert.match(uploadRoute, /const bucket = datasetBucket\(requestedProvider\)/)
