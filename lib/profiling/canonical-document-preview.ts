@@ -1,9 +1,13 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 import {
   detectSensitiveTextEvidence,
   readableDocumentEvidence,
   summarizeDocumentEvidence,
   type DocumentEvidenceState,
 } from '@/lib/profiling/document-evidence'
+import { loadGovernedFileSource } from '@/lib/profiling/governed-file-source'
+import type { FileSourceConfig } from '@/lib/profiling/file-source-adapter'
 
 export type PersistedDocumentChunk = {
   chunk_index: number | null
@@ -22,6 +26,9 @@ export type CanonicalDocumentPreview = {
   samples: CanonicalPreviewSample[]
   readableText: string[]
   sensitiveEvidence: ReturnType<typeof detectSensitiveTextEvidence>
+  source?: 'PERSISTED_DOCUMENT_EVIDENCE' | 'GOVERNED_SOURCE_READER'
+  extractionMethod?: string | null
+  warnings?: string[]
 }
 
 const UNREADABLE_PLACEHOLDER = 'Readable text is unavailable from the governed document representation. Binary or encoded glyph streams are intentionally hidden; re-run extraction/OCR to refresh readable evidence.'
@@ -58,6 +65,45 @@ export function canonicalizeDocumentPreview(
     samples,
     readableText: evidence.readable,
     sensitiveEvidence: detectSensitiveTextEvidence(evidence.readable),
+    source: 'PERSISTED_DOCUMENT_EVIDENCE',
+  }
+}
+
+export async function loadCanonicalDocumentPreviewFromSource(
+  supabase: SupabaseClient,
+  config: FileSourceConfig,
+  options: { maxSamples?: number; maxBytes?: number } = {},
+): Promise<CanonicalDocumentPreview> {
+  const maxSamples = Math.max(1, options.maxSamples ?? 50)
+  const loaded = await loadGovernedFileSource(supabase, config, {
+    maxRows: maxSamples,
+    maxBytes: options.maxBytes,
+  })
+  const candidateText = loaded.rows.map((row) => row.text)
+  const evidence = summarizeDocumentEvidence(candidateText)
+  const samples = loaded.rows.flatMap((row, offset) => {
+    const readable = readableDocumentEvidence(row.text)
+    if (!readable) return []
+    const index = Number(row.chunk_index ?? row.document_index ?? offset + 1)
+    return [{
+      index: Number.isFinite(index) ? index : offset + 1,
+      content: readable,
+      character_count: readable.length,
+    }]
+  }).slice(0, maxSamples)
+
+  return {
+    evidenceState: evidence.state,
+    samples: samples.length ? samples : [{
+      index: 1,
+      content: evidence.state === 'UNREADABLE' ? UNREADABLE_PLACEHOLDER : EMPTY_PLACEHOLDER,
+      character_count: null,
+    }],
+    readableText: evidence.readable,
+    sensitiveEvidence: detectSensitiveTextEvidence(evidence.readable),
+    source: 'GOVERNED_SOURCE_READER',
+    extractionMethod: typeof loaded.metadata.text_extraction_method === 'string' ? loaded.metadata.text_extraction_method : null,
+    warnings: loaded.warnings,
   }
 }
 
