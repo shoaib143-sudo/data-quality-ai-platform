@@ -23,6 +23,8 @@ const [page, explorer, dashboard, governedFileSource, documentEvidence] = await 
 requireMatch(page, /from\('profile_columns'\)[\s\S]*total_count[\s\S]*null_count[\s\S]*blank_count[\s\S]*zero_count[\s\S]*distinct_count[\s\S]*distinct_percentage/, 'Profiling explorer page must load persisted column statistics.')
 requireMatch(page, /from\('profile_distributions'\)[\s\S]*distribution_type[\s\S]*distribution/, 'Profiling explorer page must load persisted distributions.')
 requireMatch(page, /distributions=\{\(distributions\s*\?\?\s*\[\]\)\s+as\s+any\}/, 'Profiling explorer page must pass distributions to the client explorer.')
+requireMatch(page, /hasUnreadableControlText[\s\S]*sanitizeExplorerMetric[\s\S]*UNREADABLE_BINARY_OR_GLYPH_TEXT[\s\S]*safeMetrics/, 'Profiling explorer must suppress unreadable persisted binary/glyph metrics before rendering.')
+requireMatch(page, /metrics=\{safeMetrics as any\}/, 'Profiling explorer must render sanitized persisted metrics only.')
 
 requireMatch(explorer, /type\s+ExplorerDistribution/, 'Profiling explorer must define the persisted distribution contract.')
 requireMatch(explorer, /preferredColumnId/, 'Profiling explorer must automatically select useful persisted evidence instead of opening empty.')
@@ -65,5 +67,6 @@ console.log(JSON.stringify({
     documentReadabilityGate: true,
     noFabricatedHistograms: true,
     explorerEvidenceWithoutFindings: true,
+    explorerUnreadableMetricSuppression: true,
   },
 }, null, 2))
