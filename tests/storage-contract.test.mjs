@@ -188,8 +188,12 @@ test('stale storage reconciliation quarantines observed size or content-type mis
   assert.match(reconcileRoute, /content_type/)
 })
 
-test('preview R2 smoke probe is internally authorized and exercises browser CORS without serializing signed URLs', () => {
+test('preview R2 smoke probe is internally authorized, explicitly ref-scoped, and exercises browser CORS without serializing signed URLs', () => {
   assert.match(smokeRoute, /VERCEL_ENV === 'preview'/)
+  assert.match(smokeRoute, /R2_SMOKE_ALLOWED_REF/)
+  assert.match(smokeRoute, /VERCEL_GIT_COMMIT_REF/)
+  assert.match(smokeRoute, /currentRef === allowedRef/)
+  assert.doesNotMatch(smokeRoute, /r2-prereq-hardening-20260916/)
   assert.match(smokeRoute, /CRON_SECRET/)
   assert.match(smokeRoute, /Unauthorized/)
   assert.match(smokeRoute, /method: 'OPTIONS'/)
