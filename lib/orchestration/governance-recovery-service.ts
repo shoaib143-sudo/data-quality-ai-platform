@@ -1,7 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import {
   canMarkOriginalStepSucceeded,
   classifyGovernanceFailure,
+  validateDebuggerInput,
   type DebuggerInput,
   type FailureSignal,
   type RuntimeDebuggingOutcome,
@@ -39,6 +41,7 @@ export async function recordRuntimeDebuggerOutcome(input: {
   outcome: RuntimeDebuggingOutcome
   originalStepReexecuted: boolean
   originalExitGatePassed: boolean
+  debuggerRunId?: string | null
 }) {
   const canSucceed = canMarkOriginalStepSucceeded({
     debuggerOutcome: input.outcome,
@@ -48,6 +51,7 @@ export async function recordRuntimeDebuggerOutcome(input: {
   const admin = createAdminClient()
   const { data, error } = await admin.schema('orchestration').from('governance_recovery_events').update({
     debugger_outcome: input.outcome,
+    debugger_run_id: input.debuggerRunId ?? null,
     original_step_reexecuted: input.originalStepReexecuted,
     original_exit_gate_passed: input.originalExitGatePassed,
     updated_at: new Date().toISOString(),
@@ -70,5 +74,115 @@ export function buildBoundedDebuggerInput(input: DebuggerInput): DebuggerInput {
     evidenceRefs,
     sanitizedInput: input.sanitizedInput,
     previousAttempts: Number.isInteger(input.previousAttempts) && input.previousAttempts >= 0 ? input.previousAttempts : 0,
+  }
+}
+
+function failureSignalFromCode(code: string | null | undefined): FailureSignal {
+  const normalized = String(code ?? '').toUpperCase()
+  if (normalized.includes('APPROVAL')) return { code: normalized, approvalRequired: true }
+  if (normalized.includes('POLICY') || normalized.includes('DENIED')) return { code: normalized, policyDenied: true }
+  if (normalized.includes('SECURITY') || normalized.includes('AUTHORIZATION') || normalized.includes('CROSS_PROJECT')) {
+    return { code: normalized, securityRelevant: true }
+  }
+  if (['NATIVE_', 'SUPERVISOR_', 'LEASE_', 'EXECUTOR_', 'CONTRACT_', 'RUNTIME_'].some(prefix => normalized.includes(prefix))) {
+    return { code: normalized, runtimeDefect: true }
+  }
+  return { code: normalized, ambiguous: true }
+}
+
+async function resolveRuntimeDebuggerDefinition() {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('agent').from('agent_definitions')
+    .select('id,agent_key,version,enabled')
+    .eq('agent_key', 'support_agent')
+    .eq('version', '1.0')
+    .eq('enabled', true)
+    .maybeSingle()
+  if (error) throw new Error(`Unable to resolve governed runtime debugger: ${error.message}`)
+  if (!data) throw new Error('Governed runtime debugger support agent is unavailable.')
+  return String(data.id)
+}
+
+/**
+ * Routes a failed orchestrator/supervisor result through the governed recovery
+ * classifier. Runtime/system defects receive a bounded, read-only support-agent
+ * diagnosis. The debugger is never allowed to mark the original step successful;
+ * a later re-execution plus EXIT gate pass is still required.
+ */
+export async function handleGovernanceRuntimeFailure(input: {
+  projectId: string
+  actorUserId: string
+  orchestratorRunId: string
+  failingRunId?: string | null
+  failingStepId?: string | null
+  code?: string | null
+  policyVersion: string
+}) {
+  const failingStepId = input.failingStepId?.trim() || 'orchestrator-runtime'
+  const evidenceRefs = input.failingRunId ? [{ type: 'AGENT_RUN', id: input.failingRunId }] : []
+  const recorded = await recordGovernanceFailureClassification({
+    projectId: input.projectId,
+    orchestratorRunId: input.orchestratorRunId,
+    failingRunId: input.failingRunId ?? null,
+    failingStepId,
+    correlationId: input.orchestratorRunId,
+    signal: failureSignalFromCode(input.code),
+    evidenceRefs,
+  })
+
+  if (recorded.classification.disposition !== 'DEBUGGER_REQUIRED') {
+    return { ...recorded, debuggerRunId: null, debuggerOutcome: null as RuntimeDebuggingOutcome | null }
+  }
+
+  const debuggerInput = buildBoundedDebuggerInput({
+    failingRunId: input.failingRunId ?? input.orchestratorRunId,
+    failingStepId,
+    correlationId: input.orchestratorRunId,
+    agentKey: 'native_supervisor_agent',
+    toolKey: 'governance_specialist_investigate',
+    errorCode: input.code ?? null,
+    sanitizedInput: {
+      orchestratorRunId: input.orchestratorRunId,
+      failingRunId: input.failingRunId ?? null,
+      failingStepId,
+      errorCode: input.code ?? null,
+    },
+    boundedLogs: input.code ? [`Persisted runtime failure code: ${input.code}`] : [],
+    previousAttempts: 0,
+    dependencyStates: {},
+    policySnapshotId: `governance-orchestrator:${input.policyVersion}`,
+    evidenceRefs,
+    lastKnownGoodCheckpoint: null,
+  })
+  const validationFailures = validateDebuggerInput(debuggerInput)
+  if (validationFailures.length) throw new Error(`Runtime debugger input rejected: ${validationFailures.join(' ')}`)
+
+  const debuggerDefinitionId = await resolveRuntimeDebuggerDefinition()
+  const diagnosis = await executeGovernanceSpecialistAgent({
+    projectId: input.projectId,
+    actorUserId: input.actorUserId,
+    agentDefinitionId: debuggerDefinitionId,
+    question: [
+      'Diagnose the persisted DataNexus runtime/system failure using authoritative project evidence only.',
+      `Failure code: ${input.code ?? 'UNKNOWN'}.`,
+      `Failing step: ${failingStepId}.`,
+      'This is a read-only debugging task. Do not mutate runtime, policy, source data, schemas, credentials, or governance truth.',
+      'Separate observed evidence from hypotheses and recommendations. Any remediation remains separately governed.',
+    ].join(' '),
+  })
+
+  const debuggerOutcome: RuntimeDebuggingOutcome = 'NOT_RECOVERABLE'
+  await recordRuntimeDebuggerOutcome({
+    recoveryEventId: recorded.recoveryEventId,
+    outcome: debuggerOutcome,
+    debuggerRunId: diagnosis.runId,
+    originalStepReexecuted: false,
+    originalExitGatePassed: false,
+  })
+
+  return {
+    ...recorded,
+    debuggerRunId: diagnosis.runId,
+    debuggerOutcome,
   }
 }

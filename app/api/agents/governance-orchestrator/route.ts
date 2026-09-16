@@ -11,15 +11,18 @@ import {
   upsertProjectAutonomyPolicy,
 } from '@/lib/orchestration/governance-orchestrator-service-v2'
 import {
+  assembleAndPersistGovernanceOutcomeReport,
   getLatestGovernanceOutcomeReport,
   normalizeReportingPreference,
   persistRunReportingPreference,
 } from '@/lib/orchestration/governance-outcome-report-service'
+import { handleGovernanceRuntimeFailure } from '@/lib/orchestration/governance-recovery-service'
 import type { AutonomyMode, AutonomyPolicy, RiskTier } from '@/lib/orchestration/governance-orchestrator'
 
 export const maxDuration = 300
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
+function nullableText(value: unknown) { const valueText = text(value); return valueText || null }
 function arrayOfText(value: unknown) { return Array.isArray(value) ? value.map(text).filter(Boolean) : [] }
 function finiteNonNegative(value: unknown, fallback: number) {
   const number = Number(value)
@@ -137,10 +140,28 @@ export async function POST(request: Request) {
       approvalStatus = String(approval.status)
     }
 
+    const recovery = result.status === 'FAILED'
+      ? await handleGovernanceRuntimeFailure({
+          projectId,
+          actorUserId: user.id,
+          orchestratorRunId: result.orchestratorRunId,
+          failingRunId: 'supervisorRunId' in result ? nullableText(result.supervisorRunId) : null,
+          failingStepId: 'failedStepId' in result ? nullableText(result.failedStepId) : null,
+          code: 'code' in result ? nullableText(result.code) : null,
+          policyVersion: result.policy.policyVersion,
+        })
+      : null
+
+    const generatedReport = reporting.enabled
+      ? await assembleAndPersistGovernanceOutcomeReport({ projectId, orchestratorRunId: result.orchestratorRunId })
+      : null
+
     const status = result.status === 'WAITING_APPROVAL' ? 202 : result.status === 'SUCCEEDED' ? 200 : 409
     return NextResponse.json({
       accepted: result.status === 'SUCCEEDED',
       reporting,
+      generatedReport,
+      recovery,
       approvalRequestId,
       approvalStatus,
       ...result,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { finalizeGovernanceOrchestratorCertification } from '@/lib/orchestration/governance-orchestrator-service-v2'
+import { assembleAndPersistGovernanceOutcomeReport } from '@/lib/orchestration/governance-outcome-report-service'
 
 export const maxDuration = 300
 
@@ -20,7 +21,8 @@ export async function POST(request: Request) {
     // Certification authority is intentionally distinct from agent execution authority.
     await authorizeProject(user.id, projectId, 'certification.review')
     const result = await finalizeGovernanceOrchestratorCertification({ projectId, orchestratorRunId })
-    return NextResponse.json({ certified: result.assessmentState === 'PASS', ...result }, { status: result.assessmentState === 'PASS' ? 200 : 409 })
+    const refreshedReport = await assembleAndPersistGovernanceOutcomeReport({ projectId, orchestratorRunId })
+    return NextResponse.json({ certified: result.assessmentState === 'PASS', refreshedReport, ...result }, { status: result.assessmentState === 'PASS' ? 200 : 409 })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })

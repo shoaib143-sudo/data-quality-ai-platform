@@ -24,6 +24,23 @@ export type ReportScore = {
   method: string
 }
 
+export type ScoreAggregationPolicy =
+  | {
+      method: 'EQUAL_WEIGHT_EVIDENCED_DIMENSIONS'
+      policyId: string
+    }
+  | {
+      method: 'GOVERNED_WEIGHTS'
+      policyId: string
+      weights: Partial<Record<ScoreDimensionKey, number>>
+    }
+
+export type NarrativePolicy = {
+  policyId: string
+  bands: Array<{ maxInclusive: number; statement: string }>
+  aboveMaximumStatement: string
+}
+
 export type EvidenceBackedClaim = {
   id: string
   statement: string
@@ -83,6 +100,8 @@ export type GovernanceOutcomeReportInput = {
   persona: ReportPersona
   depth: ReportDepth
   scores: Partial<Record<ScoreDimensionKey, Omit<ReportScore, 'key' | 'label'>>>
+  aggregationPolicy?: ScoreAggregationPolicy | null
+  narrativePolicy?: NarrativePolicy | null
   findings: GovernanceRiskFinding[]
   businessImpact: EvidenceBackedClaim[]
   autonomousActivity: AutonomousActivitySummary
@@ -98,6 +117,8 @@ const SCORE_LABELS: Record<ScoreDimensionKey, string> = {
   compliancePosture: 'Compliance Posture',
   dataQualityImprovement: 'Data Quality Improvement',
 }
+
+const SCORE_KEYS: ScoreDimensionKey[] = ['governanceHealth', 'businessImpact', 'riskReduction', 'compliancePosture', 'dataQualityImprovement']
 
 function finiteScore(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null
@@ -133,29 +154,60 @@ function normalizeScore(key: ScoreDimensionKey, input?: Omit<ReportScore, 'key' 
   }
 }
 
-export function computeTransparentOverallScore(scores: ReportScore[]): ReportScore {
+function unmeasuredOverall(method: string): ReportScore {
+  return { key: 'overall', label: 'Overall Score', status: 'NOT_MEASURED', value: null, evidenceRefs: [], method }
+}
+
+export function computeTransparentOverallScore(scores: ReportScore[], policy?: ScoreAggregationPolicy | null): ReportScore {
+  if (!policy?.policyId?.trim()) return unmeasuredOverall('GOVERNED_AGGREGATION_POLICY_REQUIRED')
   const measured = scores.filter(score => score.status !== 'NOT_MEASURED' && score.value !== null && score.evidenceRefs.length > 0)
-  if (!measured.length) {
-    return { key: 'overall', label: 'Overall Score', status: 'NOT_MEASURED', value: null, evidenceRefs: [], method: 'NOT_MEASURED' }
+  if (!measured.length) return unmeasuredOverall(`NO_MEASURED_DIMENSIONS:${policy.policyId}`)
+
+  if (policy.method === 'EQUAL_WEIGHT_EVIDENCED_DIMENSIONS') {
+    const value = measured.reduce((sum, score) => sum + (score.value ?? 0), 0) / measured.length
+    return {
+      key: 'overall',
+      label: 'Overall Score',
+      status: measured.every(score => score.status === 'MEASURED') ? 'MEASURED' : 'MODEL_DERIVED',
+      value: Math.round(value * 100) / 100,
+      evidenceRefs: normalizeEvidenceRefs(measured.flatMap(score => score.evidenceRefs)),
+      method: `EQUAL_WEIGHT_EVIDENCED_DIMENSIONS:${policy.policyId}:${measured.length}`,
+    }
   }
-  const value = measured.reduce((sum, score) => sum + (score.value ?? 0), 0) / measured.length
+
+  const weightedDimensions = SCORE_KEYS.map(key => {
+    const weight = Number(policy.weights[key] ?? 0)
+    const score = scores.find(candidate => candidate.key === key)
+    return { key, weight, score }
+  }).filter(item => Number.isFinite(item.weight) && item.weight > 0)
+  if (!weightedDimensions.length) return unmeasuredOverall(`INVALID_GOVERNED_WEIGHTS:${policy.policyId}`)
+  if (weightedDimensions.some(item => !item.score || item.score.status === 'NOT_MEASURED' || item.score.value === null || !item.score.evidenceRefs.length)) {
+    return unmeasuredOverall(`INCOMPLETE_GOVERNED_WEIGHT_INPUTS:${policy.policyId}`)
+  }
+  const weightTotal = weightedDimensions.reduce((sum, item) => sum + item.weight, 0)
+  if (!Number.isFinite(weightTotal) || weightTotal <= 0) return unmeasuredOverall(`INVALID_GOVERNED_WEIGHTS:${policy.policyId}`)
+  const value = weightedDimensions.reduce((sum, item) => sum + (item.score!.value ?? 0) * item.weight, 0) / weightTotal
+  const contributingScores = weightedDimensions.map(item => item.score!)
   return {
     key: 'overall',
     label: 'Overall Score',
-    status: measured.every(score => score.status === 'MEASURED') ? 'MEASURED' : 'MODEL_DERIVED',
+    status: contributingScores.every(score => score.status === 'MEASURED') ? 'MEASURED' : 'MODEL_DERIVED',
     value: Math.round(value * 100) / 100,
-    evidenceRefs: normalizeEvidenceRefs(measured.flatMap(score => score.evidenceRefs)),
-    method: `ARITHMETIC_MEAN_OF_${measured.length}_MEASURED_DIMENSIONS`,
+    evidenceRefs: normalizeEvidenceRefs(contributingScores.flatMap(score => score.evidenceRefs)),
+    method: `GOVERNED_WEIGHTS:${policy.policyId}`,
   }
 }
 
-function riskTone(overall: ReportScore) {
+function riskTone(overall: ReportScore, policy?: NarrativePolicy | null) {
   if (overall.value === null) return 'Evidence is incomplete, so DataNexus is not assigning an overall governance posture.'
-  if (overall.value < 40) return 'The evidence indicates a critical governance posture requiring immediate leadership attention.'
-  if (overall.value < 60) return 'The evidence indicates material governance risk requiring urgent executive attention.'
-  if (overall.value < 75) return 'The evidence indicates material risks and clear near-term governance priorities.'
-  if (overall.value < 90) return 'The evidence indicates a generally controlled posture with remaining governance priorities.'
-  return 'The evidence indicates a strong governance posture; focus should remain on sustaining controls and resolving any remaining exceptions.'
+  if (!policy?.policyId?.trim() || !Array.isArray(policy.bands) || !policy.aboveMaximumStatement?.trim()) {
+    return 'Overall score is measured, but no governed narrative severity policy is configured; DataNexus is not assigning a severity label from the score.'
+  }
+  const bands = policy.bands
+    .filter(band => Number.isFinite(band.maxInclusive) && band.maxInclusive >= 0 && band.maxInclusive <= 100 && band.statement?.trim())
+    .sort((a, b) => a.maxInclusive - b.maxInclusive)
+  for (const band of bands) if (overall.value <= band.maxInclusive) return band.statement.trim()
+  return policy.aboveMaximumStatement.trim()
 }
 
 function selectMostImportantRisk(findings: GovernanceRiskFinding[]) {
@@ -183,9 +235,8 @@ function personaOpening(persona: ReportPersona, overall: ReportScore, mostImport
 }
 
 export function buildGovernanceOutcomeReport(input: GovernanceOutcomeReportInput): GovernanceOutcomeReport {
-  const scoreKeys: ScoreDimensionKey[] = ['governanceHealth', 'businessImpact', 'riskReduction', 'compliancePosture', 'dataQualityImprovement']
-  const normalizedScores = Object.fromEntries(scoreKeys.map(key => [key, normalizeScore(key, input.scores[key])])) as Record<ScoreDimensionKey, ReportScore>
-  const overall = computeTransparentOverallScore(scoreKeys.map(key => normalizedScores[key]))
+  const normalizedScores = Object.fromEntries(SCORE_KEYS.map(key => [key, normalizeScore(key, input.scores[key])])) as Record<ScoreDimensionKey, ReportScore>
+  const overall = computeTransparentOverallScore(SCORE_KEYS.map(key => normalizedScores[key]), input.aggregationPolicy)
   const findings = input.findings.map(finding => ({ ...finding, evidenceRefs: normalizeEvidenceRefs(finding.evidenceRefs) }))
   const mostImportantRisk = selectMostImportantRisk(findings)
   const businessImpact = input.businessImpact
@@ -208,6 +259,8 @@ export function buildGovernanceOutcomeReport(input: GovernanceOutcomeReportInput
     schemaVersion: '1.0', projectId: input.projectId, orchestratorRunId: input.orchestratorRunId,
     capabilityRunId: input.capabilityRunId ?? null, scores: { ...normalizedScores, overall }, findings, businessImpact,
     autonomousActivity, certificationEligible: input.certificationEligible, certificationCoveragePct: certificationCoverage,
+    aggregationPolicy: input.aggregationPolicy ?? null,
+    narrativePolicyId: input.narrativePolicy?.policyId ?? null,
     evidenceRefs,
   })
   return {
@@ -221,7 +274,7 @@ export function buildGovernanceOutcomeReport(input: GovernanceOutcomeReportInput
     persona: input.persona,
     depth: input.depth,
     title: 'DataNexus Governance Outcome Report',
-    openingSummary: `${personaOpening(input.persona, overall, mostImportantRisk, unresolvedIssues)} ${riskTone(overall)}`,
+    openingSummary: `${personaOpening(input.persona, overall, mostImportantRisk, unresolvedIssues)} ${riskTone(overall, input.narrativePolicy)}`,
     scores: { ...normalizedScores, overall },
     mostImportantRisk,
     businessImpact,

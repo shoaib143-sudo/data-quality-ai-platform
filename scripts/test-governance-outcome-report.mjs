@@ -21,6 +21,16 @@ function baseInput() {
       compliancePosture: { status: 'MEASURED', value: 90, evidenceRefs: evidence('c1'), method: 'CONTROL_COVERAGE' },
       dataQualityImprovement: { status: 'MEASURED', value: 100, evidenceRefs: evidence('d1'), method: 'QUALITY_SCORE_DELTA' },
     },
+    aggregationPolicy: { method: 'EQUAL_WEIGHT_EVIDENCED_DIMENSIONS', policyId: 'test-equal-v1' },
+    narrativePolicy: {
+      policyId: 'test-narrative-v1',
+      bands: [
+        { maxInclusive: 59, statement: 'Governed critical-material posture.' },
+        { maxInclusive: 79, statement: 'Governed material-risk posture.' },
+        { maxInclusive: 89, statement: 'Governed controlled-with-priorities posture.' },
+      ],
+      aboveMaximumStatement: 'Governed strong posture.',
+    },
     findings: [
       { id: 'risk-2', title: 'Secondary risk', severity: 'MEDIUM', priorityRank: 2, status: 'UNRESOLVED', evidenceRefs: evidence('risk-2') },
       { id: 'risk-1', title: 'Primary risk', severity: 'CRITICAL', priorityRank: 1, status: 'UNRESOLVED', evidenceRefs: evidence('risk-1') },
@@ -37,21 +47,43 @@ function baseInput() {
   }
 }
 
-test('overall score is transparent arithmetic mean of evidenced dimensions only', () => {
+test('overall score requires an explicit governed aggregation policy', () => {
+  const input = baseInput()
+  delete input.aggregationPolicy
+  const report = buildGovernanceOutcomeReport(input)
+  assert.equal(report.scores.overall.status, 'NOT_MEASURED')
+  assert.equal(report.scores.overall.value, null)
+  assert.equal(report.scores.overall.method, 'GOVERNED_AGGREGATION_POLICY_REQUIRED')
+})
+
+test('explicit equal-weight policy aggregates evidenced dimensions only', () => {
   const report = buildGovernanceOutcomeReport(baseInput())
   assert.equal(report.scores.overall.value, 80)
   assert.equal(report.scores.overall.status, 'MODEL_DERIVED')
-  assert.equal(report.scores.overall.method, 'ARITHMETIC_MEAN_OF_5_MEASURED_DIMENSIONS')
+  assert.equal(report.scores.overall.method, 'EQUAL_WEIGHT_EVIDENCED_DIMENSIONS:test-equal-v1:5')
 })
 
-test('unsupported score is NOT_MEASURED and cannot inflate average', () => {
+test('unsupported score is NOT_MEASURED and cannot inflate explicit evidenced-dimension aggregation', () => {
   const input = baseInput()
   input.scores.businessImpact = { status: 'MEASURED', value: 100, evidenceRefs: [], method: 'UNSUPPORTED' }
   const report = buildGovernanceOutcomeReport(input)
   assert.equal(report.scores.businessImpact.status, 'NOT_MEASURED')
   assert.equal(report.scores.businessImpact.value, null)
   assert.equal(report.scores.overall.value, 85)
-  assert.equal(report.scores.overall.method, 'ARITHMETIC_MEAN_OF_4_MEASURED_DIMENSIONS')
+  assert.equal(report.scores.overall.method, 'EQUAL_WEIGHT_EVIDENCED_DIMENSIONS:test-equal-v1:4')
+})
+
+test('governed weighted aggregation fails closed if a weighted dimension is unmeasured', () => {
+  const input = baseInput()
+  input.aggregationPolicy = {
+    method: 'GOVERNED_WEIGHTS',
+    policyId: 'weighted-v1',
+    weights: { governanceHealth: 0.7, businessImpact: 0.3 },
+  }
+  input.scores.businessImpact = { status: 'NOT_MEASURED', value: null, evidenceRefs: [], method: 'NOT_MEASURED' }
+  const report = buildGovernanceOutcomeReport(input)
+  assert.equal(report.scores.overall.status, 'NOT_MEASURED')
+  assert.equal(report.scores.overall.method, 'INCOMPLETE_GOVERNED_WEIGHT_INPUTS:weighted-v1')
 })
 
 test('invalid numeric score fails closed as NOT_MEASURED', () => {
@@ -71,6 +103,17 @@ test('highest-priority unresolved evidenced risk drives executive priority', () 
   const report = buildGovernanceOutcomeReport(baseInput())
   assert.equal(report.mostImportantRisk?.id, 'risk-1')
   assert.match(report.openingSummary, /Primary risk/)
+})
+
+test('narrative posture comes only from governed narrative policy', () => {
+  const input = baseInput()
+  const governed = buildGovernanceOutcomeReport(input)
+  assert.match(governed.openingSummary, /controlled-with-priorities/)
+
+  delete input.narrativePolicy
+  const neutral = buildGovernanceOutcomeReport(input)
+  assert.match(neutral.openingSummary, /no governed narrative severity policy is configured/)
+  assert.doesNotMatch(neutral.openingSummary, /critical governance posture|urgent executive attention|strong governance posture/)
 })
 
 test('unresolved statement and autonomous summary are recomputed from findings', () => {
@@ -96,7 +139,7 @@ test('certification remains incomplete when canonical certification is ineligibl
 })
 
 test('no measured dimensions produces NOT_MEASURED overall', () => {
-  const overall = computeTransparentOverallScore([])
+  const overall = computeTransparentOverallScore([], { method: 'EQUAL_WEIGHT_EVIDENCED_DIMENSIONS', policyId: 'empty-v1' })
   assert.equal(overall.status, 'NOT_MEASURED')
   assert.equal(overall.value, null)
 })
