@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { documentEvidenceState } from '@/lib/profiling/document-evidence'
 import { loadFileSource, type FileSourceConfig, type FileSourceResult } from '@/lib/profiling/file-source-adapter'
 import { extractWithOcrSpace } from '@/lib/profiling/ocr-space'
+import { safeRemoteFileFetch } from '@/lib/profiling/safe-remote-file'
 
 const OCR_EXTENSIONS = new Set(['pdf','png','jpg','jpeg','gif','webp','bmp','tif','tiff'])
 
@@ -16,21 +18,45 @@ function getString(source: Record<string, unknown>, keys: string[]) {
   return null
 }
 
-async function loadOriginalBytes(supabase: SupabaseClient, config: FileSourceConfig) {
+function assertOriginalBytes(bytes: Uint8Array, expectedContentHash: string, maxBytes: number | null) {
+  if (maxBytes !== null && bytes.byteLength > maxBytes) {
+    throw new Error(`OCR source exceeds the governed technical safety ceiling of ${maxBytes} bytes.`)
+  }
+  const contentHash = createHash('sha256').update(bytes).digest('hex')
+  if (contentHash !== expectedContentHash) {
+    throw new Error('OCR source bytes changed after the governed source-read step; refusing time-of-check/time-of-use drift.')
+  }
+}
+
+async function loadOriginalBytes(
+  supabase: SupabaseClient,
+  config: FileSourceConfig,
+  expectedContentHash: string,
+  maxBytes: number | null,
+) {
   const executionConfig = record(config.executionConfig)
   const sourceUri = config.sourceUri?.trim() || null
   const url = getString(executionConfig, ['url','source_url','sourceUrl']) ?? (sourceUri && /^https?:\/\//i.test(sourceUri) ? sourceUri : null)
   if (url) {
-    const response = await fetch(url, { cache: 'no-store' })
+    const response = await safeRemoteFileFetch(url, { cache: 'no-store' })
     if (!response.ok) throw new Error(`Unable to load file for OCR: HTTP ${response.status} ${response.statusText}`)
-    return { bytes: new Uint8Array(await response.arrayBuffer()), contentType: response.headers.get('content-type') }
+    const declaredLength = Number(response.headers.get('content-length'))
+    if (maxBytes !== null && Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new Error(`OCR source exceeds the governed technical safety ceiling of ${maxBytes} bytes.`)
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    assertOriginalBytes(bytes, expectedContentHash, maxBytes)
+    return { bytes, contentType: response.headers.get('content-type') }
   }
   const bucket = getString(executionConfig, ['bucket','bucket_id','bucketId','storage_bucket','storageBucket'])
   const path = getString(executionConfig, ['path','storage_path','storagePath','object_path','objectPath']) ?? sourceUri
   if (!bucket || !path) throw new Error('OCR fallback could not resolve the original FILE source location.')
   const { data, error } = await supabase.storage.from(bucket).download(path)
   if (error) throw new Error(`Unable to download FILE source for OCR: ${error.message}`)
-  return { bytes: new Uint8Array(await data.arrayBuffer()), contentType: data.type || null }
+  const bytes = new Uint8Array(await data.arrayBuffer())
+  assertOriginalBytes(bytes, expectedContentHash, maxBytes)
+  return { bytes, contentType: data.type || null }
 }
 
 function chunkOcrText(text: string, maxRows: number, metadata: Record<string, unknown>) {
@@ -104,7 +130,13 @@ export async function loadGovernedFileSource(
   const fallback = loaded.format === 'binary' ? loaded : metadataOnlyFallback(loaded)
 
   try {
-    const original = await loadOriginalBytes(supabase, config)
+    const initialByteSize = Number(loaded.metadata.byte_size)
+    const maxBytes = Number.isFinite(options.maxBytes)
+      ? Number(options.maxBytes)
+      : Number.isFinite(initialByteSize) && initialByteSize >= 0
+        ? initialByteSize
+        : null
+    const original = await loadOriginalBytes(supabase, config, loaded.contentHash, maxBytes)
     const ocr = await extractWithOcrSpace({
       bytes: original.bytes,
       fileName: String(loaded.metadata.file_name ?? `document.${extension || 'bin'}`),
