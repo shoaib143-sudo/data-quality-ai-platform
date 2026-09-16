@@ -26,3 +26,8 @@ A critical capability is CERTIFIED only when all applicable gates pass on the ex
 Do not claim "100% tested." Report feature inventory coverage, requirement traceability, mandatory gate pass rate, critical E2E coverage, RBAC/security coverage, invariant/negative coverage, known defects by severity, exact-main result, and production smoke result.
 
 Certification is suspended when a mandatory production probe or newly discovered defect invalidates a certified invariant.
+
+
+## Zero-manual-intervention gate
+
+Certification execution is fully automated. A release cannot be marked CERTIFIED if any mandatory gate requires a person to log in, click an approval, select a result, judge an AI answer, reset state, reconcile evidence, or decide whether a test passed. The harness must provision synthetic personas, drive browser/API actions, evaluate outcomes, collect evidence, clean up, and produce the final machine-readable result.
