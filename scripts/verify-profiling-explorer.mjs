@@ -25,12 +25,15 @@ const [page, profilingPage, explorer, dashboard, governedFileSource, documentEvi
 requireMatch(page, /from\('profile_columns'\)[\s\S]*total_count[\s\S]*null_count[\s\S]*blank_count[\s\S]*zero_count[\s\S]*distinct_count[\s\S]*distinct_percentage/, 'Profiling explorer page must load persisted column statistics.')
 requireMatch(page, /from\('profile_distributions'\)[\s\S]*distribution_type[\s\S]*distribution/, 'Profiling explorer page must load persisted distributions.')
 requireMatch(page, /distributions=\{\(distributions\s*\?\?\s*\[\]\)\s+as\s+any\}/, 'Profiling explorer page must pass distributions to the client explorer.')
-requireMatch(page, /hasUnreadableControlText[\s\S]*sanitizeExplorerMetric[\s\S]*UNREADABLE_BINARY_OR_GLYPH_TEXT[\s\S]*safeMetrics/, 'Profiling explorer must suppress unreadable persisted binary/glyph metrics before rendering.')
+requireMatch(page, /sanitizePersistedMetricForPresentation[\s\S]*safeMetrics/, 'Profiling explorer must reuse the canonical persisted-metric sanitizer before rendering.')
 requireMatch(page, /metrics=\{safeMetrics as any\}/, 'Profiling explorer must render sanitized persisted metrics only.')
+requireNoMatch(page, /function\s+sanitizeExplorerMetric|function\s+hasUnreadableControlText/, 'Profiling explorer must not maintain a second independent unreadable-text policy.')
 
 requireMatch(profilingPage, /canonicalizeDocumentPreview/, 'Profiling sample preview must use the canonical governed document preview boundary.')
 requireMatch(profilingPage, /samples=\{canonicalPreview\.samples\}/, 'Dashboard sample preview must render canonical document evidence only.')
 requireMatch(profilingPage, /canonicalPreview\.sensitiveEvidence/, 'Sensitive-data presentation must consume the same canonical readable document evidence as sample preview.')
+requireMatch(profilingPage, /loadCanonicalDocumentPreviewFromSource/, 'Unreadable persisted previews must be able to reuse the governed source reader.')
+requireNoMatch(profilingPage, /createAdminClient/, 'Profiling preview must not bypass authenticated RLS with an admin client.')
 
 requireMatch(explorer, /type\s+ExplorerDistribution/, 'Profiling explorer must define the persisted distribution contract.')
 requireMatch(explorer, /preferredColumnId/, 'Profiling explorer must automatically select useful persisted evidence instead of opening empty.')
@@ -81,5 +84,7 @@ console.log(JSON.stringify({
     canonicalDocumentPreview: true,
     governedSourceReaderReuse: true,
     sharedSensitiveEvidence: true,
+    sharedMetricSanitizer: true,
+    authenticatedPreviewOnly: true,
   },
 }, null, 2))
