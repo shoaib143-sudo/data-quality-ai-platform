@@ -12,8 +12,9 @@ on:
       - 'app/api/datasets/register/route.ts'
       - 'app/api/datasets/source/upload-file/**'
       - 'app/api/internal/storage/**'
-      - 'supabase/migrations/*storage_registry*.sql'
-      - 'tests/storage-contract.test.mjs'
+      - 'scripts/verify-r2-*.mjs'
+      - 'supabase/migrations/*storage*.sql'
+      - 'tests/storage-*.test.mjs'
       - '.github/workflows/storage-r2-assurance.yml'
   pull_request:
     paths:
@@ -24,8 +25,9 @@ on:
       - 'app/api/datasets/register/route.ts'
       - 'app/api/datasets/source/upload-file/**'
       - 'app/api/internal/storage/**'
-      - 'supabase/migrations/*storage_registry*.sql'
-      - 'tests/storage-contract.test.mjs'
+      - 'scripts/verify-r2-*.mjs'
+      - 'supabase/migrations/*storage*.sql'
+      - 'tests/storage-*.test.mjs'
       - '.github/workflows/storage-r2-assurance.yml'
   workflow_dispatch:
 
@@ -40,5 +42,5 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-      - name: Run storage contract, negative, and adversarial guards
-        run: node --test tests/storage-contract.test.mjs
+      - name: Run storage contract, negative, adversarial, and cutover guards
+        run: node --test tests/storage-*.test.mjs
