@@ -13,6 +13,16 @@ import type { NativeBoundedPlan } from '@/lib/agents/runtime/native-autonomy-ker
 import { startNativeAgentLifecycle } from '@/lib/agents/runtime/native-agent-lifecycle'
 import { hashNativeRuntimeValue } from '@/lib/agents/runtime/native-tool-contracts'
 import { evaluateNativeSupervisorTrajectory } from '@/lib/agents/runtime/native-trajectory-evaluation'
+import {
+  createGovernedHandoffEnvelope,
+  evaluateExitGate,
+  validateGovernedHandoff,
+} from '@/lib/agents/runtime/governed-handoff'
+import {
+  persistGovernedHandoff,
+  persistRunGateResult,
+  transitionGovernedHandoff,
+} from '@/lib/agents/runtime/governed-handoff-persistence'
 
 export type NativeSupervisorWorkerRequest = {
   workerId?: string | null
@@ -89,6 +99,65 @@ async function updateSupervisorRun(input: {
   if (error) throw new Error(`Unable to finalize native supervisor run: ${error.message}`)
 }
 
+async function enforceGovernedHandoffs(input: {
+  admin: ReturnType<typeof createAdminClient>
+  projectId: string
+  supervisorRunId: string
+  targetRunId: string
+  targetAgent: GovernanceSpecialistAgentKey
+  refs: NativeSupervisorHandoffRef[]
+}) {
+  const acceptedEnvelopeIds: string[] = []
+  for (const ref of input.refs) {
+    const { data: sourceRun, error: sourceRunError } = await input.admin.schema('agent').from('agent_runs')
+      .select('id,project_id,status')
+      .eq('id', ref.sourceRunId)
+      .eq('project_id', input.projectId)
+      .maybeSingle()
+    if (sourceRunError) throw new Error(`Unable to verify handoff source run: ${sourceRunError.message}`)
+
+    const sourceEvidenceExists = sourceRun?.status === 'SUCCEEDED'
+    const policySnapshotId = `governed-agent-registry:${ref.sourceAgentKey}->${input.targetAgent}:v1`
+    const envelope = createGovernedHandoffEnvelope({
+      correlationId: input.supervisorRunId,
+      parentRunId: input.supervisorRunId,
+      sourceRunId: ref.sourceRunId,
+      sourceAgent: ref.sourceAgentKey,
+      targetAgent: input.targetAgent,
+      projectId: input.projectId,
+      capabilityKey: 'governance_specialist_investigate',
+      payloadType: 'native_supervisor_handoff_ref',
+      payload: ref,
+      evidenceRefs: [{ type: 'AGENT_RUN', id: ref.sourceRunId }],
+      policySnapshotId,
+    })
+
+    await persistGovernedHandoff(envelope)
+    await transitionGovernedHandoff({ envelopeId: envelope.envelopeId, expectedState: 'SENT', nextState: 'DELIVERED' })
+
+    const entryGate = validateGovernedHandoff(envelope, {
+      projectId: input.projectId,
+      targetAgent: input.targetAgent,
+      allowedSourceAgents: [ref.sourceAgentKey],
+      allowedHandoffTargets: { [ref.sourceAgentKey]: getGovernedAgentPolicy(ref.sourceAgentKey).handoffTargets },
+      policySnapshotId,
+      dependencySatisfied: sourceEvidenceExists,
+      evidenceExists: (type, id) => type === 'AGENT_RUN' && id === ref.sourceRunId && sourceEvidenceExists,
+    })
+    await persistRunGateResult({ runId: input.targetRunId, envelopeId: envelope.envelopeId, gate: entryGate })
+
+    if (entryGate.status !== 'PASS') {
+      await transitionGovernedHandoff({ envelopeId: envelope.envelopeId, expectedState: 'DELIVERED', nextState: 'REJECTED' })
+      throw new Error(`Governed handoff rejected: ${entryGate.reason ?? 'entry gate did not pass'}`)
+    }
+
+    await transitionGovernedHandoff({ envelopeId: envelope.envelopeId, expectedState: 'DELIVERED', nextState: 'VALIDATED' })
+    await transitionGovernedHandoff({ envelopeId: envelope.envelopeId, expectedState: 'VALIDATED', nextState: 'ACCEPTED' })
+    acceptedEnvelopeIds.push(envelope.envelopeId)
+  }
+  return acceptedEnvelopeIds
+}
+
 export async function runNativeSpecialistSupervisor(input: {
   projectId: string
   actorUserId: string
@@ -147,10 +216,7 @@ export async function runNativeSpecialistSupervisor(input: {
     if (definition.version !== '1.0' || !allowedSpecialists.has(agentKey)) {
       throw new Error(`Worker definition ${worker.agentDefinitionId} is not an enabled governance specialist v1.0`)
     }
-    return {
-      ...worker,
-      agentKey: agentKey as GovernanceSpecialistAgentKey,
-    }
+    return { ...worker, agentKey: agentKey as GovernanceSpecialistAgentKey }
   })
   const resolvedByWorkerId = new Map(resolvedWorkers.map((worker) => [worker.workerId, worker]))
   for (const worker of resolvedWorkers) {
@@ -168,16 +234,10 @@ export async function runNativeSpecialistSupervisor(input: {
     agent_definition_id: supervisorDefinition.id,
     project_id: projectId,
     status: 'RUNNING',
-    input: {
-      goal_hash: goalHash,
-      worker_count: resolvedWorkers.length,
-      execution_mode: 'native_supervisor_specialist_v1',
-    },
+    input: { goal_hash: goalHash, worker_count: resolvedWorkers.length, execution_mode: 'native_supervisor_specialist_v1' },
     started_at: new Date().toISOString(),
   }).select('id').single()
-  if (supervisorRunError || !supervisorRun) {
-    throw new Error(`Unable to create native supervisor run: ${supervisorRunError?.message ?? 'unknown error'}`)
-  }
+  if (supervisorRunError || !supervisorRun) throw new Error(`Unable to create native supervisor run: ${supervisorRunError?.message ?? 'unknown error'}`)
 
   let lifecycle
   const childRunIds: string[] = []
@@ -192,10 +252,7 @@ export async function runNativeSpecialistSupervisor(input: {
 
     const stepAgentRunIds = new Map<string, string>()
     const steps: NativeBoundedPlan['steps'] = []
-    const stepIdByWorkerId = new Map(resolvedWorkers.map((worker, index) => [
-      worker.workerId,
-      `specialist-${index + 1}-${worker.agentKey}-${worker.workerId}`,
-    ]))
+    const stepIdByWorkerId = new Map(resolvedWorkers.map((worker, index) => [worker.workerId, `specialist-${index + 1}-${worker.agentKey}-${worker.workerId}`]))
 
     for (let index = 0; index < resolvedWorkers.length; index += 1) {
       const worker = resolvedWorkers[index]
@@ -211,17 +268,9 @@ export async function runNativeSpecialistSupervisor(input: {
         project_id: projectId,
         parent_run_id: supervisorRun.id,
         status: 'QUEUED',
-        input: {
-          question: worker.question,
-          supervisor_goal_hash: goalHash,
-          depends_on_step_ids: dependencyStepIds,
-          execution_mode: 'native_supervisor_specialist_read_only',
-        },
+        input: { question: worker.question, supervisor_goal_hash: goalHash, depends_on_step_ids: dependencyStepIds, execution_mode: 'native_supervisor_specialist_read_only' },
       }).select('id').single()
-      if (childRunError || !childRun) {
-        throw new Error(`Unable to create supervisor child run for ${worker.agentKey}: ${childRunError?.message ?? 'unknown error'}`)
-      }
-
+      if (childRunError || !childRun) throw new Error(`Unable to create supervisor child run for ${worker.agentKey}: ${childRunError?.message ?? 'unknown error'}`)
       childRunIds.push(childRun.id)
       stepAgentRunIds.set(stepId, childRun.id)
       workerByStepId.set(stepId, worker)
@@ -247,14 +296,8 @@ export async function runNativeSpecialistSupervisor(input: {
             handoffRefs: dependencyStepIds.map((dependencyStepId) => {
               const dependencyBindingRunId = stepAgentRunIds.get(dependencyStepId)
               const dependencyWorker = resolvedWorkers.find((candidate) => stepIdByWorkerId.get(candidate.workerId) === dependencyStepId)
-              if (!dependencyBindingRunId || !dependencyWorker) {
-                throw new Error(`${worker.workerId}: dependency binding ${dependencyStepId} is unavailable`)
-              }
-              return {
-                sourceStepId: dependencyStepId,
-                sourceAgentKey: dependencyWorker.agentKey,
-                sourceRunId: dependencyBindingRunId,
-              }
+              if (!dependencyBindingRunId || !dependencyWorker) throw new Error(`${worker.workerId}: dependency binding ${dependencyStepId} is unavailable`)
+              return { sourceStepId: dependencyStepId, sourceAgentKey: dependencyWorker.agentKey, sourceRunId: dependencyBindingRunId }
             }),
           } : {}),
         },
@@ -263,20 +306,11 @@ export async function runNativeSpecialistSupervisor(input: {
       })
     }
 
-    const plan: NativeBoundedPlan = {
-      version: '1.0',
-      goal,
-      projectId,
-      steps,
-    }
-
+    const plan: NativeBoundedPlan = { version: '1.0', goal, projectId, steps }
     const boundPlan = await bindNativePlanToPinnedRuntime({
       plan,
       stepAgentRunIds,
-      policy: {
-        allowTier2AutomaticExecution: false,
-        approvedTier2Tools: [],
-      },
+      policy: { allowTier2AutomaticExecution: false, approvedTier2Tools: [] },
     })
 
     const result = await executeNativeBoundRuntimePlan({
@@ -285,10 +319,16 @@ export async function runNativeSpecialistSupervisor(input: {
       initialCheckpointId: lifecycle.checkpointId,
       executeStep: async ({ step, binding, attempt }) => {
         const worker = workerByStepId.get(step.id)
-        if (!worker || worker.agentKey !== step.agentKey || binding.agentRunId !== stepAgentRunIds.get(step.id)) {
-          throw new Error(`${step.id}: supervisor worker binding disappeared`)
-        }
+        if (!worker || worker.agentKey !== step.agentKey || binding.agentRunId !== stepAgentRunIds.get(step.id)) throw new Error(`${step.id}: supervisor worker binding disappeared`)
         const handoffRefs = (step.input.handoffRefs ?? []) as NativeSupervisorHandoffRef[]
+        const envelopeIds = await enforceGovernedHandoffs({
+          admin,
+          projectId,
+          supervisorRunId: supervisorRun.id,
+          targetRunId: binding.agentRunId,
+          targetAgent: worker.agentKey,
+          refs: handoffRefs,
+        })
 
         const executed = await executeGovernanceSpecialistAgent({
           projectId,
@@ -299,23 +339,25 @@ export async function runNativeSpecialistSupervisor(input: {
           existingAgentRunId: binding.agentRunId,
           nativeAttempt: attempt,
         })
-        if (executed.runId !== binding.agentRunId) {
-          throw new Error(`${step.id}: specialist executor returned an unexpected child run`)
-        }
-        return executed.output
+        if (executed.runId !== binding.agentRunId) throw new Error(`${step.id}: specialist executor returned an unexpected child run`)
+        return { ...(executed.output as Record<string, unknown>), governedHandoffEnvelopeIds: envelopeIds }
       },
       validateOutcome: async ({ step, output }) => {
-        if (!output || typeof output !== 'object' || Array.isArray(output)) {
-          return { valid: false, code: 'SPECIALIST_OUTPUT_INVALID' }
-        }
-        const agent = (output as { agent?: unknown }).agent
-        if (!agent || typeof agent !== 'object' || Array.isArray(agent)) {
-          return { valid: false, code: 'SPECIALIST_AGENT_IDENTITY_MISSING' }
-        }
-        const agentKey = String((agent as { key?: unknown }).key ?? '')
-        return agentKey === step.agentKey
+        const childRunId = stepAgentRunIds.get(step.id)
+        const outputObject = !!output && typeof output === 'object' && !Array.isArray(output)
+        const agent = outputObject ? (output as { agent?: unknown }).agent : null
+        const agentObject = !!agent && typeof agent === 'object' && !Array.isArray(agent)
+        const agentKey = agentObject ? String((agent as { key?: unknown }).key ?? '') : ''
+        const exitGate = evaluateExitGate([
+          { key: 'output_schema', status: outputObject ? 'PASS' : 'FAIL', detail: 'Specialist output must be an object.' },
+          { key: 'agent_identity_present', status: agentObject ? 'PASS' : 'FAIL', detail: 'Specialist output is missing agent identity.' },
+          { key: 'agent_identity_expected', status: agentKey === step.agentKey ? 'PASS' : 'FAIL', detail: 'Specialist output agent identity does not match the planned agent.' },
+          { key: 'audit_target_run', status: childRunId ? 'PASS' : 'FAIL', detail: 'Child run binding is unavailable for EXIT gate persistence.' },
+        ])
+        if (childRunId) await persistRunGateResult({ runId: childRunId, gate: exitGate })
+        return exitGate.status === 'PASS'
           ? { valid: true, code: 'SPECIALIST_OUTPUT_VERIFIED' }
-          : { valid: false, code: 'SPECIALIST_AGENT_IDENTITY_MISMATCH' }
+          : { valid: false, code: 'SPECIALIST_EXIT_GATE_FAILED' }
       },
     })
 
@@ -324,59 +366,24 @@ export async function runNativeSpecialistSupervisor(input: {
       await updateSupervisorRun({
         supervisorRunId: supervisorRun.id,
         status: 'SUCCEEDED',
-        output: {
-          plan_hash: boundPlan.planHash,
-          completed_step_ids: result.completedStepIds,
-          child_run_ids: childRunIds,
-          execution_mode: 'native_supervisor_specialist_v1',
-          trajectory_evaluation_id: trajectoryEvaluation.id,
-          trajectory_score: trajectoryEvaluation.score,
-        },
+        output: { plan_hash: boundPlan.planHash, completed_step_ids: result.completedStepIds, child_run_ids: childRunIds, execution_mode: 'native_supervisor_specialist_v1', trajectory_evaluation_id: trajectoryEvaluation.id, trajectory_score: trajectoryEvaluation.score },
       })
-      return {
-        supervisorRunId: supervisorRun.id,
-        planHash: boundPlan.planHash,
-        childRunIds,
-        status: 'SUCCEEDED',
-        completedStepIds: result.completedStepIds,
-      }
+      return { supervisorRunId: supervisorRun.id, planHash: boundPlan.planHash, childRunIds, status: 'SUCCEEDED', completedStepIds: result.completedStepIds }
     }
 
     if (result.status === 'WAITING_APPROVAL') {
-      return {
-        supervisorRunId: supervisorRun.id,
-        planHash: boundPlan.planHash,
-        childRunIds,
-        status: 'WAITING_APPROVAL',
-        completedStepIds: result.completedStepIds,
-        failedStepId: result.stepId,
-      }
+      return { supervisorRunId: supervisorRun.id, planHash: boundPlan.planHash, childRunIds, status: 'WAITING_APPROVAL', completedStepIds: result.completedStepIds, failedStepId: result.stepId }
     }
 
     const trajectoryEvaluation = await evaluateNativeSupervisorTrajectory(supervisorRun.id)
     await updateSupervisorRun({
       supervisorRunId: supervisorRun.id,
       status: 'FAILED',
-      output: {
-        plan_hash: boundPlan.planHash,
-        completed_step_ids: result.completedStepIds,
-        child_run_ids: childRunIds,
-        execution_mode: 'native_supervisor_specialist_v1',
-        trajectory_evaluation_id: trajectoryEvaluation.id,
-        trajectory_score: trajectoryEvaluation.score,
-      },
+      output: { plan_hash: boundPlan.planHash, completed_step_ids: result.completedStepIds, child_run_ids: childRunIds, execution_mode: 'native_supervisor_specialist_v1', trajectory_evaluation_id: trajectoryEvaluation.id, trajectory_score: trajectoryEvaluation.score },
       errorCode: result.code,
       errorMessage: `Native supervisor stopped at ${result.stepId ?? 'plan'} with ${result.code}.`,
     })
-    return {
-      supervisorRunId: supervisorRun.id,
-      planHash: boundPlan.planHash,
-      childRunIds,
-      status: 'FAILED',
-      completedStepIds: result.completedStepIds,
-      failedStepId: result.stepId,
-      code: result.code,
-    }
+    return { supervisorRunId: supervisorRun.id, planHash: boundPlan.planHash, childRunIds, status: 'FAILED', completedStepIds: result.completedStepIds, failedStepId: result.stepId, code: result.code }
   } catch (error) {
     if (childRunIds.length) {
       try {
@@ -391,12 +398,7 @@ export async function runNativeSpecialistSupervisor(input: {
       }
     }
     try {
-      await updateSupervisorRun({
-        supervisorRunId: supervisorRun.id,
-        status: 'FAILED',
-        errorCode: 'NATIVE_SUPERVISOR_FAILED',
-        errorMessage: error instanceof Error ? error.message : String(error),
-      })
+      await updateSupervisorRun({ supervisorRunId: supervisorRun.id, status: 'FAILED', errorCode: 'NATIVE_SUPERVISOR_FAILED', errorMessage: error instanceof Error ? error.message : String(error) })
     } catch {
       // Preserve the original supervisor failure if terminal evidence persistence also fails.
     }
