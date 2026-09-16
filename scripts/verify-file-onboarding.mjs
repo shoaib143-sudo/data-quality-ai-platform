@@ -12,9 +12,10 @@ function requireAbsent(text, pattern, message) {
   if (pattern.test(text)) throw new Error(message)
 }
 
-const [adapter, csvSource, textDecoding, remoteGuard, discovery, registration, uploadRoute, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
+const [adapter, csvSource, jsonSource, textDecoding, remoteGuard, discovery, registration, uploadRoute, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
   source('lib/profiling/file-source-adapter.ts'),
   source('lib/profiling/csv-source.ts'),
+  source('lib/profiling/json-source.ts'),
   source('lib/profiling/text-decoding.ts'),
   source('lib/profiling/safe-remote-file.ts'),
   source('app/api/datasets/source/discover-file/route.ts'),
@@ -33,6 +34,7 @@ requireMatch(remoteGuard, /redirect:\s*['"]manual['"]/, 'Remote FILE guard must 
 requireMatch(remoteGuard, /FILE_REMOTE_ALLOWED_HOSTS/, 'Remote FILE guard must support a production host allowlist.')
 
 requireMatch(adapter, /import\s+\{\s*parseCsv\s*\}\s+from\s+['"]@\/lib\/profiling\/csv-source['"]/, 'FILE adapter must use the governed CSV parser module.')
+requireMatch(adapter, /import\s+\{\s*parseJson,\s*parseJsonLines\s*\}\s+from\s+['"]@\/lib\/profiling\/json-source['"]/, 'FILE adapter must use the governed JSON parser module.')
 requireMatch(adapter, /import\s+\{\s*decodeTextBytes\s*\}\s+from\s+['"]@\/lib\/profiling\/text-decoding['"]/, 'FILE adapter must use the governed BOM-aware text decoder.')
 requireMatch(adapter, /const\s+decodedText\s*=\s*decodeTextBytes\(bytes\)/, 'FILE adapter must decode source bytes before format detection and parsing.')
 requireMatch(adapter, /text_encoding:\s*decodedText\.encoding/, 'FILE metadata must retain the detected text encoding.')
@@ -54,6 +56,14 @@ requireMatch(csvSource, /\(\?:0\|\[1-9\]\\d\*\)/, 'CSV numeric coercion must rej
 requireMatch(csvSource, /coerceCsvScalar\(header,record\[index\]\?\?null\)/, 'Parsed CSV rows must use the governed scalar coercion path.')
 requireMatch(csvSource, /export\s+function\s+normalizeCsvHeaders\(/, 'CSV parser must normalize headers through an executable governed helper.')
 requireMatch(csvSource, /occurrence===1\?base:`\$\{base\}__\$\{occurrence\}`/, 'Duplicate CSV headers must receive deterministic lossless suffixes.')
+
+requireMatch(jsonSource, /export\s+function\s+parseJson\(/, 'JSON parsing must be exposed through the governed production module.')
+requireMatch(jsonSource, /export\s+function\s+parseJsonLines\(/, 'JSONL parsing must be exposed through the governed production module.')
+requireMatch(jsonSource, /sourceLines\.flatMap\(\(line,\s*sourceIndex\)/, 'JSONL parsing must retain original physical source line positions.')
+requireMatch(jsonSource, /Invalid JSONL source at line \$\{sourceLine\}/, 'Malformed JSONL must report its physical source line.')
+requireMatch(jsonSource, /Array\.isArray\(value\)\s*\?\s*value\s*:\s*\[value\]/, 'JSON primitives and objects must normalize through one governed row path.')
+requireAbsent(adapter, /function\s+parseJson\(/, 'FILE adapter must not maintain a second JSON parser implementation.')
+requireAbsent(adapter, /function\s+parseJsonLines\(/, 'FILE adapter must not maintain a second JSONL parser implementation.')
 
 requireMatch(smokeFixture, /CUST-0011,Karen Goh,karen\.goh@example\.com,SG,36,true/, 'CSV lifecycle fixture must preserve the approved remediated email value.')
 requireMatch(metricEngine, /function\s+isBlank\(value:\s*unknown\)/, 'Metric engine must explicitly distinguish blank strings from SQL null values.')
@@ -81,6 +91,7 @@ requireMatch(form, /type=['"]file['"]/, 'Dataset UI must expose an actual file c
 requireMatch(datasetRegistration, /\['file',\s*'csv'\]\.includes\(sourceType\)\s*\?\s*'FILE'/, 'FILE and CSV sources must normalize to profiling execution type FILE.')
 
 await import('./test-file-source-csv.mjs')
+await import('./test-file-source-json.mjs')
 await import('./test-file-source-text-decoding.mjs')
 
 console.log(JSON.stringify({
@@ -97,6 +108,8 @@ console.log(JSON.stringify({
     blankPreservation: true,
     blankAwareCompleteness: true,
     blankAwareCandidateKeys: true,
+    governedJsonParsing: true,
+    jsonlPhysicalLineErrors: true,
     bomAwareTextDecoding: true,
     textEncodingEvidence: true,
   },
