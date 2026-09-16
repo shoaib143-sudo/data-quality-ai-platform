@@ -31,6 +31,10 @@ on:
       - '.github/workflows/storage-r2-assurance.yml'
   workflow_dispatch:
 
+concurrency:
+  group: storage-r2-assurance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
