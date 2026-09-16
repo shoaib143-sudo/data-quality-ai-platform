@@ -62,6 +62,11 @@ requireMatch(documentEvidence, /detectSensitiveTextEvidence/, 'Readable document
 requireMatch(governedFileSource, /nativeTextIsReadable/, 'Governed FILE loading must reject unreadable native PDF text.')
 requireMatch(governedFileSource, /metadataOnlyFallback/, 'Unreadable native PDF text must fail closed to metadata-only evidence.')
 requireMatch(governedFileSource, /Unreadable native text was replaced with governed OCR text/, 'Governed PDF loading must prefer readable OCR evidence when native text is rejected.')
+requireMatch(governedFileSource, /safeRemoteFileFetch/, 'Governed OCR fallback must preserve the remote FILE SSRF/redirect safety boundary.')
+requireNoMatch(governedFileSource, /const response = await fetch\(url/, 'Governed OCR fallback must never re-fetch remote source bytes with an unrestricted fetch.')
+requireMatch(governedFileSource, /createHash\('sha256'\)[\s\S]*expectedContentHash/, 'Governed OCR fallback must bind reloaded bytes to the exact content hash inspected by the source reader.')
+requireMatch(governedFileSource, /time-of-check\/time-of-use drift/, 'Governed OCR fallback must fail closed when source bytes change between inspection and OCR.')
+requireMatch(governedFileSource, /technical safety ceiling/, 'Governed OCR fallback must retain the source byte ceiling on its second read.')
 requireMatch(canonicalPreview, /loadGovernedFileSource/, 'Canonical data preview must reuse the governed FILE reader rather than implement a separate extraction path.')
 requireMatch(canonicalPreview, /loadCanonicalDocumentPreviewFromSource/, 'Canonical preview must expose a source-backed path that includes native extraction and OCR fallback.')
 requireMatch(canonicalPreview, /Binary or encoded glyph streams are intentionally hidden/, 'Canonical preview must fail closed when readable text is unavailable.')
@@ -83,6 +88,9 @@ console.log(JSON.stringify({
     explorerUnreadableMetricSuppression: true,
     canonicalDocumentPreview: true,
     governedSourceReaderReuse: true,
+    governedOcrSafeFetch: true,
+    governedOcrContentBinding: true,
+    governedOcrByteCeiling: true,
     sharedSensitiveEvidence: true,
     sharedMetricSanitizer: true,
     authenticatedPreviewOnly: true,
