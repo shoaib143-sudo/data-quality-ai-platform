@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { inflateRawSync, inflateSync } from 'node:zlib'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseCsv } from '@/lib/profiling/csv-source'
+import { parseJson, parseJsonLines } from '@/lib/profiling/json-source'
 import { decodeTextBytes } from '@/lib/profiling/text-decoding'
 import { extractWithOcrSpace } from '@/lib/profiling/ocr-space'
 import { safeRemoteFileFetch } from '@/lib/profiling/safe-remote-file'
@@ -134,25 +135,6 @@ function detectFormat(content:string,contentType:string|null,extension:string):F
 
 function sourceName(uri:string){const clean=uri.split('?')[0].replace(/\/$/,'');return clean.split('/').pop()||'file'}
 function getString(record:Record<string,unknown>,fields:string[]){for(const field of fields){const value=record[field];if(typeof value==='string'&&value.trim())return value.trim()}return null}
-
-function parseJson(input:string,maxRows:number){
-  let value:unknown
-  try{value=JSON.parse(input)}catch(error){throw new Error(`Invalid JSON source: ${error instanceof Error?error.message:'parse failed'}`)}
-  const rawRows=Array.isArray(value)?value:[value]
-  const rows=rawRows.map((item,index)=>normalizeJsonRow(item,index))
-  const warnings:string[]=[]
-  if(rows.length>maxRows)warnings.push(`JSON source contains ${rows.length} records; ${maxRows} were selected for profiling.`)
-  return{rows:rows.slice(0,maxRows),rowCount:rows.length,warnings}
-}
-
-function parseJsonLines(input:string,maxRows:number){
-  const lines=input.split(/\r?\n/).filter(line=>line.trim())
-  const rows=lines.map((line,index)=>{try{return normalizeJsonRow(JSON.parse(line),index)}catch(error){throw new Error(`Invalid JSONL source at line ${index+1}: ${error instanceof Error?error.message:'parse failed'}`)}})
-  const warnings:string[]=[]
-  if(rows.length>maxRows)warnings.push(`JSONL source contains ${rows.length} records; ${maxRows} were selected for profiling.`)
-  return{rows:rows.slice(0,maxRows),rowCount:rows.length,warnings}
-}
-function normalizeJsonRow(value:unknown,index:number):Record<string,unknown>{return value&&typeof value==='object'&&!Array.isArray(value)?{record_index:index+1,...value as Record<string,unknown>}:{record_index:index+1,value}}
 
 function parseTextDocument(input:string,maxRows:number,metadata:Record<string,unknown>){
   const normalized=input.replace(/\r\n/g,'\n')
