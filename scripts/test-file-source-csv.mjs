@@ -62,3 +62,14 @@ test('identifier-like fields remain text and row truncation reports full count',
   assert.equal(parsed.rowCount,2)
   assert.equal(parsed.warnings.length,1)
 })
+
+
+test('generated duplicate suffixes never collide with source headers', () => {
+  assert.deepEqual(normalizeCsvHeaders(['name','name','name__2']),['name','name__2','name__2__2'])
+  const parsed=parseCsv('name,name,name__2\nfirst,second,explicit\n',10)
+  assert.deepEqual(parsed.rows,[{name:'first',name__2:'second',name__2__2:'explicit'}])
+})
+
+test('blank generated headers never overwrite explicit column names', () => {
+  assert.deepEqual(normalizeCsvHeaders(['','column_1']),['column_1','column_1__2'])
+})
