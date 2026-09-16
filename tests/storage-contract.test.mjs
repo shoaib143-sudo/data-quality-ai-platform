@@ -8,6 +8,10 @@ const supabase = fs.readFileSync(new URL('../lib/storage/supabase.ts', import.me
 const factory = fs.readFileSync(new URL('../lib/storage/factory.ts', import.meta.url), 'utf8')
 const uploadRoute = fs.readFileSync(new URL('../app/api/datasets/source/upload-file/route.ts', import.meta.url), 'utf8')
 const completionRoute = fs.readFileSync(new URL('../app/api/datasets/source/upload-file/complete/route.ts', import.meta.url), 'utf8')
+const registerRoute = fs.readFileSync(new URL('../app/api/datasets/register/route.ts', import.meta.url), 'utf8')
+const sourceValidation = fs.readFileSync(new URL('../lib/profiling/source-validation.ts', import.meta.url), 'utf8')
+const governedFileSource = fs.readFileSync(new URL('../lib/profiling/governed-file-source.ts', import.meta.url), 'utf8')
+const providerNeutralFileSource = fs.readFileSync(new URL('../lib/profiling/provider-neutral-file-source.ts', import.meta.url), 'utf8')
 const migration = fs.readFileSync(new URL('../supabase/migrations/20260916153000_provider_neutral_storage_registry.sql', import.meta.url), 'utf8')
 
 test('storage contract exposes required provider-neutral operations', () => {
@@ -110,4 +114,33 @@ test('completion endpoint is idempotent for already READY objects and fails clos
   assert.match(completionRoute, /idempotent: true/)
   assert.match(completionRoute, /row\.state === 'DELETED'/)
   assert.match(completionRoute, /row\.state === 'QUARANTINED'/)
+})
+
+test('provider-neutral file resolver uses R2 adapter without persisting signed URLs', () => {
+  assert.match(providerNeutralFileSource, /createObjectStorage\('r2'\)/)
+  assert.match(providerNeutralFileSource, /createDownloadAuthorization/)
+  assert.match(providerNeutralFileSource, /R2_READ_TTL_SECONDS = 5 \* 60/)
+  assert.match(providerNeutralFileSource, /source_uri: canonicalSourceUri/)
+  assert.doesNotMatch(registerRoute, /signedUrl|uploadUrl/)
+})
+
+test('FILE source validation accepts canonical r2 URIs through the provider-neutral resolver', () => {
+  assert.match(sourceValidation, /parseR2SourceUri/)
+  assert.match(sourceValidation, /resolveProviderNeutralFileConfig/)
+  assert.match(sourceValidation, /sanitizeProviderNeutralFileResult/)
+  assert.match(sourceValidation, /storage_provider: r2 \? 'r2'/)
+})
+
+test('dataset registration only links READY storage objects in the same project', () => {
+  assert.match(registerRoute, /from\('storage_objects'\)/)
+  assert.match(registerRoute, /\.eq\('project_id', projectId\)/)
+  assert.match(registerRoute, /storageObject\.state !== 'READY'/)
+  assert.match(registerRoute, /storage_object_id: verifiedStorageObject\?\.id \?\? null/)
+  assert.match(registerRoute, /storageSourceUri/)
+})
+
+test('governed profiling reads resolve R2 at execution time and sanitize temporary authorization', () => {
+  assert.match(governedFileSource, /resolveProviderNeutralFileConfig/)
+  assert.match(governedFileSource, /sanitizeProviderNeutralFileResult/)
+  assert.match(governedFileSource, /loadOriginalBytes\(supabase, resolved\.config/)
 })
