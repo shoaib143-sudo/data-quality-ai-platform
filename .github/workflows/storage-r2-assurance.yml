@@ -6,13 +6,17 @@ on:
       - r2-prereq-hardening-20260916
     paths:
       - 'lib/storage/**'
-      - 'app/api/datasets/source/upload-file/route.ts'
+      - 'app/api/datasets/source/upload-file/**'
+      - 'app/api/internal/storage/r2-smoke/**'
+      - 'supabase/migrations/*storage_registry*.sql'
       - 'tests/storage-contract.test.mjs'
       - '.github/workflows/storage-r2-assurance.yml'
   pull_request:
     paths:
       - 'lib/storage/**'
-      - 'app/api/datasets/source/upload-file/route.ts'
+      - 'app/api/datasets/source/upload-file/**'
+      - 'app/api/internal/storage/r2-smoke/**'
+      - 'supabase/migrations/*storage_registry*.sql'
       - 'tests/storage-contract.test.mjs'
       - '.github/workflows/storage-r2-assurance.yml'
   workflow_dispatch:
