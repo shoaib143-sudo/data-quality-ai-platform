@@ -439,3 +439,24 @@ Do not report "100% tested." Report measurable coverage and gate status, for exa
 10. Convert every newly discovered production defect into a permanent regression test.
 
 The current Autonomous Governance E2E journey remains an active certification case and should be completed under this standard.
+
+
+## Testing control-plane documents
+
+This strategy is implemented through the following version-controlled specifications:
+
+- [Feature Registry](./FEATURE_REGISTRY.md)
+- [Certification Matrix](./CERTIFICATION_MATRIX.md)
+- [Data Governance Test Plan](./DATA_GOVERNANCE_TEST_PLAN.md)
+- [AI and Agentic AI Test Plan](./AI_AGENT_TEST_PLAN.md)
+- [Security Test Plan](./SECURITY_TEST_PLAN.md)
+- [Golden E2E Journeys](./E2E_JOURNEYS.md)
+- [Persona and RBAC Matrix](./PERSONA_RBAC_MATRIX.md)
+- [Certification Test Data Catalog](./TEST_DATA_CATALOG.md)
+- [AI Evaluation Catalog](./AI_EVAL_CATALOG.md)
+- [System Invariants](./INVARIANTS.md)
+- [Performance and Scalability Test Plan](./PERFORMANCE_TEST_PLAN.md)
+- [Recovery and Chaos Plan](./RECOVERY_CHAOS_PLAN.md)
+- [Certification Gates](./CERTIFICATION_GATES.md)
+
+The planning envelope for the mature suite is approximately 4,000 to 8,000 meaningful software tests and AI evaluations, subject to refinement from the repository-derived Feature Registry. Raw test count is not a certification gate.
