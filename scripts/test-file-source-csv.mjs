@@ -13,6 +13,16 @@ test('three repeated headers remain lossless', () => {
   assert.deepEqual(parsed.rows,[{value:1,value__2:2,value__3:3}])
 })
 
+test('generated duplicate suffixes never collide with literal headers', () => {
+  assert.deepEqual(normalizeCsvHeaders(['value','value__2','value']),['value','value__2','value__3'])
+  const parsed=parseCsv('value,value__2,value\n1,2,3\n',10)
+  assert.deepEqual(parsed.rows,[{value:1,value__2:2,value__3:3}])
+})
+
+test('blank generated headers never collide with literal column names', () => {
+  assert.deepEqual(normalizeCsvHeaders(['','column_1','']),['column_1','column_1__2','column_3'])
+})
+
 test('blank and BOM-prefixed headers are normalized deterministically', () => {
   assert.deepEqual(normalizeCsvHeaders(['\uFEFFid','','']),['id','column_2','column_3'])
   const parsed=parseCsv('\uFEFFid,,\n007,left,right\n',10)
