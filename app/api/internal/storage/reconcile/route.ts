@@ -20,6 +20,10 @@ function staleMinutes() {
   return Number.isFinite(parsed) ? Math.min(24 * 60, Math.max(5, Math.floor(parsed))) : DEFAULT_STALE_MINUTES
 }
 
+function normalizedContentType(value?: string | null) {
+  return (value ?? '').split(';', 1)[0].trim().toLowerCase()
+}
+
 export async function POST(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
 
@@ -28,7 +32,7 @@ export async function POST(request: Request) {
   const { data: rows, error } = await admin
     .schema('catalog')
     .from('storage_objects')
-    .select('id, project_id, provider, bucket, object_key, state, metadata, updated_at')
+    .select('id, project_id, provider, bucket, object_key, state, metadata, updated_at, expected_size_bytes, content_type')
     .in('state', ['PENDING', 'UPLOADING', 'VERIFYING'])
     .lt('updated_at', cutoff)
     .order('updated_at', { ascending: true })
@@ -65,6 +69,59 @@ export async function POST(request: Request) {
           .eq('state', row.state)
         if (updateError) throw new Error(updateError.message)
         results.push({ id: row.id, action: 'FAILED_MISSING_OBJECT' })
+        continue
+      }
+
+      const expectedSize = row.expected_size_bytes == null ? undefined : Number(row.expected_size_bytes)
+      if (expectedSize !== undefined && head.sizeBytes !== undefined && head.sizeBytes !== expectedSize) {
+        const { error: updateError } = await admin
+          .schema('catalog')
+          .from('storage_objects')
+          .update({
+            state: 'QUARANTINED',
+            size_bytes: head.sizeBytes,
+            etag: head.etag ?? null,
+            updated_at: now,
+            metadata: {
+              ...metadata,
+              reconciliation: 'SIZE_MISMATCH',
+              expected_size_bytes: expectedSize,
+              observed_size_bytes: head.sizeBytes,
+              reconciled_at: now,
+            },
+          })
+          .eq('id', row.id)
+          .eq('project_id', row.project_id)
+          .eq('state', row.state)
+        if (updateError) throw new Error(updateError.message)
+        results.push({ id: row.id, action: 'QUARANTINED_SIZE_MISMATCH' })
+        continue
+      }
+
+      const expectedType = normalizedContentType(row.content_type)
+      const observedType = normalizedContentType(head.contentType)
+      if (expectedType && observedType && expectedType !== observedType) {
+        const { error: updateError } = await admin
+          .schema('catalog')
+          .from('storage_objects')
+          .update({
+            state: 'QUARANTINED',
+            size_bytes: head.sizeBytes ?? null,
+            etag: head.etag ?? null,
+            updated_at: now,
+            metadata: {
+              ...metadata,
+              reconciliation: 'CONTENT_TYPE_MISMATCH',
+              expected_content_type: expectedType,
+              observed_content_type: observedType,
+              reconciled_at: now,
+            },
+          })
+          .eq('id', row.id)
+          .eq('project_id', row.project_id)
+          .eq('state', row.state)
+        if (updateError) throw new Error(updateError.message)
+        results.push({ id: row.id, action: 'QUARANTINED_CONTENT_TYPE_MISMATCH' })
         continue
       }
 
