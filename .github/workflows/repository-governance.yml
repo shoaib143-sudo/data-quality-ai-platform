@@ -32,6 +32,10 @@ jobs:
         run: node scripts/verify-post-implementation-certification-contract.mjs
       - name: Exercise certification contract negative and failure cases
         run: node --test scripts/test-post-implementation-certification-contract.mjs
+      - name: Verify certification best-practice hardening profile
+        run: node scripts/verify-certification-best-practice-hardening-v2.mjs
+      - name: Exercise certification hardening negative cases
+        run: node --test scripts/test-certification-best-practice-hardening-v2.mjs
       - name: Verify fast-path CI safety model
         run: node scripts/verify-fast-path-ci.mjs
       - name: Verify immutable action references
