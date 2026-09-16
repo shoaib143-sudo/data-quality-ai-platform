@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseProfilingGovernanceInsightRow } from '../lib/profiling/governance-insights.ts'
+import { parseProfilingGovernanceInsightRow } from '../lib/profiling/governance-insight-parser.ts'
 
 const validRow = {
   profile_run_id:'00000000-0000-0000-0000-000000000001',
