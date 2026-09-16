@@ -54,6 +54,26 @@ function escapeXml(value: string) {
     .replaceAll("'", '&apos;')
 }
 
+function hasTag(xml: string, tag: string, value: string) {
+  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`<${tag}>\\s*${escaped}\\s*</${tag}>`, 'i').test(xml)
+}
+
+export function r2CorsHasWildcardOrigin(xml: string) {
+  return hasTag(xml, 'AllowedOrigin', '*')
+}
+
+export function r2CorsPolicyMatchesDesired(xml: string, rules = DATANEXUS_R2_CORS_RULES) {
+  if (r2CorsHasWildcardOrigin(xml)) return false
+  return rules.every((rule) =>
+    rule.allowedOrigins.every((value) => hasTag(xml, 'AllowedOrigin', value))
+    && rule.allowedMethods.every((value) => hasTag(xml, 'AllowedMethod', value))
+    && rule.allowedHeaders.every((value) => hasTag(xml, 'AllowedHeader', value))
+    && rule.exposeHeaders.every((value) => hasTag(xml, 'ExposeHeader', value))
+    && hasTag(xml, 'MaxAgeSeconds', String(rule.maxAgeSeconds)),
+  )
+}
+
 export function corsPolicyXml(rules = DATANEXUS_R2_CORS_RULES) {
   const body = rules.map((rule) => [
     '<CORSRule>',
