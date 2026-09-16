@@ -34,58 +34,50 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Exact-main certification trigger contract
         run: node --test tests/exact-main-certification-contract.test.mjs
-      - name: V0 trusted governance baseline
-        run: node --experimental-strip-types scripts/verify-v0-trusted-governance-baseline.mjs
-      - name: V1 sensitive dataset governance journey
-        run: node scripts/verify-journey-sensitive-governance.mjs
-      - name: V2 DQ incident journey
-        run: node scripts/verify-journey-dq-incident.mjs
-      - name: V3 governed change-impact journey
-        run: node scripts/verify-journey-change-governance.mjs
-      - name: V4 governed investigation journey
-        run: node scripts/verify-journey-governed-investigation.mjs
-      - name: V5 governed outcome learning journey
-        run: node scripts/verify-journey-governed-outcome-learning.mjs
-      - name: Privileged API authorization adversarial gate
-        run: node scripts/audit-user-facing-admin-routes.mjs
-      - name: Worker isolation and capacity gate
-        run: pnpm run verify:worker-runtime
-      - name: Provider timeout and fallback gate
-        run: pnpm run verify:provider-fallback
-      - name: Governed model gateway gate
-        run: pnpm run verify:model-gateway
-      - name: Emergency execution controls gate
-        run: pnpm run verify:execution-controller
-      - name: Retrieval permission and grounding gate
-        run: pnpm run verify:retrieval-provider
-      - name: Evaluation evidence gate
-        run: pnpm run verify:evaluation-engine
-      - name: Migration version collision gate
-        run: node scripts/verify-migration-version-uniqueness.mjs
-      - name: Membership helper ACL replay contract
-        run: node scripts/verify-clean-membership-helper-acl-replay.mjs
-      - name: Synthetic rollback replay contract
-        run: node scripts/verify-clean-synthetic-rollback-replay.mjs
-      - name: V6 certification contract
-        run: node scripts/verify-journey-operational-certification.mjs
-      - name: Production build
-        run: pnpm run build
-      - name: Authenticated live database contracts
+      - name: PR fast-path certification preflight
+        if: github.event_name == 'pull_request'
+        run: |
+          node scripts/audit-user-facing-admin-routes.mjs
+          node scripts/verify-migration-version-uniqueness.mjs
+          node scripts/verify-clean-membership-helper-acl-replay.mjs
+          node scripts/verify-clean-synthetic-rollback-replay.mjs
+          pnpm run verify:worker-runtime
+          pnpm run verify:provider-fallback
+          pnpm run verify:model-gateway
+      - name: Full post-merge operational certification
+        if: github.event_name != 'pull_request'
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        shell: bash
         run: |
-          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+          set -euo pipefail
+          node --experimental-strip-types scripts/verify-v0-trusted-governance-baseline.mjs
+          node scripts/verify-journey-sensitive-governance.mjs
+          node scripts/verify-journey-dq-incident.mjs
+          node scripts/verify-journey-change-governance.mjs
+          node scripts/verify-journey-governed-investigation.mjs
+          node scripts/verify-journey-governed-outcome-learning.mjs
+          node scripts/audit-user-facing-admin-routes.mjs
+          pnpm run verify:worker-runtime
+          pnpm run verify:provider-fallback
+          pnpm run verify:model-gateway
+          pnpm run verify:execution-controller
+          pnpm run verify:retrieval-provider
+          pnpm run verify:evaluation-engine
+          node scripts/verify-migration-version-uniqueness.mjs
+          node scripts/verify-clean-membership-helper-acl-replay.mjs
+          node scripts/verify-clean-synthetic-rollback-replay.mjs
+          node scripts/verify-journey-operational-certification.mjs
+          pnpm run build
+          if [ -n "${NEXT_PUBLIC_SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            pnpm run verify:database
+          else
             {
               echo '## Live governance database verification'
-              echo 'Status: NOT_MEASURED in CI because the required Supabase credentials are not configured for this workflow.'
-              echo 'This is not a PASS. Release evidence must include a separate authenticated live database validation.'
+              echo 'Status: NOT_MEASURED because protected Supabase credentials are unavailable.'
+              echo 'This is not a PASS. Production certification must include authenticated live validation.'
             } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
           fi
-          echo 'Live governance database credentials are available; authenticated database verification will run.'
-          pnpm run verify:database
 
   runtime-slo:
     runs-on: ubuntu-latest
@@ -104,7 +96,11 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: PR runtime SLO contract preflight
+        if: github.event_name == 'pull_request'
+        run: pnpm run verify:readiness
       - name: Production concurrency and latency SLO
+        if: github.event_name != 'pull_request'
         env:
           PRODUCTION_URL: https://data-quality-ai-platform.vercel.app
           BENCHMARK_PATH: /login
@@ -139,12 +135,19 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - name: Verify migration collision baseline before replay
-        run: node scripts/verify-migration-version-uniqueness.mjs
+      - name: PR database reconstruction preflight
+        if: github.event_name == 'pull_request'
+        run: |
+          node scripts/verify-migration-version-uniqueness.mjs
+          node scripts/verify-clean-membership-helper-acl-replay.mjs
+          node scripts/verify-clean-synthetic-rollback-replay.mjs
+          node scripts/verify-p0-p4-revalidation.mjs
       - name: Reconstruct clean Supabase database from migrations
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
+          node scripts/verify-migration-version-uniqueness.mjs
           ROOT="$GITHUB_WORKSPACE"
           WORK="$RUNNER_TEMP/datanexus-clean-reconstruction"
           rm -rf "$WORK"

@@ -70,9 +70,47 @@ export type ProjectAuthorization = {
   capability: AuthorizationCapability
 }
 
+export async function hasOrganizationWideDataGovernanceSuperAdminCapability(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  organizationId: string,
+  capability: AuthorizationCapability,
+) {
+  const { data: role, error: roleError } = await admin
+    .schema('governance')
+    .from('access_roles')
+    .select('capabilities')
+    .eq('role_key', 'DATA_GOVERNANCE_ADMIN')
+    .maybeSingle()
+  if (roleError) throw new Error(`Unable to resolve Data Governance Super Admin capabilities: ${roleError.message}`)
+  if (!Array.isArray(role?.capabilities) || !role.capabilities.includes(capability)) return false
+
+  const { data: projects, error: projectsError } = await admin
+    .schema('app')
+    .from('projects')
+    .select('id')
+    .eq('organization_id', organizationId)
+  if (projectsError) throw new Error(`Unable to resolve Super Admin project scope: ${projectsError.message}`)
+  const projectIds = (projects ?? []).map(project => String(project.id))
+  if (!projectIds.length) return false
+
+  const { data: bindings, error: bindingsError } = await admin
+    .schema('governance')
+    .from('project_role_bindings')
+    .select('expires_at')
+    .eq('user_id', userId)
+    .eq('role_key', 'DATA_GOVERNANCE_ADMIN')
+    .eq('active', true)
+    .in('project_id', projectIds)
+  if (bindingsError) throw new Error(`Unable to resolve Data Governance Super Admin authority: ${bindingsError.message}`)
+
+  const now = Date.now()
+  return (bindings ?? []).some(binding => !binding.expires_at || new Date(binding.expires_at).getTime() > now)
+}
+
 export async function hasProjectCapability(userId: string, projectId: string, capability: AuthorizationCapability): Promise<boolean> {
   if (!userId || !projectId) return false
-  await assertProjectBelongsToInstanceOrganization(projectId)
+  const projectContext = await assertProjectBelongsToInstanceOrganization(projectId)
   const admin = createAdminClient()
   const { data, error } = await admin.schema('governance').rpc('has_project_capability', {
     p_project_id: projectId,
@@ -80,7 +118,14 @@ export async function hasProjectCapability(userId: string, projectId: string, ca
     p_capability: capability,
   })
   if (error) throw new Error(`Unable to evaluate project capability: ${error.message}`)
-  return data === true
+  if (data === true) return true
+
+  return hasOrganizationWideDataGovernanceSuperAdminCapability(
+    admin,
+    userId,
+    projectContext.organizationId,
+    capability,
+  )
 }
 
 export async function authorizeProject(userId: string, projectId: string, capability: AuthorizationCapability): Promise<ProjectAuthorization> {
