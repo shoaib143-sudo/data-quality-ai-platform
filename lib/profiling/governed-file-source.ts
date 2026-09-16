@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { documentEvidenceState } from '@/lib/profiling/document-evidence'
 import { loadFileSource, type FileSourceConfig, type FileSourceResult } from '@/lib/profiling/file-source-adapter'
 import { extractWithOcrSpace } from '@/lib/profiling/ocr-space'
 
@@ -53,16 +54,54 @@ function chunkOcrText(text: string, maxRows: number, metadata: Record<string, un
   }
 }
 
+function nativeTextIsReadable(loaded: FileSourceResult) {
+  const textRows = loaded.rows
+    .map((row) => typeof row.text === 'string' ? row.text : null)
+    .filter((value): value is string => Boolean(value?.trim()))
+  if (!textRows.length) return false
+  const states = textRows.slice(0, 25).map(documentEvidenceState)
+  return states.some((state) => state === 'READABLE') && states.filter((state) => state === 'UNREADABLE').length <= Math.max(1, Math.floor(states.length * 0.2))
+}
+
+function metadataOnlyFallback(loaded: FileSourceResult): FileSourceResult {
+  const fileName = String(loaded.metadata.file_name ?? 'file')
+  return {
+    ...loaded,
+    format: 'binary',
+    rowCount: 1,
+    rows: [{
+      document_index: 1,
+      file_name: fileName,
+      extension: loaded.metadata.extension ?? null,
+      content_type: loaded.contentType,
+      byte_size: loaded.metadata.byte_size ?? null,
+      sha256: loaded.contentHash,
+      text_extraction_supported: false,
+    }],
+    metadata: {
+      ...loaded.metadata,
+      text_extraction_supported: false,
+      native_text_rejected_as_unreadable: true,
+    },
+    warnings: [...loaded.warnings, 'Native document text was rejected because it resembled encoded PDF glyph/binary content rather than readable text.'],
+  }
+}
+
 export async function loadGovernedFileSource(
   supabase: SupabaseClient,
   config: FileSourceConfig,
   options: { maxRows?: number; maxBytes?: number } = {},
 ): Promise<FileSourceResult> {
   const loaded = await loadFileSource(supabase, config, options)
-  if (loaded.format !== 'binary') return loaded
-
   const extension = String(loaded.metadata.extension ?? '').toLowerCase()
-  if (!OCR_EXTENSIONS.has(extension)) return loaded
+  const canOcr = OCR_EXTENSIONS.has(extension)
+
+  if (loaded.format !== 'binary') {
+    if (!canOcr || nativeTextIsReadable(loaded)) return loaded
+  }
+  if (!canOcr) return loaded
+
+  const fallback = loaded.format === 'binary' ? loaded : metadataOnlyFallback(loaded)
 
   try {
     const original = await loadOriginalBytes(supabase, config)
@@ -71,11 +110,11 @@ export async function loadGovernedFileSource(
       fileName: String(loaded.metadata.file_name ?? `document.${extension || 'bin'}`),
       contentType: original.contentType ?? loaded.contentType,
     })
-    if (!ocr.text.trim()) {
+    if (!ocr.text.trim() || documentEvidenceState(ocr.text) !== 'READABLE') {
       return {
-        ...loaded,
-        metadata: { ...loaded.metadata, ocr_provider: ocr.provider, ocr_configured: ocr.configured, ocr_pages: ocr.pages },
-        warnings: [...loaded.warnings, ...ocr.warnings],
+        ...fallback,
+        metadata: { ...fallback.metadata, ocr_provider: ocr.provider, ocr_configured: ocr.configured, ocr_pages: ocr.pages },
+        warnings: [...fallback.warnings, ...ocr.warnings, ocr.text.trim() ? 'OCR output was rejected because it was not readable text.' : 'OCR did not return readable text.'],
       }
     }
 
@@ -95,13 +134,13 @@ export async function loadGovernedFileSource(
       rowCount: parsed.rowCount,
       format: 'text',
       metadata,
-      warnings: [...loaded.warnings, ...ocr.warnings, ...parsed.warnings],
+      warnings: [...loaded.warnings, 'Unreadable native text was replaced with governed OCR text.', ...ocr.warnings, ...parsed.warnings],
     }
   } catch (error) {
     return {
-      ...loaded,
-      metadata: { ...loaded.metadata, ocr_provider: 'OCR_SPACE', ocr_failed: true },
-      warnings: [...loaded.warnings, `OCR fallback could not complete: ${error instanceof Error ? error.message : 'unknown OCR error'}`],
+      ...fallback,
+      metadata: { ...fallback.metadata, ocr_provider: 'OCR_SPACE', ocr_failed: true },
+      warnings: [...fallback.warnings, `OCR fallback could not complete: ${error instanceof Error ? error.message : 'unknown OCR error'}`],
     }
   }
 }
