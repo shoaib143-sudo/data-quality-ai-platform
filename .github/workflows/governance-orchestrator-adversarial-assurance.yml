@@ -1,0 +1,26 @@
+name: Governance Orchestrator Adversarial Assurance
+
+on:
+  pull_request:
+    paths:
+      - 'lib/orchestration/governance-outcome-report.ts'
+      - 'lib/orchestration/governance-recovery.ts'
+      - 'lib/agents/runtime/governed-handoff.ts'
+      - 'scripts/audit-governance-orchestrator-adversarial.mjs'
+      - '.github/workflows/governance-orchestrator-adversarial-assurance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-assurance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run fail-closed adversarial audit
+        run: node --experimental-strip-types scripts/audit-governance-orchestrator-adversarial.mjs
