@@ -3,10 +3,13 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const auditRoute = fs.readFileSync(new URL('../app/api/internal/storage/audit/route.ts', import.meta.url), 'utf8')
+const internalBearer = fs.readFileSync(new URL('../lib/security/internal-bearer.ts', import.meta.url), 'utf8')
 
-test('storage audit requires internal authorization and is non-destructive', () => {
-  assert.match(auditRoute, /CRON_SECRET/)
+test('storage audit requires hardened internal authorization and is non-destructive', () => {
+  assert.match(auditRoute, /requireInternalBearer/)
   assert.match(auditRoute, /Unauthorized/)
+  assert.match(internalBearer, /CRON_SECRET/)
+  assert.match(internalBearer, /timingSafeEqual/)
   assert.match(auditRoute, /destructiveActions: 0/)
   assert.doesNotMatch(auditRoute, /\.delete\(/)
   assert.doesNotMatch(auditRoute, /\.update\(/)
