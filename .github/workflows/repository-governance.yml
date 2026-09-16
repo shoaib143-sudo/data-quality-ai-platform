@@ -36,6 +36,8 @@ jobs:
         run: node scripts/verify-certification-best-practice-hardening-v2.mjs
       - name: Exercise certification hardening negative cases
         run: node --test scripts/test-certification-best-practice-hardening-v2.mjs
+      - name: Exercise fail-closed certification decision engine
+        run: node --test scripts/test-post-implementation-certification-decision.mjs
       - name: Verify fast-path CI safety model
         run: node scripts/verify-fast-path-ci.mjs
       - name: Verify immutable action references
