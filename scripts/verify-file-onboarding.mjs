@@ -12,8 +12,9 @@ function requireAbsent(text, pattern, message) {
   if (pattern.test(text)) throw new Error(message)
 }
 
-const [adapter, remoteGuard, discovery, registration, uploadRoute, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
+const [adapter, csvSource, remoteGuard, discovery, registration, uploadRoute, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
   source('lib/profiling/file-source-adapter.ts'),
+  source('lib/profiling/csv-source.ts'),
   source('lib/profiling/safe-remote-file.ts'),
   source('app/api/datasets/source/discover-file/route.ts'),
   source('app/api/datasets/source/register/route.ts'),
@@ -30,15 +31,18 @@ requireMatch(remoteGuard, /lookup\(hostname,\s*\{\s*all:\s*true/, 'Remote FILE g
 requireMatch(remoteGuard, /redirect:\s*['"]manual['"]/, 'Remote FILE guard must inspect redirects explicitly.')
 requireMatch(remoteGuard, /FILE_REMOTE_ALLOWED_HOSTS/, 'Remote FILE guard must support a production host allowlist.')
 
-requireMatch(adapter, /function\s+coerceCsvScalar\(/, 'CSV adapter must apply scalar coercion before profiling.')
-requireMatch(adapter, /\^\(true\|false\)\$/i, 'CSV scalar coercion must recognize explicit boolean values.')
-requireMatch(adapter, /function\s+strictCsvNumber\(/, 'CSV scalar coercion must use strict numeric parsing.')
-requireMatch(adapter, /name===['"]id['"]\|\|name\.endsWith\(['"]_id['"]\)/, 'CSV scalar coercion must preserve identifier columns as text.')
-requireMatch(adapter, /phone\|mobile\|zip\|postal\|postcode/, 'CSV scalar coercion must preserve phone and postal identifier columns as text.')
-requireMatch(adapter, /if\(value===null\)return null/, 'CSV scalar coercion must preserve null values.')
-requireMatch(adapter, /if\(value===['"]['"]\|\|value\.trim\(\)===['"]['"]\)return value/, 'CSV scalar coercion must preserve blank and whitespace-only values for quality metrics.')
-requireMatch(adapter, /\(\?:0\|\[1-9\]\\d\*\)/, 'CSV numeric coercion must reject ambiguous leading-zero integers.')
-requireMatch(adapter, /coerceCsvScalar\(header,record\[index\]\?\?null\)/, 'Parsed CSV rows must use the governed scalar coercion path.')
+requireMatch(adapter, /import\s+\{\s*parseCsv\s*\}\s+from\s+['"]@\/lib\/profiling\/csv-source['"]/, 'FILE adapter must use the governed CSV parser module.')
+requireMatch(csvSource, /function\s+coerceCsvScalar\(/, 'CSV adapter must apply scalar coercion before profiling.')
+requireMatch(csvSource, /\^\(true\|false\)\$/i, 'CSV scalar coercion must recognize explicit boolean values.')
+requireMatch(csvSource, /function\s+strictCsvNumber\(/, 'CSV scalar coercion must use strict numeric parsing.')
+requireMatch(csvSource, /name===['"]id['"]\|\|name\.endsWith\(['"]_id['"]\)/, 'CSV scalar coercion must preserve identifier columns as text.')
+requireMatch(csvSource, /phone\|mobile\|zip\|postal\|postcode/, 'CSV scalar coercion must preserve phone and postal identifier columns as text.')
+requireMatch(csvSource, /if\(value===null\)return null/, 'CSV scalar coercion must preserve null values.')
+requireMatch(csvSource, /if\(value===['"]['"]\|\|value\.trim\(\)===['"]['"]\)return value/, 'CSV scalar coercion must preserve blank and whitespace-only values for quality metrics.')
+requireMatch(csvSource, /\(\?:0\|\[1-9\]\\d\*\)/, 'CSV numeric coercion must reject ambiguous leading-zero integers.')
+requireMatch(csvSource, /coerceCsvScalar\(header,record\[index\]\?\?null\)/, 'Parsed CSV rows must use the governed scalar coercion path.')
+requireMatch(csvSource, /export\s+function\s+normalizeCsvHeaders\(/, 'CSV parser must normalize headers through an executable governed helper.')
+requireMatch(csvSource, /occurrence===1\?base:`\$\{base\}__\$\{occurrence\}`/, 'Duplicate CSV headers must receive deterministic lossless suffixes.')
 
 requireMatch(smokeFixture, /CUST-0011,Karen Goh,karen\.goh@example\.com,SG,36,true/, 'CSV lifecycle fixture must preserve the approved remediated email value.')
 requireMatch(metricEngine, /function\s+isBlank\(value:\s*unknown\)/, 'Metric engine must explicitly distinguish blank strings from SQL null values.')
@@ -65,6 +69,8 @@ requireMatch(form, /type=['"]file['"]/, 'Dataset UI must expose an actual file c
 
 requireMatch(datasetRegistration, /\['file',\s*'csv'\]\.includes\(sourceType\)\s*\?\s*'FILE'/, 'FILE and CSV sources must normalize to profiling execution type FILE.')
 
+await import('./test-file-source-csv.mjs')
+
 console.log(JSON.stringify({
   valid: true,
   contracts: {
@@ -75,6 +81,7 @@ console.log(JSON.stringify({
     csvExecutionType: 'FILE',
     csvScalarTyping: true,
     identifierPreservation: true,
+    duplicateHeaderPreservation: true,
     blankPreservation: true,
     blankAwareCompleteness: true,
     blankAwareCandidateKeys: true,
