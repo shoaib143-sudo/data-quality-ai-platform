@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
+import { createObjectStorage, defaultStorageProvider } from '@/lib/storage/factory'
 
-const DATASET_BUCKET = 'dataset-files'
+const SUPABASE_DATASET_BUCKET = 'dataset-files'
 const DEFAULT_MAX_BYTES = 250 * 1024 * 1024
+const SIGNED_URL_TTL_SECONDS = 15 * 60
 const ALLOWED_EXTENSIONS = new Set([
   'csv', 'json', 'jsonl', 'ndjson', 'txt', 'md', 'markdown', 'log', 'xml', 'yaml', 'yml',
   'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'gif', 'webp',
@@ -35,11 +36,24 @@ function extension(name: string) {
 
 function canonicalUploadPath(projectId: string, path: string) {
   const normalized = path.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '')
-  const prefix = `projects/${projectId}/uploads/`
-  if (!normalized.startsWith(prefix) || normalized.split('/').some((part) => !part || part === '.' || part === '..')) {
+  const providerPrefix = (process.env.R2_PREFIX ?? '').trim().replace(/^\/+|\/+$/g, '')
+  const expected = `projects/${projectId}/uploads/`
+  const candidate = providerPrefix && normalized.startsWith(`${providerPrefix}/`)
+    ? normalized.slice(providerPrefix.length + 1)
+    : normalized
+  if (!candidate.startsWith(expected) || candidate.split('/').some((part) => !part || part === '.' || part === '..')) {
     throw new Error('Dataset upload path is outside the authorized project scope.')
   }
-  return normalized
+  return candidate
+}
+
+function datasetBucket(provider: 'supabase' | 'r2') {
+  if (provider === 'r2') {
+    const bucket = process.env.R2_BUCKET?.trim()
+    if (!bucket) throw new Error('R2_BUCKET is required when R2 is the default storage provider.')
+    return bucket
+  }
+  return SUPABASE_DATASET_BUCKET
 }
 
 export async function POST(request: Request) {
@@ -69,16 +83,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Unsupported dataset file type: ${ext || 'unknown'}.` }, { status: 415 })
     }
 
-    const objectPath = `projects/${projectId}/uploads/${Date.now()}-${crypto.randomUUID()}-${fileName}`
-    const admin = createAdminClient()
-    const { data, error } = await admin.storage.from(DATASET_BUCKET).createSignedUploadUrl(objectPath, { upsert: false })
-    if (error || !data?.token) throw new Error(`Unable to authorize dataset upload: ${error?.message ?? 'missing signed upload token'}`)
+    const provider = defaultStorageProvider()
+    const storage = createObjectStorage(provider)
+    const bucket = datasetBucket(provider)
+    const objectKey = `projects/${projectId}/uploads/${Date.now()}-${crypto.randomUUID()}-${fileName}`
+    const authorization = await storage.createUploadAuthorization({
+      bucket,
+      key: objectKey,
+      contentType,
+      expiresInSeconds: SIGNED_URL_TTL_SECONDS,
+    })
 
     return NextResponse.json({
-      bucket: DATASET_BUCKET,
-      path: objectPath,
-      token: data.token,
-      sourceUri: `${DATASET_BUCKET}/${objectPath}`,
+      provider: authorization.provider,
+      bucket: authorization.bucket,
+      path: authorization.key,
+      key: authorization.key,
+      token: authorization.token,
+      uploadUrl: authorization.url,
+      expiresAt: authorization.expiresAt,
+      sourceUri: `${authorization.provider}://${authorization.bucket}/${authorization.key}`,
       file: { name: fileName, size, contentType, extension: ext },
     })
   } catch (error) {
@@ -93,13 +117,18 @@ export async function DELETE(request: Request) {
     const body = await request.json()
     const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : ''
     const path = typeof body.path === 'string' ? body.path.trim() : ''
+    const requestedProvider = body.provider === 'r2' || body.provider === 'supabase' ? body.provider : defaultStorageProvider()
     if (!projectId || !path) return NextResponse.json({ error: 'projectId and path are required.' }, { status: 400 })
 
     await authorizeProject(user.id, projectId, 'source.manage')
-    const objectPath = canonicalUploadPath(projectId, path)
-    const admin = createAdminClient()
-    const { error } = await admin.storage.from(DATASET_BUCKET).remove([objectPath])
-    if (error) throw new Error(`Unable to remove failed dataset upload: ${error.message}`)
+    const objectKey = canonicalUploadPath(projectId, path)
+    const storage = createObjectStorage(requestedProvider)
+    const bucket = typeof body.bucket === 'string' && body.bucket.trim() ? body.bucket.trim() : datasetBucket(requestedProvider)
+    const key = requestedProvider === 'r2'
+      ? `${(process.env.R2_PREFIX ?? '').trim().replace(/^\/+|\/+$/g, '')}/${objectKey}`.replace(/^\//, '')
+      : objectKey
+
+    await storage.deleteObject({ provider: requestedProvider, bucket, key })
     return NextResponse.json({ removed: true })
   } catch (error) {
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
