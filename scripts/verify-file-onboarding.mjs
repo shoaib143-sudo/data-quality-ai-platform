@@ -12,9 +12,10 @@ function requireAbsent(text, pattern, message) {
   if (pattern.test(text)) throw new Error(message)
 }
 
-const [adapter, csvSource, remoteGuard, discovery, registration, uploadRoute, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
+const [adapter, csvSource, textDecoding, remoteGuard, discovery, registration, uploadRoute, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
   source('lib/profiling/file-source-adapter.ts'),
   source('lib/profiling/csv-source.ts'),
+  source('lib/profiling/text-decoding.ts'),
   source('lib/profiling/safe-remote-file.ts'),
   source('app/api/datasets/source/discover-file/route.ts'),
   source('app/api/datasets/source/register/route.ts'),
@@ -32,6 +33,16 @@ requireMatch(remoteGuard, /redirect:\s*['"]manual['"]/, 'Remote FILE guard must 
 requireMatch(remoteGuard, /FILE_REMOTE_ALLOWED_HOSTS/, 'Remote FILE guard must support a production host allowlist.')
 
 requireMatch(adapter, /import\s+\{\s*parseCsv\s*\}\s+from\s+['"]@\/lib\/profiling\/csv-source['"]/, 'FILE adapter must use the governed CSV parser module.')
+requireMatch(adapter, /import\s+\{\s*decodeTextBytes\s*\}\s+from\s+['"]@\/lib\/profiling\/text-decoding['"]/, 'FILE adapter must use the governed BOM-aware text decoder.')
+requireMatch(adapter, /const\s+decodedText\s*=\s*decodeTextBytes\(bytes\)/, 'FILE adapter must decode source bytes before format detection and parsing.')
+requireMatch(adapter, /text_encoding:\s*decodedText\.encoding/, 'FILE metadata must retain the detected text encoding.')
+requireMatch(adapter, /text_bom:\s*decodedText\.hadBom/, 'FILE metadata must retain whether a BOM was present.')
+requireAbsent(adapter, /new\s+TextDecoder\(['"]utf-8['"]\s*,\s*\{\s*fatal:\s*false\s*\}\)\.decode\(bytes\)/, 'FILE adapter must not force every source through UTF-8 decoding.')
+requireMatch(textDecoding, /UTF16_LE_BOM/, 'Text decoding must recognize UTF-16 LE BOM input.')
+requireMatch(textDecoding, /UTF16_BE_BOM/, 'Text decoding must recognize UTF-16 BE BOM input.')
+requireMatch(textDecoding, /UTF8_BOM/, 'Text decoding must recognize UTF-8 BOM input.')
+requireMatch(textDecoding, /TextDecoder\(['"]utf-16le['"]/, 'Text decoding must use an explicit UTF-16 LE decoder.')
+
 requireMatch(csvSource, /function\s+coerceCsvScalar\(/, 'CSV adapter must apply scalar coercion before profiling.')
 requireMatch(csvSource, /\^\(true\|false\)\$/i, 'CSV scalar coercion must recognize explicit boolean values.')
 requireMatch(csvSource, /function\s+strictCsvNumber\(/, 'CSV scalar coercion must use strict numeric parsing.')
@@ -70,6 +81,7 @@ requireMatch(form, /type=['"]file['"]/, 'Dataset UI must expose an actual file c
 requireMatch(datasetRegistration, /\['file',\s*'csv'\]\.includes\(sourceType\)\s*\?\s*'FILE'/, 'FILE and CSV sources must normalize to profiling execution type FILE.')
 
 await import('./test-file-source-csv.mjs')
+await import('./test-file-source-text-decoding.mjs')
 
 console.log(JSON.stringify({
   valid: true,
@@ -85,5 +97,7 @@ console.log(JSON.stringify({
     blankPreservation: true,
     blankAwareCompleteness: true,
     blankAwareCandidateKeys: true,
+    bomAwareTextDecoding: true,
+    textEncodingEvidence: true,
   },
 }, null, 2))
