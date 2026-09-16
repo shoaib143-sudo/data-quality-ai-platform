@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { AutonomyConsole } from './autonomy-console'
+import { OrchestratorApprovalInbox } from './orchestrator-approval-inbox'
 
 export default async function AutonomousGovernancePage() {
   const user = await requireUser()
@@ -17,6 +18,7 @@ export default async function AutonomousGovernancePage() {
     Promise.all(projects.map(async project => (await hasProjectCapability(user.id, project.id, 'certification.review')) ? project.id : null)),
   ])
   const viewableIds = new Set(viewable.filter((id): id is string => Boolean(id)))
+  const visibleProjects = projects.filter(project => viewableIds.has(project.id))
   return (
     <main className="min-h-screen p-6 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -32,11 +34,12 @@ export default async function AutonomousGovernancePage() {
           </p>
         </header>
         <AutonomyConsole
-          projects={projects.filter(project => viewableIds.has(project.id))}
+          projects={visibleProjects}
           executableProjectIds={executable.filter((id): id is string => Boolean(id))}
           manageableProjectIds={manageable.filter((id): id is string => Boolean(id))}
           certifiableProjectIds={certifiable.filter((id): id is string => Boolean(id))}
         />
+        <OrchestratorApprovalInbox projects={visibleProjects} />
       </div>
     </main>
   )
