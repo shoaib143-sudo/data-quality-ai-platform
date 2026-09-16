@@ -14,7 +14,9 @@
     "waivedR3AuthorizationOrGovernanceTruthBoundaryAllowed": false,
     "certifiedCommitMustEqualProductionSourceCommit": true,
     "databaseMigrationHistoryMustBeReconciled": true,
-    "independentPostImplementationEvidenceRequired": true
+    "independentPostImplementationEvidenceRequired": true,
+    "independentEvidenceProducerMayEqualImplementationProducer": false,
+    "recoveryMaySubstituteForOriginalStepReexecution": false
   },
   "requiredEvidenceRecordFields": [
     "evidenceClass",
@@ -239,9 +241,51 @@
     "databaseMigrationSet",
     "liveRuntimeEvidence"
   ],
+  "postImplementationRevalidation": {
+    "exactHeadAfterFinalChange": true,
+    "independentAdversarialAudit": true,
+    "unitAndPropertyTests": true,
+    "stateTransitionAndConcurrencyTests": true,
+    "negativeAndFailureTests": true,
+    "cleanDatabaseReconstruction": true,
+    "integrationAndEndToEndTests": true,
+    "authorizationTenantIsolationAndRlsTests": true,
+    "aiEvaluationAndPromptInjectionRedTeam": true,
+    "compromisedAgentAndToolMisuseAudit": true,
+    "chaosAndDependencyFailureTests": true,
+    "recoveryRollbackAndCompensationTests": true,
+    "shadowAndCanaryValidation": true,
+    "previewValidationWhenApplicable": true,
+    "productionValidationWhenApplicable": true,
+    "evidenceAndDocumentationRefresh": true,
+    "independentGateProducerMustDifferFromImplementationProducer": true
+  },
+  "repositoryControlBindings": {
+    "qualityGate": ".github/workflows/quality-gate.yml",
+    "p0ToP5Revalidation": ".github/workflows/p0-p4-revalidation.yml",
+    "operationalCertification": ".github/workflows/v6-operational-certification.yml",
+    "repositoryGovernance": ".github/workflows/repository-governance.yml",
+    "aiGovernanceCertification": ".github/workflows/ai-governance-program-certification.yml",
+    "aiRedTeamAssurance": ".github/workflows/ai-red-team-assurance.yml",
+    "productionSecurityPosture": ".github/workflows/production-security-posture.yml",
+    "productionVerificationBackbone": ".github/workflows/production-verification-backbone.yml",
+    "releaseProvenance": ".github/workflows/release-provenance.yml",
+    "recoveryAssurance": ".github/workflows/recovery-assurance.yml",
+    "governedShadowEvaluation": ".github/workflows/governed-shadow-evaluation.yml"
+  },
+  "bestPracticeAlignment": {
+    "claim": "CONTROL_MAPPING_ONLY_NOT_EXTERNAL_CERTIFICATION",
+    "references": [
+      "NIST_SP_800_218_SSDF_1_1",
+      "NIST_CSF_2_0",
+      "OWASP_ASVS_5_0_0",
+      "OWASP_GENAI_LLM_TOP_10_2026",
+      "SLSA_1_2_PROVENANCE"
+    ]
+  },
   "completionRule": {
     "IMPLEMENTED": "The capability exists and its deterministic implementation contracts pass; this is not a certification claim.",
-    "CERTIFIED": "All evidence classes required for CERTIFIED are fresh PASS or justified NOT_APPLICABLE; no required class is FAIL, NOT_MEASURED or stale.",
+    "CERTIFIED": "All evidence classes required for CERTIFIED are fresh PASS or justified NOT_APPLICABLE; no required class is FAIL, NOT_MEASURED or stale, and post-implementation revalidation is complete on the exact final head.",
     "PRODUCTION_VERIFIED": "CERTIFIED is satisfied and every production-only evidence class is fresh PASS or justified NOT_APPLICABLE, with exact source/build/deployment/database/runtime binding and no unresolved release-blocking residual risk."
   }
 }

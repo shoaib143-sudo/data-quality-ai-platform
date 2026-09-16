@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "authorityContract": "infra/platform-assurance/post-implementation-certification-contract.json",
+  "claim": "MANDATORY_INTERNAL_CONTROL_PROFILE_NOT_EXTERNAL_CERTIFICATION",
+  "truthRules": {
+    "previewEvidenceMayProveProduction": false,
+    "unverifiableBuildProvenanceMayProveProduction": false,
+    "missingReleaseDependencyInventoryMaySatisfyReleaseEvidence": false,
+    "selfAuthoredProvenanceMayProveProduction": false
+  },
+  "supplyChainRequirements": [
+    "release candidate has a machine-readable SBOM or equivalent complete dependency inventory",
+    "release dependency inventory is refreshed on the exact final source revision",
+    "build provenance binds source revision, builder identity and artifact digest",
+    "provenance authenticity is independently verifiable",
+    "production deployment identity is cryptographically or immutably bound to the certified artifact",
+    "known-vulnerability policy is evaluated against the release candidate dependency inventory"
+  ],
+  "postImplementationRequirements": [
+    "all certification evidence is regenerated after the final implementation change",
+    "preview validation is useful evidence but cannot substitute for production-bound runtime evidence",
+    "independent assurance producer is separated from the implementation producer",
+    "security and dependency findings are re-evaluated on the exact final revision",
+    "residual release-blocking risks remain explicit and fail closed",
+    "production verification binds source, build, deployment, database and live runtime evidence"
+  ],
+  "bestPracticeAlignment": [
+    "NIST_SP_800_218_SSDF_1_1_PS_3_2_PROVENANCE",
+    "NIST_SP_800_218_SSDF_1_1_RV_VULNERABILITY_RESPONSE",
+    "SLSA_1_2_BUILD_PROVENANCE_AUTHENTICITY",
+    "OWASP_ASVS_5_0_RELEASE_VERIFICATION",
+    "OWASP_GENAI_2026_AGENTIC_RISK_REVIEW"
+  ]
+}

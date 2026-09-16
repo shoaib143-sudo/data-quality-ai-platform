@@ -1,6 +1,8 @@
 import { access, readFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
+import { verifyDurableWorkerSchedulerAuthority } from '../lib/recovery/durable-worker-scheduler-authority.mjs'
 
+const schedulerMigrationPath = 'supabase/migrations/20260916103000_durable_worker_scheduler_authority.sql'
 const requiredFiles = [
   'infra/recovery/full-platform-recovery-contract.json',
   'infra/recovery/platform-manifest.json',
@@ -8,6 +10,7 @@ const requiredFiles = [
   'infra/recovery/secret-inventory.example.json',
   'supabase/config.toml',
   'vercel.json',
+  schedulerMigrationPath,
 ]
 
 for (const path of requiredFiles) {
@@ -21,6 +24,7 @@ const platform = JSON.parse(await readFile('infra/recovery/platform-manifest.jso
 const secretInventory = JSON.parse(await readFile('infra/recovery/secret-inventory.example.json', 'utf8'))
 const supabaseConfig = await readFile('supabase/config.toml', 'utf8')
 const vercelConfig = JSON.parse(await readFile('vercel.json', 'utf8'))
+const schedulerMigration = await readFile(schedulerMigrationPath, 'utf8')
 
 const requiredScopes = ['STORAGE','IDENTITY_CONFIG','APPLICATION_CONFIG','EDGE_RUNTIME','DEPENDENCIES','SERVICE_VALIDATION']
 for (const scope of requiredScopes) {
@@ -59,9 +63,12 @@ if (!platform.vercel?.projectId || !Array.isArray(platform.vercel.requiredDomain
 if (!Array.isArray(platform.render?.requiredServices) || platform.render.requiredServices.length < 3) {
   throw new Error('APPLICATION_CONFIG/DEPENDENCIES requires Render topology.')
 }
-if (!Array.isArray(vercelConfig.crons) || !vercelConfig.crons.some((item) => item.path === '/api/jobs/worker')) {
-  throw new Error('Vercel worker cron must be source controlled.')
-}
+const scheduler = verifyDurableWorkerSchedulerAuthority({
+  migrationSql: schedulerMigration,
+  vercelConfig,
+})
+if (scheduler.schedule !== '* * * * *') throw new Error('Durable worker scheduler must retain one-minute cadence.')
+console.log(`PASS APPLICATION_CONFIG durable worker scheduler authority ${scheduler.authority}`)
 console.log('PASS APPLICATION_CONFIG topology source authority')
 
 if (secretInventory.rules?.secretValuesAllowed !== false || secretInventory.rules?.verifyPresenceDuringRecovery !== true) {

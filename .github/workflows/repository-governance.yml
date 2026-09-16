@@ -18,7 +18,7 @@ concurrency:
 jobs:
   repository-governance:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -28,6 +28,16 @@ jobs:
           node-version: 24
       - name: Verify repository governance contract
         run: node scripts/verify-github-governance.mjs
+      - name: Verify post-implementation certification contract
+        run: node scripts/verify-post-implementation-certification-contract.mjs
+      - name: Exercise certification contract negative and failure cases
+        run: node --test scripts/test-post-implementation-certification-contract.mjs
+      - name: Verify certification best-practice hardening profile
+        run: node scripts/verify-certification-best-practice-hardening-v2.mjs
+      - name: Exercise certification hardening negative cases
+        run: node --test scripts/test-certification-best-practice-hardening-v2.mjs
+      - name: Exercise fail-closed certification decision engine
+        run: node --test scripts/test-post-implementation-certification-decision.mjs
       - name: Verify fast-path CI safety model
         run: node scripts/verify-fast-path-ci.mjs
       - name: Verify immutable action references

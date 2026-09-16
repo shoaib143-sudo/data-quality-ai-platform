@@ -13,7 +13,16 @@ const DEPLOYMENT_ID = 'dpl_1'
 function validInput() {
   return {
     source: { repository: 'shoaib143-sudo/data-quality-ai-platform', commitSha: SHA, protectedBranch: 'main' },
-    certification: { exactHeadSha: SHA, contexts: { build: 'PASS', analyze: 'PASS', revalidate: 'PASS', certify: 'PASS' } },
+    certification: { exactHeadSha: SHA, contexts: { build: 'PASS', analyze: 'PASS', revalidate: 'PASS', certify: 'PASS', 'release-governance': 'PASS' } },
+    platformCertification: {
+      state: 'PASS',
+      observedAt,
+      claimLevel: 'CERTIFIED',
+      sourceCommitSha: SHA,
+      decisionRef: 'github-actions://certification/decision-1',
+      independentProducer: 'independent-assurance-ci',
+      implementationProducer: 'implementation-pipeline',
+    },
     build: {
       builderIdentity: 'vercel-production-builder',
       buildId: 'build-1',
@@ -99,6 +108,46 @@ function validInput() {
   const result = evaluateReleaseAssurance(input)
   assert.equal(result.highestClaim, 'IMPLEMENTED')
   assert(result.blockers.includes('CERTIFICATION_HEAD_MISMATCH'))
+}
+
+{
+  const input = validInput()
+  input.certification.contexts['release-governance'] = 'FAIL'
+  const result = evaluateReleaseAssurance(input)
+  assert.equal(result.highestClaim, 'IMPLEMENTED')
+  assert(result.blockers.includes('PROTECTED_CONTEXT_RELEASE_GOVERNANCE_NOT_PASS'))
+}
+
+{
+  const input = validInput()
+  delete input.platformCertification
+  const result = evaluateReleaseAssurance(input)
+  assert.equal(result.highestClaim, 'IMPLEMENTED')
+  assert(result.blockers.includes('PLATFORM_CERTIFICATION_DECISION_MISSING'))
+}
+
+{
+  const input = validInput()
+  input.platformCertification.sourceCommitSha = 'c'.repeat(40)
+  const result = evaluateReleaseAssurance(input)
+  assert.equal(result.highestClaim, 'IMPLEMENTED')
+  assert(result.blockers.includes('PLATFORM_CERTIFICATION_SOURCE_MISMATCH'))
+}
+
+{
+  const input = validInput()
+  input.platformCertification.independentProducer = input.platformCertification.implementationProducer
+  const result = evaluateReleaseAssurance(input)
+  assert.equal(result.highestClaim, 'IMPLEMENTED')
+  assert(result.blockers.includes('PLATFORM_CERTIFICATION_NOT_INDEPENDENT'))
+}
+
+{
+  const input = validInput()
+  input.platformCertification.observedAt = staleObservedAt
+  const result = evaluateReleaseAssurance(input)
+  assert.equal(result.highestClaim, 'IMPLEMENTED')
+  assert(result.blockers.includes('PLATFORM_CERTIFICATION_NOT_FRESH_PASS'))
 }
 
 {
