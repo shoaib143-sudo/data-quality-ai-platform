@@ -9,6 +9,15 @@ on:
       - 'scripts/verify-recovery-source-authority.mjs'
       - 'scripts/verify-portable-recovery.mjs'
       - 'scripts/verify-full-platform-recovery-scopes.mjs'
+      - 'scripts/verify-governance-runtime-wiring.mjs'
+      - 'scripts/test-governance-*.mjs'
+      - 'scripts/test-governed-handoff.mjs'
+      - 'scripts/audit-governance-orchestrator-final-assurance.mjs'
+      - 'app/api/agents/governance-orchestrator/**'
+      - 'lib/agents/runtime/governed-handoff*.ts'
+      - 'lib/orchestration/governance-outcome-report*.ts'
+      - 'lib/orchestration/governance-report-*.ts'
+      - 'lib/orchestration/governance-recovery*.ts'
       - 'supabase/migrations/**'
       - 'supabase/functions/**'
       - 'supabase/config.toml'
@@ -17,6 +26,7 @@ on:
       - 'docs/recovery-portable-backup-and-local-restore.md'
       - 'docs/recovery-full-platform-scopes.md'
       - '.github/workflows/recovery-assurance.yml'
+      - '.github/workflows/repository-governance.yml'
       - 'infra/**'
       - 'vercel.json'
   workflow_dispatch:
@@ -36,6 +46,7 @@ jobs:
   contract:
     name: Recovery assurance contract
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
@@ -46,7 +57,29 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run verify:recovery-assurance
+      - name: Verify repository governance after consolidation
+        run: |
+          node scripts/verify-github-governance.mjs
+          node scripts/verify-fast-path-ci.mjs
+          node scripts/verify-workflow-action-pinning.mjs
+          node scripts/verify-workflow-security-posture.mjs
+      - name: Verify post-implementation certification contract
+        run: |
+          node scripts/verify-post-implementation-certification-contract.mjs
+          node --test scripts/test-post-implementation-certification-contract.mjs
+      - name: Verify platform recovery assurance
+        run: pnpm run verify:recovery-assurance
+      - name: Verify governance orchestrator runtime wiring
+        run: node scripts/verify-governance-runtime-wiring.mjs
+      - name: Re-run deterministic orchestrator contracts
+        run: |
+          node --experimental-strip-types scripts/test-governance-orchestrator.mjs
+          node --experimental-strip-types scripts/test-governance-outcome-report.mjs
+          node --experimental-strip-types scripts/test-governance-report-export.mjs
+          node --experimental-strip-types scripts/test-governance-recovery.mjs
+          node --experimental-strip-types scripts/test-governed-handoff.mjs
+      - name: Run independent orchestrator adversarial concurrency and chaos audit
+        run: node --experimental-strip-types scripts/audit-governance-orchestrator-final-assurance.mjs
       - name: Write independent recovery evidence manifest
         if: always()
         shell: bash
