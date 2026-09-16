@@ -79,16 +79,35 @@ for (const item of classes) {
   if (!Array.isArray(item.requirements) || item.requirements.length < 2) fail(`Evidence class ${item.id} must declare concrete verification requirements.`)
 }
 
+const requiredForMatrix = {
+  SOURCE_RELEASE_INTEGRITY: ['CERTIFIED', 'PRODUCTION_VERIFIED'],
+  CI_WORKFLOW_SECURITY: ['CERTIFIED', 'PRODUCTION_VERIFIED'],
+  DEPENDENCY_AND_CODE_SECURITY: ['CERTIFIED', 'PRODUCTION_VERIFIED'],
+  AUTHORIZATION_AND_ISOLATION: ['CERTIFIED', 'PRODUCTION_VERIFIED'],
+  DATABASE_AUTHORITY_AND_RLS: ['CERTIFIED', 'PRODUCTION_VERIFIED'],
+  MIGRATION_AND_RECONSTRUCTION: ['CERTIFIED', 'PRODUCTION_VERIFIED'],
+  BUILD_PROVENANCE: ['PRODUCTION_VERIFIED'],
+  DEPLOYMENT_PROVENANCE: ['PRODUCTION_VERIFIED'],
+  PRODUCTION_RUNTIME_JOURNEY: ['PRODUCTION_VERIFIED'],
+  RECOVERY_ROLLBACK_AND_COMPENSATION: ['PRODUCTION_VERIFIED'],
+  OBSERVABILITY_AND_WORKFLOW_SLO: ['CERTIFIED', 'PRODUCTION_VERIFIED'],
+  AI_GOVERNANCE_AND_EVALUATION: ['CERTIFIED', 'PRODUCTION_VERIFIED'],
+  PERSONA_TASK_E2E: ['PRODUCTION_VERIFIED'],
+  RESIDUAL_RISK_AND_EXCEPTION_GOVERNANCE: ['CERTIFIED', 'PRODUCTION_VERIFIED'],
+}
+for (const [id, expected] of Object.entries(requiredForMatrix)) {
+  const actual = classes.find(item => item.id === id)?.requiredFor
+  if (!same(actual, expected)) {
+    fail(`${id} requiredFor must remain exactly ${expected.join(' -> ')}.`)
+  }
+}
+
 for (const id of [
   'SOURCE_RELEASE_INTEGRITY', 'CI_WORKFLOW_SECURITY', 'AUTHORIZATION_AND_ISOLATION', 'DATABASE_AUTHORITY_AND_RLS',
   'MIGRATION_AND_RECONSTRUCTION', 'BUILD_PROVENANCE', 'DEPLOYMENT_PROVENANCE', 'PRODUCTION_RUNTIME_JOURNEY',
   'RECOVERY_ROLLBACK_AND_COMPENSATION', 'AI_GOVERNANCE_AND_EVALUATION', 'RESIDUAL_RISK_AND_EXCEPTION_GOVERNANCE',
 ]) {
   if (classes.find(item => item.id === id)?.riskTier !== 'R3') fail(`${id} must remain an R3 certification boundary.`)
-}
-
-for (const id of ['BUILD_PROVENANCE', 'DEPLOYMENT_PROVENANCE', 'PRODUCTION_RUNTIME_JOURNEY', 'RECOVERY_ROLLBACK_AND_COMPENSATION', 'PERSONA_TASK_E2E']) {
-  if (!classes.find(item => item.id === id)?.requiredFor?.includes('PRODUCTION_VERIFIED')) fail(`${id} must be required for PRODUCTION_VERIFIED.`)
 }
 
 const personas = [
