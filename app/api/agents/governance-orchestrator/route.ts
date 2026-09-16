@@ -16,6 +16,7 @@ import {
   normalizeReportingPreference,
   persistRunReportingPreference,
 } from '@/lib/orchestration/governance-outcome-report-service'
+import { handleGovernanceRuntimeFailure } from '@/lib/orchestration/governance-recovery-service'
 import type { AutonomyMode, AutonomyPolicy, RiskTier } from '@/lib/orchestration/governance-orchestrator'
 
 export const maxDuration = 300
@@ -138,6 +139,18 @@ export async function POST(request: Request) {
       approvalStatus = String(approval.status)
     }
 
+    const recovery = result.status === 'FAILED'
+      ? await handleGovernanceRuntimeFailure({
+          projectId,
+          actorUserId: user.id,
+          orchestratorRunId: result.orchestratorRunId,
+          failingRunId: 'supervisorRunId' in result ? result.supervisorRunId ?? null : null,
+          failingStepId: 'failedStepId' in result ? result.failedStepId ?? null : null,
+          code: 'code' in result ? result.code ?? null : null,
+          policyVersion: result.policy.policyVersion,
+        })
+      : null
+
     const generatedReport = reporting.enabled
       ? await assembleAndPersistGovernanceOutcomeReport({ projectId, orchestratorRunId: result.orchestratorRunId })
       : null
@@ -147,6 +160,7 @@ export async function POST(request: Request) {
       accepted: result.status === 'SUCCEEDED',
       reporting,
       generatedReport,
+      recovery,
       approvalRequestId,
       approvalStatus,
       ...result,
