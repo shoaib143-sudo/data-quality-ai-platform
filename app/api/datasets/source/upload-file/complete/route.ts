@@ -91,7 +91,22 @@ export async function POST(request: Request) {
     }
 
     const expectedSize = row.expected_size_bytes == null ? undefined : Number(row.expected_size_bytes)
-    if (expectedSize !== undefined && head.sizeBytes !== undefined && head.sizeBytes !== expectedSize) {
+    if (expectedSize !== undefined && head.sizeBytes === undefined) {
+      await admin
+        .schema('catalog')
+        .from('storage_objects')
+        .update({
+          state: 'FAILED',
+          etag: head.etag ?? null,
+          updated_at: new Date().toISOString(),
+          metadata: { ...(row.metadata ?? {}), failure_stage: 'SIZE_UNVERIFIABLE', expected_size_bytes: expectedSize },
+        })
+        .eq('id', row.id)
+        .eq('project_id', projectId)
+      return NextResponse.json({ error: 'Uploaded object size could not be verified.' }, { status: 503 })
+    }
+
+    if (expectedSize !== undefined && head.sizeBytes !== expectedSize) {
       await admin
         .schema('catalog')
         .from('storage_objects')
@@ -109,7 +124,23 @@ export async function POST(request: Request) {
 
     const expectedType = normalizedContentType(row.content_type)
     const observedType = normalizedContentType(head.contentType)
-    if (expectedType && observedType && expectedType !== observedType) {
+    if (expectedType && !observedType) {
+      await admin
+        .schema('catalog')
+        .from('storage_objects')
+        .update({
+          state: 'FAILED',
+          size_bytes: head.sizeBytes ?? null,
+          etag: head.etag ?? null,
+          updated_at: new Date().toISOString(),
+          metadata: { ...(row.metadata ?? {}), failure_stage: 'CONTENT_TYPE_UNVERIFIABLE', expected_content_type: expectedType },
+        })
+        .eq('id', row.id)
+        .eq('project_id', projectId)
+      return NextResponse.json({ error: 'Uploaded object content type could not be verified.' }, { status: 503 })
+    }
+
+    if (expectedType && expectedType !== observedType) {
       await admin
         .schema('catalog')
         .from('storage_objects')
@@ -131,7 +162,7 @@ export async function POST(request: Request) {
       .from('storage_objects')
       .update({
         state: 'READY',
-        size_bytes: head.sizeBytes ?? expectedSize ?? null,
+        size_bytes: head.sizeBytes ?? null,
         etag: head.etag ?? null,
         verified_at: verifiedAt,
         updated_at: verifiedAt,
@@ -148,7 +179,7 @@ export async function POST(request: Request) {
       provider,
       bucket: row.bucket,
       key: row.object_key,
-      sizeBytes: head.sizeBytes ?? expectedSize,
+      sizeBytes: head.sizeBytes,
       contentType: head.contentType ?? row.content_type,
       verifiedAt,
       sourceUri: `${provider}://${row.bucket}/${row.object_key}`,
