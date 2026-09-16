@@ -71,6 +71,8 @@ test('server-side R2 writes reject unsupported body types rather than hashing an
 test('R2 HEAD does not misreport a missing content-length header as zero bytes', () => {
   assert.match(r2, /const contentLength = response\.headers\.get\('content-length'\)/)
   assert.match(r2, /contentLength === null \? undefined : Number\(contentLength\)/)
+  assert.match(r2, /sizeFromRange/)
+  assert.match(r2, /range: 'bytes=0-0'/)
   assert.doesNotMatch(r2, /const size = Number\(response\.headers\.get\('content-length'\)\)/)
 })
 
@@ -114,6 +116,14 @@ test('completion lifecycle verifies object existence, size and content type befo
   assert.match(completionRoute, /state: 'QUARANTINED'/)
   assert.match(completionRoute, /state: 'READY'/)
   assert.match(completionRoute, /verified_at/)
+})
+
+test('completion fails closed when required size or content type cannot be observed', () => {
+  assert.match(completionRoute, /SIZE_UNVERIFIABLE/)
+  assert.match(completionRoute, /CONTENT_TYPE_UNVERIFIABLE/)
+  assert.match(completionRoute, /Uploaded object size could not be verified/)
+  assert.match(completionRoute, /Uploaded object content type could not be verified/)
+  assert.doesNotMatch(completionRoute, /size_bytes: head\.sizeBytes \?\? expectedSize/)
 })
 
 test('completion endpoint is idempotent for already READY objects and fails closed for deleted or quarantined objects', () => {
@@ -160,4 +170,11 @@ test('stale storage reconciliation is authenticated, non-destructive and never m
   assert.doesNotMatch(reconcileRoute, /state: 'READY'/)
   assert.doesNotMatch(reconcileRoute, /deleteObject/)
   assert.match(reconcileRoute, /destructiveActions: 0/)
+})
+
+test('stale storage reconciliation quarantines observed size or content-type mismatches', () => {
+  assert.match(reconcileRoute, /QUARANTINED_SIZE_MISMATCH/)
+  assert.match(reconcileRoute, /QUARANTINED_CONTENT_TYPE_MISMATCH/)
+  assert.match(reconcileRoute, /expected_size_bytes/)
+  assert.match(reconcileRoute, /content_type/)
 })
