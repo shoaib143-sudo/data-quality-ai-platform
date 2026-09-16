@@ -27,6 +27,7 @@ export interface SignedStorageOperation {
   provider: StorageProvider
   bucket: string
   key: string
+  requiredHeaders?: Record<string, string>
 }
 
 export interface PutObjectInput {
