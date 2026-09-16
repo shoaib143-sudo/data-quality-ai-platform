@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - r2-prereq-hardening-20260916
+      - r2-main-reconcile-20260917
     paths:
       - 'lib/storage/**'
       - 'lib/profiling/provider-neutral-file-source.ts'
