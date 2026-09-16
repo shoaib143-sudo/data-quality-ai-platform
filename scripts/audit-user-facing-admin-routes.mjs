@@ -53,6 +53,10 @@ const approvedPrivilegedExceptions = new Map([
     classification: 'INTERNAL_MACHINE_AUTH',
     requiredMarkers: ['requireInternalBearer('],
   }],
+  ['app/api/internal/storage/migrate-to-r2/route.ts', {
+    classification: 'INTERNAL_MACHINE_AUTH',
+    requiredMarkers: ['requireInternalBearer('],
+  }],
 ])
 
 const pinnedInteractiveBoundaries = new Map([
