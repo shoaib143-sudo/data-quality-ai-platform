@@ -1,11 +1,17 @@
 import fs from 'node:fs'
+import { verifyDurableWorkerSchedulerAuthority } from '../lib/recovery/durable-worker-scheduler-authority.mjs'
 
 const gate = fs.readFileSync('supabase/migrations/20260905070248_strengthen_control_intelligence_operability_gate.sql', 'utf8')
 const continuous = fs.readFileSync('supabase/migrations/20260905065604_continuous_governance_control_intelligence_reconciliation.sql', 'utf8')
+const schedulerMigration = fs.readFileSync('supabase/migrations/20260916103000_durable_worker_scheduler_authority.sql', 'utf8')
 const intelligence = fs.readFileSync('lib/governance/ai-governance-intelligence.ts', 'utf8')
 const worker = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
 const posture = fs.readFileSync('app/api/governance/controls/posture/route.ts', 'utf8')
-const vercel = fs.readFileSync('vercel.json', 'utf8')
+const vercelText = fs.readFileSync('vercel.json', 'utf8')
+const schedulerAuthority = verifyDurableWorkerSchedulerAuthority({
+  migrationSql: schedulerMigration,
+  vercelConfig: JSON.parse(vercelText),
+})
 
 const checks = [
   ['formal gate requires automated evidence collector', /automated_evidence_collector_present/.test(gate) && /refresh_governance_control_evidence/.test(gate)],
@@ -21,7 +27,7 @@ const checks = [
   ['AI governance sweep invokes all-project reconciler', /rpc\('refresh_all_governance_control_intelligence'\)/.test(intelligence)],
   ['AI governance sweep propagates reconciliation failures', /controls\?\.failure_count/.test(intelligence) || /controls\?\.failure_count/.test(intelligence.replaceAll(' ', '')) || /failureCount/.test(intelligence) && /throw new Error\(`Governance control intelligence reconciliation reported/.test(intelligence)],
   ['scheduled worker invokes AI governance sweep', /refreshAllAIGovernanceIntelligence\(\)/.test(worker)],
-  ['worker schedule is minutely', /"path"\s*:\s*"\/api\/jobs\/worker"/.test(vercel) && /"schedule"\s*:\s*"\* \* \* \* \*"/.test(vercel)],
+  ['worker scheduler authority is governed and minutely', schedulerAuthority.authority === 'SUPABASE_PG_CRON' && schedulerAuthority.schedule === '* * * * *'],
   ['read model exposes separate control posture', /controlPosture:\s*ControlPosture/.test(intelligence)],
   ['read model distinguishes proposed and active controls', /proposedControls/.test(intelligence) && /activeControls/.test(intelligence) && /review_status/.test(intelligence) && /authority_class/.test(intelligence)],
   ['read model uses latest evaluation per scope', /latestPerControlScope/.test(intelligence) && /scope_binding_id/.test(intelligence)],
