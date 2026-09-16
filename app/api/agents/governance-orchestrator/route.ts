@@ -22,6 +22,7 @@ import type { AutonomyMode, AutonomyPolicy, RiskTier } from '@/lib/orchestration
 export const maxDuration = 300
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
+function nullableText(value: unknown) { const valueText = text(value); return valueText || null }
 function arrayOfText(value: unknown) { return Array.isArray(value) ? value.map(text).filter(Boolean) : [] }
 function finiteNonNegative(value: unknown, fallback: number) {
   const number = Number(value)
@@ -144,9 +145,9 @@ export async function POST(request: Request) {
           projectId,
           actorUserId: user.id,
           orchestratorRunId: result.orchestratorRunId,
-          failingRunId: 'supervisorRunId' in result ? result.supervisorRunId ?? null : null,
-          failingStepId: 'failedStepId' in result ? result.failedStepId ?? null : null,
-          code: 'code' in result ? result.code ?? null : null,
+          failingRunId: 'supervisorRunId' in result ? nullableText(result.supervisorRunId) : null,
+          failingStepId: 'failedStepId' in result ? nullableText(result.failedStepId) : null,
+          code: 'code' in result ? nullableText(result.code) : null,
           policyVersion: result.policy.policyVersion,
         })
       : null
