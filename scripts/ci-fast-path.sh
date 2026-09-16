@@ -4,6 +4,8 @@ set -euo pipefail
 # Fast-path PR gate: keep security, migration, type, governance and build safety
 # while deferring expensive end-to-end certification to the exact merged main SHA.
 node scripts/verify-p0-p4-revalidation.mjs
+node scripts/verify-post-implementation-certification-contract.mjs
+node --test scripts/test-post-implementation-certification-contract.mjs
 node scripts/audit-user-facing-admin-routes.mjs
 node scripts/verify-migration-version-uniqueness.mjs
 pnpm exec tsc --noEmit
