@@ -6,6 +6,10 @@ on:
       - r2-prereq-hardening-20260916
     paths:
       - 'lib/storage/**'
+      - 'lib/profiling/provider-neutral-file-source.ts'
+      - 'lib/profiling/source-validation.ts'
+      - 'lib/profiling/governed-file-source.ts'
+      - 'app/api/datasets/register/route.ts'
       - 'app/api/datasets/source/upload-file/**'
       - 'app/api/internal/storage/r2-smoke/**'
       - 'supabase/migrations/*storage_registry*.sql'
@@ -14,6 +18,10 @@ on:
   pull_request:
     paths:
       - 'lib/storage/**'
+      - 'lib/profiling/provider-neutral-file-source.ts'
+      - 'lib/profiling/source-validation.ts'
+      - 'lib/profiling/governed-file-source.ts'
+      - 'app/api/datasets/register/route.ts'
       - 'app/api/datasets/source/upload-file/**'
       - 'app/api/internal/storage/r2-smoke/**'
       - 'supabase/migrations/*storage_registry*.sql'
