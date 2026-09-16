@@ -59,6 +59,9 @@ requireMatch(dashboard, /Not assessed[\s\S]*Readable PDF text was unavailable/, 
 
 requireMatch(documentEvidence, /documentEvidenceState/, 'Document evidence must have a deterministic readability gate.')
 requireMatch(documentEvidence, /detectSensitiveTextEvidence/, 'Readable document evidence must support deterministic sensitive-text detection.')
+requireMatch(documentEvidence, /detectPromptInjectionEvidence/, 'Readable document evidence must support deterministic prompt-injection evidence detection.')
+requireMatch(documentEvidence, /instruction_override[\s\S]*role_impersonation[\s\S]*prompt_exfiltration[\s\S]*tool_coercion/, 'Prompt-injection evidence must preserve distinct governed evidence categories.')
+requireMatch(canonicalPreview, /promptInjectionEvidence:\s*detectPromptInjectionEvidence\(evidence\.readable\)/, 'Canonical previews must derive prompt-injection evidence only from readable governed document evidence.')
 requireMatch(governedFileSource, /nativeTextIsReadable/, 'Governed FILE loading must reject unreadable native PDF text.')
 requireMatch(governedFileSource, /metadataOnlyFallback/, 'Unreadable native PDF text must fail closed to metadata-only evidence.')
 requireMatch(governedFileSource, /Unreadable native text was replaced with governed OCR text/, 'Governed PDF loading must prefer readable OCR evidence when native text is rejected.')
@@ -71,6 +74,8 @@ requireMatch(canonicalPreview, /loadGovernedFileSource/, 'Canonical data preview
 requireMatch(canonicalPreview, /loadCanonicalDocumentPreviewFromSource/, 'Canonical preview must expose a source-backed path that includes native extraction and OCR fallback.')
 requireMatch(canonicalPreview, /Readable text is unavailable[\s\S]*Binary or encoded glyph streams are never presented/, 'Canonical preview must fail closed when readable text is unavailable.')
 requireMatch(canonicalPreview, /sanitizePersistedMetricForPresentation/, 'Persisted profiling metrics must share a canonical presentation sanitizer.')
+
+await import('./test-document-prompt-injection-evidence.mjs')
 
 console.log(JSON.stringify({
   valid: true,
@@ -92,6 +97,7 @@ console.log(JSON.stringify({
     governedOcrContentBinding: true,
     governedOcrByteCeiling: true,
     sharedSensitiveEvidence: true,
+    promptInjectionEvidence: true,
     sharedMetricSanitizer: true,
     authenticatedPreviewOnly: true,
   },

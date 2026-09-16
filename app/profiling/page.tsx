@@ -150,6 +150,16 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
       json_value: canonicalPreview.sensitiveEvidence,
     })
   }
+  if (textColumn && canonicalPreview.promptInjectionEvidence.length && !metrics.some((metric) => metric.profile_column_id === textColumn.id && metric.metric_key === 'prompt_injection_indicator_count')) {
+    metrics.push({
+      profile_column_id: textColumn.id,
+      metric_key: 'prompt_injection_indicator_count',
+      numeric_value: canonicalPreview.promptInjectionEvidence.reduce((sum, item) => sum + item.count, 0),
+      text_value: canonicalPreview.promptInjectionEvidence.map((item) => `${item.type}:${item.count}`).join(','),
+      boolean_value: null,
+      json_value: canonicalPreview.promptInjectionEvidence,
+    })
+  }
 
   const subtitleParts = [
     datasetResult.data.business_domain ? `Domain ${datasetResult.data.business_domain}` : null,
