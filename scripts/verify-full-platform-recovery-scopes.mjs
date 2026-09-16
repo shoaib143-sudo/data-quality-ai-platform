@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, readdir } from 'node:fs/promises'
 import { constants } from 'node:fs'
 
 const requiredFiles = [
@@ -59,9 +59,29 @@ if (!platform.vercel?.projectId || !Array.isArray(platform.vercel.requiredDomain
 if (!Array.isArray(platform.render?.requiredServices) || platform.render.requiredServices.length < 3) {
   throw new Error('APPLICATION_CONFIG/DEPENDENCIES requires Render topology.')
 }
-if (!Array.isArray(vercelConfig.crons) || !vercelConfig.crons.some((item) => item.path === '/api/jobs/worker')) {
-  throw new Error('Vercel worker cron must be source controlled.')
+
+// The worker cadence is a platform recovery invariant, not a Vercel-specific invariant.
+// Accept either a source-controlled Vercel one-minute cron or the canonical Supabase
+// pg_cron scheduler, but fail closed if neither proves the required cadence and route.
+const hasVercelMinuteWorkerCron = Array.isArray(vercelConfig.crons) && vercelConfig.crons.some((item) =>
+  item?.path === '/api/jobs/worker' && item?.schedule === '* * * * *',
+)
+const migrationFiles = (await readdir('supabase/migrations')).filter((name) => name.endsWith('.sql'))
+let supabaseSchedulerAuthority = null
+for (const migrationFile of migrationFiles) {
+  const sql = await readFile(`supabase/migrations/${migrationFile}`, 'utf8')
+  const schedulesCron = /cron\.schedule\s*\(/i.test(sql)
+  const oneMinuteCadence = /['"]\* \* \* \* \*['"]/.test(sql)
+  const targetsWorker = /\/api\/jobs\/worker|api\/jobs\/worker/i.test(sql)
+  if (schedulesCron && oneMinuteCadence && targetsWorker) {
+    supabaseSchedulerAuthority = migrationFile
+    break
+  }
 }
+if (!hasVercelMinuteWorkerCron && !supabaseSchedulerAuthority) {
+  throw new Error('A source-controlled one-minute /api/jobs/worker scheduler is required via Vercel cron or Supabase pg_cron.')
+}
+console.log(`PASS worker scheduler source authority (${supabaseSchedulerAuthority ? `Supabase migration ${supabaseSchedulerAuthority}` : 'Vercel cron'})`)
 console.log('PASS APPLICATION_CONFIG topology source authority')
 
 if (secretInventory.rules?.secretValuesAllowed !== false || secretInventory.rules?.verifyPresenceDuringRecovery !== true) {
