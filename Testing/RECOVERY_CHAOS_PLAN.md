@@ -20,3 +20,8 @@ Exercise simultaneous approvals, duplicate execution, concurrent profiling, auth
 ## Acceptance
 
 Every critical failure must recover safely or fail closed. No scenario may silently produce contradictory UI, database, storage, execution, or audit state.
+
+
+## Automated orchestration
+
+Faults, races, retries, clock/expiry scenarios, revocations, provider failures, and recovery assertions are injected and evaluated by the harness. No operator is required to terminate workers, disconnect services, retry requests, or inspect whether recovery succeeded.
