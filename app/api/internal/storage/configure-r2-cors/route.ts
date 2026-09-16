@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { requireInternalBearer } from '@/lib/security/internal-bearer'
 import {
-  DATANEXUS_R2_CORS_RULES,
   applyDataNexusR2CorsPolicy,
   readR2CorsPolicy,
+  r2CorsHasWildcardOrigin,
+  r2CorsPolicyMatchesDesired,
 } from '@/lib/storage/r2-cors'
 
 // requireInternalBearer validates CRON_SECRET using constant-time comparison.
@@ -13,28 +14,12 @@ function mutationsApproved() {
   return process.env.R2_INFRA_MUTATIONS_APPROVED?.trim().toLowerCase() === 'true'
 }
 
-function hasTag(xml: string, tag: string, value: string) {
-  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`<${tag}>\\s*${escaped}\\s*</${tag}>`, 'i').test(xml)
-}
-
-function matchesDesiredPolicy(xml: string) {
-  if (hasTag(xml, 'AllowedOrigin', '*')) return false
-  return DATANEXUS_R2_CORS_RULES.every((rule) =>
-    rule.allowedOrigins.every((value) => hasTag(xml, 'AllowedOrigin', value))
-    && rule.allowedMethods.every((value) => hasTag(xml, 'AllowedMethod', value))
-    && rule.allowedHeaders.every((value) => hasTag(xml, 'AllowedHeader', value))
-    && rule.exposeHeaders.every((value) => hasTag(xml, 'ExposeHeader', value))
-    && hasTag(xml, 'MaxAgeSeconds', String(rule.maxAgeSeconds)),
-  )
-}
-
 async function currentState() {
   const xml = await readR2CorsPolicy()
   return {
     configured: true,
-    matchesDesiredPolicy: matchesDesiredPolicy(xml),
-    wildcardOriginDetected: hasTag(xml, 'AllowedOrigin', '*'),
+    matchesDesiredPolicy: r2CorsPolicyMatchesDesired(xml),
+    wildcardOriginDetected: r2CorsHasWildcardOrigin(xml),
   }
 }
 
