@@ -89,6 +89,17 @@ begin
     raise exception 'Final profiling run state missing';
   end if;
 
+  if not exists(
+    select 1
+    from profiling.profile_run_governance_insights
+    where profile_run_id=v_run_id
+      and run_status='COMPLETED'
+      and overall_score=1
+      and total_findings=1
+  ) then
+    raise exception 'Governance insight projection missing or inconsistent';
+  end if;
+
   select count(*) into v_metric_count from profiling.profile_metrics where profile_run_id=v_run_id;
   select count(*) into v_finding_count from profiling.profile_findings where profile_run_id=v_run_id;
 
