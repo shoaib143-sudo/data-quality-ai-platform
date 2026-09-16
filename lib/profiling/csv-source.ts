@@ -27,12 +27,17 @@ function coerceCsvScalar(header:string,value:string|null):unknown{
 }
 
 export function normalizeCsvHeaders(rawHeaders:string[]){
-  const occurrences=new Map<string,number>()
+  const used=new Set<string>()
   return rawHeaders.map((rawHeader,index)=>{
     const base=rawHeader.trim().replace(/^\uFEFF/,'')||`column_${index+1}`
-    const occurrence=(occurrences.get(base)??0)+1
-    occurrences.set(base,occurrence)
-    return occurrence===1?base:`${base}__${occurrence}`
+    let candidate=base
+    let suffix=2
+    while(used.has(candidate)){
+      candidate=`${base}__${suffix}`
+      suffix+=1
+    }
+    used.add(candidate)
+    return candidate
   })
 }
 
