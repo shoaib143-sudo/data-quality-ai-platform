@@ -34,9 +34,13 @@ function extension(name: string) {
   return name.includes('.') ? name.split('.').pop()?.toLowerCase() ?? '' : ''
 }
 
+function r2Prefix() {
+  return (process.env.R2_PREFIX ?? '').trim().replace(/^\/+|\/+$/g, '')
+}
+
 function canonicalUploadPath(projectId: string, path: string) {
-  const normalized = path.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '')
-  const providerPrefix = (process.env.R2_PREFIX ?? '').trim().replace(/^\/+|\/+$/g, '')
+  const normalized = path.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+  const providerPrefix = r2Prefix()
   const expected = `projects/${projectId}/uploads/`
   const candidate = providerPrefix && normalized.startsWith(`${providerPrefix}/`)
     ? normalized.slice(providerPrefix.length + 1)
@@ -101,6 +105,7 @@ export async function POST(request: Request) {
       key: authorization.key,
       token: authorization.token,
       uploadUrl: authorization.url,
+      uploadHeaders: authorization.requiredHeaders,
       expiresAt: authorization.expiresAt,
       sourceUri: `${authorization.provider}://${authorization.bucket}/${authorization.key}`,
       file: { name: fileName, size, contentType, extension: ext },
@@ -123,10 +128,9 @@ export async function DELETE(request: Request) {
     await authorizeProject(user.id, projectId, 'source.manage')
     const objectKey = canonicalUploadPath(projectId, path)
     const storage = createObjectStorage(requestedProvider)
-    const bucket = typeof body.bucket === 'string' && body.bucket.trim() ? body.bucket.trim() : datasetBucket(requestedProvider)
-    const key = requestedProvider === 'r2'
-      ? `${(process.env.R2_PREFIX ?? '').trim().replace(/^\/+|\/+$/g, '')}/${objectKey}`.replace(/^\//, '')
-      : objectKey
+    const bucket = datasetBucket(requestedProvider)
+    const prefix = r2Prefix()
+    const key = requestedProvider === 'r2' && prefix ? `${prefix}/${objectKey}` : objectKey
 
     await storage.deleteObject({ provider: requestedProvider, bucket, key })
     return NextResponse.json({ removed: true })
