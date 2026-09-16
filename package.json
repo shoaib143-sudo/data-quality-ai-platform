@@ -59,7 +59,8 @@
     "verify:database": "node scripts/verify-governance-database.mjs",
     "verify:production": "node scripts/verify-production.mjs",
     "benchmark:production": "node scripts/benchmark-production.mjs",
-    "recovery:drill": "node scripts/recovery-drill.mjs"
+    "recovery:drill": "node scripts/recovery-drill.mjs",
+    "verify:r2-prerequisites": "node scripts/verify-r2-prerequisites.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

@@ -1,0 +1,60 @@
+name: Storage R2 Assurance
+
+on:
+  push:
+    branches:
+      - r2-prereq-hardening-20260916
+      - r2-main-reconcile-20260917
+    paths:
+      - 'lib/storage/**'
+      - 'lib/profiling/provider-neutral-file-source.ts'
+      - 'lib/profiling/source-validation.ts'
+      - 'lib/profiling/governed-file-source.ts'
+      - 'app/api/datasets/register/route.ts'
+      - 'app/api/datasets/source/upload-file/**'
+      - 'app/api/internal/storage/**'
+      - 'infra/cloudflare/**'
+      - 'scripts/verify-r2-*.mjs'
+      - 'supabase/migrations/*storage*.sql'
+      - 'tests/storage-*.test.mjs'
+      - '.github/workflows/storage-r2-assurance.yml'
+  pull_request:
+    paths:
+      - 'lib/storage/**'
+      - 'lib/profiling/provider-neutral-file-source.ts'
+      - 'lib/profiling/source-validation.ts'
+      - 'lib/profiling/governed-file-source.ts'
+      - 'app/api/datasets/register/route.ts'
+      - 'app/api/datasets/source/upload-file/**'
+      - 'app/api/internal/storage/**'
+      - 'infra/cloudflare/**'
+      - 'scripts/verify-r2-*.mjs'
+      - 'supabase/migrations/*storage*.sql'
+      - 'tests/storage-*.test.mjs'
+      - '.github/workflows/storage-r2-assurance.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: storage-r2-assurance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  storage-contract-and-adversarial-guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Syntax-check storage TypeScript without executing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --experimental-strip-types --check "$file"
+          done < <(find lib/storage app/api/internal/storage app/api/datasets/source/upload-file -type f -name '*.ts' -print0)
+      - name: Run storage contract, negative, adversarial, and cutover guards
+        run: node --test tests/storage-*.test.mjs
