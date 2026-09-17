@@ -1,3 +1,4 @@
+-- Rollback-safe acceptance coverage for the governed profiling persistence lifecycle.
 begin;
 
 do $do$
