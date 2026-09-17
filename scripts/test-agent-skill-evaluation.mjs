@@ -148,6 +148,19 @@ assert.throws(() => evaluateAgentSkillOutcome({
 
 const persisted = []
 const scorecardRequests = []
+const scorecardMetric = (request, overrides = {}) => ({
+  evaluationType: 'AGENT_SKILL',
+  capability: request.capability,
+  metricName: 'grounding',
+  sampleCount: 4,
+  scoredCount: 4,
+  passCount: 3,
+  failCount: 1,
+  averageScore: 0.75,
+  evidenceResultIds: ['result-1'],
+  lastObservedAt: '2026-09-18T00:00:00Z',
+  ...overrides,
+})
 const fakeEngine = {
   id: 'test-evaluation-engine',
   async record(result) {
@@ -156,32 +169,7 @@ const fakeEngine = {
   },
   async scorecard(request) {
     scorecardRequests.push(request)
-    return [
-      {
-        evaluationType: 'AGENT_SKILL',
-        capability: request.capability,
-        metricName: 'grounding',
-        sampleCount: 4,
-        scoredCount: 4,
-        passCount: 3,
-        failCount: 1,
-        averageScore: 0.75,
-        evidenceResultIds: ['result-1'],
-        lastObservedAt: '2026-09-18T00:00:00Z',
-      },
-      {
-        evaluationType: 'AGENT_SKILL',
-        capability: request.capability,
-        metricName: 'cost',
-        sampleCount: 1,
-        scoredCount: 1,
-        passCount: 1,
-        failCount: 0,
-        averageScore: 1,
-        evidenceResultIds: ['result-2'],
-        lastObservedAt: '2026-09-18T00:00:00Z',
-      },
-    ]
+    return [scorecardMetric(request)]
   },
 }
 
@@ -243,4 +231,22 @@ assert.equal(scorecard.agentKey, 'investigator_agent')
 assert.equal(scorecard.skillKey, 'incident_root_cause_analysis')
 assert.deepEqual(scorecard.metrics.map((metric) => metric.metricName), ['grounding'])
 
-console.log('Skill-level evaluation rejects blank evidence, normalizes identifiers, preserves unknown semantics, records agent-scoped metrics, and enforces governed authority.')
+for (const [overrides, expected] of [
+  [{ evaluationType: 'OTHER' }, /unexpected evaluation type/],
+  [{ capability: 'agent_skill:support_agent:support_case_investigation' }, /unexpected capability/],
+  [{ metricName: 'cost' }, /out-of-contract metric/],
+]) {
+  const contaminatedEngine = {
+    ...fakeEngine,
+    async scorecard(request) {
+      return [scorecardMetric(request, overrides)]
+    },
+  }
+  await assert.rejects(() => readAgentSkillScorecard(contaminatedEngine, {
+    projectId: 'project-1',
+    agentKey: 'investigator_agent',
+    skillKey: 'incident_root_cause_analysis',
+  }), expected)
+}
+
+console.log('Skill-level evaluation rejects blank evidence and contaminated scorecards, normalizes identifiers, preserves unknown semantics, and records agent-scoped metrics.')
