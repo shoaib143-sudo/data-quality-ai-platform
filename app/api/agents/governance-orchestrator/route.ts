@@ -134,6 +134,7 @@ export async function POST(request: Request) {
           policyVersion: result.policy.policyVersion,
           autonomyMode: result.policy.mode,
           goalHash: createHash('sha256').update(goal).digest('hex'),
+          goal,
         },
       })
       approvalRequestId = String(approval.id)
