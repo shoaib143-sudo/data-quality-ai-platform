@@ -118,6 +118,14 @@ function nonNegativeInteger(value: number, label: string) {
   if (!Number.isInteger(value) || value < 0) throw new Error(`${label} must be a non-negative integer`)
 }
 
+function boundedAverageScore(value: number | null, metricName: string) {
+  if (value == null) return null
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`Scorecard average score must be between 0 and 1 for ${metricName}`)
+  }
+  return value
+}
+
 export function proposeGovernedSkillImprovements(input: {
   agentKey: GovernedAgentKey
   skillKey: GovernedSkillKey
@@ -183,7 +191,11 @@ export function proposeGovernedSkillImprovementsFromScorecard(input: {
   const allowedDimensions = new Set<AgentEvaluationDimension>(excellence.requiredEvaluationDimensions)
   const observations: SkillEvaluationObservation[] = []
 
-  getGovernedSkill(input.skillKey)
+  const skill = getGovernedSkill(input.skillKey)
+  if (!skill.eligibleAgents.includes(input.agentKey)) {
+    throw new Error(`Skill ${input.skillKey} is not authorized for agent ${input.agentKey}`)
+  }
+
   for (const metric of input.metrics) {
     if (metric.evaluationType !== 'AGENT_SKILL') {
       throw new Error(`Scorecard evaluation type ${metric.evaluationType} is not AGENT_SKILL`)
@@ -199,17 +211,24 @@ export function proposeGovernedSkillImprovementsFromScorecard(input: {
     nonNegativeInteger(metric.scoredCount, 'scoredCount')
     nonNegativeInteger(metric.passCount, 'passCount')
     nonNegativeInteger(metric.failCount, 'failCount')
-    if (metric.passCount + metric.failCount > metric.sampleCount) {
-      throw new Error(`Scorecard pass/fail counts exceed sample count for ${metric.metricName}`)
+    if (metric.scoredCount > metric.sampleCount) {
+      throw new Error(`Scorecard scored count exceeds sample count for ${metric.metricName}`)
+    }
+    if (metric.passCount + metric.failCount > metric.scoredCount) {
+      throw new Error(`Scorecard pass/fail counts exceed scored count for ${metric.metricName}`)
+    }
+    const averageScore = boundedAverageScore(metric.averageScore, metric.metricName)
+    if (metric.scoredCount === 0 && averageScore != null) {
+      throw new Error(`Scorecard average score requires scored samples for ${metric.metricName}`)
     }
     if (metric.failCount === 0) continue
 
     observations.push({
       dimension: metric.metricName as AgentEvaluationDimension,
       pass: false,
-      score: metric.averageScore,
+      score: averageScore,
       evidenceRefs: metric.evidenceResultIds,
-      rationale: `${metric.failCount} of ${metric.sampleCount} measured ${metric.metricName} evaluations failed${metric.averageScore == null ? '' : `; average score ${metric.averageScore.toFixed(3)}`}.`,
+      rationale: `${metric.failCount} of ${metric.scoredCount} scored ${metric.metricName} evaluations failed${averageScore == null ? '' : `; average score ${averageScore.toFixed(3)}`}.`,
     })
   }
 
