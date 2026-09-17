@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
+import { enrichInvestigatorOutputWithBoundedRca } from '@/lib/agents/investigator-rca-output-enrichment'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
@@ -218,6 +219,10 @@ async function executeGovernanceAgentJob(job: DurableJob) {
   const agent = record(specialistOutput.agent) ?? {}
   const agentKey = text(agent.key)
   if (!agentKey) throw new Error('Durable governance agent output is missing agent.key.')
+
+  if (agentKey === 'investigator_agent') {
+    specialistOutput = await enrichInvestigatorOutputWithBoundedRca(specialistOutput)
+  }
 
   if (agentKey === 'investigator_agent' && !record(specialistOutput.investigation)) {
     const investigation = await persistInvestigatorRiskAssessment({
