@@ -45,6 +45,16 @@ assert.ok(investigatorPlan.recommendations.every((recommendation) => recommendat
 assert.ok(investigatorPlan.recommendations.length <= getAgentExcellenceContract('investigator_agent').recursionBudget.maxHandoffs)
 assert.equal(investigatorPlan.recommendations.some((recommendation) => recommendation.targetAgentKey === 'executive_agent'), false)
 
+const capped = planGovernedHandoffs({
+  sourceAgentKey: 'investigator_agent',
+  objective: 'Investigate incident quality lineage governance support profile ownership and remediation.',
+  unresolvedEvidenceDomains: ['lineage', 'quality_rule_run', 'policy', 'profile_run'],
+  handoffsAlreadyUsed: 0,
+  maxRecommendations: 1,
+})
+assert.equal(capped.recommendations.length, 1)
+assert.equal(capped.recommendations[0]?.rank, 1)
+
 const exhausted = planGovernedHandoffs({
   sourceAgentKey: 'investigator_agent',
   objective: 'Need lineage help',
@@ -62,4 +72,22 @@ const noMatch = planGovernedHandoffs({
 assert.equal(noMatch.unresolvedReason, 'NO_ALLOWED_TARGET_MATCH')
 assert.deepEqual(noMatch.recommendations, [])
 
-console.log('Per-agent excellence runtime, bounded recursion, and fail-closed governed handoff recommendations are verified.')
+for (const invalidUsed of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+  assert.throws(() => planGovernedHandoffs({
+    sourceAgentKey: 'investigator_agent',
+    objective: 'Need lineage help',
+    unresolvedEvidenceDomains: ['lineage'],
+    handoffsAlreadyUsed: invalidUsed,
+  }), /handoffsAlreadyUsed must be a non-negative integer/)
+}
+
+for (const invalidMax of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+  assert.throws(() => planGovernedHandoffs({
+    sourceAgentKey: 'investigator_agent',
+    objective: 'Need lineage help',
+    unresolvedEvidenceDomains: ['lineage'],
+    maxRecommendations: invalidMax,
+  }), /maxRecommendations must be a positive integer/)
+}
+
+console.log('Per-agent excellence runtime, bounded recursion, and fail-closed governed handoff recommendations reject malformed budget inputs and remain authority bounded.')
