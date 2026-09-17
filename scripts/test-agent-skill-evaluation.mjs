@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const { evaluateAgentSkillOutcome } = await import('../lib/agents/agent-skill-outcome-evaluator.ts')
-const { recordAgentSkillOutcomeEvaluation } = await import('../lib/agents/agent-skill-evaluation.ts')
+const {
+  agentSkillCapabilityKey,
+  readAgentSkillScorecard,
+  recordAgentSkillOutcomeEvaluation,
+} = await import('../lib/agents/agent-skill-evaluation.ts')
 const source = fs.readFileSync('lib/agents/agent-skill-evaluation.ts', 'utf8')
 const evaluationSource = fs.readFileSync('lib/ai/evaluation-engine.ts', 'utf8')
 
@@ -11,13 +15,15 @@ for (const required of [
   'assertAgentSkillEvaluationAllowed',
   'recordAgentSkillEvaluation',
   'recordAgentSkillOutcomeEvaluation',
+  'readAgentSkillScorecard',
+  'agentSkillCapabilityKey',
   "evaluationType: 'AGENT_SKILL'",
-  'capability: `agent_skill:${input.skillKey}`',
+  'capability: agentSkillCapabilityKey(input.agentKey, input.skillKey)',
   'metricName: input.dimension',
   'agent_key: input.agentKey',
   'skill_key: input.skillKey',
   'evaluation_dimension: input.dimension',
-  'skill.eligibleAgents.includes(input.agentKey)',
+  'skill.eligibleAgents.includes(agentKey)',
   'contract.requiredEvaluationDimensions.includes(input.dimension)',
 ]) {
   assert.ok(source.includes(required), `missing agent skill evaluation invariant: ${required}`)
@@ -123,14 +129,41 @@ assert.throws(() => evaluateAgentSkillOutcome({
 }), /not authorized/)
 
 const persisted = []
+const scorecardRequests = []
 const fakeEngine = {
   id: 'test-evaluation-engine',
   async record(result) {
     persisted.push(result)
     return { resultId: `result-${persisted.length}`, persisted: true }
   },
-  async scorecard() {
-    return []
+  async scorecard(request) {
+    scorecardRequests.push(request)
+    return [
+      {
+        evaluationType: 'AGENT_SKILL',
+        capability: request.capability,
+        metricName: 'grounding',
+        sampleCount: 4,
+        scoredCount: 4,
+        passCount: 3,
+        failCount: 1,
+        averageScore: 0.75,
+        evidenceResultIds: ['result-1'],
+        lastObservedAt: '2026-09-18T00:00:00Z',
+      },
+      {
+        evaluationType: 'AGENT_SKILL',
+        capability: request.capability,
+        metricName: 'cost',
+        sampleCount: 1,
+        scoredCount: 1,
+        passCount: 1,
+        failCount: 0,
+        averageScore: 1,
+        evidenceResultIds: ['result-2'],
+        lastObservedAt: '2026-09-18T00:00:00Z',
+      },
+    ]
   },
 }
 
@@ -162,11 +195,34 @@ const recorded = await recordAgentSkillOutcomeEvaluation(fakeEngine, {
 assert.equal(recorded.receipts.length, recorded.evaluation.metrics.length)
 assert.equal(persisted.length, recorded.evaluation.metrics.length)
 assert.ok(persisted.every((row) => row.evaluationType === 'AGENT_SKILL'))
-assert.ok(persisted.every((row) => row.capability === 'agent_skill:incident_root_cause_analysis'))
+assert.ok(persisted.every((row) => row.capability === 'agent_skill:investigator_agent:incident_root_cause_analysis'))
 assert.ok(persisted.every((row) => row.agentRunId === 'run-1'))
 assert.ok(persisted.every((row) => row.correlationId === 'corr-1'))
 assert.ok(persisted.every((row) => row.evaluatorType === 'DETERMINISTIC_SKILL_OUTCOME'))
 assert.ok(persisted.every((row) => row.metadata.structural_pass === true))
 assert.ok(persisted.some((row) => row.metricName === 'correctness' && row.pass === null && row.score === null))
 
-console.log('Skill-level evaluation preserves unknown semantics, evaluates structural outcomes deterministically, enforces authority, and records metrics durably without fabricating quality.')
+assert.equal(
+  agentSkillCapabilityKey('investigator_agent', 'incident_root_cause_analysis'),
+  'agent_skill:investigator_agent:incident_root_cause_analysis',
+)
+assert.throws(
+  () => agentSkillCapabilityKey('executive_agent', 'incident_root_cause_analysis'),
+  /not authorized/,
+)
+
+const scorecard = await readAgentSkillScorecard(fakeEngine, {
+  projectId: 'project-1',
+  agentKey: 'investigator_agent',
+  skillKey: 'incident_root_cause_analysis',
+})
+assert.deepEqual(scorecardRequests, [{
+  projectId: 'project-1',
+  evaluationType: 'AGENT_SKILL',
+  capability: 'agent_skill:investigator_agent:incident_root_cause_analysis',
+}])
+assert.equal(scorecard.agentKey, 'investigator_agent')
+assert.equal(scorecard.skillKey, 'incident_root_cause_analysis')
+assert.deepEqual(scorecard.metrics.map((metric) => metric.metricName), ['grounding'])
+
+console.log('Skill-level evaluation preserves unknown semantics, records agent-scoped metrics, exposes uncontaminated scorecards, and enforces governed authority.')
