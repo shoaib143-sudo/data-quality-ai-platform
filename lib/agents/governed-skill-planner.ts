@@ -90,6 +90,13 @@ function assertPlannedSkillAuthority(agentKey: GovernedAgentKey, skill: Governed
   return requiredTools
 }
 
+function positiveInteger(value: number, label: string) {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
+    throw new Error(`${label} must be a positive integer`)
+  }
+  return value
+}
+
 export function planGovernedSkills(input: GovernedSkillPlanInput): GovernedSkillPlan {
   const objective = normalize(input.objective)
   if (!objective) {
@@ -140,7 +147,8 @@ export function planGovernedSkills(input: GovernedSkillPlanInput): GovernedSkill
   }
 
   candidates.sort((a, b) => b.score - a.score || a.skillKey.localeCompare(b.skillKey))
-  const maxSkills = Math.max(1, Math.min(5, Math.trunc(input.maxSkills ?? 3)))
+  const requestedMax = input.maxSkills == null ? 3 : positiveInteger(input.maxSkills, 'maxSkills')
+  const maxSkills = Math.min(5, requestedMax)
   const selected = candidates.slice(0, maxSkills)
 
   return {
