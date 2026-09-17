@@ -111,21 +111,31 @@ export async function readAgentSkillScorecard(
 ): Promise<AgentSkillScorecard> {
   const capability = agentSkillCapabilityKey(input.agentKey, input.skillKey)
   const contract = getAgentExcellenceContract(input.agentKey)
-  const requiredDimensions = new Set(contract.requiredEvaluationDimensions)
+  const requiredDimensions = new Set<AgentEvaluationDimension>(contract.requiredEvaluationDimensions)
   const metrics = await engine.scorecard({
     projectId: input.projectId,
     evaluationType: 'AGENT_SKILL',
     capability,
   })
 
+  for (const metric of metrics) {
+    if (metric.evaluationType !== 'AGENT_SKILL') {
+      throw new Error(`Skill scorecard returned unexpected evaluation type ${metric.evaluationType}`)
+    }
+    if (metric.capability !== capability) {
+      throw new Error(`Skill scorecard returned unexpected capability ${metric.capability ?? 'null'}`)
+    }
+    if (!requiredDimensions.has(metric.metricName as AgentEvaluationDimension)) {
+      throw new Error(`Skill scorecard returned out-of-contract metric ${metric.metricName} for ${input.agentKey}`)
+    }
+  }
+
   return {
     projectId: input.projectId,
     agentKey: input.agentKey,
     skillKey: input.skillKey,
     capability,
-    metrics: metrics
-      .filter((metric) => requiredDimensions.has(metric.metricName as AgentEvaluationDimension))
-      .sort((left, right) => left.metricName.localeCompare(right.metricName)),
+    metrics: [...metrics].sort((left, right) => left.metricName.localeCompare(right.metricName)),
   }
 }
 
