@@ -155,9 +155,16 @@ export const AGENT_CLASSIFICATIONS: Record<GovernedAgentKey, AgentClassification
     ...READ_ONLY_SPECIALIST_BASE,
     agentKey: 'investigator_agent',
     operationalRole: 'INCIDENT_INVESTIGATOR',
+    determinismModel: { current: 'DETERMINISTIC', target: null },
     explainabilityModel: { current: 'RCA_EXPLAINABLE', target: null },
     recoveryValidationBehaviour: { current: 'DIAGNOSE_AND_RECOMMEND', target: null },
-    evidenceBasis: ['governed-agent-registry', 'governance-specialist-agent', 'governed investigation contract', 'predictive risk persistence'],
+    evidenceBasis: [
+      'governed-agent-registry',
+      'governance-specialist-agent',
+      'governed investigation contract',
+      'dataset-scoped investigator evidence discrimination',
+      'same-dataset incident/profile/DQ/lineage correlation',
+    ],
   },
   executive_agent: {
     ...READ_ONLY_SPECIALIST_BASE,
