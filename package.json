@@ -35,6 +35,7 @@
     "verify:route-telemetry": "node scripts/verify-route-telemetry.mjs && node --experimental-strip-types scripts/test-route-telemetry.mjs && node --experimental-strip-types scripts/test-route-fail-closed-telemetry.mjs",
     "verify:investigation-prediction": "node scripts/verify-investigation-prediction.mjs",
     "verify:governed-autonomy": "node scripts/verify-governed-autonomy.mjs && node scripts/test-policy-decision-provider.mjs",
+    "verify:orchestrator-capability-coverage": "node --experimental-strip-types scripts/test-orchestrator-capability-coverage.mjs",
     "verify:ai-due-diligence": "node scripts/verify-ai-governance-due-diligence.mjs",
     "verify:governance-reviews": "node scripts/verify-governed-review-boundaries.mjs",
     "verify:control-intelligence": "node scripts/verify-governance-control-intelligence.mjs",
