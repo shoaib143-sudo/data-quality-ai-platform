@@ -13,6 +13,18 @@ test('three repeated headers remain lossless', () => {
   assert.deepEqual(parsed.rows,[{value:1,value__2:2,value__3:3}])
 })
 
+test('normalized suffix-like headers cannot overwrite generated duplicate names', () => {
+  assert.deepEqual(normalizeCsvHeaders(['name','name','name__2']),['name','name__2','name__2__2'])
+})
+
+test('blank fallback headers avoid explicit fallback-like names', () => {
+  assert.deepEqual(normalizeCsvHeaders(['','column_1','']),['column_1','column_1__2','column_3'])
+})
+
+test('preclaimed suffixes force later duplicates to the next free suffix', () => {
+  assert.deepEqual(normalizeCsvHeaders(['name__2','name','name']),['name__2','name','name__3'])
+})
+
 test('blank and BOM-prefixed headers are normalized deterministically', () => {
   assert.deepEqual(normalizeCsvHeaders(['\uFEFFid','','']),['id','column_2','column_3'])
   const parsed=parseCsv('\uFEFFid,,\n007,left,right\n',10)

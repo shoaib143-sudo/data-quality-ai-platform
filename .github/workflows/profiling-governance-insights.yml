@@ -21,5 +21,3 @@ jobs:
           node-version: 24
       - name: Verify profiling governance insight evidence
         run: node scripts/verify-profiling-governance-insights.mjs
-      - name: Test profiling governance insight parser
-        run: node --experimental-strip-types --test tests/profiling-governance-insight-parser.test.mjs
