@@ -21,6 +21,12 @@ const agentKeys = [
   'support_agent',
 ]
 
+const canonicalAgentKeys = [
+  'profiling_agent',
+  'data_quality_agent',
+  ...agentKeys,
+]
+
 requireText('lib/auth/authorize.ts', ["'agent.execute'", "'agent.converse'"])
 requireText('supabase/migrations/20260904190310_add_governed_agent_execution_capability.sql', [
   "'agent.execute'",
@@ -120,5 +126,35 @@ requireText('app/agents/run-agent-form.tsx', [
   'Not required for this agent',
   'Question or objective',
 ])
+requireText('Architecture/2026-09-11-ADR-007-agent-classification-framework.md', [
+  'Multi-Dimensional Agent Classification Framework',
+  'current implemented state',
+  'Decision Architecture',
+  'Learning and Adaptation',
+  'Risk and Governance Posture',
+])
+requireText('lib/agents/agent-classification-registry.ts', [
+  ...canonicalAgentKeys,
+  'decisionArchitecture',
+  'reasoningArchitecture',
+  'controlPattern',
+  'autonomyLevel',
+  'humanGovernanceModel',
+  'humanGovernanceBoundary',
+  'stateModel',
+  'triggerModel',
+  'topology',
+  'coordinationPattern',
+  'knowledgeArchitecture',
+  'toolingModel',
+  'learningAdaptation',
+  'determinismModel',
+  'explainabilityModel',
+  'riskGovernancePosture',
+  'environmentObservability',
+  'recoveryValidationBehaviour',
+  'validateAgentClassifications',
+  "classificationVersion: 'ADR-007-v1'",
+])
 
-console.log('Governed agent portfolio contracts verified.')
+console.log('Governed agent portfolio and ADR-007 classification contracts verified.')
