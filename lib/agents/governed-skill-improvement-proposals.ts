@@ -1,3 +1,4 @@
+import type { EvaluationScorecardMetric } from '../ai/evaluation-engine'
 import {
   getAgentExcellenceContract,
   type AgentEvaluationDimension,
@@ -109,6 +110,14 @@ function unique(values: readonly string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
 }
 
+function expectedCapability(agentKey: GovernedAgentKey, skillKey: GovernedSkillKey) {
+  return `agent_skill:${agentKey}:${skillKey}`
+}
+
+function nonNegativeInteger(value: number, label: string) {
+  if (!Number.isInteger(value) || value < 0) throw new Error(`${label} must be a non-negative integer`)
+}
+
 export function proposeGovernedSkillImprovements(input: {
   agentKey: GovernedAgentKey
   skillKey: GovernedSkillKey
@@ -162,4 +171,51 @@ export function proposeGovernedSkillImprovements(input: {
         prohibitedActions: PROHIBITED_ACTIONS,
       }
     })
+}
+
+export function proposeGovernedSkillImprovementsFromScorecard(input: {
+  agentKey: GovernedAgentKey
+  skillKey: GovernedSkillKey
+  metrics: readonly EvaluationScorecardMetric[]
+}): GovernedSkillImprovementProposal[] {
+  const capability = expectedCapability(input.agentKey, input.skillKey)
+  const excellence = getAgentExcellenceContract(input.agentKey)
+  const allowedDimensions = new Set<AgentEvaluationDimension>(excellence.requiredEvaluationDimensions)
+  const observations: SkillEvaluationObservation[] = []
+
+  getGovernedSkill(input.skillKey)
+  for (const metric of input.metrics) {
+    if (metric.evaluationType !== 'AGENT_SKILL') {
+      throw new Error(`Scorecard evaluation type ${metric.evaluationType} is not AGENT_SKILL`)
+    }
+    if (metric.capability !== capability) {
+      throw new Error(`Scorecard capability ${metric.capability ?? 'null'} does not match governed capability ${capability}`)
+    }
+    if (!allowedDimensions.has(metric.metricName as AgentEvaluationDimension)) {
+      throw new Error(`Scorecard metric ${metric.metricName} is outside the excellence contract for ${input.agentKey}`)
+    }
+
+    nonNegativeInteger(metric.sampleCount, 'sampleCount')
+    nonNegativeInteger(metric.scoredCount, 'scoredCount')
+    nonNegativeInteger(metric.passCount, 'passCount')
+    nonNegativeInteger(metric.failCount, 'failCount')
+    if (metric.passCount + metric.failCount > metric.sampleCount) {
+      throw new Error(`Scorecard pass/fail counts exceed sample count for ${metric.metricName}`)
+    }
+    if (metric.failCount === 0) continue
+
+    observations.push({
+      dimension: metric.metricName as AgentEvaluationDimension,
+      pass: false,
+      score: metric.averageScore,
+      evidenceRefs: metric.evidenceResultIds,
+      rationale: `${metric.failCount} of ${metric.sampleCount} measured ${metric.metricName} evaluations failed${metric.averageScore == null ? '' : `; average score ${metric.averageScore.toFixed(3)}`}.`,
+    })
+  }
+
+  return proposeGovernedSkillImprovements({
+    agentKey: input.agentKey,
+    skillKey: input.skillKey,
+    observations,
+  })
 }
