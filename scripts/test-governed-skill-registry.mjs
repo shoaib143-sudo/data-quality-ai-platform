@@ -7,6 +7,7 @@ const {
   proposeGovernedSkillImprovements,
   proposeGovernedSkillImprovementsFromScorecard,
 } = await import('../lib/agents/governed-skill-improvement-proposals.ts')
+const { evaluateGovernedSkillPromotion } = await import('../lib/agents/governed-skill-promotion-gate.ts')
 const source = fs.readFileSync('lib/agents/governed-skill-registry.ts', 'utf8')
 
 for (const key of GOVERNED_AGENT_KEYS) {
@@ -118,6 +119,105 @@ assert.ok(scorecardProposals[0]?.rationale.some((value) => value.includes('2 of 
 assert.equal(scorecardProposals[0]?.mayAutoApply, false)
 assert.equal(scorecardProposals[0]?.requiresHumanReview, true)
 
+const benchmark = {
+  benchmarkId: 'benchmark-1',
+  evaluatorId: 'independent-evaluation-service',
+  evaluatorType: 'ADVERSARIAL_SUITE',
+  candidateVersion: '1.1',
+  baselineVersion: '1.0',
+  caseCount: 40,
+  baselineScore: 0.82,
+  candidateScore: 0.9,
+  authorityViolations: 0,
+  adversarialFailures: 0,
+  evidenceRefs: ['benchmark-result-1', 'benchmark-result-2'],
+}
+
+const reviewEligible = evaluateGovernedSkillPromotion({
+  proposal: scorecardProposals[0],
+  currentVersion: '1.0',
+  candidateVersion: '1.1',
+  benchmark,
+})
+assert.equal(reviewEligible.status, 'ELIGIBLE_FOR_HUMAN_REVIEW')
+assert.equal(reviewEligible.automaticPromotionAllowed, false)
+assert.equal(reviewEligible.automaticAuthorityExpansionAllowed, false)
+assert.equal(reviewEligible.rollbackRequired, true)
+assert.equal(reviewEligible.currentAuthorizationRequiredAtRelease, true)
+
+const approved = evaluateGovernedSkillPromotion({
+  proposal: scorecardProposals[0],
+  currentVersion: '1.0',
+  candidateVersion: '1.1',
+  benchmark,
+  review: {
+    reviewerId: 'reviewer-1',
+    decision: 'APPROVE_CONTROLLED_RELEASE',
+    rationale: 'Independent benchmark passed and no authority regression was observed.',
+    reviewedAt: '2026-09-18T01:00:00Z',
+    evidenceRef: 'human-review-1',
+  },
+})
+assert.equal(approved.status, 'APPROVED_FOR_CONTROLLED_RELEASE')
+assert.equal(approved.automaticPromotionAllowed, false)
+assert.equal(approved.reviewEvidenceRef, 'human-review-1')
+
+const rejected = evaluateGovernedSkillPromotion({
+  proposal: scorecardProposals[0],
+  currentVersion: '1.0',
+  candidateVersion: '1.1',
+  benchmark,
+  review: {
+    reviewerId: 'reviewer-2',
+    decision: 'REJECT',
+    rationale: 'Review found an unresolved product risk.',
+    reviewedAt: '2026-09-18T01:00:00Z',
+    evidenceRef: 'human-review-2',
+  },
+})
+assert.equal(rejected.status, 'REJECTED')
+assert.equal(rejected.automaticPromotionAllowed, false)
+
+const regressed = evaluateGovernedSkillPromotion({
+  proposal: scorecardProposals[0],
+  currentVersion: '1.0',
+  candidateVersion: '1.1',
+  benchmark: { ...benchmark, candidateScore: 0.79, authorityViolations: 1, adversarialFailures: 1 },
+})
+assert.equal(regressed.status, 'NOT_READY')
+assert.ok(regressed.reasons.includes('CANDIDATE_SCORE_BELOW_THRESHOLD'))
+assert.ok(regressed.reasons.includes('CANDIDATE_REGRESSES_BASELINE'))
+assert.ok(regressed.reasons.includes('AUTHORITY_VIOLATION_DETECTED'))
+assert.ok(regressed.reasons.includes('ADVERSARIAL_FAILURE_DETECTED'))
+
+assert.throws(() => evaluateGovernedSkillPromotion({
+  proposal: scorecardProposals[0],
+  currentVersion: '1.0',
+  candidateVersion: '1.1',
+  benchmark: { ...benchmark, evaluatorId: 'investigator_agent' },
+}), /evaluator must be independent/)
+
+assert.throws(() => evaluateGovernedSkillPromotion({
+  proposal: scorecardProposals[0],
+  currentVersion: '1.0',
+  candidateVersion: '1.0',
+  benchmark: { ...benchmark, candidateVersion: '1.0' },
+}), /candidateVersion must differ/)
+
+assert.throws(() => evaluateGovernedSkillPromotion({
+  proposal: scorecardProposals[0],
+  currentVersion: '1.0',
+  candidateVersion: '1.1',
+  benchmark,
+  review: {
+    reviewerId: 'reviewer-3',
+    decision: 'APPROVE_CONTROLLED_RELEASE',
+    rationale: 'Looks acceptable.',
+    reviewedAt: '2026-09-18T01:00:00Z',
+    evidenceRef: 'benchmark-result-1',
+  },
+}), /human review evidence must be distinct/)
+
 assert.deepEqual(proposeGovernedSkillImprovements({
   agentKey: 'support_agent',
   skillKey: 'support_case_investigation',
@@ -193,4 +293,4 @@ assert.throws(() => proposeGovernedSkillImprovementsFromScorecard({
   metrics: [metric({ sampleCount: 1, scoredCount: 0, passCount: 0, failCount: 0, averageScore: 0.5 })],
 }), /average score requires scored samples/)
 
-console.log('Governed skill improvement proposals consume consistent agent-scoped measured scorecards without cross-agent contamination or autonomous self-promotion.')
+console.log('Governed skill improvement proposals and promotion gates require consistent agent-scoped evidence, independent benchmarks, human review, rollback, and no autonomous promotion.')
