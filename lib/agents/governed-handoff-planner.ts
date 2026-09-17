@@ -45,6 +45,20 @@ function unique(values: readonly string[]) {
   return [...new Set(values.map(normalize).filter(Boolean))]
 }
 
+function nonNegativeInteger(value: number, label: string) {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative integer`)
+  }
+  return value
+}
+
+function positiveInteger(value: number, label: string) {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
+    throw new Error(`${label} must be a positive integer`)
+  }
+  return value
+}
+
 export function planGovernedHandoffs(input: {
   sourceAgentKey: GovernedAgentKey
   objective: string
@@ -54,7 +68,9 @@ export function planGovernedHandoffs(input: {
 }): GovernedHandoffPlan {
   const sourcePolicy = getGovernedAgentPolicy(input.sourceAgentKey)
   const excellence = getAgentExcellenceContract(input.sourceAgentKey)
-  const used = Math.max(0, Math.trunc(input.handoffsAlreadyUsed ?? 0))
+  const used = input.handoffsAlreadyUsed == null
+    ? 0
+    : nonNegativeInteger(input.handoffsAlreadyUsed, 'handoffsAlreadyUsed')
   const remainingHandoffBudget = Math.max(0, excellence.recursionBudget.maxHandoffs - used)
 
   if (remainingHandoffBudget === 0) {
@@ -97,10 +113,10 @@ export function planGovernedHandoffs(input: {
   }
 
   recommendations.sort((left, right) => right.score - left.score || left.targetAgentKey.localeCompare(right.targetAgentKey))
-  const maxRecommendations = Math.min(
-    remainingHandoffBudget,
-    Math.max(1, Math.min(5, Math.trunc(input.maxRecommendations ?? remainingHandoffBudget))),
-  )
+  const requestedMax = input.maxRecommendations == null
+    ? remainingHandoffBudget
+    : positiveInteger(input.maxRecommendations, 'maxRecommendations')
+  const maxRecommendations = Math.min(remainingHandoffBudget, 5, requestedMax)
   const selected = recommendations.slice(0, maxRecommendations).map((recommendation, index) => ({
     ...recommendation,
     rank: index + 1,
