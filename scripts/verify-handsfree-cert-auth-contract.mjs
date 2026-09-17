@@ -20,9 +20,13 @@ for (const forbidden of [
 for (const required of [
   'createClient()',
   'supabase.auth.getUser()',
-  "throw new ApiAuthError('Unauthorized', 401)",
+  "throw new AuthorizationError('Authentication required.', 401)",
 ]) {
   if (!auth.includes(required)) failures.push(`${authPath} is missing production session-auth invariant: ${required}`)
+}
+
+if (!auth.includes("import { AuthorizationError } from '@/lib/auth/authorize'")) {
+  failures.push(`${authPath} must use the shared fail-closed AuthorizationError for unauthenticated API requests.`)
 }
 
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'))
