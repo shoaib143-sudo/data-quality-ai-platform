@@ -54,6 +54,23 @@ for (const item of investigatorPlan.selected) {
   assert.equal(item.mayMutate, false)
 }
 
+const singleSkill = planGovernedSkills({
+  agentKey: 'investigator_agent',
+  objective: 'Diagnose the incident root cause and inspect lineage impact and profile gaps.',
+  availableEvidenceDomains: ['incident', 'profile_run', 'lineage'],
+  maxSkills: 1,
+})
+assert.equal(singleSkill.selected.length, 1)
+assert.equal(singleSkill.selected[0]?.skillKey, 'incident_root_cause_analysis')
+
+for (const invalidMax of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+  assert.throws(() => planGovernedSkills({
+    agentKey: 'investigator_agent',
+    objective: 'Diagnose the incident root cause.',
+    maxSkills: invalidMax,
+  }), /maxSkills must be a positive integer/)
+}
+
 const blockedRemediation = planGovernedSkills({
   agentKey: 'data_quality_agent',
   objective: 'Diagnose the quality failure and propose remediation to fix the violated rule.',
@@ -110,4 +127,4 @@ const noObjective = planGovernedSkills({ agentKey: 'architect_agent', objective:
 assert.equal(noObjective.unresolvedReason, 'EMPTY_OBJECTIVE')
 assert.deepEqual(noObjective.selected, [])
 
-console.log('Agent excellence contracts, durable governed skill plans, authority-safe mutation rejection, bounded recursion, and self-promotion prohibition verified.')
+console.log('Agent excellence contracts, durable governed skill plans, strict planning limits, authority-safe mutation rejection, bounded recursion, and self-promotion prohibition verified.')
