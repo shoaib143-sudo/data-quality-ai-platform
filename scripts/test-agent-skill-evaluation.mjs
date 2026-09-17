@@ -2,12 +2,14 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const { evaluateAgentSkillOutcome } = await import('../lib/agents/agent-skill-outcome-evaluator.ts')
+const { recordAgentSkillOutcomeEvaluation } = await import('../lib/agents/agent-skill-evaluation.ts')
 const source = fs.readFileSync('lib/agents/agent-skill-evaluation.ts', 'utf8')
 const evaluationSource = fs.readFileSync('lib/ai/evaluation-engine.ts', 'utf8')
 
 for (const required of [
   'assertAgentSkillEvaluationAllowed',
   'recordAgentSkillEvaluation',
+  'recordAgentSkillOutcomeEvaluation',
   "evaluationType: 'AGENT_SKILL'",
   'capability: `agent_skill:${input.skillKey}`',
   'metricName: input.dimension',
@@ -119,4 +121,51 @@ assert.throws(() => evaluateAgentSkillOutcome({
   output: {},
 }), /not authorized/)
 
-console.log('Skill-level evaluation bridge preserves unknown semantic dimensions, evaluates structural outcomes deterministically, and enforces authority safely.')
+const persisted = []
+const fakeEngine = {
+  id: 'test-evaluation-engine',
+  async record(result) {
+    persisted.push(result)
+    return { resultId: `result-${persisted.length}`, persisted: true }
+  },
+  async scorecard() {
+    return []
+  },
+}
+
+const recorded = await recordAgentSkillOutcomeEvaluation(fakeEngine, {
+  projectId: 'project-1',
+  agentKey: 'investigator_agent',
+  skillKey: 'incident_root_cause_analysis',
+  agentRunId: 'run-1',
+  correlationId: 'corr-1',
+  output: {
+    hypotheses: [{ hypothesis: 'same-dataset freshness breach' }],
+    probable_causes: [],
+    alternative_causes: [],
+    confidence: null,
+    confidenceBasis: 'No calibrated probability is asserted; deterministic evidence strength is HIGH.',
+    evidence_refs: ['incident-1', 'alert-1'],
+    recommended_follow_up: ['compare timestamps'],
+  },
+  evidenceRefs: ['incident-1', 'alert-1'],
+  invokedTools: [
+    'quality.incident.read',
+    'quality.history.read',
+    'profiling.history.read',
+    'lineage.read',
+    'governance.issue.read',
+    'remediation.history.read',
+  ],
+})
+assert.equal(recorded.receipts.length, recorded.evaluation.metrics.length)
+assert.equal(persisted.length, recorded.evaluation.metrics.length)
+assert.ok(persisted.every((row) => row.evaluationType === 'AGENT_SKILL'))
+assert.ok(persisted.every((row) => row.capability === 'agent_skill:incident_root_cause_analysis'))
+assert.ok(persisted.every((row) => row.agentRunId === 'run-1'))
+assert.ok(persisted.every((row) => row.correlationId === 'corr-1'))
+assert.ok(persisted.every((row) => row.evaluatorType === 'DETERMINISTIC_SKILL_OUTCOME'))
+assert.ok(persisted.every((row) => row.metadata.structural_pass === true))
+assert.ok(persisted.some((row) => row.metricName === 'correctness' && row.pass === null && row.score === null))
+
+console.log('Skill-level evaluation preserves unknown semantics, evaluates structural outcomes deterministically, enforces authority, and records metrics durably without fabricating quality.')
