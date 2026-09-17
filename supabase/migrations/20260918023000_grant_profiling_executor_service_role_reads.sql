@@ -6,8 +6,8 @@ set local statement_timeout = '60s';
 -- The deterministic profiling executor is a server-only path. It uses the
 -- service-role client for read-side orchestration, while result persistence
 -- continues through profiling.persist_profiling_results(). This migration
--- grants only the missing read contract required by the executor and sampling
--- planner.
+-- grants only the missing read contract required by the executor, sampling
+-- planner, and the fail-closed profile-readiness admission trigger.
 grant usage on schema profiling, catalog, orchestration to service_role;
 
 grant select on table
@@ -19,6 +19,11 @@ grant select on table
   profiling.data_quality_scores,
   catalog.dataset_versions,
   catalog.datasets,
+  catalog.data_sources,
+  catalog.source_operational_readiness,
+  catalog.source_scopes,
+  catalog.source_scope_versions,
+  catalog.discovery_manifests,
   orchestration.capacity_policies
 to service_role;
 
@@ -41,6 +46,11 @@ begin
     or not has_table_privilege('service_role', 'profiling.data_quality_scores', 'SELECT')
     or not has_table_privilege('service_role', 'catalog.dataset_versions', 'SELECT')
     or not has_table_privilege('service_role', 'catalog.datasets', 'SELECT')
+    or not has_table_privilege('service_role', 'catalog.data_sources', 'SELECT')
+    or not has_table_privilege('service_role', 'catalog.source_operational_readiness', 'SELECT')
+    or not has_table_privilege('service_role', 'catalog.source_scopes', 'SELECT')
+    or not has_table_privilege('service_role', 'catalog.source_scope_versions', 'SELECT')
+    or not has_table_privilege('service_role', 'catalog.discovery_manifests', 'SELECT')
     or not has_table_privilege('service_role', 'orchestration.capacity_policies', 'SELECT') then
     raise exception 'PROFILING_EXECUTOR_ACL_INVALID: service_role read contract is incomplete';
   end if;
