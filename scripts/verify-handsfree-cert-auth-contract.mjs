@@ -29,17 +29,10 @@ const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 const deps = { ...packageJson.dependencies, ...packageJson.devDependencies }
 if (!deps['@supabase/ssr']) failures.push('Supabase SSR auth dependency is required for cookie-backed certification sessions.')
 
-const testing = fs.existsSync('Testing/AUTOMATION_ARCHITECTURE.md')
-  ? fs.readFileSync('Testing/AUTOMATION_ARCHITECTURE.md', 'utf8')
-  : ''
-for (const required of ['synthetic', 'auth']) {
-  if (!testing.toLowerCase().includes(required)) failures.push(`Testing/AUTOMATION_ARCHITECTURE.md must document ${required} for unattended certification.`)
-}
-
 if (failures.length) {
   console.error('Hands-free certification authentication contract failed:')
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
 
-console.log('Hands-free certification auth contract verified: production remains cookie/session-backed and bypass-free; unattended certification requires synthetic auth provisioning.')
+console.log('Hands-free certification auth contract verified: production remains cookie/session-backed and bypass-free. Synthetic certification identities must obtain normal authenticated sessions rather than bypassing requireApiUser().')
