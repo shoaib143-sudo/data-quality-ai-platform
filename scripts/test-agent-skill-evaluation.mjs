@@ -75,6 +75,24 @@ assert.ok(incompleteProfile.missingOutputFields.includes('evidence_refs'))
 assert.equal(incompleteProfile.metrics.find((metric) => metric.dimension === 'evidence_sufficiency')?.pass, false)
 assert.equal(incompleteProfile.metrics.find((metric) => metric.dimension === 'tool_correctness')?.pass, false)
 
+const blankEvidence = evaluateAgentSkillOutcome({
+  agentKey: 'profiling_agent',
+  skillKey: 'profile_evidence_analysis',
+  output: {
+    observations: [],
+    evidence_refs: [],
+    confidence: null,
+    confidenceBasis: 'insufficient evidence',
+    limitations: ['no authoritative evidence'],
+  },
+  evidenceRefs: ['   ', '\t'],
+  invokedTools: [' profiling.source.read ', 'profiling.schema.discover', 'profiling.metrics.execute'],
+})
+assert.equal(blankEvidence.metrics.find((metric) => metric.dimension === 'evidence_sufficiency')?.pass, false)
+assert.equal(blankEvidence.metrics.find((metric) => metric.dimension === 'grounding')?.pass, false)
+assert.equal(blankEvidence.metrics.find((metric) => metric.dimension === 'tool_correctness')?.pass, true)
+assert.deepEqual(blankEvidence.unauthorizedTools, [])
+
 const investigatorEvaluation = evaluateAgentSkillOutcome({
   agentKey: 'investigator_agent',
   skillKey: 'incident_root_cause_analysis',
@@ -225,4 +243,4 @@ assert.equal(scorecard.agentKey, 'investigator_agent')
 assert.equal(scorecard.skillKey, 'incident_root_cause_analysis')
 assert.deepEqual(scorecard.metrics.map((metric) => metric.metricName), ['grounding'])
 
-console.log('Skill-level evaluation preserves unknown semantics, records agent-scoped metrics, exposes uncontaminated scorecards, and enforces governed authority.')
+console.log('Skill-level evaluation rejects blank evidence, normalizes identifiers, preserves unknown semantics, records agent-scoped metrics, and enforces governed authority.')
