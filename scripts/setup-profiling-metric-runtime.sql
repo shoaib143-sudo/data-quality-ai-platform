@@ -32,7 +32,7 @@ begin
   values (v_project_id,v_organization_id,'Metric runtime acceptance','metric-runtime-acceptance','Disposable deterministic metric execution fixture',jsonb_build_object('synthetic',true));
 
   insert into catalog.data_sources(id,project_id,name,source_type,connection_metadata,status)
-  values (v_data_source_id,v_project_id,'Synthetic table source','TABLE',jsonb_build_object('schema','public','table','profiling_metric_runtime_fixture','synthetic',true),'ACTIVE');
+  values (v_data_source_id,v_project_id,'Synthetic JDBC source','JDBC',jsonb_build_object('synthetic',true),'ACTIVE');
 
   insert into catalog.datasets(id,project_id,name,description,source_identifier,data_source_id,metadata)
   values (v_dataset_id,v_project_id,'Synthetic metric runtime','Disposable metric execution dataset','public.profiling_metric_runtime_fixture',v_data_source_id,jsonb_build_object('synthetic',true));
