@@ -48,7 +48,7 @@ function present(value: unknown) {
 }
 
 function unique(values: readonly string[]) {
-  return [...new Set(values.filter(Boolean))]
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
 }
 
 export function evaluateAgentSkillOutcome(input: AgentSkillOutcomeInput): AgentSkillOutcomeEvaluation {
