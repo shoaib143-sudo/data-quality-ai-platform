@@ -4,8 +4,13 @@ do $do$
 declare
   v_organization_id uuid;
   v_project_id uuid;
+  v_data_source_id uuid;
   v_dataset_id uuid;
   v_version_id uuid;
+  v_scope_id uuid;
+  v_scope_version_id uuid;
+  v_discovery_run_id uuid;
+  v_manifest_id uuid;
   v_run_id uuid;
   v_column_id uuid;
   v_metric jsonb;
@@ -14,6 +19,7 @@ declare
   v_metric_count integer;
   v_finding_count integer;
   v_definition record;
+  v_suffix text := replace(gen_random_uuid()::text,'-','');
 begin
   insert into app.organizations(name,slug,metadata)
   values ('Profiling runtime acceptance','profiling-runtime-' || left(gen_random_uuid()::text,8),jsonb_build_object('synthetic',true))
@@ -23,13 +29,49 @@ begin
   values (v_organization_id,'Profiling runtime acceptance','profiling-runtime-' || left(gen_random_uuid()::text,8),'Disposable profiling lifecycle fixture',jsonb_build_object('synthetic',true))
   returning id into v_project_id;
 
-  insert into catalog.datasets(project_id,name,description,source_identifier,metadata)
-  values (v_project_id,'Synthetic profiling lifecycle','Disposable runtime acceptance dataset','runtime://synthetic',jsonb_build_object('synthetic',true))
+  insert into catalog.data_sources(project_id,name,source_type,connection_metadata,status)
+  values (v_project_id,'Synthetic JDBC Source ' || left(v_suffix,12),'JDBC',jsonb_build_object('synthetic',true),'ACTIVE')
+  returning id into v_data_source_id;
+
+  insert into catalog.datasets(project_id,name,description,source_identifier,data_source_id,metadata)
+  values (v_project_id,'Synthetic profiling lifecycle','Disposable runtime acceptance dataset','runtime://synthetic',v_data_source_id,jsonb_build_object('synthetic',true))
   returning id into v_dataset_id;
 
   insert into catalog.dataset_versions(dataset_id,version_number,source_uri,schema_hash,row_count,column_count,status,metadata)
   values (v_dataset_id,1,'runtime://synthetic/v1','runtime-schema',2,1,'AVAILABLE',jsonb_build_object('synthetic',true))
   returning id into v_version_id;
+
+  insert into catalog.source_scopes(project_id,source_id,name,status)
+  values (v_project_id,v_data_source_id,'synthetic-default','ACTIVE')
+  returning id into v_scope_id;
+
+  insert into catalog.source_scope_versions(scope_id,project_id,source_id,version_number,scope_mode,native_selection,rules,scope_hash,frozen_at)
+  values (v_scope_id,v_project_id,v_data_source_id,1,'SNAPSHOT',jsonb_build_object('synthetic',true),jsonb_build_object('include',jsonb_build_array('runtime://synthetic')),
+    encode(digest('synthetic-scope-' || v_suffix,'sha256'),'hex'),now())
+  returning id into v_scope_version_id;
+
+  update catalog.source_scopes
+     set current_version_id=v_scope_version_id,
+         updated_at=now()
+   where id=v_scope_id;
+
+  insert into catalog.discovery_runs(project_id,source_id,status,assets_discovered,schema_snapshot,started_at,completed_at,scope_id,scope_version_id,observed_from,observed_to,objects_observed,objects_added,objects_changed,objects_missing,objects_unchanged,consistency_mode,objects_removed)
+  values (v_project_id,v_data_source_id,'COMPLETED',1,jsonb_build_object('synthetic',true),now(),now(),v_scope_id,v_scope_version_id,now(),now(),1,1,0,0,0,'SNAPSHOT',0)
+  returning id into v_discovery_run_id;
+
+  insert into catalog.discovered_assets(discovery_run_id,source_id,asset_type,namespace,name,columns,metadata,asset_key,content_hash,version_number,is_current,first_seen_at,last_seen_at,last_seen_run_id,structure_hash,source_annotation_hash,identity_key)
+  values (v_discovery_run_id,v_data_source_id,'TABLE','runtime','synthetic','[]'::jsonb,jsonb_build_object('synthetic',true),'runtime://synthetic',encode(digest('synthetic-asset-' || v_suffix,'sha256'),'hex'),1,true,now(),now(),v_discovery_run_id,encode(digest('synthetic-structure-' || v_suffix,'sha256'),'hex'),encode(digest('synthetic-annotation-' || v_suffix,'sha256'),'hex'),'runtime://synthetic');
+
+  insert into catalog.discovery_manifests(project_id,source_id,scope_id,scope_version_id,discovery_run_id,expected_object_count,expected_field_count,observed_object_count,observed_field_count,failed_item_count,truncated,complete,manifest_hash,consistency_mode,metadata,completed_at)
+  values (v_project_id,v_data_source_id,v_scope_id,v_scope_version_id,v_discovery_run_id,1,0,1,0,0,false,true,encode(digest('synthetic-manifest-' || v_suffix,'sha256'),'hex'),'SNAPSHOT',jsonb_build_object('synthetic',true),now())
+  returning id into v_manifest_id;
+
+  update catalog.discovery_runs
+     set manifest_id=v_manifest_id
+   where id=v_discovery_run_id;
+
+  insert into profiling.dataset_execution_sources(dataset_version_id,source_type,source_uri,execution_config,active)
+  values (v_version_id,'TABLE','table://runtime/synthetic',jsonb_build_object('schema','runtime','table','synthetic','synthetic',true),true);
 
   insert into profiling.profile_runs(dataset_version_id,status,engine_name,engine_version,row_count,column_count,schema_hash,summary)
   values (v_version_id,'RUNNING','runtime-acceptance','1',2,1,'runtime-schema',jsonb_build_object('score',jsonb_build_object(
