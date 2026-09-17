@@ -22,9 +22,11 @@ Documentation-only changes under `Testing/**`, `docs/**`, or Markdown files do n
 
 Preview verification must match the pull request head SHA. Production verification must independently match the merged `main` SHA. Preview success does not replace production smoke.
 
-## Secrets
+## Authentication and permissions
 
-The GitHub Actions workflow expects `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID` as repository secrets. Tokens must be stored only in GitHub Actions secrets, never committed.
+The Preview gate does not require Vercel API credentials in GitHub Actions. It uses the repository-scoped `github.token` with read-only `deployments` permission and consumes the deployment/status records published by the existing Vercel GitHub integration. The workflow runs in the ordinary `pull_request` security context and does not use `pull_request_target`.
+
+No Vercel token, team ID, or project ID should be added solely for this gate. Secrets must never be committed to the repository.
 
 ## Failure behavior
 
