@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const { GOVERNED_AGENT_KEYS, getGovernedAgentPolicy } = await import('../lib/agents/governed-agent-registry.ts')
+const { planGovernedSkills } = await import('../lib/agents/governed-skill-planner.ts')
 const source = fs.readFileSync('lib/agents/agent-excellence-contracts.ts', 'utf8')
 
 for (const key of GOVERNED_AGENT_KEYS) {
@@ -33,4 +34,46 @@ for (const required of [
 assert.equal((source.match(/maySelfPromoteChanges: false/g) ?? []).length >= GOVERNED_AGENT_KEYS.length, true)
 assert.equal((source.match(/mayProposeSkillImprovements: true/g) ?? []).length >= GOVERNED_AGENT_KEYS.length, true)
 
-console.log('Agent excellence contracts, bounded recursion, evaluation requirements, and self-promotion prohibition verified.')
+const investigatorPlan = planGovernedSkills({
+  agentKey: 'investigator_agent',
+  objective: 'Diagnose the incident root cause and inspect lineage impact and profile gaps.',
+  availableEvidenceDomains: ['incident', 'profile_run', 'lineage'],
+})
+assert.equal(investigatorPlan.unresolvedReason, null)
+assert.equal(investigatorPlan.selected[0]?.skillKey, 'incident_root_cause_analysis')
+assert.ok(investigatorPlan.selected.some((item) => item.skillKey === 'lineage_impact_analysis'))
+for (const item of investigatorPlan.selected) {
+  const policy = getGovernedAgentPolicy('investigator_agent')
+  assert.ok(item.requiredTools.every((tool) => policy.toolAllowlist.includes(tool)))
+  assert.equal(item.mayMutate, false)
+}
+
+const blockedRemediation = planGovernedSkills({
+  agentKey: 'data_quality_agent',
+  objective: 'Diagnose the quality failure and propose remediation to fix the violated rule.',
+  allowMutatingSkills: false,
+})
+assert.ok(blockedRemediation.selected.some((item) => item.skillKey === 'quality_rule_analysis'))
+assert.ok(blockedRemediation.rejected.some((item) => item.skillKey === 'quality_remediation_proposal' && item.reason === 'MUTATION_NOT_REQUESTED'))
+
+const allowedRemediation = planGovernedSkills({
+  agentKey: 'data_quality_agent',
+  objective: 'Propose remediation for the quality failure.',
+  allowMutatingSkills: true,
+})
+const remediation = allowedRemediation.selected.find((item) => item.skillKey === 'quality_remediation_proposal')
+assert.ok(remediation)
+assert.equal(remediation?.humanApprovalRequired, true)
+
+const supportPlan = planGovernedSkills({
+  agentKey: 'support_agent',
+  objective: 'Troubleshoot this operational support case and inspect lineage impact.',
+})
+assert.ok(supportPlan.selected.some((item) => item.skillKey === 'support_case_investigation'))
+assert.ok(supportPlan.selected.every((item) => item.mayMutate === false))
+
+const noObjective = planGovernedSkills({ agentKey: 'architect_agent', objective: '   ' })
+assert.equal(noObjective.unresolvedReason, 'EMPTY_OBJECTIVE')
+assert.deepEqual(noObjective.selected, [])
+
+console.log('Agent excellence contracts, bounded recursion, governed skill planning, authority checks, evaluation requirements, and self-promotion prohibition verified.')
