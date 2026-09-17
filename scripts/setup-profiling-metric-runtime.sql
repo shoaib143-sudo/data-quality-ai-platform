@@ -38,7 +38,23 @@ begin
   values (v_dataset_id,v_project_id,'Synthetic metric runtime','Disposable metric execution dataset','public.profiling_metric_runtime_fixture',v_data_source_id,jsonb_build_object('synthetic',true));
 
   insert into catalog.dataset_versions(id,dataset_id,version_number,source_uri,schema_hash,row_count,column_count,status,metadata)
-  values (v_version_id,v_dataset_id,1,'table://public/profiling_metric_runtime_fixture','metric-runtime-schema',5,4,'AVAILABLE',jsonb_build_object('synthetic',true));
+  values (
+    v_version_id,
+    v_dataset_id,
+    1,
+    'table://public/profiling_metric_runtime_fixture',
+    'metric-runtime-schema',
+    5,
+    4,
+    'AVAILABLE',
+    jsonb_build_object(
+      'synthetic', true,
+      'source_row_count', (select count(*) from public.profiling_metric_runtime_fixture),
+      'source_row_count_authority', 'SOURCE_OBSERVED',
+      'source_size_bytes', pg_total_relation_size('public.profiling_metric_runtime_fixture'::regclass),
+      'source_size_bytes_authority', 'SOURCE_OBSERVED'
+    )
+  );
 
   insert into catalog.source_scopes(id,project_id,source_id,name,status)
   values (v_scope_id,v_project_id,v_data_source_id,'synthetic-default','ACTIVE');
