@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-const files = process.argv.slice(2)
-
 const deployablePrefixes = [
   'app/',
   'components/',
@@ -20,8 +18,12 @@ const deployableExact = new Set([
   'vercel.json',
 ])
 
-const deployable = files.some((file) =>
-  deployableExact.has(file) || deployablePrefixes.some((prefix) => file.startsWith(prefix)),
-)
+export function requiresProductionPreview(files) {
+  return files.some((file) =>
+    deployableExact.has(file) || deployablePrefixes.some((prefix) => file.startsWith(prefix)),
+  )
+}
 
-process.stdout.write(deployable ? 'true' : 'false')
+if (import.meta.url === `file://${process.argv[1]}`) {
+  process.stdout.write(requiresProductionPreview(process.argv.slice(2)) ? 'true' : 'false')
+}
