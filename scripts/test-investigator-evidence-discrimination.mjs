@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 const { buildInvestigatorEvidenceAnalysis } = await import('../lib/agents/investigator-evidence-discrimination.ts')
+const { refineInvestigatorRca } = await import('../lib/agents/investigator-rca-refinement.ts')
 
 const analysis = buildInvestigatorEvidenceAnalysis({
   datasets: [
@@ -115,4 +116,15 @@ for (const hypothesis of analysis.hypotheses) {
   assert.ok(hypothesis.evidenceFamilies.length > 0)
 }
 
-console.log('Investigator hypotheses remain dataset-scoped, expose discriminating evidence needs, avoid uncalibrated probability claims, and preserve unresolved incidents.')
+const refinement = await refineInvestigatorRca(analysis)
+assert.ok(['CONFIDENCE_REACHED', 'ITERATION_BUDGET_EXHAUSTED'].includes(refinement.stopReason))
+assert.ok(refinement.iterations <= 8)
+assert.equal(refinement.toolCallsUsed, 0)
+assert.equal(refinement.handoffsUsed, 0)
+assert.equal(refinement.output.coverage.tested, refinement.iterations)
+assert.ok(refinement.output.probableCauses.every((cause) => cause.evidenceStrength === 'HIGH'))
+assert.ok(refinement.output.evidenceLimitations.every((cause) => cause.hypothesisKey === 'PROFILE_EXECUTION'))
+assert.ok(refinement.output.assessments.every((assessment) => assessment.evidence.length > 0))
+assert.ok(refinement.output.assessments.every((assessment) => assessment.discriminatingEvidenceNeeded.length > 0))
+
+console.log('Investigator hypotheses remain dataset-scoped and bounded RCA refinement tests competing candidates within the canonical recursion budget without uncalibrated probability claims.')
