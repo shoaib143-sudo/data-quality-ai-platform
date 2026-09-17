@@ -4,13 +4,23 @@ on:
   pull_request:
     paths:
       - 'supabase/migrations/20260912062000_certification_authorization_and_readiness.sql'
+      - 'app/api/agents/governance-orchestrator/handsfree-e2e/**'
+      - 'lib/auth/authorize-data-governance-admin.ts'
+      - 'lib/auth/require-api-user.ts'
       - 'scripts/verify-certification-authorization-readiness.mjs'
+      - 'scripts/verify-handsfree-e2e-admin-gate.mjs'
+      - 'scripts/verify-handsfree-cert-auth-contract.mjs'
       - '.github/workflows/certification-authorization-readiness.yml'
   push:
     branches: [main]
     paths:
       - 'supabase/migrations/20260912062000_certification_authorization_and_readiness.sql'
+      - 'app/api/agents/governance-orchestrator/handsfree-e2e/**'
+      - 'lib/auth/authorize-data-governance-admin.ts'
+      - 'lib/auth/require-api-user.ts'
       - 'scripts/verify-certification-authorization-readiness.mjs'
+      - 'scripts/verify-handsfree-e2e-admin-gate.mjs'
+      - 'scripts/verify-handsfree-cert-auth-contract.mjs'
       - '.github/workflows/certification-authorization-readiness.yml'
 
 permissions:
@@ -30,4 +40,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: node scripts/verify-certification-authorization-readiness.mjs
+      - run: node scripts/verify-handsfree-e2e-admin-gate.mjs
+      - run: node scripts/verify-handsfree-cert-auth-contract.mjs
       - run: pnpm exec tsc --noEmit
