@@ -45,11 +45,13 @@ const profileEvaluation = evaluateAgentSkillOutcome({
   evidenceRefs: ['metric-1'],
   invokedTools: ['profiling.source.read', 'profiling.schema.discover', 'profiling.metrics.execute'],
 })
-assert.equal(profileEvaluation.overallPass, true)
+assert.equal(profileEvaluation.structuralPass, true)
+assert.equal(profileEvaluation.overallPass, null, 'semantic correctness remains unknown without labeled evaluation')
 assert.deepEqual(profileEvaluation.missingOutputFields, [])
 assert.deepEqual(profileEvaluation.unauthorizedTools, [])
 assert.equal(profileEvaluation.metrics.find((metric) => metric.dimension === 'completeness')?.score, 1)
 assert.equal(profileEvaluation.metrics.find((metric) => metric.dimension === 'tool_correctness')?.pass, true)
+assert.equal(profileEvaluation.metrics.find((metric) => metric.dimension === 'correctness')?.pass, null)
 
 const incompleteProfile = evaluateAgentSkillOutcome({
   agentKey: 'profiling_agent',
@@ -58,6 +60,7 @@ const incompleteProfile = evaluateAgentSkillOutcome({
   evidenceRefs: [],
   invokedTools: ['profiling.source.read'],
 })
+assert.equal(incompleteProfile.structuralPass, false)
 assert.equal(incompleteProfile.overallPass, false)
 assert.ok(incompleteProfile.missingOutputFields.includes('evidence_refs'))
 assert.equal(incompleteProfile.metrics.find((metric) => metric.dimension === 'evidence_sufficiency')?.pass, false)
@@ -85,9 +88,12 @@ const investigatorEvaluation = evaluateAgentSkillOutcome({
     'remediation.history.read',
   ],
 })
-assert.equal(investigatorEvaluation.overallPass, true)
+assert.equal(investigatorEvaluation.structuralPass, true)
+assert.equal(investigatorEvaluation.overallPass, null)
 assert.equal(investigatorEvaluation.metrics.find((metric) => metric.dimension === 'confidence_calibration')?.pass, true)
 assert.equal(investigatorEvaluation.metrics.find((metric) => metric.dimension === 'correctness')?.score, null)
+assert.equal(investigatorEvaluation.metrics.find((metric) => metric.dimension === 'correctness')?.pass, null)
+assert.equal(investigatorEvaluation.metrics.find((metric) => metric.dimension === 'handoff_quality')?.pass, null)
 
 const unauthorized = evaluateAgentSkillOutcome({
   agentKey: 'support_agent',
@@ -102,6 +108,7 @@ const unauthorized = evaluateAgentSkillOutcome({
   evidenceRefs: ['run-1'],
   invokedTools: ['profiling.history.read', 'quality.incident.read', 'governance.issue.read', 'remediation.history.read', 'quality.rules.execute'],
 })
+assert.equal(unauthorized.structuralPass, false)
 assert.equal(unauthorized.overallPass, false)
 assert.deepEqual(unauthorized.unauthorizedTools, ['quality.rules.execute'])
 assert.equal(unauthorized.metrics.find((metric) => metric.dimension === 'authority_compliance')?.pass, false)
@@ -112,4 +119,4 @@ assert.throws(() => evaluateAgentSkillOutcome({
   output: {},
 }), /not authorized/)
 
-console.log('Skill-level evaluation bridge, deterministic structural outcome evaluator, authority checks, and privacy-safe evidence dimensions verified.')
+console.log('Skill-level evaluation bridge preserves unknown semantic dimensions, evaluates structural outcomes deterministically, and enforces authority safely.')
