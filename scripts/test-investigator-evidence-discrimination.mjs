@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 const { buildInvestigatorEvidenceAnalysis } = await import('../lib/agents/investigator-evidence-discrimination.ts')
 const { refineInvestigatorRca } = await import('../lib/agents/investigator-rca-refinement.ts')
+const { enrichInvestigatorOutputWithBoundedRca } = await import('../lib/agents/investigator-rca-output-enrichment.ts')
 
 const analysis = buildInvestigatorEvidenceAnalysis({
   datasets: [
@@ -128,4 +129,27 @@ assert.ok(refinement.output.evidenceLimitations.every((cause) => cause.hypothesi
 assert.ok(refinement.output.assessments.every((assessment) => assessment.evidence.length > 0))
 assert.ok(refinement.output.assessments.every((assessment) => assessment.discriminatingEvidenceNeeded.length > 0))
 
-console.log('Investigator hypotheses remain dataset-scoped and bounded RCA refinement tests competing candidates within the canonical recursion budget without uncalibrated probability claims.')
+const specialistOutput = {
+  agent: { key: 'investigator_agent' },
+  specialist: {
+    hypotheses: analysis.hypotheses,
+    recommendations: analysis.recommendations,
+    unresolved: analysis.unresolved,
+    evidence: { datasetEvidence: analysis.datasets },
+  },
+}
+const enriched = await enrichInvestigatorOutputWithBoundedRca(specialistOutput)
+assert.ok(enriched.rcaRefinement)
+assert.equal(enriched.rcaRefinement.recursion.confidenceSemantics, 'COVERAGE_COMPLETION_ONLY')
+assert.equal(enriched.rcaRefinement.recursion.toolCallsUsed, 0)
+assert.equal(enriched.rcaRefinement.recursion.handoffsUsed, 0)
+assert.ok(enriched.rcaRefinement.recursion.iterations <= 8)
+assert.ok(enriched.rcaRefinement.probableCauses.every((cause) => cause.evidenceStrength === 'HIGH'))
+
+const idempotent = await enrichInvestigatorOutputWithBoundedRca(enriched)
+assert.equal(idempotent, enriched, 'already enriched durable output must not re-run recursive refinement')
+
+const noHypotheses = { agent: { key: 'investigator_agent' }, specialist: { hypotheses: [], evidence: { datasetEvidence: [] } } }
+assert.equal(await enrichInvestigatorOutputWithBoundedRca(noHypotheses), noHypotheses)
+
+console.log('Investigator hypotheses remain dataset-scoped, bounded RCA refinement is durably enrichable and idempotent, and causal probability is never fabricated.')
