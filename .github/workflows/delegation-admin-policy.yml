@@ -8,10 +8,13 @@ on:
       - 'app/api/agent-approvals/authorities/**'
       - 'lib/governance/delegation-admin-service.ts'
       - 'lib/governance/agent-approval-service.ts'
+      - 'lib/profiling/**'
       - 'scripts/verify-delegation-admin-policy.mjs'
       - 'scripts/assert-direct-approval-authority-assignment.sql'
       - 'scripts/assert-direct-approval-authority-expiry-reassignment.sql'
       - 'scripts/assert-profiling-persistence-lifecycle.sql'
+      - 'scripts/setup-profiling-metric-runtime.sql'
+      - 'scripts/test-profiling-metric-runtime.ts'
       - 'scripts/test-direct-approval-authority-concurrency.sh'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
@@ -24,9 +27,13 @@ on:
       - 'app/api/agent-approvals/authorities/**'
       - 'lib/governance/delegation-admin-service.ts'
       - 'lib/governance/agent-approval-service.ts'
+      - 'lib/profiling/**'
       - 'scripts/verify-delegation-admin-policy.mjs'
       - 'scripts/assert-direct-approval-authority-assignment.sql'
       - 'scripts/assert-direct-approval-authority-expiry-reassignment.sql'
+      - 'scripts/assert-profiling-persistence-lifecycle.sql'
+      - 'scripts/setup-profiling-metric-runtime.sql'
+      - 'scripts/test-profiling-metric-runtime.ts'
       - 'scripts/test-direct-approval-authority-concurrency.sh'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
@@ -50,7 +57,7 @@ jobs:
 
   authority-runtime:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -62,7 +69,10 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - name: Reconstruct database and execute direct authority matrix
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Reconstruct database and execute direct authority and profiling matrices
         shell: bash
         run: |
           set -euo pipefail
@@ -91,9 +101,18 @@ jobs:
           pnpm dlx supabase@2.117.0 start
           trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
           pnpm dlx supabase@2.117.0 db reset --local
-          DB_URL="$(pnpm dlx supabase@2.117.0 status -o env | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
-          test -n "$DB_URL"
+          eval "$(pnpm dlx supabase@2.117.0 status -o env)"
+          test -n "${DB_URL:-}"
+          test -n "${API_URL:-}"
+          test -n "${ANON_KEY:-}"
+          test -n "${SERVICE_ROLE_KEY:-}"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-assignment.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-expiry-reassignment.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-profiling-persistence-lifecycle.sql"
           DB_URL="$DB_URL" bash "$ROOT/scripts/test-direct-approval-authority-concurrency.sh"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/setup-profiling-metric-runtime.sql"
+          cd "$ROOT"
+          NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY" \
+          SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+          pnpm dlx tsx@4.20.6 scripts/test-profiling-metric-runtime.ts
