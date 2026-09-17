@@ -1,8 +1,17 @@
-import type { EvaluationEngine, EvaluationReceipt } from '../ai/evaluation-engine'
+import type {
+  EvaluationEngine,
+  EvaluationReceipt,
+  EvaluationScorecardMetric,
+} from '../ai/evaluation-engine'
 import {
   getAgentExcellenceContract,
   type AgentEvaluationDimension,
 } from './agent-excellence-contracts'
+import {
+  evaluateAgentSkillOutcome,
+  type AgentSkillOutcomeInput,
+  type AgentSkillOutcomeEvaluation,
+} from './agent-skill-outcome-evaluator'
 import {
   getGovernedSkill,
   type GovernedSkillKey,
@@ -25,11 +34,42 @@ export type AgentSkillEvaluationInput = {
   metadata?: Record<string, unknown>
 }
 
-export function assertAgentSkillEvaluationAllowed(input: Pick<AgentSkillEvaluationInput, 'agentKey' | 'skillKey' | 'dimension'>): void {
-  const skill = getGovernedSkill(input.skillKey)
-  if (!skill.eligibleAgents.includes(input.agentKey)) {
-    throw new Error(`Skill ${input.skillKey} is not authorized for agent ${input.agentKey}`)
+export type AgentSkillOutcomeEvaluationRecordInput = AgentSkillOutcomeInput & {
+  projectId: string
+  agentRunId?: string | null
+  correlationId?: string | null
+  evaluatorType?: string
+  observedAt?: string
+  metadata?: Record<string, unknown>
+}
+
+export type AgentSkillOutcomeEvaluationRecord = {
+  evaluation: AgentSkillOutcomeEvaluation
+  receipts: EvaluationReceipt[]
+}
+
+export type AgentSkillScorecard = {
+  projectId: string
+  agentKey: GovernedAgentKey
+  skillKey: GovernedSkillKey
+  capability: string
+  metrics: EvaluationScorecardMetric[]
+}
+
+function assertAgentSkillAuthorized(agentKey: GovernedAgentKey, skillKey: GovernedSkillKey): void {
+  const skill = getGovernedSkill(skillKey)
+  if (!skill.eligibleAgents.includes(agentKey)) {
+    throw new Error(`Skill ${skillKey} is not authorized for agent ${agentKey}`)
   }
+}
+
+export function agentSkillCapabilityKey(agentKey: GovernedAgentKey, skillKey: GovernedSkillKey): string {
+  assertAgentSkillAuthorized(agentKey, skillKey)
+  return `agent_skill:${agentKey}:${skillKey}`
+}
+
+export function assertAgentSkillEvaluationAllowed(input: Pick<AgentSkillEvaluationInput, 'agentKey' | 'skillKey' | 'dimension'>): void {
+  assertAgentSkillAuthorized(input.agentKey, input.skillKey)
 
   const contract = getAgentExcellenceContract(input.agentKey)
   if (!contract.requiredEvaluationDimensions.includes(input.dimension)) {
@@ -46,7 +86,7 @@ export async function recordAgentSkillEvaluation(
   return engine.record({
     projectId: input.projectId,
     evaluationType: 'AGENT_SKILL',
-    capability: `agent_skill:${input.skillKey}`,
+    capability: agentSkillCapabilityKey(input.agentKey, input.skillKey),
     metricName: input.dimension,
     score: input.score,
     pass: input.pass,
@@ -63,4 +103,74 @@ export async function recordAgentSkillEvaluation(
     },
     metadata: input.metadata,
   })
+}
+
+export async function readAgentSkillScorecard(
+  engine: EvaluationEngine,
+  input: { projectId: string; agentKey: GovernedAgentKey; skillKey: GovernedSkillKey },
+): Promise<AgentSkillScorecard> {
+  const capability = agentSkillCapabilityKey(input.agentKey, input.skillKey)
+  const contract = getAgentExcellenceContract(input.agentKey)
+  const requiredDimensions = new Set<AgentEvaluationDimension>(contract.requiredEvaluationDimensions)
+  const metrics = await engine.scorecard({
+    projectId: input.projectId,
+    evaluationType: 'AGENT_SKILL',
+    capability,
+  })
+
+  for (const metric of metrics) {
+    if (metric.evaluationType !== 'AGENT_SKILL') {
+      throw new Error(`Skill scorecard returned unexpected evaluation type ${metric.evaluationType}`)
+    }
+    if (metric.capability !== capability) {
+      throw new Error(`Skill scorecard returned unexpected capability ${metric.capability ?? 'null'}`)
+    }
+    if (!requiredDimensions.has(metric.metricName as AgentEvaluationDimension)) {
+      throw new Error(`Skill scorecard returned out-of-contract metric ${metric.metricName} for ${input.agentKey}`)
+    }
+  }
+
+  return {
+    projectId: input.projectId,
+    agentKey: input.agentKey,
+    skillKey: input.skillKey,
+    capability,
+    metrics: [...metrics].sort((left, right) => left.metricName.localeCompare(right.metricName)),
+  }
+}
+
+export async function recordAgentSkillOutcomeEvaluation(
+  engine: EvaluationEngine,
+  input: AgentSkillOutcomeEvaluationRecordInput,
+): Promise<AgentSkillOutcomeEvaluationRecord> {
+  const evaluation = evaluateAgentSkillOutcome(input)
+  const receipts: EvaluationReceipt[] = []
+
+  for (const metric of evaluation.metrics) {
+    receipts.push(await recordAgentSkillEvaluation(engine, {
+      projectId: input.projectId,
+      agentKey: input.agentKey,
+      skillKey: input.skillKey,
+      dimension: metric.dimension,
+      score: metric.score,
+      pass: metric.pass,
+      agentRunId: input.agentRunId,
+      correlationId: input.correlationId,
+      evaluatorType: input.evaluatorType ?? 'DETERMINISTIC_SKILL_OUTCOME',
+      evaluatorVersion: evaluation.evaluatorVersion,
+      evidenceRefs: [...(input.evidenceRefs ?? [])],
+      observedAt: input.observedAt,
+      metadata: {
+        ...input.metadata,
+        structural_pass: evaluation.structuralPass,
+        overall_pass: evaluation.overallPass,
+        missing_output_fields: evaluation.missingOutputFields,
+        unauthorized_tools: evaluation.unauthorizedTools,
+        metric_evidence: metric.evidence,
+        rationale: metric.rationale,
+      },
+    }))
+  }
+
+  return { evaluation, receipts }
 }
