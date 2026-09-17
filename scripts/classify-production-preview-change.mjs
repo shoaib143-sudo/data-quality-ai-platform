@@ -11,10 +11,22 @@ const deployablePrefixes = [
 const deployableExact = new Set([
   'package.json',
   'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'pnpm-workspace.yml',
+  'tsconfig.json',
   'next.config.js',
   'next.config.mjs',
   'next.config.ts',
+  'postcss.config.js',
+  'postcss.config.mjs',
+  'postcss.config.ts',
+  'tailwind.config.js',
+  'tailwind.config.mjs',
+  'tailwind.config.ts',
   'middleware.ts',
+  'proxy.ts',
+  'instrumentation.ts',
+  'instrumentation-client.ts',
   'vercel.json',
 ])
 
