@@ -15,23 +15,20 @@ declare
   v_finding_count integer;
   v_definition record;
 begin
-  select id into v_project_id from app.projects order by created_at asc limit 1;
-  if v_project_id is null then
-    insert into app.organizations(name,slug,metadata)
-    values ('Profiling runtime acceptance','profiling-runtime-' || left(gen_random_uuid()::text,8),jsonb_build_object('synthetic',true))
-    returning id into v_organization_id;
+  insert into app.organizations(name,slug,metadata)
+  values ('Profiling runtime acceptance','profiling-runtime-' || left(gen_random_uuid()::text,8),jsonb_build_object('synthetic',true))
+  returning id into v_organization_id;
 
-    insert into app.projects(organization_id,name,slug,description,metadata)
-    values (v_organization_id,'Profiling runtime acceptance','profiling-runtime-' || left(gen_random_uuid()::text,8),'Disposable profiling lifecycle fixture',jsonb_build_object('synthetic',true))
-    returning id into v_project_id;
-  end if;
+  insert into app.projects(organization_id,name,slug,description,metadata)
+  values (v_organization_id,'Profiling runtime acceptance','profiling-runtime-' || left(gen_random_uuid()::text,8),'Disposable profiling lifecycle fixture',jsonb_build_object('synthetic',true))
+  returning id into v_project_id;
 
   insert into catalog.datasets(project_id,name,description,source_identifier,metadata)
   values (v_project_id,'Synthetic profiling lifecycle','Disposable runtime acceptance dataset','runtime://synthetic',jsonb_build_object('synthetic',true))
   returning id into v_dataset_id;
 
   insert into catalog.dataset_versions(dataset_id,version_number,source_uri,schema_hash,row_count,column_count,status,metadata)
-  values (v_dataset_id,1,'runtime://synthetic/v1','runtime-schema',2,1,'READY',jsonb_build_object('synthetic',true))
+  values (v_dataset_id,1,'runtime://synthetic/v1','runtime-schema',2,1,'AVAILABLE',jsonb_build_object('synthetic',true))
   returning id into v_version_id;
 
   insert into profiling.profile_runs(dataset_version_id,status,engine_name,engine_version,row_count,column_count,schema_hash,summary)
