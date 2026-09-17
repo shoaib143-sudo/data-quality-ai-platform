@@ -63,7 +63,7 @@ export function evaluateAgentSkillOutcome(input: AgentSkillOutcomeInput): AgentS
   const evidenceRefs = unique(input.evidenceRefs ?? [])
   const authorityViolations = unique(input.authorityViolations ?? [])
   const unauthorizedTools = invokedTools.filter((tool) => !policy.toolAllowlist.includes(tool))
-  const missingOutputFields = skill.outputContract.filter((field) => !present(input.output[field]))
+  const missingOutputFields = skill.outputContract.filter((field) => !Object.prototype.hasOwnProperty.call(input.output, field))
   const missingRequiredTools = requiredTools.filter((tool) => !invokedTools.includes(tool))
 
   const metrics: AgentSkillOutcomeMetric[] = []
@@ -79,7 +79,7 @@ export function evaluateAgentSkillOutcome(input: AgentSkillOutcomeInput): AgentS
       evidence: missingOutputFields,
       rationale: missingOutputFields.length
         ? `Missing required skill output fields: ${missingOutputFields.join(', ')}`
-        : 'All required skill output fields are present.',
+        : 'All required skill output fields are declared, including intentionally empty or null fields.',
     })
   }
 
