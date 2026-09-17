@@ -1,3 +1,4 @@
+import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
 
 const { buildInvestigatorEvidenceAnalysis } = await import('../lib/agents/investigator-evidence-discrimination.ts')
