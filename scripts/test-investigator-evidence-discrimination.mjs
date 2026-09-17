@@ -1,9 +1,16 @@
 import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 
 const { buildInvestigatorEvidenceAnalysis } = await import('../lib/agents/investigator-evidence-discrimination.ts')
 const { refineInvestigatorRca } = await import('../lib/agents/investigator-rca-refinement.ts')
 const { enrichInvestigatorOutputWithBoundedRca } = await import('../lib/agents/investigator-rca-output-enrichment.ts')
+
+const workerSource = fs.readFileSync('lib/agents/governance-job-worker.ts', 'utf8')
+assert.ok(workerSource.includes("import { enrichInvestigatorOutputWithBoundedRca } from '@/lib/agents/investigator-rca-output-enrichment'"))
+assert.ok(workerSource.includes("if (agentKey === 'investigator_agent') {\n    specialistOutput = await enrichInvestigatorOutputWithBoundedRca(specialistOutput)\n  }"))
+assert.ok(workerSource.indexOf('enrichInvestigatorOutputWithBoundedRca(specialistOutput)') < workerSource.indexOf('persistInvestigatorRiskAssessment({'), 'bounded RCA refinement must happen before predictive risk persistence')
+assert.ok(workerSource.indexOf('enrichInvestigatorOutputWithBoundedRca(specialistOutput)') < workerSource.indexOf('enrichGovernedAgentWithMemory({'), 'bounded RCA refinement must happen before memory enrichment')
 
 const analysis = buildInvestigatorEvidenceAnalysis({
   datasets: [
@@ -152,4 +159,4 @@ assert.equal(idempotent, enriched, 'already enriched durable output must not re-
 const noHypotheses = { agent: { key: 'investigator_agent' }, specialist: { hypotheses: [], evidence: { datasetEvidence: [] } } }
 assert.equal(await enrichInvestigatorOutputWithBoundedRca(noHypotheses), noHypotheses)
 
-console.log('Investigator hypotheses remain dataset-scoped, bounded RCA refinement is durably enrichable and idempotent, and causal probability is never fabricated.')
+console.log('Investigator hypotheses remain dataset-scoped, durable worker wiring is verified, bounded RCA enrichment is idempotent, and causal probability is never fabricated.')
