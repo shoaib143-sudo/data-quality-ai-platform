@@ -11,6 +11,7 @@ on:
       - 'scripts/verify-delegation-admin-policy.mjs'
       - 'scripts/assert-direct-approval-authority-assignment.sql'
       - 'scripts/assert-direct-approval-authority-expiry-reassignment.sql'
+      - 'scripts/assert-profiling-persistence-lifecycle.sql'
       - 'scripts/test-direct-approval-authority-concurrency.sh'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
@@ -94,4 +95,5 @@ jobs:
           test -n "$DB_URL"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-assignment.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-expiry-reassignment.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-profiling-persistence-lifecycle.sql"
           DB_URL="$DB_URL" bash "$ROOT/scripts/test-direct-approval-authority-concurrency.sh"
