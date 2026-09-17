@@ -9,9 +9,9 @@ import {
 const workflowRoot = path.resolve('.github/workflows')
 const failures = []
 const workflowFiles = (await readdir(workflowRoot)).filter(name => /\.ya?ml$/.test(name)).sort()
-// 132 is the exact governed ceiling after adding the dedicated Storage R2 Assurance workflow.
+// 133 is the exact governed ceiling after adding the dedicated secret-safe R2 live certification workflow.
 // Keep this fail-closed: any additional workflow still requires an explicit governance change.
-const GOVERNED_WORKFLOW_CEILING = 132
+const GOVERNED_WORKFLOW_CEILING = 133
 if (workflowFiles.length > GOVERNED_WORKFLOW_CEILING) {
   failures.push(`workflow count ${workflowFiles.length} exceeds the governed ceiling of ${GOVERNED_WORKFLOW_CEILING}`)
 }
