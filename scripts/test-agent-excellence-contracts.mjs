@@ -4,7 +4,9 @@ import fs from 'node:fs'
 
 const { GOVERNED_AGENT_KEYS, getGovernedAgentPolicy } = await import('../lib/agents/governed-agent-registry.ts')
 const { planGovernedSkills } = await import('../lib/agents/governed-skill-planner.ts')
+const { enrichGovernedOutputWithSkillPlan } = await import('../lib/agents/governed-skill-plan-output.ts')
 const source = fs.readFileSync('lib/agents/agent-excellence-contracts.ts', 'utf8')
+const workerSource = fs.readFileSync('lib/agents/governance-job-worker.ts', 'utf8')
 
 for (const key of GOVERNED_AGENT_KEYS) {
   assert.ok(source.includes(`${key}: {`), `missing excellence contract for ${key}`)
@@ -34,6 +36,9 @@ for (const required of [
 
 assert.equal((source.match(/maySelfPromoteChanges: false/g) ?? []).length >= GOVERNED_AGENT_KEYS.length, true)
 assert.equal((source.match(/mayProposeSkillImprovements: true/g) ?? []).length >= GOVERNED_AGENT_KEYS.length, true)
+assert.ok(workerSource.includes("import { enrichGovernedOutputWithSkillPlan } from '@/lib/agents/governed-skill-plan-output'"))
+assert.ok(workerSource.includes('specialistOutput = enrichGovernedOutputWithSkillPlan({'))
+assert.ok(workerSource.indexOf('enrichGovernedOutputWithSkillPlan({') < workerSource.indexOf('enrichGovernedAgentWithMemory({'))
 
 const investigatorPlan = planGovernedSkills({
   agentKey: 'investigator_agent',
@@ -73,8 +78,36 @@ const supportPlan = planGovernedSkills({
 assert.ok(supportPlan.selected.some((item) => item.skillKey === 'support_case_investigation'))
 assert.ok(supportPlan.selected.every((item) => item.mayMutate === false))
 
+const durableOutput = enrichGovernedOutputWithSkillPlan({
+  agentKey: 'data_quality_agent',
+  objective: 'Diagnose the quality failure and propose remediation to fix the violated rule.',
+  output: { agent: { key: 'data_quality_agent' } },
+})
+assert.ok(durableOutput.skillPlan)
+assert.ok(durableOutput.skillPlan.selected.some((item) => item.skillKey === 'quality_rule_analysis'))
+assert.ok(durableOutput.skillPlan.rejected.some((item) => item.skillKey === 'quality_remediation_proposal' && item.reason === 'MUTATION_NOT_REQUESTED'))
+assert.equal(durableOutput.skillPlan.executionPolicy.planIsAdvisory, true)
+assert.equal(durableOutput.skillPlan.executionPolicy.autoExecuteAdditionalSkills, false)
+assert.equal(durableOutput.skillPlan.executionPolicy.mutationSkillsAllowed, false)
+assert.equal(durableOutput.skillPlan.executionPolicy.freshAuthorizationRequiredBeforeAnyAdditionalExecution, true)
+
+const sameDurableOutput = enrichGovernedOutputWithSkillPlan({
+  agentKey: 'data_quality_agent',
+  objective: 'Different quality objective that must not replace a persisted plan.',
+  output: durableOutput,
+})
+assert.equal(sameDurableOutput, durableOutput, 'durable retries must preserve the original governed skill plan')
+
+const emptyOutput = { agent: { key: 'architect_agent' } }
+assert.equal(enrichGovernedOutputWithSkillPlan({ agentKey: 'architect_agent', objective: '  ', output: emptyOutput }), emptyOutput)
+assert.throws(() => enrichGovernedOutputWithSkillPlan({
+  agentKey: 'unknown_agent',
+  objective: 'inspect quality',
+  output: {},
+}), /Unknown governed agent key/)
+
 const noObjective = planGovernedSkills({ agentKey: 'architect_agent', objective: '   ' })
 assert.equal(noObjective.unresolvedReason, 'EMPTY_OBJECTIVE')
 assert.deepEqual(noObjective.selected, [])
 
-console.log('Agent excellence contracts, bounded recursion, governed skill planning, authority checks, evaluation requirements, and self-promotion prohibition verified.')
+console.log('Agent excellence contracts, durable governed skill plans, authority-safe mutation rejection, bounded recursion, and self-promotion prohibition verified.')
