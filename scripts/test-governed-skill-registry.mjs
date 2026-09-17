@@ -3,7 +3,10 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const { GOVERNED_AGENT_KEYS, getGovernedAgentPolicy } = await import('../lib/agents/governed-agent-registry.ts')
-const { proposeGovernedSkillImprovements } = await import('../lib/agents/governed-skill-improvement-proposals.ts')
+const {
+  proposeGovernedSkillImprovements,
+  proposeGovernedSkillImprovementsFromScorecard,
+} = await import('../lib/agents/governed-skill-improvement-proposals.ts')
 const source = fs.readFileSync('lib/agents/governed-skill-registry.ts', 'utf8')
 
 for (const key of GOVERNED_AGENT_KEYS) {
@@ -65,6 +68,56 @@ for (const proposal of proposals) {
   assert.ok(proposal.prohibitedActions.includes('EXPAND_TOOL_AUTHORITY'))
 }
 
+const scorecardProposals = proposeGovernedSkillImprovementsFromScorecard({
+  agentKey: 'investigator_agent',
+  skillKey: 'incident_root_cause_analysis',
+  metrics: [
+    {
+      evaluationType: 'AGENT_SKILL',
+      capability: 'agent_skill:investigator_agent:incident_root_cause_analysis',
+      metricName: 'grounding',
+      sampleCount: 5,
+      scoredCount: 5,
+      passCount: 3,
+      failCount: 2,
+      averageScore: 0.6,
+      evidenceResultIds: ['grounding-1', 'grounding-2'],
+      lastObservedAt: '2026-09-18T00:00:00Z',
+    },
+    {
+      evaluationType: 'AGENT_SKILL',
+      capability: 'agent_skill:investigator_agent:incident_root_cause_analysis',
+      metricName: 'evidence_sufficiency',
+      sampleCount: 5,
+      scoredCount: 5,
+      passCount: 4,
+      failCount: 1,
+      averageScore: 0.8,
+      evidenceResultIds: ['evidence-1'],
+      lastObservedAt: '2026-09-18T00:00:00Z',
+    },
+    {
+      evaluationType: 'AGENT_SKILL',
+      capability: 'agent_skill:investigator_agent:incident_root_cause_analysis',
+      metricName: 'correctness',
+      sampleCount: 3,
+      scoredCount: 3,
+      passCount: 3,
+      failCount: 0,
+      averageScore: 1,
+      evidenceResultIds: ['correctness-1'],
+      lastObservedAt: '2026-09-18T00:00:00Z',
+    },
+  ],
+})
+assert.equal(scorecardProposals.length, 1)
+assert.equal(scorecardProposals[0]?.category, 'EVIDENCE_GROUNDING')
+assert.deepEqual(scorecardProposals[0]?.evidenceDimensions.sort(), ['evidence_sufficiency', 'grounding'])
+assert.deepEqual(scorecardProposals[0]?.evidenceRefs.sort(), ['evidence-1', 'grounding-1', 'grounding-2'])
+assert.ok(scorecardProposals[0]?.rationale.some((value) => value.includes('2 of 5 measured grounding evaluations failed')))
+assert.equal(scorecardProposals[0]?.mayAutoApply, false)
+assert.equal(scorecardProposals[0]?.requiresHumanReview, true)
+
 assert.deepEqual(proposeGovernedSkillImprovements({
   agentKey: 'support_agent',
   skillKey: 'support_case_investigation',
@@ -86,4 +139,55 @@ assert.throws(() => proposeGovernedSkillImprovements({
   observations: [{ dimension: 'cost', pass: false, score: 0 }],
 }), /outside the excellence contract/)
 
-console.log('Governed reusable skill registry, tool authorization inheritance, mutation safeguards, and human-reviewed skill-improvement proposals verified.')
+assert.throws(() => proposeGovernedSkillImprovementsFromScorecard({
+  agentKey: 'investigator_agent',
+  skillKey: 'incident_root_cause_analysis',
+  metrics: [{
+    evaluationType: 'AGENT_SKILL',
+    capability: 'agent_skill:support_agent:incident_root_cause_analysis',
+    metricName: 'grounding',
+    sampleCount: 1,
+    scoredCount: 1,
+    passCount: 0,
+    failCount: 1,
+    averageScore: 0,
+    evidenceResultIds: [],
+    lastObservedAt: null,
+  }],
+}), /does not match governed capability/)
+
+assert.throws(() => proposeGovernedSkillImprovementsFromScorecard({
+  agentKey: 'investigator_agent',
+  skillKey: 'incident_root_cause_analysis',
+  metrics: [{
+    evaluationType: 'AGENT_SKILL',
+    capability: 'agent_skill:investigator_agent:incident_root_cause_analysis',
+    metricName: 'cost',
+    sampleCount: 1,
+    scoredCount: 1,
+    passCount: 0,
+    failCount: 1,
+    averageScore: 0,
+    evidenceResultIds: [],
+    lastObservedAt: null,
+  }],
+}), /outside the excellence contract/)
+
+assert.throws(() => proposeGovernedSkillImprovementsFromScorecard({
+  agentKey: 'investigator_agent',
+  skillKey: 'incident_root_cause_analysis',
+  metrics: [{
+    evaluationType: 'AGENT_SKILL',
+    capability: 'agent_skill:investigator_agent:incident_root_cause_analysis',
+    metricName: 'grounding',
+    sampleCount: 1,
+    scoredCount: 1,
+    passCount: 1,
+    failCount: 1,
+    averageScore: 0.5,
+    evidenceResultIds: [],
+    lastObservedAt: null,
+  }],
+}), /exceed sample count/)
+
+console.log('Governed skill improvement proposals consume agent-scoped measured scorecards without cross-agent contamination or autonomous self-promotion.')
