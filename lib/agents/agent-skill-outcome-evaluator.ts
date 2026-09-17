@@ -23,7 +23,7 @@ export type AgentSkillOutcomeInput = {
 export type AgentSkillOutcomeMetric = {
   dimension: AgentEvaluationDimension
   score: number | null
-  pass: boolean
+  pass: boolean | null
   evidence: string[]
   rationale: string
 }
@@ -35,7 +35,8 @@ export type AgentSkillOutcomeEvaluation = {
   metrics: AgentSkillOutcomeMetric[]
   missingOutputFields: string[]
   unauthorizedTools: string[]
-  overallPass: boolean
+  structuralPass: boolean
+  overallPass: boolean | null
 }
 
 function present(value: unknown) {
@@ -159,21 +160,22 @@ export function evaluateAgentSkillOutcome(input: AgentSkillOutcomeInput): AgentS
     metrics.push({
       dimension: 'correctness',
       score: null,
-      pass: true,
+      pass: null,
       evidence: evidenceRefs,
-      rationale: 'Correctness requires task-specific or labeled evaluation and is intentionally not fabricated by the structural evaluator.',
+      rationale: 'Correctness requires task-specific or labeled evaluation and is intentionally left unknown by the structural evaluator.',
     })
   }
 
   if (required.has('outcome_quality')) {
+    const structurallyComplete = missingOutputFields.length === 0
     metrics.push({
       dimension: 'outcome_quality',
       score: null,
-      pass: missingOutputFields.length === 0,
+      pass: structurallyComplete ? null : false,
       evidence: evidenceRefs,
-      rationale: missingOutputFields.length === 0
-        ? 'The structural output contract is complete; semantic outcome quality remains subject to downstream evaluation.'
-        : 'Outcome quality cannot pass structurally while required output fields are missing.',
+      rationale: structurallyComplete
+        ? 'The structural output contract is complete; semantic outcome quality remains unknown until downstream evaluation.'
+        : 'Outcome quality cannot pass while required output fields are missing.',
     })
   }
 
@@ -181,9 +183,9 @@ export function evaluateAgentSkillOutcome(input: AgentSkillOutcomeInput): AgentS
     metrics.push({
       dimension: 'handoff_quality',
       score: null,
-      pass: true,
+      pass: null,
       evidence: [],
-      rationale: 'Handoff quality is not inferable from a single skill outcome and remains unscored unless handoff evidence is evaluated separately.',
+      rationale: 'Handoff quality is not inferable from a single skill outcome and remains unknown unless handoff evidence is evaluated separately.',
     })
   }
 
@@ -199,11 +201,19 @@ export function evaluateAgentSkillOutcome(input: AgentSkillOutcomeInput): AgentS
   }
 
   if (required.has('latency')) {
-    metrics.push({ dimension: 'latency', score: null, pass: true, evidence: [], rationale: 'Latency requires runtime telemetry and is not fabricated from output structure.' })
+    metrics.push({ dimension: 'latency', score: null, pass: null, evidence: [], rationale: 'Latency requires runtime telemetry and remains unknown without measurement.' })
   }
   if (required.has('cost')) {
-    metrics.push({ dimension: 'cost', score: null, pass: true, evidence: [], rationale: 'Cost requires runtime telemetry and is not fabricated from output structure.' })
+    metrics.push({ dimension: 'cost', score: null, pass: null, evidence: [], rationale: 'Cost requires runtime telemetry and remains unknown without measurement.' })
   }
+
+  const measurable = metrics.filter((metric) => metric.pass !== null)
+  const structuralPass = measurable.every((metric) => metric.pass === true)
+  const overallPass = metrics.some((metric) => metric.pass === false)
+    ? false
+    : metrics.some((metric) => metric.pass === null)
+      ? null
+      : true
 
   return {
     evaluatorVersion: '1.0',
@@ -212,6 +222,7 @@ export function evaluateAgentSkillOutcome(input: AgentSkillOutcomeInput): AgentS
     metrics,
     missingOutputFields,
     unauthorizedTools,
-    overallPass: metrics.every((metric) => metric.pass),
+    structuralPass,
+    overallPass,
   }
 }
