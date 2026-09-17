@@ -123,6 +123,7 @@ const benchmark = {
   benchmarkId: 'benchmark-1',
   evaluatorId: 'independent-evaluation-service',
   evaluatorType: 'ADVERSARIAL_SUITE',
+  observedAt: '2026-09-18T00:30:00Z',
   candidateVersion: '1.1',
   baselineVersion: '1.0',
   caseCount: 40,
@@ -132,24 +133,27 @@ const benchmark = {
   adversarialFailures: 0,
   evidenceRefs: ['benchmark-result-1', 'benchmark-result-2'],
 }
-
-const reviewEligible = evaluateGovernedSkillPromotion({
+const promotionBase = {
   proposal: scorecardProposals[0],
   currentVersion: '1.0',
   candidateVersion: '1.1',
+  rollbackRef: 'rollback-plan-1',
   benchmark,
-})
+}
+
+const reviewEligible = evaluateGovernedSkillPromotion(promotionBase)
 assert.equal(reviewEligible.status, 'ELIGIBLE_FOR_HUMAN_REVIEW')
 assert.equal(reviewEligible.automaticPromotionAllowed, false)
 assert.equal(reviewEligible.automaticAuthorityExpansionAllowed, false)
 assert.equal(reviewEligible.rollbackRequired, true)
+assert.equal(reviewEligible.rollbackRef, 'rollback-plan-1')
+assert.equal(reviewEligible.benchmarkId, 'benchmark-1')
+assert.equal(reviewEligible.evaluatorId, 'independent-evaluation-service')
+assert.equal(reviewEligible.benchmarkObservedAt, '2026-09-18T00:30:00Z')
 assert.equal(reviewEligible.currentAuthorizationRequiredAtRelease, true)
 
 const approved = evaluateGovernedSkillPromotion({
-  proposal: scorecardProposals[0],
-  currentVersion: '1.0',
-  candidateVersion: '1.1',
-  benchmark,
+  ...promotionBase,
   review: {
     reviewerId: 'reviewer-1',
     decision: 'APPROVE_CONTROLLED_RELEASE',
@@ -161,12 +165,10 @@ const approved = evaluateGovernedSkillPromotion({
 assert.equal(approved.status, 'APPROVED_FOR_CONTROLLED_RELEASE')
 assert.equal(approved.automaticPromotionAllowed, false)
 assert.equal(approved.reviewEvidenceRef, 'human-review-1')
+assert.equal(approved.rollbackRef, 'rollback-plan-1')
 
 const rejected = evaluateGovernedSkillPromotion({
-  proposal: scorecardProposals[0],
-  currentVersion: '1.0',
-  candidateVersion: '1.1',
-  benchmark,
+  ...promotionBase,
   review: {
     reviewerId: 'reviewer-2',
     decision: 'REJECT',
@@ -179,9 +181,7 @@ assert.equal(rejected.status, 'REJECTED')
 assert.equal(rejected.automaticPromotionAllowed, false)
 
 const regressed = evaluateGovernedSkillPromotion({
-  proposal: scorecardProposals[0],
-  currentVersion: '1.0',
-  candidateVersion: '1.1',
+  ...promotionBase,
   benchmark: { ...benchmark, candidateScore: 0.79, authorityViolations: 1, adversarialFailures: 1 },
 })
 assert.equal(regressed.status, 'NOT_READY')
@@ -191,26 +191,41 @@ assert.ok(regressed.reasons.includes('AUTHORITY_VIOLATION_DETECTED'))
 assert.ok(regressed.reasons.includes('ADVERSARIAL_FAILURE_DETECTED'))
 
 assert.throws(() => evaluateGovernedSkillPromotion({
-  proposal: scorecardProposals[0],
-  currentVersion: '1.0',
-  candidateVersion: '1.1',
+  ...promotionBase,
   benchmark: { ...benchmark, evaluatorId: 'investigator_agent' },
 }), /evaluator must be independent/)
 
 assert.throws(() => evaluateGovernedSkillPromotion({
-  proposal: scorecardProposals[0],
-  currentVersion: '1.0',
+  ...promotionBase,
   candidateVersion: '1.0',
   benchmark: { ...benchmark, candidateVersion: '1.0' },
 }), /candidateVersion must differ/)
 
 assert.throws(() => evaluateGovernedSkillPromotion({
-  proposal: scorecardProposals[0],
-  currentVersion: '1.0',
-  candidateVersion: '1.1',
-  benchmark,
+  ...promotionBase,
+  rollbackRef: '   ',
+}), /rollbackRef is required/)
+
+assert.throws(() => evaluateGovernedSkillPromotion({
+  ...promotionBase,
+  benchmark: { ...benchmark, evidenceRefs: ['benchmark-result-1', 'benchmark-result-1'] },
+}), /benchmark evidence references must be unique/)
+
+assert.throws(() => evaluateGovernedSkillPromotion({
+  ...promotionBase,
   review: {
     reviewerId: 'reviewer-3',
+    decision: 'APPROVE_CONTROLLED_RELEASE',
+    rationale: 'Looks acceptable.',
+    reviewedAt: '2026-09-18T00:00:00Z',
+    evidenceRef: 'human-review-3',
+  },
+}), /human review must not predate benchmark evidence/)
+
+assert.throws(() => evaluateGovernedSkillPromotion({
+  ...promotionBase,
+  review: {
+    reviewerId: 'reviewer-4',
     decision: 'APPROVE_CONTROLLED_RELEASE',
     rationale: 'Looks acceptable.',
     reviewedAt: '2026-09-18T01:00:00Z',
@@ -293,4 +308,4 @@ assert.throws(() => proposeGovernedSkillImprovementsFromScorecard({
   metrics: [metric({ sampleCount: 1, scoredCount: 0, passCount: 0, failCount: 0, averageScore: 0.5 })],
 }), /average score requires scored samples/)
 
-console.log('Governed skill improvement proposals and promotion gates require consistent agent-scoped evidence, independent benchmarks, human review, rollback, and no autonomous promotion.')
+console.log('Governed skill improvement proposals and promotion gates require consistent agent-scoped evidence, independent chronological benchmarks, explicit rollback, human review, and no autonomous promotion.')
