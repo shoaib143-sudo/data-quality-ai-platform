@@ -1,4 +1,8 @@
-import type { EvaluationEngine, EvaluationReceipt } from '../ai/evaluation-engine'
+import type {
+  EvaluationEngine,
+  EvaluationReceipt,
+  EvaluationScorecardMetric,
+} from '../ai/evaluation-engine'
 import {
   getAgentExcellenceContract,
   type AgentEvaluationDimension,
@@ -44,11 +48,28 @@ export type AgentSkillOutcomeEvaluationRecord = {
   receipts: EvaluationReceipt[]
 }
 
-export function assertAgentSkillEvaluationAllowed(input: Pick<AgentSkillEvaluationInput, 'agentKey' | 'skillKey' | 'dimension'>): void {
-  const skill = getGovernedSkill(input.skillKey)
-  if (!skill.eligibleAgents.includes(input.agentKey)) {
-    throw new Error(`Skill ${input.skillKey} is not authorized for agent ${input.agentKey}`)
+export type AgentSkillScorecard = {
+  projectId: string
+  agentKey: GovernedAgentKey
+  skillKey: GovernedSkillKey
+  capability: string
+  metrics: EvaluationScorecardMetric[]
+}
+
+function assertAgentSkillAuthorized(agentKey: GovernedAgentKey, skillKey: GovernedSkillKey): void {
+  const skill = getGovernedSkill(skillKey)
+  if (!skill.eligibleAgents.includes(agentKey)) {
+    throw new Error(`Skill ${skillKey} is not authorized for agent ${agentKey}`)
   }
+}
+
+export function agentSkillCapabilityKey(agentKey: GovernedAgentKey, skillKey: GovernedSkillKey): string {
+  assertAgentSkillAuthorized(agentKey, skillKey)
+  return `agent_skill:${agentKey}:${skillKey}`
+}
+
+export function assertAgentSkillEvaluationAllowed(input: Pick<AgentSkillEvaluationInput, 'agentKey' | 'skillKey' | 'dimension'>): void {
+  assertAgentSkillAuthorized(input.agentKey, input.skillKey)
 
   const contract = getAgentExcellenceContract(input.agentKey)
   if (!contract.requiredEvaluationDimensions.includes(input.dimension)) {
@@ -65,7 +86,7 @@ export async function recordAgentSkillEvaluation(
   return engine.record({
     projectId: input.projectId,
     evaluationType: 'AGENT_SKILL',
-    capability: `agent_skill:${input.skillKey}`,
+    capability: agentSkillCapabilityKey(input.agentKey, input.skillKey),
     metricName: input.dimension,
     score: input.score,
     pass: input.pass,
@@ -82,6 +103,30 @@ export async function recordAgentSkillEvaluation(
     },
     metadata: input.metadata,
   })
+}
+
+export async function readAgentSkillScorecard(
+  engine: EvaluationEngine,
+  input: { projectId: string; agentKey: GovernedAgentKey; skillKey: GovernedSkillKey },
+): Promise<AgentSkillScorecard> {
+  const capability = agentSkillCapabilityKey(input.agentKey, input.skillKey)
+  const contract = getAgentExcellenceContract(input.agentKey)
+  const requiredDimensions = new Set(contract.requiredEvaluationDimensions)
+  const metrics = await engine.scorecard({
+    projectId: input.projectId,
+    evaluationType: 'AGENT_SKILL',
+    capability,
+  })
+
+  return {
+    projectId: input.projectId,
+    agentKey: input.agentKey,
+    skillKey: input.skillKey,
+    capability,
+    metrics: metrics
+      .filter((metric) => requiredDimensions.has(metric.metricName as AgentEvaluationDimension))
+      .sort((left, right) => left.metricName.localeCompare(right.metricName)),
+  }
 }
 
 export async function recordAgentSkillOutcomeEvaluation(
