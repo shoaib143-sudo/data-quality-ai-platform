@@ -16,6 +16,7 @@ grant select on table
   profiling.metric_definitions,
   profiling.dataset_execution_sources,
   profiling.sampling_policies,
+  profiling.data_quality_scores,
   catalog.dataset_versions,
   catalog.datasets,
   orchestration.capacity_policies
@@ -37,6 +38,7 @@ begin
     or not has_table_privilege('service_role', 'profiling.metric_definitions', 'SELECT')
     or not has_table_privilege('service_role', 'profiling.dataset_execution_sources', 'SELECT')
     or not has_table_privilege('service_role', 'profiling.sampling_policies', 'SELECT')
+    or not has_table_privilege('service_role', 'profiling.data_quality_scores', 'SELECT')
     or not has_table_privilege('service_role', 'catalog.dataset_versions', 'SELECT')
     or not has_table_privilege('service_role', 'catalog.datasets', 'SELECT')
     or not has_table_privilege('service_role', 'orchestration.capacity_policies', 'SELECT') then
@@ -47,7 +49,8 @@ begin
     or has_table_privilege('anon', 'profiling.profile_columns', 'SELECT')
     or has_table_privilege('anon', 'profiling.metric_definitions', 'SELECT')
     or has_table_privilege('anon', 'profiling.dataset_execution_sources', 'SELECT')
-    or has_table_privilege('anon', 'profiling.sampling_policies', 'SELECT') then
+    or has_table_privilege('anon', 'profiling.sampling_policies', 'SELECT')
+    or has_table_privilege('anon', 'profiling.data_quality_scores', 'SELECT') then
     raise exception 'PROFILING_EXECUTOR_ACL_INVALID: anonymous profiling reads were broadened';
   end if;
 end
