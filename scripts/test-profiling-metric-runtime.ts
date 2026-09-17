@@ -202,10 +202,17 @@ async function assertMissingObservedColumnScoring() {
   assert.equal(numeric((await scoreFor(MISSING_COLUMN_RUN_ID))?.completeness_score), 0.75)
 }
 
-await assertPrimaryExecution()
-await assertNoFindingsExecution()
-await assertFailureThenRetry()
-await assertEmptyDatasetScoring()
-await assertMissingObservedColumnScoring()
+async function main() {
+  await assertPrimaryExecution()
+  await assertNoFindingsExecution()
+  await assertFailureThenRetry()
+  await assertEmptyDatasetScoring()
+  await assertMissingObservedColumnScoring()
 
-console.log('Profiling deterministic metric runtime acceptance passed.')
+  console.log('Profiling deterministic metric runtime acceptance passed.')
+}
+
+main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})
