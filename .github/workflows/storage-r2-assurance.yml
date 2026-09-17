@@ -58,3 +58,37 @@ jobs:
           done < <(find lib/storage app/api/internal/storage app/api/datasets/source/upload-file -type f -name '*.ts' -print0)
       - name: Run storage contract, negative, adversarial, and cutover guards
         run: node --test tests/storage-*.test.mjs
+
+  live-production-certification:
+    if: github.event_name == 'workflow_dispatch'
+    needs: storage-contract-and-adversarial-guards
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Require certification configuration
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$APP_URL" || { echo "::error::R2_CERTIFICATION_APP_URL is not configured"; exit 1; }
+          test -n "$CRON_SECRET" || { echo "::error::CRON_SECRET is not configured"; exit 1; }
+      - name: Production R2 certification
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 60 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/internal/storage/certify-r2")"
+          printf '%s' "$response" | node -e '
+            let body="";
+            process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const result=JSON.parse(body);
+              const unsafe=["error","secret","token","credential"];
+              if (unsafe.some(k => Object.prototype.hasOwnProperty.call(result,k))) process.exit(2);
+              console.log(JSON.stringify(result,null,2));
+            });
+          '
