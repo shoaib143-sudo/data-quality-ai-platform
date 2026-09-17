@@ -4,6 +4,11 @@ import {
   type AgentEvaluationDimension,
 } from './agent-excellence-contracts'
 import {
+  evaluateAgentSkillOutcome,
+  type AgentSkillOutcomeInput,
+  type AgentSkillOutcomeEvaluation,
+} from './agent-skill-outcome-evaluator'
+import {
   getGovernedSkill,
   type GovernedSkillKey,
 } from './governed-skill-registry'
@@ -23,6 +28,20 @@ export type AgentSkillEvaluationInput = {
   evidenceRefs?: string[]
   observedAt?: string
   metadata?: Record<string, unknown>
+}
+
+export type AgentSkillOutcomeEvaluationRecordInput = AgentSkillOutcomeInput & {
+  projectId: string
+  agentRunId?: string | null
+  correlationId?: string | null
+  evaluatorType?: string
+  observedAt?: string
+  metadata?: Record<string, unknown>
+}
+
+export type AgentSkillOutcomeEvaluationRecord = {
+  evaluation: AgentSkillOutcomeEvaluation
+  receipts: EvaluationReceipt[]
 }
 
 export function assertAgentSkillEvaluationAllowed(input: Pick<AgentSkillEvaluationInput, 'agentKey' | 'skillKey' | 'dimension'>): void {
@@ -63,4 +82,40 @@ export async function recordAgentSkillEvaluation(
     },
     metadata: input.metadata,
   })
+}
+
+export async function recordAgentSkillOutcomeEvaluation(
+  engine: EvaluationEngine,
+  input: AgentSkillOutcomeEvaluationRecordInput,
+): Promise<AgentSkillOutcomeEvaluationRecord> {
+  const evaluation = evaluateAgentSkillOutcome(input)
+  const receipts: EvaluationReceipt[] = []
+
+  for (const metric of evaluation.metrics) {
+    receipts.push(await recordAgentSkillEvaluation(engine, {
+      projectId: input.projectId,
+      agentKey: input.agentKey,
+      skillKey: input.skillKey,
+      dimension: metric.dimension,
+      score: metric.score,
+      pass: metric.pass,
+      agentRunId: input.agentRunId,
+      correlationId: input.correlationId,
+      evaluatorType: input.evaluatorType ?? 'DETERMINISTIC_SKILL_OUTCOME',
+      evaluatorVersion: evaluation.evaluatorVersion,
+      evidenceRefs: [...(input.evidenceRefs ?? [])],
+      observedAt: input.observedAt,
+      metadata: {
+        ...input.metadata,
+        structural_pass: evaluation.structuralPass,
+        overall_pass: evaluation.overallPass,
+        missing_output_fields: evaluation.missingOutputFields,
+        unauthorized_tools: evaluation.unauthorizedTools,
+        metric_evidence: metric.evidence,
+        rationale: metric.rationale,
+      },
+    }))
+  }
+
+  return { evaluation, receipts }
 }
