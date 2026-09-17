@@ -93,7 +93,9 @@ function evidenceStrength(input: {
 const CONFIDENCE_BASIS = 'No calibrated probability is asserted. Evidence strength is deterministic from same-dataset linkage, direct incident anchoring, and independent evidence families.'
 
 export function buildInvestigatorEvidenceAnalysis(ctx: InvestigatorEvidenceContext): InvestigatorEvidenceAnalysis {
-  const datasetNames = new Map(ctx.datasets.map((row) => [String(row.id), text(row.name) || null]))
+  const datasetNames = new Map<string, string | null>(
+    ctx.datasets.map((row) => [String(row.id), text(row.name) || null] as const),
+  )
   const versionToDataset = new Map(
     ctx.versions
       .map((row) => [id(row.id), id(row.dataset_id)] as const)
