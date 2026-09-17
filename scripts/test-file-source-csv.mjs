@@ -52,3 +52,17 @@ test('identifier-like fields remain text and row truncation reports full count',
   assert.equal(parsed.rowCount,2)
   assert.equal(parsed.warnings.length,1)
 })
+
+test('suffix-like source headers cannot collide with generated duplicate names', () => {
+  assert.deepEqual(normalizeCsvHeaders(['name','name','name__2']),['name','name__2','name__2__2'])
+  const parsed=parseCsv('name,name,name__2\nprimary,alias,literal\n',10)
+  assert.deepEqual(parsed.rows,[{name:'primary',name__2:'alias',name__2__2:'literal'}])
+})
+
+test('blank fallback headers cannot collide with explicit fallback-like names', () => {
+  assert.deepEqual(normalizeCsvHeaders(['','column_1','']),['column_1','column_1__2','column_3'])
+})
+
+test('preexisting suffix claims force later duplicates to the next free suffix', () => {
+  assert.deepEqual(normalizeCsvHeaders(['name__2','name','name']),['name__2','name','name__3'])
+})
