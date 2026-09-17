@@ -60,7 +60,7 @@ async function scoreFor(runId: string) {
 
 async function runState(runId: string) {
   const { data, error } = await supabase.schema('profiling').from('profile_runs')
-    .select('status,summary,completed_at').eq('id', runId).single()
+    .select('status,summary,completed_at,row_count,column_count,schema_hash').eq('id', runId).single()
   assert.equal(error, null, error?.message)
   return data
 }
@@ -74,6 +74,13 @@ async function columnIds(runId: string) {
 
 function numeric(value: unknown) {
   return typeof value === 'number' ? value : Number(value)
+}
+
+function assertRunFacts(state: Awaited<ReturnType<typeof runState>>, rowCount: number) {
+  assert.equal(numeric(state.row_count), rowCount)
+  assert.equal(numeric(state.column_count), columns.length)
+  assert.equal(typeof state.schema_hash, 'string')
+  assert.ok(state.schema_hash.length > 0)
 }
 
 async function assertPrimaryExecution() {
@@ -116,6 +123,7 @@ async function assertPrimaryExecution() {
   assert.equal(numeric(score?.overall_score), 0.8333)
   assert.equal(state.status, 'COMPLETED')
   assert.ok(state.completed_at)
+  assertRunFacts(state, 5)
   assert.equal(numeric((state.summary as Record<string, any>)?.score?.overall_score), 0.8333)
 
   const uniqueMetricKeys = new Set(metrics.map((metric) => `${metric.profile_column_id ?? 'DATASET'}:${metric.metric_key}`))
@@ -145,6 +153,7 @@ async function assertNoFindingsExecution() {
   assert.equal(numeric(score?.uniqueness_score), 1)
   assert.equal(numeric(score?.validity_score), 0.75)
   assert.equal(numeric(score?.overall_score), 0.9167)
+  assertRunFacts(await runState(NO_FINDINGS_RUN_ID), 3)
 }
 
 async function assertFailureThenRetry() {
@@ -169,6 +178,7 @@ async function assertFailureThenRetry() {
   assert.equal(retry.status, 'COMPLETED')
   assert.ok((await metricsFor(FAILURE_RETRY_RUN_ID)).length > 0)
   assert.ok(await scoreFor(FAILURE_RETRY_RUN_ID))
+  assertRunFacts(await runState(FAILURE_RETRY_RUN_ID), 2)
 }
 
 async function assertEmptyDatasetScoring() {
@@ -181,6 +191,7 @@ async function assertEmptyDatasetScoring() {
   assert.equal(result.score.validity_score, 1)
   assert.equal(result.score.overall_score, 0.3333)
   assert.equal((await findingsFor(EMPTY_RUN_ID)).length, 0)
+  assertRunFacts(await runState(EMPTY_RUN_ID), 0)
 }
 
 async function assertMissingObservedColumnScoring() {
@@ -192,7 +203,9 @@ async function assertMissingObservedColumnScoring() {
     ],
   })
   assert.equal(result.status, 'COMPLETED')
-  assert.ok(Array.isArray((await runState(MISSING_COLUMN_RUN_ID)).summary?.profiling_warnings))
+  const state = await runState(MISSING_COLUMN_RUN_ID)
+  assert.ok(Array.isArray(state.summary?.profiling_warnings))
+  assertRunFacts(state, 2)
   const ids = await columnIds(MISSING_COLUMN_RUN_ID)
   const metrics = await metricsFor(MISSING_COLUMN_RUN_ID)
   const noteNullCount = metrics.find((metric) => metric.profile_column_id === ids.get('note') && metric.metric_key === 'null_count')
