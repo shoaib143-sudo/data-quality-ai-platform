@@ -9,7 +9,7 @@
     "bootstrap:opensearch": "node scripts/bootstrap-opensearch.mjs",
     "verify:data-plane-config": "node scripts/verify-data-plane-config.mjs",
     "verify:data-plane-operations": "node scripts/verify-data-plane-operations.mjs",
-    "verify:agent-portfolio": "node scripts/verify-governed-agent-portfolio.mjs && pnpm run verify:agent-excellence",
+    "verify:agent-portfolio": "node scripts/verify-governed-agent-portfolio.mjs && node --experimental-strip-types scripts/test-agent-classification-registry.mjs && pnpm run verify:agent-excellence",
     "verify:agent-specialization": "node scripts/verify-agent-specialization.mjs",
     "verify:agent-excellence": "node --experimental-strip-types scripts/test-agent-excellence-contracts.mjs && node --experimental-strip-types scripts/test-governed-skill-registry.mjs && node --experimental-strip-types scripts/test-agent-skill-evaluation.mjs && node --experimental-strip-types scripts/test-bounded-recursion-runtime.mjs && node --experimental-strip-types scripts/test-agent-excellence-runtime.mjs",
     "verify:agent-memory-learning": "node scripts/verify-agent-memory-learning.mjs",
