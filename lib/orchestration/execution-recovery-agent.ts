@@ -142,10 +142,14 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
   ])
   const readinessFromError = object(error.readiness)
   const readiness = Object.keys(readinessFromError).length ? readinessFromError : currentReadiness
-  const sourceId = text(readiness.source_id)
+  const sourceId = text(readiness.source_id) || text(payload.sourceId)
   const failedStep = [...agentSteps].reverse().find(step => step.status === 'FAILED') ?? null
-  const failingStage = recoveryStageForFailure(job, error, failedStep?.step_name ?? null)
   const errorMessage = text(error.message) || text(failedStep?.error_message)
+  const baseFailingStage = recoveryStageForFailure(job, error, failedStep?.step_name ?? null)
+  const transientDiscoveryFailure = job.job_type === 'DISCOVERY'
+    && isConcreteTransientFailure(errorMessage)
+    && Boolean(sourceId)
+  const failingStage: RecoveryStage = transientDiscoveryFailure ? 'CONNECTOR_ESTABLISHMENT' : baseFailingStage
   const profileReadinessFailure = errorCode === 'PROFILE_READINESS_GATE_BLOCKED'
     && job.job_type === 'PROFILING'
     && Boolean(datasetVersionId)
@@ -156,7 +160,7 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
 
   const knownRepairClass = profileReadinessFailure
     ? 'PROFILING_READINESS_RECONCILIATION' as const
-    : transientMetricFailure
+    : transientMetricFailure || transientDiscoveryFailure
       ? 'SOURCE_READINESS_RECONCILIATION' as const
       : null
   const approvalRequired = readinessApprovalRequired(readiness)
@@ -172,7 +176,7 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
     failingStage,
     failingCheckpointId,
     code: errorCode || null,
-    retryable: profileReadinessFailure || transientMetricFailure,
+    retryable: profileReadinessFailure || transientMetricFailure || transientDiscoveryFailure,
     blocking: true,
     securityRelevant: recoveryCase.classification === 'AUTHORIZATION',
     credentialMissing: activeReadinessBlockers(readiness).some(code => /CREDENTIAL/i.test(code)) || /missing.*credential|credential.*missing/i.test(errorMessage),
