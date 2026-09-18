@@ -8,6 +8,65 @@ import {
   createSourceReadinessRecoveryHandler,
 } from './execution-recovery-handlers'
 
+async function verifySourceReadiness(input: { projectId: string; sourceId: string }) {
+  const admin = createAdminClient()
+  const { data: source, error: sourceError } = await admin
+    .schema('catalog')
+    .from('data_sources')
+    .select('id,status')
+    .eq('id', input.sourceId)
+    .eq('project_id', input.projectId)
+    .maybeSingle()
+  if (sourceError) throw new Error(`Unable to independently validate source readiness: ${sourceError.message}`)
+  if (!source) return { valid: false, code: 'SOURCE_NOT_FOUND' }
+  if (source.status !== 'ACTIVE') return { valid: false, code: 'SOURCE_NOT_ACTIVE' }
+
+  const { data: datasets, error: datasetError } = await admin
+    .schema('catalog')
+    .from('datasets')
+    .select('id')
+    .eq('project_id', input.projectId)
+    .eq('data_source_id', input.sourceId)
+  if (datasetError) throw new Error(`Unable to validate source dataset bindings: ${datasetError.message}`)
+  const datasetIds = (datasets ?? []).map(dataset => String(dataset.id))
+  if (!datasetIds.length) return { valid: true, code: 'SOURCE_ACTIVE' }
+
+  const { data: versions, error: versionError } = await admin
+    .schema('catalog')
+    .from('dataset_versions')
+    .select('id,dataset_id,version_number,status')
+    .in('dataset_id', datasetIds)
+    .order('version_number', { ascending: false })
+  if (versionError) throw new Error(`Unable to validate source dataset versions: ${versionError.message}`)
+
+  const latestByDataset = new Map<string, { id: string; status: string }>()
+  for (const version of versions ?? []) {
+    const datasetId = String(version.dataset_id)
+    if (!latestByDataset.has(datasetId)) {
+      latestByDataset.set(datasetId, { id: String(version.id), status: String(version.status) })
+    }
+  }
+  if (latestByDataset.size !== datasetIds.length) return { valid: false, code: 'LATEST_DATASET_VERSION_MISSING' }
+  if ([...latestByDataset.values()].some(version => version.status !== 'AVAILABLE')) {
+    return { valid: false, code: 'LATEST_DATASET_VERSION_NOT_AVAILABLE' }
+  }
+
+  const versionIds = [...latestByDataset.values()].map(version => version.id)
+  const { data: executionSources, error: executionError } = await admin
+    .schema('profiling')
+    .from('dataset_execution_sources')
+    .select('dataset_version_id,active')
+    .in('dataset_version_id', versionIds)
+  if (executionError) throw new Error(`Unable to validate profiling source bindings: ${executionError.message}`)
+  const activeVersions = new Set(
+    (executionSources ?? [])
+      .filter(binding => binding.active === true)
+      .map(binding => String(binding.dataset_version_id)),
+  )
+  const valid = versionIds.every(versionId => activeVersions.has(versionId))
+  return { valid, code: valid ? 'SOURCE_READINESS_RESTORED' : 'EXECUTION_SOURCE_NOT_BOUND' }
+}
+
 async function reconcileDurableJobLease(input: { projectId: string; durableJobId: string }) {
   const admin = createAdminClient()
   const { data, error } = await admin
@@ -57,7 +116,7 @@ async function verifyProfilingReadiness(input: { projectId: string; datasetVersi
 
 export function createDefaultExecutionRecoveryRegistry() {
   return new ExecutionRecoveryHandlerRegistry([
-    createSourceReadinessRecoveryHandler({ repair: revalidateAndReconcileSourceForProfiling }),
+    createSourceReadinessRecoveryHandler({ repair: revalidateAndReconcileSourceForProfiling, verify: verifySourceReadiness }),
     createLeaseReconciliationRecoveryHandler({ reconcile: reconcileDurableJobLease, verify: verifyDurableJobLease }),
     createProfilingReadinessRecoveryHandler({
       repair: executeProfileReadinessRemediation,
