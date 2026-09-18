@@ -109,6 +109,15 @@ export function classifyRecoverySeverity(input: RecoveryFailureContext): Recover
 export function authorizeRecoveryRepair(input: RecoveryFailureContext): RecoveryAuthorizationDecision {
   const severity = classifyRecoverySeverity(input)
 
+  if (input.securityRelevant) {
+    return {
+      authorized: false,
+      severity,
+      repairClass: null,
+      reason: 'Security-relevant failures require governed review unless a separately certified security repair class exists.',
+      escalationReason: 'SECURITY_RELEVANT_REPAIR_REQUIRES_REVIEW',
+    }
+  }
   if (input.credentialMissing) {
     return { authorized: false, severity, repairClass: null, reason: 'Credentials are missing.', escalationReason: 'MISSING_CREDENTIALS' }
   }
