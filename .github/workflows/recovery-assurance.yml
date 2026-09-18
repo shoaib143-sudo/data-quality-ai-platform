@@ -29,6 +29,8 @@ on:
       - 'lib/profiling/readiness-remediation-*.ts'
       - 'lib/profiling/source-readiness-repair.ts'
       - 'scripts/test-execution-recovery-*.mjs'
+      - 'scripts/setup-execution-recovery-persistence-test.sql'
+      - 'scripts/test-execution-recovery-persistence.sql'
       - 'scripts/test-profiling-checkpoint-resume.mjs'
       - 'scripts/test-profile-readiness-remediation-policy.mjs'
       - 'package.json'
@@ -73,6 +75,21 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL for isolated recovery persistence tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+      - name: Execute isolated recovery persistence acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/setup-execution-recovery-persistence-test.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918022000_execution_recovery_closed_loop_contract.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918023000_execution_recovery_atomic_claim.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918023500_execution_recovery_action_evidence.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918025000_execution_recovery_validated_resume.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/test-execution-recovery-persistence.sql
       - name: Verify repository governance after consolidation
         run: |
           node scripts/verify-github-governance.mjs
