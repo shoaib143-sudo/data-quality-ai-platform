@@ -58,12 +58,21 @@ function readinessApprovalRequired(readiness: Record<string, unknown>) {
 function stageForProfilingStep(stepName: string): RecoveryStage {
   if (stepName === 'profile_dataset') return 'PROFILE_RUN'
   if (stepName === 'execute_metrics') return 'METRIC_EXECUTION'
-  if (stepName === 'investigate_profile') return 'FINDINGS_GENERATION'
+  if (stepName === 'investigate_profile') return 'GOVERNANCE_INSIGHTS'
   return 'GOVERNED_WORKFLOW'
 }
 
-function recoveryStageForFailure(job: DurableJob, error: Record<string, unknown>, failedStepName?: string | null): RecoveryStage {
-  if (failedStepName) return stageForProfilingStep(failedStepName)
+function stageForProfilingFailure(stepName: string, message: string): RecoveryStage {
+  if (stepName === 'execute_metrics') {
+    if (/profile_findings|finding persistence|persist findings/i.test(message)) return 'FINDINGS_GENERATION'
+    if (/data_quality_scores|quality score|scoring/i.test(message)) return 'QUALITY_SCORING'
+    if (/profile_metrics|atomically persist profiling results|metric persistence/i.test(message)) return 'METRIC_PERSISTENCE'
+  }
+  return stageForProfilingStep(stepName)
+}
+
+function recoveryStageForFailure(job: DurableJob, error: Record<string, unknown>, failedStepName?: string | null, message = ''): RecoveryStage {
+  if (failedStepName) return stageForProfilingFailure(failedStepName, message)
   if (text(error.code) === 'PROFILE_READINESS_GATE_BLOCKED' && job.job_type === 'PROFILING') return 'PROFILE_RUN'
   return 'GOVERNED_WORKFLOW'
 }
@@ -147,7 +156,7 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
   const sourceId = text(readiness.source_id) || text(payload.sourceId)
   const failedStep = [...agentSteps].reverse().find(step => step.status === 'FAILED') ?? null
   const errorMessage = text(error.message) || text(failedStep?.error_message)
-  const baseFailingStage = recoveryStageForFailure(job, error, failedStep?.step_name ?? null)
+  const baseFailingStage = recoveryStageForFailure(job, error, failedStep?.step_name ?? null, errorMessage)
   const transientDiscoveryFailure = job.job_type === 'DISCOVERY'
     && isConcreteTransientFailure(errorMessage)
     && Boolean(sourceId)
@@ -162,12 +171,15 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
   const retrySafeGovernanceRuntimeFailure = job.job_type === 'GOVERNANCE_AGENT'
     && (recoveryCase.classification === 'ORCHESTRATION'
       || (recoveryCase.classification === 'TRANSIENT_EXTERNAL' && isConcreteTransientFailure(errorMessage)))
+  const retrySafeProfilingRuntimeFailure = job.job_type === 'PROFILING'
+    && ['METRIC_PERSISTENCE', 'FINDINGS_GENERATION', 'QUALITY_SCORING', 'GOVERNANCE_INSIGHTS'].includes(failingStage)
+    && isConcreteTransientFailure(errorMessage)
 
   const knownRepairClass = profileReadinessFailure
     ? 'PROFILING_READINESS_RECONCILIATION' as const
     : transientMetricFailure || transientDiscoveryFailure
       ? 'SOURCE_READINESS_RECONCILIATION' as const
-      : retrySafeGovernanceRuntimeFailure
+      : retrySafeGovernanceRuntimeFailure || retrySafeProfilingRuntimeFailure
         ? 'RETRY_SAFE_RUNTIME_REPAIR' as const
         : null
   const approvalRequired = readinessApprovalRequired(readiness)
@@ -183,7 +195,7 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
     failingStage,
     failingCheckpointId,
     code: errorCode || null,
-    retryable: profileReadinessFailure || transientMetricFailure || transientDiscoveryFailure || retrySafeGovernanceRuntimeFailure,
+    retryable: profileReadinessFailure || transientMetricFailure || transientDiscoveryFailure || retrySafeGovernanceRuntimeFailure || retrySafeProfilingRuntimeFailure,
     blocking: true,
     securityRelevant: recoveryCase.classification === 'AUTHORIZATION',
     credentialMissing: activeReadinessBlockers(readiness).some(code => /CREDENTIAL/i.test(code)) || /missing.*credential|credential.*missing/i.test(errorMessage),
