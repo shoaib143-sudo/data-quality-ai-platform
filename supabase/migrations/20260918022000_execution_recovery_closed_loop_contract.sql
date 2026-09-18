@@ -7,6 +7,7 @@ alter table orchestration.recovery_cases
   add column if not exists failing_checkpoint_id text null,
   add column if not exists severity text null,
   add column if not exists root_cause_diagnosis text null,
+  add column if not exists evidence_used jsonb not null default '[]'::jsonb,
   add column if not exists proposed_repair text null,
   add column if not exists authorization_decision text null,
   add column if not exists repair_action_tool text null,
