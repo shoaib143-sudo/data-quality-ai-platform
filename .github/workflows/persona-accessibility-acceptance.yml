@@ -38,5 +38,7 @@ jobs:
         run: node scripts/verify-persona-accessibility-contract.mjs
       - name: Accessibility negative/failure tests
         run: node --experimental-strip-types scripts/test-persona-accessibility-contract.mjs
+      - name: Data Steward live-status accessibility tests
+        run: node scripts/test-data-steward-live-status-accessibility.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
