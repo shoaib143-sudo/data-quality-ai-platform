@@ -58,3 +58,5 @@ jobs:
         run: node --experimental-strip-types --test scripts/test-data-steward-persona-ui-ux.mjs
       - name: Data Steward concurrency and idempotency contracts
         run: node --test scripts/test-data-steward-concurrency-idempotency.mjs
+      - name: Verify Data Steward E2E fixture contract
+        run: node scripts/verify-data-steward-e2e-fixture.mjs
