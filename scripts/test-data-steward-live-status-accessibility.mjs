@@ -40,6 +40,12 @@ for (const label of ['Governed project','Classification label','Policy name','Po
   assert.ok(classification.includes(`aria-label="${label}"`), `Classification input missing accessible label: ${label}`)
 }
 
+
+for (const label of ['Mapping target type','Mapping target','Mapping column']) {
+  assert.ok(glossary.includes(`aria-label="${label}"`), `Glossary mapping control missing accessible label: ${label}`)
+}
+assert.ok(issues.includes('aria-label={`Issue owner for ${issue.title}`}'), 'Issue owner selector must be labelled per issue.')
+assert.ok(issues.includes('aria-label={`Issue status for ${issue.title}`}'), 'Issue status selector must be labelled per issue.')
 console.log('Data Steward live-status accessibility contract passed.')
 
 const classificationPage = fs.readFileSync('app/classification/page.tsx', 'utf8')
