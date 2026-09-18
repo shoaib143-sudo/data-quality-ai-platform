@@ -154,6 +154,8 @@ requireText(recoveryAgent, "failingStage === 'METRIC_EXECUTION'", 'metric-stage 
 requireText(recoveryAgent, 'isConcreteTransientFailure(errorMessage)', 'concrete transient failure gate')
 requireText(recoveryAgent, "'SOURCE_READINESS_RECONCILIATION' as const", 'source reconciliation repair for transient metrics')
 requireText(recoveryAgent, "stage: stageForProfilingStep(text(step.step_name))", 'persisted step checkpoint mapping')
+requireText(recoveryAgent, 'retryStageHint', 'diagnostic substage executable retry mapping')
+requireText(closedLoopContract, 'input.retryStageHint ?? input.failingStage', 'retry stage hint contract')
 requireText(recoveryHandlers, "context.failingStage === 'METRIC_EXECUTION'", 'source repair handler metric scope')
 requireText(recoveryHandlers, "context.failingStage === 'CONNECTOR_ESTABLISHMENT'", 'source repair handler connector scope')
 requireText(recoveryAgent, "job.job_type === 'DISCOVERY'", 'connector discovery recovery integration')
