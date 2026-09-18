@@ -1,9 +1,18 @@
 import type { DurableJobType } from './queue'
 import type { RecoveryRepairClass, RecoveryStage } from './execution-recovery-contract'
 
+export type RecoveryRestartScope = 'WHOLE_JOB' | 'FAILED_JOB'
+
 export type TerminalRecoveryRoute = {
   repairClass: RecoveryRepairClass
   stage: RecoveryStage
+  restartScope: RecoveryRestartScope
+}
+
+const WHOLE_JOB_RESTART_TYPES = new Set<DurableJobType>(['PROFILING', 'DISCOVERY', 'DATA_QUALITY'])
+
+export function recoveryRestartScope(jobType: DurableJobType): RecoveryRestartScope {
+  return WHOLE_JOB_RESTART_TYPES.has(jobType) ? 'WHOLE_JOB' : 'FAILED_JOB'
 }
 
 const LEASE_RETRY_SAFE_JOB_TYPES = new Set<DurableJobType>([
@@ -33,7 +42,7 @@ export function classifyTerminalRecoveryRoute(jobType: DurableJobType, message: 
     LEASE_RETRY_SAFE_JOB_TYPES.has(jobType)
     && /lease expired|orphaned|worker lease|stale lease|lease timeout/i.test(message)
   ) {
-    return { repairClass: 'LEASE_RECONCILIATION', stage: 'GOVERNED_WORKFLOW' }
+    return { repairClass: 'LEASE_RECONCILIATION', stage: 'GOVERNED_WORKFLOW', restartScope: recoveryRestartScope(jobType) }
   }
 
   if (
@@ -43,6 +52,7 @@ export function classifyTerminalRecoveryRoute(jobType: DurableJobType, message: 
     return {
       repairClass: 'PROFILING_READINESS_RECONCILIATION',
       stage: recoveryStageFromFailure(jobType, message),
+      restartScope: recoveryRestartScope(jobType),
     }
   }
 
