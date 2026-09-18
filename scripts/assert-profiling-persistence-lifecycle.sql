@@ -79,10 +79,12 @@ begin
   for v_definition in select id,metric_key,scope,value_type from profiling.metric_definitions where enabled order by metric_key
   loop
     v_metric := jsonb_build_object('metric_definition_id',v_definition.id,'profile_column_id',case when v_definition.scope='DATASET' then null else v_column_id end,'metric_key',v_definition.metric_key);
-    v_metric := v_metric || case v_definition.value_type
-      when 'NUMBER' then jsonb_build_object('numeric_value',1)
-      when 'STRING' then jsonb_build_object('text_value','runtime')
-      when 'BOOLEAN' then jsonb_build_object('boolean_value',true)
+    v_metric := v_metric || case
+      when v_definition.metric_key = 'row_count' then jsonb_build_object('numeric_value',2)
+      when v_definition.metric_key = 'column_count' then jsonb_build_object('numeric_value',1)
+      when v_definition.value_type = 'NUMBER' then jsonb_build_object('numeric_value',1)
+      when v_definition.value_type = 'STRING' then jsonb_build_object('text_value','runtime')
+      when v_definition.value_type = 'BOOLEAN' then jsonb_build_object('boolean_value',true)
       else jsonb_build_object('json_value',jsonb_build_object('runtime',true))
     end;
     v_metrics := v_metrics || jsonb_build_array(v_metric);
