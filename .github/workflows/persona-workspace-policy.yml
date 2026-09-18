@@ -58,3 +58,5 @@ jobs:
         run: node --experimental-strip-types --test scripts/test-data-steward-persona-ui-ux.mjs
       - name: Data Steward execution-mode fixture tests
         run: node --experimental-strip-types --test scripts/test-data-steward-execution-modes.mjs
+      - name: Data Steward canonical API route boundary tests
+        run: node scripts/test-data-steward-api-route-boundaries.mjs
