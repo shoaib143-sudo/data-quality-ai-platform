@@ -32,3 +32,5 @@ test('governed FILE storage reference strips stale URL fields before source load
   assert.match(source, /delete governedExecutionConfig\.sourceUrl/)
   assert.match(source, /\.\.\.governedExecutionConfig/)
 })
+
+// Exact-SHA preview retrigger: runtime storage cutover coverage remains deterministic.
