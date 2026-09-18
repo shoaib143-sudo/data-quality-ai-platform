@@ -352,7 +352,10 @@ export async function executeDurableJob(job: DurableJob) {
       return
     }
     if (completedRun.status !== 'COMPLETED') {
-      const technicalError = new Error(completedRun.error_message || completedRun.error_code || `Profiling run ended as ${completedRun.status}.`)
+      const technicalError = Object.assign(
+        new Error(completedRun.error_message || completedRun.error_code || `Profiling run ended as ${completedRun.status}.`),
+        { code: completedRun.error_code ?? 'PROFILING_RUN_FAILED' },
+      )
       if (automaticVerification) await recordAutomaticVerificationError({ workflowInstanceId, projectId, userId, profilingRunId, error: technicalError })
       if (dataQualityFreshProfileVerification) await recordDataQualityReprofileError({ workflowInstanceId, projectId, userId, profilingRunId, error: technicalError })
       throw technicalError
