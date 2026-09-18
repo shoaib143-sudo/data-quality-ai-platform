@@ -151,6 +151,9 @@ begin
     raise exception 'Classification hard-delete guard did not fire';
   exception when others then
     if sqlerrm='Classification hard-delete guard did not fire' then raise; end if;
+    if position('Classification decisions are governed history and cannot be hard-deleted' in sqlerrm)=0 then
+      raise exception 'Unexpected classification delete failure: %',sqlerrm;
+    end if;
   end;
 
   if not exists(select 1 from governance.stewardship_assignments where id=v_assignment_id)
