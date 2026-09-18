@@ -73,26 +73,41 @@ jobs:
           test -n "$APP_URL" || { echo "::error::R2_CERTIFICATION_APP_URL is not configured"; exit 1; }
           test -n "$CRON_SECRET" || { echo "::error::CRON_SECRET is not configured"; exit 1; }
 
-      - name: Apply approved R2 CORS policy
+      - name: Verify or apply approved R2 CORS policy
         env:
           APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error \
+          if current="$(curl --fail-with-body --silent --show-error \
             --connect-timeout 10 --max-time 60 \
-            -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "$APP_URL/api/internal/storage/configure-r2-cors" \
-            | node -e '
+            "$APP_URL/api/internal/storage/configure-r2-cors")" \
+            && printf '%s' "$current" | node -e '
               let body="";
               process.stdin.on("data", c => body += c);
               process.stdin.on("end", () => {
                 const result=JSON.parse(body);
-                if (result.applied !== true || result.matchesDesiredPolicy !== true || result.wildcardOriginDetected === true) process.exit(2);
-                console.log(JSON.stringify({configured:result.configured,applied:result.applied,matchesDesiredPolicy:result.matchesDesiredPolicy,wildcardOriginDetected:result.wildcardOriginDetected},null,2));
+                if (result.configured !== true || result.matchesDesiredPolicy !== true || result.wildcardOriginDetected === true) process.exit(2);
               });
-            '
+            '; then
+            echo "R2 CORS policy already matches the governed desired state."
+          else
+            curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 60 \
+              -X POST \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              "$APP_URL/api/internal/storage/configure-r2-cors" \
+              | node -e '
+                let body="";
+                process.stdin.on("data", c => body += c);
+                process.stdin.on("end", () => {
+                  const result=JSON.parse(body);
+                  if (result.applied !== true || result.matchesDesiredPolicy !== true || result.wildcardOriginDetected === true) process.exit(2);
+                  console.log(JSON.stringify({configured:result.configured,applied:result.applied,matchesDesiredPolicy:result.matchesDesiredPolicy,wildcardOriginDetected:result.wildcardOriginDetected},null,2));
+                });
+              '
+          fi
 
       - name: Copy and verify Supabase objects into R2
         env:
