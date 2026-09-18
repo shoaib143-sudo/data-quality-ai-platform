@@ -27,6 +27,16 @@ on:
       - 'scripts/verify-native-recovery-v2.mjs'
       - 'scripts/verify-all-agent-native-runtime-adoption.mjs'
       - 'scripts/test-native-autonomy-kernel.mjs'
+      - 'lib/orchestration/governance-orchestrator.ts'
+      - 'lib/orchestration/governance-orchestrator-approval-service.ts'
+      - 'app/api/agents/governance-orchestrator/**'
+      - 'app/api/schedules/**'
+      - 'app/agents/autonomous-governance/**'
+      - 'app/schedules/**'
+      - 'scripts/test-execution-mode-contracts.mjs'
+      - 'scripts/audit-execution-modes-adversarial.mjs'
+      - 'scripts/test-execution-mode-ui-ux.mjs'
+      - 'scripts/test-execution-mode-ui-accessibility.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
   pull_request:
@@ -86,3 +96,11 @@ jobs:
         run: node scripts/verify-native-recovery-v2.mjs
       - name: Verify shared native runtime adoption
         run: node scripts/verify-all-agent-native-runtime-adoption.mjs
+      - name: Unit test execution-mode policy
+        run: node --experimental-strip-types --test scripts/test-execution-mode-contracts.mjs
+      - name: Independent execution-mode adversarial audit
+        run: node scripts/audit-execution-modes-adversarial.mjs
+      - name: Execution-mode UI and UX contract tests
+        run: node --test scripts/test-execution-mode-ui-ux.mjs
+      - name: Execution-mode accessibility contract tests
+        run: node --test scripts/test-execution-mode-ui-accessibility.mjs
