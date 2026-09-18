@@ -1,0 +1,108 @@
+name: R2 Live Precutover One Shot
+
+on:
+  push:
+    branches:
+      - ops/r2-live-precutover-20260918
+    paths:
+      - '.github/workflows/r2-live-precutover-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r2-live-precutover-once
+  cancel-in-progress: false
+
+jobs:
+  precutover:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Require production certification configuration
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$APP_URL" || { echo "::error::R2_CERTIFICATION_APP_URL is not configured"; exit 1; }
+          test -n "$CRON_SECRET" || { echo "::error::CRON_SECRET is not configured"; exit 1; }
+
+      - name: Apply and verify approved R2 CORS policy
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 60 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/internal/storage/configure-r2-cors")"
+          printf '%s' "$response" | node -e '
+            let body=""; process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const r=JSON.parse(body);
+              if (r.applied !== true || r.matchesDesiredPolicy !== true || r.wildcardOriginDetected === true) process.exit(2);
+              console.log(JSON.stringify({configured:r.configured,applied:r.applied,matchesDesiredPolicy:r.matchesDesiredPolicy,wildcardOriginDetected:r.wildcardOriginDetected}));
+            });
+          '
+
+      - name: Copy and verify READY Supabase objects into R2
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 300 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/internal/storage/migrate-to-r2")"
+          printf '%s' "$response" | node -e '
+            let body=""; process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const r=JSON.parse(body);
+              const rows=Array.isArray(r.results) ? r.results : [];
+              const bad=rows.filter(x => !["COPIED_AND_VERIFIED","SKIPPED_ALREADY_READY"].includes(x.action));
+              if (r.sourceObjectsDeleted !== 0 || r.datasetVersionReferencesChanged !== 0 || bad.length) process.exit(2);
+              console.log(JSON.stringify({examined:r.examined,actions:rows.map(x=>x.action),sourceObjectsDeleted:r.sourceObjectsDeleted,datasetVersionReferencesChanged:r.datasetVersionReferencesChanged}));
+            });
+          '
+
+      - name: Certify live R2 precutover state
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 60 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/internal/storage/certify-r2")"
+          printf '%s' "$response" | node -e '
+            let body=""; process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const r=JSON.parse(body);
+              if (r.certified !== true) process.exit(2);
+              if (r.runtime?.productionCutoverActive === true) process.exit(3);
+              console.log(JSON.stringify({certified:r.certified,blockers:r.blockers,database:r.database,cors:r.cors,runtime:r.runtime,destructiveActions:r.destructiveActions}));
+            });
+          '
+
+      - name: Verify reference cutover dry run
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 300 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+            --data '{"mode":"dry-run"}' \
+            "$APP_URL/api/internal/storage/reference-cutover")"
+          printf '%s' "$response" | node -e '
+            let body=""; process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const r=JSON.parse(body);
+              const rows=Array.isArray(r.results) ? r.results : [];
+              if (r.mode !== "dry-run" || (r.examinedTargets ?? 0) < 1 || (r.eligibleReferences ?? 0) < 1) process.exit(2);
+              if (r.changedReferences !== 0 || r.destructiveActions !== 0) process.exit(3);
+              if (rows.some(x => x.action === "ERROR" || x.action === "SKIPPED_INTEGRITY_MISMATCH")) process.exit(4);
+              console.log(JSON.stringify({mode:r.mode,examinedTargets:r.examinedTargets,eligibleReferences:r.eligibleReferences,changedReferences:r.changedReferences,destructiveActions:r.destructiveActions}));
+            });
+          '
