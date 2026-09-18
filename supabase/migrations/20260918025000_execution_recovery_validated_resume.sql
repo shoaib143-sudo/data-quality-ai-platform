@@ -211,7 +211,7 @@ revoke all on function orchestration.queue_execution_recovery_resume(uuid, integ
   from public, anon, authenticated;
 
 comment on function orchestration.queue_execution_recovery_resume(uuid, integer, text, text) is
-  'Internal system resume after independently validated P0/P1 repair; requires durable repair and validation evidence and is idempotent per bounded attempt.';
+  'Internal governed restart/resume after independently validated P0/P1 repair; heavy jobs restart whole-job, other jobs preserve the failed-job checkpoint, and execution is idempotent per bounded attempt.';
 
 create or replace function orchestration.resolve_execution_recovery_after_success()
 returns trigger

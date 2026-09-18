@@ -27,6 +27,8 @@ declare
   v_case_failed_resume uuid := '20000000-0000-4000-8000-000000000051';
   v_job_unauthorized uuid := '20000000-0000-4000-8000-000000000060';
   v_case_unauthorized uuid := '20000000-0000-4000-8000-000000000061';
+  v_job_failed_job uuid := '20000000-0000-4000-8000-000000000070';
+  v_case_failed_job uuid := '20000000-0000-4000-8000-000000000071';
   v_result jsonb;
   v_count integer;
   v_payload jsonb;
@@ -42,7 +44,8 @@ begin
     (v_job_no_validation, v_project, 'PROFILING', 'DEAD', 1, 1, '{}'::jsonb),
     (v_job_no_repair, v_project, 'PROFILING', 'DEAD', 1, 1, '{}'::jsonb),
     (v_job_failed_resume, v_project, 'PROFILING', 'DEAD', 1, 1, '{}'::jsonb),
-    (v_job_unauthorized, v_project, 'PROFILING', 'DEAD', 1, 1, '{}'::jsonb);
+    (v_job_unauthorized, v_project, 'PROFILING', 'DEAD', 1, 1, '{}'::jsonb),
+    (v_job_failed_job, v_project, 'OBSERVABILITY', 'DEAD', 1, 1, '{}'::jsonb);
 
   insert into orchestration.recovery_cases(
     id, project_id, durable_job_id, job_type, classification, recommended_action,
@@ -61,7 +64,9 @@ begin
     (v_case_failed_resume, v_project, v_job_failed_resume, 'PROFILING', 'CONFIGURATION', 'RETRY',
      'P1', 'AUTHORIZED', 0, 'OPEN', 'NOT_RUN', 'METRIC_EXECUTION', gen_random_uuid()),
     (v_case_unauthorized, v_project, v_job_unauthorized, 'PROFILING', 'AUTHORIZATION', 'MANUAL_REVIEW',
-     'P1', 'ESCALATE', 0, 'OPEN', 'NOT_RUN', 'METRIC_EXECUTION', gen_random_uuid());
+     'P1', 'ESCALATE', 0, 'OPEN', 'NOT_RUN', 'METRIC_EXECUTION', gen_random_uuid()),
+    (v_case_failed_job, v_project, v_job_failed_job, 'OBSERVABILITY', 'ORCHESTRATION', 'RETRY',
+     'P1', 'AUTHORIZED', 0, 'OPEN', 'NOT_RUN', 'GOVERNED_WORKFLOW', gen_random_uuid());
 
   v_result := orchestration.claim_execution_recovery_auto_repair(v_case_p2, 0, 'test', 'scope');
   if coalesce((v_result->>'claimed')::boolean, true) or v_result->>'reason' <> 'SEVERITY_NOT_AUTOREPAIRABLE' then
@@ -149,6 +154,38 @@ begin
   from orchestration.recovery_actions
   where recovery_case_id = v_case_success and action_type = 'RESUME';
   if v_count <> 1 then raise exception 'Resume replay duplicated side effects: %', v_count; end if;
+
+  perform orchestration.claim_execution_recovery_auto_repair(
+    v_case_failed_job, 0, 'observability_repair', 'project/observability'
+  );
+  perform orchestration.finalize_execution_recovery_auto_repair(
+    v_case_failed_job, 0, 'mutation-observability', true, 'PASSED', 'OBSERVABILITY_RESTORED'
+  );
+  update orchestration.recovery_cases
+     set post_repair_validation_result = 'PASSED',
+         retry_stage = 'GOVERNED_WORKFLOW',
+         retry_checkpoint_id = 'observability-step'
+   where id = v_case_failed_job;
+  v_result := orchestration.queue_execution_recovery_resume(
+    v_case_failed_job, 0, 'GOVERNED_WORKFLOW', 'observability-step'
+  );
+  if not coalesce((v_result->>'queued')::boolean, false)
+     or v_result->>'restart_scope' <> 'FAILED_JOB'
+     or v_result->>'retry_checkpoint_id' <> 'observability-step' then
+    raise exception 'Non-heavy job did not preserve failed-job checkpoint semantics: %', v_result;
+  end if;
+  select payload, status into v_payload, v_status
+  from orchestration.job_queue where id = v_job_failed_job;
+  if v_status <> 'QUEUED'
+     or v_payload#>>'{recoveryResume,restart_scope}' <> 'FAILED_JOB'
+     or v_payload#>>'{recoveryResume,retry_checkpoint_id}' <> 'observability-step' then
+    raise exception 'Non-heavy failed-job restart boundary was not persisted: status %, payload %', v_status, v_payload;
+  end if;
+  select retry_checkpoint_id into v_checkpoint
+  from orchestration.recovery_cases where id = v_case_failed_job;
+  if v_checkpoint <> 'observability-step' then
+    raise exception 'Non-heavy failed-job recovery lost its checkpoint: %', v_checkpoint;
+  end if;
 
   update orchestration.job_queue set status = 'SUCCEEDED', completed_at = now() where id = v_job_success;
   select status, final_outcome into v_status, v_outcome

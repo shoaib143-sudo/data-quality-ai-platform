@@ -52,6 +52,6 @@ comment on column orchestration.recovery_cases.root_cause_diagnosis is
 comment on column orchestration.recovery_cases.post_repair_validation_result is
   'Independent validation gate. Retry/resume must not proceed as recovered until this is PASSED.';
 comment on column orchestration.recovery_cases.retry_checkpoint_id is
-  'Exact failed checkpoint for same-stage retry, or nearest still-valid checkpoint when fallback is required.';
+  'Checkpoint retained for FAILED_JOB recovery. Heavy PROFILING, DISCOVERY, and DATA_QUALITY whole-job restarts clear this value.';
 comment on column orchestration.recovery_cases.final_outcome is
   'Canonical closed-loop outcome for failure -> diagnosis -> repair -> validation -> retry/resume -> outcome.';
