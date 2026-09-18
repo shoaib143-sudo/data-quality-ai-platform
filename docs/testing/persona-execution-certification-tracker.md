@@ -7,7 +7,7 @@ Status vocabulary: `PENDING`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`.
 
 | Persona | Contract/unit | Functional | Negative/failure | Independent adversarial | UI/UX | Accessibility | RBAC/auth | Execution modes | Concurrency/idempotency | E2E lifecycle | Final certification |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Data Steward | IN_PROGRESS | PENDING | IN_PROGRESS | IN_PROGRESS | IN_PROGRESS | PENDING | IN_PROGRESS | IN_PROGRESS | PENDING | PENDING | IN_PROGRESS |
+| Data Steward | PASS | PENDING | PASS | PASS | PASS | PENDING | PASS | IN_PROGRESS | PENDING | PENDING | IN_PROGRESS |
 | Data Quality Analyst | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Governance Analyst / Operator | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Data Engineer / Data Custodian | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
@@ -40,5 +40,15 @@ Status vocabulary: `PENDING`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`.
 3. Curate governed business terminology — `glossary.manage`
 4. Review data classifications — `classification.review`
 5. Investigate and coordinate governance issues — `issues.manage`
+
+## Data Steward evidence checkpoint — 2026-09-18
+
+- Contract/unit, negative-boundary, independent adversarial, and UI/UX certification scripts passed in GitHub Actions on PR #692.
+- Production read-only authorization verification confirmed the retained Data Steward test principal is an organization MEMBER with exactly one active DATA_STEWARD project binding.
+- Positive project capabilities verified: catalog.read, catalog.update, glossary.manage, quality.execute, issues.manage, classification.review, stewardship.manage, profiling.execute, agent.execute, execution.retry, execution.cancel.
+- Explicit negative capabilities verified: admin.manage, source.manage, schedule.manage, policy.approve, quality.exception.approve, execution.approve, agent.admin.
+- Cross-project negative verification confirmed stewardship.manage and agent.execute are false outside the single bound UI Regression Test Project; schedule.manage is false everywhere.
+- The retained Data Steward principal still has no literal password-login evidence (last_sign_in_at is null), so deployed authenticated functional/E2E and manual accessibility evidence remain pending.
+- Repository-governance workflow-count failure was repaired by folding Data Steward certification into the existing Persona Workspace Policy workflow rather than adding another permanent workflow.
 
 Final certification requires authenticated deployed-persona evidence in addition to automated CI coverage.
