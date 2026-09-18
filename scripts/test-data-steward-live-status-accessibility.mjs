@@ -42,7 +42,7 @@ for (const label of ['Governed project','Classification label','Policy name','Po
 
 console.log('Data Steward live-status accessibility contract passed.')
 
-const classificationPage = await readFile(new URL('../app/classification/page.tsx', import.meta.url), 'utf8')
+const classificationPage = fs.readFileSync('app/classification/page.tsx', 'utf8')
 assert.match(classificationPage, /classification\.review/, 'Classification page must resolve project-scoped review authority.')
 assert.match(classificationPage, /classificationReviewProjectIds/, 'Classification page must pass review-authorized projects into the client workbench.')
 assert.match(classification, /classificationReviewProjectIds/, 'Classification workbench must receive explicit review-authorized project scope.')
