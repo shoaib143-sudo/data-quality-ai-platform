@@ -188,3 +188,14 @@ export function initialRecoveryRecord(
     escalation_reason: authorization.escalationReason ?? null,
   }
 }
+
+
+export function shouldRediagnoseRecoveryFailure(input: {
+  escalationReason: string | null
+  retryAttempt: number
+  maxRepairAttempts: number
+}) {
+  const boundedRepairFailure = ['REPAIR_APPLICATION_FAILED', 'REPAIR_VALIDATION_FAILED']
+    .includes(input.escalationReason ?? '')
+  return boundedRepairFailure && input.retryAttempt + 1 < input.maxRepairAttempts
+}
