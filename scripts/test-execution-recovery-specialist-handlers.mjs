@@ -34,11 +34,17 @@ function context(overrides = {}) {
 }
 
 let sourceRepairs = 0
+let sourceVerifications = 0
 const sourceHandler = createSourceReadinessRecoveryHandler({
   async repair(input) {
     sourceRepairs += 1
     assert.deepEqual(input, { projectId: 'project-1', sourceId: 'source-1' })
     return { operational: true, code: 'SOURCE_READY' }
+  },
+  async verify(input) {
+    sourceVerifications += 1
+    assert.deepEqual(input, { projectId: 'project-1', sourceId: 'source-1' })
+    return { valid: true, code: 'SOURCE_READINESS_RESTORED' }
   },
 })
 
@@ -51,9 +57,26 @@ const connectorRecovered = await executeAuthorizedRecovery({
   registry: new ExecutionRecoveryHandlerRegistry([sourceHandler]),
 })
 assert.equal(sourceRepairs, 1)
+assert.equal(sourceVerifications, 1)
 assert.equal(connectorRecovered.record.post_repair_validation_result, 'PASSED')
 assert.equal(connectorRecovered.record.retry_stage, 'CONNECTOR_ESTABLISHMENT')
 assert.equal(connectorRecovered.record.final_outcome, 'OPEN')
+
+const sourceValidationFailureHandler = createSourceReadinessRecoveryHandler({
+  async repair() {
+    return { operational: true, code: 'SOURCE_READY' }
+  },
+  async verify() {
+    return { valid: false, code: 'EXECUTION_SOURCE_NOT_BOUND' }
+  },
+})
+const sourceValidationFailure = await executeAuthorizedRecovery({
+  context: { ...context(), recoveryCaseId: 'case-source-validation-failure' },
+  failureClassification: 'CONFIGURATION',
+  registry: new ExecutionRecoveryHandlerRegistry([sourceValidationFailureHandler]),
+})
+assert.equal(sourceValidationFailure.record.post_repair_validation_result, 'FAILED')
+assert.equal(sourceValidationFailure.record.escalation_reason, 'REPAIR_VALIDATION_FAILED')
 
 let profilingRepairs = 0
 let profilingVerifications = 0
