@@ -60,3 +60,5 @@ jobs:
         run: node --experimental-strip-types --test scripts/test-data-steward-execution-modes.mjs
       - name: Data Steward canonical API route boundary tests
         run: node scripts/test-data-steward-api-route-boundaries.mjs
+      - name: Data Steward concurrency and idempotency tests
+        run: node scripts/test-data-steward-concurrency-idempotency.mjs
