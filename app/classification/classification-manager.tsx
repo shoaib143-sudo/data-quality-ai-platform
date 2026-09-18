@@ -125,7 +125,7 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
     <section className="rounded-2xl border bg-white p-5 shadow-sm">
       <label className="block max-w-md text-sm font-semibold text-slate-700">
         Governed project
-        <select value={projectId} onChange={event => { setProjectId(event.target.value); setLabelId(''); setMessage('') }} className="mt-1 w-full rounded-xl border px-3 py-2.5">
+        <select aria-label="Governed project" value={projectId} onChange={event => { setProjectId(event.target.value); setLabelId(''); setMessage('') }} className="mt-1 w-full rounded-xl border px-3 py-2.5">
           <option value="">Choose a governed project</option>
           {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
         </select>
@@ -174,12 +174,12 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
             <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-purple-600" /><h2 className="text-xl font-bold">Approve handling policy</h2></div>
             <p className="mt-1 text-sm text-slate-500">This mutation requires explicit policy approval authority for the selected project.</p>
             <div className="mt-5 grid gap-3">
-              <select value={effectiveLabelId} onChange={event => setLabelId(event.target.value)} className="rounded-xl border px-3 py-2.5">
+              <select aria-label="Classification label" value={effectiveLabelId} onChange={event => setLabelId(event.target.value)} className="rounded-xl border px-3 py-2.5">
                 {visibleLabels.map(label => <option key={label.id} value={label.id}>{label.code} · {label.name}</option>)}
               </select>
-              <input value={name} onChange={event => setName(event.target.value)} className="rounded-xl border px-3 py-2.5" />
-              <textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} className="rounded-xl border px-3 py-2.5" />
-              <input type="number" value={retention} onChange={event => setRetention(event.target.value)} className="rounded-xl border px-3 py-2.5" placeholder="Retention days" />
+              <input aria-label="Policy name" value={name} onChange={event => setName(event.target.value)} className="rounded-xl border px-3 py-2.5" />
+              <textarea aria-label="Policy description" value={description} onChange={event => setDescription(event.target.value)} rows={3} className="rounded-xl border px-3 py-2.5" />
+              <input aria-label="Retention days" type="number" value={retention} onChange={event => setRetention(event.target.value)} className="rounded-xl border px-3 py-2.5" placeholder="Retention days" />
               <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={encrypt} onChange={event => setEncrypt(event.target.checked)} />Encryption required</label>
               <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={mask} onChange={event => setMask(event.target.checked)} />Masking required</label>
               <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={approval} onChange={event => setApproval(event.target.checked)} />Access approval required</label>
