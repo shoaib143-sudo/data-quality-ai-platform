@@ -15,7 +15,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { createDefaultExecutionRecoveryRegistry } from '@/lib/orchestration/execution-recovery-handler-bindings'
 import { executePersistedRecoveryAndQueueResume } from '@/lib/orchestration/execution-recovery-persistence'
-import type { RecoveryFailureContext, RecoveryRepairClass, RecoveryStage } from '@/lib/orchestration/execution-recovery-contract'
+import type { RecoveryFailureContext, RecoveryStage } from '@/lib/orchestration/execution-recovery-contract'
+import { classifyTerminalRecoveryRoute, recoveryUnsafeFlags } from '@/lib/orchestration/execution-recovery-routing'
 import {
   markDurableJobFailed,
   markDurableJobSucceeded,
@@ -462,52 +463,6 @@ export async function executeDurableJob(job: DurableJob) {
 }
 
 
-function recoveryStageFromMessage(job: DurableJob, message: string): RecoveryStage {
-  if (/lease expired|orphaned|worker lease|stale lease|lease timeout/i.test(message)) return 'GOVERNED_WORKFLOW'
-  if (job.job_type === 'DISCOVERY') {
-    return /connect|jdbc|network|socket|timeout/i.test(message)
-      ? 'CONNECTOR_ESTABLISHMENT'
-      : 'SOURCE_READINESS'
-  }
-  if (/schema discovery|schema snapshot|schema hash/i.test(message)) return 'SCHEMA_DISCOVERY'
-  if (/profile column|column registration/i.test(message)) return 'PROFILE_COLUMNS'
-  if (/metric/i.test(message)) return 'METRIC_EXECUTION'
-  return 'PROFILE_RUN'
-}
-
-function repairClassForDeadJob(job: DurableJob, message: string): RecoveryRepairClass | null {
-  const leaseSafeJob = ['PROFILING', 'OBSERVABILITY', 'DISCOVERY', 'LINEAGE_ENRICHMENT', 'SEMANTIC_INDEX', 'GOVERNANCE_AGENT'].includes(job.job_type)
-  if (leaseSafeJob && /lease expired|orphaned|worker lease|stale lease|lease timeout/i.test(message)) {
-    return 'LEASE_RECONCILIATION'
-  }
-
-  if (
-    job.job_type === 'PROFILING'
-    && /PROFILE_READINESS_GATE_BLOCKED|profiling readiness|dataset_not_found|dataset_version_not_latest|source_not_observed_ready|execution_source_not_bound/i.test(message)
-  ) {
-    return 'PROFILING_READINESS_RECONCILIATION'
-  }
-
-  if (
-    job.job_type === 'DISCOVERY'
-    && /connect|jdbc|network|socket|timeout|source validation|schema availability|readiness/i.test(message)
-  ) {
-    return 'SOURCE_READINESS_RECONCILIATION'
-  }
-
-  return null
-}
-
-function recoveryUnsafeFlags(message: string) {
-  return {
-    credentialMissing: /(credential|secret).*(missing|not found|unknown|unavailable)|(missing|unknown).*(credential|secret)/i.test(message),
-    privilegeExpansionRequired: /grant\s|privilege expansion|requires elevated privilege/i.test(message),
-    destructiveMutationRequired: /\b(drop|truncate)\b.*\b(table|schema|database)\b/i.test(message),
-    policyBlocked: /policy denied|policy blocked|approval required|forbidden|access denied|not authorized/i.test(message),
-    securityRelevant: /security|cross[-_ ]project|cross[-_ ]tenant|tenant violation/i.test(message),
-  }
-}
-
 function stepStage(stepName: string): RecoveryStage | null {
   const value = stepName.toLowerCase()
   if (/connector|connection/.test(value)) return 'CONNECTOR_ESTABLISHMENT'
@@ -557,8 +512,8 @@ async function loadRecoveryCheckpoints(job: DurableJob) {
 
 async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? 'Durable job execution failed.')
-  const repairClass = repairClassForDeadJob(job, message)
-  if (!repairClass) return { attempted: false, reason: 'NO_ALLOWLISTED_REPAIR_CLASS' as const }
+  const route = classifyTerminalRecoveryRoute(job.job_type, message)
+  if (!route) return { attempted: false, reason: 'NO_ALLOWLISTED_REPAIR_CLASS' as const }
 
   const admin = createAdminClient()
   const { data: recoveryCase, error: caseError } = await admin
@@ -571,7 +526,8 @@ async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unk
   if (!recoveryCase) throw new Error('Terminal durable job did not create a recovery case.')
 
   const payload = job.payload ?? {}
-  const stage = recoveryStageFromMessage(job, message)
+  const stage = route.stage
+  const repairClass = route.repairClass
   const unsafe = recoveryUnsafeFlags(message)
   const checkpoints = await loadRecoveryCheckpoints(job)
   const sourceId = text(payload.sourceId) || text(job.entity_id)
