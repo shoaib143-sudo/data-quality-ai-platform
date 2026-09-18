@@ -106,6 +106,7 @@ requireText(recoveryPersistence, "final_outcome === 'RECOVERED'", 'successful re
 requireText(recoveryPersistence, "claim_execution_recovery_auto_repair", 'atomic repair claim integration')
 requireText(recoveryPersistence, ".eq('project_id', projectId)", 'project-scoped recovery persistence')
 requireText(recoveryPersistence, "existing.severity ?? initialRecoveryRecord", 'replayed severity preservation')
+requireText(recoveryPersistence, "consent_requirement: record.authorization_decision === 'AUTHORIZED' ? 'NONE' : 'OPERATOR'", 'autonomous consent evidence alignment')
 requireText(closedLoopRuntime, 'beforeApply', 'pre-mutation claim hook')
 requireText(autoResumeMigration, 'resume_execution_recovery_job', 'validated durable resume RPC')
 requireText(autoResumeMigration, "post_repair_validation_result is distinct from 'PASSED'", 'database repair-validation resume gate')
