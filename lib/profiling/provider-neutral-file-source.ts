@@ -24,6 +24,33 @@ export function parseObjectStorageSourceUri(sourceUri: string | null | undefined
   return { provider, bucket, key, sourceUri: canonicalSourceUri }
 }
 
+export function assertProjectScopedObjectStorageSource(
+  parsed: NonNullable<ReturnType<typeof parseObjectStorageSourceUri>>,
+  projectId: string,
+) {
+  const requiredPrefix = `projects/${projectId}/`
+  if (parsed.provider === 'r2') {
+    const configuredBucket = process.env.R2_BUCKET?.trim()
+    const configuredPrefix = (process.env.R2_PREFIX ?? '').trim().replace(/^\/+|\/+$/g, '')
+    if (!configuredBucket || parsed.bucket !== configuredBucket) {
+      throw new Error('R2 FILE source bucket is outside the configured application scope.')
+    }
+    const projectPath = configuredPrefix && parsed.key.startsWith(`${configuredPrefix}/`)
+      ? parsed.key.slice(configuredPrefix.length + 1)
+      : parsed.key
+    if (!projectPath.startsWith(requiredPrefix) || projectPath.length <= requiredPrefix.length) {
+      throw new Error(`R2 FILE source must be stored under ${requiredPrefix}...`)
+    }
+    return
+  }
+
+  if (parsed.bucket !== 'dataset-files'
+    || !parsed.key.startsWith(requiredPrefix)
+    || parsed.key.length <= requiredPrefix.length) {
+    throw new Error(`Supabase FILE source must be stored under dataset-files/${requiredPrefix}...`)
+  }
+}
+
 export function parseR2SourceUri(sourceUri: string | null | undefined) {
   const parsed = parseObjectStorageSourceUri(sourceUri)
   return parsed?.provider === 'r2' ? parsed : null
