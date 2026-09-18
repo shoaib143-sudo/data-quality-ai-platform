@@ -81,6 +81,25 @@ async function claimAutoRepair(input: {
   }
 }
 
+async function finalizeAutoRepairEvidence(input: {
+  recoveryCaseId: string
+  retryAttempt: number
+  mutationId?: string
+  repairApplied: boolean
+  validationResult: CanonicalRecoveryRecord['post_repair_validation_result']
+  validationCode?: string | null
+}) {
+  const admin = createAdminClient()
+  const { error } = await admin.schema('orchestration').rpc('finalize_execution_recovery_auto_repair', {
+    p_case_id: input.recoveryCaseId,
+    p_repair_attempt: input.retryAttempt,
+    p_mutation_id: input.mutationId ?? '',
+    p_repair_applied: input.repairApplied,
+    p_validation_result: input.validationResult,
+    p_validation_code: input.validationCode ?? '',
+  })
+  if (error) throw new Error(`Unable to finalize autonomous recovery evidence: ${error.message}`)
+}
 export async function executePersistedRecovery(input: {
   context: RecoveryFailureContext
   failureClassification: string
@@ -89,6 +108,33 @@ export async function executePersistedRecovery(input: {
   const existing = await loadPersistedRecoveryCase(input.context.recoveryCaseId)
   if (!existing) throw new Error('Execution recovery case was not found.')
 
+  if (existing.status === 'OPEN' && existing.post_repair_validation_result === 'PASSED' && existing.retry_stage) {
+    return {
+      replayed: true,
+      replayState: 'REPAIR_VALIDATED' as const,
+      record: {
+        recovery_case_id: input.context.recoveryCaseId,
+        original_workflow_run_id: input.context.workflowRunId,
+        failing_stage: input.context.failingStage,
+        failing_checkpoint_id: input.context.failingCheckpointId ?? null,
+        severity: 'P1' as const,
+        failure_classification: input.failureClassification,
+        root_cause_diagnosis: null,
+        evidence_used: input.context.evidence,
+        proposed_repair: input.context.knownRepairClass ?? null,
+        authorization_decision: existing.authorization_decision ?? 'AUTHORIZED',
+        repair_action_tool: null,
+        mutation_scope: null,
+        pre_repair_checkpoint_id: null,
+        post_repair_validation_result: 'PASSED' as const,
+        retry_stage: existing.retry_stage,
+        retry_checkpoint_id: existing.retry_checkpoint_id,
+        retry_attempt: input.context.retryAttempt,
+        final_outcome: 'OPEN' as const,
+        escalation_reason: null,
+      },
+    }
+  }
   if (existing.status === 'RETRY_QUEUED' && existing.post_repair_validation_result === 'PASSED') {
     return {
       replayed: true,
@@ -175,6 +221,7 @@ export async function executePersistedRecovery(input: {
   const initial = initialRecoveryRecord(input.context, input.failureClassification)
   await persistCanonicalRecoveryRecord(initial)
 
+  let repairClaimed = false
   const result = await executeAuthorizedRecovery({
     ...input,
     beforeApply: async ({ repair }) => {
@@ -184,10 +231,21 @@ export async function executePersistedRecovery(input: {
         actionKey: repair.toolKey,
         mutationScope: repair.mutationScope,
       })
+      repairClaimed = claim.claimed
       return { proceed: claim.claimed, reason: claim.reason ?? 'RECOVERY_ATTEMPT_ALREADY_CLAIMED' }
     },
   })
 
   await persistCanonicalRecoveryRecord(result.record)
+  if (repairClaimed) {
+    await finalizeAutoRepairEvidence({
+      recoveryCaseId: input.context.recoveryCaseId,
+      retryAttempt: input.context.retryAttempt,
+      mutationId: result.mutationId,
+      repairApplied: Boolean(result.mutationId),
+      validationResult: result.record.post_repair_validation_result,
+      validationCode: result.validation?.code ?? result.record.escalation_reason,
+    })
+  }
   return { replayed: false, replayState: 'EXECUTED' as const, ...result }
 }
