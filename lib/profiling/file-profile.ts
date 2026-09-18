@@ -73,8 +73,14 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
     authoritativeSourceUri = storageObject.provider === 'r2'
       ? `r2://${storageObject.bucket}/${storageObject.object_key}`
       : `storage://${storageObject.bucket}/${storageObject.object_key}`
+    const {
+      url: _staleUrl,
+      source_url: _staleSourceUrl,
+      sourceUrl: _staleSourceUrlCamel,
+      ...governedExecutionConfig
+    } = authoritativeExecutionConfig
     authoritativeExecutionConfig = {
-      ...authoritativeExecutionConfig,
+      ...governedExecutionConfig,
       storage_object_id: storageObject.id,
       storage_provider: storageObject.provider,
       storage_bucket: storageObject.bucket,
