@@ -25,6 +25,7 @@ function canonicalColumns(record: CanonicalRecoveryRecord) {
     evidence_used: record.evidence_used,
     proposed_repair: record.proposed_repair,
     authorization_decision: record.authorization_decision,
+    consent_requirement: record.authorization_decision === 'AUTHORIZED' ? 'NONE' : 'OPERATOR',
     repair_action_tool: record.repair_action_tool,
     mutation_scope: record.mutation_scope,
     pre_repair_checkpoint_id: record.pre_repair_checkpoint_id,
