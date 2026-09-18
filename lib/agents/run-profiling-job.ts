@@ -10,6 +10,13 @@ import { tryReuseProfileEvidence } from '@/lib/profiling/evidence-reuse'
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
 function errorMessage(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback }
+function errorCode(error: unknown, fallback = 'PROFILING_EXECUTION_FAILED') {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = String((error as { code?: unknown }).code ?? '').trim()
+    if (code) return code.slice(0, 120)
+  }
+  return fallback
+}
 
 async function safeUpdate(query: PromiseLike<{ error: { message: string } | null }>, label: string) {
   try {
@@ -278,6 +285,7 @@ export async function executePreparedProfilingJob(input: {
 
   } catch (error) {
     const message = errorMessage(error, 'Unknown profiling execution error')
+    const code = errorCode(error)
     const completedAt = new Date().toISOString()
     let cancelled = false
     try { cancelled = await isRunCancelled(agentRunId) } catch {}
@@ -285,9 +293,9 @@ export async function executePreparedProfilingJob(input: {
       await preserveCancellation(agentRunId, profilingRunId, stepId ?? undefined)
       return
     }
-    if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', stepId).eq('status', 'RUNNING'), 'fail current step')
-    await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', agentRunId).in('status', ['QUEUED','RUNNING']), 'fail agent run')
-    await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', profilingRunId).eq('status', 'RUNNING'), 'fail profiling run')
+    if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'FAILED', error_code: code, error_message: message, completed_at: completedAt }).eq('id', stepId).eq('status', 'RUNNING'), 'fail current step')
+    await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'FAILED', error_code: code, error_message: message, completed_at: completedAt }).eq('id', agentRunId).in('status', ['QUEUED','RUNNING']), 'fail agent run')
+    await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'FAILED', error_code: code, error_message: message, completed_at: completedAt }).eq('id', profilingRunId).eq('status', 'RUNNING'), 'fail profiling run')
     try {
       await recordProfileFailureAlert(datasetVersionId, profilingRunId, message)
     } catch (alertError) {
