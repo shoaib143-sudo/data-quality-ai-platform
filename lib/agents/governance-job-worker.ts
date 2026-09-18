@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
+import { createGovernedHandoffEnvelope } from '@/lib/agents/governed-handoff-contract'
+import { isGovernedAgentKey, type GovernedAgentKey } from '@/lib/agents/governed-agent-registry'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
 import { enrichOutputWithAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
 import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governance-policy-decision-provider'
@@ -65,12 +67,18 @@ async function loadHandoffSource(projectId: string, sourceAgentRunId: string) {
   }
 
   const sourceOutput = record(data.output) ?? {}
+  const sourceAgent = record(sourceOutput.agent) ?? {}
+  const sourceAgentKey = text(sourceAgent.key)
+  if (!isGovernedAgentKey(sourceAgentKey)) {
+    throw new Error('Durable handoff source run is missing a canonical governed agent key.')
+  }
   const observations = Array.isArray(sourceOutput.observations)
     ? sourceOutput.observations.filter((item): item is string => typeof item === 'string').slice(0, 3)
     : []
   return {
     correlationId: text(data.correlation_id) || randomUUID(),
     observations,
+    sourceAgentKey,
   }
 }
 
@@ -94,8 +102,9 @@ async function persistHandoff(input: {
   projectId: string
   actorUserId: string
   sourceAgentRunId: string
+  sourceAgentKey: GovernedAgentKey
   targetAgentRunId: string
-  targetAgentKey: string
+  targetAgentKey: GovernedAgentKey
   correlationId: string
   objective: string | null
   sourceObservations: string[]
@@ -120,6 +129,16 @@ async function persistHandoff(input: {
   if (existingError) throw new Error(`Unable to resolve durable handoff idempotency: ${existingError.message}`)
   if (existingMessage) return existingMessage
 
+  const envelope = createGovernedHandoffEnvelope({
+    correlationId: input.correlationId,
+    sourceAgentKey: input.sourceAgentKey,
+    targetAgentKey: input.targetAgentKey,
+    objective: input.objective || 'Review the source agent run and provide the requested specialist assessment.',
+    establishedFacts: input.sourceObservations,
+    evidenceRefs: [input.sourceAgentRunId],
+    confidence: 'UNSPECIFIED',
+  })
+
   const now = new Date().toISOString()
   const { data: message, error: messageError } = await admin.schema('agent').from('agent_messages').insert({
     source_agent_run_id: input.sourceAgentRunId,
@@ -127,9 +146,9 @@ async function persistHandoff(input: {
     message_type: 'GOVERNED_HANDOFF',
     correlation_id: input.correlationId,
     payload: {
-      objective: input.objective,
-      source_observations: input.sourceObservations,
-      target_agent_key: input.targetAgentKey,
+      ...envelope,
+      source_agent_run_id: input.sourceAgentRunId,
+      target_agent_run_id: input.targetAgentRunId,
       read_only: true,
       specialist: true,
       memory_informed: true,
@@ -154,7 +173,10 @@ async function persistHandoff(input: {
       source_agent_run_id: input.sourceAgentRunId,
       target_agent_run_id: input.targetAgentRunId,
       message_id: message.id,
+      source_agent_key: input.sourceAgentKey,
       target_agent_key: input.targetAgentKey,
+      handoff_contract_version: envelope.contractVersion,
+      handoff_requires_fresh_authorization: envelope.requiresFreshAuthorization,
       read_only: true,
       specialist: true,
       memory_informed: true,
@@ -217,7 +239,7 @@ async function executeGovernanceAgentJob(job: DurableJob) {
   let specialistOutput = result.output
   const agent = record(specialistOutput.agent) ?? {}
   const agentKey = text(agent.key)
-  if (!agentKey) throw new Error('Durable governance agent output is missing agent.key.')
+  if (!isGovernedAgentKey(agentKey)) throw new Error('Durable governance agent output is missing a canonical governed agent key.')
 
   if (agentKey === 'investigator_agent' && !record(specialistOutput.investigation)) {
     const investigation = await persistInvestigatorRiskAssessment({
@@ -252,6 +274,7 @@ async function executeGovernanceAgentJob(job: DurableJob) {
         projectId,
         actorUserId,
         sourceAgentRunId,
+        sourceAgentKey: handoff.sourceAgentKey,
         targetAgentRunId: result.runId,
         targetAgentKey: agentKey,
         correlationId: handoff.correlationId,
