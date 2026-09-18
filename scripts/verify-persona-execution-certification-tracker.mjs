@@ -43,5 +43,15 @@ assert.equal(steward.literalAuthenticatedBrowser, 'BLOCKED')
 assert.equal(steward.selfHealingHandsfree, 'BLOCKED')
 assert.equal(steward.productionGlossaryBoundary, 'BLOCKED')
 assert.ok(steward.blockers.length >= 2)
+assert.ok(steward.modeMatrix && typeof steward.modeMatrix === 'object', 'Data Steward execution-mode matrix must be persisted.')
+for (const mode of ['manual','guided','governedAuto','straightThrough','hitl','hotl','handsfree','selfHealingHandsfree','autonomousGoalDriven','systemTriggeredAutonomous']) {
+  assert.ok(mode in steward.modeMatrix, `Data Steward mode matrix missing ${mode}`)
+  assert.ok(typeof steward.modeMatrix[mode].allowed === 'boolean', `Data Steward ${mode} allowed flag must be explicit`)
+  assert.ok(allowed.has(steward.modeMatrix[mode].status), `Data Steward ${mode} has invalid status ${steward.modeMatrix[mode].status}`)
+}
+assert.equal(steward.modeMatrix.systemTriggeredAutonomous.allowed, false)
+assert.equal(steward.modeMatrix.systemTriggeredAutonomous.status, 'PASS')
+assert.equal(steward.modeMatrix.handsfree.status, 'BLOCKED')
+assert.equal(steward.modeMatrix.selfHealingHandsfree.status, 'BLOCKED')
 
 console.log('Persona certification tracker integrity: PASS')
