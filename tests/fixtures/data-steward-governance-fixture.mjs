@@ -1,0 +1,118 @@
+export const dataStewardGovernanceFixture = Object.freeze({
+  organization: { id: '00000000-0000-4000-8000-000000000001', role: 'MEMBER' },
+  user: {
+    id: '00000000-0000-4000-8000-000000000010',
+    persona: 'data-steward',
+    roleKey: 'DATA_STEWARD',
+  },
+  approver: {
+    id: '00000000-0000-4000-8000-000000000011',
+    roleKey: 'POLICY_APPROVER',
+  },
+  project: {
+    id: '00000000-0000-4000-8000-000000000100',
+    name: 'Data Steward E2E Fixture',
+  },
+  unauthorizedProject: {
+    id: '00000000-0000-4000-8000-000000000101',
+    name: 'Data Steward Negative Scope',
+  },
+  dataset: {
+    id: '00000000-0000-4000-8000-000000000200',
+    projectId: '00000000-0000-4000-8000-000000000100',
+    name: 'customer_orders',
+  },
+  datasetVersion: {
+    id: '00000000-0000-4000-8000-000000000201',
+    datasetId: '00000000-0000-4000-8000-000000000200',
+  },
+  profileRun: {
+    id: '00000000-0000-4000-8000-000000000202',
+    datasetVersionId: '00000000-0000-4000-8000-000000000201',
+    status: 'COMPLETED',
+  },
+  qualityRule: {
+    id: '00000000-0000-4000-8000-000000000203',
+    datasetId: '00000000-0000-4000-8000-000000000200',
+    enabled: true,
+  },
+  finding: {
+    id: '00000000-0000-4000-8000-000000000204',
+    profileRunId: '00000000-0000-4000-8000-000000000202',
+    severity: 'HIGH',
+  },
+  glossaryTerm: {
+    id: '00000000-0000-4000-8000-000000000205',
+    projectId: '00000000-0000-4000-8000-000000000100',
+    status: 'DRAFT',
+  },
+  classification: {
+    id: '00000000-0000-4000-8000-000000000206',
+    projectId: '00000000-0000-4000-8000-000000000100',
+    status: 'SUGGESTED',
+  },
+  issue: {
+    id: '00000000-0000-4000-8000-000000000207',
+    projectId: '00000000-0000-4000-8000-000000000100',
+    findingId: '00000000-0000-4000-8000-000000000204',
+    status: 'OPEN',
+  },
+  stewardshipAssignment: {
+    id: '00000000-0000-4000-8000-000000000208',
+    projectId: '00000000-0000-4000-8000-000000000100',
+    datasetId: '00000000-0000-4000-8000-000000000200',
+    role: 'DATA_STEWARD',
+    status: 'ACTIVE',
+  },
+  capabilities: [
+    'catalog.read',
+    'catalog.update',
+    'glossary.read',
+    'glossary.manage',
+    'profiling.read',
+    'profiling.execute',
+    'quality.read',
+    'quality.execute',
+    'issues.manage',
+    'classification.review',
+    'stewardship.manage',
+    'agent.view',
+    'agent.execute',
+    'execution.view',
+    'execution.retry',
+    'execution.cancel',
+  ],
+  prohibitedCapabilities: [
+    'admin.manage',
+    'source.manage',
+    'schedule.manage',
+    'policy.approve',
+    'quality.exception.approve',
+    'execution.approve',
+    'agent.admin',
+  ],
+})
+
+export function dataStewardAutonomyPolicy(mode) {
+  return {
+    mode,
+    enabled: mode !== 'OFF',
+    policyVersion: 'data-steward-e2e-v1',
+    maximumRiskTier: 'MEDIUM',
+    allowedAgentKeys: ['governance_orchestrator_agent'],
+    allowedToolKeys: ['read', 'profile', 'quality', 'glossary', 'classification', 'issues', 'stewardship'],
+    allowedModelClasses: ['approved'],
+    allowedMutationClasses: ['SAFE_REVERSIBLE'],
+    approvalRequiredActions: ['DESTRUCTIVE_ACTION', 'POLICY_CHANGE'],
+    autoRemediationEnabled: true,
+    autoRollbackEnabled: true,
+    maxExecutionBudget: 20,
+    maxModelBudget: 10,
+    maxRuntimeMs: 300000,
+    maxDatasetsChangedPerRun: 1,
+    maxProjectsAffectedPerRun: 1,
+    maxRemediationActionsPerHour: 3,
+    maxConcurrentModelCalls: 2,
+    emergencyStop: false,
+  }
+}
