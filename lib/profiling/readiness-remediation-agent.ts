@@ -1,5 +1,5 @@
 import { chooseProfileReadinessRemediation } from '@/lib/ai/profile-readiness-remediation-model'
-import { evaluateProfileReadinessRemediationPolicy } from '@/lib/profiling/readiness-remediation-policy'
+import { deterministicProfileReadinessRepairDecision, evaluateProfileReadinessRemediationPolicy } from '@/lib/profiling/readiness-remediation-policy'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidateAndReconcileSourceForProfiling } from '@/lib/profiling/source-readiness-repair'
 
@@ -50,6 +50,32 @@ export async function executeProfileReadinessRemediation(input: {
       readiness: before,
       provider: null,
       model: null,
+    }
+  }
+
+  const deterministicDecision = deterministicProfileReadinessRepairDecision(policy)
+  if (deterministicDecision) {
+    const repair = await revalidateAndReconcileSourceForProfiling({
+      projectId: input.projectId,
+      sourceId: deterministicDecision.sourceId,
+    })
+    const after = await loadReadiness(input.projectId, input.datasetVersionId)
+    const afterState = text(after.state) || 'NOT_ASSESSED'
+    return {
+      status: afterState === 'READY' && after.profiling_ready === true ? 'REMEDIATED' : 'REMEDIATION_ATTEMPTED',
+      selected_action: deterministicDecision.action,
+      executed: true,
+      approval_required: false,
+      rationale: 'Deterministic readiness policy authorized the sole low-risk source revalidation repair.',
+      confidence: 1,
+      before_state: beforeState,
+      after_state: afterState,
+      blocker_codes: policy.blockerCodes,
+      readiness: after,
+      source_validation: repair.validation,
+      provider: null,
+      model: null,
+      routing: { mode: 'DETERMINISTIC_POLICY' },
     }
   }
 
