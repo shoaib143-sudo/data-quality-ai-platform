@@ -48,6 +48,11 @@ assert.equal(classifyRecoverySeverity(p2), 'P2')
 assert.equal(authorizeRecoveryRepair(p2).authorized, false)
 assert.equal(authorizeRecoveryRepair(p2).escalationReason, null)
 
+const securityBlocked = authorizeRecoveryRepair(context({ securityRelevant: true }))
+assert.equal(securityBlocked.severity, 'P0')
+assert.equal(securityBlocked.authorized, false)
+assert.equal(securityBlocked.escalationReason, 'SECURITY_RELEVANT_REPAIR_REQUIRES_REVIEW')
+
 for (const blocked of [
   { credentialMissing: true, expected: 'MISSING_CREDENTIALS' },
   { privilegeExpansionRequired: true, expected: 'PRIVILEGE_EXPANSION_REQUIRED' },
