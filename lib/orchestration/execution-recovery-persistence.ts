@@ -60,6 +60,21 @@ export async function persistCanonicalRecoveryRecord(record: CanonicalRecoveryRe
   if (!data) throw new Error('Execution recovery case was not found.')
 }
 
+async function seedInitialRecoveryRecord(record: CanonicalRecoveryRecord) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .schema('orchestration')
+    .from('recovery_cases')
+    .update(canonicalColumns(record))
+    .eq('id', record.recovery_case_id)
+    .eq('final_outcome', 'OPEN')
+    .or('post_repair_validation_result.is.null,post_repair_validation_result.eq.NOT_RUN')
+    .select('id')
+    .maybeSingle()
+  if (error) throw new Error(`Unable to seed closed-loop execution recovery state: ${error.message}`)
+  return Boolean(data)
+}
+
 async function claimAutoRepair(input: {
   recoveryCaseId: string
   retryAttempt: number
@@ -219,9 +234,13 @@ export async function executePersistedRecovery(input: {
   }
 
   const initial = initialRecoveryRecord(input.context, input.failureClassification)
-  await persistCanonicalRecoveryRecord(initial)
+  const seeded = await seedInitialRecoveryRecord(initial)
+  if (!seeded) {
+    return { replayed: true, replayState: 'STATE_ADVANCED' as const, record: initial }
+  }
 
   let repairClaimed = false
+  let claimReason: string | null = null
   const result = await executeAuthorizedRecovery({
     ...input,
     beforeApply: async ({ repair }) => {
@@ -232,9 +251,14 @@ export async function executePersistedRecovery(input: {
         mutationScope: repair.mutationScope,
       })
       repairClaimed = claim.claimed
+      claimReason = claim.reason
       return { proceed: claim.claimed, reason: claim.reason ?? 'RECOVERY_ATTEMPT_ALREADY_CLAIMED' }
     },
   })
+
+  if (!repairClaimed && claimReason === 'ATTEMPT_ALREADY_CLAIMED') {
+    return { replayed: true, replayState: 'IN_FLIGHT' as const, record: initial }
+  }
 
   await persistCanonicalRecoveryRecord(result.record)
   if (repairClaimed) {
