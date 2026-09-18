@@ -158,3 +158,72 @@ export function createProfilingReadinessRecoveryHandler(input: {
     },
   }
 }
+
+
+export function createLeaseReconciliationRecoveryHandler(input: {
+  reconcile: (args: { projectId: string; durableJobId: string }) => Promise<{ reconciled: boolean }>
+  verify: (args: { projectId: string; durableJobId: string }) => Promise<{ status: string; leaseOwner: string | null; leaseExpiresAt: string | null }>
+}): RecoveryHandler {
+  const reconciled = new Set<string>()
+
+  function durableJobId(context: RecoveryFailureContext) {
+    return text(context.repairParameters?.durableJobId)
+  }
+
+  return {
+    key: 'lease-reconciliation',
+
+    canHandle(context) {
+      return context.knownRepairClass === 'LEASE_RECONCILIATION'
+        && Boolean(durableJobId(context))
+        && context.failingStage === 'GOVERNED_WORKFLOW'
+    },
+
+    async diagnose(context) {
+      const id = durableJobId(context)
+      if (!id) throw new Error('Lease reconciliation requires a durableJobId.')
+      return {
+        rootCause: `Persisted orchestration evidence indicates durable job ${id} has a stale or inconsistent worker lease.`,
+        repairClass: 'LEASE_RECONCILIATION',
+        evidenceIds: context.evidence.map(item => item.id),
+      }
+    },
+
+    async proposeRepair(context) {
+      const id = durableJobId(context)
+      if (!id) throw new Error('Lease reconciliation requires a durableJobId.')
+      return {
+        repairClass: 'LEASE_RECONCILIATION',
+        toolKey: 'reconcileDurableJobLease',
+        mutationScope: `project:${context.projectId}:durable-job:${id}:lease`,
+        payload: { projectId: context.projectId, durableJobId: id },
+      }
+    },
+
+    async apply(context, proposed) {
+      const id = durableJobId(context)
+      if (!id) throw new Error('Lease reconciliation requires a durableJobId.')
+      if (proposed.repairClass !== 'LEASE_RECONCILIATION') throw new Error('Unexpected repair class for lease reconciliation handler.')
+      const result = await input.reconcile({ projectId: context.projectId, durableJobId: id })
+      if (!result.reconciled) throw new Error('Durable job lease reconciliation did not apply.')
+      reconciled.add(context.recoveryCaseId)
+      return { mutationId: `lease-reconciliation:${context.recoveryCaseId}:${id}` }
+    },
+
+    async validate(context) {
+      if (!reconciled.has(context.recoveryCaseId)) return { valid: false, code: 'LEASE_REPAIR_EVIDENCE_MISSING' }
+      const id = durableJobId(context)
+      const state = await input.verify({ projectId: context.projectId, durableJobId: id })
+      const valid = state.status === 'DEAD' && state.leaseOwner === null && state.leaseExpiresAt === null
+      return {
+        valid,
+        code: valid ? 'DURABLE_JOB_LEASE_RECONCILED' : 'DURABLE_JOB_LEASE_STILL_ACTIVE',
+        evidenceIds: context.evidence.map(item => item.id),
+      }
+    },
+
+    sameStageRetrySafe() {
+      return true
+    },
+  }
+}
