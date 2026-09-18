@@ -19,6 +19,7 @@ const requiredDimensions = [
   'e2eLifecycle',
   'literalAuthenticatedBrowser',
   'selfHealingHandsfree',
+  'productionGlossaryBoundary',
   'finalCertification',
 ]
 
@@ -40,6 +41,7 @@ const steward = tracker.personas['data-steward']
 assert.equal(steward.finalCertification, 'IN_PROGRESS', 'Data Steward must not be over-certified before authenticated browser and self-healing evidence exist.')
 assert.equal(steward.literalAuthenticatedBrowser, 'BLOCKED')
 assert.equal(steward.selfHealingHandsfree, 'BLOCKED')
+assert.equal(steward.productionGlossaryBoundary, 'BLOCKED')
 assert.ok(steward.blockers.length >= 2)
 
 console.log('Persona certification tracker integrity: PASS')
