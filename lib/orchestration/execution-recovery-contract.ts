@@ -56,6 +56,7 @@ export type RecoveryFailureContext = {
   maxRepairAttempts: number
   evidence: RecoveryEvidenceRef[]
   checkpoints: RecoveryCheckpoint[]
+  repairParameters?: Record<string, unknown>
 }
 
 export type RecoveryAuthorizationDecision = {
