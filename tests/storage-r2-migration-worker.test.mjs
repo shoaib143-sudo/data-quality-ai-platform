@@ -5,7 +5,7 @@ import fs from 'node:fs'
 const route = fs.readFileSync(new URL('../app/api/internal/storage/migrate-to-r2/route.ts', import.meta.url), 'utf8')
 
 test('R2 migration worker is internally authorized, bounded, and source-safe', () => {
-  assert.match(route, /await requireInternalAutomation\\(request\\)/)
+  assert.match(route, /await requireInternalAutomation\(request\)/)
   assert.match(route, /STORAGE_MIGRATION_BATCH_SIZE/)
   assert.match(route, /MAX_BATCH = 20/)
   assert.match(route, /STORAGE_MIGRATION_MAX_OBJECT_BYTES/)
