@@ -101,6 +101,7 @@ const durableOutput = enrichGovernedOutputWithSkillPlan({
   output: { agent: { key: 'data_quality_agent' } },
 })
 assert.ok(durableOutput.skillPlan)
+assert.equal(durableOutput.skillPlan.plannerVersion, '1.0')
 assert.ok(durableOutput.skillPlan.selected.some((item) => item.skillKey === 'quality_rule_analysis'))
 assert.ok(durableOutput.skillPlan.rejected.some((item) => item.skillKey === 'quality_remediation_proposal' && item.reason === 'MUTATION_NOT_REQUESTED'))
 assert.equal(durableOutput.skillPlan.executionPolicy.planIsAdvisory, true)
