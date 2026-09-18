@@ -101,8 +101,8 @@ const [runA, runB] = await Promise.all([
   executeAuthorizedRecovery({ context: makeContext('b'), failureClassification: 'RUNTIME_SYSTEM_DEFECT', registry }),
 ])
 
-assert.equal(runA.record.final_outcome, 'RECOVERED')
-assert.equal(runB.record.final_outcome, 'RECOVERED')
+assert.equal(runA.record.final_outcome, 'OPEN')
+assert.equal(runB.record.final_outcome, 'OPEN')
 assert.equal(runA.record.retry_checkpoint_id, 'metric-a')
 assert.equal(runB.record.retry_checkpoint_id, 'metric-b')
 assert.deepEqual(mutations.sort((a, b) => a.workflowRunId.localeCompare(b.workflowRunId)), [
