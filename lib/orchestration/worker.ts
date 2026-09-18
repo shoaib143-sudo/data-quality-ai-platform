@@ -13,6 +13,9 @@ import { enrichObservabilityIncidentWithLineageImpact } from '@/lib/governance/l
 import { verifyRemediationOutcome } from '@/lib/profiling/remediation-verification'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { createDefaultExecutionRecoveryRegistry } from '@/lib/orchestration/execution-recovery-handler-bindings'
+import { executePersistedRecoveryAndQueueResume } from '@/lib/orchestration/execution-recovery-persistence'
+import type { RecoveryFailureContext, RecoveryRepairClass, RecoveryStage } from '@/lib/orchestration/execution-recovery-contract'
 import {
   markDurableJobFailed,
   markDurableJobSucceeded,
@@ -458,6 +461,165 @@ export async function executeDurableJob(job: DurableJob) {
   throw new Error(`Unsupported durable job type: ${job.job_type}`)
 }
 
+
+function recoveryStageFromMessage(job: DurableJob, message: string): RecoveryStage {
+  if (job.job_type === 'DISCOVERY') {
+    return /connect|jdbc|network|socket|timeout/i.test(message)
+      ? 'CONNECTOR_ESTABLISHMENT'
+      : 'SOURCE_READINESS'
+  }
+  if (/schema discovery|schema snapshot|schema hash/i.test(message)) return 'SCHEMA_DISCOVERY'
+  if (/profile column|column registration/i.test(message)) return 'PROFILE_COLUMNS'
+  if (/metric/i.test(message)) return 'METRIC_EXECUTION'
+  return 'PROFILE_RUN'
+}
+
+function repairClassForDeadJob(job: DurableJob, message: string): RecoveryRepairClass | null {
+  if (
+    job.job_type === 'PROFILING'
+    && /PROFILE_READINESS_GATE_BLOCKED|profiling readiness|dataset_not_found|dataset_version_not_latest|source_not_observed_ready|execution_source_not_bound/i.test(message)
+  ) {
+    return 'PROFILING_READINESS_RECONCILIATION'
+  }
+
+  if (
+    job.job_type === 'DISCOVERY'
+    && /connect|jdbc|network|socket|timeout|source validation|schema availability|readiness/i.test(message)
+  ) {
+    return 'SOURCE_READINESS_RECONCILIATION'
+  }
+
+  return null
+}
+
+function recoveryUnsafeFlags(message: string) {
+  return {
+    credentialMissing: /(credential|secret).*(missing|not found|unknown|unavailable)|(missing|unknown).*(credential|secret)/i.test(message),
+    privilegeExpansionRequired: /grant\s|privilege expansion|requires elevated privilege/i.test(message),
+    destructiveMutationRequired: /\b(drop|truncate)\b.*\b(table|schema|database)\b/i.test(message),
+    policyBlocked: /policy denied|policy blocked|approval required|forbidden|access denied|not authorized/i.test(message),
+    securityRelevant: /security|cross[-_ ]project|cross[-_ ]tenant|tenant violation/i.test(message),
+  }
+}
+
+function stepStage(stepName: string): RecoveryStage | null {
+  const value = stepName.toLowerCase()
+  if (/connector|connection/.test(value)) return 'CONNECTOR_ESTABLISHMENT'
+  if (/source.*onboard|dataset.*register/.test(value)) return 'SOURCE_ONBOARDING'
+  if (/readiness/.test(value)) return 'SOURCE_READINESS'
+  if (/schema/.test(value)) return 'SCHEMA_DISCOVERY'
+  if (/column/.test(value)) return 'PROFILE_COLUMNS'
+  if (/metric/.test(value)) return 'METRIC_EXECUTION'
+  if (/finding/.test(value)) return 'FINDINGS_GENERATION'
+  if (/score|scoring/.test(value)) return 'QUALITY_SCORING'
+  if (/governance.*insight|insight/.test(value)) return 'GOVERNANCE_INSIGHTS'
+  if (/profile/.test(value)) return 'PROFILE_RUN'
+  return null
+}
+
+async function loadRecoveryCheckpoints(job: DurableJob) {
+  if (!job.agent_run_id) return []
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .schema('agent')
+    .from('agent_run_steps')
+    .select('id,step_name,step_order,status,output')
+    .eq('agent_run_id', job.agent_run_id)
+    .order('step_order', { ascending: true })
+  if (error) throw new Error(\`Unable to load recovery checkpoints: \${error.message}\`)
+
+  return (data ?? []).flatMap(step => {
+    const stage = stepStage(String(step.step_name ?? ''))
+    if (!stage) return []
+    const output = step.output && typeof step.output === 'object' && !Array.isArray(step.output)
+      ? step.output as Record<string, unknown>
+      : {}
+    const upstreamIds = Object.fromEntries(
+      Object.entries(output)
+        .filter(([key, value]) => /id$/i.test(key) && typeof value === 'string' && value.trim())
+        .map(([key, value]) => [key, String(value)]),
+    )
+    return [{
+      id: String(step.id),
+      stage,
+      valid: step.status === 'SUCCEEDED',
+      completed: step.status === 'SUCCEEDED',
+      upstreamIds,
+    }]
+  })
+}
+
+async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? 'Durable job execution failed.')
+  const repairClass = repairClassForDeadJob(job, message)
+  if (!repairClass) return { attempted: false, reason: 'NO_ALLOWLISTED_REPAIR_CLASS' as const }
+
+  const admin = createAdminClient()
+  const { data: recoveryCase, error: caseError } = await admin
+    .schema('orchestration')
+    .from('recovery_cases')
+    .select('id,classification,retry_attempt')
+    .eq('durable_job_id', job.id)
+    .maybeSingle()
+  if (caseError) throw new Error(\`Unable to resolve terminal recovery case: \${caseError.message}\`)
+  if (!recoveryCase) throw new Error('Terminal durable job did not create a recovery case.')
+
+  const payload = job.payload ?? {}
+  const stage = recoveryStageFromMessage(job, message)
+  const unsafe = recoveryUnsafeFlags(message)
+  const checkpoints = await loadRecoveryCheckpoints(job)
+  const sourceId = text(payload.sourceId) || text(job.entity_id)
+  const datasetVersionId = text(payload.datasetVersionId)
+  const agentRunId = text(payload.agentRunId) || text(job.agent_run_id)
+
+  const context: RecoveryFailureContext = {
+    recoveryCaseId: String(recoveryCase.id),
+    projectId: job.project_id,
+    workflowRunId: agentRunId || job.id,
+    failingStage: stage,
+    failingCheckpointId: null,
+    code: message.slice(0, 500),
+    retryable: false,
+    blocking: true,
+    securityRelevant: unsafe.securityRelevant,
+    credentialMissing: unsafe.credentialMissing,
+    privilegeExpansionRequired: unsafe.privilegeExpansionRequired,
+    destructiveMutationRequired: unsafe.destructiveMutationRequired,
+    policyBlocked: unsafe.policyBlocked,
+    productionMutationRequired: false,
+    knownRepairClass: repairClass,
+    retryAttempt: Number(recoveryCase.retry_attempt ?? 0),
+    maxRepairAttempts: 2,
+    evidence: [
+      { type: 'DURABLE_JOB', id: job.id },
+      ...(job.agent_run_id ? [{ type: 'AGENT_RUN', id: job.agent_run_id }] : []),
+    ],
+    checkpoints,
+    repairParameters: {
+      ...(sourceId ? { sourceId } : {}),
+      ...(datasetVersionId ? { datasetVersionId } : {}),
+      ...(agentRunId ? { agentRunId } : {}),
+    },
+  }
+
+  const recovery = await executePersistedRecoveryAndQueueResume({
+    context,
+    failureClassification: String(recoveryCase.classification ?? 'UNKNOWN'),
+    registry: createDefaultExecutionRecoveryRegistry(),
+  })
+
+  return {
+    attempted: true,
+    recoveryCaseId: recovery.record.recovery_case_id,
+    outcome: recovery.record.final_outcome,
+    validation: recovery.record.post_repair_validation_result,
+    retryStage: recovery.record.retry_stage,
+    retryCheckpointId: recovery.record.retry_checkpoint_id,
+    resumeQueued: recovery.resume?.queued === true,
+    resumeReason: recovery.resume?.reason ?? null,
+  }
+}
+
 export async function processDurableJobs(jobs: DurableJob[]) {
   const results: Array<Record<string, unknown>> = []
   for (const job of jobs) {
@@ -467,11 +629,22 @@ export async function processDurableJobs(jobs: DurableJob[]) {
       results.push({ jobId: job.id, agentRunId: job.agent_run_id, status: 'SUCCEEDED' })
     } catch (error) {
       await markDurableJobFailed(job, error)
+      let recovery: Record<string, unknown> | null = null
+      if (job.attempts >= job.max_attempts) {
+        try {
+          recovery = await attemptClosedLoopRecoveryAfterDeadJob(job, error)
+        } catch (recoveryError) {
+          const recoveryMessage = recoveryError instanceof Error ? recoveryError.message : 'Closed-loop recovery failed.'
+          console.error('[execution-recovery-agent]', recoveryMessage.slice(0, 2000))
+          recovery = { attempted: true, outcome: 'RECOVERY_ENGINE_ERROR', error: recoveryMessage }
+        }
+      }
       results.push({
         jobId: job.id,
         agentRunId: job.agent_run_id,
         status: job.attempts >= job.max_attempts ? 'DEAD' : 'RETRY',
         error: error instanceof Error ? error.message : 'Job execution failed.',
+        recovery,
       })
     }
   }
