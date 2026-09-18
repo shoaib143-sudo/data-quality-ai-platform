@@ -42,3 +42,10 @@ export function evaluateProfileReadinessRemediationPolicy(readiness: Record<stri
     allowedActions: canExecuteLowRiskRepair ? ['REVALIDATE_SOURCE', 'NO_ACTION'] : ['NO_ACTION'],
   }
 }
+
+
+export function deterministicProfileReadinessRepairDecision(policy: ReadinessRemediationPolicy) {
+  return policy.canExecuteLowRiskRepair && policy.sourceId
+    ? { action: 'REVALIDATE_SOURCE' as const, sourceId: policy.sourceId }
+    : null
+}
