@@ -53,3 +53,5 @@ test('privileged route audit recognizes OIDC automation as an approved machine b
     assert.match(audit, new RegExp(route + '[\\s\\S]*?requireInternalAutomation\\\\\\('))
   }
 })
+
+// CI retrigger after OIDC audit reconciliation.
