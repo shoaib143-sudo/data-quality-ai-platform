@@ -29,7 +29,59 @@
         "Self-healing Handsfree waits for the Execution Recovery Agent P0/P1 closed-loop implementation.",
         "Production migration history does not yet contain the glossary hardening migration; production direct-write remediation cannot be certified until deployment is independently verified."
       ],
-      "productionGlossaryBoundary": "BLOCKED"
+      "productionGlossaryBoundary": "BLOCKED",
+      "modeMatrix": {
+        "manual": {
+          "allowed": true,
+          "status": "IN_PROGRESS",
+          "note": "Governed task capabilities and API boundaries certified; literal authenticated browser journey pending."
+        },
+        "guided": {
+          "allowed": true,
+          "status": "IN_PROGRESS",
+          "note": "Policy contract requires approval; authenticated persona E2E pending."
+        },
+        "governedAuto": {
+          "allowed": true,
+          "status": "IN_PROGRESS",
+          "note": "Low-risk policy-bounded contract certified; authenticated persona E2E pending."
+        },
+        "straightThrough": {
+          "allowed": true,
+          "status": "IN_PROGRESS",
+          "note": "Valid authorized-run outcome; complete persona lifecycle evidence pending."
+        },
+        "hitl": {
+          "allowed": true,
+          "status": "IN_PROGRESS",
+          "note": "May initiate/participate; approval authority remains independent."
+        },
+        "hotl": {
+          "allowed": true,
+          "status": "IN_PROGRESS",
+          "note": "Operational oversight is permitted without policy administration."
+        },
+        "handsfree": {
+          "allowed": true,
+          "status": "BLOCKED",
+          "note": "Awaiting complete P0/P1 Execution Recovery Agent certification."
+        },
+        "selfHealingHandsfree": {
+          "allowed": true,
+          "status": "BLOCKED",
+          "note": "Awaiting complete P0/P1 diagnose-remediate-validate-resume loop."
+        },
+        "autonomousGoalDriven": {
+          "allowed": true,
+          "status": "IN_PROGRESS",
+          "note": "FULL_AUTONOMOUS contract remains policy, tool, mutation, risk and approval bounded."
+        },
+        "systemTriggeredAutonomous": {
+          "allowed": false,
+          "status": "PASS",
+          "note": "Negative authority certified: Data Steward lacks schedule.manage."
+        }
+      }
     }
   }
 }
