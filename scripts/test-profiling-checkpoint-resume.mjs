@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-import { decideProfilingStepResume } from '../lib/agents/profiling-checkpoint.ts'
+import { decideProfilingStepResume, profilingRecoveryStartOrder } from '../lib/agents/profiling-checkpoint.ts'
 
 const succeeded = decideProfilingStepResume({
   id: 'step-profile',
@@ -51,5 +51,16 @@ assert.deepEqual(malformedOutput, {
   attempt: 4,
   output: {},
 })
+
+assert.equal(profilingRecoveryStartOrder({ retry_stage: 'PROFILE_RUN' }), 1)
+assert.equal(profilingRecoveryStartOrder({ retry_stage: 'SCHEMA_DISCOVERY' }), 1)
+assert.equal(profilingRecoveryStartOrder({ retry_stage: 'PROFILE_COLUMNS' }), 1)
+assert.equal(profilingRecoveryStartOrder({ retry_stage: 'METRIC_EXECUTION' }), 2)
+assert.equal(profilingRecoveryStartOrder({ retry_stage: 'METRIC_PERSISTENCE' }), 2)
+assert.equal(profilingRecoveryStartOrder({ retry_stage: 'FINDINGS_GENERATION' }), 3)
+assert.equal(profilingRecoveryStartOrder({ retry_stage: 'QUALITY_SCORING' }), 3)
+assert.equal(profilingRecoveryStartOrder({ retry_stage: 'GOVERNANCE_INSIGHTS' }), 3)
+assert.equal(profilingRecoveryStartOrder({ retry_stage: 'GOVERNED_WORKFLOW' }), null)
+assert.equal(profilingRecoveryStartOrder(null), null)
 
 console.log('Profiling checkpoint resume tests passed.')
