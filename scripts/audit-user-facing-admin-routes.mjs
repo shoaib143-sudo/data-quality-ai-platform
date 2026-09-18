@@ -46,6 +46,10 @@ const approvedPrivilegedExceptions = new Map([
     classification: 'INTERNAL_MACHINE_AUTH',
     requiredMarkers: ['requireInternalBearer('],
   }],
+  ['app/api/internal/storage/configure-r2-cors/route.ts', {
+    classification: 'INTERNAL_MACHINE_AUTH',
+    requiredMarkers: ['requireInternalAutomation('],
+  }],
   ['app/api/internal/storage/certify-r2/route.ts', {
     classification: 'INTERNAL_MACHINE_AUTH',
     requiredMarkers: ['requireInternalAutomation('],
