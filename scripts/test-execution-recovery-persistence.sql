@@ -148,6 +148,49 @@ begin
   where recovery_case_id = v_case_success and action_type = 'RESUME' and status = 'EXECUTED';
   if v_count <> 1 then raise exception 'Successful resume action was not reconciled: %', v_count; end if;
 
+  select count(*) into v_count
+  from orchestration.recovery_actions
+  where recovery_case_id = v_case_success
+    and action_type in ('AUTO_REPAIR','VALIDATE','RESUME')
+    and status = 'EXECUTED';
+  if v_count <> 3 then
+    raise exception 'Audit chain is incomplete; expected repair, validation, and resume evidence, found %', v_count;
+  end if;
+
+  if not exists (
+    select 1
+    from orchestration.recovery_actions
+    where recovery_case_id = v_case_success
+      and action_type = 'AUTO_REPAIR'
+      and outcome ? 'action_key'
+      and outcome ? 'mutation_id'
+      and outcome->>'repair_applied' = 'true'
+  ) then
+    raise exception 'AUTO_REPAIR evidence is incomplete.';
+  end if;
+
+  if not exists (
+    select 1
+    from orchestration.recovery_actions
+    where recovery_case_id = v_case_success
+      and action_type = 'VALIDATE'
+      and outcome->>'validation_result' = 'PASSED'
+      and outcome ? 'validation_code'
+  ) then
+    raise exception 'VALIDATE evidence is incomplete.';
+  end if;
+
+  if not exists (
+    select 1
+    from orchestration.recovery_actions
+    where recovery_case_id = v_case_success
+      and action_type = 'RESUME'
+      and outcome->>'retry_stage' = 'METRIC_EXECUTION'
+      and outcome->>'retry_checkpoint_id' = 'metric-step'
+  ) then
+    raise exception 'RESUME evidence is incomplete.';
+  end if;
+
   v_result := orchestration.claim_execution_recovery_auto_repair(
     v_case_no_validation, 0, 'repair', 'scope'
   );
