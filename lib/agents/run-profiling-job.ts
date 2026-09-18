@@ -6,6 +6,7 @@ import { recordProfileFailureAlert } from '@/lib/observability/evaluate'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 import { syncProfileClassifications } from '@/lib/governance/classification'
 import { tryReuseProfileEvidence } from '@/lib/profiling/evidence-reuse'
+import { decideProfilingStepResume } from '@/lib/agents/profiling-checkpoint'
 
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
@@ -30,20 +31,29 @@ async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, inp
   const { data: existing, error: existingError } = await admin
     .schema('agent')
     .from('agent_run_steps')
-    .select('id,attempt')
+    .select('id,status,attempt,output')
     .eq('agent_run_id', input.agentRunId)
     .eq('step_order', input.stepOrder)
     .maybeSingle()
   if (existingError) throw new Error(`Unable to resolve profiling step ${input.stepOrder}: ${existingError.message}`)
 
   if (existing) {
+    const decision = decideProfilingStepResume(existing)
+    if (decision.mode === 'REUSE') {
+      return {
+        id: decision.id,
+        alreadySucceeded: true,
+        output: decision.output,
+      }
+    }
+
     const { data, error } = await admin
       .schema('agent')
       .from('agent_run_steps')
       .update({
         step_name: input.stepName,
         status: 'RUNNING',
-        attempt: Number(existing.attempt ?? 1) + 1,
+        attempt: decision.nextAttempt,
         input: input.stepInput,
         output: null,
         started_at: input.startedAt,
@@ -55,7 +65,7 @@ async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, inp
       .select('id')
       .single()
     if (error || !data) throw new Error(`Unable to restart profiling step ${input.stepOrder}: ${error?.message ?? 'unknown error'}`)
-    return data
+    return { id: data.id, alreadySucceeded: false, output: {} }
   }
 
   const { data, error } = await admin
@@ -72,7 +82,7 @@ async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, inp
     .select('id')
     .single()
   if (error || !data) throw new Error(`Unable to create profiling step ${input.stepOrder}: ${error?.message ?? 'unknown error'}`)
-  return data
+  return { id: data.id, alreadySucceeded: false, output: {} }
 }
 
 async function isRunCancelled(runId: string) {
@@ -147,9 +157,13 @@ export async function executePreparedProfilingJob(input: {
     const activeProfileStepId = profileStep.id
 
     const context = { agentRunId, stepId: activeProfileStepId, projectId, agentDefinitionId, agentVersion } satisfies ToolExecutionContext
-    const profileResult = await executeProfilingExecutor('profile_dataset', { ...requestInput, datasetVersionId, profilingRunId }, context)
+    const profileResult = profileStep.alreadySucceeded
+      ? profileStep.output
+      : await executeProfilingExecutor('profile_dataset', { ...requestInput, datasetVersionId, profilingRunId }, context)
     if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeProfileStepId); return }
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).eq('status', 'RUNNING'), 'complete profile step')
+    if (!profileStep.alreadySucceeded) {
+      await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).eq('status', 'RUNNING'), 'complete profile step')
+    }
 
     let reuseDecision = null
     try {
@@ -228,9 +242,13 @@ export async function executePreparedProfilingJob(input: {
     stepId = metricStep.id
     const activeMetricStepId = metricStep.id
 
-    const metricResult = await executeProfilingExecutor('execute_metrics', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId: activeMetricStepId })
+    const metricResult = metricStep.alreadySucceeded
+      ? metricStep.output
+      : await executeProfilingExecutor('execute_metrics', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId: activeMetricStepId })
     if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeMetricStepId); return }
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', activeMetricStepId).eq('status', 'RUNNING'), 'complete metric step')
+    if (!metricStep.alreadySucceeded) {
+      await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', activeMetricStepId).eq('status', 'RUNNING'), 'complete metric step')
+    }
 
     const investigationStartedAt = new Date().toISOString()
     const investigationStep = await startOrRetryStep(admin, {
@@ -243,14 +261,18 @@ export async function executePreparedProfilingJob(input: {
     stepId = investigationStep.id
     const activeInvestigationStepId = investigationStep.id
 
-    const investigationResult = await executeProfilingExecutor('investigate_profile', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId: activeInvestigationStepId })
+    const investigationResult = investigationStep.alreadySucceeded
+      ? investigationStep.output
+      : await executeProfilingExecutor('investigate_profile', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId: activeInvestigationStepId })
     if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeInvestigationStepId); return }
 
     const validation = await validateProfilingRun(profilingRunId, userId)
     if (!validation.valid) throw new Error(`Profiling contract validation failed: ${validation.warnings.join(' ') || 'persisted results are incomplete.'}`)
 
     const completedAt = new Date().toISOString()
-    await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', activeInvestigationStepId).eq('status', 'RUNNING'), 'complete investigation step')
+    if (!investigationStep.alreadySucceeded) {
+      await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: investigationResult, completed_at: completedAt }).eq('id', activeInvestigationStepId).eq('status', 'RUNNING'), 'complete investigation step')
+    }
 
     try {
       await syncProfileClassifications(datasetVersionId, profilingRunId)
