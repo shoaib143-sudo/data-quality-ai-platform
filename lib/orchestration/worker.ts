@@ -304,9 +304,15 @@ export async function executeDurableJob(job: DurableJob) {
     const agentVersion = text(payload.agentVersion)
     const agentRunId = text(payload.agentRunId)
     const profilingRunId = text(payload.profilingRunId)
-    const requestInput = payload.requestInput && typeof payload.requestInput === 'object' && !Array.isArray(payload.requestInput)
+    const baseRequestInput = payload.requestInput && typeof payload.requestInput === 'object' && !Array.isArray(payload.requestInput)
       ? payload.requestInput as Record<string, unknown>
       : {}
+    const recoveryResume = payload.recoveryResume && typeof payload.recoveryResume === 'object' && !Array.isArray(payload.recoveryResume)
+      ? payload.recoveryResume as Record<string, unknown>
+      : null
+    const requestInput = recoveryResume
+      ? { ...baseRequestInput, recoveryResume }
+      : baseRequestInput
     if (!userId || !projectId || !datasetVersionId || !agentDefinitionId || !agentVersion || !agentRunId || !profilingRunId) {
       throw new Error('Durable profiling job payload is incomplete.')
     }
