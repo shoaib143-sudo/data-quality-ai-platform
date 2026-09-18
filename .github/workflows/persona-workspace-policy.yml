@@ -62,3 +62,5 @@ jobs:
         run: node scripts/test-data-steward-api-route-boundaries.mjs
       - name: Data Steward concurrency and idempotency tests
         run: node scripts/test-data-steward-concurrency-idempotency.mjs
+      - name: Verify persona certification tracker integrity
+        run: node scripts/verify-persona-execution-certification-tracker.mjs
