@@ -53,19 +53,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          oidc_response="$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
-          OIDC_TOKEN="$(printf '%s' "$oidc_response" | node -e '
-            let body="";
-            process.stdin.on("data", c => body += c);
-            process.stdin.on("end", () => {
-              const result=JSON.parse(body);
-              if (typeof result.value !== "string" || result.value.split(".").length !== 3) process.exit(2);
-              process.stdout.write(result.value);
-            });
-          ')"
           while IFS= read -r -d '' file; do
             node --experimental-strip-types --check "$file"
           done < <(find lib/storage app/api/internal/storage app/api/datasets/source/upload-file -type f -name '*.ts' -print0)
