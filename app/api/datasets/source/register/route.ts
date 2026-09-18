@@ -6,6 +6,7 @@ import { validateDataSourceForProfiling } from '@/lib/profiling/source-validatio
 import { validateJdbcConnection } from '@/lib/connectors/jdbc'
 import { discoverNativeHierarchy } from '@/lib/connectors/native-hierarchy-discovery'
 import { hierarchySelection } from '@/lib/connectors/native-hierarchy'
+import { assertProjectScopedObjectStorageSource, parseObjectStorageSourceUri } from '@/lib/profiling/provider-neutral-file-source'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function record(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
@@ -31,50 +32,32 @@ function jdbcTableParts(sourceIdentifier: string, defaultSchema = 'public', defa
 function fileConnectionMetadata(sourceUri: string, projectId: string) {
   if (/^https?:\/\//i.test(sourceUri)) return { url: sourceUri }
 
+  const parsed = parseObjectStorageSourceUri(sourceUri)
+  if (parsed) {
+    assertProjectScopedObjectStorageSource(parsed, projectId)
+    return {
+      storage_provider: parsed.provider,
+      storage_bucket: parsed.bucket,
+      storage_path: parsed.key,
+      bucket: parsed.bucket,
+      path: parsed.key,
+    }
+  }
+
   const normalized = sourceUri.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '')
-  const providerMatch = /^(r2|supabase|storage):\/\/([^/]+)\/(.+)$/i.exec(normalized)
-  const provider = providerMatch?.[1].toLowerCase()
-  const bucket = providerMatch ? decodeURIComponent(providerMatch[2]) : normalized.split('/')[0]
-  const rawPath = providerMatch ? providerMatch[3] : normalized.split('/').slice(1).join('/')
-  const path = rawPath.replace(/^\/+|\/+$/g, '')
-  if (!bucket || !path || path.split('/').some((part) => !part || part === '.' || part === '..')) {
+  const parts = normalized.split('/')
+  if (parts.length < 2 || parts.some((part) => !part || part === '.' || part === '..')) {
     throw new Error('FILE/CSV source URI must use a supported provider URI or bucket/path syntax with a normalized object path.')
   }
-
-  const requiredPrefix = `projects/${projectId}/`
-  if (provider === 'r2') {
-    const configuredBucket = process.env.R2_BUCKET?.trim()
-    const configuredPrefix = (process.env.R2_PREFIX ?? '').trim().replace(/^\/+|\/+$/g, '')
-    if (!configuredBucket || bucket !== configuredBucket) {
-      throw new Error('R2 FILE/CSV source bucket is outside the configured application scope.')
-    }
-    const projectPath = configuredPrefix && path.startsWith(`${configuredPrefix}/`)
-      ? path.slice(configuredPrefix.length + 1)
-      : path
-    if (!projectPath.startsWith(requiredPrefix) || projectPath.length <= requiredPrefix.length) {
-      throw new Error(`R2 FILE/CSV sources must be stored under ${requiredPrefix}...`)
-    }
-    return {
-      storage_provider: 'r2',
-      storage_bucket: bucket,
-      storage_path: path,
-      bucket,
-      path,
-    }
-  }
-
-  if (provider && provider !== 'supabase' && provider !== 'storage') {
-    throw new Error(`Unsupported FILE/CSV storage provider: ${provider}`)
-  }
-  if (bucket !== 'dataset-files' || !path.startsWith(requiredPrefix) || path.length <= requiredPrefix.length) {
-    throw new Error(`Supabase FILE/CSV sources must be stored under dataset-files/${requiredPrefix}...`)
-  }
+  const legacy = parseObjectStorageSourceUri(`storage://${parts[0]}/${parts.slice(1).join('/')}`)
+  if (!legacy) throw new Error('FILE/CSV source URI could not be resolved.')
+  assertProjectScopedObjectStorageSource(legacy, projectId)
   return {
-    storage_provider: 'supabase',
-    storage_bucket: bucket,
-    storage_path: path,
-    bucket,
-    path,
+    storage_provider: legacy.provider,
+    storage_bucket: legacy.bucket,
+    storage_path: legacy.key,
+    bucket: legacy.bucket,
+    path: legacy.key,
   }
 }
 
