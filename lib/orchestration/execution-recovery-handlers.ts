@@ -167,7 +167,7 @@ export function createRetrySafeRuntimeRecoveryHandler(): RecoveryHandler {
 
     canHandle(context) {
       return context.knownRepairClass === 'RETRY_SAFE_RUNTIME_REPAIR'
-        && context.failingStage === 'GOVERNED_WORKFLOW'
+        && ['GOVERNED_WORKFLOW', 'METRIC_PERSISTENCE', 'FINDINGS_GENERATION', 'QUALITY_SCORING', 'GOVERNANCE_INSIGHTS'].includes(context.failingStage)
         && Boolean(durableJobId(context))
     },
 
