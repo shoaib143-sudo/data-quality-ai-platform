@@ -4,6 +4,7 @@ import { initialRecoveryRecord, type CanonicalRecoveryRecord, type RecoveryFailu
 
 type PersistedRecoveryCase = {
   id: string
+  status: string | null
   final_outcome: CanonicalRecoveryRecord['final_outcome'] | null
   authorization_decision: CanonicalRecoveryRecord['authorization_decision'] | null
   post_repair_validation_result: CanonicalRecoveryRecord['post_repair_validation_result'] | null
@@ -39,7 +40,7 @@ export async function loadPersistedRecoveryCase(recoveryCaseId: string): Promise
   const { data, error } = await admin
     .schema('orchestration')
     .from('recovery_cases')
-    .select('id,final_outcome,authorization_decision,post_repair_validation_result,retry_stage,retry_checkpoint_id,escalation_reason')
+    .select('id,status,final_outcome,authorization_decision,post_repair_validation_result,retry_stage,retry_checkpoint_id,escalation_reason')
     .eq('id', recoveryCaseId)
     .maybeSingle()
   if (error) throw new Error(`Unable to load execution recovery case: ${error.message}`)
@@ -88,9 +89,65 @@ export async function executePersistedRecovery(input: {
   const existing = await loadPersistedRecoveryCase(input.context.recoveryCaseId)
   if (!existing) throw new Error('Execution recovery case was not found.')
 
+  if (existing.status === 'RETRY_QUEUED' && existing.post_repair_validation_result === 'PASSED') {
+    return {
+      replayed: true,
+      replayState: 'RESUME_PENDING' as const,
+      record: {
+        recovery_case_id: input.context.recoveryCaseId,
+        original_workflow_run_id: input.context.workflowRunId,
+        failing_stage: input.context.failingStage,
+        failing_checkpoint_id: input.context.failingCheckpointId ?? null,
+        severity: 'P1' as const,
+        failure_classification: input.failureClassification,
+        root_cause_diagnosis: null,
+        evidence_used: input.context.evidence,
+        proposed_repair: input.context.knownRepairClass ?? null,
+        authorization_decision: existing.authorization_decision ?? 'AUTHORIZED',
+        repair_action_tool: null,
+        mutation_scope: null,
+        pre_repair_checkpoint_id: null,
+        post_repair_validation_result: 'PASSED' as const,
+        retry_stage: existing.retry_stage,
+        retry_checkpoint_id: existing.retry_checkpoint_id,
+        retry_attempt: input.context.retryAttempt,
+        final_outcome: 'OPEN' as const,
+        escalation_reason: null,
+      },
+    }
+  }
+
+  if (existing.final_outcome === 'ESCALATED' || existing.final_outcome === 'FAILED') {
+    return {
+      replayed: true,
+      replayState: 'TERMINAL' as const,
+      record: {
+        recovery_case_id: input.context.recoveryCaseId,
+        original_workflow_run_id: input.context.workflowRunId,
+        failing_stage: input.context.failingStage,
+        failing_checkpoint_id: input.context.failingCheckpointId ?? null,
+        severity: 'P1' as const,
+        failure_classification: input.failureClassification,
+        root_cause_diagnosis: null,
+        evidence_used: input.context.evidence,
+        proposed_repair: input.context.knownRepairClass ?? null,
+        authorization_decision: existing.authorization_decision ?? 'ESCALATE',
+        repair_action_tool: null,
+        mutation_scope: null,
+        pre_repair_checkpoint_id: null,
+        post_repair_validation_result: existing.post_repair_validation_result ?? 'NOT_RUN',
+        retry_stage: existing.retry_stage,
+        retry_checkpoint_id: existing.retry_checkpoint_id,
+        retry_attempt: input.context.retryAttempt,
+        final_outcome: existing.final_outcome,
+        escalation_reason: existing.escalation_reason,
+      },
+    }
+  }
   if (existing.final_outcome === 'RECOVERED' && existing.post_repair_validation_result === 'PASSED') {
     return {
       replayed: true,
+      replayState: 'RECOVERED' as const,
       record: {
         recovery_case_id: input.context.recoveryCaseId,
         original_workflow_run_id: input.context.workflowRunId,
@@ -132,5 +189,5 @@ export async function executePersistedRecovery(input: {
   })
 
   await persistCanonicalRecoveryRecord(result.record)
-  return { replayed: false, ...result }
+  return { replayed: false, replayState: 'EXECUTED' as const, ...result }
 }
