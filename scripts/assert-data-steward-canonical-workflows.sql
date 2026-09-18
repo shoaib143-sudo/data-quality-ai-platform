@@ -145,6 +145,19 @@ begin
   select count(*) into v_count from governance.stewardship_assignment_events where assignment_id=v_assignment_id;
   if v_count < 2 then raise exception 'Stewardship accountability change event was not captured: %',v_count; end if;
 
+  update governance.stewardship_assignments
+  set status='REVOKED',revoked_by=v_user_id,revoked_at=now(),
+      decision_reason='Synthetic governed revocation',last_changed_by=v_user_id,updated_at=now()
+  where id=v_assignment_id;
+
+  select count(*) into v_count from governance.stewardship_assignment_events where assignment_id=v_assignment_id;
+  if v_count < 3 then raise exception 'Stewardship revoke event was not captured: %',v_count; end if;
+
+  if not exists(
+    select 1 from governance.stewardship_assignment_events
+    where assignment_id=v_assignment_id and event_type='REVOKED'
+  ) then raise exception 'Stewardship revoke event type is missing'; end if;
+
   select count(*) into v_count
   from governance.audit_events
   where project_id=v_project_id and entity_type='STEWARDSHIP_ASSIGNMENT' and entity_id=v_assignment_id;
