@@ -39,6 +39,7 @@ export type RecoveryHandler = {
 export type RecoveryExecutionResult = {
   record: CanonicalRecoveryRecord
   mutationId?: string
+  validation?: RecoveryValidation
 }
 
 export class ExecutionRecoveryHandlerRegistry {
@@ -145,6 +146,7 @@ export async function executeAuthorizedRecovery(input: {
   if (!validation.valid) {
     return {
       mutationId,
+      validation,
       record: {
         ...record,
         root_cause_diagnosis: diagnosis.rootCause,
@@ -161,6 +163,7 @@ export async function executeAuthorizedRecovery(input: {
   const target = retryTarget(input.context, handler.sameStageRetrySafe(input.context, repair))
   return {
     mutationId,
+    validation,
     record: {
       ...record,
       root_cause_diagnosis: diagnosis.rootCause,
