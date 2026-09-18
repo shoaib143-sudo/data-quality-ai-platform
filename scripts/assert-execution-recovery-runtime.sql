@@ -85,7 +85,7 @@ begin
     raise exception 'Resume trusted case flags without executed repair evidence: %',v_result;
   end if;
   update orchestration.recovery_cases
-     set post_repair_validation_result='NOT_RUN',retry_stage=null,retry_checkpoint_id=null
+     set post_repair_validation_result='NOT_RUN',retry_stage='GOVERNED_WORKFLOW',retry_checkpoint_id='workflow-stage'
    where id=v_case_id;
 
   v_result := orchestration.finalize_execution_recovery_auto_repair(
@@ -95,13 +95,18 @@ begin
     raise exception 'Repair validation evidence was not persisted: %',v_result;
   end if;
 
+  if not exists(
+    select 1 from orchestration.recovery_cases
+    where id=v_case_id and post_repair_validation_result='PASSED'
+      and retry_stage='GOVERNED_WORKFLOW' and retry_checkpoint_id='workflow-stage'
+  ) then
+    raise exception 'Repair finalizer did not checkpoint validated resume state atomically';
+  end if;
+
   update orchestration.recovery_cases
      set root_cause_diagnosis='Synthetic retry-safe lease defect',
          repair_action_tool='reconcileDurableRuntimeLease',
-         mutation_scope='project:'||v_project_id||':durable-job:'||v_job_id,
-         post_repair_validation_result='PASSED',
-         retry_stage='GOVERNED_WORKFLOW',
-         retry_checkpoint_id='workflow-stage'
+         mutation_scope='project:'||v_project_id||':durable-job:'||v_job_id
    where id=v_case_id;
 
   v_result := orchestration.resume_execution_recovery_job(v_case_id);
