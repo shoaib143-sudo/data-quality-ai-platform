@@ -96,6 +96,34 @@ async function claimAutoRepair(input: {
   }
 }
 
+async function advanceRecoveryAttemptAfterFailure(input: {
+  recoveryCaseId: string
+  currentAttempt: number
+  nextAttempt: number
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .schema('orchestration')
+    .from('recovery_cases')
+    .update({
+      status: 'OPEN',
+      retry_attempt: input.nextAttempt,
+      post_repair_validation_result: 'NOT_RUN',
+      retry_stage: null,
+      retry_checkpoint_id: null,
+      final_outcome: 'OPEN',
+      escalation_reason: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.recoveryCaseId)
+    .eq('retry_attempt', input.currentAttempt)
+    .eq('final_outcome', 'ESCALATED')
+    .select('id')
+    .maybeSingle()
+  if (error) throw new Error(`Unable to advance bounded execution recovery attempt: ${error.message}`)
+  return Boolean(data)
+}
+
 async function finalizeAutoRepairEvidence(input: {
   recoveryCaseId: string
   retryAttempt: number
@@ -271,5 +299,24 @@ export async function executePersistedRecovery(input: {
       validationCode: result.validation?.code ?? result.record.escalation_reason,
     })
   }
+
+  const boundedRepairFailure = result.record.final_outcome === 'ESCALATED'
+    && ['REPAIR_APPLICATION_FAILED', 'REPAIR_VALIDATION_FAILED'].includes(result.record.escalation_reason ?? '')
+  const nextAttempt = input.context.retryAttempt + 1
+  if (repairClaimed && boundedRepairFailure && nextAttempt < input.context.maxRepairAttempts) {
+    await advanceRecoveryAttemptAfterFailure({
+      recoveryCaseId: input.context.recoveryCaseId,
+      currentAttempt: input.context.retryAttempt,
+      nextAttempt,
+    })
+    return executePersistedRecovery({
+      ...input,
+      context: {
+        ...input.context,
+        retryAttempt: nextAttempt,
+      },
+    })
+  }
+
   return { replayed: false, replayState: 'EXECUTED' as const, ...result }
 }
