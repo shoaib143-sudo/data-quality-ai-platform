@@ -13,6 +13,7 @@ import { enrichObservabilityIncidentWithLineageImpact } from '@/lib/governance/l
 import { verifyRemediationOutcome } from '@/lib/profiling/remediation-verification'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { recoverTerminalDurableJobFailure } from '@/lib/orchestration/execution-recovery-agent'
 import {
   markDurableJobFailed,
   markDurableJobSucceeded,
@@ -467,11 +468,26 @@ export async function processDurableJobs(jobs: DurableJob[]) {
       results.push({ jobId: job.id, agentRunId: job.agent_run_id, status: 'SUCCEEDED' })
     } catch (error) {
       await markDurableJobFailed(job, error)
+      let recovery: Awaited<ReturnType<typeof recoverTerminalDurableJobFailure>> | null = null
+      let recoveryError: string | null = null
+      if (job.attempts >= job.max_attempts) {
+        try {
+          recovery = await recoverTerminalDurableJobFailure(job, error)
+        } catch (executionRecoveryError) {
+          recoveryError = executionRecoveryError instanceof Error
+            ? executionRecoveryError.message
+            : 'Execution Recovery Agent failed after the durable job became terminal.'
+          console.error('[execution-recovery-agent]', recoveryError)
+        }
+      }
+      const resumed = Boolean(recovery && 'resume' in recovery && recovery.resume?.resumed === true)
       results.push({
         jobId: job.id,
         agentRunId: job.agent_run_id,
-        status: job.attempts >= job.max_attempts ? 'DEAD' : 'RETRY',
+        status: resumed ? 'RECOVERY_QUEUED' : job.attempts >= job.max_attempts ? 'DEAD' : 'RETRY',
         error: error instanceof Error ? error.message : 'Job execution failed.',
+        recovery: recovery ?? undefined,
+        recoveryError: recoveryError ?? undefined,
       })
     }
   }
