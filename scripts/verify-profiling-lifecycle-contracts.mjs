@@ -8,11 +8,13 @@ function requireMatch(text, pattern, message) {
   if (!pattern.test(text)) throw new Error(message)
 }
 
-const [metricEngine, persistenceMigration, validatorMigration, databaseVerifier] = await Promise.all([
+const [metricEngine, persistenceMigration, validatorMigration, databaseVerifier, profilingJob, profilingCheckpoint] = await Promise.all([
   source('lib/profiling/metric-engine.ts'),
   source('supabase/migrations/20260904233902_preserve_precise_profiling_overall_score.sql'),
   source('supabase/migrations/20260904234230_strengthen_metric_execution_score_contract.sql'),
   source('scripts/verify-governance-database.mjs'),
+  source('lib/agents/run-profiling-job.ts'),
+  source('lib/agents/profiling-checkpoint.ts'),
 ])
 
 requireMatch(metricEngine, /function\s+isBlank\(value:\s*unknown\)/, 'Profiling engine must explicitly model blank strings.')
@@ -41,6 +43,11 @@ requireMatch(databaseVerifier, /latestProfileByDatasetVersion/, 'Live database v
 requireMatch(databaseVerifier, /rpc\('validate_metric_execution_contract'/, 'Live database verification must execute the profiling contract validator.')
 requireMatch(databaseVerifier, /score_consistent/, 'Live database verification must gate score consistency.')
 requireMatch(databaseVerifier, /completed_facts_present/, 'Live database verification must gate completed profiling facts.')
+
+requireMatch(profilingCheckpoint, /existing\.status\s*===\s*'SUCCEEDED'/, 'Profiling checkpoint resume must reuse successful steps.')
+requireMatch(profilingJob, /profileStep\.alreadySucceeded/, 'Profile step must preserve successful checkpoint evidence.')
+requireMatch(profilingJob, /metricStep\.alreadySucceeded/, 'Metric step must preserve successful checkpoint evidence.')
+requireMatch(profilingJob, /investigationStep\.alreadySucceeded/, 'Investigation step must preserve successful checkpoint evidence.')
 
 console.log(JSON.stringify({
   valid: true,
