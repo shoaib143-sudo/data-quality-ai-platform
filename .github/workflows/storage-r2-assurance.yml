@@ -58,3 +58,85 @@ jobs:
           done < <(find lib/storage app/api/internal/storage app/api/datasets/source/upload-file -type f -name '*.ts' -print0)
       - name: Run storage contract, negative, adversarial, and cutover guards
         run: node --test tests/storage-*.test.mjs
+
+  live-production-certification:
+    if: github.event_name == 'workflow_dispatch'
+    needs: storage-contract-and-adversarial-guards
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Require certification configuration
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$APP_URL" || { echo "::error::R2_CERTIFICATION_APP_URL is not configured"; exit 1; }
+          test -n "$CRON_SECRET" || { echo "::error::CRON_SECRET is not configured"; exit 1; }
+
+      - name: Apply approved R2 CORS policy
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 60 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/internal/storage/configure-r2-cors" \
+            | node -e '
+              let body="";
+              process.stdin.on("data", c => body += c);
+              process.stdin.on("end", () => {
+                const result=JSON.parse(body);
+                if (result.applied !== true || result.matchesDesiredPolicy !== true || result.wildcardOriginDetected === true) process.exit(2);
+                console.log(JSON.stringify({configured:result.configured,applied:result.applied,matchesDesiredPolicy:result.matchesDesiredPolicy,wildcardOriginDetected:result.wildcardOriginDetected},null,2));
+              });
+            '
+
+      - name: Copy and verify Supabase objects into R2
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 300 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/internal/storage/migrate-to-r2")"
+          printf '%s' "$response" | node -e '
+            let body="";
+            process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const result=JSON.parse(body);
+              const rows=Array.isArray(result.results) ? result.results : [];
+              const bad=rows.filter(r => !["COPIED_AND_VERIFIED","SKIPPED_ALREADY_READY"].includes(r.action));
+              if (result.sourceObjectsDeleted !== 0 || result.datasetVersionReferencesChanged !== 0 || bad.length) process.exit(2);
+              console.log(JSON.stringify({examined:result.examined,actions:rows.map(r=>r.action),sourceObjectsDeleted:result.sourceObjectsDeleted,datasetVersionReferencesChanged:result.datasetVersionReferencesChanged},null,2));
+            });
+          '
+
+      - name: Production R2 certification
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 60 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/internal/storage/certify-r2")"
+          printf '%s' "$response" | node -e '
+            let body="";
+            process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const result=JSON.parse(body);
+              const unsafe=["error","secret","token","credential"];
+              if (unsafe.some(k => Object.prototype.hasOwnProperty.call(result,k))) process.exit(2);
+              if (result.certified !== true) process.exit(3);
+              if (result.runtime?.productionCutoverActive === true) process.exit(4);
+              console.log(JSON.stringify(result,null,2));
+            });
+          '
+
