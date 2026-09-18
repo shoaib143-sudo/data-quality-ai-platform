@@ -218,7 +218,7 @@ export function GlossaryManager({
           <button disabled={busy || !projectId} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 font-bold text-white disabled:opacity-50">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Create draft
           </button>
-          {message ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</p> : null}
+          {message ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700" role="status" aria-live="polite">{message}</p> : null}
         </div>
       </form> : null}
 
