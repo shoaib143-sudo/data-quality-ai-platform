@@ -68,6 +68,22 @@ begin
   select count(*) into v_count from governance.glossary_term_versions where term_id=v_term_id;
   if v_count < 1 then raise exception 'Data Steward glossary semantic version evidence was not captured'; end if;
 
+  update governance.glossary_terms
+  set status='IN_REVIEW',last_changed_by=v_user_id,updated_at=now()
+  where id=v_term_id;
+  update governance.glossary_terms
+  set status='APPROVED',approved_by=v_user_id,approved_at=now(),last_changed_by=v_user_id,
+      provenance=provenance||jsonb_build_object('authoritative',true),updated_at=now()
+  where id=v_term_id;
+
+  select count(*) into v_count from governance.glossary_term_versions where term_id=v_term_id;
+  if v_count < 3 then raise exception 'Glossary lifecycle did not preserve draft/review/approved semantic versions: %',v_count; end if;
+
+  if not exists(
+    select 1 from governance.published_glossary_terms
+    where id=v_term_id and status='APPROVED'
+  ) then raise exception 'Approved glossary term is absent from published governed semantics'; end if;
+
   -- Classification suggestion + human review must be evidence-bearing and capability gated.
   insert into governance.classification_labels(project_id,code,name,category,description,enabled)
   values(v_project_id,'SYNTHETIC_INTERNAL','Synthetic Internal','SENSITIVITY','Synthetic classification label.',true)
@@ -117,6 +133,17 @@ begin
 
   select count(*) into v_count from governance.stewardship_assignment_events where assignment_id=v_assignment_id;
   if v_count < 1 then raise exception 'Stewardship assignment event evidence was not captured'; end if;
+
+  update governance.stewardship_assignments
+  set accountability='Updated synthetic stewardship accountability.',
+      decision_reason='Synthetic accountability update',
+      last_changed_by=v_user_id,
+      evidence=evidence||jsonb_build_object('updated_in_fixture',true),
+      updated_at=now()
+  where id=v_assignment_id;
+
+  select count(*) into v_count from governance.stewardship_assignment_events where assignment_id=v_assignment_id;
+  if v_count < 2 then raise exception 'Stewardship accountability change event was not captured: %',v_count; end if;
 
   select count(*) into v_count
   from governance.audit_events
