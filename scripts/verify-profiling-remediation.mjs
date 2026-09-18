@@ -24,6 +24,9 @@ for (const path of requiredFiles) {
 }
 
 const checks = [
+  ['lib/profiling/readiness-remediation-policy.ts', /deterministicProfileReadinessRepairDecision/, 'deterministic readiness repair decision'],
+  ['lib/profiling/readiness-remediation-agent.ts', /deterministicDecision\s*=\s*deterministicProfileReadinessRepairDecision\(policy\)/, 'deterministic readiness repair execution'],
+  ['lib/profiling/readiness-remediation-agent.ts', /routing:\s*\{\s*mode:\s*'DETERMINISTIC_POLICY'\s*\}/, 'deterministic readiness repair evidence'],
   ['app/api/profiling/approval/route.ts', /approval_required[\s\S]*PROFILE_RUN[\s\S]*policy\.approve[\s\S]*start_workflow/, 'investigation approval gating'],
   ['app/api/profiling/approval/route.ts', /PROFILING_REMEDIATION_APPROVAL[\s\S]*workflow_definitions/, 'default profiling approval workflow'],
   ['app/api/profiling/remediation/route.ts', /status !== 'APPROVED'[\s\S]*issues\.manage[\s\S]*TRACKED_GOVERNANCE_ISSUES_ONLY[\s\S]*production_mutation_performed:\s*false/, 'approved non-destructive remediation execution'],
