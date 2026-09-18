@@ -142,7 +142,24 @@ export async function executeAuthorizedRecovery(input: {
     }
   }
 
-  const validation = await handler.validate(input.context, repair)
+  let validation: RecoveryValidation
+  try {
+    validation = await handler.validate(input.context, repair)
+  } catch {
+    return {
+      mutationId,
+      record: {
+        ...record,
+        root_cause_diagnosis: diagnosis.rootCause,
+        repair_action_tool: repair.toolKey,
+        mutation_scope: repair.mutationScope,
+        post_repair_validation_result: 'FAILED',
+        final_outcome: 'ESCALATED',
+        authorization_decision: 'ESCALATE',
+        escalation_reason: 'REPAIR_VALIDATION_UNAVAILABLE',
+      },
+    }
+  }
   if (!validation.valid) {
     return {
       mutationId,
