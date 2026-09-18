@@ -44,3 +44,14 @@ export function decideProfilingStepResume(existing: ProfilingStepSnapshot): Prof
     nextAttempt: attempt + 1,
   }
 }
+
+
+export function profilingRecoveryStartOrder(value: unknown): number | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const stageValue = (value as Record<string, unknown>).retry_stage
+  const stage = typeof stageValue === 'string' ? stageValue.trim().toUpperCase() : ''
+  if (['PROFILE_RUN', 'SCHEMA_DISCOVERY', 'PROFILE_COLUMNS'].includes(stage)) return 1
+  if (['METRIC_EXECUTION', 'METRIC_PERSISTENCE'].includes(stage)) return 2
+  if (['FINDINGS_GENERATION', 'QUALITY_SCORING', 'GOVERNANCE_INSIGHTS'].includes(stage)) return 3
+  return null
+}
