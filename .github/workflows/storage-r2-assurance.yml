@@ -140,3 +140,36 @@ jobs:
             });
           '
 
+      - name: Verify R2 reference cutover dry run
+        env:
+          APP_URL: ${{ secrets.R2_CERTIFICATION_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 300 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{"mode":"dry-run"}' \
+            "$APP_URL/api/internal/storage/reference-cutover")"
+          printf '%s' "$response" | node -e '
+            let body="";
+            process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const result=JSON.parse(body);
+              const rows=Array.isArray(result.results) ? result.results : [];
+              if (result.mode !== "dry-run") process.exit(2);
+              if ((result.examinedTargets ?? 0) < 1 || (result.eligibleReferences ?? 0) < 1) process.exit(3);
+              if (result.changedReferences !== 0 || result.destructiveActions !== 0) process.exit(4);
+              if (rows.some(r => r.action === "ERROR" || r.action === "SKIPPED_INTEGRITY_MISMATCH")) process.exit(5);
+              console.log(JSON.stringify({
+                mode: result.mode,
+                examinedTargets: result.examinedTargets,
+                eligibleReferences: result.eligibleReferences,
+                changedReferences: result.changedReferences,
+                destructiveActions: result.destructiveActions
+              },null,2));
+            });
+          '
+

@@ -12,11 +12,12 @@ test('R2 production preparation is manual-only and production gated', () => {
   assert.doesNotMatch(certification, /pull_request_target|schedule:/)
 })
 
-test('R2 preparation uses fixed internal routes and never cuts over references or deletes sources', () => {
+test('R2 preparation uses fixed internal routes and never applies cutover or deletes sources', () => {
   assert.match(certification, /\/api\/internal\/storage\/configure-r2-cors/)
   assert.match(certification, /\/api\/internal\/storage\/migrate-to-r2/)
   assert.match(certification, /\/api\/internal\/storage\/certify-r2/)
-  assert.doesNotMatch(certification, /reference-cutover|STORAGE_DEFAULT_PROVIDER|STORAGE_R2_PRODUCTION_CUTOVER_APPROVED/)
+  assert.doesNotMatch(certification, /STORAGE_DEFAULT_PROVIDER|STORAGE_R2_PRODUCTION_CUTOVER_APPROVED|STORAGE_R2_REFERENCE_CUTOVER_APPROVED/)
+  assert.doesNotMatch(certification, /"mode":"apply"/)
   assert.match(certification, /sourceObjectsDeleted !== 0/)
   assert.match(certification, /datasetVersionReferencesChanged !== 0/)
 })
@@ -25,4 +26,15 @@ test('R2 preparation remains bounded and secret-safe', () => {
   assert.match(certification, /--connect-timeout 10 --max-time 300/)
   assert.match(certification, /Authorization: Bearer \$CRON_SECRET/)
   assert.doesNotMatch(certification, /GITHUB_ENV|GITHUB_OUTPUT|upload-artifact|actions\/cache|set -x|printenv/)
+})
+
+
+test('R2 production preparation proves reference cutover eligibility without changing references', () => {
+  assert.match(certification, /\/api\/internal\/storage\/reference-cutover/)
+  assert.match(certification, /--data '\{"mode":"dry-run"\}'/)
+  assert.match(certification, /eligibleReferences \?\? 0\) < 1/)
+  assert.match(certification, /changedReferences !== 0/)
+  assert.match(certification, /destructiveActions !== 0/)
+  assert.match(certification, /SKIPPED_INTEGRITY_MISMATCH/)
+  assert.doesNotMatch(certification, /"mode":"apply"/)
 })
