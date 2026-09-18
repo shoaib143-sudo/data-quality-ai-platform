@@ -16,7 +16,7 @@ test('R2 migration prefilters terminally ineligible sources before filling a bat
   assert.match(route, /\.not\('size_bytes', 'is', null\)/)
   assert.match(route, /\.not\('verified_at', 'is', null\)/)
   assert.match(route, /\.lte\('size_bytes', objectLimit\)/)
-  assert.match(route, /\.or\('checksum\.is\.null,checksum_algorithm\.eq\.sha256'\)/)
+  assert.match(route, /\.or\('and\(checksum\.is\.null,checksum_algorithm\.is\.null\),checksum_algorithm\.eq\.sha256'\)/)
 })
 
 test('R2 migration reports scanned and selected counts without destructive cutover', () => {
@@ -24,4 +24,10 @@ test('R2 migration reports scanned and selected counts without destructive cutov
   assert.match(route, /selected: candidates\.length/)
   assert.match(route, /sourceObjectsDeleted: 0/)
   assert.match(route, /datasetVersionReferencesChanged: 0/)
+})
+
+
+test('R2 batch selection does not admit a source with an unsupported checksum algorithm merely because checksum is null', () => {
+  assert.doesNotMatch(route, /\.or\('checksum\.is\.null,checksum_algorithm\.eq\.sha256'\)/)
+  assert.match(route, /and\(checksum\.is\.null,checksum_algorithm\.is\.null\)/)
 })
