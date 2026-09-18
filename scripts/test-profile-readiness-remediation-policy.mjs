@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { evaluateProfileReadinessRemediationPolicy } from '../lib/profiling/readiness-remediation-policy.ts'
+import { deterministicProfileReadinessRepairDecision, evaluateProfileReadinessRemediationPolicy } from '../lib/profiling/readiness-remediation-policy.ts'
 
 function readiness(blockers, remediation, source_id = '00000000-0000-4000-8000-000000000001') {
   return { state: 'BLOCKED', profiling_ready: false, source_id, blockers, remediation }
@@ -26,6 +26,7 @@ let policy = evaluateProfileReadinessRemediationPolicy(readiness(
 assert.equal(policy.canExecuteLowRiskRepair, true)
 assert.deepEqual(policy.allowedActions, ['REVALIDATE_SOURCE', 'NO_ACTION'])
 assert.equal(policy.approvalRequired, false)
+assert.deepEqual(deterministicProfileReadinessRepairDecision(policy), { action: 'REVALIDATE_SOURCE', sourceId: '00000000-0000-4000-8000-000000000001' })
 
 policy = evaluateProfileReadinessRemediationPolicy(readiness(
   { EXECUTION_SOURCE_NOT_BOUND: true },
@@ -43,6 +44,7 @@ policy = evaluateProfileReadinessRemediationPolicy(readiness(
 assert.equal(policy.approvalRequired, true)
 assert.equal(policy.canExecuteLowRiskRepair, false)
 assert.deepEqual(policy.allowedActions, ['NO_ACTION'])
+assert.equal(deterministicProfileReadinessRepairDecision(policy), null)
 
 policy = evaluateProfileReadinessRemediationPolicy(readiness(
   { DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE: true },
@@ -64,6 +66,7 @@ policy = evaluateProfileReadinessRemediationPolicy(readiness(
   '',
 ))
 assert.equal(policy.canExecuteLowRiskRepair, false)
+assert.equal(deterministicProfileReadinessRepairDecision(policy), null)
 
 policy = evaluateProfileReadinessRemediationPolicy(readiness({}, {}))
 assert.equal(policy.canExecuteLowRiskRepair, false)
