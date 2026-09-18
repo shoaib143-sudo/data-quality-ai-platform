@@ -60,3 +60,5 @@ jobs:
         run: node --test scripts/test-data-steward-concurrency-idempotency.mjs
       - name: Verify Data Steward E2E fixture contract
         run: node scripts/verify-data-steward-e2e-fixture.mjs
+      - name: Data Steward accessibility contract
+        run: node --test scripts/test-data-steward-accessibility-contract.mjs
