@@ -42,6 +42,11 @@ requireMatch(databaseVerifier, /rpc\('validate_metric_execution_contract'/, 'Liv
 requireMatch(databaseVerifier, /score_consistent/, 'Live database verification must gate score consistency.')
 requireMatch(databaseVerifier, /completed_facts_present/, 'Live database verification must gate completed profiling facts.')
 
+requireText(profilingCheckpoint, "existing.status === 'SUCCEEDED'", 'profiling checkpoint reuse')
+requireText(profilingJob, 'profileStep.alreadySucceeded', 'profile step checkpoint preservation')
+requireText(profilingJob, 'metricStep.alreadySucceeded', 'metric step checkpoint preservation')
+requireText(profilingJob, 'investigationStep.alreadySucceeded', 'investigation step checkpoint preservation')
+
 console.log(JSON.stringify({
   valid: true,
   contracts: {
