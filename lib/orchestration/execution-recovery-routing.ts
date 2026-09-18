@@ -2,7 +2,7 @@ import type { DurableJobType } from './queue'
 import type { RecoveryRepairClass, RecoveryStage } from './execution-recovery-contract'
 
 export type TerminalRecoveryRoute = {
-  repairClass: RecoveryRepairClass
+  repairClass: RecoveryRepairClass | null
   stage: RecoveryStage
 }
 
@@ -29,6 +29,17 @@ export function recoveryStageFromFailure(jobType: DurableJobType, message: strin
 }
 
 export function classifyTerminalRecoveryRoute(jobType: DurableJobType, message: string): TerminalRecoveryRoute | null {
+  const governedException = recoveryUnsafeFlags(message)
+  if (
+    governedException.securityRelevant
+    || governedException.credentialMissing
+    || governedException.privilegeExpansionRequired
+    || governedException.destructiveMutationRequired
+    || governedException.policyBlocked
+  ) {
+    return { repairClass: null, stage: recoveryStageFromFailure(jobType, message) }
+  }
+
   if (
     LEASE_RETRY_SAFE_JOB_TYPES.has(jobType)
     && /lease expired|orphaned|worker lease|stale lease|lease timeout/i.test(message)
