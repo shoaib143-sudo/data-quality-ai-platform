@@ -20,6 +20,7 @@ function canonicalColumns(record: CanonicalRecoveryRecord) {
     failing_checkpoint_id: record.failing_checkpoint_id,
     severity: record.severity,
     root_cause_diagnosis: record.root_cause_diagnosis,
+    evidence_used: record.evidence_used,
     proposed_repair: record.proposed_repair,
     authorization_decision: record.authorization_decision,
     repair_action_tool: record.repair_action_tool,
