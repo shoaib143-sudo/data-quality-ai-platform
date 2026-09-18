@@ -33,5 +33,11 @@ for (const label of ['Governed project','Business term','Business definition','D
 for (const label of ['Governed project','Governed dataset','Issue title','Description and business impact','Issue severity','Resolution summary and evidence','Issue comment']) {
   assert.ok(issues.includes(`aria-label="${label}"`), `Issue workflow input missing accessible label: ${label}`)
 }
+for (const label of ['Stewardship target type','Stewardship target','Assignee','Stewardship role','Accountability statement']) {
+  assert.ok(stewardship.includes(`aria-label="${label}"`), `Stewardship input missing accessible label: ${label}`)
+}
+for (const label of ['Governed project','Classification label','Policy name','Policy description','Retention days']) {
+  assert.ok(classification.includes(`aria-label="${label}"`), `Classification input missing accessible label: ${label}`)
+}
 
 console.log('Data Steward live-status accessibility contract passed.')
