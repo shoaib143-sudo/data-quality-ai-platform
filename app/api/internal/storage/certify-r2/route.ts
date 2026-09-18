@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireInternalBearer } from '@/lib/security/internal-bearer'
+import { requireInternalAutomation } from '@/lib/security/internal-bearer'
 import { readR2CorsPolicy, r2CorsHasWildcardOrigin, r2CorsPolicyMatchesDesired } from '@/lib/storage/r2-cors'
 
 export const dynamic = 'force-dynamic'
@@ -41,7 +41,7 @@ function sourceStorageId(row: StorageRow) {
 }
 
 export async function GET(request: Request) {
-  if (!requireInternalBearer(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+  if (!(await requireInternalAutomation(request))) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
 
   const admin = createAdminClient()
   const [storageResult, versionsResult] = await Promise.all([

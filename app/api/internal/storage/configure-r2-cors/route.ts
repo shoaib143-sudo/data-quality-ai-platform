@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireInternalBearer } from '@/lib/security/internal-bearer'
+import { requireInternalAutomation } from '@/lib/security/internal-bearer'
 import {
   applyDataNexusR2CorsPolicy,
   readR2CorsPolicy,
@@ -24,7 +24,7 @@ async function currentState() {
 }
 
 export async function GET(request: Request) {
-  if (!requireInternalBearer(request)) {
+  if (!(await requireInternalAutomation(request))) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!requireInternalBearer(request)) {
+  if (!(await requireInternalAutomation(request))) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
   if (!mutationsApproved()) {

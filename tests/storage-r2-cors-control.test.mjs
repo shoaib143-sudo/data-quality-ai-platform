@@ -32,8 +32,7 @@ test('R2 CORS control uses the same exact-origin least-privilege desired state a
 })
 
 test('R2 CORS mutation endpoint is internal-authenticated and separately approved', () => {
-  assert.match(route, /requireInternalBearer\(request\)/)
-  assert.match(route, /CRON_SECRET/)
+  assert.match(route, /await requireInternalAutomation\\(request\\)/)
   assert.match(route, /R2_INFRA_MUTATIONS_APPROVED/)
   assert.match(route, /status: 403/)
   assert.match(route, /applyDataNexusR2CorsPolicy/)
