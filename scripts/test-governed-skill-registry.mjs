@@ -179,6 +179,7 @@ const rejected = evaluateGovernedSkillPromotion({
 })
 assert.equal(rejected.status, 'REJECTED')
 assert.equal(rejected.automaticPromotionAllowed, false)
+assert.equal(rejected.currentAuthorizationRequiredAtRelease, true)
 
 const regressed = evaluateGovernedSkillPromotion({
   ...promotionBase,
