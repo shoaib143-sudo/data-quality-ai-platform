@@ -38,3 +38,13 @@ test('R2 production preparation proves reference cutover eligibility without cha
   assert.match(certification, /SKIPPED_INTEGRITY_MISMATCH/)
   assert.doesNotMatch(certification, /"mode":"apply"/)
 })
+
+
+test('R2 production preparation does not require an infrastructure mutation when CORS is already correct', () => {
+  assert.match(certification, /Verify or apply approved R2 CORS policy/)
+  assert.match(certification, /result\.configured !== true/)
+  assert.match(certification, /result\.matchesDesiredPolicy !== true/)
+  assert.match(certification, /result\.wildcardOriginDetected === true/)
+  assert.match(certification, /R2 CORS policy already matches the governed desired state/)
+  assert.match(certification, /-X POST/)
+})
