@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import {
+  createLeaseReconciliationRecoveryHandler,
   createProfilingReadinessRecoveryHandler,
   createSourceReadinessRecoveryHandler,
 } from '../lib/orchestration/execution-recovery-handlers.ts'
@@ -151,5 +152,54 @@ assert.equal(failedIndependentValidation, 1)
 assert.equal(failedValidation.record.post_repair_validation_result, 'FAILED')
 assert.equal(failedValidation.record.final_outcome, 'ESCALATED')
 assert.equal(failedValidation.record.escalation_reason, 'REPAIR_VALIDATION_FAILED')
+
+
+let leaseReconciliations = 0
+let leaseValidations = 0
+const leaseHandler = createLeaseReconciliationRecoveryHandler({
+  async reconcile(input) {
+    leaseReconciliations += 1
+    assert.deepEqual(input, { projectId: 'project-1', durableJobId: 'job-1' })
+    return { reconciled: true }
+  },
+  async verify(input) {
+    leaseValidations += 1
+    assert.deepEqual(input, { projectId: 'project-1', durableJobId: 'job-1' })
+    return { status: 'DEAD', leaseOwner: null, leaseExpiresAt: null }
+  },
+})
+const leaseContext = context({
+  recoveryCaseId: 'case-lease-1',
+  failingStage: 'GOVERNED_WORKFLOW',
+  knownRepairClass: 'LEASE_RECONCILIATION',
+  repairParameters: { durableJobId: 'job-1' },
+})
+assert.equal(leaseHandler.canHandle(leaseContext), true)
+const leaseRecovered = await executeAuthorizedRecovery({
+  context: leaseContext,
+  failureClassification: 'ORCHESTRATION',
+  registry: new ExecutionRecoveryHandlerRegistry([leaseHandler]),
+})
+assert.equal(leaseReconciliations, 1)
+assert.equal(leaseValidations, 1)
+assert.equal(leaseRecovered.record.post_repair_validation_result, 'PASSED')
+assert.equal(leaseRecovered.record.retry_stage, 'GOVERNED_WORKFLOW')
+
+const activeLeaseHandler = createLeaseReconciliationRecoveryHandler({
+  async reconcile() {
+    return { reconciled: true }
+  },
+  async verify() {
+    return { status: 'DEAD', leaseOwner: 'worker-2', leaseExpiresAt: '2026-09-18T12:00:00Z' }
+  },
+})
+const activeLease = await executeAuthorizedRecovery({
+  context: { ...leaseContext, recoveryCaseId: 'case-lease-active' },
+  failureClassification: 'ORCHESTRATION',
+  registry: new ExecutionRecoveryHandlerRegistry([activeLeaseHandler]),
+})
+assert.equal(activeLease.record.post_repair_validation_result, 'FAILED')
+assert.equal(activeLease.record.final_outcome, 'ESCALATED')
+assert.equal(activeLease.record.escalation_reason, 'REPAIR_VALIDATION_FAILED')
 
 console.log('Execution Recovery Agent specialist handler tests passed.')
