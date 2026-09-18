@@ -25,7 +25,7 @@ export function createSourceReadinessRecoveryHandler(input?: {
     canHandle(context) {
       return context.knownRepairClass === 'SOURCE_READINESS_RECONCILIATION'
         && Boolean(sourceId(context))
-        && (context.failingStage === 'SOURCE_READINESS' || context.failingStage === 'SOURCE_ONBOARDING')
+        && (context.failingStage === 'SOURCE_READINESS' || context.failingStage === 'SOURCE_ONBOARDING' || context.failingStage === 'METRIC_EXECUTION')
     },
 
     async diagnose(context) {
