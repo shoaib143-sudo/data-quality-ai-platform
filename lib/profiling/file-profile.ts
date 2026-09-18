@@ -31,7 +31,7 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
   const { data: versionRows, error: versionError } = await supabase
     .schema('catalog')
     .from('dataset_versions')
-    .select('id,metadata,source_uri,dataset_id')
+    .select('id,metadata,source_uri,dataset_id,storage_object_id')
     .eq('id', datasetVersionId)
     .limit(1)
   if (versionError) throw new Error(`Unable to load FILE dataset version: ${versionError.message}`)
@@ -53,12 +53,44 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
 
   const executionConfig = record(executionSource.execution_config)
   const connectionMetadata = record(executionConfig.connection_metadata)
+  let authoritativeSourceUri = typeof executionSource.source_uri === 'string' ? executionSource.source_uri : version.source_uri
+  let authoritativeExecutionConfig: Record<string, unknown> = { ...connectionMetadata, ...executionConfig }
+
+  if (version.storage_object_id) {
+    const { data: storageObject, error: storageError } = await supabase
+      .schema('catalog')
+      .from('storage_objects')
+      .select('id,provider,bucket,object_key,content_type,state')
+      .eq('id', version.storage_object_id)
+      .maybeSingle()
+    if (storageError) throw new Error(`Unable to resolve governed FILE storage object: ${storageError.message}`)
+    if (!storageObject) throw new Error('Governed FILE storage object was not found.')
+    if (storageObject.state !== 'READY') throw new Error(`Governed FILE storage object is not READY (state=${storageObject.state}).`)
+    if (storageObject.provider !== 'supabase' && storageObject.provider !== 'r2') {
+      throw new Error(`Unsupported governed FILE storage provider: ${storageObject.provider}`)
+    }
+
+    authoritativeSourceUri = storageObject.provider === 'r2'
+      ? `r2://${storageObject.bucket}/${storageObject.object_key}`
+      : `storage://${storageObject.bucket}/${storageObject.object_key}`
+    authoritativeExecutionConfig = {
+      ...authoritativeExecutionConfig,
+      storage_object_id: storageObject.id,
+      storage_provider: storageObject.provider,
+      storage_bucket: storageObject.bucket,
+      storage_path: storageObject.object_key,
+      bucket: storageObject.bucket,
+      path: storageObject.object_key,
+      content_type: storageObject.content_type,
+    }
+  }
+
   const sampling = await resolveSamplingPolicy(supabase, datasetVersionId, 1000)
   const loaded = await loadGovernedFileSource(
     supabase,
     {
-      sourceUri: typeof executionSource.source_uri === 'string' ? executionSource.source_uri : version.source_uri,
-      executionConfig: { ...connectionMetadata, ...executionConfig },
+      sourceUri: authoritativeSourceUri,
+      executionConfig: authoritativeExecutionConfig,
     },
     { maxRows: sampling.loadLimit, maxBytes: sampling.technicalMaxFileBytes },
   )
