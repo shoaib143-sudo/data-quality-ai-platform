@@ -8,44 +8,73 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
-export function parseR2SourceUri(sourceUri: string | null | undefined) {
+export function parseObjectStorageSourceUri(sourceUri: string | null | undefined) {
   const value = sourceUri?.trim() ?? ''
-  const match = /^r2:\/\/([^/]+)\/(.+)$/i.exec(value)
+  const match = /^(r2|supabase|storage):\/\/([^/]+)\/(.+)$/i.exec(value)
   if (!match) return null
-  const bucket = decodeURIComponent(match[1])
-  const key = match[2]
-  if (!bucket || !key) throw new Error('R2 source URI is incomplete.')
-  return { bucket, key, sourceUri: `r2://${bucket}/${key}` }
+  const provider = match[1].toLowerCase() === 'r2' ? 'r2' : 'supabase'
+  const bucket = decodeURIComponent(match[2])
+  const key = match[3].replace(/^\/+|\/+$/g, '')
+  if (!bucket || !key || key.split('/').some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('Object-storage source URI is incomplete or invalid.')
+  }
+  const canonicalSourceUri = provider === 'r2'
+    ? `r2://${bucket}/${key}`
+    : `storage://${bucket}/${key}`
+  return { provider, bucket, key, sourceUri: canonicalSourceUri }
+}
+
+export function parseR2SourceUri(sourceUri: string | null | undefined) {
+  const parsed = parseObjectStorageSourceUri(sourceUri)
+  return parsed?.provider === 'r2' ? parsed : null
 }
 
 export async function resolveProviderNeutralFileConfig(config: FileSourceConfig): Promise<{
   config: FileSourceConfig
   canonicalSourceUri: string | null
-  provider: 'r2' | null
+  provider: 'r2' | 'supabase' | null
 }> {
-  const r2 = parseR2SourceUri(config.sourceUri)
-  if (!r2) return { config, canonicalSourceUri: config.sourceUri?.trim() || null, provider: null }
+  const objectStorage = parseObjectStorageSourceUri(config.sourceUri)
+  if (!objectStorage) return { config, canonicalSourceUri: config.sourceUri?.trim() || null, provider: null }
+
+  if (objectStorage.provider === 'supabase') {
+    return {
+      provider: 'supabase',
+      canonicalSourceUri: objectStorage.sourceUri,
+      config: {
+        sourceUri: objectStorage.sourceUri,
+        executionConfig: {
+          ...record(config.executionConfig),
+          storage_provider: 'supabase',
+          storage_bucket: objectStorage.bucket,
+          storage_path: objectStorage.key,
+          bucket: objectStorage.bucket,
+          path: objectStorage.key,
+        },
+      },
+    }
+  }
 
   const storage = createObjectStorage('r2')
   const reference: StorageReference = {
     provider: 'r2',
-    bucket: r2.bucket,
-    key: r2.key,
+    bucket: objectStorage.bucket,
+    key: objectStorage.key,
   }
   const authorization = await storage.createDownloadAuthorization({ reference, expiresInSeconds: R2_READ_TTL_SECONDS })
   if (!authorization.url) throw new Error('R2 file source could not be authorized for server-side reading.')
 
   return {
     provider: 'r2',
-    canonicalSourceUri: r2.sourceUri,
+    canonicalSourceUri: objectStorage.sourceUri,
     config: {
-      sourceUri: r2.sourceUri,
+      sourceUri: objectStorage.sourceUri,
       executionConfig: {
         ...record(config.executionConfig),
         url: authorization.url,
         storage_provider: 'r2',
-        storage_bucket: r2.bucket,
-        storage_path: r2.key,
+        storage_bucket: objectStorage.bucket,
+        storage_path: objectStorage.key,
       },
     },
   }
@@ -54,7 +83,7 @@ export async function resolveProviderNeutralFileConfig(config: FileSourceConfig)
 export function sanitizeProviderNeutralFileResult(
   result: FileSourceResult,
   canonicalSourceUri: string | null,
-  provider: 'r2' | null,
+  provider: 'r2' | 'supabase' | null,
 ): FileSourceResult {
   if (!provider || !canonicalSourceUri) return result
   return {
