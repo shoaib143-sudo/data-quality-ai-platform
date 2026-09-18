@@ -169,10 +169,7 @@ export async function executeAuthorizedRecovery(input: {
       mutationId,
       validation,
       record: {
-        ...record,
-        root_cause_diagnosis: diagnosis.rootCause,
-        repair_action_tool: repair.toolKey,
-        mutation_scope: repair.mutationScope,
+        ...plannedRecord,
         post_repair_validation_result: 'FAILED',
         final_outcome: 'ESCALATED',
         authorization_decision: 'ESCALATE',
