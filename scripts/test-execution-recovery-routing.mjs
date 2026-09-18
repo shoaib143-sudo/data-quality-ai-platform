@@ -21,6 +21,16 @@ assert.deepEqual(
   { repairClass: 'LEASE_RECONCILIATION', stage: 'GOVERNED_WORKFLOW' },
 )
 
+assert.deepEqual(
+  classifyTerminalRecoveryRoute('PROFILING', 'missing credential secret for source'),
+  { repairClass: null, stage: 'PROFILE_RUN' },
+)
+
+assert.deepEqual(
+  classifyTerminalRecoveryRoute('DISCOVERY', 'cross-tenant security violation during JDBC discovery'),
+  { repairClass: null, stage: 'CONNECTOR_ESTABLISHMENT' },
+)
+
 assert.equal(
   classifyTerminalRecoveryRoute('NOTIFICATION', 'worker lease expired during notification'),
   null,
