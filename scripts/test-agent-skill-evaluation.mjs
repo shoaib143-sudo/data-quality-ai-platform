@@ -230,6 +230,7 @@ assert.deepEqual(scorecardRequests, [{
 assert.equal(scorecard.agentKey, 'investigator_agent')
 assert.equal(scorecard.skillKey, 'incident_root_cause_analysis')
 assert.deepEqual(scorecard.metrics.map((metric) => metric.metricName), ['grounding'])
+assert.ok(scorecard.metrics.every((metric) => metric.capability === 'agent_skill:investigator_agent:incident_root_cause_analysis'))
 
 for (const [overrides, expected] of [
   [{ evaluationType: 'OTHER' }, /unexpected evaluation type/],
