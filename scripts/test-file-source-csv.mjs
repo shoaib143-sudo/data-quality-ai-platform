@@ -47,6 +47,13 @@ test('overwide records fail closed instead of silently dropping fields', () => {
   )
 })
 
+test('overwide diagnostics preserve the physical source line across blank and quoted multiline records', () => {
+  assert.throws(
+    ()=>parseCsv('id,description\n\n1,"hello\nworld"\n2,ok,unexpected\n',10),
+    /Invalid CSV source at line 5: expected at most 2 fields from the header but found 3/,
+  )
+})
+
 test('missing trailing fields remain null while blank fields remain blank', () => {
   const parsed=parseCsv('name,optional,missing\nAlice,,\nBob,provided\n',10)
   assert.deepEqual(parsed.rows,[
