@@ -154,6 +154,7 @@ requireText(recoveryRouting, "return { repairClass: 'LEASE_RECONCILIATION', stag
 requireText(recoveryRouting, "repairClass: 'PROFILING_READINESS_RECONCILIATION'", 'profiling readiness routing policy')
 requireText(recoveryRouting, "repairClass: 'SOURCE_READINESS_RECONCILIATION'", 'source readiness routing policy')
 requireText(recoveryRouting, "return null", 'unknown failure fail-closed routing')
+requireText(recoveryRouting, "return { repairClass: null", 'governed non-repairable routing')
 requireText(worker, 'executePersistedRecoveryAndQueueResume', 'persisted recovery and resume integration')
 requireText(worker, 'createDefaultExecutionRecoveryRegistry', 'default recovery handler registry binding')
 requireText(worker, "job.attempts >= job.max_attempts", 'terminal-only automatic recovery trigger')
