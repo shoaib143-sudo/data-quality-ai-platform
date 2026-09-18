@@ -1,5 +1,6 @@
 import { revalidateAndReconcileSourceForProfiling } from '@/lib/profiling/source-readiness-repair'
 import { executeProfileReadinessRemediation } from '@/lib/profiling/readiness-remediation-agent'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { RecoveryHandler } from './execution-recovery-runtime'
 import type { RecoveryFailureContext } from './execution-recovery-contract'
 
@@ -146,6 +147,93 @@ export function createProfileReadinessRecoveryHandler(input?: {
       return {
         valid,
         code: valid ? 'PROFILE_READINESS_RESTORED' : 'PROFILE_READINESS_STILL_BLOCKED',
+        evidenceIds: context.evidence.map(item => item.id),
+      }
+    },
+
+    sameStageRetrySafe() {
+      return true
+    },
+  }
+}
+
+export function createRetrySafeRuntimeRecoveryHandler(): RecoveryHandler {
+  function durableJobId(context: RecoveryFailureContext) {
+    return text(context.repairParameters?.durableJobId)
+  }
+
+  return {
+    key: 'retry-safe-runtime-repair',
+
+    canHandle(context) {
+      return context.knownRepairClass === 'RETRY_SAFE_RUNTIME_REPAIR'
+        && context.failingStage === 'GOVERNED_WORKFLOW'
+        && Boolean(durableJobId(context))
+    },
+
+    async diagnose(context) {
+      const jobId = durableJobId(context)
+      if (!jobId) throw new Error('Runtime recovery requires a durableJobId.')
+      const admin = createAdminClient()
+      const { data, error } = await admin.schema('orchestration').from('job_queue')
+        .select('id,project_id,status,lease_owner,lease_expires_at,attempts,max_attempts,last_error')
+        .eq('id', jobId)
+        .eq('project_id', context.projectId)
+        .maybeSingle()
+      if (error) throw new Error(`Unable to load durable runtime evidence: ${error.message}`)
+      if (!data) throw new Error('Durable runtime evidence was not found in project scope.')
+      if (data.status !== 'DEAD') throw new Error(`Durable job is ${data.status}; retry-safe runtime repair requires DEAD evidence.`)
+      return {
+        rootCause: `Durable job ${jobId} exhausted bounded execution after a retry-safe runtime or lease failure.`,
+        repairClass: 'RETRY_SAFE_RUNTIME_REPAIR',
+        evidenceIds: context.evidence.map(item => item.id),
+      }
+    },
+
+    async proposeRepair(context) {
+      const jobId = durableJobId(context)
+      if (!jobId) throw new Error('Runtime recovery requires a durableJobId.')
+      return {
+        repairClass: 'RETRY_SAFE_RUNTIME_REPAIR',
+        toolKey: 'reconcileDurableRuntimeLease',
+        mutationScope: `project:${context.projectId}:durable-job:${jobId}`,
+        payload: { durableJobId: jobId, projectId: context.projectId },
+      }
+    },
+
+    async apply(context, proposed) {
+      const jobId = durableJobId(context)
+      if (!jobId) throw new Error('Runtime recovery requires a durableJobId.')
+      if (proposed.repairClass !== 'RETRY_SAFE_RUNTIME_REPAIR') {
+        throw new Error('Unexpected repair class for retry-safe runtime handler.')
+      }
+      const admin = createAdminClient()
+      const { data, error } = await admin.schema('orchestration').from('job_queue').update({
+        lease_owner: null,
+        lease_expires_at: null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', jobId).eq('project_id', context.projectId).eq('status', 'DEAD')
+        .select('id')
+        .maybeSingle()
+      if (error) throw new Error(`Unable to reconcile durable runtime lease: ${error.message}`)
+      if (!data) throw new Error('Durable runtime repair lost its terminal job scope.')
+      return { mutationId: `durable-runtime:${context.recoveryCaseId}:${jobId}` }
+    },
+
+    async validate(context) {
+      const jobId = durableJobId(context)
+      if (!jobId) return { valid: false, code: 'DURABLE_JOB_ID_MISSING' }
+      const admin = createAdminClient()
+      const { data, error } = await admin.schema('orchestration').from('job_queue')
+        .select('id,status,lease_owner,lease_expires_at')
+        .eq('id', jobId)
+        .eq('project_id', context.projectId)
+        .maybeSingle()
+      if (error || !data) return { valid: false, code: 'DURABLE_RUNTIME_VALIDATION_UNAVAILABLE' }
+      const valid = data.status === 'DEAD' && data.lease_owner === null && data.lease_expires_at === null
+      return {
+        valid,
+        code: valid ? 'DURABLE_RUNTIME_RECONCILED' : 'DURABLE_RUNTIME_STILL_UNSAFE',
         evidenceIds: context.evidence.map(item => item.id),
       }
     },
