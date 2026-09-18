@@ -5,6 +5,7 @@ import {
   classifyRecoverySeverity,
   nearestValidRecoveryCheckpoint,
   retryTarget,
+  shouldRediagnoseRecoveryFailure,
 } from '../lib/orchestration/execution-recovery-contract.ts'
 import {
   ExecutionRecoveryHandlerRegistry,
@@ -198,5 +199,18 @@ const claimRejected = await executeAuthorizedRecovery({
 assert.equal(gatedApplies, 0)
 assert.equal(claimRejected.record.final_outcome, 'ESCALATED')
 assert.equal(claimRejected.record.escalation_reason, 'ATTEMPT_ALREADY_CLAIMED')
+
+assert.equal(shouldRediagnoseRecoveryFailure({
+  escalationReason: 'REPAIR_APPLICATION_FAILED', retryAttempt: 0, maxRepairAttempts: 2,
+}), true)
+assert.equal(shouldRediagnoseRecoveryFailure({
+  escalationReason: 'REPAIR_VALIDATION_FAILED', retryAttempt: 0, maxRepairAttempts: 2,
+}), true)
+assert.equal(shouldRediagnoseRecoveryFailure({
+  escalationReason: 'REPAIR_VALIDATION_FAILED', retryAttempt: 1, maxRepairAttempts: 2,
+}), false)
+assert.equal(shouldRediagnoseRecoveryFailure({
+  escalationReason: 'POLICY_BLOCKED', retryAttempt: 0, maxRepairAttempts: 2,
+}), false)
 
 console.log('Execution Recovery Agent closed-loop contract tests passed.')
