@@ -23,6 +23,7 @@ const GITHUB_OIDC_AUDIENCE = 'datanexus-r2-production'
 const GITHUB_OIDC_REPOSITORY = 'shoaib143-sudo/data-quality-ai-platform'
 const GITHUB_OIDC_ENVIRONMENT = 'production'
 const GITHUB_OIDC_REF = 'refs/heads/main'
+const GITHUB_OIDC_WORKFLOW_REF = 'shoaib143-sudo/data-quality-ai-platform/.github/workflows/storage-r2-assurance.yml@refs/heads/main'
 
 type GitHubOidcClaims = {
   iss?: string
@@ -33,6 +34,8 @@ type GitHubOidcClaims = {
   environment?: string
   ref?: string
   event_name?: string
+  workflow_ref?: string
+  iat?: number
 }
 
 type JsonWebKeyWithKid = JsonWebKey & { kid?: string; alg?: string; use?: string }
@@ -88,8 +91,11 @@ async function verifyGitHubActionsOidcBearer(request: Request) {
     || claims.environment !== GITHUB_OIDC_ENVIRONMENT
     || claims.ref !== GITHUB_OIDC_REF
     || claims.event_name !== 'workflow_dispatch'
+    || claims.workflow_ref !== GITHUB_OIDC_WORKFLOW_REF
     || typeof claims.exp !== 'number'
     || claims.exp <= now
+    || claims.exp > now + 10 * 60
+    || (typeof claims.iat === 'number' && claims.iat > now + 30)
     || (typeof claims.nbf === 'number' && claims.nbf > now + 30)) {
     return false
   }
