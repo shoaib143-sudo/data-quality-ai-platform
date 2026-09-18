@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'app/glossary/**'
       - 'infra/accessibility/**'
       - 'lib/accessibility/**'
       - 'scripts/test-persona-accessibility-contract.mjs'
@@ -12,6 +13,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'app/glossary/**'
       - 'infra/accessibility/**'
       - 'lib/accessibility/**'
       - 'scripts/test-persona-accessibility-contract.mjs'
@@ -38,5 +40,7 @@ jobs:
         run: node scripts/verify-persona-accessibility-contract.mjs
       - name: Accessibility negative/failure tests
         run: node --experimental-strip-types scripts/test-persona-accessibility-contract.mjs
+      - name: Data Steward glossary accessibility
+        run: node --test scripts/test-data-steward-glossary-accessibility.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
