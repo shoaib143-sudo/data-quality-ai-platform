@@ -156,6 +156,15 @@ begin
          lease_owner = null,
          lease_expires_at = null,
          completed_at = null,
+         payload = coalesce(payload, '{}'::jsonb) || jsonb_build_object(
+           'recoveryResume',
+           jsonb_build_object(
+             'recovery_case_id', v_case.id,
+             'repair_attempt', p_repair_attempt,
+             'retry_stage', p_retry_stage,
+             'retry_checkpoint_id', nullif(trim(coalesce(p_retry_checkpoint_id, '')), '')
+           )
+         ),
          updated_at = v_now
    where id = v_job.id;
 
