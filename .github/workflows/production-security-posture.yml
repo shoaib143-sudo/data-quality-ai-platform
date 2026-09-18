@@ -34,5 +34,9 @@ jobs:
           node-version: 24
       - name: Verify security posture source contract
         run: node scripts/verify-production-security-posture.mjs
+      - name: Verify glossary direct-write boundary
+        run: node scripts/verify-glossary-direct-write-boundary.mjs
       - name: Execute dynamic and negative PostgreSQL cases
         run: psql -h 127.0.0.1 -U postgres -d datanexus_security_posture -f scripts/test-production-security-posture.sql
+      - name: Exercise glossary privilege boundary
+        run: psql -h 127.0.0.1 -U postgres -d datanexus_security_posture -f scripts/test-glossary-direct-write-boundary.sql
