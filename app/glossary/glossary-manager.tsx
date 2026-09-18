@@ -344,19 +344,19 @@ function MappingForm({
   return <div className="mt-4 rounded-xl border border-dashed p-3">
     <div className="flex items-center gap-2 text-xs font-bold text-slate-600"><Link2 className="h-3.5 w-3.5" />Propose semantic mapping</div>
     <div className="mt-2 flex flex-wrap gap-2">
-      <select value={targetType} onChange={event => changeTargetType(event.target.value as 'DATASET' | 'CATALOG_ASSET')} className="rounded-lg border px-2 py-1.5 text-xs">
+      <select aria-label="Mapping target type" value={targetType} onChange={event => changeTargetType(event.target.value as 'DATASET' | 'CATALOG_ASSET')} className="rounded-lg border px-2 py-1.5 text-xs">
         <option value="CATALOG_ASSET" disabled={!catalogAssets.length}>Catalog asset</option>
         <option value="DATASET" disabled={!datasets.length}>Registered dataset</option>
       </select>
-      <select value={targetId} onChange={event => { setTargetId(event.target.value); setColumnName('') }} className="min-w-56 rounded-lg border px-2 py-1.5 text-xs">
+      <select aria-label="Mapping target" value={targetId} onChange={event => { setTargetId(event.target.value); setColumnName('') }} className="min-w-56 rounded-lg border px-2 py-1.5 text-xs">
         {targetType === 'DATASET'
           ? datasets.map(dataset => <option key={dataset.id} value={dataset.id}>{dataset.name}</option>)
           : catalogAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.asset_key}</option>)}
       </select>
-      {targetType === 'CATALOG_ASSET' ? <select value={columnName} onChange={event => setColumnName(event.target.value)} className="rounded-lg border px-2 py-1.5 text-xs">
+      {targetType === 'CATALOG_ASSET' ? <select aria-label="Mapping column" value={columnName} onChange={event => setColumnName(event.target.value)} className="rounded-lg border px-2 py-1.5 text-xs">
         <option value="">Whole asset</option>
         {availableColumns.map(name => <option key={name} value={name}>{name}</option>)}
-      </select> : <input value={columnName} onChange={event => setColumnName(event.target.value)} placeholder="Column optional" className="rounded-lg border px-2 py-1.5 text-xs" />}
+      </select> : <input aria-label="Mapping column" value={columnName} onChange={event => setColumnName(event.target.value)} placeholder="Column optional" className="rounded-lg border px-2 py-1.5 text-xs" />}
       <button type="button" disabled={disabled || !targetId} onClick={() => void onMap(term, { targetType, targetId, columnName })} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">Propose</button>
     </div>
     {term.status === 'REFERENCE' ? <p className="mt-2 flex items-center gap-1 text-xs text-amber-700"><XCircle className="h-3.5 w-3.5" />Reference mappings can be proposed, but cannot be approved until the concept is adopted and governed.</p> : null}
