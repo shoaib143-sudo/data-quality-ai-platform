@@ -4,21 +4,22 @@ import {
   classifyTerminalRecoveryRoute,
   recoveryStageFromFailure,
   recoveryUnsafeFlags,
+  recoveryRestartScope,
 } from '../lib/orchestration/execution-recovery-routing.ts'
 
 assert.deepEqual(
   classifyTerminalRecoveryRoute('PROFILING', 'PROFILE_READINESS_GATE_BLOCKED during metric execution'),
-  { repairClass: 'PROFILING_READINESS_RECONCILIATION', stage: 'METRIC_EXECUTION' },
+  { repairClass: 'PROFILING_READINESS_RECONCILIATION', stage: 'METRIC_EXECUTION', restartScope: 'WHOLE_JOB' },
 )
 
 assert.deepEqual(
   classifyTerminalRecoveryRoute('DISCOVERY', 'JDBC connection timeout while validating source'),
-  { repairClass: 'SOURCE_READINESS_RECONCILIATION', stage: 'CONNECTOR_ESTABLISHMENT' },
+  { repairClass: 'SOURCE_READINESS_RECONCILIATION', stage: 'CONNECTOR_ESTABLISHMENT', restartScope: 'WHOLE_JOB' },
 )
 
 assert.deepEqual(
   classifyTerminalRecoveryRoute('PROFILING', 'worker lease expired while processing profiling job'),
-  { repairClass: 'LEASE_RECONCILIATION', stage: 'GOVERNED_WORKFLOW' },
+  { repairClass: 'LEASE_RECONCILIATION', stage: 'GOVERNED_WORKFLOW', restartScope: 'WHOLE_JOB' },
 )
 
 assert.equal(
@@ -35,6 +36,11 @@ assert.equal(recoveryStageFromFailure('PROFILING', 'schema discovery failed'), '
 assert.equal(recoveryStageFromFailure('PROFILING', 'profile column registration failed'), 'PROFILE_COLUMNS')
 assert.equal(recoveryStageFromFailure('PROFILING', 'metric persistence blocked'), 'METRIC_EXECUTION')
 assert.equal(recoveryStageFromFailure('PROFILING', 'profile run creation failed'), 'PROFILE_RUN')
+
+assert.equal(recoveryRestartScope('PROFILING'), 'WHOLE_JOB')
+assert.equal(recoveryRestartScope('DISCOVERY'), 'WHOLE_JOB')
+assert.equal(recoveryRestartScope('DATA_QUALITY'), 'WHOLE_JOB')
+assert.equal(recoveryRestartScope('GOVERNANCE_AGENT'), 'FAILED_JOB')
 
 assert.deepEqual(
   recoveryUnsafeFlags('missing credential secret for source'),
