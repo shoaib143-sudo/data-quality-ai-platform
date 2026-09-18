@@ -70,6 +70,14 @@ assert.deepEqual(retryTarget(context(), true), {
   checkpointId: 'metric-execution',
   usedFallback: false,
 })
+assert.deepEqual(retryTarget(context({
+  failingStage: 'FINDINGS_GENERATION',
+  retryStageHint: 'METRIC_EXECUTION',
+}), true), {
+  stage: 'METRIC_EXECUTION',
+  checkpointId: 'metric-execution',
+  usedFallback: false,
+})
 assert.deepEqual(retryTarget(context(), false), {
   stage: 'SCHEMA_DISCOVERY',
   checkpointId: 'schema',
