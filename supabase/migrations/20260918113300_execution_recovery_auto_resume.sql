@@ -39,6 +39,28 @@ begin
   if v_case.retry_stage is null then
     return jsonb_build_object('resumed', false, 'reason', 'RETRY_STAGE_NOT_RECORDED');
   end if;
+  if not exists (
+    select 1
+    from orchestration.recovery_actions
+    where recovery_case_id = v_case.id
+      and action_type = 'AUTO_REPAIR'
+      and repair_attempt = v_case.retry_attempt
+      and status = 'EXECUTED'
+      and coalesce((outcome->>'repair_applied')::boolean, false) = true
+  ) then
+    return jsonb_build_object('resumed', false, 'reason', 'REPAIR_ACTION_EVIDENCE_MISSING');
+  end if;
+  if not exists (
+    select 1
+    from orchestration.recovery_actions
+    where recovery_case_id = v_case.id
+      and action_type = 'VALIDATE'
+      and repair_attempt = v_case.retry_attempt
+      and status = 'EXECUTED'
+      and outcome->>'validation_result' = 'PASSED'
+  ) then
+    return jsonb_build_object('resumed', false, 'reason', 'VALIDATION_EVIDENCE_MISSING');
+  end if;
 
   select * into v_job
   from orchestration.job_queue
@@ -214,4 +236,4 @@ end;
 $function$;
 
 comment on function orchestration.resume_execution_recovery_job(uuid) is
-  'Internal P0/P1 resume gate: only independently validated autonomous repairs may requeue the exact durable job.';
+  'Internal P0/P1 resume gate: only independently validated autonomous repairs with executed repair and validation audit evidence may requeue the exact durable job.';
