@@ -1,6 +1,7 @@
 import { ExecutionRecoveryHandlerRegistry } from './execution-recovery-runtime'
 import {
   createProfileReadinessRecoveryHandler,
+  createRetrySafeRuntimeRecoveryHandler,
   createSourceReadinessRecoveryHandler,
 } from './execution-recovery-handlers'
 import { executePersistedRecovery } from './execution-recovery-persistence'
@@ -17,6 +18,7 @@ export function createExecutionRecoveryAgentRegistry() {
   return new ExecutionRecoveryHandlerRegistry([
     createSourceReadinessRecoveryHandler(),
     createProfileReadinessRecoveryHandler(),
+    createRetrySafeRuntimeRecoveryHandler(),
   ])
 }
 
@@ -157,12 +159,17 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
   const transientMetricFailure = failingStage === 'METRIC_EXECUTION'
     && isConcreteTransientFailure(errorMessage)
     && Boolean(sourceId)
+  const retrySafeGovernanceRuntimeFailure = job.job_type === 'GOVERNANCE_AGENT'
+    && (recoveryCase.classification === 'ORCHESTRATION'
+      || (recoveryCase.classification === 'TRANSIENT_EXTERNAL' && isConcreteTransientFailure(errorMessage)))
 
   const knownRepairClass = profileReadinessFailure
     ? 'PROFILING_READINESS_RECONCILIATION' as const
     : transientMetricFailure || transientDiscoveryFailure
       ? 'SOURCE_READINESS_RECONCILIATION' as const
-      : null
+      : retrySafeGovernanceRuntimeFailure
+        ? 'RETRY_SAFE_RUNTIME_REPAIR' as const
+        : null
   const approvalRequired = readinessApprovalRequired(readiness)
   const failingCheckpointId = failedStep?.id
     ?? (failingStage === 'PROFILE_RUN'
@@ -176,7 +183,7 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
     failingStage,
     failingCheckpointId,
     code: errorCode || null,
-    retryable: profileReadinessFailure || transientMetricFailure || transientDiscoveryFailure,
+    retryable: profileReadinessFailure || transientMetricFailure || transientDiscoveryFailure || retrySafeGovernanceRuntimeFailure,
     blocking: true,
     securityRelevant: recoveryCase.classification === 'AUTHORIZATION',
     credentialMissing: activeReadinessBlockers(readiness).some(code => /CREDENTIAL/i.test(code)) || /missing.*credential|credential.*missing/i.test(errorMessage),
@@ -203,6 +210,7 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
       datasetVersionId,
       sourceId,
       agentRunId,
+      durableJobId: job.id,
     },
   }
 
