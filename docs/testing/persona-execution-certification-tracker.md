@@ -61,4 +61,6 @@ Status vocabulary: `PENDING`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`.
 - Live-route adversarial check confirmed navigating directly to /home/data-steward under a different authenticated persona resolves back to that authenticated persona rather than accepting the URL slug as authority.
 - Production execution-mode fixture check found no governance.orchestrator_autonomy_policies row for the Data Steward-bound UI Regression Test Project; the only current orchestrator policy is GUIDED on Product, where the Data Steward test principal has no project authority. Production GUIDED/GOVERNED_AUTO/FULL_AUTONOMOUS persona E2E therefore remains intentionally unclaimed without a fixture/configuration change.
 
+- Concurrency/idempotency source contracts now cover Data Quality idempotency/reuse, issue pre-existing + concurrent deduplication, optimistic issue-resolution compensation, stewardship duplicate protection, and hard-delete prohibition. Runtime concurrency E2E remains pending.
+
 Final certification requires authenticated deployed-persona evidence in addition to automated CI coverage.
