@@ -107,15 +107,25 @@ export async function executeAuthorizedRecovery(input: {
     }
   }
 
+  const plannedTarget = retryTarget(
+    input.context,
+    handler.sameStageRetrySafe(input.context, repair),
+  )
+  const plannedRecord: CanonicalRecoveryRecord = {
+    ...record,
+    root_cause_diagnosis: diagnosis.rootCause,
+    repair_action_tool: repair.toolKey,
+    mutation_scope: repair.mutationScope,
+    retry_stage: plannedTarget.stage,
+    retry_checkpoint_id: plannedTarget.checkpointId,
+  }
+
   if (input.beforeApply) {
-    const gate = await input.beforeApply({ context: input.context, repair, record })
+    const gate = await input.beforeApply({ context: input.context, repair, record: plannedRecord })
     if (!gate.proceed) {
       return {
         record: {
-          ...record,
-          root_cause_diagnosis: diagnosis.rootCause,
-          repair_action_tool: repair.toolKey,
-          mutation_scope: repair.mutationScope,
+          ...plannedRecord,
           authorization_decision: 'ESCALATE',
           final_outcome: 'ESCALATED',
           escalation_reason: gate.reason ?? 'REPAIR_CLAIM_REJECTED',
@@ -131,10 +141,7 @@ export async function executeAuthorizedRecovery(input: {
   } catch {
     return {
       record: {
-        ...record,
-        root_cause_diagnosis: diagnosis.rootCause,
-        repair_action_tool: repair.toolKey,
-        mutation_scope: repair.mutationScope,
+        ...plannedRecord,
         final_outcome: 'ESCALATED',
         authorization_decision: 'ESCALATE',
         escalation_reason: 'REPAIR_APPLICATION_FAILED',
@@ -149,10 +156,7 @@ export async function executeAuthorizedRecovery(input: {
     return {
       mutationId,
       record: {
-        ...record,
-        root_cause_diagnosis: diagnosis.rootCause,
-        repair_action_tool: repair.toolKey,
-        mutation_scope: repair.mutationScope,
+        ...plannedRecord,
         post_repair_validation_result: 'FAILED',
         final_outcome: 'ESCALATED',
         authorization_decision: 'ESCALATE',
@@ -177,18 +181,12 @@ export async function executeAuthorizedRecovery(input: {
     }
   }
 
-  const target = retryTarget(input.context, handler.sameStageRetrySafe(input.context, repair))
   return {
     mutationId,
     validation,
     record: {
-      ...record,
-      root_cause_diagnosis: diagnosis.rootCause,
-      repair_action_tool: repair.toolKey,
-      mutation_scope: repair.mutationScope,
+      ...plannedRecord,
       post_repair_validation_result: 'PASSED',
-      retry_stage: target.stage,
-      retry_checkpoint_id: target.checkpointId,
       final_outcome: 'OPEN',
       escalation_reason: null,
     },
