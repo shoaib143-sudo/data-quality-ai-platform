@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeAuthorizedRecovery, type ExecutionRecoveryHandlerRegistry } from './execution-recovery-runtime'
-import { initialRecoveryRecord, type CanonicalRecoveryRecord, type RecoveryFailureContext } from './execution-recovery-contract'
+import { initialRecoveryRecord, shouldRediagnoseRecoveryFailure, type CanonicalRecoveryRecord, type RecoveryFailureContext } from './execution-recovery-contract'
 
 type PersistedRecoveryCase = {
   id: string
@@ -300,10 +300,14 @@ export async function executePersistedRecovery(input: {
     })
   }
 
-  const boundedRepairFailure = result.record.final_outcome === 'ESCALATED'
-    && ['REPAIR_APPLICATION_FAILED', 'REPAIR_VALIDATION_FAILED'].includes(result.record.escalation_reason ?? '')
   const nextAttempt = input.context.retryAttempt + 1
-  if (repairClaimed && boundedRepairFailure && nextAttempt < input.context.maxRepairAttempts) {
+  const shouldRediagnose = result.record.final_outcome === 'ESCALATED'
+    && shouldRediagnoseRecoveryFailure({
+      escalationReason: result.record.escalation_reason,
+      retryAttempt: input.context.retryAttempt,
+      maxRepairAttempts: input.context.maxRepairAttempts,
+    })
+  if (repairClaimed && shouldRediagnose) {
     await advanceRecoveryAttemptAfterFailure({
       recoveryCaseId: input.context.recoveryCaseId,
       currentAttempt: input.context.retryAttempt,
