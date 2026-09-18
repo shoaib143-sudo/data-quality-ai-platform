@@ -26,3 +26,14 @@ test('R2 preparation remains bounded and secret-safe', () => {
   assert.match(certification, /Authorization: Bearer \$CRON_SECRET/)
   assert.doesNotMatch(certification, /GITHUB_ENV|GITHUB_OUTPUT|upload-artifact|actions\/cache|set -x|printenv/)
 })
+
+
+test('R2 production preparation proves reference cutover eligibility without changing references', () => {
+  assert.match(certification, /\/api\/internal\/storage\/reference-cutover/)
+  assert.match(certification, /--data '\{"mode":"dry-run"\}'/)
+  assert.match(certification, /eligibleReferences \?\? 0\) < 1/)
+  assert.match(certification, /changedReferences !== 0/)
+  assert.match(certification, /destructiveActions !== 0/)
+  assert.match(certification, /SKIPPED_INTEGRITY_MISMATCH/)
+  assert.doesNotMatch(certification, /"mode":"apply"/)
+})
