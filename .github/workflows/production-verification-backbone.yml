@@ -40,6 +40,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         shell: bash
         run: |
           set -euo pipefail
@@ -57,9 +58,13 @@ jobs:
             page=$((page+1))
           done
           mapfile -t files < "$files_file"
-          required="$(node scripts/classify-production-preview-change.mjs "${files[@]}")"
+          deployable="$(node scripts/classify-production-preview-change.mjs "${files[@]}")"
+          required="$(node scripts/classify-production-preview-change.mjs --branch "$HEAD_REF" "${files[@]}")"
+          echo "deployable=$deployable" >> "$GITHUB_OUTPUT"
           echo "required=$required" >> "$GITHUB_OUTPUT"
-          if [[ "$required" == "false" ]]; then
+          if [[ "$required" == "false" && "$deployable" == "true" ]]; then
+            echo "Deployable files changed, but branch '$HEAD_REF' is outside the preview-enabled branch policy. GitHub build/type checks remain required; Vercel Preview is intentionally suppressed to conserve Hobby deployment capacity."
+          elif [[ "$required" == "false" ]]; then
             echo "No deployable application files changed; exact Vercel Preview is not required."
           fi
 
