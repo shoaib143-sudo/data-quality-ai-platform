@@ -22,6 +22,9 @@ on:
       - 'lib/orchestration/governance-outcome-report*.ts'
       - 'lib/orchestration/governance-report-*.ts'
       - 'lib/orchestration/governance-recovery*.ts'
+      - 'lib/orchestration/execution-recovery*.ts'
+      - 'scripts/test-execution-recovery-*.mjs'
+      - 'scripts/verify-execution-recovery-agent.mjs'
       - 'lib/orchestration/governance-orchestrator-approval-service.ts'
       - 'app/agents/autonomous-governance/**'
       - 'supabase/migrations/**'
@@ -83,6 +86,8 @@ jobs:
         run: pnpm run verify:recovery-assurance
       - name: Verify governance orchestrator runtime wiring
         run: node scripts/verify-governance-runtime-wiring.mjs
+      - name: Verify closed-loop Execution Recovery Agent
+        run: pnpm run verify:execution-recovery
       - name: Re-run deterministic orchestrator contracts
         run: |
           node --experimental-strip-types scripts/test-governance-orchestrator.mjs
