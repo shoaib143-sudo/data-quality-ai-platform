@@ -151,7 +151,7 @@ export async function executeAuthorizedRecovery(input: {
       post_repair_validation_result: 'PASSED',
       retry_stage: target.stage,
       retry_checkpoint_id: target.checkpointId,
-      final_outcome: 'RECOVERED',
+      final_outcome: 'OPEN',
       escalation_reason: null,
     },
   }
