@@ -48,13 +48,14 @@ async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, inp
       }
     }
 
+    const nextAttempt = decision.mode === 'RESTART' ? decision.nextAttempt : decision.attempt + 1
     const { data, error } = await admin
       .schema('agent')
       .from('agent_run_steps')
       .update({
         step_name: input.stepName,
         status: 'RUNNING',
-        attempt: decision.nextAttempt,
+        attempt: nextAttempt,
         input: input.stepInput,
         started_at: input.startedAt,
         completed_at: null,
