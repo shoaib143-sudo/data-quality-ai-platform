@@ -40,5 +40,7 @@ jobs:
         run: node --experimental-strip-types scripts/test-persona-accessibility-contract.mjs
       - name: Data Steward live-status accessibility tests
         run: node scripts/test-data-steward-live-status-accessibility.mjs
+      - name: Data Steward UI authorization visibility tests
+        run: node scripts/test-data-steward-ui-authorization.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
