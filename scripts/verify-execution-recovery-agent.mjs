@@ -21,6 +21,7 @@ const workspacePolicy = fs.readFileSync('lib/governance/workspace-policy.ts', 'u
 const monitoringPage = fs.readFileSync('app/monitoring/page.tsx', 'utf8')
 const recoveryRuntimeAcceptance = fs.readFileSync('scripts/assert-execution-recovery-runtime.sql', 'utf8')
 const recoveryAssuranceWorkflow = fs.readFileSync('.github/workflows/recovery-assurance.yml', 'utf8')
+const recoveryClassificationRecord = fs.readFileSync('Major discussion/2026-09-11-agent-classification-framework-and-portfolio-review.md', 'utf8')
 
 function requireText(source, token, label) {
   if (!source.includes(token)) throw new Error(`Missing ${label}: ${token}`)
@@ -128,6 +129,9 @@ requireText(recoveryRuntimeAcceptance, 'resume_execution_recovery_job', 'databas
 requireText(recoveryRuntimeAcceptance, "final_outcome='RECOVERED'", 'database recovery resolution acceptance')
 requireText(recoveryAssuranceWorkflow, 'Closed-loop recovery database acceptance', 'disposable database recovery CI')
 requireText(recoveryAssuranceWorkflow, 'assert-execution-recovery-runtime.sql', 'database recovery acceptance execution')
+requireText(recoveryClassificationRecord, 'DIAGNOSE_REMEDIATE_VALIDATE', 'implemented recovery classification')
+requireText(recoveryClassificationRecord, 'P2 and below remain evidence-only', 'classification P2 boundary')
+requireText(recoveryClassificationRecord, 'Rollback execution remains separately governed', 'classification rollback boundary')
 requireText(autoResumeMigration, "post_repair_validation_result is distinct from 'PASSED'", 'database repair-validation resume gate')
 requireText(autoResumeMigration, "final_outcome = 'RECOVERED'", 'workflow success final recovery outcome')
 requireText(autoResumeMigration, "action_type in ('RETRY', 'RESUME')", 'retry and autonomous resume outcome reconciliation')
