@@ -63,4 +63,6 @@ Status vocabulary: `PENDING`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`.
 
 - Concurrency/idempotency source contracts now cover Data Quality idempotency/reuse, issue pre-existing + concurrent deduplication, optimistic issue-resolution compensation, stewardship duplicate protection, and hard-delete prohibition. Runtime concurrency E2E remains pending.
 
+- Accessibility contract now explicitly verifies Data Steward inclusion in governed WCAG 2.2 AA scope and requires fresh automated + manual evidence; measured browser/manual evidence remains pending.
+
 Final certification requires authenticated deployed-persona evidence in addition to automated CI coverage.
