@@ -4,6 +4,8 @@ import { initialRecoveryRecord, type CanonicalRecoveryRecord, type RecoveryFailu
 
 type PersistedRecoveryCase = {
   id: string
+  project_id: string
+  severity: CanonicalRecoveryRecord['severity'] | null
   status: string | null
   final_outcome: CanonicalRecoveryRecord['final_outcome'] | null
   authorization_decision: CanonicalRecoveryRecord['authorization_decision'] | null
@@ -36,38 +38,41 @@ function canonicalColumns(record: CanonicalRecoveryRecord) {
   }
 }
 
-export async function loadPersistedRecoveryCase(recoveryCaseId: string): Promise<PersistedRecoveryCase | null> {
+export async function loadPersistedRecoveryCase(recoveryCaseId: string, projectId: string): Promise<PersistedRecoveryCase | null> {
   const admin = createAdminClient()
   const { data, error } = await admin
     .schema('orchestration')
     .from('recovery_cases')
-    .select('id,status,final_outcome,authorization_decision,post_repair_validation_result,retry_stage,retry_checkpoint_id,escalation_reason')
+    .select('id,project_id,severity,status,final_outcome,authorization_decision,post_repair_validation_result,retry_stage,retry_checkpoint_id,escalation_reason')
     .eq('id', recoveryCaseId)
+    .eq('project_id', projectId)
     .maybeSingle()
   if (error) throw new Error(`Unable to load execution recovery case: ${error.message}`)
   return data as PersistedRecoveryCase | null
 }
 
-export async function persistCanonicalRecoveryRecord(record: CanonicalRecoveryRecord) {
+export async function persistCanonicalRecoveryRecord(record: CanonicalRecoveryRecord, projectId: string) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .schema('orchestration')
     .from('recovery_cases')
     .update(canonicalColumns(record))
     .eq('id', record.recovery_case_id)
+    .eq('project_id', projectId)
     .select('id')
     .maybeSingle()
   if (error) throw new Error(`Unable to persist closed-loop execution recovery state: ${error.message}`)
   if (!data) throw new Error('Execution recovery case was not found.')
 }
 
-async function seedInitialRecoveryRecord(record: CanonicalRecoveryRecord) {
+async function seedInitialRecoveryRecord(record: CanonicalRecoveryRecord, projectId: string) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .schema('orchestration')
     .from('recovery_cases')
     .update(canonicalColumns(record))
     .eq('id', record.recovery_case_id)
+    .eq('project_id', projectId)
     .eq('final_outcome', 'OPEN')
     .or('post_repair_validation_result.is.null,post_repair_validation_result.eq.NOT_RUN')
     .select('id')
@@ -121,7 +126,7 @@ export async function executePersistedRecovery(input: {
   failureClassification: string
   registry: ExecutionRecoveryHandlerRegistry
 }) {
-  const existing = await loadPersistedRecoveryCase(input.context.recoveryCaseId)
+  const existing = await loadPersistedRecoveryCase(input.context.recoveryCaseId, input.context.projectId)
   if (!existing) throw new Error('Execution recovery case was not found.')
 
   if (existing.status === 'OPEN' && existing.post_repair_validation_result === 'PASSED' && existing.retry_stage) {
@@ -133,7 +138,7 @@ export async function executePersistedRecovery(input: {
         original_workflow_run_id: input.context.workflowRunId,
         failing_stage: input.context.failingStage,
         failing_checkpoint_id: input.context.failingCheckpointId ?? null,
-        severity: 'P1' as const,
+        severity: existing.severity ?? initialRecoveryRecord(input.context, input.failureClassification).severity,
         failure_classification: input.failureClassification,
         root_cause_diagnosis: null,
         evidence_used: input.context.evidence,
@@ -160,7 +165,7 @@ export async function executePersistedRecovery(input: {
         original_workflow_run_id: input.context.workflowRunId,
         failing_stage: input.context.failingStage,
         failing_checkpoint_id: input.context.failingCheckpointId ?? null,
-        severity: 'P1' as const,
+        severity: existing.severity ?? initialRecoveryRecord(input.context, input.failureClassification).severity,
         failure_classification: input.failureClassification,
         root_cause_diagnosis: null,
         evidence_used: input.context.evidence,
@@ -188,7 +193,7 @@ export async function executePersistedRecovery(input: {
         original_workflow_run_id: input.context.workflowRunId,
         failing_stage: input.context.failingStage,
         failing_checkpoint_id: input.context.failingCheckpointId ?? null,
-        severity: 'P1' as const,
+        severity: existing.severity ?? initialRecoveryRecord(input.context, input.failureClassification).severity,
         failure_classification: input.failureClassification,
         root_cause_diagnosis: null,
         evidence_used: input.context.evidence,
@@ -215,7 +220,7 @@ export async function executePersistedRecovery(input: {
         original_workflow_run_id: input.context.workflowRunId,
         failing_stage: input.context.failingStage,
         failing_checkpoint_id: input.context.failingCheckpointId ?? null,
-        severity: 'P1' as const,
+        severity: existing.severity ?? initialRecoveryRecord(input.context, input.failureClassification).severity,
         failure_classification: input.failureClassification,
         root_cause_diagnosis: null,
         evidence_used: input.context.evidence,
@@ -235,7 +240,7 @@ export async function executePersistedRecovery(input: {
   }
 
   const initial = initialRecoveryRecord(input.context, input.failureClassification)
-  const seeded = await seedInitialRecoveryRecord(initial)
+  const seeded = await seedInitialRecoveryRecord(initial, input.context.projectId)
   if (!seeded) {
     return { replayed: true, replayState: 'STATE_ADVANCED' as const, record: initial }
   }
@@ -261,7 +266,7 @@ export async function executePersistedRecovery(input: {
     return { replayed: true, replayState: 'IN_FLIGHT' as const, record: initial }
   }
 
-  await persistCanonicalRecoveryRecord(result.record)
+  await persistCanonicalRecoveryRecord(result.record, input.context.projectId)
   if (repairClaimed) {
     await finalizeAutoRepairEvidence({
       recoveryCaseId: input.context.recoveryCaseId,
