@@ -30,6 +30,12 @@ jobs:
         run: node --experimental-strip-types scripts/audit-agent-policy-v2-adversarial.mjs
       - name: Verify Agent Policy v2 approval hardening
         run: node scripts/verify-agent-approval-hardening.mjs
+      - name: Verify Agent Policy v2 approval validity and expiry
+        run: node scripts/verify-agent-approval-validity.mjs
+      - name: Run Agent Policy v2 approval validity adversarial audit
+        run: node scripts/audit-agent-approval-validity-adversarial.mjs
+      - name: Verify Agent Policy v2 notification robustness
+        run: node scripts/verify-approval-notification-robustness.mjs
       - name: Verify real-life persona acceptance task contract
         run: node --experimental-strip-types scripts/verify-persona-real-life-task-contract.mjs
       - name: Verify persona mutation visibility matches server authorization
