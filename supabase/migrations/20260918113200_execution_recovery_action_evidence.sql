@@ -48,6 +48,17 @@ begin
     raise exception 'Autonomous repair claim evidence is missing.' using errcode = '23514';
   end if;
 
+  if v_case.final_outcome <> 'OPEN' then
+    return jsonb_build_object('finalized', false, 'reason', 'RECOVERY_CASE_NO_LONGER_OPEN');
+  end if;
+
+  if not exists (
+    select 1 from orchestration.recovery_actions
+    where id = v_repair_action_id and status = 'REQUESTED'
+  ) then
+    return jsonb_build_object('finalized', false, 'reason', 'REPAIR_CLAIM_NOT_ACTIVE');
+  end if;
+
   update orchestration.recovery_actions
      set status = 'EXECUTED',
          executed_at = coalesce(executed_at, now()),
@@ -56,7 +67,8 @@ begin
            'mutation_id', nullif(trim(coalesce(p_mutation_id, '')), ''),
            'repair_completed_at', now()
          )
-   where id = v_repair_action_id;
+   where id = v_repair_action_id
+     and status = 'REQUESTED';
 
   if v_validation in ('PASSED', 'FAILED') then
     insert into orchestration.recovery_actions (
@@ -89,6 +101,7 @@ begin
   end if;
 
   return jsonb_build_object(
+    'finalized', true,
     'repair_action_id', v_repair_action_id,
     'validation_action_id', v_validation_action_id,
     'validation_result', v_validation
@@ -100,4 +113,4 @@ revoke all on function orchestration.finalize_execution_recovery_auto_repair(uui
   from public, anon, authenticated;
 
 comment on function orchestration.finalize_execution_recovery_auto_repair(uuid, integer, text, boolean, text, text) is
-  'Internal audit finalizer for one claimed autonomous repair and its independent validation evidence.';
+  'Internal fenced audit finalizer for one active claimed autonomous repair and its independent validation evidence. Stale or terminal claims cannot overwrite a later governed outcome.';
