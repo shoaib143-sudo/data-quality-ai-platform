@@ -46,12 +46,12 @@ for (const label of ['Mapping target type','Mapping target','Mapping column']) {
 }
 assert.ok(issues.includes('aria-label={`Issue owner for ${issue.title}`}'), 'Issue owner selector must be labelled per issue.')
 assert.ok(issues.includes('aria-label={`Issue status for ${issue.title}`}'), 'Issue status selector must be labelled per issue.')
-console.log('Data Steward live-status accessibility contract passed.')
-
-const classificationPage = fs.readFileSync('app/classification/page.tsx', 'utf8')
+const classificationPage = await readFile(new URL('../app/classification/page.tsx', import.meta.url), 'utf8')
 assert.match(classificationPage, /classification\.review/, 'Classification page must resolve project-scoped review authority.')
 assert.match(classificationPage, /classificationReviewProjectIds/, 'Classification page must pass review-authorized projects into the client workbench.')
 assert.match(classification, /classificationReviewProjectIds/, 'Classification workbench must receive explicit review-authorized project scope.')
 assert.match(classification, /canReviewClassification/, 'Classification workbench must gate review controls by project capability.')
 assert.match(classification, /classification\.status === 'SUGGESTED' && canReviewClassification/, 'Suggested classification review buttons must be hidden without authority.')
 assert.match(classification, /does not allow classification review/, 'Unauthorized classification review must produce a clear UX message.')
+
+console.log('Data Steward live-status accessibility contract passed.')
