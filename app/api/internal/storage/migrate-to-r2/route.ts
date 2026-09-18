@@ -152,7 +152,7 @@ export async function POST(request: Request) {
       .not('size_bytes', 'is', null)
       .not('verified_at', 'is', null)
       .lte('size_bytes', objectLimit)
-      .or('checksum.is.null,checksum_algorithm.eq.sha256')
+      .or('and(checksum.is.null,checksum_algorithm.is.null),checksum_algorithm.eq.sha256')
       .order('created_at', { ascending: true })
       .range(offset, offset + SOURCE_SCAN_PAGE_SIZE - 1)
 
