@@ -118,6 +118,10 @@ export function buildInvestigatorEvidenceAnalysis(ctx: InvestigatorEvidenceConte
     if (direct) return direct
     const profileRunId = id(row.profile_run_id)
     if (profileRunId) return runToDataset.get(profileRunId) ?? null
+    const rowId = id(row.id)
+    if (rowId && runToDataset.has(rowId)) return runToDataset.get(rowId) ?? null
+    const datasetVersionId = id(row.dataset_version_id)
+    if (datasetVersionId) return versionToDataset.get(datasetVersionId) ?? null
     return null
   }
 
