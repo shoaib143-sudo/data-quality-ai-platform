@@ -78,6 +78,10 @@ requireText(closedLoopRuntime, 'handler.validate', 'independent repair validatio
 requireText(closedLoopRuntime, "post_repair_validation_result: 'PASSED'", 'validated repair outcome')
 requireText(recoveryHandlers, 'revalidateAndReconcileSourceForProfiling', 'existing source readiness repair reuse')
 requireText(recoveryHandlers, "knownRepairClass === 'SOURCE_READINESS_RECONCILIATION'", 'source readiness handler scope')
+requireText(recoveryHandlers, 'executeProfileReadinessRemediation', 'existing profiling readiness remediation reuse')
+requireText(recoveryHandlers, "knownRepairClass === 'PROFILING_READINESS_RECONCILIATION'", 'profiling readiness handler scope')
+requireText(recoveryHandlers, "readiness.state === 'READY'", 'profiling readiness independent validation')
+requireText(recoveryHandlers, "context.failingStage === 'PROFILE_RUN'", 'profile-run same-stage repair boundary')
 
 requireText(api, 'requireApiUser()', 'authenticated recovery action API')
 requireText(api, "authorizeProject(user.id, recoveryCase.project_id, 'agent.execute')", 'execution permission preflight')
