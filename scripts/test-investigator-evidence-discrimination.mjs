@@ -64,6 +64,7 @@ assert.deepEqual(datasetA.incidentIds, ['incident-a'])
 assert.deepEqual(datasetA.freshnessAlertIds, ['freshness-a'])
 assert.deepEqual(datasetA.failedRuleIds, ['rule-a'])
 assert.deepEqual(datasetA.anomalyIds, ['anomaly-a'])
+assert.deepEqual(datasetA.failedOrPartialProfileRunIds, [])
 assert.deepEqual(datasetA.workedRemediationIds, ['remediation-a'])
 assert.deepEqual(datasetA.lineageMappingIds, ['mapping-ab'])
 
