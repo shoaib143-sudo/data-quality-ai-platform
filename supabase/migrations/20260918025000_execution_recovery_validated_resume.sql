@@ -162,7 +162,8 @@ begin
              'recovery_case_id', v_case.id,
              'repair_attempt', p_repair_attempt,
              'retry_stage', p_retry_stage,
-             'retry_checkpoint_id', nullif(trim(coalesce(p_retry_checkpoint_id, '')), '')
+             'restart_scope', case when v_job.job_type in ('PROFILING', 'DISCOVERY', 'DATA_QUALITY') then 'WHOLE_JOB' else 'FAILED_JOB' end,
+             'retry_checkpoint_id', case when v_job.job_type in ('PROFILING', 'DISCOVERY', 'DATA_QUALITY') then null else nullif(trim(coalesce(p_retry_checkpoint_id, '')), '') end
            )
          ),
          updated_at = v_now
@@ -181,7 +182,8 @@ begin
     'action_id', v_action_id,
     'durable_job_id', v_job.id,
     'retry_stage', p_retry_stage,
-    'retry_checkpoint_id', nullif(trim(coalesce(p_retry_checkpoint_id, '')), '')
+    'restart_scope', case when v_job.job_type in ('PROFILING', 'DISCOVERY', 'DATA_QUALITY') then 'WHOLE_JOB' else 'FAILED_JOB' end,
+    'retry_checkpoint_id', case when v_job.job_type in ('PROFILING', 'DISCOVERY', 'DATA_QUALITY') then null else nullif(trim(coalesce(p_retry_checkpoint_id, '')), '') end
   );
 end;
 $function$;
