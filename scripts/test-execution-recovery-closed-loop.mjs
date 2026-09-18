@@ -181,4 +181,22 @@ const mismatch = await executeAuthorizedRecovery({
 assert.equal(mismatch.record.final_outcome, 'ESCALATED')
 assert.equal(mismatch.record.escalation_reason, 'REPAIR_CLASS_MISMATCH')
 
+let gatedApplies = 0
+const gatedHandler = {
+  ...handler,
+  async apply() {
+    gatedApplies += 1
+    return { mutationId: 'should-not-run' }
+  },
+}
+const claimRejected = await executeAuthorizedRecovery({
+  context: context(),
+  failureClassification: 'TRANSIENT_EXTERNAL',
+  registry: new ExecutionRecoveryHandlerRegistry([gatedHandler]),
+  beforeApply: async () => ({ proceed: false, reason: 'ATTEMPT_ALREADY_CLAIMED' }),
+})
+assert.equal(gatedApplies, 0)
+assert.equal(claimRejected.record.final_outcome, 'ESCALATED')
+assert.equal(claimRejected.record.escalation_reason, 'ATTEMPT_ALREADY_CLAIMED')
+
 console.log('Execution Recovery Agent closed-loop contract tests passed.')
