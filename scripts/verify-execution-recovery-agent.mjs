@@ -132,5 +132,6 @@ requireText(worker, "knownRepairClass: repairClass", 'deterministic repair-class
 requireText(worker, "type: 'DURABLE_JOB'", 'durable job recovery evidence')
 requireText(worker, 'loadRecoveryCheckpoints', 'checkpoint evidence loading')
 requireText(worker, "outcome: 'RECOVERY_ENGINE_ERROR'", 'fail-closed recovery engine error evidence')
+requireText(worker, "'RECOVERY_QUEUED'", 'queued recovery worker outcome')
 
 console.log('Governed Execution Recovery Agent contract verified.')
