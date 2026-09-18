@@ -83,6 +83,8 @@ requireText(recoveryHandlers, "'CONNECTOR_ESTABLISHMENT'", 'connector establishm
 requireText(recoveryHandlers, "knownRepairClass === 'PROFILING_READINESS_RECONCILIATION'", 'profiling readiness handler scope')
 requireText(recoveryHandlers, "knownRepairClass === 'LEASE_RECONCILIATION'", 'lease reconciliation handler scope')
 requireText(recoveryHandlers, 'input.verify', 'independent profiling readiness validation')
+requireText(recoveryHandlerBindings, 'verifySourceReadiness', 'independent source readiness validation')
+requireText(recoveryHandlerBindings, "from('dataset_execution_sources')", 'source execution binding validation')
 requireText(recoveryHandlerBindings, 'revalidateAndReconcileSourceForProfiling', 'existing source repair binding')
 requireText(recoveryHandlerBindings, 'executeProfileReadinessRemediation', 'existing profiling remediation binding')
 requireText(recoveryHandlerBindings, 'verify_dataset_version_profile_readiness', 'independent readiness verifier binding')
