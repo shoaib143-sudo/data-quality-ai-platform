@@ -124,5 +124,13 @@ requireText(monitoringPage, 'Execution Recovery', 'Job Monitor recovery label')
 // is removed; durable profiling success itself must still be impossible without
 // canonical result evidence.
 requireText(worker, "if (profileRun.status === 'COMPLETED')", 'profiling completion reconciliation path')
+requireText(worker, 'attemptClosedLoopRecoveryAfterDeadJob', 'terminal durable-job recovery invocation')
+requireText(worker, 'executePersistedRecoveryAndQueueResume', 'persisted recovery and resume integration')
+requireText(worker, 'createDefaultExecutionRecoveryRegistry', 'default recovery handler registry binding')
+requireText(worker, "job.attempts >= job.max_attempts", 'terminal-only automatic recovery trigger')
+requireText(worker, "knownRepairClass: repairClass", 'deterministic repair-class handoff')
+requireText(worker, "type: 'DURABLE_JOB'", 'durable job recovery evidence')
+requireText(worker, 'loadRecoveryCheckpoints', 'checkpoint evidence loading')
+requireText(worker, "outcome: 'RECOVERY_ENGINE_ERROR'", 'fail-closed recovery engine error evidence')
 
 console.log('Governed Execution Recovery Agent contract verified.')
