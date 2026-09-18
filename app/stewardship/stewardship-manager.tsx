@@ -298,7 +298,7 @@ export function StewardshipManager({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div><h2 className="text-xl font-bold">Certification queue</h2><p className="mt-1 text-xs text-slate-500">Certification is a separate governed decision. Request and review controls follow their own capabilities.</p></div>
             {canRequestCertification && projectDatasets.length ? <div className="flex min-w-64 flex-col gap-2">
-              <select value={effectiveCertificationDatasetId} onChange={event => setCertificationDatasetId(event.target.value)} className="rounded-xl border px-3 py-2 text-sm">
+              <select aria-label="Certification dataset" value={effectiveCertificationDatasetId} onChange={event => setCertificationDatasetId(event.target.value)} className="rounded-xl border px-3 py-2 text-sm">
                 {projectDatasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
               <button disabled={busy || !effectiveCertificationDatasetId} onClick={() => void requestCertification(effectiveCertificationDatasetId)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50"><ShieldCheck className="h-4 w-4" />Request certification</button>
