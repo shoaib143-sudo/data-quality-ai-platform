@@ -220,25 +220,25 @@ export function StewardshipManager({
           <h2 className="text-xl font-bold">Assign accountability</h2>
           <p className="mt-1 text-xs leading-5 text-slate-500">Assignments are human governance decisions. AI may suggest a candidate, but it cannot silently activate an owner or steward.</p>
           <div className="mt-5 grid gap-3">
-            <select value={targetType} onChange={event => { setTargetType(event.target.value as 'DATASET' | 'CATALOG_ASSET'); setTargetId('') }} className="rounded-xl border px-3 py-2.5">
+            <select aria-label="Stewardship target type" value={targetType} onChange={event => { setTargetType(event.target.value as 'DATASET' | 'CATALOG_ASSET'); setTargetId('') }} className="rounded-xl border px-3 py-2.5">
               <option value="DATASET">Governed dataset</option>
               <option value="CATALOG_ASSET">Current catalog asset</option>
             </select>
-            <select value={effectiveTargetId} onChange={event => setTargetId(event.target.value)} className="rounded-xl border px-3 py-2.5">
+            <select aria-label="Stewardship target" value={effectiveTargetId} onChange={event => setTargetId(event.target.value)} className="rounded-xl border px-3 py-2.5">
               {targetType === 'DATASET'
                 ? projectDatasets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)
                 : projectAssets.map(item => <option key={item.id} value={item.id}>{item.asset_key} · {item.asset_type}</option>)}
             </select>
-            <select value={effectiveUserId} onChange={event => setUserId(event.target.value)} className="rounded-xl border px-3 py-2.5">
+            <select aria-label="Assignee" value={effectiveUserId} onChange={event => setUserId(event.target.value)} className="rounded-xl border px-3 py-2.5">
               {projectMembers.map((item, index) => <option key={item.user_id + item.role} value={item.user_id}>Member {index + 1} · {item.role}</option>)}
             </select>
-            <select value={role} onChange={event => setRole(event.target.value)} className="rounded-xl border px-3 py-2.5">
+            <select aria-label="Stewardship role" value={role} onChange={event => setRole(event.target.value)} className="rounded-xl border px-3 py-2.5">
               <option value="BUSINESS_OWNER">Business owner</option>
               <option value="DATA_STEWARD">Data steward</option>
               <option value="TECHNICAL_OWNER">Technical owner</option>
               <option value="CUSTODIAN">Custodian</option>
             </select>
-            <textarea value={accountability} onChange={event => setAccountability(event.target.value)} rows={4} className="rounded-xl border px-3 py-2.5" placeholder="Explicit accountability statement" />
+            <textarea aria-label="Accountability statement" value={accountability} onChange={event => setAccountability(event.target.value)} rows={4} className="rounded-xl border px-3 py-2.5" placeholder="Explicit accountability statement" />
             <button disabled={busy || !effectiveTargetId || !effectiveUserId} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white disabled:opacity-50">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Assign governed role
             </button>
