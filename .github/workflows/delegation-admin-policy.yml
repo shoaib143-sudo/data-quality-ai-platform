@@ -16,6 +16,10 @@ on:
       - 'scripts/setup-profiling-metric-runtime.sql'
       - 'scripts/test-profiling-metric-runtime.ts'
       - 'scripts/test-profiling-metric-concurrency-runtime.ts'
+      - 'scripts/test-profiling-metric-run-guards.ts'
+      - 'scripts/test-profiling-jdbc-runtime.ts'
+      - 'scripts/test-profiling-metric-run-guards.ts'
+      - 'scripts/test-profiling-jdbc-runtime.ts'
       - 'scripts/test-direct-approval-authority-concurrency.sh'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
@@ -122,3 +126,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY" \
           SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
           pnpm dlx tsx@4.20.6 scripts/test-profiling-metric-concurrency-runtime.ts
+          NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY" \
+          SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+          pnpm dlx tsx@4.20.6 scripts/test-profiling-metric-run-guards.ts
+          NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY" \
+          SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+          pnpm dlx tsx@4.20.6 scripts/test-profiling-jdbc-runtime.ts
