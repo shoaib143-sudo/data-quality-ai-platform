@@ -154,7 +154,7 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
       execution_type: 'FILE',
       source_uri: objectStorage?.sourceUri ?? url ?? `storage://${bucket ?? ''}/${path ?? ''}`,
       checks: { configuration: !errors.some((error) => error.includes('require') || error.includes('valid') || error.includes('must be stored') || error.includes('not allowed') || error.includes('private or local')), connectivity: false, schema_available: false },
-      details: { storage_provider: objectStorage?.provider ?? (bucket ? 'supabase' : 'https'), url: r2 ? null : url, bucket, path },
+      details: { storage_provider: objectStorage?.provider ?? (bucket ? 'supabase' : 'https'), url: objectStorage ? null : url, bucket, path },
       errors,
       warnings,
     }
