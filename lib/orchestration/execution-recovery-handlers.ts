@@ -25,8 +25,9 @@ function readinessPassed(value: Record<string, unknown>) {
 
 export function createSourceReadinessRecoveryHandler(input: {
   repair: (args: { projectId: string; sourceId: string }) => Promise<SourceRepairResult>
+  verify: (args: { projectId: string; sourceId: string }) => Promise<{ valid: boolean; code: string }>
 }): RecoveryHandler {
-  const applied = new Map<string, SourceRepairResult>()
+  const applied = new Set<string>()
 
   function sourceId(context: RecoveryFailureContext) {
     return text(context.repairParameters?.sourceId)
@@ -66,17 +67,18 @@ export function createSourceReadinessRecoveryHandler(input: {
       const id = sourceId(context)
       if (!id) throw new Error('Source readiness repair requires a sourceId.')
       if (proposed.repairClass !== 'SOURCE_READINESS_RECONCILIATION') throw new Error('Unexpected repair class for source readiness handler.')
-      const result = await input.repair({ projectId: context.projectId, sourceId: id })
-      applied.set(context.recoveryCaseId, result)
+      await input.repair({ projectId: context.projectId, sourceId: id })
+      applied.add(context.recoveryCaseId)
       return { mutationId: `source-readiness:${context.recoveryCaseId}:${id}` }
     },
 
     async validate(context) {
-      const result = applied.get(context.recoveryCaseId)
-      if (!result) return { valid: false, code: 'SOURCE_REPAIR_EVIDENCE_MISSING' }
+      if (!applied.has(context.recoveryCaseId)) return { valid: false, code: 'SOURCE_REPAIR_EVIDENCE_MISSING' }
+      const id = sourceId(context)
+      const verification = await input.verify({ projectId: context.projectId, sourceId: id })
       return {
-        valid: result.operational === true,
-        code: result.operational === true ? 'SOURCE_READINESS_RESTORED' : result.code || 'SOURCE_READINESS_STILL_BLOCKED',
+        valid: verification.valid,
+        code: verification.code,
         evidenceIds: context.evidence.map(item => item.id),
       }
     },
