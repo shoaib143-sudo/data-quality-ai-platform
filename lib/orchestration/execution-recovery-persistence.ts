@@ -324,3 +324,59 @@ export async function executePersistedRecovery(input: {
 
   return { replayed: false, replayState: 'EXECUTED' as const, ...result }
 }
+
+export async function queuePersistedRecoveryResume(input: {
+  recoveryCaseId: string
+  retryAttempt: number
+  retryStage: NonNullable<CanonicalRecoveryRecord['retry_stage']>
+  retryCheckpointId?: string | null
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('orchestration').rpc('queue_execution_recovery_resume', {
+    p_case_id: input.recoveryCaseId,
+    p_repair_attempt: input.retryAttempt,
+    p_retry_stage: input.retryStage,
+    p_retry_checkpoint_id: input.retryCheckpointId ?? '',
+  })
+  if (error) throw new Error(`Unable to queue execution recovery resume: ${error.message}`)
+  const result = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {}
+  return {
+    queued: result.queued === true,
+    reason: typeof result.reason === 'string' ? result.reason : 'UNKNOWN',
+    actionId: typeof result.action_id === 'string' ? result.action_id : null,
+    durableJobId: typeof result.durable_job_id === 'string' ? result.durable_job_id : null,
+    retryStage: typeof result.retry_stage === 'string' ? result.retry_stage : input.retryStage,
+    retryCheckpointId: typeof result.retry_checkpoint_id === 'string' ? result.retry_checkpoint_id : input.retryCheckpointId ?? null,
+  }
+}
+
+export async function executePersistedRecoveryAndQueueResume(input: {
+  context: RecoveryFailureContext
+  failureClassification: string
+  registry: ExecutionRecoveryHandlerRegistry
+}) {
+  const recovery = await executePersistedRecovery(input)
+  if (
+    recovery.record.authorization_decision !== 'AUTHORIZED'
+    || recovery.record.post_repair_validation_result !== 'PASSED'
+    || !recovery.record.retry_stage
+    || recovery.record.final_outcome !== 'OPEN'
+  ) {
+    return { ...recovery, resume: null }
+  }
+
+  const resume = await queuePersistedRecoveryResume({
+    recoveryCaseId: recovery.record.recovery_case_id,
+    retryAttempt: recovery.record.retry_attempt,
+    retryStage: recovery.record.retry_stage,
+    retryCheckpointId: recovery.record.retry_checkpoint_id,
+  })
+
+  if (!resume.queued && !['ALREADY_QUEUED'].includes(resume.reason)) {
+    throw new Error(`Validated execution recovery could not resume: ${resume.reason}`)
+  }
+
+  return { ...recovery, resume }
+}
