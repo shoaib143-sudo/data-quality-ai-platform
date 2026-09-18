@@ -64,6 +64,12 @@ export function parseCsv(input:string,maxRows:number):ParsedCsvSource{
   const records=parseCsvRecords(input),warnings:string[]=[]
   if(!records.length)return{rows:[],rowCount:0,warnings}
   const headers=normalizeCsvHeaders(records[0])
+  const overwideRecordIndex=records.slice(1).findIndex(record=>record.length>headers.length)
+  if(overwideRecordIndex>=0){
+    const sourceLine=overwideRecordIndex+2
+    const observedFieldCount=records[overwideRecordIndex+1].length
+    throw new Error(`Invalid CSV source at line ${sourceLine}: expected at most ${headers.length} fields from the header but found ${observedFieldCount}`)
+  }
   const rows=records.slice(1).map(record=>Object.fromEntries(headers.map((header,index)=>[header,coerceCsvScalar(header,record[index]??null)])))
   if(rows.length>maxRows)warnings.push(`FILE source contains ${rows.length} data rows; ${maxRows} were selected for profiling.`)
   return{rows:rows.slice(0,maxRows),rowCount:rows.length,warnings}
