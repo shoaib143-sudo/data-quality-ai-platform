@@ -50,7 +50,7 @@
     "verify:profiling-explorer": "node scripts/verify-profiling-explorer.mjs",
     "verify:governance": "node scripts/verify-governance-architecture.mjs && node scripts/verify-single-organization-runtime.mjs",
     "verify:semantic": "node scripts/verify-semantic-governance.mjs",
-    "verify:remediation": "node scripts/verify-profiling-remediation.mjs",
+    "verify:remediation": "node scripts/verify-profiling-remediation.mjs && node --experimental-strip-types scripts/test-profile-readiness-remediation-policy.mjs",
     "verify:learning": "node scripts/verify-profiling-recommendation-learning.mjs",
     "verify:reprofile": "node scripts/verify-automatic-remediation-reprofile.mjs",
     "verify:autonomous": "node scripts/verify-autonomous-governance-operations.mjs && node --experimental-strip-types scripts/test-human-remediation-handoff.mjs && node scripts/test-adversarial-human-remediation-handoff.mjs",
