@@ -225,7 +225,7 @@ export function GlossaryManager({
       <section className="rounded-3xl border bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-xl font-bold">Semantic workbench</h2><p className="mt-1 text-sm text-slate-500">Published meaning survives draft revisions; mappings are reviewed against the approved term version.</p>{!canManageSelectedProject ? <p className="mt-1 text-xs font-semibold text-blue-600">Read-only glossary evidence for this project.</p> : null}</div>
-          <select value={projectId} onChange={event => setProjectId(event.target.value)} className="rounded-xl border px-3 py-2 text-sm font-semibold">
+          <select aria-label="Glossary evidence project" value={projectId} onChange={event => setProjectId(event.target.value)} className="rounded-xl border px-3 py-2 text-sm font-semibold">
             {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
         </div>
