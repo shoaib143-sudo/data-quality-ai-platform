@@ -1,4 +1,7 @@
 import { access, readFile } from 'node:fs/promises'
+
+const readinessRemediationAgent = fs.readFileSync('lib/profiling/readiness-remediation-agent.ts', 'utf8')
+const readinessRemediationPolicy = fs.readFileSync('lib/profiling/readiness-remediation-policy.ts', 'utf8')
 import { constants } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
 
@@ -95,5 +98,9 @@ if (url && serviceRoleKey) {
   if (error) throw new Error(`Live profiling remediation outcome registry is unavailable: ${error.message}`)
   console.log(`PASS live remediation outcome registry -> ${count ?? 0} recorded outcomes`)
 }
+
+requireText(readinessRemediationPolicy, 'deterministicProfileReadinessRepairDecision', 'deterministic readiness repair decision')
+requireText(readinessRemediationAgent, 'const deterministicDecision = deterministicProfileReadinessRepairDecision(policy)', 'deterministic readiness repair execution')
+requireText(readinessRemediationAgent, "routing: { mode: 'DETERMINISTIC_POLICY' }", 'deterministic recovery routing evidence')
 
 console.log('Profiling remediation verification completed.')
