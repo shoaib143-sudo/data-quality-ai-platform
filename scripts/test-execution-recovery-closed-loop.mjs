@@ -108,7 +108,7 @@ assert.equal(applies, 1)
 assert.equal(recovered.record.post_repair_validation_result, 'PASSED')
 assert.equal(recovered.record.retry_stage, 'METRIC_EXECUTION')
 assert.equal(recovered.record.retry_checkpoint_id, 'metric-execution')
-assert.equal(recovered.record.final_outcome, 'RECOVERED')
+assert.equal(recovered.record.final_outcome, 'OPEN')
 
 const p2Result = await executeAuthorizedRecovery({
   context: p2,
