@@ -143,6 +143,8 @@ requireText(worker, "return 'GOVERNED_WORKFLOW'", 'lease failure recovery stage'
 requireText(worker, 'durableJobId: job.id', 'durable job lease repair parameter')
 requireText(worker, "type: 'DURABLE_JOB'", 'durable job recovery evidence')
 requireText(worker, 'loadRecoveryCheckpoints', 'checkpoint evidence loading')
+requireText(worker, 'payload.recoveryResume', 'profiling retry boundary handoff')
+requireText(worker, '{ ...baseRequestInput, recoveryResume }', 'recovery metadata propagation into profiling request')
 requireText(worker, "outcome: 'RECOVERY_ENGINE_ERROR'", 'fail-closed recovery engine error evidence')
 requireText(worker, "'RECOVERY_QUEUED'", 'queued recovery worker outcome')
 
