@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { jdbcEngineFromUrl, validateJdbcConnection } from '@/lib/connectors/jdbc'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
 import { assertSafeRemoteFileUrl } from '@/lib/profiling/safe-remote-file'
-import { parseR2SourceUri, resolveProviderNeutralFileConfig, sanitizeProviderNeutralFileResult } from '@/lib/profiling/provider-neutral-file-source'
+import { assertProjectScopedObjectStorageSource, parseObjectStorageSourceUri, resolveProviderNeutralFileConfig, sanitizeProviderNeutralFileResult } from '@/lib/profiling/provider-neutral-file-source'
 
 export type SourceValidationResult = {
   valid: boolean
@@ -75,18 +75,25 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
   }
 
   if (['file', 'csv'].includes(sourceType)) {
-    const r2 = parseR2SourceUri(sourceUri)
-    const url = r2 ? null : firstString(metadata, ['url', 'source_url', 'sourceUrl']) ?? (/^https?:\/\//i.test(sourceUri) ? sourceUri : null)
-    const bucket = r2?.bucket ?? firstString(metadata, ['bucket', 'bucket_id', 'bucketId', 'storage_bucket', 'storageBucket'])
-    const path = r2?.key ?? firstString(metadata, ['path', 'storage_path', 'storagePath', 'object_path', 'objectPath']) ?? sourceUri
-    if (!r2 && !url && (!bucket || !path)) errors.push('FILE sources require an HTTPS URL, an R2 source URI, or a Supabase Storage bucket and object path.')
+    const objectStorage = parseObjectStorageSourceUri(sourceUri)
+    if (objectStorage) {
+      try {
+        assertProjectScopedObjectStorageSource(objectStorage, source.project_id)
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : 'FILE source is outside the authorized project storage scope.')
+      }
+    }
+    const url = objectStorage ? null : firstString(metadata, ['url', 'source_url', 'sourceUrl']) ?? (/^https?:\/\//i.test(sourceUri) ? sourceUri : null)
+    const bucket = objectStorage?.bucket ?? firstString(metadata, ['bucket', 'bucket_id', 'bucketId', 'storage_bucket', 'storageBucket'])
+    const path = objectStorage?.key ?? firstString(metadata, ['path', 'storage_path', 'storagePath', 'object_path', 'objectPath']) ?? sourceUri
+    if (!objectStorage && !url && (!bucket || !path)) errors.push('FILE sources require an HTTPS URL, an object-storage source URI, or a Supabase Storage bucket and object path.')
     if (url) {
       try {
         await assertSafeRemoteFileUrl(url)
       } catch (error) {
         errors.push(error instanceof Error ? error.message : 'FILE source URL is not allowed.')
       }
-    } else if (!r2 && bucket && path) {
+    } else if (!objectStorage && bucket && path) {
       const requiredPrefix = `projects/${source.project_id}/`
       if (bucket !== 'dataset-files' || !path.startsWith(requiredPrefix) || path.length <= requiredPrefix.length) {
         errors.push(`FILE sources must be stored under dataset-files/${requiredPrefix}...`)
@@ -95,8 +102,17 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
 
     if (errors.length === 0) {
       try {
-        const baseConfig = r2
-          ? { sourceUri: r2.sourceUri, executionConfig: { ...metadata, storage_provider: 'r2', storage_bucket: r2.bucket, storage_path: r2.key } }
+        const baseConfig = objectStorage
+          ? {
+              sourceUri: objectStorage.sourceUri,
+              executionConfig: {
+                ...metadata,
+                storage_provider: objectStorage.provider,
+                storage_bucket: objectStorage.bucket,
+                storage_path: objectStorage.key,
+                ...(objectStorage.provider === 'supabase' ? { bucket: objectStorage.bucket, path: objectStorage.key } : {}),
+              },
+            }
           : { sourceUri, executionConfig: url ? { ...metadata, url } : { ...metadata, bucket, path } }
         const resolved = await resolveProviderNeutralFileConfig(baseConfig)
         const rawLoaded = await loadFileSource(supabase, resolved.config, { maxRows: 25 })
@@ -110,8 +126,8 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
           source_uri: loaded.sourceUri,
           checks: { configuration: true, connectivity: true, schema_available: loaded.rows.length > 0 },
           details: {
-            storage_provider: r2 ? 'r2' : bucket ? 'supabase' : 'https',
-            url: r2 ? null : url,
+            storage_provider: objectStorage?.provider ?? (bucket ? 'supabase' : 'https'),
+            url: objectStorage ? null : url,
             bucket,
             path,
             format: loaded.format,
@@ -136,9 +152,9 @@ export async function validateDataSourceForProfiling(supabase: SupabaseClient, s
       valid: false,
       source_type: sourceType.toUpperCase(),
       execution_type: 'FILE',
-      source_uri: r2?.sourceUri ?? url ?? `storage://${bucket ?? ''}/${path ?? ''}`,
+      source_uri: objectStorage?.sourceUri ?? url ?? `storage://${bucket ?? ''}/${path ?? ''}`,
       checks: { configuration: !errors.some((error) => error.includes('require') || error.includes('valid') || error.includes('must be stored') || error.includes('not allowed') || error.includes('private or local')), connectivity: false, schema_available: false },
-      details: { storage_provider: r2 ? 'r2' : bucket ? 'supabase' : 'https', url: r2 ? null : url, bucket, path },
+      details: { storage_provider: objectStorage?.provider ?? (bucket ? 'supabase' : 'https'), url: r2 ? null : url, bucket, path },
       errors,
       warnings,
     }
