@@ -27,8 +27,8 @@ test('FILE profiling fails closed on unsupported governed storage providers', ()
 
 
 test('governed FILE storage reference strips stale URL fields before source loading', () => {
-  assert.match(source, /url: _staleUrl/)
-  assert.match(source, /source_url: _staleSourceUrl/)
-  assert.match(source, /sourceUrl: _staleSourceUrlCamel/)
+  assert.match(source, /delete governedExecutionConfig\.url/)
+  assert.match(source, /delete governedExecutionConfig\.source_url/)
+  assert.match(source, /delete governedExecutionConfig\.sourceUrl/)
   assert.match(source, /\.\.\.governedExecutionConfig/)
 })
