@@ -82,6 +82,23 @@ async function seedInitialRecoveryRecord(record: CanonicalRecoveryRecord, projec
   return Boolean(data)
 }
 
+async function persistRecoveryPlan(record: CanonicalRecoveryRecord, projectId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .schema('orchestration')
+    .from('recovery_cases')
+    .update(canonicalColumns(record))
+    .eq('id', record.recovery_case_id)
+    .eq('project_id', projectId)
+    .eq('status', 'OPEN')
+    .eq('final_outcome', 'OPEN')
+    .or('post_repair_validation_result.is.null,post_repair_validation_result.eq.NOT_RUN')
+    .select('id')
+    .maybeSingle()
+  if (error) throw new Error(`Unable to persist execution recovery plan: ${error.message}`)
+  return Boolean(data)
+}
+
 async function claimAutoRepair(input: {
   recoveryCaseId: string
   retryAttempt: number
@@ -252,10 +269,16 @@ export async function executePersistedRecovery(input: {
   }
 
   let repairClaimed = false
-  let claimReason: string | null = null
+  let gateReason: string | null = null
   const result = await executeAuthorizedRecovery({
     ...input,
-    beforeApply: async ({ repair }) => {
+    beforeApply: async ({ repair, record }) => {
+      const planned = await persistRecoveryPlan(record, input.context.projectId)
+      if (!planned) {
+        gateReason = 'RECOVERY_STATE_ADVANCED'
+        return { proceed: false, reason: gateReason }
+      }
+
       const claim = await claimAutoRepair({
         recoveryCaseId: input.context.recoveryCaseId,
         retryAttempt: input.context.retryAttempt,
@@ -263,20 +286,20 @@ export async function executePersistedRecovery(input: {
         mutationScope: repair.mutationScope,
       })
       repairClaimed = claim.claimed
-      claimReason = claim.reason
+      gateReason = claim.reason
       return { proceed: claim.claimed, reason: claim.reason ?? 'RECOVERY_ATTEMPT_ALREADY_CLAIMED' }
     },
   })
 
-  if (!repairClaimed && claimReason) {
+  if (!repairClaimed && gateReason) {
     // A failed database claim means another actor or state transition already owns
     // mutation authority. Never convert that concurrency signal into a new terminal
     // recovery outcome or overwrite the authoritative row with stale in-memory state.
     const advanced = await loadPersistedRecoveryCase(input.context.recoveryCaseId, input.context.projectId)
     return {
       replayed: true,
-      replayState: claimReason === 'ATTEMPT_ALREADY_CLAIMED' ? 'IN_FLIGHT' as const : 'STATE_ADVANCED' as const,
-      claimReason,
+      replayState: gateReason === 'ATTEMPT_ALREADY_CLAIMED' ? 'IN_FLIGHT' as const : 'STATE_ADVANCED' as const,
+      claimReason: gateReason,
       persistedState: advanced,
       record: initial,
     }
