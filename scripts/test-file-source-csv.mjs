@@ -40,6 +40,13 @@ test('unterminated quoted fields fail closed', () => {
   assert.throws(()=>parseCsv('id,description\n1,"broken\n',10),/Invalid CSV source: unterminated quoted field/)
 })
 
+test('overwide records fail closed instead of silently dropping fields', () => {
+  assert.throws(
+    ()=>parseCsv('id,name\\n1,Alice,unexpected\\n',10),
+    /Invalid CSV source at line 2: expected at most 2 fields from the header but found 3/,
+  )
+})
+
 test('missing trailing fields remain null while blank fields remain blank', () => {
   const parsed=parseCsv('name,optional,missing\nAlice,,\nBob,provided\n',10)
   assert.deepEqual(parsed.rows,[
