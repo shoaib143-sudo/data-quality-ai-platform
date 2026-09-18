@@ -53,9 +53,45 @@ function readinessApprovalRequired(readiness: Record<string, unknown>) {
   return activeReadinessBlockers(readiness).some(code => object(remediation[code]).approval_required === true)
 }
 
-function recoveryStageForFailure(job: DurableJob, error: Record<string, unknown>): RecoveryStage {
+function stageForProfilingStep(stepName: string): RecoveryStage {
+  if (stepName === 'profile_dataset') return 'PROFILE_RUN'
+  if (stepName === 'execute_metrics') return 'METRIC_EXECUTION'
+  if (stepName === 'investigate_profile') return 'FINDINGS_GENERATION'
+  return 'GOVERNED_WORKFLOW'
+}
+
+function recoveryStageForFailure(job: DurableJob, error: Record<string, unknown>, failedStepName?: string | null): RecoveryStage {
+  if (failedStepName) return stageForProfilingStep(failedStepName)
   if (text(error.code) === 'PROFILE_READINESS_GATE_BLOCKED' && job.job_type === 'PROFILING') return 'PROFILE_RUN'
   return 'GOVERNED_WORKFLOW'
+}
+
+function isConcreteTransientFailure(message: string) {
+  return /(connection timeout|connect timeout|connection reset|temporar|timed out|timeout|network|econnreset|econnrefused|fetch failed|socket)/i.test(message)
+}
+
+async function loadAgentRecoverySteps(agentRunId: string) {
+  if (!agentRunId) return []
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .schema('agent')
+    .from('agent_run_steps')
+    .select('id,step_name,step_order,status,error_code,error_message,attempt')
+    .eq('agent_run_id', agentRunId)
+    .order('step_order', { ascending: true })
+  if (error) throw new Error(`Unable to load profiling recovery checkpoints: ${error.message}`)
+  return data ?? []
+}
+
+async function loadCurrentReadiness(projectId: string, datasetVersionId: string) {
+  if (!projectId || !datasetVersionId) return {}
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('catalog').rpc('verify_dataset_version_profile_readiness', {
+    p_project_id: projectId,
+    p_dataset_version_id: datasetVersionId,
+  })
+  if (error) throw new Error(`Unable to load current profiling readiness evidence: ${error.message}`)
+  return object(data)
 }
 
 async function loadRecoveryCaseForDurableJob(jobId: string) {
@@ -97,22 +133,37 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
 
   const error = object(failure)
   const payload = object(job.payload)
-  const readiness = object(error.readiness)
   const errorCode = text(error.code)
-  const failingStage = recoveryStageForFailure(job, error)
-  const datasetVersionId = text(readiness.dataset_version_id) || text(payload.datasetVersionId)
-  const sourceId = text(readiness.source_id)
+  const datasetVersionId = text(object(error.readiness).dataset_version_id) || text(payload.datasetVersionId)
   const agentRunId = text(payload.agentRunId) || text(job.agent_run_id)
+  const [agentSteps, currentReadiness] = await Promise.all([
+    loadAgentRecoverySteps(agentRunId),
+    loadCurrentReadiness(job.project_id, datasetVersionId),
+  ])
+  const readinessFromError = object(error.readiness)
+  const readiness = Object.keys(readinessFromError).length ? readinessFromError : currentReadiness
+  const sourceId = text(readiness.source_id)
+  const failedStep = [...agentSteps].reverse().find(step => step.status === 'FAILED') ?? null
+  const failingStage = recoveryStageForFailure(job, error, failedStep?.step_name ?? null)
+  const errorMessage = text(error.message) || text(failedStep?.error_message)
   const profileReadinessFailure = errorCode === 'PROFILE_READINESS_GATE_BLOCKED'
     && job.job_type === 'PROFILING'
     && Boolean(datasetVersionId)
     && Boolean(agentRunId)
+  const transientMetricFailure = failingStage === 'METRIC_EXECUTION'
+    && isConcreteTransientFailure(errorMessage)
+    && Boolean(sourceId)
 
-  const knownRepairClass = profileReadinessFailure ? 'PROFILING_READINESS_RECONCILIATION' as const : null
+  const knownRepairClass = profileReadinessFailure
+    ? 'PROFILING_READINESS_RECONCILIATION' as const
+    : transientMetricFailure
+      ? 'SOURCE_READINESS_RECONCILIATION' as const
+      : null
   const approvalRequired = readinessApprovalRequired(readiness)
-  const failingCheckpointId = failingStage === 'PROFILE_RUN'
-    ? `profile-run:${text(payload.profilingRunId) || job.id}:readiness`
-    : `durable-job:${job.id}`
+  const failingCheckpointId = failedStep?.id
+    ?? (failingStage === 'PROFILE_RUN'
+      ? `profile-run:${text(payload.profilingRunId) || job.id}:readiness`
+      : `durable-job:${job.id}`)
 
   const context: RecoveryFailureContext = {
     recoveryCaseId: recoveryCase.id,
@@ -121,10 +172,10 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
     failingStage,
     failingCheckpointId,
     code: errorCode || null,
-    retryable: profileReadinessFailure,
+    retryable: profileReadinessFailure || transientMetricFailure,
     blocking: true,
     securityRelevant: recoveryCase.classification === 'AUTHORIZATION',
-    credentialMissing: activeReadinessBlockers(readiness).some(code => /CREDENTIAL/i.test(code)),
+    credentialMissing: activeReadinessBlockers(readiness).some(code => /CREDENTIAL/i.test(code)) || /missing.*credential|credential.*missing/i.test(errorMessage),
     privilegeExpansionRequired: recoveryCase.classification === 'AUTHORIZATION',
     destructiveMutationRequired: false,
     policyBlocked: approvalRequired,
@@ -136,9 +187,14 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
       { type: 'DURABLE_JOB', id: job.id },
       ...(job.agent_run_id ? [{ type: 'AGENT_RUN', id: job.agent_run_id }] : []),
     ],
-    checkpoints: [
-      { id: failingCheckpointId, stage: failingStage, valid: false, completed: false },
-    ],
+    checkpoints: agentSteps.length
+      ? agentSteps.map(step => ({
+          id: step.id,
+          stage: stageForProfilingStep(text(step.step_name)),
+          valid: step.status === 'SUCCEEDED',
+          completed: step.status === 'SUCCEEDED',
+        }))
+      : [{ id: failingCheckpointId, stage: failingStage, valid: false, completed: false }],
     repairParameters: {
       datasetVersionId,
       sourceId,
