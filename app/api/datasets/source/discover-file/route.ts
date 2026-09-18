@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
-import { resolveProviderNeutralFileConfig, sanitizeProviderNeutralFileResult } from '@/lib/profiling/provider-neutral-file-source'
+import { assertProjectScopedObjectStorageSource, parseObjectStorageSourceUri, resolveProviderNeutralFileConfig, sanitizeProviderNeutralFileResult } from '@/lib/profiling/provider-neutral-file-source'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
@@ -33,6 +33,9 @@ export async function POST(request: Request) {
     await authorizeProject(user.id, projectId, 'catalog.read')
 
     const admin = createAdminClient()
+    const parsedStorage = parseObjectStorageSourceUri(sourceUri)
+    if (parsedStorage) assertProjectScopedObjectStorageSource(parsedStorage, projectId)
+
     const executionConfig = /^https?:\/\//i.test(sourceUri)
       ? { url: sourceUri }
       : /^(r2|supabase|storage):\/\//i.test(sourceUri)
