@@ -41,34 +41,48 @@ export function normalizeCsvHeaders(rawHeaders:string[]){
   })
 }
 
-export function parseCsvRecords(input:string){
-  const records:string[][]=[];let record:string[]=[];let field='';let quoted=false
+type CsvRecordEntry={record:string[];sourceLine:number}
+
+function parseCsvRecordEntries(input:string):CsvRecordEntry[]{
+  const entries:CsvRecordEntry[]=[];let record:string[]=[];let field='';let quoted=false;let line=1;let recordStartLine=1
   for(let index=0;index<input.length;index+=1){
     const char=input[index],next=input[index+1]
     if(quoted){
       if(char==='"'&&next==='"'){field+='"';index+=1;continue}
       if(char==='"'){quoted=false;continue}
+      if(char==='\n'){field+=char;line+=1;continue}
       field+=char;continue
     }
     if(char==='"'&&field.length===0){quoted=true;continue}
     if(char===','){record.push(field);field='';continue}
-    if(char==='\n'){record.push(field.replace(/\r$/,''));records.push(record);record=[];field='';continue}
+    if(char==='\n'){
+      record.push(field.replace(/\r$/,''))
+      entries.push({record,sourceLine:recordStartLine})
+      record=[];field='';line+=1;recordStartLine=line
+      continue
+    }
     field+=char
   }
   if(quoted)throw new Error('Invalid CSV source: unterminated quoted field')
-  if(field.length||record.length){record.push(field.replace(/\r$/,''));records.push(record)}
-  return records.filter(row=>row.some(value=>value.trim()!==''))
+  if(field.length||record.length){
+    record.push(field.replace(/\r$/,''))
+    entries.push({record,sourceLine:recordStartLine})
+  }
+  return entries.filter(entry=>entry.record.some(value=>value.trim()!==''))
+}
+
+export function parseCsvRecords(input:string){
+  return parseCsvRecordEntries(input).map(entry=>entry.record)
 }
 
 export function parseCsv(input:string,maxRows:number):ParsedCsvSource{
-  const records=parseCsvRecords(input),warnings:string[]=[]
-  if(!records.length)return{rows:[],rowCount:0,warnings}
+  const entries=parseCsvRecordEntries(input),warnings:string[]=[]
+  if(!entries.length)return{rows:[],rowCount:0,warnings}
+  const records=entries.map(entry=>entry.record)
   const headers=normalizeCsvHeaders(records[0])
-  const overwideRecordIndex=records.slice(1).findIndex(record=>record.length>headers.length)
-  if(overwideRecordIndex>=0){
-    const sourceLine=overwideRecordIndex+2
-    const observedFieldCount=records[overwideRecordIndex+1].length
-    throw new Error(`Invalid CSV source at line ${sourceLine}: expected at most ${headers.length} fields from the header but found ${observedFieldCount}`)
+  const overwideEntry=entries.slice(1).find(entry=>entry.record.length>headers.length)
+  if(overwideEntry){
+    throw new Error(`Invalid CSV source at line ${overwideEntry.sourceLine}: expected at most ${headers.length} fields from the header but found ${overwideEntry.record.length}`)
   }
   const rows=records.slice(1).map(record=>Object.fromEntries(headers.map((header,index)=>[header,coerceCsvScalar(header,record[index]??null)])))
   if(rows.length>maxRows)warnings.push(`FILE source contains ${rows.length} data rows; ${maxRows} were selected for profiling.`)
