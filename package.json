@@ -45,7 +45,7 @@
     "verify:knowledge-model": "node scripts/verify-governance-knowledge-model.mjs",
     "verify:quality-intelligence": "node scripts/verify-quality-intelligence.mjs",
     "verify:file-onboarding": "node scripts/verify-file-onboarding.mjs",
-    "verify:profiling-lifecycle": "node scripts/verify-profiling-lifecycle-contracts.mjs",
+    "verify:profiling-lifecycle": "node scripts/verify-profiling-lifecycle-contracts.mjs && node --experimental-strip-types scripts/test-profiling-checkpoint-resume.mjs",
     "verify:worker-runtime": "node scripts/verify-worker-runtime.mjs",
     "verify:profiling-explorer": "node scripts/verify-profiling-explorer.mjs",
     "verify:governance": "node scripts/verify-governance-architecture.mjs && node scripts/verify-single-organization-runtime.mjs",
