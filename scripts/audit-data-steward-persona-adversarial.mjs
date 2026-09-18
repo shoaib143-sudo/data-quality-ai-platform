@@ -11,6 +11,17 @@ const orchestratorUi = fs.readFileSync('app/agents/autonomous-governance/autonom
 const scheduleRoute = fs.readFileSync('app/api/schedules/route.ts', 'utf8')
 const approvalRoute = fs.readFileSync('app/api/agents/governance-orchestrator/approvals/route.ts', 'utf8')
 
+const stewardCreate = fs.readFileSync('app/api/stewardship/assignments/route.ts', 'utf8')
+const stewardUpdate = fs.readFileSync('app/api/stewardship/assignments/[assignmentId]/route.ts', 'utf8')
+const qualityRun = fs.readFileSync('app/api/data-quality/run/route.ts', 'utf8')
+const glossaryCreate = fs.readFileSync('app/api/glossary/route.ts', 'utf8')
+const glossaryUpdate = fs.readFileSync('app/api/glossary/[termId]/route.ts', 'utf8')
+const classificationCreate = fs.readFileSync('app/api/classifications/route.ts', 'utf8')
+const classificationUpdate = fs.readFileSync('app/api/classifications/[classificationId]/route.ts', 'utf8')
+const issueCreate = fs.readFileSync('app/api/issues/route.ts', 'utf8')
+const issueUpdate = fs.readFileSync('app/api/issues/[issueId]/route.ts', 'utf8')
+const issueComment = fs.readFileSync('app/api/issues/[issueId]/comments/route.ts', 'utf8')
+
 function requireText(source, needle, label) {
   if (!source.includes(needle)) failures.push(`${label}: missing ${needle}`)
 }
@@ -57,6 +68,23 @@ requireText(orchestratorUi, 'disabled={!canExecute || busy || policy.mode === \'
 
 requireText(scheduleRoute, "authorizeProject(user.id,projectId,'schedule.manage')", 'schedule creation authorization')
 if (/DATA_STEWARD/.test(scheduleRoute)) failures.push('Schedule route must not special-case Data Steward around schedule.manage.')
+
+
+for (const [label, source, capability] of [
+  ['stewardship create', stewardCreate, 'stewardship.manage'],
+  ['stewardship update', stewardUpdate, 'stewardship.manage'],
+  ['data quality execution', qualityRun, 'quality.execute'],
+  ['glossary create', glossaryCreate, 'glossary.manage'],
+  ['glossary update', glossaryUpdate, 'glossary.manage'],
+  ['classification create', classificationCreate, 'classification.review'],
+  ['classification update', classificationUpdate, 'classification.review'],
+  ['issue create', issueCreate, 'issues.manage'],
+  ['issue update', issueUpdate, 'issues.manage'],
+  ['issue comment', issueComment, 'issues.manage'],
+]) {
+  requireText(source, capability, `${label} capability gate`)
+  requireText(source, 'createAdminClient', `${label} trusted persistence path`)
+}
 
 requireText(approvalRoute, 'authorityMatches', 'approval authority evaluation')
 requireText(approvalRoute, 'You do not hold current', 'approval denial path')
