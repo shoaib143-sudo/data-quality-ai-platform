@@ -27,7 +27,7 @@ for (const [label, source] of [
 
 assert.match(quality, /aria-disabled=\{disabled\}/, 'Data Quality execution state must expose disabled semantics.')
 assert.match(issues, /aria-label="Add comment"/, 'Issue comment icon action must retain an explicit accessible name.')
-for (const label of ['Governed project','Business term','Business definition','Domain','Synonyms']) {
+for (const label of ['Governed project','Glossary evidence project','Business term','Business definition','Domain','Synonyms']) {
   assert.ok(glossary.includes(`aria-label="${label}"`), `Glossary input missing accessible label: ${label}`)
 }
 for (const label of ['Governed project','Governed dataset','Issue title','Description and business impact','Issue severity','Resolution summary and evidence','Issue comment']) {
