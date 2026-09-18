@@ -42,6 +42,7 @@ export type RecoveryFailureContext = {
   workflowRunId: string
   failingStage: RecoveryStage
   failingCheckpointId?: string | null
+  retryStageHint?: RecoveryStage | null
   code?: string | null
   retryable?: boolean | null
   blocking?: boolean | null
@@ -153,7 +154,7 @@ export function nearestValidRecoveryCheckpoint(input: RecoveryFailureContext): R
 
 export function retryTarget(input: RecoveryFailureContext, sameStageSafe: boolean) {
   if (sameStageSafe) {
-    return { stage: input.failingStage, checkpointId: input.failingCheckpointId ?? null, usedFallback: false }
+    return { stage: input.retryStageHint ?? input.failingStage, checkpointId: input.failingCheckpointId ?? null, usedFallback: false }
   }
   const checkpoint = nearestValidRecoveryCheckpoint(input)
   return checkpoint
