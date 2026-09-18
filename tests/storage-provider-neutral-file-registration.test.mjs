@@ -2,32 +2,50 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const route = fs.readFileSync(new URL('../app/api/datasets/source/register/route.ts', import.meta.url), 'utf8')
+const registration = fs.readFileSync(new URL('../app/api/datasets/source/register/route.ts', import.meta.url), 'utf8')
+const discovery = fs.readFileSync(new URL('../app/api/datasets/source/discover-file/route.ts', import.meta.url), 'utf8')
+const validation = fs.readFileSync(new URL('../lib/profiling/source-validation.ts', import.meta.url), 'utf8')
+const providerNeutral = fs.readFileSync(new URL('../lib/profiling/provider-neutral-file-source.ts', import.meta.url), 'utf8')
 
-test('FILE registration accepts R2, Supabase, storage, and legacy bucket/path source forms', () => {
-  assert.match(route, /\^\(r2\|supabase\|storage\):\\\/\\\/\(\[\^\/\]\+\)\\\/\(\.\+\)\$/i)
-  assert.match(route, /provider === 'r2'/)
-  assert.match(route, /provider !== 'supabase' && provider !== 'storage'/)
-  assert.match(route, /bucket !== 'dataset-files'/)
+test('provider-neutral FILE parsing accepts R2, Supabase, and storage URI schemes', () => {
+  assert.match(providerNeutral, /\^\(r2\|supabase\|storage\):\\\/\\\//)
+  assert.match(providerNeutral, /match\[1\]\.toLowerCase\(\) === 'r2' \? 'r2' : 'supabase'/)
+  assert.match(providerNeutral, /storage:\/\//)
+  assert.match(providerNeutral, /r2:\/\//)
 })
 
-test('R2 FILE registration is bucket-scoped and project-prefix scoped', () => {
-  assert.match(route, /process\.env\.R2_BUCKET/)
-  assert.match(route, /process\.env\.R2_PREFIX/)
-  assert.match(route, /bucket !== configuredBucket/)
-  assert.match(route, /projectPath\.startsWith\(requiredPrefix\)/)
-  assert.match(route, /R2 FILE\/CSV source bucket is outside the configured application scope/)
+test('provider-neutral object storage URIs are project scoped for both providers', () => {
+  assert.match(providerNeutral, /assertProjectScopedObjectStorageSource/)
+  assert.match(providerNeutral, /process\.env\.R2_BUCKET/)
+  assert.match(providerNeutral, /process\.env\.R2_PREFIX/)
+  assert.match(providerNeutral, /parsed\.bucket !== 'dataset-files'/)
+  assert.match(providerNeutral, /projectPath\.startsWith\(requiredPrefix\)/)
 })
 
-test('Supabase FILE registration remains constrained to dataset-files project scope', () => {
-  assert.match(route, /Supabase FILE\/CSV sources must be stored under dataset-files/)
-  assert.match(route, /requiredPrefix = `projects\/\$\{projectId\}\/`/)
-  assert.match(route, /storage_provider: 'supabase'/)
+test('FILE source registration reuses governed provider-neutral parsing', () => {
+  assert.match(registration, /parseObjectStorageSourceUri/)
+  assert.match(registration, /assertProjectScopedObjectStorageSource/)
+  assert.match(registration, /storage_provider: parsed\.provider/)
+  assert.match(registration, /storage_bucket: parsed\.bucket/)
+  assert.match(registration, /storage_path: parsed\.key/)
 })
 
-test('FILE registration persists explicit provider-neutral storage metadata', () => {
-  assert.match(route, /storage_provider: 'r2'/)
-  assert.match(route, /storage_provider: 'supabase'/)
-  assert.match(route, /storage_bucket: bucket/)
-  assert.match(route, /storage_path: path/)
+test('FILE discovery resolves provider-neutral sources before loading bytes', () => {
+  assert.match(discovery, /parseObjectStorageSourceUri/)
+  assert.match(discovery, /assertProjectScopedObjectStorageSource/)
+  assert.match(discovery, /resolveProviderNeutralFileConfig/)
+  assert.match(discovery, /sanitizeProviderNeutralFileResult/)
+})
+
+test('source validation rejects cross-project object-storage references before connectivity', () => {
+  assert.match(validation, /parseObjectStorageSourceUri/)
+  assert.match(validation, /assertProjectScopedObjectStorageSource/)
+  assert.match(validation, /FILE source is outside the authorized project storage scope/)
+})
+
+test('Supabase provider URIs are converted to executable bucket and path config', () => {
+  assert.match(providerNeutral, /objectStorage\.provider === 'supabase'/)
+  assert.match(providerNeutral, /bucket: objectStorage\.bucket/)
+  assert.match(providerNeutral, /path: objectStorage\.key/)
+  assert.match(providerNeutral, /storage_provider: 'supabase'/)
 })
