@@ -48,3 +48,13 @@ test('R2 production preparation does not require an infrastructure mutation when
   assert.match(certification, /R2 CORS policy already matches the governed desired state/)
   assert.match(certification, /-X POST/)
 })
+
+
+test('R2 production preparation uses GitHub OIDC instead of copied production secrets', () => {
+  assert.match(certification, /id-token: write/)
+  assert.match(certification, /OIDC_AUDIENCE: datanexus-r2-production/)
+  assert.match(certification, /ACTIONS_ID_TOKEN_REQUEST_URL/)
+  assert.match(certification, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/)
+  assert.match(certification, /Authorization: Bearer \$OIDC_TOKEN/)
+  assert.doesNotMatch(certification, /secrets\.CRON_SECRET|secrets\.R2_CERTIFICATION_APP_URL/)
+})
