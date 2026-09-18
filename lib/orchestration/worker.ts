@@ -565,6 +565,7 @@ async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unk
     checkpoints,
     repairParameters: {
       durableJobId: job.id,
+      restartScope: route.restartScope,
       ...(sourceId ? { sourceId } : {}),
       ...(datasetVersionId ? { datasetVersionId } : {}),
       ...(agentRunId ? { agentRunId } : {}),
@@ -583,7 +584,8 @@ async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unk
     outcome: recovery.record.final_outcome,
     validation: recovery.record.post_repair_validation_result,
     retryStage: recovery.record.retry_stage,
-    retryCheckpointId: recovery.record.retry_checkpoint_id,
+    retryCheckpointId: route.restartScope === 'WHOLE_JOB' ? null : recovery.record.retry_checkpoint_id,
+    restartScope: route.restartScope,
     resumeQueued: recovery.resume?.queued === true,
     resumeReason: recovery.resume?.reason ?? null,
   }
