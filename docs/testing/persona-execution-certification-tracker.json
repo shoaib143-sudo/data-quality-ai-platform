@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-18",
+  "statuses": [
+    "PENDING",
+    "IN_PROGRESS",
+    "PASS",
+    "FAIL",
+    "BLOCKED"
+  ],
+  "personas": {
+    "data-steward": {
+      "contractUnit": "PASS",
+      "functional": "IN_PROGRESS",
+      "negativeFailure": "PASS",
+      "independentAdversarial": "PASS",
+      "uiUx": "PASS",
+      "accessibility": "IN_PROGRESS",
+      "rbacAuthorization": "PASS",
+      "executionModes": "IN_PROGRESS",
+      "concurrencyIdempotency": "IN_PROGRESS",
+      "e2eLifecycle": "IN_PROGRESS",
+      "literalAuthenticatedBrowser": "BLOCKED",
+      "selfHealingHandsfree": "BLOCKED",
+      "finalCertification": "IN_PROGRESS",
+      "blockers": [
+        "Literal password-login evidence for retained Data Steward test principal is not available to automation.",
+        "Production-bound Data Steward regression project is intentionally sparse and is not a realistic business-workflow fixture.",
+        "Self-healing Handsfree waits for the Execution Recovery Agent P0/P1 closed-loop implementation."
+      ]
+    }
+  }
+}
