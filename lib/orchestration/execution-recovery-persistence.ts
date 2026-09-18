@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { executeAuthorizedRecovery, type ExecutionRecoveryHandlerRegistry } from './execution-recovery-runtime'
-import type { CanonicalRecoveryRecord, RecoveryFailureContext } from './execution-recovery-contract'
+import { initialRecoveryRecord, type CanonicalRecoveryRecord, type RecoveryFailureContext } from './execution-recovery-contract'
 
 type PersistedRecoveryCase = {
   id: string
@@ -114,6 +114,9 @@ export async function executePersistedRecovery(input: {
       },
     }
   }
+
+  const initial = initialRecoveryRecord(input.context, input.failureClassification)
+  await persistCanonicalRecoveryRecord(initial)
 
   const result = await executeAuthorizedRecovery({
     ...input,
