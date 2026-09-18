@@ -14,7 +14,7 @@
     "verify:agent-excellence": "node --experimental-strip-types scripts/test-agent-excellence-contracts.mjs && node --experimental-strip-types scripts/test-governed-skill-registry.mjs && node --experimental-strip-types scripts/test-agent-skill-evaluation.mjs && node --experimental-strip-types scripts/test-bounded-recursion-runtime.mjs && node --experimental-strip-types scripts/test-agent-excellence-runtime.mjs",
     "verify:agent-memory-learning": "node scripts/verify-agent-memory-learning.mjs",
     "verify:agent-run-artifacts": "node scripts/verify-agent-run-artifacts.mjs",
-    "verify:execution-recovery": "node scripts/verify-execution-recovery-agent.mjs && node --experimental-strip-types scripts/test-execution-recovery-closed-loop.mjs",
+    "verify:execution-recovery": "node scripts/verify-execution-recovery-agent.mjs && node --experimental-strip-types scripts/test-execution-recovery-closed-loop.mjs && node --experimental-strip-types scripts/test-execution-recovery-adversarial.mjs",
     "verify:reasoning-provider": "node scripts/verify-reasoning-provider.mjs && node --experimental-strip-types scripts/test-reasoning-provider.mjs",
     "verify:model-gateway": "node scripts/verify-model-gateway.mjs && node scripts/test-model-gateway.mjs",
     "verify:embedding-provider": "node scripts/verify-embedding-provider.mjs && node --experimental-strip-types scripts/test-embedding-provider.mjs",
