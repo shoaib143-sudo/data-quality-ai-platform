@@ -463,6 +463,7 @@ export async function executeDurableJob(job: DurableJob) {
 
 
 function recoveryStageFromMessage(job: DurableJob, message: string): RecoveryStage {
+  if (/lease expired|orphaned|worker lease|stale lease|lease timeout/i.test(message)) return 'GOVERNED_WORKFLOW'
   if (job.job_type === 'DISCOVERY') {
     return /connect|jdbc|network|socket|timeout/i.test(message)
       ? 'CONNECTOR_ESTABLISHMENT'
@@ -475,6 +476,11 @@ function recoveryStageFromMessage(job: DurableJob, message: string): RecoverySta
 }
 
 function repairClassForDeadJob(job: DurableJob, message: string): RecoveryRepairClass | null {
+  const leaseSafeJob = ['PROFILING', 'OBSERVABILITY', 'DISCOVERY', 'LINEAGE_ENRICHMENT', 'SEMANTIC_INDEX', 'GOVERNANCE_AGENT'].includes(job.job_type)
+  if (leaseSafeJob && /lease expired|orphaned|worker lease|stale lease|lease timeout/i.test(message)) {
+    return 'LEASE_RECONCILIATION'
+  }
+
   if (
     job.job_type === 'PROFILING'
     && /PROFILE_READINESS_GATE_BLOCKED|profiling readiness|dataset_not_found|dataset_version_not_latest|source_not_observed_ready|execution_source_not_bound/i.test(message)
@@ -596,6 +602,7 @@ async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unk
     ],
     checkpoints,
     repairParameters: {
+      durableJobId: job.id,
       ...(sourceId ? { sourceId } : {}),
       ...(datasetVersionId ? { datasetVersionId } : {}),
       ...(agentRunId ? { agentRunId } : {}),
