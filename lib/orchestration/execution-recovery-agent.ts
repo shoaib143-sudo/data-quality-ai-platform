@@ -183,6 +183,9 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
         ? 'RETRY_SAFE_RUNTIME_REPAIR' as const
         : null
   const approvalRequired = readinessApprovalRequired(readiness)
+  const retryStageHint: RecoveryStage = failedStep
+    ? stageForProfilingStep(text(failedStep.step_name))
+    : failingStage
   const failingCheckpointId = failedStep?.id
     ?? (failingStage === 'PROFILE_RUN'
       ? `profile-run:${text(payload.profilingRunId) || job.id}:readiness`
@@ -194,6 +197,7 @@ export async function recoverTerminalDurableJobFailure(job: DurableJob, failure:
     workflowRunId: job.agent_run_id ?? job.id,
     failingStage,
     failingCheckpointId,
+    retryStageHint,
     code: errorCode || null,
     retryable: profileReadinessFailure || transientMetricFailure || transientDiscoveryFailure || retrySafeGovernanceRuntimeFailure || retrySafeProfilingRuntimeFailure,
     blocking: true,
