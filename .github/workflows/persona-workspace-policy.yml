@@ -50,3 +50,19 @@ jobs:
         run: node scripts/verify-ux-product-telemetry.mjs
       - name: Verify policy-denied UX contract
         run: node scripts/verify-ux-policy-denied-state.mjs
+      - name: Data Steward unit and persona contract tests
+        run: node --experimental-strip-types --test scripts/test-data-steward-persona-certification.mjs
+      - name: Data Steward independent adversarial audit
+        run: node scripts/audit-data-steward-persona-adversarial.mjs
+      - name: Data Steward UI and UX tests
+        run: node --experimental-strip-types --test scripts/test-data-steward-persona-ui-ux.mjs
+      - name: Data Steward execution-mode fixture tests
+        run: node --experimental-strip-types --test scripts/test-data-steward-execution-modes.mjs
+      - name: Data Steward canonical API route boundary tests
+        run: node scripts/test-data-steward-api-route-boundaries.mjs
+      - name: Data Steward concurrency and idempotency tests
+        run: node scripts/test-data-steward-concurrency-idempotency.mjs
+      - name: Verify persona certification tracker integrity
+        run: node scripts/verify-persona-execution-certification-tracker.mjs
+      - name: Data Steward persona resolution tests
+        run: node --experimental-strip-types scripts/test-data-steward-persona-resolution.mjs
