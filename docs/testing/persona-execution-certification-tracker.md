@@ -50,5 +50,8 @@ Status vocabulary: `PENDING`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`.
 - Cross-project negative verification confirmed stewardship.manage and agent.execute are false outside the single bound UI Regression Test Project; schedule.manage is false everywhere.
 - The retained Data Steward principal still has no literal password-login evidence (last_sign_in_at is null), so deployed authenticated functional/E2E and manual accessibility evidence remain pending.
 - Repository-governance workflow-count failure was repaired by folding Data Steward certification into the existing Persona Workspace Policy workflow rather than adding another permanent workflow.
+- Production fixture adequacy check found the bound UI Regression Test Project has zero datasets, stewardship assignments, quality rules, glossary terms, classifications, and issues; it is suitable for authorization regression but not realistic Data Steward functional E2E.
+- Direct Data API privilege review found glossary_terms and glossary_mappings were the only Data Steward canonical-task tables retaining authenticated INSERT/UPDATE/DELETE grants. This is tracked and remediated separately in PR #697; other checked stewardship, issue, classification, and quality tables are SELECT-only for authenticated.
+- Live-route adversarial check confirmed navigating directly to /home/data-steward under a different authenticated persona resolves back to that authenticated persona rather than accepting the URL slug as authority.
 
 Final certification requires authenticated deployed-persona evidence in addition to automated CI coverage.
