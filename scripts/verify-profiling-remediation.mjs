@@ -1,7 +1,4 @@
 import { access, readFile } from 'node:fs/promises'
-
-const readinessRemediationAgent = fs.readFileSync('lib/profiling/readiness-remediation-agent.ts', 'utf8')
-const readinessRemediationPolicy = fs.readFileSync('lib/profiling/readiness-remediation-policy.ts', 'utf8')
 import { constants } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
 
@@ -27,6 +24,9 @@ for (const path of requiredFiles) {
 }
 
 const checks = [
+  ['lib/profiling/readiness-remediation-policy.ts', /deterministicProfileReadinessRepairDecision/, 'deterministic readiness repair decision'],
+  ['lib/profiling/readiness-remediation-agent.ts', /deterministicDecision\s*=\s*deterministicProfileReadinessRepairDecision\(policy\)/, 'deterministic readiness repair execution'],
+  ['lib/profiling/readiness-remediation-agent.ts', /routing:\s*\{\s*mode:\s*'DETERMINISTIC_POLICY'\s*\}/, 'deterministic readiness repair evidence'],
   ['app/api/profiling/approval/route.ts', /approval_required[\s\S]*PROFILE_RUN[\s\S]*policy\.approve[\s\S]*start_workflow/, 'investigation approval gating'],
   ['app/api/profiling/approval/route.ts', /PROFILING_REMEDIATION_APPROVAL[\s\S]*workflow_definitions/, 'default profiling approval workflow'],
   ['app/api/profiling/remediation/route.ts', /status !== 'APPROVED'[\s\S]*issues\.manage[\s\S]*TRACKED_GOVERNANCE_ISSUES_ONLY[\s\S]*production_mutation_performed:\s*false/, 'approved non-destructive remediation execution'],
@@ -98,9 +98,5 @@ if (url && serviceRoleKey) {
   if (error) throw new Error(`Live profiling remediation outcome registry is unavailable: ${error.message}`)
   console.log(`PASS live remediation outcome registry -> ${count ?? 0} recorded outcomes`)
 }
-
-requireText(readinessRemediationPolicy, 'deterministicProfileReadinessRepairDecision', 'deterministic readiness repair decision')
-requireText(readinessRemediationAgent, 'const deterministicDecision = deterministicProfileReadinessRepairDecision(policy)', 'deterministic readiness repair execution')
-requireText(readinessRemediationAgent, "routing: { mode: 'DETERMINISTIC_POLICY' }", 'deterministic recovery routing evidence')
 
 console.log('Profiling remediation verification completed.')
