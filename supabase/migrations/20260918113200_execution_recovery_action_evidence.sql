@@ -100,6 +100,35 @@ begin
     end if;
   end if;
 
+  if v_validation = 'PASSED' then
+    update orchestration.recovery_cases
+       set post_repair_validation_result = 'PASSED',
+           updated_at = now()
+     where id = v_case.id
+       and final_outcome = 'OPEN';
+  elsif v_validation = 'FAILED' then
+    update orchestration.recovery_cases
+       set post_repair_validation_result = 'FAILED',
+           authorization_decision = 'ESCALATE',
+           consent_requirement = 'OPERATOR',
+           status = 'AWAITING_MANUAL_REVIEW',
+           final_outcome = 'ESCALATED',
+           escalation_reason = 'REPAIR_VALIDATION_FAILED',
+           updated_at = now()
+     where id = v_case.id
+       and final_outcome = 'OPEN';
+  elsif p_repair_applied is false then
+    update orchestration.recovery_cases
+       set authorization_decision = 'ESCALATE',
+           consent_requirement = 'OPERATOR',
+           status = 'AWAITING_MANUAL_REVIEW',
+           final_outcome = 'ESCALATED',
+           escalation_reason = coalesce(nullif(trim(coalesce(p_validation_code, '')), ''), 'REPAIR_APPLICATION_FAILED'),
+           updated_at = now()
+     where id = v_case.id
+       and final_outcome = 'OPEN';
+  end if;
+
   return jsonb_build_object(
     'finalized', true,
     'repair_action_id', v_repair_action_id,
