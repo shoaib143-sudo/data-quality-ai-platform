@@ -150,11 +150,12 @@ test('provider-neutral file resolver uses R2 adapter without persisting signed U
   assert.doesNotMatch(registerRoute, /signedUrl|uploadUrl/)
 })
 
-test('FILE source validation accepts canonical r2 URIs through the provider-neutral resolver', () => {
-  assert.match(sourceValidation, /parseR2SourceUri/)
+test('FILE source validation accepts governed provider-neutral object-storage URIs', () => {
+  assert.match(sourceValidation, /parseObjectStorageSourceUri/)
+  assert.match(sourceValidation, /assertProjectScopedObjectStorageSource/)
   assert.match(sourceValidation, /resolveProviderNeutralFileConfig/)
   assert.match(sourceValidation, /sanitizeProviderNeutralFileResult/)
-  assert.match(sourceValidation, /storage_provider: r2 \? 'r2'/)
+  assert.match(sourceValidation, /storage_provider: objectStorage\?\.provider/)
 })
 
 test('dataset registration only links READY storage objects in the same project', () => {
