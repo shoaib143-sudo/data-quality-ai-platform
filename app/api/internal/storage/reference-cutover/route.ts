@@ -11,6 +11,8 @@ const DEFAULT_BATCH = 10
 const MAX_BATCH = 50
 const DEFAULT_MAX_VERIFY_BYTES = 250 * 1024 * 1024
 const HARD_MAX_VERIFY_BYTES = 1024 * 1024 * 1024
+const TARGET_SCAN_PAGE_SIZE = 100
+const MAX_TARGET_SCAN_ROWS = 1000
 
 type Mode = 'dry-run' | 'apply' | 'rollback'
 
@@ -137,34 +139,71 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient()
   const storageSelect = 'id, project_id, provider, bucket, object_key, content_type, state, size_bytes, checksum, checksum_algorithm, metadata'
-  const { data: r2Rows, error: r2Error } = await admin
-    .schema('catalog')
-    .from('storage_objects')
-    .select(storageSelect)
-    .eq('provider', 'r2')
-    .eq('owner_type', 'MIGRATION_COPY')
-    .eq('state', 'READY')
-    .order('verified_at', { ascending: true })
-    .limit(batchSize())
-  if (r2Error) return NextResponse.json({ error: `Unable to load verified R2 migration objects: ${r2Error.message}` }, { status: 500 })
+  const targets: StorageRow[] = []
+  let examinedTargets = 0
 
-  const targets = (r2Rows ?? []) as StorageRow[]
-  const sourceIds = [...new Set(targets.map(sourceStorageId).filter((value): value is string => Boolean(value)))]
-  if (sourceIds.length === 0) {
-    return NextResponse.json({ mode, examinedTargets: targets.length, eligibleReferences: 0, changedReferences: 0, destructiveActions: 0, results: [] })
+  for (let offset = 0; offset < MAX_TARGET_SCAN_ROWS && targets.length < batchSize(); offset += TARGET_SCAN_PAGE_SIZE) {
+    const { data: r2Page, error: r2Error } = await admin
+      .schema('catalog')
+      .from('storage_objects')
+      .select(storageSelect)
+      .eq('provider', 'r2')
+      .eq('owner_type', 'MIGRATION_COPY')
+      .eq('state', 'READY')
+      .order('verified_at', { ascending: true })
+      .range(offset, offset + TARGET_SCAN_PAGE_SIZE - 1)
+    if (r2Error) return NextResponse.json({ error: `Unable to load verified R2 migration objects: ${r2Error.message}` }, { status: 500 })
+
+    const page = (r2Page ?? []) as StorageRow[]
+    examinedTargets += page.length
+    if (page.length === 0) break
+
+    const pageSourceIds = page.map(sourceStorageId).filter((value): value is string => Boolean(value))
+    const referenceIds = mode === 'rollback' ? page.map((row) => row.id) : pageSourceIds
+    if (referenceIds.length > 0) {
+      const { data: referencedRows, error: referenceError } = await admin
+        .schema('catalog')
+        .from('dataset_versions')
+        .select('storage_object_id')
+        .in('storage_object_id', referenceIds)
+      if (referenceError) {
+        return NextResponse.json({ error: `Unable to locate Dataset Version references for R2 migration objects: ${referenceError.message}` }, { status: 500 })
+      }
+
+      const referencedIds = new Set((referencedRows ?? []).map((row) => row.storage_object_id).filter(Boolean))
+      for (const target of page) {
+        const sourceId = sourceStorageId(target)
+        const referenceId = mode === 'rollback' ? target.id : sourceId
+        if (referenceId && referencedIds.has(referenceId)) targets.push(target)
+        if (targets.length >= batchSize()) break
+      }
+    }
+    if (page.length < TARGET_SCAN_PAGE_SIZE) break
   }
 
-  const [{ data: sourceRows, error: sourceError }, { data: versionRows, error: versionError }, { data: datasetRows, error: datasetError }] = await Promise.all([
+  const sourceIds = [...new Set(targets.map(sourceStorageId).filter((value): value is string => Boolean(value)))]
+  if (sourceIds.length === 0) {
+    return NextResponse.json({ mode, examinedTargets, selectedTargets: targets.length, eligibleReferences: 0, changedReferences: 0, destructiveActions: 0, results: [] })
+  }
+
+  const [{ data: sourceRows, error: sourceError }, { data: versionRows, error: versionError }] = await Promise.all([
     admin.schema('catalog').from('storage_objects').select(storageSelect).in('id', sourceIds),
     admin
       .schema('catalog')
       .from('dataset_versions')
       .select('id, dataset_id, storage_object_id')
       .in('storage_object_id', mode === 'rollback' ? targets.map((row) => row.id) : sourceIds),
-    admin.schema('catalog').from('datasets').select('id, project_id'),
   ])
-  const errors = [sourceError, versionError, datasetError].filter(Boolean)
-  if (errors.length) return NextResponse.json({ error: `Reference cutover query failed: ${errors.map((error) => error?.message).join('; ')}` }, { status: 500 })
+  const initialErrors = [sourceError, versionError].filter(Boolean)
+  if (initialErrors.length) {
+    return NextResponse.json({ error: `Reference cutover query failed: ${initialErrors.map((error) => error?.message).join('; ')}` }, { status: 500 })
+  }
+
+  const datasetIds = [...new Set(((versionRows ?? []) as VersionRow[]).map((row) => row.dataset_id))]
+  const { data: datasetRows, error: datasetError } = datasetIds.length > 0
+    ? await admin.schema('catalog').from('datasets').select('id, project_id').in('id', datasetIds)
+    : { data: [] as DatasetRow[], error: null }
+  if (datasetError) return NextResponse.json({ error: `Reference cutover query failed: ${datasetError.message}` }, { status: 500 })
 
   const sourcesById = new Map(((sourceRows ?? []) as StorageRow[]).map((row) => [row.id, row]))
   const targetBySourceId = new Map<string, StorageRow>()
@@ -264,7 +303,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     mode,
-    examinedTargets: targets.length,
+    examinedTargets,
+    selectedTargets: targets.length,
     eligibleReferences,
     changedReferences,
     destructiveActions: 0,
