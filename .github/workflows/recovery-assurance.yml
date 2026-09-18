@@ -22,6 +22,16 @@ on:
       - 'lib/orchestration/governance-outcome-report*.ts'
       - 'lib/orchestration/governance-report-*.ts'
       - 'lib/orchestration/governance-recovery*.ts'
+      - 'lib/orchestration/execution-recovery*.ts'
+      - 'lib/orchestration/worker.ts'
+      - 'lib/agents/profiling-checkpoint.ts'
+      - 'lib/agents/run-profiling-job.ts'
+      - 'lib/profiling/readiness-remediation-*.ts'
+      - 'lib/profiling/source-readiness-repair.ts'
+      - 'scripts/test-execution-recovery-*.mjs'
+      - 'scripts/test-profiling-checkpoint-resume.mjs'
+      - 'scripts/test-profile-readiness-remediation-policy.mjs'
+      - 'package.json'
       - 'lib/orchestration/governance-orchestrator-approval-service.ts'
       - 'app/agents/autonomous-governance/**'
       - 'supabase/migrations/**'
@@ -81,6 +91,12 @@ jobs:
         run: node --test scripts/test-post-implementation-certification-decision.mjs
       - name: Verify platform recovery assurance
         run: pnpm run verify:recovery-assurance
+      - name: Verify closed-loop Execution Recovery Agent
+        run: pnpm run verify:execution-recovery
+      - name: Verify profiling recovery checkpoint contracts
+        run: pnpm run verify:profiling-lifecycle
+      - name: Verify deterministic readiness remediation
+        run: pnpm run verify:remediation
       - name: Verify governance orchestrator runtime wiring
         run: node scripts/verify-governance-runtime-wiring.mjs
       - name: Re-run deterministic orchestrator contracts
