@@ -200,6 +200,23 @@ begin
   ) then
     raise exception 'Stale uncertain claim did not preserve uncertainty evidence';
   end if;
+
+  v_result := orchestration.finalize_execution_recovery_auto_repair(
+    v_stale_case_id,0,'late-mutation',true,'PASSED','LATE_VALIDATION'
+  );
+  if coalesce((v_result->>'finalized')::boolean,false) is true
+     or v_result->>'reason' <> 'RECOVERY_CASE_NO_LONGER_OPEN'
+  then
+    raise exception 'Late finalizer was allowed to overwrite stale-claim escalation: %',v_result;
+  end if;
+
+  if not exists(
+    select 1 from orchestration.recovery_cases
+    where id=v_stale_case_id and final_outcome='ESCALATED'
+      and escalation_reason='REPAIR_CLAIM_OUTCOME_UNCERTAIN'
+  ) then
+    raise exception 'Late finalizer changed the governed stale-claim outcome';
+  end if;
 end;
 $do$;
 
