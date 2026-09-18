@@ -9,6 +9,7 @@ const NO_FINDINGS_RUN_ID = '10000000-0000-0000-0000-000000000009'
 const FAILURE_RETRY_RUN_ID = '10000000-0000-0000-0000-000000000010'
 const EMPTY_RUN_ID = '10000000-0000-0000-0000-000000000011'
 const MISSING_COLUMN_RUN_ID = '10000000-0000-0000-0000-000000000012'
+const UNSUPPORTED_METRIC_RUN_ID = '10000000-0000-0000-0000-000000000013'
 
 const supabase = createAdminClient()
 
@@ -215,12 +216,45 @@ async function assertMissingObservedColumnScoring() {
   assert.equal(numeric((await scoreFor(MISSING_COLUMN_RUN_ID))?.completeness_score), 0.75)
 }
 
+async function assertUnsupportedEnabledMetricFailsClosed() {
+  await createRun(UNSUPPORTED_METRIC_RUN_ID)
+
+  const unsupportedMetricKey = 'runtime_acceptance_unsupported_metric'
+  const { error: definitionError } = await supabase.schema('profiling').from('metric_definitions').insert({
+    metric_key: unsupportedMetricKey,
+    name: 'Runtime acceptance unsupported metric',
+    scope: 'DATASET',
+    value_type: 'NUMBER',
+    description: 'Disposable fail-closed runtime probe.',
+    enabled: true,
+  })
+  assert.equal(definitionError, null, definitionError?.message)
+
+  try {
+    await assert.rejects(
+      () => executeProfilingMetrics(DATASET_VERSION_ID, UNSUPPORTED_METRIC_RUN_ID, {
+        rows: [{ id: 1, email: 'a@example.com', age: 10, note: 'ok' }],
+      }),
+      new RegExp(`Metric registry does not implement enabled definitions: DATASET:${unsupportedMetricKey}`),
+    )
+    assert.equal((await metricsFor(UNSUPPORTED_METRIC_RUN_ID)).length, 0)
+    assert.equal((await findingsFor(UNSUPPORTED_METRIC_RUN_ID)).length, 0)
+    assert.equal(await scoreFor(UNSUPPORTED_METRIC_RUN_ID), null)
+    assert.equal((await runState(UNSUPPORTED_METRIC_RUN_ID)).status, 'RUNNING')
+  } finally {
+    const { error: cleanupError } = await supabase.schema('profiling').from('metric_definitions')
+      .delete().eq('metric_key', unsupportedMetricKey)
+    assert.equal(cleanupError, null, cleanupError?.message)
+  }
+}
+
 async function main() {
   await assertPrimaryExecution()
   await assertNoFindingsExecution()
   await assertFailureThenRetry()
   await assertEmptyDatasetScoring()
   await assertMissingObservedColumnScoring()
+  await assertUnsupportedEnabledMetricFailsClosed()
 
   console.log('Profiling deterministic metric runtime acceptance passed.')
 }
