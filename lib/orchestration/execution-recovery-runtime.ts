@@ -57,6 +57,7 @@ export async function executeAuthorizedRecovery(input: {
   context: RecoveryFailureContext
   failureClassification: string
   registry: ExecutionRecoveryHandlerRegistry
+  beforeApply?: (input: { context: RecoveryFailureContext; repair: RecoveryRepair; record: CanonicalRecoveryRecord }) => Promise<{ proceed: boolean; reason?: string }>
 }): Promise<RecoveryExecutionResult> {
   const record = initialRecoveryRecord(input.context, input.failureClassification)
   const authorization = authorizeRecoveryRepair(input.context)
@@ -102,6 +103,23 @@ export async function executeAuthorizedRecovery(input: {
         authorization_decision: 'ESCALATE',
         escalation_reason: 'REPAIR_CLASS_MISMATCH',
       },
+    }
+  }
+
+  if (input.beforeApply) {
+    const gate = await input.beforeApply({ context: input.context, repair, record })
+    if (!gate.proceed) {
+      return {
+        record: {
+          ...record,
+          root_cause_diagnosis: diagnosis.rootCause,
+          repair_action_tool: repair.toolKey,
+          mutation_scope: repair.mutationScope,
+          authorization_decision: 'ESCALATE',
+          final_outcome: 'ESCALATED',
+          escalation_reason: gate.reason ?? 'REPAIR_CLAIM_REJECTED',
+        },
+      }
     }
   }
 
