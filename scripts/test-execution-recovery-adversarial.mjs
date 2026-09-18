@@ -47,6 +47,27 @@ const p2 = authorizeRecoveryRepair(makeContext('p2', {
 assert.equal(p2.authorized, false)
 assert.equal(p2.severity, 'P2')
 
+const p0 = authorizeRecoveryRepair(makeContext('p0', {
+  failingStage: 'GOVERNED_WORKFLOW',
+  retryable: true,
+  blocking: true,
+  knownRepairClass: 'RETRY_SAFE_RUNTIME_REPAIR',
+}))
+assert.equal(p0.severity, 'P0')
+assert.equal(p0.authorized, true)
+
+const securityP0 = authorizeRecoveryRepair(makeContext('security-p0', {
+  failingStage: 'GOVERNED_WORKFLOW',
+  retryable: false,
+  blocking: true,
+  securityRelevant: true,
+  privilegeExpansionRequired: true,
+  knownRepairClass: 'RETRY_SAFE_RUNTIME_REPAIR',
+}))
+assert.equal(securityP0.severity, 'P0')
+assert.equal(securityP0.authorized, false)
+assert.equal(securityP0.escalationReason, 'PRIVILEGE_EXPANSION_REQUIRED')
+
 const maxed = authorizeRecoveryRepair(makeContext('maxed', { retryAttempt: 2, maxRepairAttempts: 2 }))
 assert.equal(maxed.authorized, false)
 assert.equal(maxed.escalationReason, 'REPAIR_ATTEMPT_LIMIT_EXHAUSTED')
