@@ -56,3 +56,5 @@ jobs:
         run: node scripts/audit-data-steward-persona-adversarial.mjs
       - name: Data Steward UI and UX tests
         run: node --experimental-strip-types --test scripts/test-data-steward-persona-ui-ux.mjs
+      - name: Data Steward execution-mode fixture tests
+        run: node --experimental-strip-types --test scripts/test-data-steward-execution-modes.mjs
