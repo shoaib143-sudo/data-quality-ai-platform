@@ -263,8 +263,18 @@ export async function executePersistedRecovery(input: {
     },
   })
 
-  if (!repairClaimed && claimReason === 'ATTEMPT_ALREADY_CLAIMED') {
-    return { replayed: true, replayState: 'IN_FLIGHT' as const, record: initial }
+  if (!repairClaimed && claimReason) {
+    // A failed database claim means another actor or state transition already owns
+    // mutation authority. Never convert that concurrency signal into a new terminal
+    // recovery outcome or overwrite the authoritative row with stale in-memory state.
+    const advanced = await loadPersistedRecoveryCase(input.context.recoveryCaseId, input.context.projectId)
+    return {
+      replayed: true,
+      replayState: claimReason === 'ATTEMPT_ALREADY_CLAIMED' ? 'IN_FLIGHT' as const : 'STATE_ADVANCED' as const,
+      claimReason,
+      persistedState: advanced,
+      record: initial,
+    }
   }
 
   await persistCanonicalRecoveryRecord(result.record, input.context.projectId)
