@@ -65,4 +65,6 @@ Status vocabulary: `PENDING`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`.
 
 - Accessibility contract now explicitly verifies Data Steward inclusion in governed WCAG 2.2 AA scope and requires fresh automated + manual evidence; measured browser/manual evidence remains pending.
 
+- Production migration history currently stops before the glossary direct-write hardening migration; read-only verification still shows authenticated INSERT/UPDATE/DELETE on glossary_terms and glossary_mappings. Repository remediation is merged, but production deployment is intentionally not performed from this test stream without explicit production-write approval.
+
 Final certification requires authenticated deployed-persona evidence in addition to automated CI coverage.
