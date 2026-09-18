@@ -1,0 +1,32 @@
+name: Execution Mode UI Assurance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/agents/autonomous-governance/**'
+      - 'app/schedules/**'
+      - 'scripts/test-execution-mode-ui-accessibility.mjs'
+      - '.github/workflows/execution-mode-ui-assurance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/agents/autonomous-governance/**'
+      - 'app/schedules/**'
+      - 'scripts/test-execution-mode-ui-accessibility.mjs'
+      - '.github/workflows/execution-mode-ui-assurance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ui-ux-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: UI and accessibility contract tests
+        run: node --test scripts/test-execution-mode-ui-accessibility.mjs
