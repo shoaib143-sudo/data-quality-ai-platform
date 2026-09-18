@@ -1,6 +1,16 @@
+import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 
 const { buildInvestigatorEvidenceAnalysis } = await import('../lib/agents/investigator-evidence-discrimination.ts')
+const { refineInvestigatorRca } = await import('../lib/agents/investigator-rca-refinement.ts')
+const { enrichInvestigatorOutputWithBoundedRca } = await import('../lib/agents/investigator-rca-output-enrichment.ts')
+
+const workerSource = fs.readFileSync('lib/agents/governance-job-worker.ts', 'utf8')
+assert.ok(workerSource.includes("import { enrichInvestigatorOutputWithBoundedRca } from '@/lib/agents/investigator-rca-output-enrichment'"))
+assert.ok(workerSource.includes("if (agentKey === 'investigator_agent') {\n    specialistOutput = await enrichInvestigatorOutputWithBoundedRca(specialistOutput)\n  }"))
+assert.ok(workerSource.indexOf('enrichInvestigatorOutputWithBoundedRca(specialistOutput)') < workerSource.indexOf('persistInvestigatorRiskAssessment({'), 'bounded RCA refinement must happen before predictive risk persistence')
+assert.ok(workerSource.indexOf('enrichInvestigatorOutputWithBoundedRca(specialistOutput)') < workerSource.indexOf('enrichGovernedAgentWithMemory({'), 'bounded RCA refinement must happen before memory enrichment')
 
 const analysis = buildInvestigatorEvidenceAnalysis({
   datasets: [
@@ -115,4 +125,38 @@ for (const hypothesis of analysis.hypotheses) {
   assert.ok(hypothesis.evidenceFamilies.length > 0)
 }
 
-console.log('Investigator hypotheses remain dataset-scoped, expose discriminating evidence needs, avoid uncalibrated probability claims, and preserve unresolved incidents.')
+const refinement = await refineInvestigatorRca(analysis)
+assert.ok(['CONFIDENCE_REACHED', 'ITERATION_BUDGET_EXHAUSTED'].includes(refinement.stopReason))
+assert.ok(refinement.iterations <= 8)
+assert.equal(refinement.toolCallsUsed, 0)
+assert.equal(refinement.handoffsUsed, 0)
+assert.equal(refinement.output.coverage.tested, refinement.iterations)
+assert.ok(refinement.output.probableCauses.every((cause) => cause.evidenceStrength === 'HIGH'))
+assert.ok(refinement.output.evidenceLimitations.every((cause) => cause.hypothesisKey === 'PROFILE_EXECUTION'))
+assert.ok(refinement.output.assessments.every((assessment) => assessment.evidence.length > 0))
+assert.ok(refinement.output.assessments.every((assessment) => assessment.discriminatingEvidenceNeeded.length > 0))
+
+const specialistOutput = {
+  agent: { key: 'investigator_agent' },
+  specialist: {
+    hypotheses: analysis.hypotheses,
+    recommendations: analysis.recommendations,
+    unresolved: analysis.unresolved,
+    evidence: { datasetEvidence: analysis.datasets },
+  },
+}
+const enriched = await enrichInvestigatorOutputWithBoundedRca(specialistOutput)
+assert.ok(enriched.rcaRefinement)
+assert.equal(enriched.rcaRefinement.recursion.confidenceSemantics, 'COVERAGE_COMPLETION_ONLY')
+assert.equal(enriched.rcaRefinement.recursion.toolCallsUsed, 0)
+assert.equal(enriched.rcaRefinement.recursion.handoffsUsed, 0)
+assert.ok(enriched.rcaRefinement.recursion.iterations <= 8)
+assert.ok(enriched.rcaRefinement.probableCauses.every((cause) => cause.evidenceStrength === 'HIGH'))
+
+const idempotent = await enrichInvestigatorOutputWithBoundedRca(enriched)
+assert.equal(idempotent, enriched, 'already enriched durable output must not re-run recursive refinement')
+
+const noHypotheses = { agent: { key: 'investigator_agent' }, specialist: { hypotheses: [], evidence: { datasetEvidence: [] } } }
+assert.equal(await enrichInvestigatorOutputWithBoundedRca(noHypotheses), noHypotheses)
+
+console.log('Investigator hypotheses remain dataset-scoped, durable worker wiring is verified, bounded RCA enrichment is idempotent, and causal probability is never fabricated.')
