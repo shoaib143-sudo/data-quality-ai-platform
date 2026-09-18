@@ -2,6 +2,22 @@
 -- idempotent repair claims, P2 protection, stale-claim escalation, and validated resume.
 begin;
 
+do $acl$
+begin
+  if has_function_privilege('anon','orchestration.claim_execution_recovery_auto_repair(uuid,integer,text,text)','EXECUTE')
+     or has_function_privilege('authenticated','orchestration.claim_execution_recovery_auto_repair(uuid,integer,text,text)','EXECUTE')
+  then raise exception 'Autonomous repair claim RPC is exposed to an API role'; end if;
+
+  if has_function_privilege('anon','orchestration.finalize_execution_recovery_auto_repair(uuid,integer,text,boolean,text,text)','EXECUTE')
+     or has_function_privilege('authenticated','orchestration.finalize_execution_recovery_auto_repair(uuid,integer,text,boolean,text,text)','EXECUTE')
+  then raise exception 'Autonomous repair finalizer RPC is exposed to an API role'; end if;
+
+  if has_function_privilege('anon','orchestration.resume_execution_recovery_job(uuid)','EXECUTE')
+     or has_function_privilege('authenticated','orchestration.resume_execution_recovery_job(uuid)','EXECUTE')
+  then raise exception 'Autonomous recovery resume RPC is exposed to an API role'; end if;
+end;
+$acl$;
+
 do $do$
 declare
   v_org_id uuid;
