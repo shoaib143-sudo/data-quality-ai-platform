@@ -37,7 +37,8 @@ assert.match(classification, /canManagePolicy/)
 assert.match(issuesPage, /issues\.manage/)
 assert.match(issuesPage, /manageableProjectIds/)
 assert.match(issues, /manageableProjects/)
-assert.match(issues, /const canManage = manageableProjects\.has\(projectId\)/)
+assert.match(issues, /manageableProjects\.length \? <form/, 'Issue creation form must only render when at least one project grants issues.manage.')
+assert.match(issues, /canManage=\{manageable\.has\(issue\.project_id\)\}/, 'Per-issue mutation controls must be gated by project authority.')
 
 for (const source of [stewardshipPage,quality,glossaryPage,classificationPage,issuesPage]) {
   assert.match(source, /hasProjectCapability|manageableProjectIds|stewardshipManageProjectIds|capabilitiesByProject|classificationReviewProjectIds/, 'Every canonical mutation surface must derive project capability before presenting write controls.')
