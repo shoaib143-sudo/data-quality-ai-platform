@@ -120,6 +120,14 @@ The intended mature form may evolve toward:
 
 Those remain target capabilities until implemented and verified.
 
+### Implementation addendum — 2026-09-18
+
+The repository now contains executable evidence for a bounded subset of the mature recovery behaviour. The existing Execution Recovery Agent implements deterministic P0/P1 authorization, evidence-backed diagnosis, allowlisted specialist repair handlers, independent post-repair validation, exact-stage retry/resume, nearest-valid-checkpoint fallback, idempotent mutation claims, and governed escalation. P2 and below remain evidence-only and cannot acquire automatic mutation authority.
+
+For the implemented repair classes, the recovery behaviour is therefore classified as `DIAGNOSE_REMEDIATE_VALIDATE` with governed retry/resume. This does not classify the agent as unrestricted self-healing: missing credentials, privilege expansion, destructive or production mutations, policy blocks, unknown repair classes, exhausted attempts, and uncertain stale mutation claims still fail closed to governed escalation.
+
+The classification is backed by the closed-loop runtime tests, adversarial isolation tests, lifecycle checkpoint simulation, rollback-safe disposable-database acceptance, and Recovery Assurance CI. Rollback execution remains separately governed rather than automatically performed.
+
 ## Portfolio-Wide Action
 
 This framework now becomes the basis for reviewing **all DataNexus agents**.
