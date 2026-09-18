@@ -66,3 +66,5 @@ jobs:
         run: node scripts/verify-persona-execution-certification-tracker.mjs
       - name: Data Steward persona resolution tests
         run: node --experimental-strip-types scripts/test-data-steward-persona-resolution.mjs
+      - name: Data Steward audit and evidence preservation tests
+        run: node scripts/test-data-steward-audit-evidence.mjs
