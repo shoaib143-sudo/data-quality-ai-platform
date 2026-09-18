@@ -149,5 +149,9 @@ requireText(worker, 'payload.recoveryResume', 'profiling retry boundary handoff'
 requireText(worker, '{ ...baseRequestInput, recoveryResume }', 'recovery metadata propagation into profiling request')
 requireText(worker, "outcome: 'RECOVERY_ENGINE_ERROR'", 'fail-closed recovery engine error evidence')
 requireText(worker, "'RECOVERY_QUEUED'", 'queued recovery worker outcome')
+requireText(recoveryRouting, "'PROFILING', 'DISCOVERY', 'DATA_QUALITY'", 'heavy-job whole restart policy')
+requireText(worker, 'restartScope: route.restartScope', 'worker restart-scope evidence')
+requireText(validatedResumeMigration, "v_job.job_type in ('PROFILING', 'DISCOVERY', 'DATA_QUALITY')", 'database whole-job restart boundary')
+requireText(validatedResumeMigration, "'restart_scope'", 'durable restart-scope payload')
 
 console.log('Governed Execution Recovery Agent contract verified.')
