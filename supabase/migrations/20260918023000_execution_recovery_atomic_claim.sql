@@ -27,6 +27,7 @@ as $function$
 declare
   v_case orchestration.recovery_cases%rowtype;
   v_action_id uuid;
+  v_existing_action orchestration.recovery_actions%rowtype;
 begin
   if p_repair_attempt < 0 then
     raise exception 'Repair attempt must be non-negative.' using errcode = '22023';
@@ -74,6 +75,44 @@ begin
       )
     ) returning id into v_action_id;
   exception when unique_violation then
+    select * into v_existing_action
+    from orchestration.recovery_actions
+    where recovery_case_id = p_case_id
+      and action_type = 'AUTO_REPAIR'
+      and repair_attempt = p_repair_attempt
+    order by requested_at desc
+    limit 1
+    for update;
+
+    if found
+      and v_existing_action.status = 'REQUESTED'
+      and v_existing_action.requested_at < now() - interval '10 minutes'
+    then
+      -- The process died after acquiring mutation authority but before durable
+      -- completion evidence. Reapplying would risk a duplicate side effect, so
+      -- fail closed instead of leaving the case in an infinite in-flight loop.
+      update orchestration.recovery_actions
+         set status = 'REJECTED',
+             executed_at = now(),
+             outcome = coalesce(outcome, '{}'::jsonb) || jsonb_build_object(
+               'claim_expired', true,
+               'mutation_outcome', 'UNKNOWN',
+               'reason', 'STALE_CLAIM_OUTCOME_UNCERTAIN',
+               'expired_at', now()
+             )
+       where id = v_existing_action.id;
+
+      update orchestration.recovery_cases
+         set recommended_action = 'MANUAL_REVIEW',
+             status = 'AWAITING_MANUAL_REVIEW',
+             final_outcome = 'ESCALATED',
+             escalation_reason = 'REPAIR_CLAIM_OUTCOME_UNCERTAIN',
+             updated_at = now()
+       where id = p_case_id;
+
+      return jsonb_build_object('claimed', false, 'reason', 'ATTEMPT_CLAIM_OUTCOME_UNCERTAIN');
+    end if;
+
     return jsonb_build_object('claimed', false, 'reason', 'ATTEMPT_ALREADY_CLAIMED');
   end;
 
@@ -85,4 +124,4 @@ revoke all on function orchestration.claim_execution_recovery_auto_repair(uuid, 
   from public, anon, authenticated;
 
 comment on function orchestration.claim_execution_recovery_auto_repair(uuid, integer, text, text) is
-  'Internal atomic claim for one autonomous P0/P1 repair mutation per recovery case and bounded attempt.';
+  'Internal atomic claim for one autonomous P0/P1 repair mutation per recovery case and bounded attempt. Stale uncertain claims escalate rather than replaying a possibly-applied mutation.';
