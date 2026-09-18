@@ -88,7 +88,7 @@ export async function GET(request: Request) {
       && Boolean(sourceStorageId(row)),
   )
   const migrationSources = new Set(readyMigrationCopies.map(sourceStorageId).filter((value): value is string => Boolean(value)))
-  const verifiedMigrationPairs = [...migrationSources].filter((sourceId) => {
+  const verifiedMigrationSourceIds = new Set([...migrationSources].filter((sourceId) => {
     const source = storageById.get(sourceId)
     const target = readyMigrationCopies.find((candidate) => sourceStorageId(candidate) === sourceId)
     return Boolean(source
@@ -98,7 +98,16 @@ export async function GET(request: Request) {
       && source.size_bytes != null
       && Number(source.size_bytes) === Number(target.size_bytes)
       && (!source.checksum || source.checksum_algorithm !== 'sha256' || source.checksum === target.checksum))
-  }).length
+  }))
+  const verifiedMigrationPairs = verifiedMigrationSourceIds.size
+  const referencedStorageRows = [...referencedIds]
+    .map((id) => storageById.get(id))
+    .filter((row): row is StorageRow => Boolean(row))
+  const referencedSupabaseObjects = referencedStorageRows.filter((row) => row.provider === 'supabase').length
+  const referencedR2Objects = referencedStorageRows.filter((row) => row.provider === 'r2').length
+  const referencedSupabaseWithoutVerifiedMigration = referencedStorageRows.filter(
+    (row) => row.provider === 'supabase' && !verifiedMigrationSourceIds.has(row.id),
+  ).length
 
   const r2RuntimeConfigured = hasR2RuntimeConfiguration()
   let corsConfigured = false
@@ -124,6 +133,7 @@ export async function GET(request: Request) {
   if (r2NonReadyObjects > 0) blockers.push('R2_NON_READY_OBJECTS_PRESENT')
   if (readyMigrationCopies.length === 0) blockers.push('NO_READY_R2_MIGRATION_COPY')
   if (readyMigrationCopies.length !== verifiedMigrationPairs) blockers.push('R2_MIGRATION_PAIR_INTEGRITY_INCOMPLETE')
+  if (referencedSupabaseWithoutVerifiedMigration > 0) blockers.push('REFERENCED_SUPABASE_OBJECTS_MISSING_VERIFIED_R2_COPY')
   if (!corsConfigured || !corsMatchesDesiredPolicy || corsWildcardOriginDetected) blockers.push('R2_CORS_NOT_CERTIFIED')
 
   const defaultProvider = selectedProvider()
@@ -142,6 +152,9 @@ export async function GET(request: Request) {
       r2NonReadyObjects,
       readyMigrationCopies: readyMigrationCopies.length,
       verifiedMigrationPairs,
+      referencedSupabaseObjects,
+      referencedR2Objects,
+      referencedSupabaseWithoutVerifiedMigration,
     },
     cors: {
       configured: corsConfigured,
