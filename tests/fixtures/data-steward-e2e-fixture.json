@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "persona": "data-steward",
+  "roleKey": "DATA_STEWARD",
+  "organizationRole": "MEMBER",
+  "authorizedProject": {
+    "key": "data-steward-e2e-authorized",
+    "autonomyModes": [
+      "OFF",
+      "GUIDED",
+      "GOVERNED_AUTO",
+      "FULL_AUTONOMOUS"
+    ],
+    "datasets": [
+      {
+        "key": "customer-quality-sample",
+        "versions": [
+          {
+            "key": "v1",
+            "profilingState": "COMPLETED",
+            "hasMetrics": true,
+            "hasFindings": true,
+            "qualityRules": [
+              "completeness-email",
+              "duplicate-id"
+            ]
+          }
+        ]
+      }
+    ],
+    "stewardshipAssignments": [
+      {
+        "target": "customer-quality-sample",
+        "role": "DATA_STEWARD",
+        "status": "ACTIVE"
+      }
+    ],
+    "glossaryTerms": [
+      {
+        "key": "customer-id",
+        "status": "DRAFT"
+      },
+      {
+        "key": "email-address",
+        "status": "IN_REVIEW"
+      }
+    ],
+    "classifications": [
+      {
+        "target": "customer-quality-sample.email",
+        "status": "SUGGESTED"
+      }
+    ],
+    "issues": [
+      {
+        "key": "missing-email-quality",
+        "status": "OPEN",
+        "severity": "MEDIUM"
+      }
+    ]
+  },
+  "unauthorizedProject": {
+    "key": "data-steward-e2e-denied",
+    "expectedCapabilities": [
+      "stewardship.manage",
+      "quality.execute",
+      "glossary.manage",
+      "classification.review",
+      "issues.manage",
+      "agent.execute"
+    ],
+    "expectedAllowed": false
+  },
+  "approver": {
+    "separatePrincipal": true,
+    "mustNotEqualPersona": true,
+    "approvalCapabilities": [
+      "execution.approve"
+    ]
+  },
+  "requiredNegativeCapabilities": [
+    "admin.manage",
+    "source.manage",
+    "schedule.manage",
+    "policy.approve",
+    "quality.exception.approve",
+    "execution.approve",
+    "agent.admin"
+  ],
+  "requiredJourneys": [
+    "stewardship",
+    "data-quality",
+    "glossary",
+    "classification",
+    "issues",
+    "guided-approval",
+    "governed-auto",
+    "goal-driven",
+    "cross-project-denial"
+  ]
+}
