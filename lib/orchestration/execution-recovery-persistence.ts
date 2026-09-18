@@ -112,7 +112,7 @@ async function finalizeAutoRepairEvidence(input: {
   validationCode?: string | null
 }) {
   const admin = createAdminClient()
-  const { error } = await admin.schema('orchestration').rpc('finalize_execution_recovery_auto_repair', {
+  const { data, error } = await admin.schema('orchestration').rpc('finalize_execution_recovery_auto_repair', {
     p_case_id: input.recoveryCaseId,
     p_repair_attempt: input.retryAttempt,
     p_mutation_id: input.mutationId ?? '',
@@ -121,6 +121,11 @@ async function finalizeAutoRepairEvidence(input: {
     p_validation_code: input.validationCode ?? '',
   })
   if (error) throw new Error(`Unable to finalize autonomous recovery evidence: ${error.message}`)
+  const result = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {}
+  return {
+    finalized: result.finalized === true,
+    reason: typeof result.reason === 'string' ? result.reason : null,
+  }
 }
 export async function executePersistedRecovery(input: {
   context: RecoveryFailureContext
@@ -277,9 +282,8 @@ export async function executePersistedRecovery(input: {
     }
   }
 
-  await persistCanonicalRecoveryRecord(result.record, input.context.projectId)
   if (repairClaimed) {
-    await finalizeAutoRepairEvidence({
+    const finalized = await finalizeAutoRepairEvidence({
       recoveryCaseId: input.context.recoveryCaseId,
       retryAttempt: input.context.retryAttempt,
       mutationId: result.mutationId,
@@ -287,6 +291,18 @@ export async function executePersistedRecovery(input: {
       validationResult: result.record.post_repair_validation_result,
       validationCode: result.validation?.code ?? result.record.escalation_reason,
     })
+    if (!finalized.finalized) {
+      const advanced = await loadPersistedRecoveryCase(input.context.recoveryCaseId, input.context.projectId)
+      return {
+        replayed: true,
+        replayState: 'STATE_ADVANCED' as const,
+        claimReason: finalized.reason ?? 'REPAIR_CLAIM_NOT_ACTIVE',
+        persistedState: advanced,
+        record: initial,
+      }
+    }
   }
+
+  await persistCanonicalRecoveryRecord(result.record, input.context.projectId)
   return { replayed: false, replayState: 'EXECUTED' as const, ...result }
 }
