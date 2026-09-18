@@ -6,7 +6,7 @@ import { recordProfileFailureAlert } from '@/lib/observability/evaluate'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 import { syncProfileClassifications } from '@/lib/governance/classification'
 import { tryReuseProfileEvidence } from '@/lib/profiling/evidence-reuse'
-import { decideProfilingStepResume } from '@/lib/agents/profiling-checkpoint'
+import { decideProfilingStepResume, profilingRecoveryStartOrder } from '@/lib/agents/profiling-checkpoint'
 
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
@@ -27,6 +27,7 @@ async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, inp
   stepOrder: number
   stepInput: Record<string, unknown>
   startedAt: string
+  forceRestart?: boolean
 }) {
   const { data: existing, error: existingError } = await admin
     .schema('agent')
@@ -39,7 +40,7 @@ async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, inp
 
   if (existing) {
     const decision = decideProfilingStepResume(existing)
-    if (decision.mode === 'REUSE') {
+    if (decision.mode === 'REUSE' && !input.forceRestart) {
       return {
         id: decision.id,
         alreadySucceeded: true,
@@ -55,7 +56,6 @@ async function startOrRetryStep(admin: ReturnType<typeof createAdminClient>, inp
         status: 'RUNNING',
         attempt: decision.nextAttempt,
         input: input.stepInput,
-        output: null,
         started_at: input.startedAt,
         completed_at: null,
         error_code: null,
@@ -122,6 +122,7 @@ export async function executePreparedProfilingJob(input: {
 
   const admin = createAdminClient()
   let stepId: string | null = null
+  const recoveryStartOrder = profilingRecoveryStartOrder(requestInput.recoveryResume)
   try {
     const startedAt = new Date().toISOString()
     const { error: startError } = await admin.schema('agent').from('agent_runs').update({
@@ -152,6 +153,7 @@ export async function executePreparedProfilingJob(input: {
       stepOrder: 1,
       stepInput: { ...requestInput, profilingRunId, tool_definition_id: profileTool.id, tool_version: profileTool.version },
       startedAt,
+      forceRestart: recoveryStartOrder !== null && 1 >= recoveryStartOrder,
     })
     stepId = profileStep.id
     const activeProfileStepId = profileStep.id
@@ -166,7 +168,7 @@ export async function executePreparedProfilingJob(input: {
     }
 
     let reuseDecision = null
-    try {
+    if (recoveryStartOrder === null) try {
       reuseDecision = await tryReuseProfileEvidence({
         supabase: admin,
         userId,
@@ -195,6 +197,7 @@ export async function executePreparedProfilingJob(input: {
         stepOrder: 2,
         stepInput: { ...requestInput, profilingRunId, tool_definition_id: metricTool.id, tool_version: metricTool.version, execution_mode: 'REUSED' },
         startedAt: reusedAt,
+        forceRestart: recoveryStartOrder !== null && 2 >= recoveryStartOrder,
       })
       await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: reuseOutput, completed_at: reusedAt }).eq('id', metricReuseStep.id).eq('status', 'RUNNING'), 'complete reused metric step')
       const investigationReuseStep = await startOrRetryStep(admin, {
@@ -203,6 +206,7 @@ export async function executePreparedProfilingJob(input: {
         stepOrder: 3,
         stepInput: { ...requestInput, profilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version, execution_mode: 'REUSED' },
         startedAt: reusedAt,
+        forceRestart: recoveryStartOrder !== null && 3 >= recoveryStartOrder,
       })
       await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: reuseOutput, completed_at: reusedAt }).eq('id', investigationReuseStep.id).eq('status', 'RUNNING'), 'complete reused investigation step')
 
@@ -238,6 +242,7 @@ export async function executePreparedProfilingJob(input: {
       stepOrder: 2,
       stepInput: { ...requestInput, profilingRunId, tool_definition_id: metricTool.id, tool_version: metricTool.version },
       startedAt: metricStartedAt,
+      forceRestart: recoveryStartOrder !== null && 2 >= recoveryStartOrder,
     })
     stepId = metricStep.id
     const activeMetricStepId = metricStep.id
@@ -257,6 +262,7 @@ export async function executePreparedProfilingJob(input: {
       stepOrder: 3,
       stepInput: { ...requestInput, profilingRunId, tool_definition_id: investigationTool.id, tool_version: investigationTool.version },
       startedAt: investigationStartedAt,
+      forceRestart: recoveryStartOrder !== null && 3 >= recoveryStartOrder,
     })
     stepId = investigationStep.id
     const activeInvestigationStepId = investigationStep.id
