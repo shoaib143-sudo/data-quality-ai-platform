@@ -40,3 +40,5 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d datanexus_security_posture -f scripts/test-production-security-posture.sql
       - name: Exercise glossary privilege boundary
         run: psql -h 127.0.0.1 -U postgres -d datanexus_security_posture -f scripts/test-glossary-direct-write-boundary.sql
+      - name: Re-run glossary privilege boundary to prove fixture isolation
+        run: psql -h 127.0.0.1 -U postgres -d datanexus_security_posture -f scripts/test-glossary-direct-write-boundary.sql
