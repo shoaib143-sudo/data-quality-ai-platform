@@ -639,10 +639,13 @@ export async function processDurableJobs(jobs: DurableJob[]) {
           recovery = { attempted: true, outcome: 'RECOVERY_ENGINE_ERROR', error: recoveryMessage }
         }
       }
+      const status = recovery?.resumeQueued === true
+        ? 'RECOVERY_QUEUED'
+        : job.attempts >= job.max_attempts ? 'DEAD' : 'RETRY'
       results.push({
         jobId: job.id,
         agentRunId: job.agent_run_id,
-        status: job.attempts >= job.max_attempts ? 'DEAD' : 'RETRY',
+        status,
         error: error instanceof Error ? error.message : 'Job execution failed.',
         recovery,
       })
