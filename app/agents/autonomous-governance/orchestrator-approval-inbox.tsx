@@ -108,7 +108,7 @@ export function OrchestratorApprovalInbox({ projects }: { projects: ProjectOptio
         <button type="button" onClick={() => void refresh()} disabled={Boolean(busyId)} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">Refresh approvals</button>
       </div>
 
-      {message && <p className="rounded-lg border p-3 text-sm">{message}</p>}
+      {message && <p className="rounded-lg border p-3 text-sm" role="status" aria-live="polite">{message}</p>}
       {!approvals.length && <p className="rounded-lg border p-4 text-sm text-muted-foreground">No pending Governance Orchestrator approvals are visible to you.</p>}
 
       <div className="grid gap-4">
