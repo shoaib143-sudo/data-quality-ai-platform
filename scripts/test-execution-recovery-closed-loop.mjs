@@ -163,6 +163,21 @@ assert.equal(failedValidation.record.post_repair_validation_result, 'FAILED')
 assert.equal(failedValidation.record.final_outcome, 'ESCALATED')
 assert.equal(failedValidation.record.escalation_reason, 'REPAIR_VALIDATION_FAILED')
 
+const unavailableValidation = await executeAuthorizedRecovery({
+  context: context({ retryAttempt: 1 }),
+  failureClassification: 'CONFIGURATION',
+  registry: new ExecutionRecoveryHandlerRegistry([{
+    ...handler,
+    async validate() {
+      throw new Error('validation dependency unavailable')
+    },
+  }]),
+})
+assert.equal(unavailableValidation.record.post_repair_validation_result, 'FAILED')
+assert.equal(unavailableValidation.record.final_outcome, 'ESCALATED')
+assert.equal(unavailableValidation.record.authorization_decision, 'ESCALATE')
+assert.equal(unavailableValidation.record.escalation_reason, 'REPAIR_VALIDATION_UNAVAILABLE')
+
 const mismatch = await executeAuthorizedRecovery({
   context: context(),
   failureClassification: 'CONFIGURATION',
