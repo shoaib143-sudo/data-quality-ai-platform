@@ -26,6 +26,8 @@ declare
   v_case_id uuid;
   v_p2_job_id uuid;
   v_p2_case_id uuid;
+  v_failed_job_id uuid;
+  v_failed_case_id uuid;
   v_stale_job_id uuid;
   v_stale_case_id uuid;
   v_result jsonb;
@@ -159,6 +161,53 @@ begin
       and outcome->>'durable_job_status'='SUCCEEDED'
   ) then
     raise exception 'Successful resumed execution did not reconcile resume evidence';
+  end if;
+
+  -- Failed independent validation must atomically escalate and must never queue a resume.
+  insert into orchestration.job_queue(project_id,job_type,payload,status,attempts,max_attempts,last_error)
+  values (v_project_id,'GOVERNANCE_AGENT',jsonb_build_object('synthetic',true),'RUNNING',3,3,'retry-safe runtime defect')
+  returning id into v_failed_job_id;
+  update orchestration.job_queue set status='DEAD',completed_at=now(),updated_at=now() where id=v_failed_job_id;
+  select id into v_failed_case_id from orchestration.recovery_cases where durable_job_id=v_failed_job_id;
+
+  update orchestration.recovery_cases
+     set severity='P1',authorization_decision='AUTHORIZED',consent_requirement='NONE',
+         retry_attempt=0,post_repair_validation_result='NOT_RUN',
+         retry_stage='GOVERNED_WORKFLOW',retry_checkpoint_id='failed-validation-stage',final_outcome='OPEN'
+   where id=v_failed_case_id;
+
+  v_result := orchestration.claim_execution_recovery_auto_repair(
+    v_failed_case_id,0,'failed-validation-repair','project:'||v_project_id||':durable-job:'||v_failed_job_id
+  );
+  if coalesce((v_result->>'claimed')::boolean,false) is not true then
+    raise exception 'Unable to claim failed-validation fixture repair: %',v_result;
+  end if;
+
+  v_result := orchestration.finalize_execution_recovery_auto_repair(
+    v_failed_case_id,0,'synthetic-failed-mutation',true,'FAILED','ROOT_CAUSE_STILL_PRESENT'
+  );
+  if coalesce((v_result->>'finalized')::boolean,false) is not true then
+    raise exception 'Failed validation finalizer did not complete: %',v_result;
+  end if;
+
+  if not exists(
+    select 1 from orchestration.recovery_cases
+    where id=v_failed_case_id and status='AWAITING_MANUAL_REVIEW'
+      and authorization_decision='ESCALATE' and post_repair_validation_result='FAILED'
+      and final_outcome='ESCALATED' and escalation_reason='REPAIR_VALIDATION_FAILED'
+  ) then
+    raise exception 'Failed repair validation did not atomically escalate the recovery case';
+  end if;
+
+  v_result := orchestration.resume_execution_recovery_job(v_failed_case_id);
+  if v_result->>'reason' <> 'REPAIR_NOT_AUTHORIZED' then
+    raise exception 'Failed validation recovery was allowed to approach resume: %',v_result;
+  end if;
+  if exists(
+    select 1 from orchestration.recovery_actions
+    where recovery_case_id=v_failed_case_id and action_type='RESUME'
+  ) then
+    raise exception 'Failed validation recovery persisted a resume action';
   end if;
 
   -- P2 protection: deterministic database gate must reject autonomous mutation authority.
