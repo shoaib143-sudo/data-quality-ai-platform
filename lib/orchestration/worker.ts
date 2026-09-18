@@ -493,7 +493,7 @@ async function loadRecoveryCheckpoints(job: DurableJob) {
     .select('id,step_name,step_order,status,output')
     .eq('agent_run_id', job.agent_run_id)
     .order('step_order', { ascending: true })
-  if (error) throw new Error(\`Unable to load recovery checkpoints: \${error.message}\`)
+  if (error) throw new Error(`Unable to load recovery checkpoints: ${error.message}`)
 
   return (data ?? []).flatMap(step => {
     const stage = stepStage(String(step.step_name ?? ''))
@@ -528,7 +528,7 @@ async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unk
     .select('id,classification,retry_attempt')
     .eq('durable_job_id', job.id)
     .maybeSingle()
-  if (caseError) throw new Error(\`Unable to resolve terminal recovery case: \${caseError.message}\`)
+  if (caseError) throw new Error(`Unable to resolve terminal recovery case: ${caseError.message}`)
   if (!recoveryCase) throw new Error('Terminal durable job did not create a recovery case.')
 
   const payload = job.payload ?? {}
