@@ -71,6 +71,8 @@ requireText(retryOutcomeMigration, "recommended_action = 'MANUAL_REVIEW'", 'fail
 
 requireText(closedLoopMigration, 'add column if not exists severity text', 'closed-loop severity persistence')
 requireText(closedLoopMigration, 'root_cause_diagnosis', 'root-cause persistence')
+requireText(closedLoopMigration, 'evidence_used jsonb', 'diagnosis evidence persistence')
+requireText(recoveryPersistence, 'evidence_used: record.evidence_used', 'diagnosis evidence write integration')
 requireText(closedLoopMigration, 'post_repair_validation_result', 'repair validation persistence')
 requireText(closedLoopMigration, 'retry_checkpoint_id', 'checkpoint-aware retry persistence')
 requireText(closedLoopMigration, "'AUTO_REPAIR'", 'automatic repair audit action')
