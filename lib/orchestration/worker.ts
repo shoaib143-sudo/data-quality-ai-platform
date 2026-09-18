@@ -516,6 +516,16 @@ async function loadRecoveryCheckpoints(job: DurableJob) {
   })
 }
 
+function resolveFailingRecoveryCheckpointId(
+  checkpoints: RecoveryFailureContext['checkpoints'],
+  stage: RecoveryStage,
+) {
+  const failedAtStage = [...checkpoints]
+    .reverse()
+    .find(checkpoint => checkpoint.stage === stage && (!checkpoint.completed || !checkpoint.valid))
+  return failedAtStage?.id ?? null
+}
+
 async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? 'Durable job execution failed.')
   const route = classifyTerminalRecoveryRoute(job.job_type, message)
@@ -536,6 +546,7 @@ async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unk
   const repairClass = route.repairClass
   const unsafe = recoveryUnsafeFlags(message)
   const checkpoints = await loadRecoveryCheckpoints(job)
+  const failingCheckpointId = resolveFailingRecoveryCheckpointId(checkpoints, stage)
   const sourceId = text(payload.sourceId) || text(job.entity_id)
   const datasetVersionId = text(payload.datasetVersionId)
   const agentRunId = text(payload.agentRunId) || text(job.agent_run_id)
@@ -545,7 +556,7 @@ async function attemptClosedLoopRecoveryAfterDeadJob(job: DurableJob, error: unk
     projectId: job.project_id,
     workflowRunId: agentRunId || job.id,
     failingStage: stage,
-    failingCheckpointId: null,
+    failingCheckpointId,
     code: message.slice(0, 500),
     retryable: false,
     blocking: true,
