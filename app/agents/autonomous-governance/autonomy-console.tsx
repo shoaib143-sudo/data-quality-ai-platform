@@ -51,6 +51,13 @@ const defaultPolicy: Policy = {
 
 const defaultReporting: ReportingPreference = { enabled: false, persona: 'EXECUTIVE', depth: 'EXECUTIVE' }
 
+const modeGuidance: Record<Policy['mode'], { label: string; category: string; description: string }> = {
+  OFF: { label: 'Off', category: 'Manual', description: 'Autonomous execution is disabled. Operations require explicit user-driven actions.' },
+  GUIDED: { label: 'Guided', category: 'Assisted / Human-in-the-loop', description: 'Eligible work can be prepared automatically, but execution requires governed approval.' },
+  GOVERNED_AUTO: { label: 'Governed auto', category: 'Automated / Human-on-the-loop', description: 'Policy-approved low-risk work can run automatically while operators retain stop and oversight controls.' },
+  FULL_AUTONOMOUS: { label: 'Full autonomous', category: 'Autonomous goal-driven', description: 'The orchestrator may pursue the submitted goal within deterministic policy, risk, budget, tool, and approval boundaries.' },
+}
+
 export function AutonomyConsole({ projects, executableProjectIds, manageableProjectIds, certifiableProjectIds }: {
   projects: ProjectOption[]
   executableProjectIds: string[]
@@ -175,14 +182,20 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
         </div>
 
         <div>
-          <p className="text-sm font-medium">Operating mode</p>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <p className="text-sm font-medium" id="operating-mode-label">Operating mode</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-labelledby="operating-mode-label">
             {(['OFF','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS'] as const).map(mode => (
               <button key={mode} type="button" onClick={() => chooseMode(mode)} disabled={!canManage || busy}
+                aria-pressed={policy.mode === mode}
+                aria-describedby="operating-mode-help"
                 className={`rounded-lg border px-3 py-2 text-xs font-medium ${policy.mode === mode ? 'ring-2 ring-ring' : ''}`}>
-                {mode.replaceAll('_',' ')}
+                {modeGuidance[mode].label}
               </button>
             ))}
+          </div>
+          <div id="operating-mode-help" className="mt-3 rounded-lg border p-3" aria-live="polite">
+            <p className="text-xs font-medium">{modeGuidance[policy.mode].category}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{modeGuidance[policy.mode].description}</p>
           </div>
         </div>
 
@@ -253,7 +266,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
         </div>
         {!canExecute && <p className="text-xs text-muted-foreground">You do not have agent execution permission for {project?.name ?? 'this project'}.</p>}
         {!canCertify && <p className="text-xs text-muted-foreground">Certification requires separate certification.review authority.</p>}
-        {message && <p className="rounded-lg border p-3 text-sm">{message}</p>}
+        {message && <p className="rounded-lg border p-3 text-sm" role="status" aria-live="polite">{message}</p>}
       </section>
 
       {reportPayload && <section className="dn-workspace-panel rounded-xl border p-5 lg:col-span-2">
