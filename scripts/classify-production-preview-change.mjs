@@ -30,12 +30,36 @@ const deployableExact = new Set([
   'vercel.json',
 ])
 
+const automaticPreviewBranchPrefixes = [
+  'ux/',
+  'preview/',
+  'feat/ui-',
+  'fix/ui-',
+  'feat/frontend-',
+  'fix/frontend-',
+]
+
 export function requiresProductionPreview(files) {
   return files.some((file) =>
     deployableExact.has(file) || deployablePrefixes.some((prefix) => file.startsWith(prefix)),
   )
 }
 
+export function automaticPreviewEnabledForBranch(branch) {
+  const normalized = String(branch ?? '').trim()
+  return automaticPreviewBranchPrefixes.some((prefix) => normalized.startsWith(prefix))
+}
+
+export function requiresAutomaticProductionPreview(branch, files) {
+  return automaticPreviewEnabledForBranch(branch) && requiresProductionPreview(files)
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  process.stdout.write(requiresProductionPreview(process.argv.slice(2)) ? 'true' : 'false')
+  const args = process.argv.slice(2)
+  if (args[0] === '--branch') {
+    const branch = args[1] ?? ''
+    process.stdout.write(requiresAutomaticProductionPreview(branch, args.slice(2)) ? 'true' : 'false')
+  } else {
+    process.stdout.write(requiresProductionPreview(args) ? 'true' : 'false')
+  }
 }
