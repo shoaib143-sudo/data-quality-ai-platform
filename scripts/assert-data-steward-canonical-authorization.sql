@@ -16,6 +16,7 @@ declare
     'quality.exception.approve','execution.approve','agent.admin'
   ];
   v_capability text;
+  v_org_role text;
 begin
   insert into auth.users(id,aud,role,email,created_at,updated_at)
   values(v_user_id,'authenticated','authenticated','data-steward-canonical-fixture@example.invalid',now(),now());
@@ -52,8 +53,12 @@ begin
   insert into governance.project_role_bindings(project_id,user_id,role_key,active)
   values(v_project_id,v_user_id,'DATA_STEWARD',true);
 
-  if (select role from app.organization_members where organization_id=v_org_id and user_id=v_user_id) <> 'MEMBER' then
-    raise exception 'Data Steward fixture must retain MEMBER organization tenancy';
+  select role::text into v_org_role
+  from app.organization_members
+  where organization_id=v_org_id and user_id=v_user_id;
+
+  if v_org_role is distinct from 'MEMBER' then
+    raise exception 'Data Steward fixture must retain MEMBER organization tenancy, found %', v_org_role;
   end if;
 
   if (select count(*) from governance.project_role_bindings where user_id=v_user_id and active) <> 1 then
