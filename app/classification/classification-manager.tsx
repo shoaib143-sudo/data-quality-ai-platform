@@ -17,9 +17,10 @@ type Props = {
   initialPolicies: Policy[]
   initialProjectId?: string | null
   policyManageProjectIds: string[]
+  classificationReviewProjectIds: string[]
 }
 
-export function ClassificationManager({ projects, datasets, labels, initialClassifications, initialPolicies, initialProjectId, policyManageProjectIds }: Props) {
+export function ClassificationManager({ projects, datasets, labels, initialClassifications, initialPolicies, initialProjectId, policyManageProjectIds, classificationReviewProjectIds }: Props) {
   const resolvedInitial = initialProjectId && projects.some(project => project.id === initialProjectId) ? initialProjectId : ''
   const [classifications, setClassifications] = useState(initialClassifications)
   const [policies, setPolicies] = useState(initialPolicies)
@@ -40,8 +41,13 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
   const visibleLabels = useMemo(() => projectId ? labels.filter(label => label.project_id == null || label.project_id === projectId) : [], [labels, projectId])
   const effectiveLabelId = visibleLabels.some(label => label.id === labelId) ? labelId : visibleLabels[0]?.id ?? ''
   const canManagePolicy = Boolean(projectId && policyManageProjectIds.includes(projectId))
+  const canReviewClassification = Boolean(projectId && classificationReviewProjectIds.includes(projectId))
 
   async function patch(id: string, status: string) {
+    if (!canReviewClassification) {
+      setMessage('Your current project role does not allow classification review.')
+      return
+    }
     setBusy(true)
     setMessage('')
     try {
@@ -146,6 +152,7 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
             <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700">{visibleClassifications.filter(item => item.status === 'SUGGESTED').length} pending</span>
           </div>
           <div className="mt-5 space-y-3">
+            {!canReviewClassification && visibleClassifications.some(item => item.status === 'SUGGESTED') ? <p className="rounded-xl border border-dashed bg-slate-50 p-3 text-sm text-slate-600">Classification evidence is visible, but review actions are hidden because <code>classification.review</code> is not granted for this project.</p> : null}
             {visibleClassifications.length ? visibleClassifications.map(classification => (
               <article key={classification.id} className="rounded-2xl border p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -157,7 +164,7 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
                     </div>
                     <p className="mt-1 text-xs text-slate-500">Confidence {classification.confidence != null ? `${Math.round(classification.confidence * 100)}%` : 'N/A'} · source {classification.source}</p>
                   </div>
-                  {classification.status === 'SUGGESTED' ? (
+                  {classification.status === 'SUGGESTED' && canReviewClassification ? (
                     <div className="flex gap-2">
                       <button disabled={busy} onClick={() => void patch(classification.id, 'APPROVED')} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"><Check className="h-3.5 w-3.5" />Approve</button>
                       <button disabled={busy} onClick={() => void patch(classification.id, 'REJECTED')} className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"><X className="h-3.5 w-3.5" />Reject</button>
