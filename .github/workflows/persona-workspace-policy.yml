@@ -64,3 +64,5 @@ jobs:
         run: node scripts/test-data-steward-concurrency-idempotency.mjs
       - name: Verify persona certification tracker integrity
         run: node scripts/verify-persona-execution-certification-tracker.mjs
+      - name: Data Steward persona resolution tests
+        run: node --experimental-strip-types scripts/test-data-steward-persona-resolution.mjs
