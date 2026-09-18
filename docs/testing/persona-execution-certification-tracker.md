@@ -7,7 +7,7 @@ Status vocabulary: `PENDING`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`.
 
 | Persona | Contract/unit | Functional | Negative/failure | Independent adversarial | UI/UX | Accessibility | RBAC/auth | Execution modes | Concurrency/idempotency | E2E lifecycle | Final certification |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Data Steward | PASS | PENDING | PASS | PASS | PASS | PENDING | PASS | IN_PROGRESS | PENDING | PENDING | IN_PROGRESS |
+| Data Steward | PASS | IN_PROGRESS | PASS | PASS | PASS | PENDING | PASS | IN_PROGRESS | IN_PROGRESS | IN_PROGRESS | IN_PROGRESS |
 | Data Quality Analyst | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Governance Analyst / Operator | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
 | Data Engineer / Data Custodian | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING | PENDING |
@@ -45,6 +45,8 @@ Status vocabulary: `PENDING`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`.
 
 - Deterministic disposable Data Steward fixture now covers organization membership, authorized + unauthorized projects, dataset/version, completed profile, quality rule, finding, glossary term, suggested classification, issue, stewardship assignment, independent approver, allowed capabilities, and prohibited capabilities.
 - Data Steward execution-mode tests now exercise OFF, GUIDED, GOVERNED_AUTO, FULL_AUTONOMOUS, destructive-action approval gating, disallowed tools, and emergency-stop precedence against that fixture.
+- Disposable PostgreSQL E2E fixture now materializes MEMBER tenancy, one active DATA_STEWARD binding, authorized and negative-scope projects, dataset/version, completed profile, enabled quality rule, draft glossary term, suggested classification, open issue, active stewardship assignment, and all four canonical autonomy policy modes inside a rollback-only CI transaction.
+- Concurrency/idempotency coverage now checks quality-run idempotency namespacing/reuse, finding-to-issue deduplication including concurrent inserts, stewardship unique-conflict handling, canonical classification review RPC usage, and invalid/replayed glossary lifecycle transitions.
 
 - Contract/unit, negative-boundary, independent adversarial, and UI/UX certification scripts passed in GitHub Actions on PR #692.
 - Production read-only authorization verification confirmed the retained Data Steward test principal is an organization MEMBER with exactly one active DATA_STEWARD project binding.
