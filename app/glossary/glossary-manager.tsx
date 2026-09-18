@@ -208,13 +208,13 @@ export function GlossaryManager({
         <div className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-violet-600" /><h2 className="text-xl font-bold">New governed term</h2></div>
         <p className="mt-2 text-sm text-slate-500">New terms always begin as drafts. Approval is an explicit lifecycle action with evidence.</p>
         <div className="mt-5 grid gap-3">
-          <select value={projectId} onChange={event => setProjectId(event.target.value)} className="rounded-xl border px-3 py-2.5">
+          <select aria-label="Governed project" value={projectId} onChange={event => setProjectId(event.target.value)} className="rounded-xl border px-3 py-2.5">
             {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
-          <input required value={term} onChange={event => setTerm(event.target.value)} placeholder="Business term" className="rounded-xl border px-3 py-2.5" />
-          <textarea required value={definition} onChange={event => setDefinition(event.target.value)} placeholder="Business definition" rows={5} className="rounded-xl border px-3 py-2.5" />
-          <input value={domain} onChange={event => setDomain(event.target.value)} placeholder="Domain" className="rounded-xl border px-3 py-2.5" />
-          <input value={synonyms} onChange={event => setSynonyms(event.target.value)} placeholder="Synonyms, comma separated" className="rounded-xl border px-3 py-2.5" />
+          <input aria-label="Business term" required value={term} onChange={event => setTerm(event.target.value)} placeholder="Business term" className="rounded-xl border px-3 py-2.5" />
+          <textarea aria-label="Business definition" required value={definition} onChange={event => setDefinition(event.target.value)} placeholder="Business definition" rows={5} className="rounded-xl border px-3 py-2.5" />
+          <input aria-label="Domain" value={domain} onChange={event => setDomain(event.target.value)} placeholder="Domain" className="rounded-xl border px-3 py-2.5" />
+          <input aria-label="Synonyms" value={synonyms} onChange={event => setSynonyms(event.target.value)} placeholder="Synonyms, comma separated" className="rounded-xl border px-3 py-2.5" />
           <button disabled={busy || !projectId} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 font-bold text-white disabled:opacity-50">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Create draft
           </button>
