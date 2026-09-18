@@ -43,6 +43,9 @@ Status vocabulary: `PENDING`, `IN_PROGRESS`, `PASS`, `FAIL`, `BLOCKED`.
 
 ## Data Steward evidence checkpoint — 2026-09-18
 
+- Deterministic disposable Data Steward fixture now covers organization membership, authorized + unauthorized projects, dataset/version, completed profile, quality rule, finding, glossary term, suggested classification, issue, stewardship assignment, independent approver, allowed capabilities, and prohibited capabilities.
+- Data Steward execution-mode tests now exercise OFF, GUIDED, GOVERNED_AUTO, FULL_AUTONOMOUS, destructive-action approval gating, disallowed tools, and emergency-stop precedence against that fixture.
+
 - Contract/unit, negative-boundary, independent adversarial, and UI/UX certification scripts passed in GitHub Actions on PR #692.
 - Production read-only authorization verification confirmed the retained Data Steward test principal is an organization MEMBER with exactly one active DATA_STEWARD project binding.
 - Positive project capabilities verified: catalog.read, catalog.update, glossary.manage, quality.execute, issues.manage, classification.review, stewardship.manage, profiling.execute, agent.execute, execution.retry, execution.cancel.
