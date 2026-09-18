@@ -12,6 +12,8 @@ const DEFAULT_BATCH = 5
 const MAX_BATCH = 20
 const DEFAULT_MAX_OBJECT_BYTES = 250 * 1024 * 1024
 const HARD_MAX_OBJECT_BYTES = 1024 * 1024 * 1024
+const SOURCE_SCAN_PAGE_SIZE = 100
+const MAX_SOURCE_SCAN_ROWS = 1000
 
 type SourceRow = {
   id: string
@@ -138,21 +140,51 @@ export async function POST(request: Request) {
   const targetStorage = createObjectStorage('r2')
   const objectLimit = maxObjectBytes()
 
-  const { data: sourceRows, error: sourceError } = await admin
-    .schema('catalog')
-    .from('storage_objects')
-    .select('id, project_id, bucket, object_key, object_type, original_filename, content_type, size_bytes, checksum, checksum_algorithm, verified_at')
-    .eq('provider', 'supabase')
-    .eq('state', 'READY')
-    .order('created_at', { ascending: true })
-    .limit(batchSize())
+  const candidates: SourceRow[] = []
+  let examined = 0
+  for (let offset = 0; offset < MAX_SOURCE_SCAN_ROWS && candidates.length < batchSize(); offset += SOURCE_SCAN_PAGE_SIZE) {
+    const { data: sourcePage, error: sourceError } = await admin
+      .schema('catalog')
+      .from('storage_objects')
+      .select('id, project_id, bucket, object_key, object_type, original_filename, content_type, size_bytes, checksum, checksum_algorithm, verified_at')
+      .eq('provider', 'supabase')
+      .eq('state', 'READY')
+      .not('size_bytes', 'is', null)
+      .not('verified_at', 'is', null)
+      .lte('size_bytes', objectLimit)
+      .or('checksum.is.null,checksum_algorithm.eq.sha256')
+      .order('created_at', { ascending: true })
+      .range(offset, offset + SOURCE_SCAN_PAGE_SIZE - 1)
 
-  if (sourceError) {
-    return NextResponse.json({ error: `Unable to load verified Supabase source objects: ${sourceError.message}` }, { status: 500 })
+    if (sourceError) {
+      return NextResponse.json({ error: `Unable to load verified Supabase source objects: ${sourceError.message}` }, { status: 500 })
+    }
+
+    const rows = (sourcePage ?? []) as SourceRow[]
+    examined += rows.length
+    for (const source of rows) {
+      const key = targetKey(source)
+      const persistedKey = persistedR2Key(key)
+      const { data: readyTarget, error: readyTargetError } = await admin
+        .schema('catalog')
+        .from('storage_objects')
+        .select('id')
+        .eq('provider', 'r2')
+        .eq('bucket', r2Bucket)
+        .eq('object_key', persistedKey)
+        .eq('state', 'READY')
+        .maybeSingle()
+      if (readyTargetError) {
+        return NextResponse.json({ error: `Unable to inspect R2 migration targets: ${readyTargetError.message}` }, { status: 500 })
+      }
+      if (!readyTarget) candidates.push(source)
+      if (candidates.length >= batchSize()) break
+    }
+    if (rows.length < SOURCE_SCAN_PAGE_SIZE) break
   }
 
   const results: Array<Record<string, unknown>> = []
-  for (const source of (sourceRows ?? []) as SourceRow[]) {
+  for (const source of candidates) {
     const key = targetKey(source)
     const persistedKey = persistedR2Key(key)
 
@@ -372,7 +404,8 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    examined: sourceRows?.length ?? 0,
+    examined,
+    selected: candidates.length,
     results,
     sourceObjectsDeleted: 0,
     datasetVersionReferencesChanged: 0,
