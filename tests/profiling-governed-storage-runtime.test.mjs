@@ -24,3 +24,11 @@ test('FILE profiling fails closed on unsupported governed storage providers', ()
   assert.match(source, /storageObject\.provider !== 'supabase' && storageObject\.provider !== 'r2'/)
   assert.match(source, /Unsupported governed FILE storage provider/)
 })
+
+
+test('governed FILE storage reference strips stale URL fields before source loading', () => {
+  assert.match(source, /url: _staleUrl/)
+  assert.match(source, /source_url: _staleSourceUrl/)
+  assert.match(source, /sourceUrl: _staleSourceUrlCamel/)
+  assert.match(source, /\.\.\.governedExecutionConfig/)
+})
