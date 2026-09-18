@@ -1,0 +1,58 @@
+name: Execution Mode Assurance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/orchestration/governance-orchestrator.ts'
+      - 'lib/orchestration/governance-orchestrator-service-v2.ts'
+      - 'lib/orchestration/governance-orchestrator-approval-service.ts'
+      - 'lib/agents/resumable-run-step.ts'
+      - 'lib/agents/runtime/**'
+      - 'app/api/agents/governance-orchestrator/**'
+      - 'app/api/schedules/**'
+      - 'app/agents/autonomous-governance/**'
+      - 'app/schedules/**'
+      - 'app/recovery/**'
+      - 'scripts/test-execution-mode-contracts.mjs'
+      - 'scripts/audit-execution-modes-adversarial.mjs'
+      - 'scripts/test-execution-mode-ui-ux.mjs'
+      - 'package.json'
+      - '.github/workflows/execution-mode-assurance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/orchestration/governance-orchestrator.ts'
+      - 'lib/orchestration/governance-orchestrator-service-v2.ts'
+      - 'lib/orchestration/governance-orchestrator-approval-service.ts'
+      - 'lib/agents/resumable-run-step.ts'
+      - 'lib/agents/runtime/**'
+      - 'app/api/agents/governance-orchestrator/**'
+      - 'app/api/schedules/**'
+      - 'app/agents/autonomous-governance/**'
+      - 'app/schedules/**'
+      - 'app/recovery/**'
+      - 'scripts/test-execution-mode-contracts.mjs'
+      - 'scripts/audit-execution-modes-adversarial.mjs'
+      - 'scripts/test-execution-mode-ui-ux.mjs'
+      - 'package.json'
+      - '.github/workflows/execution-mode-assurance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  execution-mode-assurance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Unit test execution-mode policy
+        run: node --experimental-strip-types --test scripts/test-execution-mode-contracts.mjs
+      - name: Independent adversarial audit
+        run: node scripts/audit-execution-modes-adversarial.mjs
+      - name: UI and UX contract tests
+        run: node --test scripts/test-execution-mode-ui-ux.mjs
