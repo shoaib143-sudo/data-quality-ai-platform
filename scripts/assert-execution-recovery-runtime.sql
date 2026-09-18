@@ -76,6 +76,18 @@ begin
     raise exception 'Duplicate repair claim was not idempotently fenced: %',v_result;
   end if;
 
+  -- Case flags alone are insufficient. Resume requires executed repair and validation evidence.
+  update orchestration.recovery_cases
+     set post_repair_validation_result='PASSED',retry_stage='GOVERNED_WORKFLOW',retry_checkpoint_id='workflow-stage'
+   where id=v_case_id;
+  v_result := orchestration.resume_execution_recovery_job(v_case_id);
+  if v_result->>'reason' <> 'REPAIR_ACTION_EVIDENCE_MISSING' then
+    raise exception 'Resume trusted case flags without executed repair evidence: %',v_result;
+  end if;
+  update orchestration.recovery_cases
+     set post_repair_validation_result='NOT_RUN',retry_stage=null,retry_checkpoint_id=null
+   where id=v_case_id;
+
   v_result := orchestration.finalize_execution_recovery_auto_repair(
     v_case_id,0,'synthetic-mutation-1',true,'PASSED','DURABLE_RUNTIME_RECONCILED'
   );
