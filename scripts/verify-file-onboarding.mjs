@@ -55,7 +55,7 @@ requireMatch(csvSource, /if\(value===['"]['"]\|\|value\.trim\(\)===['"]['"]\)ret
 requireMatch(csvSource, /\(\?:0\|\[1-9\]\\d\*\)/, 'CSV numeric coercion must reject ambiguous leading-zero integers.')
 requireMatch(csvSource, /coerceCsvScalar\(header,record\[index\]\?\?null\)/, 'Parsed CSV rows must use the governed scalar coercion path.')
 requireMatch(csvSource, /export\s+function\s+normalizeCsvHeaders\(/, 'CSV parser must normalize headers through an executable governed helper.')
-requireMatch(csvSource, /occurrence===1\?base:`\$\{base\}__\$\{occurrence\}`/, 'Duplicate CSV headers must receive deterministic lossless suffixes.')
+requireMatch(csvSource, /while\(used\.has\(candidate\)\)\{[\s\S]*candidate=`\$\{base\}__\$\{suffix\}`[\s\S]*suffix\+=1/, 'Duplicate CSV headers must receive deterministic lossless suffixes.')
 
 requireMatch(jsonSource, /export\s+function\s+parseJson\(/, 'JSON parsing must be exposed through the governed production module.')
 requireMatch(jsonSource, /export\s+function\s+parseJsonLines\(/, 'JSONL parsing must be exposed through the governed production module.')
