@@ -55,6 +55,14 @@ jobs:
           node scripts/verify-profiling-native-replay.mjs
           node scripts/verify-profiling-metric-replay.mjs
           node scripts/verify-profiling-dataset-replay.mjs
+      - name: Profiling request trust boundary
+        run: node scripts/test-profiling-request-input.mjs
+      - name: Profiling scale certification
+        run: |
+          node scripts/verify-profiling-scale-certification.mjs
+          node --experimental-strip-types scripts/test-profiling-scale-certification.mjs
+      - name: Controlled Tier 2 profiling supervisor
+        run: node scripts/verify-native-supervisor-tier2-profiling.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
 
