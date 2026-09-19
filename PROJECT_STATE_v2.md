@@ -9,8 +9,9 @@
 - **Production URL:** `https://data-quality-ai-platform.vercel.app`
 - **Supabase project:** `tvjnavjxuehpesxcfvrx`
 - **Vercel project:** `data-quality-ai-platform`
-- **Current verified main head at this checkpoint:** `e8db6507d80e1c3148a8bf6539b5f675754aef90`
-- **Current production change at that head:** `Agent Policy v2 acceptance convergence (#736)`
+- **Current verified protected main head at this checkpoint:** `62ad03f95f0ef6737f9071a3a31c72e4f60aba2d`
+- **Current protected-main change at that head:** `Complete hybrid R2 large-object execution path (#776)`
+- **Production exact-SHA status:** not certified at this checkpoint. The canonical Vercel production URL returned `404` for `/api/build-info` on 2026-09-19 while that route exists on protected `main`; production must not be represented as source-converged until a deployment exposes matching build identity.
 - **Branch protection:** `main` protected with required contexts `build`, `analyze`, `dependency-audit`, and `repository-governance`; squash merge and linear-history policy remain enforced.
 
 ## 2. Current production architecture
@@ -149,7 +150,7 @@ The Runtime v2 Phase-0 advisor review classified the current findings rather tha
 
 - service/control-plane tables with RLS but no user policies are intentional where `anon`/`authenticated` have no direct table privileges;
 - authenticated SECURITY DEFINER membership/runtime helpers remain intentional governed surfaces with explicit empty `search_path` and server-side authorization;
-- `governance.agent_risk_rank(text)` has one evidence-backed mutable-search-path hardening gap selected for immediate forward-only remediation;
+- `governance.agent_risk_rank(text)` mutable-search-path hardening is complete via the forward-only `20260915013000_harden_agent_risk_rank_search_path.sql` migration;
 - leaked-password protection remains an external Supabase Auth configuration opportunity;
 - current live advisor evidence reports 44 unindexed foreign-key candidates and 473 indexes with zero observed scans; both remain benchmark-later until representative workload evidence justifies changes;
 - the current exact catalog-level duplicate-index comparison found no exact duplicate index pairs;
@@ -218,7 +219,7 @@ Agent-to-agent delegation is explicit allow-list only, with configurable depth a
 - **Model/provider production promotion:** explicit approval required
 - **Canary rollout:** required for material runtime/model/provider changes
 - **CRITICAL production mutations:** mandatory human approval remains
-- **Break-glass access:** time-limited, reason required, MFA where supported, enhanced audit, post-event review
+- **Break-glass production execution:** not supported; fail closed. No emergency path may bypass normal authorization or approval controls.
 
 ## 10. Native-first architecture requirements
 
@@ -289,7 +290,7 @@ Optimized execution phases:
 
 ## 12. Autonomous operating rules
 
-- Use 3–4 parallel streams where dependencies allow.
+- Use up to 5 parallel streams where dependencies allow.
 - Do not ask routine implementation questions.
 - If a task requires user MFA/login/consent, new external account authorization, unresolved business policy, or an unsafe destructive action, mark it blocked and continue independent work.
 - If the same failure occurs twice without new evidence, stop repeating the same approach and choose a materially different approach or isolate the blocker.
