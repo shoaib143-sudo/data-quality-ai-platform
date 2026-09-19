@@ -133,7 +133,6 @@ async function main() {
   try {
     const result = await executeProfilingMetrics(DATASET_VERSION_ID, RUN_ID)
     assert.equal(result.status, 'COMPLETED')
-    // Dataset Version source-observed cardinality remains authoritative even when the bridge returns a bounded row set.
     assert.equal(result.row_count, 5)
     assert.equal((result.source_access as Record<string, any>)?.sampled_rows, 3)
     assert.equal(result.column_count, 4)
