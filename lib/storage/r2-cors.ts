@@ -86,15 +86,41 @@ export function r2CorsHasWildcardOrigin(xml: string) {
   return hasTag(xml, 'AllowedOrigin', '*')
 }
 
+function tagValues(xml: string, tag: string) {
+  const expression = new RegExp(`<${tag}>\\s*([^<]*?)\\s*</${tag}>`, 'gi')
+  return [...xml.matchAll(expression)].map((match) => match[1].trim())
+}
+
+function corsRuleBlocks(xml: string) {
+  return [...xml.matchAll(/<CORSRule>\s*([\s\S]*?)\s*<\/CORSRule>/gi)].map((match) => match[1])
+}
+
+function sameValues(actual: string[], expected: string[]) {
+  const a = [...new Set(actual)].sort()
+  const b = [...new Set(expected)].sort()
+  return a.length === b.length && a.every((value, index) => value === b[index])
+}
+
+function corsRuleMatchesDesired(xml: string, rule: R2CorsRule) {
+  return sameValues(tagValues(xml, 'AllowedOrigin'), rule.allowedOrigins)
+    && sameValues(tagValues(xml, 'AllowedMethod'), rule.allowedMethods)
+    && sameValues(tagValues(xml, 'AllowedHeader'), rule.allowedHeaders)
+    && sameValues(tagValues(xml, 'ExposeHeader'), rule.exposeHeaders)
+    && sameValues(tagValues(xml, 'MaxAgeSeconds'), [String(rule.maxAgeSeconds)])
+}
+
 export function r2CorsPolicyMatchesDesired(xml: string, rules = dataNexusR2CorsRules()) {
   if (r2CorsHasWildcardOrigin(xml)) return false
-  return rules.every((rule) =>
-    rule.allowedOrigins.every((value) => hasTag(xml, 'AllowedOrigin', value))
-    && rule.allowedMethods.every((value) => hasTag(xml, 'AllowedMethod', value))
-    && rule.allowedHeaders.every((value) => hasTag(xml, 'AllowedHeader', value))
-    && rule.exposeHeaders.every((value) => hasTag(xml, 'ExposeHeader', value))
-    && hasTag(xml, 'MaxAgeSeconds', String(rule.maxAgeSeconds)),
-  )
+  const actualRules = corsRuleBlocks(xml)
+  if (actualRules.length !== rules.length) return false
+
+  const unmatched = [...actualRules]
+  for (const desired of rules) {
+    const index = unmatched.findIndex((actual) => corsRuleMatchesDesired(actual, desired))
+    if (index < 0) return false
+    unmatched.splice(index, 1)
+  }
+  return unmatched.length === 0
 }
 
 export function corsPolicyXml(rules = dataNexusR2CorsRules()) {
