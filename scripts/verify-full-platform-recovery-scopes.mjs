@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { verifyDurableWorkerSchedulerAuthority } from '../lib/recovery/durable-worker-scheduler-authority.mjs'
 
-const schedulerMigrationPath = 'supabase/migrations/20260916103000_durable_worker_scheduler_authority.sql'
+const schedulerMigrationPath = 'supabase/migrations/20260919121000_provider_neutral_durable_worker_url.sql'
 const requiredFiles = [
   'infra/recovery/full-platform-recovery-contract.json',
   'infra/recovery/platform-manifest.json',
