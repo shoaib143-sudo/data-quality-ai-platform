@@ -13,8 +13,12 @@ function requireText(text, needle, label) {
 
 requireText(promotion, 'v_asset.structure_hash,\n      v_asset.structure_hash,', 'native promoted content hash is currently structure hash, not source content')
 requireText(fileSource, "createHash('sha256').update(bytes).digest('hex')", 'FILE source content hash is derived from actual bytes')
-requireText(fileProfile, "content_hash_authority: 'SOURCE_BYTES_SHA256'", 'FILE byte-hash authority evidence')
-requireText(fs.readFileSync('lib/profiling/metric-engine.ts', 'utf8'), "content_hash_authority: 'SOURCE_BYTES_SHA256'", 'metric execution preserves FILE byte-hash authority')
+requireText(fileProfile, "const contentHashAuthority = String(loaded.metadata.content_hash_authority ?? 'SOURCE_BYTES_SHA256')", 'FILE source derives persisted hash authority from governed source evidence')
+requireText(fileProfile, "const fullSourceBytesObserved = contentHashAuthority === 'SOURCE_BYTES_SHA256'", 'FILE exact reuse is restricted to complete source-byte observations')
+requireText(fileProfile, 'content_hash_authority: contentHashAuthority', 'FILE source persists governed hash authority evidence')
+requireText(fs.readFileSync('lib/profiling/metric-engine.ts', 'utf8'), "const contentHashAuthority = String(loaded.metadata.content_hash_authority ?? 'SOURCE_BYTES_SHA256')", 'metric execution derives FILE hash authority from governed source evidence')
+requireText(fs.readFileSync('lib/profiling/metric-engine.ts', 'utf8'), "content_hash: contentHashAuthority === 'SOURCE_BYTES_SHA256' ? loaded.contentHash : null", 'metric execution persists exact content hash only for complete source bytes')
+requireText(fs.readFileSync('lib/profiling/metric-engine.ts', 'utf8'), 'content_hash_authority: contentHashAuthority', 'metric execution preserves governed FILE hash authority')
 requireText(fileProfile, 'content_hash: loaded.contentHash', 'FILE source byte hash persisted on profile run')
 
 requireText(reuse, "if (!['FILE', 'CSV'].includes(sourceType))", 'reuse limited to file-backed sources')

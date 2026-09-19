@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
+import { resolveProviderNeutralFileConfig, sanitizeProviderNeutralFileResult } from '@/lib/profiling/provider-neutral-file-source'
 import { jdbcEngineFromUrl, loadJdbcRows, parseJdbcTableReference } from '@/lib/connectors/jdbc'
 import { DETERMINISTIC_METRICS, isDeterministicMetric, type MetricScope } from '@/lib/profiling/metric-registry'
 import { applySamplingPolicy, resolveSamplingPolicy } from '@/lib/profiling/sampling'
@@ -193,13 +194,27 @@ export async function loadProfilingRows(supabase: ReturnType<typeof createAdminC
       : {}
 
     if (sourceType === 'file' || sourceType === 'csv') {
-      const loaded = await loadFileSource(supabase, { sourceUri: executionSource.source_uri, executionConfig }, { maxRows })
+      const resolved = await resolveProviderNeutralFileConfig({
+        sourceUri: executionSource.source_uri,
+        executionConfig,
+      })
+      const rawLoaded = await loadFileSource(supabase, resolved.config, {
+        maxRows,
+        maxBytes: sampling.technicalMaxFileBytes,
+      })
+      const loaded = sanitizeProviderNeutralFileResult(
+        rawLoaded,
+        resolved.canonicalSourceUri,
+        resolved.provider,
+      )
+      const contentHashAuthority = String(loaded.metadata.content_hash_authority ?? 'SOURCE_BYTES_SHA256')
       return sampledResult(loaded.rows as Row[], loaded.rowCount, {
         source_type: sourceType === 'csv' ? 'CSV' : 'FILE',
         source_uri: loaded.sourceUri,
-        content_hash: loaded.contentHash,
-        content_hash_authority: 'SOURCE_BYTES_SHA256',
+        content_hash: contentHashAuthority === 'SOURCE_BYTES_SHA256' ? loaded.contentHash : null,
+        content_hash_authority: contentHashAuthority,
         warnings: loaded.warnings,
+        metadata: loaded.metadata,
       })
     }
 

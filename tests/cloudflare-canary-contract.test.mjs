@@ -16,6 +16,8 @@ test('Cloudflare canary is a single-instance secondary container runtime', () =>
   assert.equal(config.containers[0].max_instances, 1)
   assert.equal(config.containers[0].image, '../../../Dockerfile')
   assert.deepEqual(config.containers[0].constraints?.regions, ['APAC'])
+  assert.equal(config.containers[0].instance_type, 'basic')
+  assert.equal(config.containers[0].ssh?.enabled, false)
   assert.equal(config.durable_objects.bindings[0].name, 'DATANEXUS_CANARY')
   assert.deepEqual(config.migrations[0].new_sqlite_classes, ['DataNexusCanary'])
 })
