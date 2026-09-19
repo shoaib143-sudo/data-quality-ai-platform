@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { assertNativeToolRawInputSafety, nativeToolInputAliases } from './native-tool-input-safety'
 
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -177,14 +178,6 @@ export function assertNativeJsonContract(schema: Record<string, unknown>, value:
   if (errors.length) throw new Error(`${label} contract violation: ${errors.slice(0, 8).join('; ')}`)
 }
 
-function snakeToCamel(value: string) {
-  return value.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
-}
-
-function camelToSnake(value: string) {
-  return value.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
-}
-
 /**
  * Native execution is stricter than permissive JSON Schema defaults: when a contract
  * declares properties, the executor receives only those properties. This prevents an
@@ -201,10 +194,18 @@ export function normalizeNativeToolContractInput(
     return rawInput
   }
 
+  const propertyKeys = Object.keys(properties)
+  assertNativeToolRawInputSafety({
+    propertyKeys,
+    additionalProperties: contract.input_schema.additionalProperties,
+    rawInput,
+    toolKey: contract.tool_key,
+  })
+
   const normalized: Record<string, unknown> = {}
-  for (const key of Object.keys(properties)) {
-    const candidates = Array.from(new Set([key, snakeToCamel(key), camelToSnake(key)]))
-    const match = candidates.find((candidate) => Object.prototype.hasOwnProperty.call(rawInput, candidate))
+  for (const key of propertyKeys) {
+    const match = nativeToolInputAliases(key)
+      .find((candidate) => Object.prototype.hasOwnProperty.call(rawInput, candidate))
     if (match) normalized[key] = rawInput[match]
   }
   assertNativeJsonContract(contract.input_schema, normalized, `${contract.tool_key} input`)
