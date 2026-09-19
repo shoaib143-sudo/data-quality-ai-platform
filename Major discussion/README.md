@@ -82,24 +82,20 @@ AI-assisted lineage follows the same authority principle: metadata-derived candi
 - `2026-09-13-engineering-summary-production-verification-and-next-work.md` records the earlier September 13 checkpoint through PR #356, including deployed-artifact provenance and the governed remediation production-verification sequence. Its lifecycle statements are historical and are superseded where later same-day merges advanced `main`.
 - `2026-09-13-chat-review-decision-register-and-unresolved-items.md` is the current September 13 discussion synthesis. It extracts chat-agreed engineering rules, design and architecture decisions, tradeoffs, authority boundaries, superseded decisions, later same-day implementation evidence, and unresolved architecture items.
 
+- `2026-09-19-agent-policy-runtime-v2-implementation-checkpoint.md` records the current Agent Policy v2 + Runtime v2 implementation checkpoint: deterministic Job Monitor authority, tool-input fail-closed behavior, direct resource ACLs, notification delivery health, governed agent-version lifecycle, recovery, runtime-evidence drilldown, remaining certification scope, and the no-break-glass policy hold.
+
 The capability matrix is intentionally broader than the current implementation scope. Future implementation should draw from it rather than recreate the exploration from scratch.
 
 ## Current continuation checkpoint
 
-The authoritative current September 13 decision checkpoint is:
+The authoritative current September 19 continuation records are:
 
-- `2026-09-13-chat-review-decision-register-and-unresolved-items.md`
+- `2026-09-19-governance-requirements-freeze-and-delivery-decision.md`
+- `2026-09-19-agent-policy-runtime-v2-implementation-checkpoint.md`
+- `../Architecture/2026-09-19-agent-runtime-v2-master-implementation-plan.md`
+- `../PROJECT_STATE_v2.md`
 
-At this checkpoint:
-
-- protected `main` is reconciled at `be2fbd45d5692aaef6e73101efefeec352a31aa3`, the merge of PR #361;
-- the earlier human-remediation architecture remains governed by both project capability and workspace access, without widening permissions;
-- PRs #351, #352 and #354, which were open in the earlier morning record, later merged to `main`;
-- the retrieval-evaluation read-path finding that was previously listed as unresolved was addressed by PR #358 using minimal read grants while preserving RLS, `SECURITY INVOKER` semantics and application authorization;
-- Physical Assets identity presentation was aligned with the authoritative schema in PR #366, and Project Roles persona count was derived from the governed catalog in PR #367;
-- shared workspace actions were aligned with persona/workspace policy in PR #360 without weakening direct route authorization;
-- the scoped legacy dark-contrast compatibility bridge was merged in PR #361;
-- PR #363, Living Tree job monitoring, remains an open draft and must not be described as production accepted until its authenticated persona, controlled execution, load, current-head CI, deployment-flag and production acceptance gates are complete.
+The repository is under active parallel implementation. Any SHA recorded in a discussion file is a checkpoint, not a permanent source of truth. Future agents must fetch current `main` and active PR state before implementation or certification.
 
 ## Preservation rule
 
