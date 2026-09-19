@@ -5,6 +5,7 @@ export function evaluateProfilingProductionSnapshot(snapshot) {
   const sourceTypes = snapshot.activeSourceTypes && typeof snapshot.activeSourceTypes === 'object'
     ? snapshot.activeSourceTypes
     : {}
+  const latestAttempts = Array.isArray(snapshot.latestAttempts) ? snapshot.latestAttempts : []
 
   if (!Number.isFinite(snapshot.profileRuns) || snapshot.profileRuns < 1) failures.push('NO_PROFILE_RUNS')
   if (!Number.isFinite(snapshot.completedRuns) || snapshot.completedRuns < 1) failures.push('NO_COMPLETED_PROFILE_RUNS')
@@ -16,6 +17,12 @@ export function evaluateProfilingProductionSnapshot(snapshot) {
   const completedJdbcRuns = latestRuns.filter((run) => String(run.sourceType ?? '').toUpperCase() === 'JDBC').length
   if (completedFileRuns < 1) failures.push('NO_COMPLETED_FILE_PROFILE')
   if (completedJdbcRuns < 1) failures.push('NO_COMPLETED_JDBC_PROFILE')
+
+  for (const attempt of latestAttempts) {
+    if (attempt.activeSource === true && attempt.status && attempt.status !== 'COMPLETED') {
+      warnings.push(`LATEST_ATTEMPT_${attempt.datasetVersionId ?? 'UNKNOWN'}_${String(attempt.status).toUpperCase()}`)
+    }
+  }
 
   for (const run of latestRuns) {
     const prefix = `RUN_${run.id ?? 'UNKNOWN'}`
@@ -45,6 +52,9 @@ export function evaluateProfilingProductionSnapshot(snapshot) {
       latestCompletedJdbcProfiles: completedJdbcRuns,
       latestRunsWithFindings: latestRuns.filter((run) => Number(run.findings ?? 0) > 0).length,
       latestRunsWithoutFindings: latestRuns.filter((run) => Number(run.findings ?? 0) === 0).length,
+      activeDatasetsWithNonCompletedLatestAttempt: latestAttempts.filter(
+        (attempt) => attempt.activeSource === true && attempt.status && attempt.status !== 'COMPLETED',
+      ).length,
     },
   }
 }
