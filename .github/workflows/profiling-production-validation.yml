@@ -110,4 +110,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PROFILING_PRODUCTION_VALIDATION_REQUIRED: 'true'
+          PROFILING_PRODUCTION_VALIDATION_EVIDENCE_PATH: ${{ runner.temp }}/profiling-production-validation.json
         run: node scripts/verify-profiling-production-validation.mjs
+      - name: Upload profiling production validation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: profiling-production-validation-${{ github.sha }}
+          path: ${{ runner.temp }}/profiling-production-validation.json
+          retention-days: 90
+          if-no-files-found: error
