@@ -137,12 +137,44 @@ begin
     raise exception 'benchmark decision reasons are required';
   end if;
 
+  v_refs := to_jsonb((select array_agg(ref order by ref) from unnest(p_evidence_refs) ref));
+  v_reasons := to_jsonb((select array_agg(reason order by reason) from unnest(p_reasons) reason));
+
   select * into v_candidate
   from agent.learning_candidates
   where id = p_candidate_id and project_id = p_project_id
   for update;
   if not found then raise exception 'learning candidate not found in project'; end if;
+
   if v_candidate.status <> 'EVIDENCE_READY' then
+    select * into v_existing
+    from agent.learning_candidate_benchmarks
+    where project_id = p_project_id
+      and candidate_id = p_candidate_id
+      and benchmark_id = btrim(p_benchmark_id);
+
+    if found
+      and v_existing.evaluator_id = btrim(p_evaluator_id)
+      and v_existing.evaluator_type = p_evaluator_type
+      and v_existing.observed_at = p_observed_at
+      and v_existing.case_count = p_case_count
+      and v_existing.baseline_version = btrim(p_baseline_version)
+      and v_existing.candidate_version = btrim(p_candidate_version)
+      and v_existing.baseline_score = p_baseline_score
+      and v_existing.candidate_score = p_candidate_score
+      and v_existing.authority_violations = p_authority_violations
+      and v_existing.adversarial_failures = p_adversarial_failures
+      and v_existing.evidence_refs = v_refs
+      and v_existing.rollback_ref = btrim(p_rollback_ref)
+      and v_existing.minimum_case_count = p_minimum_case_count
+      and v_existing.minimum_candidate_score = p_minimum_candidate_score
+      and v_existing.decision = p_decision
+      and v_existing.reasons = v_reasons
+      and v_candidate.status = p_decision
+    then
+      return v_existing.id;
+    end if;
+
     raise exception 'only EVIDENCE_READY candidates may be benchmarked';
   end if;
   if btrim(p_baseline_version) <> v_candidate.baseline_version then
@@ -169,9 +201,6 @@ begin
   if p_candidate_score < p_baseline_score and p_decision <> 'NOT_READY' then
     raise exception 'candidate regression requires NOT_READY';
   end if;
-
-  v_refs := to_jsonb((select array_agg(ref order by ref) from unnest(p_evidence_refs) ref));
-  v_reasons := to_jsonb((select array_agg(reason order by reason) from unnest(p_reasons) reason));
 
   select * into v_existing
   from agent.learning_candidate_benchmarks
@@ -248,7 +277,7 @@ revoke all on function agent.record_learning_candidate_benchmark(
   uuid,uuid,text,text,text,timestamptz,integer,text,text,numeric,numeric,integer,integer,text[],text,integer,numeric,text,text[],uuid
 ) from public, anon, authenticated;
 grant execute on function agent.record_learning_candidate_benchmark(
-  uuid,uuid,text,text,text,timestamptz,integer,text,text,numeric,numeric,integer,integer,text[],text,text,text[],uuid
+  uuid,uuid,text,text,text,timestamptz,integer,text,text,numeric,numeric,integer,integer,text[],text,integer,numeric,text,text[],uuid
 ) to service_role;
 
 comment on table agent.learning_candidate_benchmarks is
