@@ -1,6 +1,7 @@
 import { EnvironmentModelGateway } from './model-gateway'
 import { createGovernanceModelCostAccountingProvider } from './governance-cost-accounting'
 import { createGovernanceModelRegistry } from './governance-model-registry'
+import { createGovernanceProviderResiliencePolicyProvider } from './governance-provider-resilience'
 import { createGovernanceReasoningBudgetPolicyProvider } from './governance-reasoning-budget-policy'
 import { createGovernanceProjectBudgetAdmissionProvider } from './governance-resource-budget-admission'
 import { createGovernanceRoutingPolicyProvider } from './governance-routing-policy'
@@ -19,6 +20,7 @@ export function createGovernanceIntelligentRouter(): IntelligentModelRouter {
     evaluatePolicy: evaluateModelAgainstRoutingPolicy,
     fallbackGateway: new EnvironmentModelGateway(),
     createProvider: createReasoningProvider,
+    resiliencePolicy: createGovernanceProviderResiliencePolicyProvider(),
   })
   const telemetry = createGovernanceTelemetryProvider()
   const failClosedObservable = new FailClosedRouteTelemetryRouter(router, telemetry)
