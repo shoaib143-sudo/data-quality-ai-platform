@@ -126,3 +126,71 @@ A future implementation review should map every row in this register to the curr
 
 Do not delete an operation family because it is not in the current delivery phase. Mark its status explicitly and preserve the requirement until it is either implemented, deferred by product decision, superseded, or declared not applicable.
 
+
+
+## Reconciled status against protected main
+
+**Repository checkpoint:** `11ff0b13eb5897d2d6d29fcc1a8a7ae7e24b498a`  
+**Checkpoint change:** PR #816, governed learning candidate pipeline.
+
+Status meanings used below:
+
+- **IMPLEMENTED**: core capability is present on protected main with substantive code/tests or production evidence.
+- **IMPLEMENTED / CERTIFICATION PENDING**: core capability exists, but target-scale, exact-head, end-to-end, or production certification remains incomplete.
+- **PARTIAL / ADVANCED**: substantial foundations exist, but one or more material parts of the requested operation family remain incomplete.
+- **ACTIVE IMPLEMENTATION**: a current implementation sequence is progressing on top of protected main.
+- **BLOCKED EXTERNAL**: implementation cannot honestly complete without an external source/permission boundary.
+
+| # | Operation family | Reconciled status | Current repository assessment |
+| ---: | --- | --- | --- |
+| 1 | Transactional metadata | **IMPLEMENTED** | Dataset/version, catalog lifecycle, ownership/stewardship, glossary and governed metadata mutation paths exist. |
+| 2 | Bulk metadata discovery | **PARTIAL / ADVANCED** | Discovery/onboarding and projection foundations exist, but multi-million object discovery scale is not yet certified as a platform-wide workload. |
+| 3 | Profiling execution | **IMPLEMENTED / CERTIFICATION PENDING** | Deterministic metric execution, persistence, concurrency, CSV/JDBC runtime and prior exact-main certification exist. Current protected main has advanced since the last profiling exact-head certification. |
+| 4 | Historical profiling | **PARTIAL / ADVANCED** | Profile history is persisted and analytical foundations exist, but multi-year distributions/trend analytics at target scale are not fully certified. |
+| 5 | DQ management | **IMPLEMENTED** | Rules, governed quality execution, findings/scores, approvals/remediation and exact verification evidence are implemented. |
+| 6 | DQ analytics | **PARTIAL / ADVANCED** | Trend and persona-oriented DQ analytical surfaces exist; enterprise-scale comparative/anomaly-history analytics remain broader than current certification. |
+| 7 | Glossary | **IMPLEMENTED** | Business terms, governed mutations, persona/project context, security hardening and stewardship workflows exist. |
+| 8 | Policy management | **IMPLEMENTED** | Governance documents, policy/control context, versions/authority concepts and governed approval boundaries are represented in the current platform. |
+| 9 | Policy text retrieval | **PARTIAL / ADVANCED** | Semantic embeddings, retrieval/evaluation and governance knowledge retrieval foundations exist; exact policy-clause retrieval at enterprise corpus scale needs broader acceptance evidence. |
+| 10 | Regulatory research | **PARTIAL / ADVANCED** | Regulations are part of the knowledge architecture and semantic/exact retrieval model, but there is no evidence of a separately certified end-to-end regulatory research workload. |
+| 11 | RAG | **IMPLEMENTED / CERTIFICATION PENDING** | Retrieval provider, semantic embeddings, retrieval evaluation, authority-aware knowledge architecture and evidence-grounded generation foundations exist; breadth/scale certification remains. |
+| 12 | Metadata search | **PARTIAL / ADVANCED** | Search and semantic indexing capabilities exist, but searching millions of fields/assets is not yet certified at target scale. |
+| 13 | Similarity | **PARTIAL / ADVANCED** | Embedding/semantic indexing foundations support similarity use cases; broad column/term/issue similarity workflows are not fully production-certified. |
+| 14 | Lineage | **BLOCKED EXTERNAL** | AI-assisted/inferred lineage exists under explicit authority classes, but source-authoritative Module #3 lineage remains blocked by missing Databricks `system.access` permission. |
+| 15 | Impact analysis | **PARTIAL / ADVANCED** | Relationship/lineage architecture supports impact reasoning, but full source-authoritative field-to-report/process/policy impact is constrained by incomplete authoritative lineage. |
+| 16 | Root cause | **IMPLEMENTED / CERTIFICATION PENDING** | Investigator RCA, evidence discrimination, bounded refinement, incident RCA provenance and cross-signal investigation are implemented; full enterprise E2E certification remains. |
+| 17 | Cross-dataset relationships | **PARTIAL / ADVANCED** | Cross-dataset correlations, ownership/CDE/domain relationships and governed relationship models exist; complete enterprise dependency coverage is not certified. |
+| 18 | Agent investigation | **IMPLEMENTED** | Dataset-scoped investigation, evidence retrieval, RCA, governed tools/handoffs and execution evidence exist. |
+| 19 | Human approval | **IMPLEMENTED** | Business/Governance approval axes, delegation, validity, external decision entry, SLA and execution revalidation are implemented. |
+| 20 | Remediation | **IMPLEMENTED** | Governed remediation state, authorization, handoff, evidence and idempotent/recovery patterns exist. |
+| 21 | Verification | **IMPLEMENTED** | Before/after and exact governed evidence verification paths exist, including DQ verification timelines and runtime validation. |
+| 22 | Rollback | **IMPLEMENTED / CERTIFICATION PENDING** | Native rollback/compensation and storage rollback contracts exist; complete platform rollback/recovery exercise remains a final certification gate. |
+| 23 | Incident management | **IMPLEMENTED** | Canonical incident lifecycle, persona workspace, SLA, evidence, RCA and adversarial lifecycle hardening are present. |
+| 24 | Operational monitoring | **PARTIAL / ADVANCED** | Alerts, incidents, OTLP/auth, queue/readiness and monitoring surfaces exist; millions/billions-of-events scale is not yet certified. |
+| 25 | Agent monitoring | **IMPLEMENTED / CERTIFICATION PENDING** | Job Monitor, runtime evidence drilldown, run actions, logs/evaluation, provider telemetry and cost/token foundations exist; Runtime v2 observability convergence remains a certification item. |
+| 26 | Agent memory | **PARTIAL / ADVANCED** | Agent memory tables/providers, semantic memory indexing and learning layers exist; broad verified-memory consumption and lifecycle certification are still evolving. |
+| 27 | Agent learning | **ACTIVE IMPLEMENTATION** | PR #816 candidate-learning pipeline is merged. Current follow-on PRs #819, #820 and #821 cover benchmark gating, governed approval and controlled release. |
+| 28 | Executive analytics | **PARTIAL / ADVANCED** | Governance outcome reporting, command-center and persona analytical foundations exist; complete enterprise risk/health/benefit trend certification remains. |
+| 29 | Audit | **IMPLEMENTED** | Immutable/hash-chained governance audit, approval/execution audit, discovery/profiling evidence and audit UI/workflows are present. |
+| 30 | Audit analytics | **PARTIAL / ADVANCED** | Audit evidence and command-center analytics exist, but multi-year autonomous-action analytics at stated scale are not yet certified. |
+| 31 | Export/reporting | **IMPLEMENTED / CERTIFICATION PENDING** | Governance outcome reports and hardened export paths exist; huge-result-set and long-history reporting scale remains to be proven. |
+| 32 | Retention | **IMPLEMENTED / CERTIFICATION PENDING** | Governance retention/archive, projection-safe retention, agent evidence retention and legal hold are implemented; complete cross-domain retention certification remains. |
+| 33 | Reindex/rebuild | **PARTIAL / ADVANCED** | Semantic reindex and projection snapshot rebuild mechanisms exist; full search/graph/analytics rebuild runbooks and certification remain incomplete. |
+| 34 | Disaster recovery | **PARTIAL / ADVANCED** | Runtime recovery, compensation and RTO/RPO policy foundations exist; restoration of complete core business truth has not yet been fully exercised/certified as platform DR. |
+| 35 | ML/AI evaluation | **IMPLEMENTED** | Evaluation datasets/engine, retrieval evaluation, shadow evaluation, trajectory evaluation, scorecards and governed learning evidence are implemented. |
+| 36 | Re-embedding | **PARTIAL / ADVANCED** | Embedding provider abstraction and embedding-space identity are present, which protect governance truth from model identity, but a complete re-embedding migration/rebuild workflow is not yet certified. |
+| 37 | Natural-language support | **IMPLEMENTED** | Governed agents, reasoning/retrieval providers, investigation and evidence-grounded explanation paths support natural-language governance questions; wider persona/E2E certification continues under Runtime v2. |
+
+### Current coverage interpretation
+
+This register should not be read as 37 green production certifications.
+
+At this checkpoint:
+
+- **12** operation families have their core capability implemented.
+- **7** have the core implementation present but still require broader certification, scale testing, or exact-head revalidation.
+- **16** are materially advanced but remain partial against the full operation-family definition.
+- **1** is in active implementation: agent learning.
+- **1** is externally blocked: source-authoritative lineage.
+
+The dominant remaining gaps are enterprise-scale certification, historical/OLAP depth, complete derived-store rebuild/re-embedding operations, platform-level disaster-recovery exercise, and capabilities that depend on source-authoritative lineage.
