@@ -34,6 +34,12 @@ jobs:
           node-version: 24
       - name: Verify security posture source contract
         run: node scripts/verify-production-security-posture.mjs
+      - name: Verify source secret hygiene
+        run: node scripts/verify-secret-hygiene.mjs
+      - name: Exercise secret hygiene negative cases
+        run: node --test tests/secret-hygiene.test.mjs
+      - name: Verify workflow credential scoping
+        run: node --test tests/workflow-credential-scope.test.mjs
       - name: Verify glossary direct-write boundary
         run: node scripts/verify-glossary-direct-write-boundary.mjs
       - name: Execute dynamic and negative PostgreSQL cases
