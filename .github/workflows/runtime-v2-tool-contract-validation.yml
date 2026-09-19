@@ -3,6 +3,8 @@ name: Runtime v2 Tool Contract Validation
 on:
   pull_request:
     paths:
+      - 'lib/agents/runtime/native-tool-input-safety.ts'
+      - 'scripts/test-runtime-v2-tool-input-safety.mjs'
       - 'lib/agents/runtime/native-tool-contracts.ts'
       - 'lib/agents/executors/**'
       - 'scripts/verify-runtime-v2-tool-contract-validation.mjs'
@@ -10,6 +12,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/agents/runtime/native-tool-input-safety.ts'
+      - 'scripts/test-runtime-v2-tool-input-safety.mjs'
       - 'lib/agents/runtime/native-tool-contracts.ts'
       - 'lib/agents/executors/**'
       - 'scripts/verify-runtime-v2-tool-contract-validation.mjs'
@@ -30,3 +34,5 @@ jobs:
           node-version: 24
       - name: Verify Runtime v2 tool contract validation
         run: node scripts/verify-runtime-v2-tool-contract-validation.mjs
+      - name: Exercise raw tool input negative cases
+        run: node --experimental-strip-types scripts/test-runtime-v2-tool-input-safety.mjs
