@@ -20,7 +20,8 @@ export function evaluateProfilingProductionSnapshot(snapshot) {
 
   for (const attempt of latestAttempts) {
     if (attempt.activeSource === true && attempt.status && attempt.status !== 'COMPLETED') {
-      warnings.push(`LATEST_ATTEMPT_${attempt.datasetVersionId ?? 'UNKNOWN'}_${String(attempt.status).toUpperCase()}`)
+      const code = attempt.errorCode ? `_${String(attempt.errorCode).toUpperCase()}` : ''
+      warnings.push(`LATEST_ATTEMPT_${attempt.datasetVersionId ?? 'UNKNOWN'}_${String(attempt.status).toUpperCase()}${code}`)
     }
   }
 
