@@ -66,7 +66,7 @@
     "verify:agent-policy-v2": "node --experimental-strip-types scripts/verify-agent-policy-v2.mjs && node --experimental-strip-types scripts/test-agent-policy-v2-unit.mjs && node --experimental-strip-types scripts/audit-agent-policy-v2-adversarial.mjs && node scripts/verify-agent-approval-hardening.mjs && node scripts/verify-agent-approval-validity.mjs && node scripts/audit-agent-approval-validity-adversarial.mjs && node scripts/verify-approval-notification-robustness.mjs",
     "verify:orchestrator-capability-coverage": "node --experimental-strip-types scripts/test-orchestrator-capability-coverage.mjs",
     "verify:provider-neutral-runtime": "node --experimental-strip-types --test tests/provider-neutral-runtime.test.mjs && node --test tests/build-info-contract.test.mjs tests/durable-worker-provider-neutral-url.test.mjs && node scripts/test-durable-worker-scheduler-authority.mjs && node --test tests/storage-cutover-guard.test.mjs tests/storage-r2-production-precutover-workflow.test.mjs",
-    "verify:container-runtime": "node --test tests/container-runtime-contract.test.mjs tests/cloudflare-canary-contract.test.mjs"
+    "verify:container-runtime": "node --test tests/container-runtime-contract.test.mjs tests/cloudflare-canary-contract.test.mjs tests/cloudflare-canary-deployment-workflow.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
