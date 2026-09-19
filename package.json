@@ -46,7 +46,7 @@
     "verify:quality-intelligence": "node scripts/verify-quality-intelligence.mjs",
     "verify:file-onboarding": "node scripts/verify-file-onboarding.mjs",
     "verify:profiling-lifecycle": "node scripts/verify-profiling-lifecycle-contracts.mjs",
-    "verify:worker-runtime": "node scripts/verify-worker-runtime.mjs && node --test tests/provider-neutral-worker-service.test.mjs",
+    "verify:worker-runtime": "node scripts/verify-worker-runtime.mjs && node --test tests/provider-neutral-worker-service.test.mjs tests/cloudflare-worker-runtime-contract.test.mjs tests/cloudflare-worker-deployment-workflow.test.mjs",
     "verify:profiling-explorer": "node scripts/verify-profiling-explorer.mjs",
     "verify:governance": "node scripts/verify-governance-architecture.mjs && node scripts/verify-single-organization-runtime.mjs",
     "verify:semantic": "node scripts/verify-semantic-governance.mjs",
