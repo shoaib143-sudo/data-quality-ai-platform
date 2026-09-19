@@ -8,6 +8,16 @@ on:
       - 'lib/agents/runtime/native-compensation-fencing.ts'
       - 'scripts/verify-native-compensation-reclaim-fencing.mjs'
       - 'supabase/migrations/**native_compensation_reclaim_fencing.sql'
+      - 'lib/orchestration/execution-recovery-*.ts'
+      - 'scripts/setup-execution-recovery-persistence-test.sql'
+      - 'scripts/setup-native-compensation-crash-recovery.sql'
+      - 'scripts/test-native-compensation-crash-recovery.sql'
+      - 'scripts/verify-native-compensation-crash-recovery.mjs'
+      - 'supabase/migrations/20260918022000_execution_recovery_closed_loop_contract.sql'
+      - 'supabase/migrations/20260918022500_execution_recovery_atomic_claim.sql'
+      - 'supabase/migrations/20260918023500_execution_recovery_action_evidence.sql'
+      - 'supabase/migrations/20260918025000_execution_recovery_validated_resume.sql'
+      - 'supabase/migrations/20260919030000_execution_recovery_crash_fencing.sql'
       - '.github/workflows/native-compensation-reclaim-fencing.yml'
   pull_request:
     branches: [main]
@@ -36,3 +46,47 @@ jobs:
         run: node scripts/verify-native-compensation-reclaim-fencing.mjs
       - name: Typecheck native compensation fencing
         run: pnpm exec tsc --noEmit
+
+  execution-recovery-crash-fencing:
+    name: Execution Recovery interrupted-worker fencing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install isolated PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+      - name: Reconstruct current execution recovery contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/setup-execution-recovery-persistence-test.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918022000_execution_recovery_closed_loop_contract.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918022500_execution_recovery_atomic_claim.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918023500_execution_recovery_action_evidence.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918025000_execution_recovery_validated_resume.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260919030000_execution_recovery_crash_fencing.sql
+      - name: Race parallel fenced claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/setup-native-compensation-crash-recovery.sql
+          sudo -u postgres psql -At -v ON_ERROR_STOP=1 -c "select orchestration.claim_execution_recovery_auto_repair('41000000-0000-4000-8000-000000000011',0,'lease_reconcile','project/race',1,true,300);" > /tmp/fenced-race-a.out &
+          race_a=$!
+          sudo -u postgres psql -At -v ON_ERROR_STOP=1 -c "select orchestration.claim_execution_recovery_auto_repair('41000000-0000-4000-8000-000000000011',0,'lease_reconcile','project/race',1,true,300);" > /tmp/fenced-race-b.out &
+          race_b=$!
+          wait "$race_a"
+          wait "$race_b"
+          claimed="$(cat /tmp/fenced-race-a.out /tmp/fenced-race-b.out | grep -c '"claimed": true' || true)"
+          in_flight="$(cat /tmp/fenced-race-a.out /tmp/fenced-race-b.out | grep -c '"reason": "ATTEMPT_IN_FLIGHT"' || true)"
+          if [ "$claimed" -ne 1 ] || [ "$in_flight" -ne 1 ]; then
+            echo "Expected one fenced executor and one in-flight rejection; claimed=$claimed in_flight=$in_flight"
+            cat /tmp/fenced-race-a.out /tmp/fenced-race-b.out
+            exit 1
+          fi
+      - name: Verify crash reclaim and restart boundaries
+        run: |
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/test-native-compensation-crash-recovery.sql
+          node scripts/verify-native-compensation-crash-recovery.mjs
