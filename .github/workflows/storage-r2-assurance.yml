@@ -3,8 +3,7 @@ name: Storage R2 Assurance
 on:
   push:
     branches:
-      - r2-prereq-hardening-20260916
-      - r2-main-reconcile-20260917
+      - main
     paths:
       - 'lib/storage/**'
       - 'lib/profiling/provider-neutral-file-source.ts'
@@ -17,7 +16,11 @@ on:
       - 'scripts/verify-r2-*.mjs'
       - 'supabase/migrations/*storage*.sql'
       - 'tests/storage-*.test.mjs'
+      - 'tests/cloudflare-*.test.mjs'
+      - 'tests/profiling-large-object-bounded-read.test.mjs'
+      - '.github/workflows/release-governance.yml'
       - '.github/workflows/storage-r2-assurance.yml'
+      - 'package.json'
   pull_request:
     paths:
       - 'lib/storage/**'
@@ -31,7 +34,11 @@ on:
       - 'scripts/verify-r2-*.mjs'
       - 'supabase/migrations/*storage*.sql'
       - 'tests/storage-*.test.mjs'
+      - 'tests/cloudflare-*.test.mjs'
+      - 'tests/profiling-large-object-bounded-read.test.mjs'
+      - '.github/workflows/release-governance.yml'
       - '.github/workflows/storage-r2-assurance.yml'
+      - 'package.json'
   workflow_dispatch:
     inputs:
       operation:
@@ -43,6 +50,7 @@ on:
           - verify
           - production-readiness
           - production-certify
+          - stale-preview-retirement-check
       allow_cors_mutation:
         description: Explicitly allow governed R2 CORS mutation during production certification
         required: false
@@ -53,6 +61,10 @@ on:
         required: false
         default: false
         type: boolean
+      stale_preview_url:
+        description: Historical Vercel preview base URL to verify as retired or authentication hardened
+        required: false
+        type: string
 
 concurrency:
   group: storage-r2-assurance-${{ github.event.pull_request.number || github.ref }}
@@ -77,10 +89,12 @@ jobs:
             node --experimental-strip-types --check "$file"
           done < <(find lib/storage app/api/internal/storage app/api/datasets/source/upload-file -type f -name '*.ts' -print0)
       - name: Run storage contract, negative, adversarial, and cutover guards
-        run: node --test tests/storage-*.test.mjs
+        run: |
+          node --test tests/storage-*.test.mjs
+          node --test tests/cloudflare-*.test.mjs tests/profiling-large-object-bounded-read.test.mjs
 
   live-production-certification:
-    if: github.event_name == 'workflow_dispatch' && inputs.operation != 'verify'
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'production-readiness' || inputs.operation == 'production-certify')
     needs: storage-contract-and-adversarial-guards
     runs-on: ubuntu-latest
     environment: production
@@ -304,3 +318,42 @@ jobs:
               },null,2));
             });
           '
+
+
+  stale-preview-retirement-check:
+    name: stale-preview-retirement-check
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'stale-preview-retirement-check'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      STALE_PREVIEW_URL: ${{ inputs.stale_preview_url }}
+    steps:
+      - name: Require a non-production Vercel preview URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${STALE_PREVIEW_URL:-}" || { echo "::error::stale_preview_url is required"; exit 1; }
+          node - "$STALE_PREVIEW_URL" <<'NODE'
+          const value = process.argv[2]
+          const url = new URL(value)
+          if (url.protocol !== 'https:') process.exit(2)
+          if (!url.hostname.endsWith('.vercel.app')) process.exit(3)
+          if (url.hostname === 'data-quality-ai-platform.vercel.app') process.exit(4)
+          if (url.pathname !== '/' || url.search || url.hash || url.username || url.password || url.port) process.exit(5)
+          NODE
+
+      - name: Verify stale R2 smoke route is retired or authentication hardened
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="${STALE_PREVIEW_URL%/}"
+          for method in GET POST; do
+            code="$(curl --silent --show-error --connect-timeout 10 --max-time 30               --output "/tmp/r2-smoke-${method}.json"               --write-out '%{http_code}'               -X "$method"               "$BASE_URL/api/internal/storage/r2-smoke")"
+            if [ "$code" != "401" ] && [ "$code" != "404" ]; then
+              echo "::error::Historical R2 smoke route still accepts unauthenticated $method requests (HTTP $code)"
+              cat "/tmp/r2-smoke-${method}.json"
+              exit 1
+            fi
+          done
+          echo "Historical R2 smoke preview is retired or rejects unauthenticated access."
