@@ -2,13 +2,14 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const route = await readFile(new URL('../app/api/jobs/worker/route.ts', import.meta.url), 'utf8')
+const workerService = await readFile(new URL('../lib/orchestration/worker-service.ts', import.meta.url), 'utf8')
 const lane = await readFile(new URL('../lib/orchestration/outbox-lane.ts', import.meta.url), 'utf8')
 const outbox = await readFile(new URL('../lib/orchestration/outbox.ts', import.meta.url), 'utf8')
 
-assert.match(route, /eventLaneBlocked \? skippedOutboxLane\(\) : await executeOutboxLane\(eventWorkerId\)/, 'adaptive convergence must stop re-hitting the outbox after transport degradation')
-assert.match(route, /eventLaneBlocked = true/, 'transport degradation must fence further outbox attempts in the same request')
+assert.match(workerService, /eventLaneBlocked \? skippedOutboxLane\(\) : await executeOutboxLane\(eventWorkerId\)/, 'adaptive convergence must stop re-hitting the outbox after transport degradation')
+assert.match(workerService, /eventLaneBlocked = true/, 'transport degradation must fence further outbox attempts in the same request')
 assert.match(route, /eventLaneDegraded: convergence\.eventLaneDegraded/, 'adaptive responses must expose degraded event-lane state')
-assert.match(route, /eventLaneDisposition: eventLane\.disposition/, 'scheduled responses must expose event-lane disposition')
+assert.match(workerService, /eventLaneDisposition: eventLane\.disposition/, 'scheduled responses must expose event-lane disposition')
 assert.match(route, /Worker access denied\./, 'worker bearer authorization must remain fail closed')
 assert.match(route, /status: 403/, 'unauthorized worker calls must remain forbidden')
 assert.match(route, /status: 500/, 'unhandled durable-worker failures must retain the fail-closed envelope')
