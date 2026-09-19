@@ -42,6 +42,10 @@ on:
       - 'scripts/verify-profiling-investigation-replay.mjs'
       - 'scripts/verify-profiling-metric-replay.mjs'
       - 'scripts/verify-profiling-dataset-replay.mjs'
+      - 'scripts/verify-profiling-production-validation.mjs'
+      - 'scripts/test-profiling-production-validation.mjs'
+      - 'scripts/lib/profiling-production-validation.mjs'
+      - 'tests/profiling-production-validation-workflow.test.mjs'
       - '.github/workflows/profiling-native-replay.yml'
 
 permissions:
