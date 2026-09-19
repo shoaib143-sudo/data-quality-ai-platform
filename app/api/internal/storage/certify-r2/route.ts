@@ -97,7 +97,9 @@ export async function GET(request: Request) {
       && source.state === 'READY'
       && source.size_bytes != null
       && Number(source.size_bytes) === Number(target.size_bytes)
-      && (!source.checksum || source.checksum_algorithm !== 'sha256' || source.checksum === target.checksum))
+      && source.checksum_algorithm === 'sha256'
+      && Boolean(source.checksum)
+      && source.checksum === target.checksum)
   }).length
 
   const r2RuntimeConfigured = hasR2RuntimeConfiguration()
