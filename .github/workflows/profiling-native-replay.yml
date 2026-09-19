@@ -19,6 +19,11 @@ on:
       - 'scripts/verify-profiling-investigation-replay.mjs'
       - 'scripts/verify-profiling-metric-replay.mjs'
       - 'scripts/verify-profiling-dataset-replay.mjs'
+      - 'scripts/verify-profiling-production-validation.mjs'
+      - 'scripts/test-profiling-production-validation.mjs'
+      - 'scripts/lib/profiling-production-validation.mjs'
+      - 'tests/profiling-production-validation-workflow.test.mjs'
+      - 'tests/profiling-production-validation-source.test.mjs'
       - '.github/workflows/profiling-native-replay.yml'
   pull_request:
     branches: [main]
@@ -38,10 +43,19 @@ on:
       - 'scripts/verify-profiling-investigation-replay.mjs'
       - 'scripts/verify-profiling-metric-replay.mjs'
       - 'scripts/verify-profiling-dataset-replay.mjs'
+      - 'scripts/verify-profiling-production-validation.mjs'
+      - 'scripts/test-profiling-production-validation.mjs'
+      - 'scripts/lib/profiling-production-validation.mjs'
+      - 'tests/profiling-production-validation-workflow.test.mjs'
+      - 'tests/profiling-production-validation-source.test.mjs'
       - '.github/workflows/profiling-native-replay.yml'
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
@@ -64,3 +78,5 @@ jobs:
         run: node scripts/verify-profiling-metric-replay.mjs
       - name: Verify profiling replay-safe dataset execution
         run: node scripts/verify-profiling-dataset-replay.mjs
+      - name: Verify full profiling production validation contract
+        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs tests/profiling-production-validation-source.test.mjs
