@@ -45,7 +45,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Profiling production validation negative and failure cases
-        run: node --test scripts/test-profiling-production-validation.mjs
+        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs
       - name: Existing profiling lifecycle contract
         run: pnpm run verify:profiling-lifecycle
       - name: Profiling governance insights contract
