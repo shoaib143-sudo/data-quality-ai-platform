@@ -17,9 +17,10 @@ type Props = {
   initialPolicies: Policy[]
   initialProjectId?: string | null
   policyManageProjectIds: string[]
+  classificationReviewProjectIds: string[]
 }
 
-export function ClassificationManager({ projects, datasets, labels, initialClassifications, initialPolicies, initialProjectId, policyManageProjectIds }: Props) {
+export function ClassificationManager({ projects, datasets, labels, initialClassifications, initialPolicies, initialProjectId, policyManageProjectIds, classificationReviewProjectIds }: Props) {
   const resolvedInitial = initialProjectId && projects.some(project => project.id === initialProjectId) ? initialProjectId : ''
   const [classifications, setClassifications] = useState(initialClassifications)
   const [policies, setPolicies] = useState(initialPolicies)
@@ -40,8 +41,13 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
   const visibleLabels = useMemo(() => projectId ? labels.filter(label => label.project_id == null || label.project_id === projectId) : [], [labels, projectId])
   const effectiveLabelId = visibleLabels.some(label => label.id === labelId) ? labelId : visibleLabels[0]?.id ?? ''
   const canManagePolicy = Boolean(projectId && policyManageProjectIds.includes(projectId))
+  const canReviewClassification = Boolean(projectId && classificationReviewProjectIds.includes(projectId))
 
   async function patch(id: string, status: string) {
+    if (!canReviewClassification) {
+      setMessage('Your current project role does not allow classification review.')
+      return
+    }
     setBusy(true)
     setMessage('')
     try {
@@ -125,7 +131,7 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
     <section className="rounded-2xl border bg-white p-5 shadow-sm">
       <label className="block max-w-md text-sm font-semibold text-slate-700">
         Governed project
-        <select value={projectId} onChange={event => { setProjectId(event.target.value); setLabelId(''); setMessage('') }} className="mt-1 w-full rounded-xl border px-3 py-2.5">
+        <select aria-label="Governed project" value={projectId} onChange={event => { setProjectId(event.target.value); setLabelId(''); setMessage('') }} className="mt-1 w-full rounded-xl border px-3 py-2.5">
           <option value="">Choose a governed project</option>
           {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
         </select>
@@ -146,6 +152,7 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
             <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700">{visibleClassifications.filter(item => item.status === 'SUGGESTED').length} pending</span>
           </div>
           <div className="mt-5 space-y-3">
+            {!canReviewClassification && visibleClassifications.some(item => item.status === 'SUGGESTED') ? <p className="rounded-xl border border-dashed bg-slate-50 p-3 text-sm text-slate-600">Classification evidence is visible, but review actions are hidden because <code>classification.review</code> is not granted for this project.</p> : null}
             {visibleClassifications.length ? visibleClassifications.map(classification => (
               <article key={classification.id} className="rounded-2xl border p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -157,7 +164,7 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
                     </div>
                     <p className="mt-1 text-xs text-slate-500">Confidence {classification.confidence != null ? `${Math.round(classification.confidence * 100)}%` : 'N/A'} · source {classification.source}</p>
                   </div>
-                  {classification.status === 'SUGGESTED' ? (
+                  {classification.status === 'SUGGESTED' && canReviewClassification ? (
                     <div className="flex gap-2">
                       <button disabled={busy} onClick={() => void patch(classification.id, 'APPROVED')} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"><Check className="h-3.5 w-3.5" />Approve</button>
                       <button disabled={busy} onClick={() => void patch(classification.id, 'REJECTED')} className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"><X className="h-3.5 w-3.5" />Reject</button>
@@ -174,12 +181,12 @@ export function ClassificationManager({ projects, datasets, labels, initialClass
             <div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-purple-600" /><h2 className="text-xl font-bold">Approve handling policy</h2></div>
             <p className="mt-1 text-sm text-slate-500">This mutation requires explicit policy approval authority for the selected project.</p>
             <div className="mt-5 grid gap-3">
-              <select value={effectiveLabelId} onChange={event => setLabelId(event.target.value)} className="rounded-xl border px-3 py-2.5">
+              <select aria-label="Classification label" value={effectiveLabelId} onChange={event => setLabelId(event.target.value)} className="rounded-xl border px-3 py-2.5">
                 {visibleLabels.map(label => <option key={label.id} value={label.id}>{label.code} · {label.name}</option>)}
               </select>
-              <input value={name} onChange={event => setName(event.target.value)} className="rounded-xl border px-3 py-2.5" />
-              <textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} className="rounded-xl border px-3 py-2.5" />
-              <input type="number" value={retention} onChange={event => setRetention(event.target.value)} className="rounded-xl border px-3 py-2.5" placeholder="Retention days" />
+              <input aria-label="Policy name" value={name} onChange={event => setName(event.target.value)} className="rounded-xl border px-3 py-2.5" />
+              <textarea aria-label="Policy description" value={description} onChange={event => setDescription(event.target.value)} rows={3} className="rounded-xl border px-3 py-2.5" />
+              <input aria-label="Retention days" type="number" value={retention} onChange={event => setRetention(event.target.value)} className="rounded-xl border px-3 py-2.5" placeholder="Retention days" />
               <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={encrypt} onChange={event => setEncrypt(event.target.checked)} />Encryption required</label>
               <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={mask} onChange={event => setMask(event.target.checked)} />Masking required</label>
               <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={approval} onChange={event => setApproval(event.target.checked)} />Access approval required</label>

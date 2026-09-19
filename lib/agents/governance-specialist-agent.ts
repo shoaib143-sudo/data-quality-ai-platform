@@ -5,6 +5,7 @@ import {
   type GovernanceReadAgentKey,
 } from '@/lib/agents/governance-read-agent'
 import { getGovernedAgentPolicy } from '@/lib/agents/governed-agent-registry'
+import { buildInvestigatorEvidenceAnalysis } from '@/lib/agents/investigator-evidence-discrimination'
 import { authorizedDatasetScopeForProject } from '@/lib/governance/resource-authorization'
 import { assertGovernedInvestigationGrounding, buildGovernedInvestigation } from '@/lib/agents/governed-investigation'
 import {
@@ -196,7 +197,6 @@ async function loadContext(admin: ReturnType<typeof createAdminClient>, projectI
   const scopedLineageAssets = fullProjectVisibility
     ? (lineageAssetsResult.data ?? [])
     : (lineageAssetsResult.data ?? []).filter(row => row.dataset_id && allowedDatasetIds.has(String(row.dataset_id)))
-  const allowedLineageAssetIds = new Set(scopedLineageAssets.map(row => String(row.id)))
   // Cross-resource lineage can reveal the opposite side of a transformation.
   // Until lineage endpoints carry resource-aware authorization metadata, partial
   // project access exposes only lineage assets directly attached to allowed datasets.
@@ -377,29 +377,26 @@ function roleEvidence(agentKey: GovernanceReadAgentKey, ctx: SpecialistContext) 
   }
 
   if (agentKey === 'investigator_agent') {
-    const usefulRemediation = ctx.remediationKnowledge.filter((row) => String(row.outcome_status).toUpperCase() === 'WORKED')
-    const failedRemediation = ctx.remediationKnowledge.filter((row) => String(row.outcome_status).toUpperCase() === 'FAILED')
+    const analysis = buildInvestigatorEvidenceAnalysis(ctx)
     return {
-      focus: 'root_cause_hypothesis_and_prior_case_reuse',
+      focus: 'dataset_scoped_root_cause_hypothesis_and_prior_case_reuse',
       observations: [
         `${openIncidents.length} open incident(s), ${openIssues.length} open issue(s), ${ctx.anomalies.length} anomaly signal(s), and ${failedRules.length} failed rule result(s) are available for investigation.`,
         `${ctx.lineageTransformations.length} transformation(s), ${ctx.lineageColumnMappings.length} field-level mapping(s), and ${ctx.lineageTransformationEdges.length} transformation edge(s) are available for bounded root-cause tracing.`,
-        `${usefulRemediation.length} prior remediation case(s) are marked WORKED and ${failedRemediation.length} are marked FAILED.`,
-        `${failedProfiles.length} failed and ${partialProfiles.length} partial profile run(s) appear in the bounded history.`,
+        `${analysis.datasets.length} dataset evidence bucket(s) were correlated without cross-dataset hypothesis contamination.`,
+        `${analysis.unresolved.length} incident-bearing dataset(s) remain unresolved because the bounded window lacks discriminating same-dataset signals.`,
       ],
-      hypotheses: [
-        ...(freshnessAlerts.length ? [{ confidence: 0.75, hypothesis: 'A freshness/SLA breach may be contributing to downstream quality risk.', evidence: freshnessAlerts.slice(0, 10).map((row) => row.id) }] : []),
-        ...(failedRules.length ? [{ confidence: 0.8, hypothesis: 'One or more governed quality controls are currently violated.', evidence: failedRules.slice(0, 20).map((row) => row.id) }] : []),
-        ...(ctx.anomalies.length ? [{ confidence: 0.7, hypothesis: 'Profile metric drift may explain a change in observed data behavior.', evidence: ctx.anomalies.slice(0, 20).map((row) => row.id) }] : []),
-        ...(ctx.lineageColumnMappings.length ? [{ confidence: 0.65, hypothesis: 'A transformation or mapped source field may contribute to the observed downstream behavior; verify the persisted expressions before attribution.', evidence: ctx.lineageColumnMappings.slice(0, 20).map((row) => row.id) }] : []),
-      ],
-      recommendations: usefulRemediation.slice(0, 10).map((row) => ({ priority: 'MEDIUM', action: row.reusable_guidance || row.remediation_action, evidence: [row.id], priorOutcome: row.outcome_status, confidence: row.confidence })),
+      hypotheses: analysis.hypotheses,
+      recommendations: analysis.recommendations,
+      unresolved: analysis.unresolved,
       evidence: {
+        datasetEvidence: analysis.datasets,
         incidents: ctx.incidents.slice(0, 30),
         issues: ctx.issues.slice(0, 30),
         alerts: freshnessAlerts.slice(0, 50),
         anomalies: ctx.anomalies.slice(0, 50),
         failedRules: failedRules.slice(0, 50),
+        profileRuns: ctx.profileRuns.slice(0, 50),
         remediationKnowledge: ctx.remediationKnowledge.slice(0, 30),
         lineageAssets: ctx.lineageAssets.slice(0, 100),
         lineageTransformations: ctx.lineageTransformations.slice(0, 50),
@@ -690,6 +687,7 @@ export async function executeGovernanceSpecialistAgent(input: {
         'Freshness currently uses completed profiling observation time as a proxy until source-native watermark telemetry is available.',
         'Shared investigation provenance is project scoped and unsupported claim evidence fails the run before success is persisted.',
         'Resource evidence is restricted to datasets the initiating user is currently authorized to view; project-wide knowledge and graph evidence require full project dataset visibility.',
+        ...(agentKey === 'investigator_agent' ? ['Investigator hypothesis confidence is intentionally not expressed as a calibrated probability; LOW/MEDIUM/HIGH evidence strength reflects deterministic same-dataset evidence linkage.'] : []),
       ],
     }
 

@@ -271,6 +271,13 @@ class ObservableReasoningProvider implements ReasoningProvider {
             canonical_output_cost: costEvidence?.outputCost ?? null,
             canonical_total_cost: costEvidence?.totalCost ?? null,
             provider_request_id: result.providerRequestId ?? null, total_tokens: result.usage?.totalTokens ?? null,
+            resilience_requested_provider: result.resilience?.requestedProvider ?? null,
+            resilience_requested_model: result.resilience?.requestedModel ?? null,
+            resilience_actual_provider: result.resilience?.actualProvider ?? result.provider,
+            resilience_actual_model: result.resilience?.actualModel ?? result.model,
+            resilience_fallback_applied: result.resilience?.fallbackApplied ?? false,
+            resilience_fallback_reason: result.resilience?.fallbackReason ?? null,
+            resilience_attempts: result.resilience?.attempts ?? 1,
           },
         })
       } catch {

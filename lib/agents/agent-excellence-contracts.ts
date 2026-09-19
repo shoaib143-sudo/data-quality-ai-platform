@@ -2,7 +2,7 @@ import {
   GOVERNED_AGENT_KEYS,
   getGovernedAgentPolicy,
   type GovernedAgentKey,
-} from './governed-agent-registry'
+} from './governed-agent-registry.ts'
 
 export type AgentRecursionMode =
   | 'ANALYTICAL'

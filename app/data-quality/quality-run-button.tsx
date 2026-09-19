@@ -85,6 +85,6 @@ export function QualityRunButton({ datasetVersionId, profileRunId }: { datasetVe
       {running || availability === 'checking' ? <Loader2 className="h-4 w-4 animate-spin" /> : availability === 'ready' ? <PlayCircle className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
       {label}
     </button>
-    {message ? <span className="max-w-sm text-xs font-medium text-rose-300">{message}</span> : null}
+    {message ? <span className="max-w-sm text-xs font-medium text-rose-300" role="status" aria-live="polite">{message}</span> : null}
   </div>
 }

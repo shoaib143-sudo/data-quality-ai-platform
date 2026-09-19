@@ -3,7 +3,10 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const { GOVERNED_AGENT_KEYS, getGovernedAgentPolicy } = await import('../lib/agents/governed-agent-registry.ts')
+const { getAgentClassification, validateAgentClassifications } = await import('../lib/agents/agent-classification-registry.ts')
 const source = fs.readFileSync('lib/agents/agent-classification-registry.ts', 'utf8')
+
+validateAgentClassifications()
 
 for (const agentKey of GOVERNED_AGENT_KEYS) {
   assert.ok(source.includes(`${agentKey}: {`) || source.includes(`agentKey: '${agentKey}'`), `missing ADR-007 classification for ${agentKey}`)
@@ -48,4 +51,11 @@ assert.ok(source.includes("classification.autonomyLevel.current === 'FULL_AUTONO
 assert.equal(source.includes("current: 'GOAL_BASED'"), false, 'do not claim goal-based architecture without implemented planning evidence')
 assert.equal(source.includes("current: 'ONLINE_LEARNING'"), false, 'do not claim online learning without validated adaptive behavior')
 
-console.log('ADR-007 canonical classifications, mixed-risk boundary, conservative current state, and read-only authority alignment verified.')
+const investigator = getAgentClassification('investigator_agent')
+assert.equal(investigator.determinismModel.current, 'DETERMINISTIC')
+assert.equal(investigator.reasoningArchitecture.current, 'REACTIVE')
+assert.equal(investigator.autonomyLevel.current, 'READ_ONLY')
+assert.ok(investigator.evidenceBasis.includes('dataset-scoped investigator evidence discrimination'))
+assert.ok(investigator.evidenceBasis.includes('same-dataset incident/profile/DQ/lineage correlation'))
+
+console.log('ADR-007 canonical classifications, mixed-risk boundary, conservative current state, and investigator runtime evidence alignment verified.')
