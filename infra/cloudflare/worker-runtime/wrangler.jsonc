@@ -17,6 +17,10 @@
         "regions": [
           "APAC"
         ]
+      },
+      "instance_type": "standard-1",
+      "ssh": {
+        "enabled": false
       }
     }
   ],

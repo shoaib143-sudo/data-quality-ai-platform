@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createObjectStorage, defaultStorageProvider } from '@/lib/storage/factory'
+import { bulkStorageProvider, createObjectStorage, defaultStorageProvider } from '@/lib/storage/factory'
 import type { MultipartObjectStorage } from '@/lib/storage/contracts'
 
 const SUPABASE_DATASET_BUCKET = 'dataset-files'
@@ -94,7 +94,8 @@ export async function POST(request: Request) {
 
     await authorizeProject(user.id, projectId, 'source.manage')
 
-    const provider = defaultStorageProvider()
+    const defaultProvider = defaultStorageProvider()
+    const provider = size > R2_MULTIPART_THRESHOLD_BYTES ? bulkStorageProvider() : defaultProvider
     const maxBytes = boundedMaxBytes(provider)
     if (size <= 0) return NextResponse.json({ error: 'Uploaded file is empty.' }, { status: 400 })
     if (size > maxBytes) {
