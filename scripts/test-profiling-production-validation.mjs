@@ -119,12 +119,12 @@ test('fails when active source types exist but no completed FILE profile is cert
 test('surfaces a newer failed attempt on an active dataset without invalidating older certified output', () => {
   const result = evaluateProfilingProductionSnapshot(validSnapshot({
     latestAttempts: [
-      { id: 'run-3', datasetVersionId: 'dataset-file', status: 'FAILED', activeSource: true },
+      { id: 'run-3', datasetVersionId: 'dataset-file', status: 'FAILED', errorCode: 'ORPHANED_RUN_RECOVERED', activeSource: true },
       { id: 'run-2', datasetVersionId: 'dataset-jdbc', status: 'COMPLETED', activeSource: true },
     ],
   }))
   assert.equal(result.valid, true)
-  assert.ok(result.warnings.includes('LATEST_ATTEMPT_dataset-file_FAILED'))
+  assert.ok(result.warnings.includes('LATEST_ATTEMPT_dataset-file_FAILED_ORPHANED_RUN_RECOVERED'))
   assert.equal(result.summary.activeDatasetsWithNonCompletedLatestAttempt, 1)
 })
 
