@@ -1,10 +1,40 @@
 # Supabase Advisor and Index Review — Runtime v2 Phase 0
 
 **Date:** 2026-09-15  
+**Refreshed:** 2026-09-19  
 **Project:** `tvjnavjxuehpesxcfvrx`  
 **Disposition:** evidence-based review; no blind warning cleanup
 
 ## Executive conclusion
+
+## 2026-09-19 live refresh
+
+A fresh production-project advisor review was executed against Supabase project `tvjnavjxuehpesxcfvrx`.
+
+### Security snapshot
+
+- `rls_enabled_no_policy`: **7 INFO findings**.
+- `authenticated_security_definer_function_executable`: **5 WARN findings**.
+- leaked-password protection: **1 WARN** and remains an external Supabase Auth configuration item.
+- The seven current RLS-with-no-policy tables are `agent.governed_handoffs`, `agent.governed_run_gates`, `governance.agent_approval_authority_audit`, `governance.governance_orchestrator_runs`, `governance.governance_outcome_reports`, `governance.orchestrator_autonomy_policies`, and `orchestration.governance_recovery_events`.
+- Direct privilege verification confirmed that `anon` and `authenticated` have no SELECT/INSERT/UPDATE/DELETE access to those seven tables while `service_role` retains the required control-plane read access. They remain classified as intentional service/control-plane isolation, not candidates for permissive client policies.
+- The five authenticated SECURITY DEFINER findings remain the governed runtime interrupt plus the four app-private membership/admin helper functions already documented below. No new function class appeared in this refresh.
+
+Remediation references:
+- https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy
+- https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable
+- https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+
+### Performance/index snapshot
+
+- `unindexed_foreign_keys`: **44 INFO findings** in the current advisor output.
+- `pg_stat_user_indexes` currently reports **473 indexes with zero observed scans**.
+- A catalog-level exact duplicate comparison returned **0 exact duplicate index pairs**.
+- No index deletion is authorized from these counts alone. The zero-scan set includes primary/unique indexes and recently introduced runtime/governance structures, so removal requires representative workload evidence and query-plan validation.
+- The increased FK-advisor count reflects newly added Runtime v2 tables and relationships. These remain `BENCHMARK_LATER` candidates unless Phase 6 load evidence demonstrates measurable join/delete/update contention.
+
+The reproducible read-only evidence queries are checked in at `scripts/review-runtime-v2-database-advisors.sql`.
+
 
 The current Supabase advisor output contains one small database-hardening defect suitable for immediate remediation, several intentional service/control-plane patterns, one external Auth configuration item, and performance advisories that do not justify destructive index changes at current scale.
 
