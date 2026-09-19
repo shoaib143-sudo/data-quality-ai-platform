@@ -20,6 +20,7 @@ function validRun(overrides = {}) {
     scorePresent: true,
     investigationPresent: true,
     governanceInsightPresent: true,
+    sourceType: 'FILE',
     ...overrides,
   }
 }
@@ -29,7 +30,7 @@ function validSnapshot(overrides = {}) {
     profileRuns: 3,
     completedRuns: 2,
     activeSourceTypes: { FILE: 1, JDBC: 1 },
-    latestRuns: [validRun()],
+    latestRuns: [validRun(), validRun({ id: 'run-2', sourceType: 'JDBC' })],
     ...overrides,
   }
 }
@@ -40,7 +41,7 @@ test('accepts a complete production profiling snapshot', () => {
 
 test('allows a deterministic no-findings outcome', () => {
   const result = evaluateProfilingProductionSnapshot(validSnapshot({
-    latestRuns: [validRun({ findings: 0 })],
+    latestRuns: [validRun({ findings: 0 }), validRun({ id: 'run-2', sourceType: 'JDBC' })],
   }))
   assert.equal(result.valid, true)
   assert.deepEqual(result.warnings, ['RUN_run-1_NO_FINDINGS'])
@@ -73,7 +74,7 @@ test('fails on a broken persisted metric contract', () => {
         score_consistent: true,
         completed_facts_present: true,
       },
-    })],
+    }), validRun({ id: 'run-2', sourceType: 'JDBC' })],
   }))
   assert.equal(result.valid, false)
   assert.ok(result.failures.some((failure) => failure.includes('METRIC_CONTRACT_INVALID')))
@@ -85,10 +86,27 @@ test('fails on missing score, investigation, or governance projection', () => {
       scorePresent: false,
       investigationPresent: false,
       governanceInsightPresent: false,
-    })],
+    }), validRun({ id: 'run-2', sourceType: 'JDBC' })],
   }))
   assert.equal(result.valid, false)
   assert.ok(result.failures.includes('RUN_run-1_NO_QUALITY_SCORE'))
   assert.ok(result.failures.includes('RUN_run-1_NO_CANONICAL_INVESTIGATION'))
   assert.ok(result.failures.includes('RUN_run-1_NO_GOVERNANCE_INSIGHT'))
+})
+
+
+test('fails when active source types exist but no completed JDBC profile is certified', () => {
+  const result = evaluateProfilingProductionSnapshot(validSnapshot({
+    latestRuns: [validRun({ sourceType: 'FILE' })],
+  }))
+  assert.equal(result.valid, false)
+  assert.ok(result.failures.includes('NO_COMPLETED_JDBC_PROFILE'))
+})
+
+test('fails when active source types exist but no completed FILE profile is certified', () => {
+  const result = evaluateProfilingProductionSnapshot(validSnapshot({
+    latestRuns: [validRun({ sourceType: 'JDBC' })],
+  }))
+  assert.equal(result.valid, false)
+  assert.ok(result.failures.includes('NO_COMPLETED_FILE_PROFILE'))
 })
