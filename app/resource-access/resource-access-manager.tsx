@@ -41,6 +41,15 @@ export function ResourceAccessManager() {
   const [startsAt, setStartsAt] = useState('')
   const [endsAt, setEndsAt] = useState('')
   const [reason, setReason] = useState('')
+  const [preview, setPreview] = useState<null | {
+    currentEffectiveAccess: 'ALLOWED' | 'DENIED'
+    proposedEffectiveAccess: 'ALLOWED' | 'DENIED'
+    proposedEffect: 'ALLOW' | 'DENY'
+    datasetOwner: boolean
+    replacementRequired: boolean
+    existingEffect: string | null
+    warning: string
+  }>(null)
 
   const projectNames = useMemo(() => new Map(workspace.projects.map(project => [project.id, project.name])), [workspace.projects])
   const datasetNames = useMemo(() => new Map(workspace.datasets.map(dataset => [dataset.id, dataset.name])), [workspace.datasets])
@@ -64,6 +73,23 @@ export function ResourceAccessManager() {
   useEffect(() => {
     if (datasetId && !filteredDatasets.some(dataset => dataset.id === datasetId)) setDatasetId('')
   }, [projectId, datasetId, filteredDatasets])
+
+  useEffect(() => {
+    if (!projectId || !datasetId || !targetUserId) { setPreview(null); return }
+    let active = true
+    fetch('/api/resource-access/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, datasetId, targetUserId, effect }),
+    })
+      .then(async response => {
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload.error ?? 'Unable to preview resource access.')
+        if (active) setPreview(payload.preview ?? null)
+      })
+      .catch(error => { if (active) { setPreview(null); setStatus(error instanceof Error ? error.message : 'Unable to preview resource access.') } })
+    return () => { active = false }
+  }, [projectId, datasetId, targetUserId, effect])
 
   async function createGrant() {
     setSaving(true)
@@ -124,7 +150,18 @@ export function ResourceAccessManager() {
           <label className="space-y-2 text-sm"><span className="font-semibold">Ends</span><input type="datetime-local" value={endsAt} onChange={event => setEndsAt(event.target.value)} className="w-full rounded-lg border px-3 py-2" /><span className="block text-xs text-slate-500">Blank means no scheduled expiry.</span></label>
         </div>
         <label className="mt-4 block space-y-2 text-sm"><span className="font-semibold">Reason</span><textarea rows={3} value={reason} onChange={event => setReason(event.target.value)} className="w-full rounded-lg border px-3 py-2" /></label>
-        <button type="button" onClick={() => void createGrant()} disabled={saving || !projectId || !datasetId || !targetUserId || !reason.trim()} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? 'Saving…' : `Create ${effect} rule`}</button>
+        {preview ? <div className="mt-4 rounded-xl border bg-slate-50 p-4 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold">Effective-access preview</span>
+            <span className="rounded-full border px-2 py-0.5 text-xs">Current: {preview.currentEffectiveAccess}</span>
+            <span className="rounded-full border px-2 py-0.5 text-xs">Proposed: {preview.proposedEffectiveAccess}</span>
+            {preview.datasetOwner ? <span className="rounded-full border px-2 py-0.5 text-xs">Dataset owner</span> : null}
+          </div>
+          <p className="mt-2 text-slate-600">{preview.warning}</p>
+          {preview.replacementRequired ? <p className="mt-2 font-semibold text-amber-700">Revoke the existing {preview.existingEffect} rule before creating this rule.</p> : null}
+          <p className="mt-2 text-xs text-slate-500">Preview is advisory. Server-side authorization and current ACL state are revalidated when the rule is committed.</p>
+        </div> : null}
+        <button type="button" onClick={() => void createGrant()} disabled={saving || !projectId || !datasetId || !targetUserId || !reason.trim() || preview?.replacementRequired === true} className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving ? 'Saving…' : `Create ${effect} rule`}</button>
       </section>
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
