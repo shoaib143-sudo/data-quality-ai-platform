@@ -6,7 +6,7 @@ const route = fs.readFileSync(new URL('../app/api/internal/storage/certify-r2/ro
 const cors = fs.readFileSync(new URL('../lib/storage/r2-cors.ts', import.meta.url), 'utf8')
 
 test('R2 certification is machine-authenticated and non-destructive', () => {
-  assert.match(route, /requireInternalBearer\(request\)/)
+  assert.match(route, /await requireInternalAutomation\(request\)/)
   assert.match(route, /destructiveActions: 0/)
   assert.doesNotMatch(route, /\.update\(/)
   assert.doesNotMatch(route, /\.delete\(/)

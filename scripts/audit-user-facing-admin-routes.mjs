@@ -22,6 +22,7 @@ const specializedMachineAuthMarkers = [
   'scimToken',
   'requireScimDirectory(',
   'requireInternalBearer(',
+  'requireInternalAutomation(',
   'DATA_PLANE',
   'dataPlaneToken',
   'Bearer ',
@@ -45,9 +46,13 @@ const approvedPrivilegedExceptions = new Map([
     classification: 'INTERNAL_MACHINE_AUTH',
     requiredMarkers: ['requireInternalBearer('],
   }],
+  ['app/api/internal/storage/configure-r2-cors/route.ts', {
+    classification: 'INTERNAL_MACHINE_AUTH',
+    requiredMarkers: ['requireInternalAutomation('],
+  }],
   ['app/api/internal/storage/certify-r2/route.ts', {
     classification: 'INTERNAL_MACHINE_AUTH',
-    requiredMarkers: ['requireInternalBearer('],
+    requiredMarkers: ['requireInternalAutomation('],
   }],
   ['app/api/internal/storage/reconcile/route.ts', {
     classification: 'INTERNAL_MACHINE_AUTH',
@@ -59,11 +64,11 @@ const approvedPrivilegedExceptions = new Map([
   }],
   ['app/api/internal/storage/migrate-to-r2/route.ts', {
     classification: 'INTERNAL_MACHINE_AUTH',
-    requiredMarkers: ['requireInternalBearer('],
+    requiredMarkers: ['requireInternalAutomation('],
   }],
   ['app/api/internal/storage/reference-cutover/route.ts', {
     classification: 'INTERNAL_MACHINE_AUTH',
-    requiredMarkers: ['requireInternalBearer('],
+    requiredMarkers: ['requireInternalAutomation('],
   }],
 ])
 
