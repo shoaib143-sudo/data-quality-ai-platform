@@ -30,15 +30,15 @@ A fresh production-project advisor review was executed against Supabase project 
 
 The reproducible read-only evidence queries are checked in at `scripts/review-runtime-v2-database-advisors.sql`.
 
-The current Supabase advisor output contains one small database-hardening defect suitable for immediate remediation, several intentional service/control-plane patterns, one external Auth configuration item, and performance advisories that do not justify destructive index changes at current scale.
+The current Supabase advisor output contains intentional service/control-plane patterns, one external Auth configuration item, and performance advisories that do not justify destructive index changes at current scale. The earlier `governance.agent_risk_rank(text)` mutable-search-path finding has already been remediated by the forward-only hardening migration and is absent from the 2026-09-19 live security snapshot.
 
 ## Security advisor
 
-### 1. RLS enabled with no policies — 11 INFO findings
+### 1. RLS enabled with no policies — 7 INFO findings
 
-Affected tables include the runtime manifest, release-assurance evidence, Agent Policy authority/decision/delegation/outbox/request tables, conversation overrides, AI red-team evidence, project policy context, and resource ACL grants.
+Affected tables are the seven Runtime v2 service/control-plane tables listed in the live refresh above.
 
-Direct privilege verification showed for all 11 tables:
+Direct privilege verification showed for all seven tables:
 
 - `anon`: no SELECT privilege;
 - `authenticated`: no SELECT/INSERT/UPDATE/DELETE privileges;
@@ -49,12 +49,12 @@ Direct privilege verification showed for all 11 tables:
 
 Remediation reference: https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy
 
-### 2. `governance.agent_risk_rank` mutable search path — 1 WARN
+### 2. `governance.agent_risk_rank` mutable search path — resolved historical finding
 
-The function is a simple immutable risk-to-rank mapping and has no authenticated/anon EXECUTE privilege, but it does not set an explicit `search_path`.
+The function is a simple immutable risk-to-rank mapping and has no authenticated/anon EXECUTE privilege. The forward-only migration `20260915013000_harden_agent_risk_rank_search_path.sql` set an explicit empty `search_path`.
 
-**Classification:** genuine low-risk hardening gap.  
-**Action:** `BUILD_NOW`. Add `SET search_path TO ''` through a forward-only migration and re-run advisor checks.
+**Classification:** remediated.  
+**Action:** `DONE`. Preserve the hardening and keep it covered by advisor regression checks.
 
 Remediation reference: https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable
 
@@ -90,14 +90,14 @@ Remediation reference: https://supabase.com/docs/guides/auth/password-security#p
 
 ## Performance advisor
 
-### 1. Unindexed foreign keys — 26 INFO findings
+### 1. Unindexed foreign keys — 44 INFO findings
 
 The findings span runtime/checkpoint/interrupt/replay/tool-invocation tables, Agent Policy governance tables, and recovery records.
 
 Current relation-size inspection shows the affected Runtime v2/control-plane tables are very small (largest inspected relation approximately 144 KiB; most are tens of KiB). This phase has no evidence of FK-driven latency or delete/update contention.
 
 **Classification:** optimization candidates, not current defects.  
-**Action:** `BENCHMARK_LATER`. Reassess in Phase 6 load testing using real join/delete/update paths and add indexes where measured plans justify them. Do not create 26 indexes merely because a linter can enumerate missing FK coverage.
+**Action:** `BENCHMARK_LATER`. Reassess in Phase 6 load testing using real join/delete/update paths and add indexes where measured plans justify them. Do not create 44 indexes merely because a linter can enumerate missing FK coverage.
 
 Remediation reference: https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys
 
@@ -113,7 +113,7 @@ Affected tables are test/validation-oriented:
 
 Remediation reference: https://supabase.com/docs/guides/database/database-linter?lint=0004_no_primary_key
 
-### 3. Unused indexes — 227 INFO findings
+### 3. Unused indexes — 235 INFO findings
 
 The database contains many recently introduced governance/catalog/runtime structures. An index showing zero observed scans does not establish redundancy, especially before meaningful production workload has exercised new paths.
 
@@ -124,11 +124,9 @@ A catalog-level exact-duplicate check comparing schema, table, uniqueness/primar
 
 Remediation reference: https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index
 
-## Immediate remediation selected
+## Immediate remediation status
 
-Only the following database change is justified now from the current advisor evidence:
-
-1. Harden `governance.agent_risk_rank(text)` with an explicit empty `search_path`.
+The evidence-backed `governance.agent_risk_rank(text)` search-path hardening is already complete. No additional database mutation is justified solely from the current advisor output.
 
 The following are explicitly not being changed merely to make advisor counts smaller:
 
