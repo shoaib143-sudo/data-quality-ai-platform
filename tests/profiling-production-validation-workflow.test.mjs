@@ -23,6 +23,10 @@ test('pull requests certify lifecycle, replay, governance insights, and TypeScri
     'verify-profiling-native-replay.mjs',
     'verify-profiling-metric-replay.mjs',
     'verify-profiling-dataset-replay.mjs',
+    'test-profiling-request-input.mjs',
+    'verify-profiling-scale-certification.mjs',
+    'test-profiling-scale-certification.mjs',
+    'verify-native-supervisor-tier2-profiling.mjs',
     'pnpm exec tsc --noEmit',
   ]) {
     assert.ok(workflow.includes(marker), `missing workflow certification marker: ${marker}`)
