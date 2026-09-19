@@ -7,7 +7,7 @@ const workflow = await readFile(workflowPath, 'utf8')
 const certification = workflow.slice(workflow.indexOf('  live-production-certification:'))
 
 test('R2 production preparation is manual-only and production gated', () => {
-  assert.match(certification, /if: github\.event_name == 'workflow_dispatch'/)
+  assert.match(certification, /if: github\.event_name == 'workflow_dispatch' && inputs\.operation != 'verify'/)
   assert.match(certification, /environment: production/)
   assert.doesNotMatch(certification, /pull_request_target|schedule:/)
 })
@@ -55,4 +55,23 @@ test('R2 production preparation uses GitHub OIDC instead of copied production se
   assert.match(certification, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/)
   assert.match(certification, /Authorization: Bearer \$OIDC_TOKEN/)
   assert.doesNotMatch(certification, /secrets\.CRON_SECRET|secrets\.R2_CERTIFICATION_APP_URL/)
+})
+
+
+test('R2 production mutations are separately opt-in and readiness mode is read-only by default', () => {
+  assert.match(workflow, /production-readiness/)
+  assert.match(workflow, /production-certify/)
+  assert.match(workflow, /allow_cors_mutation/)
+  assert.match(workflow, /allow_r2_copy/)
+  assert.match(certification, /ALLOW_CORS_MUTATION/)
+  assert.match(certification, /allow_cors_mutation == true/)
+  assert.match(certification, /if: inputs\.operation == 'production-certify' && inputs\.allow_r2_copy == true/)
+  assert.match(certification, /Re-run production-certify with allow_cors_mutation=true/)
+})
+
+test('R2 production preparation verifies rollback readiness without mutating references', () => {
+  assert.match(certification, /"mode":"dry-run-rollback"/)
+  assert.match(certification, /result\.mode !== "dry-run-rollback"/)
+  assert.match(certification, /sourceObjectsDeleted \?\? 0/)
+  assert.match(certification, /targetObjectsDeleted \?\? 0/)
 })
