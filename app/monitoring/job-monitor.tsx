@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { JobRunActions } from './job-run-actions'
 import {
   BrainCircuit,
   ChevronRight,
@@ -581,5 +582,7 @@ export function JobMonitor({
       </div>
 
     </div>
+
+    <JobRunActions runId={selectedRunId} onCancelled={() => void refresh()} />
   </section>
 }
