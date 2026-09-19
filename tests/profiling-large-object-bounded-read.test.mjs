@@ -22,6 +22,7 @@ test('large streamable sources use bounded byte-range sampling instead of full b
   assert.match(adapter, /FILE_RANGE_SAMPLE_BYTES/)
   assert.match(adapter, /headers\.range = `bytes=0-\$\{rangeSampleBytes - 1\}`/)
   assert.match(adapter, /response\.status !== 206/)
+  assert.match(adapter, /await response\.body\?\.cancel\(\)\.catch/)
   assert.match(adapter, /Large FILE source did not honor the bounded byte-range request/)
   assert.match(adapter, /content_hash_authority:prefixSampled\?'SOURCE_PREFIX_SHA256':'SOURCE_BYTES_SHA256'/)
   assert.match(adapter, /source_observation_scope:prefixSampled\?'BOUNDED_PREFIX_SAMPLE':'FULL_OBJECT_BYTES'/)
