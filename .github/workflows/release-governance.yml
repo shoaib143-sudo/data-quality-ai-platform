@@ -13,6 +13,7 @@ on:
         options:
           - verify
           - cloudflare-canary-deploy
+          - cloudflare-worker-deploy
       commit_sha:
         description: Exact 40-character Git commit SHA already validated by GitHub CI
         required: false
@@ -129,11 +130,17 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          DATANEXUS_CLOUDFLARE_CANARY_URL: ${{ vars.DATANEXUS_CLOUDFLARE_CANARY_URL }}
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          test -n "$DATANEXUS_CLOUDFLARE_CANARY_URL"
           BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           RELEASE_ID="github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           npx wrangler@4.131.1 deploy --config infra/cloudflare/runtime/wrangler.jsonc \
@@ -141,4 +148,127 @@ jobs:
             --var "DATANEXUS_PLATFORM:cloudflare" \
             --var "DATANEXUS_COMMIT_SHA:$EXACT_SHA" \
             --var "DATANEXUS_RELEASE_ID:$RELEASE_ID" \
+            --var "DATANEXUS_BUILD_TIMESTAMP:$BUILD_TIMESTAMP" \
+            --var "NEXT_PUBLIC_SUPABASE_URL:$NEXT_PUBLIC_SUPABASE_URL" \
+            --var "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+
+      - name: Verify deployed canary exact SHA and fail-closed mutation boundary
+        env:
+          DATANEXUS_CLOUDFLARE_CANARY_URL: ${{ vars.DATANEXUS_CLOUDFLARE_CANARY_URL }}
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          BASE_URL="${DATANEXUS_CLOUDFLARE_CANARY_URL%/}"
+          live_code="$(curl --silent --show-error --output /tmp/canary-live.json --write-out '%{http_code}' "$BASE_URL/api/health/live")"
+          test "$live_code" = "200"
+          build_code="$(curl --silent --show-error --output /tmp/canary-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
+          test "$build_code" = "200"
+          node - "$EXACT_SHA" </tmp/canary-build.json <<'NODE'
+          const fs = require('node:fs')
+          const expected = process.argv[2]
+          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
+          NODE
+          mutation_code="$(curl --silent --show-error --output /tmp/canary-mutation.json --write-out '%{http_code}' -X POST "$BASE_URL/api/internal/governance/approval-automation")"
+          test "$mutation_code" = "403"
+
+
+  deploy-cloudflare-worker:
+    name: cloudflare-worker-deploy
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'cloudflare-worker-deploy' && inputs.confirm_paid_activation == true
+    needs: release-governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: cloudflare-worker
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact certified SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 1
+
+      - name: Verify immutable worker release identity
+        id: identity
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REQUESTED_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          HEAD_SHA="$(git rev-parse HEAD)"
+          test "$HEAD_SHA" = "$REQUESTED_SHA"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Revalidate worker runtime contracts
+        run: |
+          set -euo pipefail
+          pnpm run verify:provider-neutral-runtime
+          pnpm run verify:worker-runtime
+          pnpm exec tsc --noEmit
+          pnpm build
+
+      - name: Build worker container locally
+        env:
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: docker build --tag "datanexus-worker:$EXACT_SHA" .
+
+      - name: Install pinned Cloudflare deployment tooling
+        run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.131.1 @cloudflare/containers@0.3.7
+
+      - name: Deploy disabled exact-SHA worker runtime
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
+          BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          RELEASE_ID="github-worker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          npx wrangler@4.131.1 deploy --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --var "DATANEXUS_ENV:canary" \
+            --var "DATANEXUS_PLATFORM:cloudflare" \
+            --var "DATANEXUS_WORKER_EXECUTION_ENABLED:false" \
+            --var "DATANEXUS_COMMIT_SHA:$EXACT_SHA" \
+            --var "DATANEXUS_RELEASE_ID:$RELEASE_ID" \
             --var "DATANEXUS_BUILD_TIMESTAMP:$BUILD_TIMESTAMP"
+
+
+      - name: Verify deployed worker exact SHA and disabled execution boundary
+        env:
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          BASE_URL="${DATANEXUS_CLOUDFLARE_WORKER_URL%/}"
+          live_code="$(curl --silent --show-error --output /tmp/worker-live.json --write-out '%{http_code}' "$BASE_URL/api/health/live")"
+          test "$live_code" = "200"
+          build_code="$(curl --silent --show-error --output /tmp/worker-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
+          test "$build_code" = "200"
+          node - "$EXACT_SHA" </tmp/worker-build.json <<'NODE'
+          const fs = require('node:fs')
+          const expected = process.argv[2]
+          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
+          NODE
+          disabled_code="$(curl --silent --show-error --output /tmp/worker-disabled.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"mode":"ADAPTIVE_DISPATCH"}' "$BASE_URL/api/jobs/worker")"
+          test "$disabled_code" = "503"
