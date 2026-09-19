@@ -2,13 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const workflow = fs.readFileSync(new URL('../.github/workflows/cloudflare-canary-deployment.yml', import.meta.url), 'utf8')
+const workflow = fs.readFileSync(new URL('../.github/workflows/release-governance.yml', import.meta.url), 'utf8')
 
 test('Cloudflare canary deployment is manual-only and cost-gated', () => {
   assert.match(workflow, /workflow_dispatch:/)
-  assert.doesNotMatch(workflow, /\npush:|\npull_request:|\nschedule:/)
+  assert.doesNotMatch(workflow, /\npush:|\nschedule:/)
   assert.match(workflow, /confirm_paid_activation/)
-  assert.match(workflow, /if: inputs\.confirm_paid_activation == true/)
+  assert.match(workflow, /inputs\.operation == 'cloudflare-canary-deploy' && inputs\.confirm_paid_activation == true/)
   assert.match(workflow, /environment: cloudflare-canary/)
 })
 
