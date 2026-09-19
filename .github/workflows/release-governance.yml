@@ -146,7 +146,9 @@ jobs:
             --var "DATANEXUS_PLATFORM:cloudflare" \
             --var "DATANEXUS_COMMIT_SHA:$EXACT_SHA" \
             --var "DATANEXUS_RELEASE_ID:$RELEASE_ID" \
-            --var "DATANEXUS_BUILD_TIMESTAMP:$BUILD_TIMESTAMP"
+            --var "DATANEXUS_BUILD_TIMESTAMP:$BUILD_TIMESTAMP" \
+            --var "NEXT_PUBLIC_SUPABASE_URL:$NEXT_PUBLIC_SUPABASE_URL" \
+            --var "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
 
 
   deploy-cloudflare-worker:
