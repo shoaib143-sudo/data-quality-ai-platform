@@ -3,7 +3,8 @@
 FROM node:22-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+ARG PNPM_VERSION=10
+RUN corepack enable && corepack prepare "pnpm@$PNPM_VERSION" --activate
 WORKDIR /app
 
 FROM base AS deps
