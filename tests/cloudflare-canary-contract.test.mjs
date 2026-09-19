@@ -44,7 +44,7 @@ test('Cloudflare canary ingress fails closed on production-authority endpoints',
   assert.match(router, /DATANEXUS_BUILD_TIMESTAMP/)
   assert.match(router, /NEXT_PUBLIC_SUPABASE_URL/)
   assert.match(router, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/)
-  assert.match(router, /pingEndpoint = '\/api\/health\/live'/)
+  assert.match(router, /pingEndpoint = 'container\/api\/health\/live'/)
   assert.match(router, /definedEnvVars/)
   assert.doesNotMatch(router, /SUPABASE_SERVICE_ROLE_KEY/)
 })
