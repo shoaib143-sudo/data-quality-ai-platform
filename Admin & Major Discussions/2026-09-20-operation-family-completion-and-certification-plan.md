@@ -103,7 +103,7 @@ Those activities remain preserved as a future deferred phase and must not block 
 2. Historical/analytical storage path for profiling, DQ, audit and executive analytics.
 3. Enterprise-scale search/retrieval/index lifecycle.
 4. Unified rebuild/reindex/re-embedding orchestration.
-5. Platform disaster recovery and restore certification.
+5. Unified rebuild/recovery implementation required by current functional contracts.
 6. Final Runtime v2 agent learning controlled release chain.
 
 ### P1: scale and analytical depth
@@ -119,16 +119,42 @@ Those activities remain preserved as a future deferred phase and must not block 
 - audit analytics;
 - large export/reporting.
 
-### P2: certification convergence
+### P2: mature implementation closure
 
-Areas already above approximately 80% should not receive broad redesign. Close their remaining gaps through exact-head testing, failure injection, load testing, production revalidation and evidence reconciliation.
+Areas already above approximately 80% should not receive broad redesign. Close only remaining functional, integration, authorization and essential correctness-test gaps. Certification and production hardening remain deferred.
 
-## 5. Optimum implementation plan to 100% implementation
+## 5. Workstream priority and engineering effort
+
+The ETAs below are **engineering effort estimates**, not production deadlines. They assume the existing architecture is retained, independent work is executed in parallel, and no new material requirements are introduced.
+
+| Workstream | Priority | Primary scope | Current implementation estimate | Engineering effort estimate | Dependency / critical-path note |
+| --- | --- | --- | ---: | --- | --- |
+| A. Scale, history and analytical plane | **P0** | #2, #4, #6, #24, #28, #30, #31 | ~75% | **5–7 engineering days** | One of the main critical-path streams because it closes several lower-completion analytical areas. |
+| B. Knowledge, retrieval, search and embedding lifecycle | **P0** | #9, #10, #11, #12, #13, #36, retrieval part of #37 | ~81% | **4–6 engineering days** | Shared search/retrieval contracts affect multiple capabilities; can run in parallel with A. |
+| C. Relationship intelligence, lineage and impact | **P0, externally constrained** | #14, #15, #17, relationship inputs to #16 | ~77% | **4–6 engineering days after source permission is available** | Databricks `system.access` is the only material external blocker. Independent adapter/contract work can proceed before permission. |
+| D. Governed agent intelligence, memory and learning | **P0** | #16, #18, #25, #26, #27, #35, #37 | ~90% | **3–5 engineering days** | Active implementation already exists through #816/#819; #820/#821 and memory/monitoring closure are the main remaining items. |
+| E. Operational lifecycle, retention, rebuild and recovery implementation | **P1** | #22, #32, #33, #34 plus shared recovery/rebuild logic | ~82% | **3–5 engineering days** | Implement functional rebuild/recovery only. Production DR exercises and hardening remain deferred. |
+| F. Mature transactional/governance closure | **P0 quick-win** | #1, #3, #5, #7, #8, #19, #20, #21, #23, #29 | ~96% | **2–3 engineering days** | Highest-return closure stream. Avoid redesign; fix only proven functional/test gaps. |
+| G. Integration and implementation reconciliation | **P0 continuous** | Cross-workstream integration for all 37 areas | continuous | **Runs throughout; 2–3 engineering days of final convergence** | Must start immediately, not after A–F. Prevents contract drift and duplicate implementations. |
+
+### Parallel elapsed-time view
+
+With six implementation streams progressing concurrently:
+
+- **Wave 1, immediate:** D + F + shared contracts for A/B/E + G.
+- **Wave 2:** deeper A/B/E implementation, C wherever not blocked by Databricks permission.
+- **Wave 3:** C source-authoritative lineage after permission, plus final G reconciliation.
+
+Ignoring the external lineage permission, the present implementation backlog is roughly a **5–7 engineering-day critical path** under effective parallel execution. If Databricks permission arrives later, Workstream C becomes the residual blocker to literal 100% implementation.
+
+## 6. Optimum implementation plan to 100% implementation
 
 Use **six parallel implementation workstreams** with a seventh integration/reconciliation lane. Parallel branches must not redefine the same schema contract independently. Production certification and hardening are excluded.
 
 ### Workstream A: Scale, history and analytical plane
 
+**Priority:** P0  
+**Engineering effort estimate:** 5–7 days  
 **Covers:** #2, #4, #6, #24, #28, #30, #31.
 
 Implementation:
@@ -142,19 +168,19 @@ Implementation:
 7. Add telemetry cardinality and retention controls.
 8. Add projection reconciliation and rebuild verification.
 
-Certification gates:
+Implementation completion gates:
 
-- representative small/medium/large workloads;
-- million-object discovery and search tests;
-- historical range-query benchmarks;
-- backpressure and queue saturation;
-- projection lag SLO;
-- no lost/duplicated analytical events;
-- rebuild produces equivalent derived state;
+- end-to-end analytical projection flow works from authoritative truth;
+- checkpoint/resume and backpressure behavior is implemented correctly;
+- no lost/duplicated analytical events in targeted integration tests;
+- historical queries and incremental aggregation return reproducible results;
+- rebuild logic recreates equivalent derived state on controlled fixtures;
 - source authority remains unchanged.
 
 ### Workstream B: Knowledge, retrieval, search and embedding lifecycle
 
+**Priority:** P0  
+**Engineering effort estimate:** 4–6 days  
 **Covers:** #9, #10, #11, #12, #13, #36, plus NL retrieval aspects of #37.
 
 Implementation:
@@ -172,19 +198,20 @@ Implementation:
    - retain rollback to previous space.
 7. Add unified semantic reindex/rebuild orchestration.
 
-Certification gates:
+Implementation completion gates:
 
-- Recall@K, precision, MRR/nDCG where appropriate;
-- citation correctness and evidence coverage;
-- no unauthorized result leakage;
-- temporal/effective-version correctness;
-- prompt/document injection resistance;
-- re-embedding regression threshold;
-- cutover/rollback integrity;
-- target corpus latency and cost SLO.
+- hybrid exact/semantic retrieval paths are implemented;
+- citation/evidence linkage is correct on controlled evaluation fixtures;
+- authorization filtering applies before results are exposed;
+- temporal/effective-version semantics work correctly;
+- prompt/document injection inputs fail safely at implementation boundaries;
+- re-embedding cutover and rollback logic is implemented and testable;
+- index rebuild produces coherent searchable state.
 
 ### Workstream C: Relationship intelligence, lineage and impact
 
+**Priority:** P0, externally constrained  
+**Engineering effort estimate:** 4–6 days after source permission is available  
 **Covers:** #14, #15, #17 and relationship inputs to #16.
 
 Implementation:
@@ -199,18 +226,19 @@ Implementation:
 7. Feed authoritative relationship evidence into RCA, never the reverse.
 8. Implement graph/projection rebuild and reconciliation.
 
-Certification gates:
+Implementation completion gates:
 
-- known lineage fixture accuracy;
-- cycle, missing-edge and stale-edge cases;
+- known lineage fixture traversal correctness;
+- cycle, missing-edge and stale-edge handling;
 - authority-class preservation;
 - no inferred-to-observed escalation;
-- traversal scale/latency;
-- impact completeness/false-positive tests;
-- rebuild equivalence.
+- impact traversal returns evidence-backed relationships;
+- graph/projection rebuild equivalence on controlled fixtures.
 
 ### Workstream D: Governed agent intelligence, memory and learning
 
+**Priority:** P0  
+**Engineering effort estimate:** 3–5 days  
 **Covers:** #16, #18, #25, #26, #27, #35, #37.
 
 Implementation:
@@ -226,20 +254,22 @@ Implementation:
 7. Add standardized natural-language acceptance packs by persona and operation family.
 8. Integrate evaluation/drift triggers with provider/model/agent-version promotion policy.
 
-Certification gates:
+Implementation completion gates:
 
 - candidate cannot self-promote;
 - benchmark evaluator independence;
 - approval fingerprint binding;
-- shadow canary cannot mutate production;
-- rollback restores exact approved baseline;
+- controlled-release implementation cannot bypass active-version authority;
+- rollback code restores the exact approved baseline in controlled tests;
 - memory cannot override authoritative truth;
-- poisoned/stale evidence rejected;
-- deterministic authority preserved under model failure;
-- trajectory and outcome evaluation reproducible.
+- poisoned/stale evidence is rejected;
+- deterministic authority remains intact under model/tool failure;
+- trajectory and outcome evaluation is reproducible.
 
-### Workstream E: Operational lifecycle, retention, rebuild and DR
+### Workstream E: Operational lifecycle, retention, rebuild and recovery
 
+**Priority:** P1  
+**Engineering effort estimate:** 3–5 days  
 **Covers:** #22, #32, #33, #34 and recovery aspects across all families.
 
 Implementation:
@@ -251,42 +281,43 @@ Implementation:
 5. Implement archive verification and restore-from-archive.
 6. Unify rebuild orchestration for:
    projections, search indexes, vector indexes, relationship graph and materialized analytics.
-7. Automate backup integrity validation.
-8. Execute full disaster recovery into an isolated environment.
-9. Measure actual RTO/RPO against the frozen 4-hour / 15-minute targets.
-10. Exercise rollback and forward-recovery separately.
+7. Implement backup/restore integration points required by current recovery functionality.
+8. Implement rollback and forward-recovery paths required by functional contracts.
 
-Certification gates:
+Implementation completion gates:
 
-- corrupted backup detection;
-- partial restore failure;
-- stale backup rejection;
-- dependency outage;
-- projection rebuild after truth restore;
-- duplicate replay prevention;
+- partial restore/rebuild failures are represented safely;
+- duplicate replay is prevented;
 - legal hold cannot be bypassed;
-- measured RTO/RPO PASS.
+- rebuild/recovery actions are checkpointed and resumable where required;
+- authoritative truth and rebuildable derived state remain explicitly separated.
+
+Full DR exercises, backup certification and measured RTO/RPO remain deferred.
 
 ### Workstream F: Transactional governance and already-mature capability closure
 
+**Priority:** P0 quick-win  
+**Engineering effort estimate:** 2–3 days  
 **Covers:** #1, #3, #5, #7, #8, #19, #20, #21, #23, #29 plus targeted closure for mature areas.
 
 Implementation strategy:
 
 Do not redesign. Freeze contracts and close only evidence-backed gaps:
 
-1. exact-head concurrency/race tests;
-2. permission and RLS matrices;
+1. targeted concurrency/race correctness tests;
+2. permission and RLS matrices required for functional correctness;
 3. stale-version/fingerprint checks;
 4. malformed/duplicate input tests;
 5. transaction rollback tests;
-6. production E2E by persona;
-7. audit/evidence reconciliation;
-8. performance baselines for critical transactional endpoints.
+6. controlled E2E flows for affected personas;
+7. audit/evidence reconciliation required by the functional contract.
 
 This workstream should move rapidly because core implementation already exists.
 
 ### Workstream G: Integration and implementation reconciliation
+
+**Priority:** P0 continuous  
+**Engineering effort estimate:** continuous during A–F, then 2–3 days final convergence  
 
 This lane starts immediately with evidence mapping and becomes the final integration/reconciliation authority for the implementation phase.
 
@@ -294,12 +325,12 @@ Responsibilities:
 
 1. Maintain requirement → code → test → runtime-evidence matrix for all 37 areas.
 2. Prevent duplicate/conflicting implementations across A-F.
-3. Define fixed golden datasets/corpora and load profiles.
-4. Run exact-head test suites after every convergence merge.
+3. Define fixed golden datasets/corpora for implementation-level integration.
+4. Run affected integration/regression suites after convergence merges.
 5. Own implementation-level integration, regression and targeted negative/failure validation.
 6. Refuse a 100% implementation status while a required functional contract remains incomplete.
 
-## 6. Implementation sequence and gates
+## 7. Implementation sequence and gates
 
 ### Gate 0: Baseline
 
@@ -363,7 +394,7 @@ An area reaches 100% for the current phase when:
 
 When operationalization is explicitly reopened, use the preserved post-implementation assurance material below as the starting point. Do not execute it now and do not use it to block implementation completion.
 
-## 7. Deferred future certification and hardening plan
+## 8. Deferred future certification and hardening plan
 
 **Status: DEFERRED / OFF LIMITS until operationalization is explicitly reopened.**
 
@@ -776,7 +807,7 @@ Every final certification should produce a machine-readable evidence manifest bi
 The manifest is the canonical proof of what was certified. A later change to any bound material input invalidates only the affected certification scope, while a new release candidate still receives full exact-head certification.
 
 
-## 8. Deferred future production-certification criteria
+## 9. Deferred future production-certification criteria
 
 When operationalization is reopened, production-certified status may require the following applicable criteria. These are not current implementation-completion gates:
 
@@ -806,13 +837,13 @@ When operationalization is reopened, production-certified status may require the
 - immutable certification evidence manifest is complete;
 - no unresolved P0/P1 defect remains.
 
-## 9. External dependency affecting implementation
+## 10. External dependency affecting implementation
 
 Source-authoritative lineage cannot reach 100% while the Databricks source does not expose the required `system.access` lineage evidence.
 
 The completion plan therefore requires the external permission to be granted and the authoritative lineage acceptance suite to pass. Until then, DataNexus must continue to label inferred/AI-assisted lineage separately and must not manufacture source-observed lineage.
 
-## 10. Current immediate implementation order
+## 11. Current immediate implementation order
 
 1. Continue the current learning chain: #820 approval binding → #821 controlled-release/rollback implementation.
 2. Establish analytical/history contracts and complete missing implementation in Workstream A.
@@ -823,7 +854,7 @@ The completion plan therefore requires the external permission to be granted and
 7. Reconcile all implementation streams through Workstream G. Do not start certification or production-hardening work.
 
 
-## 11. Preserved future assurance references
+## 12. Preserved future assurance references
 
 The implementation and assurance model should be maintained as a practical crosswalk rather than a compliance claim.
 
