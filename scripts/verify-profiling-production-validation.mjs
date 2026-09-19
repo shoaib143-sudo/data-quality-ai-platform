@@ -49,6 +49,24 @@ for (const run of completed) {
   latestByDatasetVersion.set(run.dataset_version_id, run)
 }
 
+const latestAttemptsByDatasetVersion = new Map()
+const allRuns = []
+for (let from = 0; ; from += pageSize) {
+  const { data: page, error } = await supabase
+    .schema('profiling')
+    .from('profile_runs')
+    .select('id,dataset_version_id,status,started_at,completed_at')
+    .order('started_at', { ascending: false, nullsFirst: false })
+    .range(from, from + pageSize - 1)
+  if (error) throw new Error(`Unable to enumerate profiling attempts: ${error.message}`)
+  allRuns.push(...(page ?? []))
+  if (!page || page.length < pageSize) break
+}
+for (const run of allRuns) {
+  if (!run.dataset_version_id || latestAttemptsByDatasetVersion.has(run.dataset_version_id)) continue
+  latestAttemptsByDatasetVersion.set(run.dataset_version_id, run)
+}
+
 const { data: activeSources, error: sourceError } = await supabase
   .schema('profiling')
   .from('dataset_execution_sources')
@@ -127,11 +145,19 @@ const latestRuns = await Promise.all(Array.from(latestByDatasetVersion.values())
   }
 }))
 
+const latestAttempts = Array.from(latestAttemptsByDatasetVersion.values()).map((run) => ({
+  id: run.id,
+  datasetVersionId: run.dataset_version_id,
+  status: run.status,
+  activeSource: activeSourceTypeByDatasetVersion.has(run.dataset_version_id),
+}))
+
 const snapshot = {
   profileRuns,
   completedRuns,
   activeSourceTypes,
   latestRuns,
+  latestAttempts,
 }
 const result = evaluateProfilingProductionSnapshot(snapshot)
 console.log(JSON.stringify({ snapshot, result }, null, 2))
