@@ -37,7 +37,11 @@ test('Cloudflare canary ingress fails closed on production-authority endpoints',
   assert.match(router, /DATANEXUS_COMMIT_SHA/)
   assert.match(router, /DATANEXUS_RELEASE_ID/)
   assert.match(router, /DATANEXUS_BUILD_TIMESTAMP/)
+  assert.match(router, /NEXT_PUBLIC_SUPABASE_URL/)
+  assert.match(router, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/)
+  assert.doesNotMatch(router, /SUPABASE_SERVICE_ROLE_KEY/)
 })
+
 
 
 test('primary application typecheck has an isolated Cloudflare runtime declaration boundary', () => {
