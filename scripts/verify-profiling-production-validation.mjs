@@ -38,6 +38,7 @@ for (let from = 0; ; from += pageSize) {
     .eq('status', 'COMPLETED')
     .order('completed_at', { ascending: false, nullsFirst: false })
     .order('started_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: false })
     .range(from, from + pageSize - 1)
   if (error) throw new Error(`Unable to enumerate completed profile runs: ${error.message}`)
   completed.push(...(page ?? []))
@@ -58,6 +59,7 @@ for (let from = 0; ; from += pageSize) {
     .from('profile_runs')
     .select('id,dataset_version_id,status,error_code,started_at,completed_at')
     .order('started_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: false })
     .range(from, from + pageSize - 1)
   if (error) throw new Error(`Unable to enumerate profiling attempts: ${error.message}`)
   allRuns.push(...(page ?? []))
@@ -68,13 +70,20 @@ for (const run of allRuns) {
   latestAttemptsByDatasetVersion.set(run.dataset_version_id, run)
 }
 
-const { data: activeSources, error: sourceError } = await supabase
-  .schema('profiling')
-  .from('dataset_execution_sources')
-  .select('dataset_version_id,source_type,updated_at')
-  .eq('active', true)
-  .order('updated_at', { ascending: false })
-if (sourceError) throw new Error(`Unable to enumerate active execution sources: ${sourceError.message}`)
+const activeSources = []
+for (let from = 0; ; from += pageSize) {
+  const { data: page, error } = await supabase
+    .schema('profiling')
+    .from('dataset_execution_sources')
+    .select('id,dataset_version_id,source_type,updated_at')
+    .eq('active', true)
+    .order('updated_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(from, from + pageSize - 1)
+  if (error) throw new Error(`Unable to enumerate active execution sources: ${error.message}`)
+  activeSources.push(...(page ?? []))
+  if (!page || page.length < pageSize) break
+}
 
 const activeSourceTypes = {}
 const activeSourceTypeByDatasetVersion = new Map()
@@ -111,7 +120,12 @@ function hasCanonicalInvestigation(summary) {
   )
 }
 
-const latestRuns = await Promise.all(Array.from(latestByDatasetVersion.values()).map(async (run) => {
+const latestRuns = []
+const validationBatchSize = 10
+const latestCompletedRuns = Array.from(latestByDatasetVersion.values())
+for (let index = 0; index < latestCompletedRuns.length; index += validationBatchSize) {
+  const batch = latestCompletedRuns.slice(index, index + validationBatchSize)
+  const results = await Promise.all(batch.map(async (run) => {
   const [
     contractResult,
     profileColumnsResult,
@@ -152,6 +166,8 @@ const latestRuns = await Promise.all(Array.from(latestByDatasetVersion.values())
     governanceInsightPresent: Boolean(governanceResult.data),
   }
 }))
+  latestRuns.push(...results)
+}
 
 const latestAttempts = Array.from(latestAttemptsByDatasetVersion.values()).map((run) => ({
   id: run.id,
