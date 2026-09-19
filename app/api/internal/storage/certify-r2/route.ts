@@ -40,31 +40,60 @@ function sourceStorageId(row: StorageRow) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+const CERTIFICATION_PAGE_SIZE = 1000
+const CERTIFICATION_MAX_ROWS = 100_000
+
 export async function GET(request: Request) {
   if (!(await requireInternalAutomation(request))) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
 
   const admin = createAdminClient()
-  const [storageResult, versionsResult] = await Promise.all([
-    admin
-      .schema('catalog')
-      .from('storage_objects')
-      .select('id, provider, state, owner_type, size_bytes, checksum, checksum_algorithm, verified_at, metadata'),
-    admin
-      .schema('catalog')
-      .from('dataset_versions')
-      .select('storage_object_id')
-      .not('storage_object_id', 'is', null),
-  ])
+
+  async function loadStorageRows() {
+    const rows: StorageRow[] = []
+    for (let from = 0; from < CERTIFICATION_MAX_ROWS; from += CERTIFICATION_PAGE_SIZE) {
+      const result = await admin
+        .schema('catalog')
+        .from('storage_objects')
+        .select('id, provider, state, owner_type, size_bytes, checksum, checksum_algorithm, verified_at, metadata')
+        .order('id', { ascending: true })
+        .range(from, from + CERTIFICATION_PAGE_SIZE - 1)
+      if (result.error) return { rows: [] as StorageRow[], error: result.error.message }
+      const page = (result.data ?? []) as StorageRow[]
+      rows.push(...page)
+      if (page.length < CERTIFICATION_PAGE_SIZE) return { rows, error: undefined }
+    }
+    return { rows: [] as StorageRow[], error: `storage_objects inventory exceeds bounded certification ceiling of ${CERTIFICATION_MAX_ROWS} rows` }
+  }
+
+  async function loadVersionRows() {
+    const rows: VersionRow[] = []
+    for (let from = 0; from < CERTIFICATION_MAX_ROWS; from += CERTIFICATION_PAGE_SIZE) {
+      const result = await admin
+        .schema('catalog')
+        .from('dataset_versions')
+        .select('storage_object_id')
+        .not('storage_object_id', 'is', null)
+        .order('id', { ascending: true })
+        .range(from, from + CERTIFICATION_PAGE_SIZE - 1)
+      if (result.error) return { rows: [] as VersionRow[], error: result.error.message }
+      const page = (result.data ?? []) as VersionRow[]
+      rows.push(...page)
+      if (page.length < CERTIFICATION_PAGE_SIZE) return { rows, error: undefined }
+    }
+    return { rows: [] as VersionRow[], error: `dataset_versions inventory exceeds bounded certification ceiling of ${CERTIFICATION_MAX_ROWS} rows` }
+  }
+
+  const [storageResult, versionsResult] = await Promise.all([loadStorageRows(), loadVersionRows()])
 
   if (storageResult.error || versionsResult.error) {
     return NextResponse.json({
       certified: false,
-      error: `R2 certification database query failed: ${storageResult.error?.message ?? versionsResult.error?.message}`,
+      error: `R2 certification database query failed: ${storageResult.error ?? versionsResult.error}`,
     }, { status: 503 })
   }
 
-  const storageRows = (storageResult.data ?? []) as StorageRow[]
-  const versionRows = (versionsResult.data ?? []) as VersionRow[]
+  const storageRows = storageResult.rows
+  const versionRows = versionsResult.rows
   const storageById = new Map(storageRows.map((row) => [row.id, row]))
   const referencedIds = new Set(versionRows.flatMap((row) => row.storage_object_id ? [row.storage_object_id] : []))
 
