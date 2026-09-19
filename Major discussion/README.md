@@ -81,6 +81,7 @@ AI-assisted lineage follows the same authority principle: metadata-derived candi
 - `2026-09-06-progress-checkpoint-and-agent-handover.md` records the September 6 production acceptance, catalog/JDBC evidence, Module #3 blocker, then-current open work and agent handoff.
 - `2026-09-13-engineering-summary-production-verification-and-next-work.md` records the earlier September 13 checkpoint through PR #356, including deployed-artifact provenance and the governed remediation production-verification sequence. Its lifecycle statements are historical and are superseded where later same-day merges advanced `main`.
 - `2026-09-13-chat-review-decision-register-and-unresolved-items.md` is the current September 13 discussion synthesis. It extracts chat-agreed engineering rules, design and architecture decisions, tradeoffs, authority boundaries, superseded decisions, later same-day implementation evidence, and unresolved architecture items.
+- `2026-09-19-vercel-capacity-cloudflare-continuity-and-runtime-decisions.md` records the Vercel deployment-capacity incident, deployment-explosion root cause, Git disconnect and retention controls, active-passive Vercel/Cloudflare continuity architecture, provider-neutral runtime changes, exact-SHA release model, R2/OIDC production boundaries, and operator safeguards.
 
 The capability matrix is intentionally broader than the current implementation scope. Future implementation should draw from it rather than recreate the exploration from scratch.
 
