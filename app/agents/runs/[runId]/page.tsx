@@ -1,7 +1,9 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { canViewExecutionRun } from '@/lib/governance/resource-authorization'
 
 type AgentRun = {
   id: string
@@ -83,7 +85,7 @@ function formatDate(value: string | null) {
 }
 
 export default async function AgentRunPage({ params }: { params: Promise<{ runId: string }> }) {
-  await requireUser()
+  const user = await requireUser()
   const { runId } = await params
   const supabase = await createClient()
 
@@ -93,7 +95,8 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
     .maybeSingle()
 
   if (runError) throw new Error(`Unable to load agent run: ${runError.message}`)
-  if (!run) return <main className="min-h-screen p-8"><div className="mx-auto max-w-5xl"><Link href="/agents" className="text-sm underline">← Back to AI Agents</Link><section className="mt-8 rounded-xl border p-6"><h1 className="text-xl font-semibold">Agent run not found</h1><p className="mt-2 text-sm text-muted-foreground">The run does not exist or is not accessible in your current project scope.</p></section></div></main>
+  if (!run) notFound()
+  if (!await canViewExecutionRun(user.id, run as AgentRun)) notFound()
 
   const [stepsResult, logsResult, messagesResult, artifactsResult, agentResult] = await Promise.all([
     supabase.schema('agent').from('agent_run_steps').select('id, step_name, step_order, status, attempt, input, output, started_at, completed_at, error_code, error_message, created_at').eq('agent_run_id', runId).order('step_order'),
