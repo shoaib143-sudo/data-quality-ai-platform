@@ -57,7 +57,7 @@ export async function loadFileSource(
 
   if (url && largeObservedObject && !RANGE_SAMPLE_EXTENSIONS.has(canonicalExtension)) {
     const metadataHash = createHash('sha256')
-      .update(`object-metadata:\${observedEtag ?? 'no-etag'}:\${observedSize}:\${canonicalName}`)
+      .update(`object-metadata:${observedEtag ?? 'no-etag'}:${observedSize}:${canonicalName}`)
       .digest('hex')
     const metadata: Record<string, unknown> = {
       file_name: canonicalName,
@@ -88,7 +88,7 @@ export async function loadFileSource(
       format: 'binary',
       metadata,
       warnings: [
-        `Large object is \${observedSize} bytes, above the in-memory source ceiling of \${maxBytes} bytes; profiling is metadata-only for this format.`,
+        `Large object is ${observedSize} bytes, above the in-memory source ceiling of ${maxBytes} bytes; profiling is metadata-only for this format.`,
         canonicalExtension === 'json'
           ? 'Large JSON documents require JSONL/NDJSON or a partitioned snapshot for row-level sampled profiling.'
           : 'Use a streamable text format or partitioned snapshot for row-level profiling of this large object.',
@@ -109,9 +109,9 @@ export async function loadFileSource(
     const headers: Record<string,string> = {
       accept:'text/csv,text/plain,application/json,application/pdf,application/octet-stream;q=0.9,*/*;q=0.8',
     }
-    if (largeObservedObject) headers.range = `bytes=0-\${rangeSampleBytes - 1}`
+    if (largeObservedObject) headers.range = `bytes=0-${rangeSampleBytes - 1}`
     const response=await safeRemoteFileFetch(url,{headers,cache:'no-store'})
-    if(!response.ok)throw new Error(`Unable to load FILE source: HTTP \${response.status} \${response.statusText}`)
+    if(!response.ok)throw new Error(`Unable to load FILE source: HTTP ${response.status} ${response.statusText}`)
     if (largeObservedObject && response.status !== 206) {
       const declaredLength=Number(response.headers.get('content-length'))
       await response.body?.cancel().catch(()=>undefined)
@@ -120,7 +120,7 @@ export async function loadFileSource(
       }
     }
     const declaredLength=Number(response.headers.get('content-length'))
-    if(!largeObservedObject&&Number.isFinite(declaredLength)&&declaredLength>maxBytes)throw new Error(`FILE source exceeds the execution engine technical safety ceiling of \${maxBytes} bytes.`)
+    if(!largeObservedObject&&Number.isFinite(declaredLength)&&declaredLength>maxBytes)throw new Error(`FILE source exceeds the execution engine technical safety ceiling of ${maxBytes} bytes.`)
     bytes=new Uint8Array(await response.arrayBuffer())
     resolvedSourceUri=url
     contentType=response.headers.get('content-type') ?? observedContentType
@@ -128,14 +128,14 @@ export async function loadFileSource(
   }else{
     const bucket=getString(executionConfig,['bucket','bucket_id','bucketId','storage_bucket','storageBucket'])
     const path=getString(executionConfig,['path','storage_path','storagePath','object_path','objectPath'])??sourceUri
-    if(!bucket||!path)throw new Error(`FILE source "\${sourceUri??'(missing source_uri)'}" has no executable location. Provide execution_config.url or execution_config.bucket + execution_config.path.`)
+    if(!bucket||!path)throw new Error(`FILE source "${sourceUri??'(missing source_uri)'}" has no executable location. Provide execution_config.url or execution_config.bucket + execution_config.path.`)
     const {data,error}=await supabase.storage.from(bucket).download(path)
-    if(error)throw new Error(`Unable to download FILE source \${bucket}/\${path}: \${error.message}`)
+    if(error)throw new Error(`Unable to download FILE source ${bucket}/${path}: ${error.message}`)
     bytes=new Uint8Array(await data.arrayBuffer())
-    resolvedSourceUri=`storage://\${bucket}/\${path}`
+    resolvedSourceUri=`storage://${bucket}/${path}`
     contentType=data.type||null
   }
-  if(bytes.byteLength>maxBytes)throw new Error(`FILE source exceeds the execution engine technical safety ceiling of \${maxBytes} bytes.`)
+  if(bytes.byteLength>maxBytes)throw new Error(`FILE source exceeds the execution engine technical safety ceiling of ${maxBytes} bytes.`)
 
   const contentHash=createHash('sha256').update(bytes).digest('hex')
   const fileName=sourceName(sourceUri ?? resolvedSourceUri)
@@ -162,7 +162,7 @@ export async function loadFileSource(
     sampled_prefix_bytes:prefixSampled?bytes.byteLength:null,
   }
   const prefixWarnings = prefixSampled
-    ? [`Large object row evidence was sampled from the first \${bytes.byteLength} bytes of an observed \${observedSize} byte object; complete source coverage is not claimed.`]
+    ? [`Large object row evidence was sampled from the first ${bytes.byteLength} bytes of an observed ${observedSize} byte object; complete source coverage is not claimed.`]
     : []
 
   if(format==='csv'){const result=parsedResult(parseCsv(decoded,maxRows),contentHash,resolvedSourceUri,contentType,format,metadata);result.warnings=[...prefixWarnings,...result.warnings];return result}
@@ -192,7 +192,7 @@ export async function loadFileSource(
     }catch(error){
       metadata.ocr_provider='OCR_SPACE'
       metadata.ocr_failed=true
-      extracted.warnings.push(`OCR fallback could not complete: \${error instanceof Error?error.message:'unknown OCR error'}`)
+      extracted.warnings.push(`OCR fallback could not complete: ${error instanceof Error?error.message:'unknown OCR error'}`)
     }
   }
 
