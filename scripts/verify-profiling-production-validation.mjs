@@ -77,12 +77,19 @@ if (sourceError) throw new Error(`Unable to enumerate active execution sources: 
 
 const activeSourceTypes = {}
 const activeSourceTypeByDatasetVersion = new Map()
+const activeSourceCountByDatasetVersion = new Map()
 for (const source of activeSources ?? []) {
   const key = String(source.source_type ?? '').toUpperCase()
   if (!key) continue
   activeSourceTypes[key] = Number(activeSourceTypes[key] ?? 0) + 1
-  if (source.dataset_version_id && !activeSourceTypeByDatasetVersion.has(source.dataset_version_id)) {
-    activeSourceTypeByDatasetVersion.set(source.dataset_version_id, key)
+  if (source.dataset_version_id) {
+    activeSourceCountByDatasetVersion.set(
+      source.dataset_version_id,
+      Number(activeSourceCountByDatasetVersion.get(source.dataset_version_id) ?? 0) + 1,
+    )
+    if (!activeSourceTypeByDatasetVersion.has(source.dataset_version_id)) {
+      activeSourceTypeByDatasetVersion.set(source.dataset_version_id, key)
+    }
   }
 }
 
@@ -153,10 +160,15 @@ const latestAttempts = Array.from(latestAttemptsByDatasetVersion.values()).map((
   activeSource: activeSourceTypeByDatasetVersion.has(run.dataset_version_id),
 }))
 
+const ambiguousActiveSourceDatasetVersions = Array.from(activeSourceCountByDatasetVersion.entries())
+  .filter(([, count]) => count > 1)
+  .map(([datasetVersionId]) => datasetVersionId)
+
 const snapshot = {
   profileRuns,
   completedRuns,
   activeSourceTypes,
+  ambiguousActiveSourceDatasetVersions,
   latestRuns,
   latestAttempts,
 }
