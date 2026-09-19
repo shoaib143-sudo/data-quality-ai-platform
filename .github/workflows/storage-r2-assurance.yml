@@ -68,12 +68,17 @@ jobs:
       contents: read
       id-token: write
     env:
-      APP_URL: https://data-quality-ai-platform.vercel.app
+      DATANEXUS_CERTIFICATION_TARGET_URL: ${{ vars.DATANEXUS_CERTIFICATION_TARGET_URL }}
       OIDC_AUDIENCE: datanexus-r2-production
     steps:
-      - name: Require GitHub OIDC runtime
+      - name: Require governed certification target and GitHub OIDC runtime
         run: |
           set -euo pipefail
+          test -n "${DATANEXUS_CERTIFICATION_TARGET_URL:-}" || { echo "::error::DATANEXUS_CERTIFICATION_TARGET_URL must be configured in the protected production environment"; exit 1; }
+          case "$DATANEXUS_CERTIFICATION_TARGET_URL" in
+            https://data-quality-ai-platform.vercel.app|https://canary.datanexus.invalid) ;;
+            *) echo "::error::Certification target is not an approved governed endpoint"; exit 1 ;;
+          esac
           test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || { echo "::error::GitHub OIDC request URL is unavailable"; exit 1; }
           test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || { echo "::error::GitHub OIDC request token is unavailable"; exit 1; }
 
@@ -96,7 +101,7 @@ jobs:
           if current="$(curl --fail-with-body --silent --show-error \
             --connect-timeout 10 --max-time 60 \
             -H "Authorization: Bearer $OIDC_TOKEN" \
-            "$APP_URL/api/internal/storage/configure-r2-cors")" \
+            "$DATANEXUS_CERTIFICATION_TARGET_URL/api/internal/storage/configure-r2-cors")" \
             && printf '%s' "$current" | node -e '
               let body="";
               process.stdin.on("data", c => body += c);
@@ -111,7 +116,7 @@ jobs:
               --connect-timeout 10 --max-time 60 \
               -X POST \
               -H "Authorization: Bearer $OIDC_TOKEN" \
-              "$APP_URL/api/internal/storage/configure-r2-cors" \
+              "$DATANEXUS_CERTIFICATION_TARGET_URL/api/internal/storage/configure-r2-cors" \
               | node -e '
                 let body="";
                 process.stdin.on("data", c => body += c);
@@ -143,7 +148,7 @@ jobs:
             --connect-timeout 10 --max-time 300 \
             -X POST \
             -H "Authorization: Bearer $OIDC_TOKEN" \
-            "$APP_URL/api/internal/storage/migrate-to-r2")"
+            "$DATANEXUS_CERTIFICATION_TARGET_URL/api/internal/storage/migrate-to-r2")"
           printf '%s' "$response" | node -e '
             let body="";
             process.stdin.on("data", c => body += c);
@@ -175,7 +180,7 @@ jobs:
           response="$(curl --fail-with-body --silent --show-error \
             --connect-timeout 10 --max-time 60 \
             -H "Authorization: Bearer $OIDC_TOKEN" \
-            "$APP_URL/api/internal/storage/certify-r2")"
+            "$DATANEXUS_CERTIFICATION_TARGET_URL/api/internal/storage/certify-r2")"
           printf '%s' "$response" | node -e '
             let body="";
             process.stdin.on("data", c => body += c);
@@ -211,7 +216,7 @@ jobs:
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
             --data '{"mode":"dry-run"}' \
-            "$APP_URL/api/internal/storage/reference-cutover")"
+            "$DATANEXUS_CERTIFICATION_TARGET_URL/api/internal/storage/reference-cutover")"
           printf '%s' "$response" | node -e '
             let body="";
             process.stdin.on("data", c => body += c);
