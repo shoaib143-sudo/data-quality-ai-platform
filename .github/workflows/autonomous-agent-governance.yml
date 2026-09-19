@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, governed-autonomy-evidence]
     paths:
+      - 'scripts/verify-agent-version-lifecycle.mjs'
+      - 'tests/agent-version-lifecycle-negative.test.mjs'
       - 'supabase/migrations/**'
       - 'lib/agents/governed-agent-registry.ts'
       - 'lib/agents/governance-specialist-agent.ts'
@@ -42,6 +44,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'scripts/verify-agent-version-lifecycle.mjs'
+      - 'tests/agent-version-lifecycle-negative.test.mjs'
       - 'supabase/migrations/**'
       - 'lib/agents/governed-agent-registry.ts'
       - 'lib/agents/governance-specialist-agent.ts'
@@ -106,6 +110,10 @@ jobs:
         run: node scripts/verify-native-recovery-v2.mjs
       - name: Verify shared native runtime adoption
         run: node scripts/verify-all-agent-native-runtime-adoption.mjs
+      - name: Verify governed agent version lifecycle
+        run: node scripts/verify-agent-version-lifecycle.mjs
+      - name: Exercise agent version lifecycle negative cases
+        run: node --test tests/agent-version-lifecycle-negative.test.mjs
       - name: Unit test execution-mode policy
         run: node --experimental-strip-types --test scripts/test-execution-mode-contracts.mjs
       - name: Independent execution-mode adversarial audit
