@@ -20,7 +20,7 @@ const ALLOWED_PATHS = new Set([
 export class DataNexusWorkerContainer extends Container {
   defaultPort = 3000
   sleepAfter = '10m'
-  pingEndpoint = '/api/health/live'
+  pingEndpoint = 'container/api/health/live'
   envVars = definedEnvVars({
     DATANEXUS_ENV: 'canary',
     DATANEXUS_PLATFORM: 'cloudflare',
