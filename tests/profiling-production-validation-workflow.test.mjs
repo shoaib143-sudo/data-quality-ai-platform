@@ -48,3 +48,17 @@ test('production validation workflow retriggers on every certification artifact'
     assert.equal(occurrences, 2, `expected push and pull_request triggers for ${marker}`)
   }
 })
+
+
+test('production validation workflow watches all certified runtime surfaces', () => {
+  for (const marker of [
+    "'app/api/agents/run/route.ts'",
+    "'app/api/agents/supervisor/tier2/profiling-snapshot/route.ts'",
+    "'lib/agents/runtime/native-supervisor-tier2-profiling.ts'",
+    "'infra/profiling/**'",
+    "'supabase/migrations/**profile**'",
+  ]) {
+    const occurrences = workflow.split(marker).length - 1
+    assert.equal(occurrences, 2, `expected push and pull_request triggers for ${marker}`)
+  }
+})
