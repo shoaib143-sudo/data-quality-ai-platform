@@ -1,0 +1,89 @@
+name: Full Profiling Runtime Production Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/profiling/**'
+      - 'lib/connectors/**'
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'app/api/profiling/**'
+      - 'supabase/migrations/**profiling**'
+      - 'scripts/verify-profiling-production-validation.mjs'
+      - 'scripts/test-profiling-production-validation.mjs'
+      - 'scripts/lib/profiling-production-validation.mjs'
+      - '.github/workflows/profiling-production-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/profiling/**'
+      - 'lib/connectors/**'
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'app/api/profiling/**'
+      - 'supabase/migrations/**profiling**'
+      - 'scripts/verify-profiling-production-validation.mjs'
+      - 'scripts/test-profiling-production-validation.mjs'
+      - 'scripts/lib/profiling-production-validation.mjs'
+      - '.github/workflows/profiling-production-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Profiling production validation negative and failure cases
+        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs
+      - name: Existing profiling lifecycle contract
+        run: pnpm run verify:profiling-lifecycle
+      - name: Profiling governance insights contract
+        run: node scripts/verify-profiling-governance-insights.mjs
+      - name: Profiling replay contracts
+        run: |
+          node scripts/verify-profiling-native-replay.mjs
+          node scripts/verify-profiling-metric-replay.mjs
+          node scripts/verify-profiling-dataset-replay.mjs
+      - name: Profiling request trust boundary
+        run: node scripts/test-profiling-request-input.mjs
+      - name: Profiling scale certification
+        run: |
+          node scripts/verify-profiling-scale-certification.mjs
+          node --experimental-strip-types scripts/test-profiling-scale-certification.mjs
+      - name: Controlled Tier 2 profiling supervisor
+        run: node scripts/verify-native-supervisor-tier2-profiling.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
+
+  live-production:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate live production profiling estate
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PROFILING_PRODUCTION_VALIDATION_REQUIRED: 'true'
+        run: node scripts/verify-profiling-production-validation.mjs
