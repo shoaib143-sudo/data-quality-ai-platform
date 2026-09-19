@@ -12,6 +12,11 @@ export function evaluateProfilingProductionSnapshot(snapshot) {
   if (Number(sourceTypes.FILE ?? 0) < 1) failures.push('NO_ACTIVE_FILE_EXECUTION_SOURCE')
   if (Number(sourceTypes.JDBC ?? 0) < 1) failures.push('NO_ACTIVE_JDBC_EXECUTION_SOURCE')
 
+  const completedFileRuns = latestRuns.filter((run) => String(run.sourceType ?? '').toUpperCase() === 'FILE').length
+  const completedJdbcRuns = latestRuns.filter((run) => String(run.sourceType ?? '').toUpperCase() === 'JDBC').length
+  if (completedFileRuns < 1) failures.push('NO_COMPLETED_FILE_PROFILE')
+  if (completedJdbcRuns < 1) failures.push('NO_COMPLETED_JDBC_PROFILE')
+
   for (const run of latestRuns) {
     const prefix = `RUN_${run.id ?? 'UNKNOWN'}`
     if (!run.contract || run.contract.valid !== true) failures.push(`${prefix}_METRIC_CONTRACT_INVALID`)
@@ -36,6 +41,8 @@ export function evaluateProfilingProductionSnapshot(snapshot) {
       latestCompletedDatasetVersions: latestRuns.length,
       activeFileSources: Number(sourceTypes.FILE ?? 0),
       activeJdbcSources: Number(sourceTypes.JDBC ?? 0),
+      latestCompletedFileProfiles: completedFileRuns,
+      latestCompletedJdbcProfiles: completedJdbcRuns,
       latestRunsWithFindings: latestRuns.filter((run) => Number(run.findings ?? 0) > 0).length,
       latestRunsWithoutFindings: latestRuns.filter((run) => Number(run.findings ?? 0) === 0).length,
     },
