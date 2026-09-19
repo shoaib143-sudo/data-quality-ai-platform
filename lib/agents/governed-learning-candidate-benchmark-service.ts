@@ -45,6 +45,8 @@ export async function recordGovernedLearningCandidateBenchmark(input: {
     p_adversarial_failures: decision.adversarialFailures,
     p_evidence_refs: decision.evidenceRefs,
     p_rollback_ref: decision.rollbackRef,
+    p_minimum_case_count: decision.minimumCaseCount,
+    p_minimum_candidate_score: decision.minimumCandidateScore,
     p_decision: decision.status,
     p_reasons: decision.reasons,
     p_actor_user_id: input.actorUserId ?? null,
