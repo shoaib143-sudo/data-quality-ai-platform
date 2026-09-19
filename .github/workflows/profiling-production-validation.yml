@@ -24,6 +24,7 @@ on:
       - 'scripts/test-profiling-scale-certification.mjs'
       - 'scripts/verify-native-supervisor-tier2-profiling.mjs'
       - 'tests/profiling-production-validation-workflow.test.mjs'
+      - 'tests/profiling-production-validation-source.test.mjs'
       - '.github/workflows/profiling-production-validation.yml'
   push:
     branches: [main]
@@ -48,6 +49,7 @@ on:
       - 'scripts/test-profiling-scale-certification.mjs'
       - 'scripts/verify-native-supervisor-tier2-profiling.mjs'
       - 'tests/profiling-production-validation-workflow.test.mjs'
+      - 'tests/profiling-production-validation-source.test.mjs'
       - '.github/workflows/profiling-production-validation.yml'
   workflow_dispatch:
 
@@ -73,7 +75,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Profiling production validation negative and failure cases
-        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs
+        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs tests/profiling-production-validation-source.test.mjs
       - name: Existing profiling lifecycle contract
         run: pnpm run verify:profiling-lifecycle
       - name: Profiling governance insights contract
