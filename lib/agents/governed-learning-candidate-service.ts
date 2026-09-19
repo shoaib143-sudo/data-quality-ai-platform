@@ -1,7 +1,15 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import type {
-  GovernedLearningCandidateDraft,
-  LearningCandidateStatus,
+import type { EvaluationEngine } from '../ai/evaluation-engine'
+import type { GovernedAgentKey } from './governed-agent-registry'
+import {
+  readAgentSkillScorecard,
+  type AgentSkillScorecard,
+} from './agent-skill-evaluation'
+import type { GovernedSkillKey } from './governed-skill-registry'
+import {
+  buildGovernedLearningCandidateDraftsFromScorecard,
+  type GovernedLearningCandidateDraft,
+  type LearningCandidateStatus,
 } from './governed-learning-candidates'
 
 export async function persistGovernedLearningCandidate(input: {
@@ -31,6 +39,47 @@ export async function persistGovernedLearningCandidate(input: {
     throw new Error(`Unable to persist governed learning candidate: ${error?.message ?? 'no candidate id returned'}`)
   }
   return String(data)
+}
+
+export async function createGovernedLearningCandidatesFromScorecard(
+  engine: EvaluationEngine,
+  input: {
+    projectId: string
+    agentKey: GovernedAgentKey
+    skillKey: GovernedSkillKey
+    baselineVersion: string
+    candidateVersion: string
+    evidenceCutoffAt: string
+    actorUserId?: string | null
+  },
+): Promise<{
+  scorecard: AgentSkillScorecard
+  drafts: GovernedLearningCandidateDraft[]
+  candidateIds: string[]
+}> {
+  const scorecard = await readAgentSkillScorecard(engine, {
+    projectId: input.projectId,
+    agentKey: input.agentKey,
+    skillKey: input.skillKey,
+  })
+  const drafts = buildGovernedLearningCandidateDraftsFromScorecard({
+    projectId: input.projectId,
+    agentKey: input.agentKey,
+    skillKey: input.skillKey,
+    metrics: scorecard.metrics,
+    baselineVersion: input.baselineVersion,
+    candidateVersion: input.candidateVersion,
+    evidenceCutoffAt: input.evidenceCutoffAt,
+  })
+
+  const candidateIds: string[] = []
+  for (const candidate of drafts) {
+    candidateIds.push(await persistGovernedLearningCandidate({
+      candidate,
+      actorUserId: input.actorUserId ?? null,
+    }))
+  }
+  return { scorecard, drafts, candidateIds }
 }
 
 export async function transitionGovernedLearningCandidate(input: {
