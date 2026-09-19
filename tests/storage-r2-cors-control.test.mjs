@@ -19,14 +19,16 @@ test('R2 CORS control signs the supported S3 bucket cors subresource', () => {
   assert.match(control, /R2_ENDPOINT does not match the configured R2 account/)
 })
 
-test('R2 CORS control uses the same exact-origin least-privilege desired state as infra config', () => {
-  for (const origin of [
-    'https://data-quality-ai-platform.vercel.app',
-    'https://data-quality-ai-platform-git-r2-prereq-ha-4e83b5-shoaib143-sudo.vercel.app',
-  ]) {
-    assert.match(control, new RegExp(origin.replaceAll('.', '\\.')))
-    assert.match(desired, new RegExp(origin.replaceAll('.', '\\.')))
-  }
+test('R2 CORS control keeps production exact-origin baseline and uses governed additional origins', () => {
+  const productionOrigin = 'https://data-quality-ai-platform.vercel.app'
+  const stalePreviewOrigin = 'https://data-quality-ai-platform-git-r2-prereq-ha-4e83b5-shoaib143-sudo.vercel.app'
+
+  assert.match(control, new RegExp(productionOrigin.replaceAll('.', '\\.')))
+  assert.match(desired, new RegExp(productionOrigin.replaceAll('.', '\\.')))
+  assert.doesNotMatch(desired, new RegExp(stalePreviewOrigin.replaceAll('.', '\\.')))
+  assert.match(control, /R2_CORS_ADDITIONAL_ORIGINS/)
+  assert.match(control, /R2 CORS wildcard origins are not allowed/)
+  assert.match(control, /R2 CORS origin must be an exact HTTPS browser origin/)
   assert.match(control, /allowedMethods: \['GET', 'PUT', 'HEAD'\]/)
   assert.doesNotMatch(control, /allowedOrigins:[^\n]*\*/)
 })

@@ -48,12 +48,13 @@ jobs:
           : > "$files_file"
           page=1
           while :; do
-            payload="$(curl --fail --silent --show-error \
+            payload_file="$RUNNER_TEMP/pr-files-page-$page.json"
+            curl --fail --silent --show-error \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/files?per_page=100&page=$page")"
-            count="$(node -e 'const a=JSON.parse(process.argv[1]); process.stdout.write(String(a.length))' "$payload")"
-            node -e 'const a=JSON.parse(process.argv[1]); for (const f of a) console.log(f.filename)' "$payload" >> "$files_file"
+              "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/files?per_page=100&page=$page" > "$payload_file"
+            count="$(node -e 'const fs=require("fs"); const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(String(a.length))' "$payload_file")"
+            node -e 'const fs=require("fs"); const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); for (const f of a) console.log(f.filename)' "$payload_file" >> "$files_file"
             [[ "$count" -eq 100 ]] || break
             page=$((page+1))
           done
@@ -131,5 +132,6 @@ jobs:
         run: |
           node --experimental-strip-types scripts/test-release-assurance-evaluator.mjs
           node scripts/test-production-preview-change-classifier.mjs
+          node scripts/test-production-verification-backbone-large-pr.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { loadFileSource } from '@/lib/profiling/file-source-adapter'
+import { assertProjectScopedObjectStorageSource, parseObjectStorageSourceUri, resolveProviderNeutralFileConfig, sanitizeProviderNeutralFileResult } from '@/lib/profiling/provider-neutral-file-source'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 
@@ -32,11 +33,18 @@ export async function POST(request: Request) {
     await authorizeProject(user.id, projectId, 'catalog.read')
 
     const admin = createAdminClient()
+    const parsedStorage = parseObjectStorageSourceUri(sourceUri)
+    if (parsedStorage) assertProjectScopedObjectStorageSource(parsedStorage, projectId)
+
     const executionConfig = /^https?:\/\//i.test(sourceUri)
       ? { url: sourceUri }
-      : storageExecutionConfig(sourceUri, projectId)
+      : /^(r2|supabase|storage):\/\//i.test(sourceUri)
+        ? {}
+        : storageExecutionConfig(sourceUri, projectId)
 
-    const loaded = await loadFileSource(admin, { sourceUri, executionConfig }, { maxRows: 1000 })
+    const resolved = await resolveProviderNeutralFileConfig({ sourceUri, executionConfig })
+    const rawLoaded = await loadFileSource(admin, resolved.config, { maxRows: 1000 })
+    const loaded = sanitizeProviderNeutralFileResult(rawLoaded, resolved.canonicalSourceUri, resolved.provider)
     const firstRow = loaded.rows[0] ?? {}
     const columns = Array.from(
       loaded.rows.reduce<Set<string>>((names, row) => {

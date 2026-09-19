@@ -3,20 +3,37 @@ import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createObjectStorage, defaultStorageProvider } from '@/lib/storage/factory'
+import type { MultipartObjectStorage } from '@/lib/storage/contracts'
 
 const SUPABASE_DATASET_BUCKET = 'dataset-files'
 const DEFAULT_MAX_BYTES = 250 * 1024 * 1024
+const SUPABASE_HARD_MAX_BYTES = 1024 * 1024 * 1024
+const R2_DEFAULT_MAX_BYTES = 50 * 1024 * 1024 * 1024
+const R2_HARD_MAX_BYTES = 5 * 1024 * 1024 * 1024 * 1024
+const R2_MULTIPART_THRESHOLD_BYTES = 100 * 1024 * 1024
+const R2_BASE_PART_SIZE_BYTES = 64 * 1024 * 1024
+const R2_MIN_PART_SIZE_BYTES = 5 * 1024 * 1024
+const R2_MAX_PARTS = 10_000
 const SIGNED_URL_TTL_SECONDS = 15 * 60
 const ALLOWED_EXTENSIONS = new Set([
   'csv', 'json', 'jsonl', 'ndjson', 'txt', 'md', 'markdown', 'log', 'xml', 'yaml', 'yml',
   'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'gif', 'webp',
 ])
 
-function boundedMaxBytes() {
-  const parsed = Number(process.env.FILE_TECHNICAL_MAX_BYTES)
+function boundedMaxBytes(provider: 'supabase' | 'r2') {
+  const envName = provider === 'r2' ? 'R2_FILE_TECHNICAL_MAX_BYTES' : 'FILE_TECHNICAL_MAX_BYTES'
+  const parsed = Number(process.env[envName])
+  const hardMax = provider === 'r2' ? R2_HARD_MAX_BYTES : SUPABASE_HARD_MAX_BYTES
+  const defaultMax = provider === 'r2' ? R2_DEFAULT_MAX_BYTES : DEFAULT_MAX_BYTES
   return Number.isFinite(parsed)
-    ? Math.min(1024 * 1024 * 1024, Math.max(1024 * 1024, Math.floor(parsed)))
-    : DEFAULT_MAX_BYTES
+    ? Math.min(hardMax, Math.max(1024 * 1024, Math.floor(parsed)))
+    : defaultMax
+}
+
+function multipartPartSize(size: number) {
+  const minimumForPartCount = Math.ceil(size / R2_MAX_PARTS)
+  const alignedMinimum = Math.ceil(minimumForPartCount / R2_MIN_PART_SIZE_BYTES) * R2_MIN_PART_SIZE_BYTES
+  return Math.max(R2_BASE_PART_SIZE_BYTES, alignedMinimum)
 }
 
 function safeFileName(name: string) {
@@ -77,7 +94,8 @@ export async function POST(request: Request) {
 
     await authorizeProject(user.id, projectId, 'source.manage')
 
-    const maxBytes = boundedMaxBytes()
+    const provider = defaultStorageProvider()
+    const maxBytes = boundedMaxBytes(provider)
     if (size <= 0) return NextResponse.json({ error: 'Uploaded file is empty.' }, { status: 400 })
     if (size > maxBytes) {
       return NextResponse.json({ error: `Uploaded file exceeds the technical safety ceiling of ${maxBytes} bytes.` }, { status: 413 })
@@ -89,7 +107,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Unsupported dataset file type: ${ext || 'unknown'}.` }, { status: 415 })
     }
 
-    const provider = defaultStorageProvider()
     const storage = createObjectStorage(provider)
     const bucket = datasetBucket(provider)
     const objectKey = `projects/${projectId}/uploads/${Date.now()}-${crypto.randomUUID()}-${fileName}`
@@ -120,6 +137,61 @@ export async function POST(request: Request) {
     storageObjectId = storageObject.id
 
     try {
+      if (provider === 'r2' && size > R2_MULTIPART_THRESHOLD_BYTES) {
+        const multipartStorage = storage as MultipartObjectStorage
+        const session = await multipartStorage.createMultipartUpload({
+          bucket,
+          key: objectKey,
+          contentType,
+        })
+        const partSize = multipartPartSize(size)
+        const partCount = Math.ceil(size / partSize)
+
+        try {
+          const { error: stateError } = await admin
+            .schema('catalog')
+            .from('storage_objects')
+            .update({
+              state: 'UPLOADING',
+              updated_at: new Date().toISOString(),
+              metadata: {
+                extension: ext,
+                upload_mode: 'MULTIPART',
+                multipart_upload_id: session.uploadId,
+                multipart_part_size_bytes: partSize,
+                multipart_part_count: partCount,
+              },
+            })
+            .eq('id', storageObjectId)
+            .eq('project_id', projectId)
+          if (stateError) throw new Error(`Unable to activate multipart dataset upload: ${stateError.message}`)
+        } catch (stateError) {
+          await multipartStorage.abortMultipartUpload({
+            bucket,
+            key: objectKey,
+            uploadId: session.uploadId,
+          }).catch(() => undefined)
+          throw stateError
+        }
+
+        return NextResponse.json({
+          storageObjectId,
+          provider: session.provider,
+          bucket: session.bucket,
+          path: session.key,
+          key: session.key,
+          uploadMode: 'multipart',
+          multipart: {
+            uploadId: session.uploadId,
+            partSizeBytes: partSize,
+            partCount,
+            authorizationEndpoint: '/api/datasets/source/upload-file/multipart',
+          },
+          sourceUri: `${session.provider}://${session.bucket}/${session.key}`,
+          file: { name: fileName, size, contentType, extension: ext },
+        })
+      }
+
       const authorization = await storage.createUploadAuthorization({
         bucket,
         key: objectKey,
@@ -141,6 +213,7 @@ export async function POST(request: Request) {
         path: authorization.key,
         key: authorization.key,
         token: authorization.token,
+        uploadMode: 'single',
         uploadUrl: authorization.url,
         uploadHeaders: authorization.requiredHeaders,
         expiresAt: authorization.expiresAt,

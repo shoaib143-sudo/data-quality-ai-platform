@@ -2,24 +2,13 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
-import { evaluateIncidentSlaEscalations } from '@/lib/observability/incident-sla'
-import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
-import { claimOutboxEvents, processOutboxEvents } from '@/lib/orchestration/outbox'
-import { runOutboxLane, skippedOutboxLane, type OutboxLaneResult } from '@/lib/orchestration/outbox-lane'
-import { claimDurableJobByAgentRun, runDurableQueueMaintenance } from '@/lib/orchestration/queue'
-import { processDurableJobs } from '@/lib/orchestration/worker'
-import { dispatchAdaptiveRounds } from '@/lib/orchestration/adaptive-dispatch'
+import { claimDurableJobByAgentRun } from '@/lib/orchestration/queue'
 import { isAuthorizedWorkerBearer } from '@/lib/orchestration/worker-auth'
-import { runProjectionWorker } from '@/lib/data-plane/run-projection-worker'
-import { cleanupExpiredObjectArtifacts } from '@/lib/data-plane/object-lifecycle'
-import { enqueueDailySemanticIndexJobs } from '@/lib/governance/semantic-jobs'
-import { processSemanticIndexJobs } from '@/lib/governance/semantic-job-worker'
-import { refreshAllPredictiveRisk } from '@/lib/governance/predictive-risk'
-import { applyAllPredictiveRiskGovernedActions } from '@/lib/governance/governed-autonomy'
-import { refreshAllAIGovernanceIntelligence } from '@/lib/governance/ai-governance-intelligence'
-import { processGovernanceAgentJobs } from '@/lib/agents/governance-job-worker'
-import { processApprovalNotificationOutbox } from '@/lib/governance/approval-notification-worker'
-import { evaluateAgentApprovalSlaEscalations } from '@/lib/governance/approval-sla'
+import {
+  processClaimedDurableJob,
+  runAdaptiveWorkerCycle,
+  runScheduledWorkerCycle,
+} from '@/lib/orchestration/worker-service'
 
 export const maxDuration = 300
 
@@ -31,121 +20,11 @@ function isAuthorizedWorkerRequest(request: Request) {
   return isAuthorizedWorkerBearer(suppliedSecret, process.env.CRON_SECRET)
 }
 
-function logOutboxLaneDegradation(workerId: string, lane: OutboxLaneResult) {
-  if (!lane.degraded || lane.disposition === 'SKIPPED_AFTER_DEGRADATION') return
-  const detail = lane.error ? `: ${lane.error}` : ''
-  console.error('[worker-outbox]', `${workerId} ${lane.disposition}${detail}`.slice(0, 2000))
-}
-
-async function executeOutboxLane(workerId: string) {
-  const lane = await runOutboxLane(workerId, 30, {
-    claimEvents: claimOutboxEvents,
-    processEvents: processOutboxEvents,
-  })
-  logOutboxLaneDegradation(workerId, lane)
-  return lane
-}
-
-async function runAdaptiveEventConvergence(workerId: string) {
-  const cycles: Array<Record<string, unknown>> = []
-  const results: Array<Record<string, unknown>> = []
-  const semanticResults: Array<Record<string, unknown>> = []
-  const governanceAgentResults: Array<Record<string, unknown>> = []
-  const eventResults: Array<Record<string, unknown>> = []
-  const eventLaneDispositions: string[] = []
-  let claimed = 0
-  let eventsClaimed = 0
-  let eventLaneBlocked = false
-  let eventLaneDegraded = false
-
-  for (let cycle = 1; cycle <= 3; cycle += 1) {
-    const dispatch = await dispatchAdaptiveRounds(`${workerId}:jobs:${cycle}`, {
-      maxRounds: 2,
-      claimBatchSize: 8,
-    })
-    const eventWorkerId = `${workerId}:events:${cycle}`
-    const eventLane = eventLaneBlocked ? skippedOutboxLane() : await executeOutboxLane(eventWorkerId)
-    if (eventLane.degraded && eventLane.disposition !== 'SKIPPED_AFTER_DEGRADATION') {
-      eventLaneBlocked = true
-      eventLaneDegraded = true
-    }
-
-    claimed += dispatch.claimed
-    eventsClaimed += eventLane.claimed
-    results.push(...dispatch.results)
-    semanticResults.push(...dispatch.semanticResults)
-    governanceAgentResults.push(...dispatch.governanceAgentResults)
-    eventResults.push(...eventLane.results)
-    eventLaneDispositions.push(eventLane.disposition)
-    cycles.push({
-      cycle,
-      jobsClaimed: dispatch.claimed,
-      dispatchRounds: dispatch.rounds,
-      eventsClaimed: eventLane.claimed,
-      eventLaneDegraded: eventLane.degraded,
-      eventLaneDisposition: eventLane.disposition,
-    })
-
-    if (dispatch.claimed === 0 && eventLane.claimed === 0) break
-  }
-
-  return {
-    cycles,
-    claimed,
-    eventsClaimed,
-    results,
-    semanticResults,
-    governanceAgentResults,
-    eventResults,
-    eventLaneDegraded,
-    eventLaneDispositions,
-  }
-}
-
 export async function GET(request: Request) {
   if (!isAuthorizedWorkerRequest(request)) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
 
   const workerId = `scheduled-worker:${crypto.randomUUID()}`
-  const queueMaintenance = await runDurableQueueMaintenance()
-  const scheduled = await enqueueDueSchedules(20)
-  const dispatch = await dispatchAdaptiveRounds(workerId)
-  const eventLane = await executeOutboxLane(workerId)
-  const [incidentEscalations, projections, semanticIndexScheduling, objectRetention] = await Promise.all([
-    evaluateIncidentSlaEscalations(50),
-    runProjectionWorker({ projectLimit: 10, batchSize: 200 }),
-    enqueueDailySemanticIndexJobs(100),
-    cleanupExpiredObjectArtifacts(25),
-  ])
-  const approvalSla = await evaluateAgentApprovalSlaEscalations(100)
-  const approvalNotifications = await processApprovalNotificationOutbox(25)
-  const predictiveRisk = await refreshAllPredictiveRisk()
-  const aiGovernanceIntelligence = await refreshAllAIGovernanceIntelligence()
-  const governedAutonomy = await applyAllPredictiveRiskGovernedActions()
-
-  return NextResponse.json({
-    workerId,
-    queueMaintenance,
-    scheduled,
-    adaptiveDispatch: true,
-    dispatchRounds: dispatch.rounds,
-    claimed: dispatch.claimed,
-    results: dispatch.results,
-    semanticResults: dispatch.semanticResults,
-    governanceAgentResults: dispatch.governanceAgentResults,
-    semanticIndexScheduling,
-    objectRetention,
-    approvalSla,
-    approvalNotifications,
-    predictiveRisk,
-    aiGovernanceIntelligence,
-    governedAutonomy,
-    eventsClaimed: eventLane.claimed,
-    eventResults: eventLane.results,
-    eventLaneDegraded: eventLane.degraded,
-    eventLaneDisposition: eventLane.disposition,
-    incidentEscalations,
-    projections,
-  })
+  return NextResponse.json(await runScheduledWorkerCycle(workerId))
 }
 
 export async function POST(request: Request) {
@@ -156,7 +35,7 @@ export async function POST(request: Request) {
     if (!isAuthorizedWorkerRequest(request)) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
     try {
       const workerId = `event-worker:${crypto.randomUUID()}`
-      const convergence = await runAdaptiveEventConvergence(workerId)
+      const convergence = await runAdaptiveWorkerCycle(workerId)
       return NextResponse.json({
         accepted: true,
         mode,
@@ -191,18 +70,14 @@ export async function POST(request: Request) {
     const workerId = `user-kick:${user.id}:${crypto.randomUUID()}`
     const job = await claimDurableJobByAgentRun(workerId, agentRunId)
     if (!job) return NextResponse.json({ accepted: true, claimed: false, message: 'The job is already running, complete, or waiting for retry.' })
-    if (job.job_type === 'SEMANTIC_INDEX') {
-      const semanticResults = await processSemanticIndexJobs([job])
-      return NextResponse.json({ accepted: true, claimed: true, semanticResults })
-    }
-    if (job.job_type === 'GOVERNANCE_AGENT') {
-      const governanceAgentResults = await processGovernanceAgentJobs([job])
-      return NextResponse.json({ accepted: true, claimed: true, governanceAgentResults })
-    }
-    const results = await processDurableJobs([job])
-    return NextResponse.json({ accepted: true, claimed: true, results })
+
+    return NextResponse.json({
+      accepted: true,
+      claimed: true,
+      ...await processClaimedDurableJob(job),
+    })
   } catch (error) {
     if (error instanceof AuthorizationError) return NextResponse.json({ error: error.message }, { status: error.status })
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Worker execution failed.' }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Worker execution failed.', }, { status: 500 })
   }
 }

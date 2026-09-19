@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "datanexus-worker-canary",
+  "main": "src/router.ts",
+  "compatibility_date": "2026-09-19",
+  "vars": {
+    "DATANEXUS_ENV": "canary",
+    "DATANEXUS_PLATFORM": "cloudflare",
+    "DATANEXUS_WORKER_EXECUTION_ENABLED": "false"
+  },
+  "containers": [
+    {
+      "class_name": "DataNexusWorkerContainer",
+      "image": "../../../Dockerfile",
+      "max_instances": 1,
+      "constraints": {
+        "regions": [
+          "APAC"
+        ]
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DATANEXUS_WORKER",
+        "class_name": "DataNexusWorkerContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "DataNexusWorkerContainer"
+      ]
+    }
+  ]
+}

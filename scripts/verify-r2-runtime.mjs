@@ -18,12 +18,25 @@ if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(process.env.R2_BUCKET)) {
   console.error('R2 runtime verification failed. R2_BUCKET does not look like a valid bucket name.')
   process.exit(1)
 }
+function deploymentEnvironment() {
+  const configured = (process.env.DATANEXUS_ENV ?? '').trim().toLowerCase()
+  if (configured) {
+    if (!['production', 'canary', 'development'].includes(configured)) {
+      console.error(`R2 runtime verification failed. Unsupported DATANEXUS_ENV: ${configured}`)
+      process.exit(1)
+    }
+    return configured
+  }
+  return process.env.VERCEL_ENV?.trim().toLowerCase() === 'production' ? 'production' : 'development'
+}
+
 const provider = (process.env.STORAGE_DEFAULT_PROVIDER ?? 'supabase').trim().toLowerCase()
 if (!['supabase', 'r2'].includes(provider)) {
   console.error(`R2 runtime verification failed. Unsupported STORAGE_DEFAULT_PROVIDER: ${provider}`)
   process.exit(1)
 }
-if (provider === 'r2' && process.env.VERCEL_ENV === 'production') {
+const environment = deploymentEnvironment()
+if (provider === 'r2' && environment === 'production') {
   const approved = process.env.STORAGE_R2_PRODUCTION_CUTOVER_APPROVED?.trim().toLowerCase() === 'true'
   if (!approved) {
     console.error('R2 runtime verification failed. Production R2 cutover has not been explicitly approved.')
@@ -36,6 +49,7 @@ console.log(JSON.stringify({
   endpointHost: endpoint.hostname,
   prefix: process.env.R2_PREFIX ?? '',
   provider,
+  environment,
   productionCutoverApproved: process.env.STORAGE_R2_PRODUCTION_CUTOVER_APPROVED?.trim().toLowerCase() === 'true',
   secretsPresent: true,
 }))
