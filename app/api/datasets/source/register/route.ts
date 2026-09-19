@@ -6,6 +6,7 @@ import { validateDataSourceForProfiling } from '@/lib/profiling/source-validatio
 import { validateJdbcConnection } from '@/lib/connectors/jdbc'
 import { discoverNativeHierarchy } from '@/lib/connectors/native-hierarchy-discovery'
 import { hierarchySelection } from '@/lib/connectors/native-hierarchy'
+import { assertProjectScopedObjectStorageSource, parseObjectStorageSourceUri } from '@/lib/profiling/provider-neutral-file-source'
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function record(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
@@ -30,18 +31,34 @@ function jdbcTableParts(sourceIdentifier: string, defaultSchema = 'public', defa
 }
 function fileConnectionMetadata(sourceUri: string, projectId: string) {
   if (/^https?:\/\//i.test(sourceUri)) return { url: sourceUri }
+
+  const parsed = parseObjectStorageSourceUri(sourceUri)
+  if (parsed) {
+    assertProjectScopedObjectStorageSource(parsed, projectId)
+    return {
+      storage_provider: parsed.provider,
+      storage_bucket: parsed.bucket,
+      storage_path: parsed.key,
+      bucket: parsed.bucket,
+      path: parsed.key,
+    }
+  }
+
   const normalized = sourceUri.replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '')
   const parts = normalized.split('/')
   if (parts.length < 2 || parts.some((part) => !part || part === '.' || part === '..')) {
-    throw new Error('FILE/CSV source URI must use bucket/path syntax with a normalized object path.')
+    throw new Error('FILE/CSV source URI must use a supported provider URI or bucket/path syntax with a normalized object path.')
   }
-  const bucket = parts[0]
-  const path = parts.slice(1).join('/')
-  const requiredPrefix = `projects/${projectId}/`
-  if (bucket !== 'dataset-files' || !path.startsWith(requiredPrefix) || path.length <= requiredPrefix.length) {
-    throw new Error(`FILE/CSV sources must be stored under dataset-files/${requiredPrefix}...`)
+  const legacy = parseObjectStorageSourceUri(`storage://${parts[0]}/${parts.slice(1).join('/')}`)
+  if (!legacy) throw new Error('FILE/CSV source URI could not be resolved.')
+  assertProjectScopedObjectStorageSource(legacy, projectId)
+  return {
+    storage_provider: legacy.provider,
+    storage_bucket: legacy.bucket,
+    storage_path: legacy.key,
+    bucket: legacy.bucket,
+    path: legacy.key,
   }
-  return { bucket, path }
 }
 
 type DatasetVersionForReconciliation = { id: string; dataset_id: string; version_number: number; metadata: unknown }
