@@ -9,7 +9,7 @@ test('R2 browser CORS policy is explicit and least privilege', () => {
   assert.equal(policy.length, 1)
   const rule = policy[0]
   assert.equal(rule.AllowedOrigins.includes('*'), false)
-  assert.equal(rule.AllowedOrigins.some(origin => { const url = new URL(origin); return url.protocol === 'https:' && url.hostname === 'data-quality-ai-platform.vercel.app' && url.port === '' && url.pathname === '/' && url.search === '' && url.hash === '' }), true)
+  assert.deepEqual(rule.AllowedOrigins, ['https://data-quality-ai-platform.vercel.app'])
   assert.deepEqual([...rule.AllowedMethods].sort(), ['GET', 'HEAD', 'PUT'])
   assert.deepEqual(rule.AllowedHeaders, ['Content-Type'])
   assert.equal(rule.ExposeHeaders.includes('ETag'), true)
@@ -26,4 +26,8 @@ test('R2 CORS origins are valid browser origins without paths or trailing slashe
     assert.equal(url.hash, '')
     assert.equal(origin.endsWith('/'), false)
   }
+})
+
+test('R2 static policy does not pin ephemeral Vercel preview deployments', () => {
+  assert.equal(policy[0].AllowedOrigins.some(origin => origin.includes('-git-')), false)
 })

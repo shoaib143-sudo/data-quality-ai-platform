@@ -1,8 +1,7 @@
 [
   {
     "AllowedOrigins": [
-      "https://data-quality-ai-platform.vercel.app",
-      "https://data-quality-ai-platform-git-r2-prereq-ha-4e83b5-shoaib143-sudo.vercel.app"
+      "https://data-quality-ai-platform.vercel.app"
     ],
     "AllowedMethods": ["GET", "PUT", "HEAD"],
     "AllowedHeaders": ["Content-Type"],
