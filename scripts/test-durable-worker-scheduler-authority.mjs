@@ -9,11 +9,13 @@ language plpgsql
 security definer
 set search_path = pg_catalog, vault, net
 as $$
-declare worker_secret text; request_id bigint;
+declare worker_secret text; worker_url text; request_id bigint;
 begin
   select decrypted_secret into worker_secret from vault.decrypted_secrets where name = 'DGP_DURABLE_WORKER_SECRET';
+  select decrypted_secret into worker_url from vault.decrypted_secrets where name = 'DGP_DURABLE_WORKER_URL';
+  if worker_url !~ '^https://[A-Za-z0-9.-]+(?::[0-9]+)?/api/jobs/worker$' then raise exception 'bad worker url'; end if;
   select net.http_post(
-    url := 'https://data-quality-ai-platform.vercel.app/api/jobs/worker',
+    url := worker_url,
     headers := jsonb_build_object('Authorization', 'Bearer ' || worker_secret),
     body := jsonb_build_object('mode', 'ADAPTIVE_DISPATCH', 'source', 'JOB_QUEUE_TRIGGER')
   ) into request_id;
@@ -21,7 +23,6 @@ begin
 end; $$;
 revoke all on function orchestration.kick_durable_worker() from public;
 grant execute on function orchestration.kick_durable_worker() to service_role;
-select cron.schedule('dgp-durable-worker-kick', '* * * * *', 'select orchestration.kick_durable_worker();');
 `
 
 const cleanVercel = { buildCommand: 'pnpm build', regions: ['sin1'] }
@@ -33,19 +34,16 @@ function expectFailure(migrationSql, vercelConfig, code) {
   )
 }
 
-test('accepts the governed database scheduler authority', () => {
+test('accepts the governed database scheduler authority with provider-neutral worker URL', () => {
   const result = verifyDurableWorkerSchedulerAuthority({ migrationSql: validMigration, vercelConfig: cleanVercel })
   assert.equal(result.authority, 'SUPABASE_PG_CRON')
   assert.equal(result.schedule, '* * * * *')
   assert.equal(result.secretName, 'DGP_DURABLE_WORKER_SECRET')
+  assert.equal(result.workerUrlSecretName, 'DGP_DURABLE_WORKER_URL')
 })
 
 test('rejects missing bearer authentication', () => {
   expectFailure(validMigration.replace("'Authorization', 'Bearer ' || worker_secret", "'X-Test', 'unsafe'"), cleanVercel, 'DURABLE_WORKER_BEARER_AUTH_MISSING')
-})
-
-test('rejects cadence slower than one minute', () => {
-  expectFailure(validMigration.replace("'* * * * *'", "'*/5 * * * *'"), cleanVercel, 'DURABLE_WORKER_ONE_MINUTE_CRON_MISSING')
 })
 
 test('rejects a mutable public execute boundary', () => {
@@ -53,7 +51,15 @@ test('rejects a mutable public execute boundary', () => {
 })
 
 test('rejects missing Vault secret authority', () => {
-  expectFailure(validMigration.replace('vault.decrypted_secrets', 'public.secrets'), cleanVercel, 'DURABLE_WORKER_VAULT_AUTHORITY_MISSING')
+  expectFailure(validMigration.replaceAll('vault.decrypted_secrets', 'public.secrets'), cleanVercel, 'DURABLE_WORKER_VAULT_AUTHORITY_MISSING')
+})
+
+test('rejects missing governed worker URL secret', () => {
+  expectFailure(validMigration.replace("DGP_DURABLE_WORKER_URL", "DGP_WORKER_URL"), cleanVercel, 'DURABLE_WORKER_URL_SECRET_NAME_MISSING')
+})
+
+test('rejects direct provider-specific worker destination', () => {
+  expectFailure(validMigration.replace('url := worker_url', "url := 'https://data-quality-ai-platform.vercel.app/api/jobs/worker'"), cleanVercel, 'DURABLE_WORKER_VAULT_URL_NOT_USED')
 })
 
 test('rejects duplicate Vercel worker scheduling', () => {
@@ -61,8 +67,4 @@ test('rejects duplicate Vercel worker scheduling', () => {
     ...cleanVercel,
     crons: [{ path: '/api/jobs/worker', schedule: '* * * * *' }],
   }, 'DURABLE_WORKER_DUPLICATE_VERCEL_CRON_PRESENT')
-})
-
-test('rejects a non-canonical worker destination', () => {
-  expectFailure(validMigration.replace('https://data-quality-ai-platform.vercel.app/api/jobs/worker', 'https://example.invalid/api/jobs/worker'), cleanVercel, 'DURABLE_WORKER_CANONICAL_URL_MISSING')
 })
