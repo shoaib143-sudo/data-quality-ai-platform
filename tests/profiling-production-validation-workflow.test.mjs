@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 
-const workflow = await readFile('.github/workflows/profiling-production-validation.yml', 'utf8')
+const workflow = await readFile('.github/workflows/profiling-native-replay.yml', 'utf8')
 
 test('production credentials are never exposed to pull_request jobs', () => {
   assert.match(workflow, /live-production:\n\s+if: github\.event_name == 'push' \|\| github\.event_name == 'workflow_dispatch'/)
