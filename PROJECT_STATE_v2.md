@@ -151,8 +151,9 @@ The Runtime v2 Phase-0 advisor review classified the current findings rather tha
 - authenticated SECURITY DEFINER membership/runtime helpers remain intentional governed surfaces with explicit empty `search_path` and server-side authorization;
 - `governance.agent_risk_rank(text)` has one evidence-backed mutable-search-path hardening gap selected for immediate forward-only remediation;
 - leaked-password protection remains an external Supabase Auth configuration opportunity;
-- unindexed foreign keys and unused indexes remain benchmark-later candidates until representative workload evidence justifies changes;
-- an exact catalog-level duplicate-index comparison found no exact duplicate index pairs.
+- current live advisor evidence reports 44 unindexed foreign-key candidates and 473 indexes with zero observed scans; both remain benchmark-later until representative workload evidence justifies changes;
+- the current exact catalog-level duplicate-index comparison found no exact duplicate index pairs;
+- seven current RLS-with-no-policy Runtime v2 tables were directly verified as service/control-plane-only: anon/authenticated have no table DML privileges while service_role retains required access.
 
 See `Architecture/2026-09-15-supabase-advisor-and-index-review.md`.
 
