@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 const workflow = await readFile('.github/workflows/profiling-native-replay.yml', 'utf8')
 
 test('production credentials are never exposed to pull_request jobs', () => {
-  assert.match(workflow, /live-production:\n\s+if: github\.event_name == 'push' \|\| github\.event_name == 'workflow_dispatch'/)
+  assert.match(workflow, /live-production:\n\s+if: github\.event_name != 'pull_request'/)
   const contractBlock = workflow.slice(workflow.indexOf('  verify:'), workflow.indexOf('  live-production:'))
   assert.equal(contractBlock.includes('SUPABASE_SERVICE_ROLE_KEY'), false)
   assert.equal(contractBlock.includes('NEXT_PUBLIC_SUPABASE_URL'), false)
