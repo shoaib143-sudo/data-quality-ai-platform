@@ -7,7 +7,7 @@ const workflow = await readFile(workflowPath, 'utf8')
 const certification = workflow.slice(workflow.indexOf('  live-production-certification:'))
 
 test('R2 production preparation is manual-only and production gated', () => {
-  assert.match(certification, /if: github\.event_name == 'workflow_dispatch' && inputs\.operation != 'verify'/)
+  assert.match(certification, /if: github\.event_name == 'workflow_dispatch' && \(inputs\.operation == 'production-readiness' \|\| inputs\.operation == 'production-certify'\)/)
   assert.match(certification, /environment: production/)
   assert.doesNotMatch(certification, /pull_request_target|schedule:/)
 })
