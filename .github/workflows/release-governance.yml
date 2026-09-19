@@ -141,10 +141,10 @@ jobs:
                 http://127.0.0.1:3000/api/health/live >/tmp/cloudflare-live.json 2>/tmp/cloudflare-live.err \
               && curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
                 http://127.0.0.1:3000/api/build-info >/tmp/cloudflare-build.json 2>/tmp/cloudflare-build.err \
-              && node - "$GITHUB_SHA" </tmp/cloudflare-build.json <<'NODE'
+              && node - "$GITHUB_SHA" /tmp/cloudflare-build.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
           if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
           NODE
             then
@@ -408,10 +408,10 @@ jobs:
           test "$live_code" = "200"
           build_code="$(curl --silent --show-error --output /tmp/canary-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
           test "$build_code" = "200"
-          node - "$EXACT_SHA" </tmp/canary-build.json <<'NODE'
+          node - "$EXACT_SHA" /tmp/canary-build.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
           if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
           NODE
           mutation_code="$(curl --silent --show-error --output /tmp/canary-mutation.json --write-out '%{http_code}' -X POST "$BASE_URL/api/internal/governance/approval-automation")"
@@ -517,10 +517,10 @@ jobs:
           test "$live_code" = "200"
           build_code="$(curl --silent --show-error --output /tmp/worker-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
           test "$build_code" = "200"
-          node - "$EXACT_SHA" </tmp/worker-build.json <<'NODE'
+          node - "$EXACT_SHA" /tmp/worker-build.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
           if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
           NODE
           disabled_code="$(curl --silent --show-error --output /tmp/worker-disabled.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"mode":"ADAPTIVE_DISPATCH"}' "$BASE_URL/api/jobs/worker")"
@@ -554,18 +554,18 @@ jobs:
 
           live_code="$(curl --silent --show-error --output /tmp/vercel-live.json --write-out '%{http_code}' "$BASE_URL/api/health/live")"
           test "$live_code" = "200"
-          node </tmp/vercel-live.json <<'NODE'
+          node - /tmp/vercel-live.json <<'NODE'
           const fs = require('node:fs')
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
           if (body.status !== 'ALIVE') process.exit(1)
           NODE
 
           build_code="$(curl --silent --show-error --output /tmp/vercel-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
           test "$build_code" = "200"
-          node - "$EXPECTED_SHA" </tmp/vercel-build.json <<'NODE'
+          node - "$EXPECTED_SHA" /tmp/vercel-build.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
           if (body.commitSha !== expected || body.environment !== 'production' || body.platform !== 'vercel') process.exit(1)
           NODE
 
@@ -575,9 +575,9 @@ jobs:
           set -euo pipefail
           BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
           curl --fail-with-body --silent --show-error             --connect-timeout 10 --max-time 60             "$BASE_URL/api/health/ready"             --output /tmp/vercel-ready.json
-          node </tmp/vercel-ready.json <<'NODE'
+          node - /tmp/vercel-ready.json <<'NODE'
           const fs = require('node:fs')
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
           if (body.status !== 'READY') process.exit(1)
           NODE
 
@@ -588,8 +588,8 @@ jobs:
           BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
           code="$(curl --silent --show-error --output /tmp/r2-cert-auth.json --write-out '%{http_code}' "$BASE_URL/api/internal/storage/certify-r2")"
           test "$code" = "401"
-          node </tmp/r2-cert-auth.json <<'NODE'
+          node - /tmp/r2-cert-auth.json <<'NODE'
           const fs = require('node:fs')
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
           if (body.error !== 'Unauthorized.') process.exit(1)
           NODE
