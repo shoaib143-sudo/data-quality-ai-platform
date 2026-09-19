@@ -87,7 +87,7 @@ requireText('lib/data-plane/object-lifecycle.ts', [
   "not('retention_until', 'is', null)",
   'store.delete',
 ])
-requireText('app/api/jobs/worker/route.ts', [
+requireText('lib/orchestration/worker-service.ts', [
   'processSemanticIndexJobs',
   'enqueueDailySemanticIndexJobs',
   'cleanupExpiredObjectArtifacts',
