@@ -89,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          docker run --detach --rm \
+          docker run --detach \
             --name datanexus-cloudflare-ci \
             --publish 127.0.0.1:3000:3000 \
             --env DATANEXUS_ENV=canary \
