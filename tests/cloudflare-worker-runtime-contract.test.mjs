@@ -24,7 +24,7 @@ test('worker ingress exposes only health, build identity, and durable execution'
   }
   assert.match(router, /Route is not exposed by the DataNexus worker runtime/)
   assert.match(router, /DATANEXUS_WORKER_EXECUTION_ENABLED !== 'true'/)
-  assert.match(router, /pingEndpoint = '\/api\/health\/live'/)
+  assert.match(router, /pingEndpoint = 'container\/api\/health\/live'/)
   assert.match(router, /definedEnvVars/)
   assert.match(router, /status: 503/)
 })
