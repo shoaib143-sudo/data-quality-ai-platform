@@ -721,6 +721,60 @@ Use, where practical:
 Critical findings cannot be waived implicitly by the implementing workstream. Any accepted exception requires explicit owner, rationale, compensating controls, expiry/review date and evidence.
 
 
+
+### 6.20 Risk-tiered revalidation without weakening final certification
+
+Use change-impact classification so assurance is fast during implementation and exhaustive at final release.
+
+Suggested tiers:
+
+| Change tier | Examples | Required revalidation |
+| --- | --- | --- |
+| T0 | Documentation-only, no executable/config contract change | documentation/link/schema-reference checks |
+| T1 | Isolated UI/read-only logic | affected unit/contract/integration tests plus security lint |
+| T2 | API, persistence, retrieval, queue or non-destructive runtime logic | affected unit/integration/negative/failure/concurrency suites plus migration/compatibility checks |
+| T3 | Authorization, approval, autonomous action, schema migration, lineage authority, retention, rollback, DR, build/release security | full affected-domain assurance including adversarial/security/load/recovery where relevant |
+| Release candidate | final exact head | full clean-room, E2E, load, chaos, security, adversarial, rollback, DR and production revalidation |
+
+Risk-tiering reduces unnecessary CI cost but never weakens the final exact-head release gate.
+
+### 6.21 Configuration and environment drift assurance
+
+Production behavior depends on code, schema and configuration together.
+
+Certification must inventory and verify material configuration including:
+
+- environment variables and secret references;
+- Supabase/Auth/RLS configuration;
+- Vercel/Cloudflare/Render/runtime settings where applicable;
+- provider routing/model policy;
+- feature flags and kill switches;
+- queues/schedulers/cron;
+- storage buckets/CORS/lifecycle settings;
+- rate limits, concurrency and budget controls;
+- notification/integration endpoints.
+
+Where practical, desired state should be codified and compared against runtime state. Material drift must either fail certification or be explicitly documented and approved.
+
+### 6.22 Immutable certification evidence manifest
+
+Every final certification should produce a machine-readable evidence manifest binding:
+
+- exact Git SHA;
+- build/deployment artifact digest;
+- migration set/checksum;
+- test-suite versions and results;
+- evaluation dataset/corpus versions;
+- model/provider/embedding versions where relevant;
+- configuration fingerprint;
+- canary window and measured SLO results;
+- security/adversarial findings and dispositions;
+- rollback/DR evidence;
+- production deployment identifier and verification timestamp.
+
+The manifest is the canonical proof of what was certified. A later change to any bound material input invalidates only the affected certification scope, while a new release candidate still receives full exact-head certification.
+
+
 ## 7. Final 100% acceptance criteria
 
 A 37-area capability may be marked 100% only when all applicable criteria pass:
@@ -747,6 +801,8 @@ A 37-area capability may be marked 100% only when all applicable criteria pass:
 - deployed exact SHA is verified;
 - production revalidation passes;
 - documentation/evidence is reconciled;
+- configuration/runtime drift checks pass;
+- immutable certification evidence manifest is complete;
 - no unresolved P0/P1 defect remains.
 
 ## 8. External dependency required for literal 100%
