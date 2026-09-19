@@ -92,6 +92,22 @@ function skillOutput(agentKey: GovernanceReadAgentKey, output: Record<string, un
   }
 }
 
+export function buildGovernanceSpecialistSkillEvaluationInput(input: {
+  agentKey: GovernanceReadAgentKey
+  nativeToolInvocationId: string
+  output: Record<string, unknown>
+}) {
+  const refs = evidenceRefs(input.nativeToolInvocationId)
+  const skillKey = PRIMARY_SPECIALIST_SKILL[input.agentKey]
+  return {
+    skillKey,
+    output: skillOutput(input.agentKey, input.output, refs),
+    evidenceRefs: refs,
+    invokedTools: ['governance_specialist_investigate'] as const,
+    authorityViolations: [] as string[],
+  }
+}
+
 export async function evaluateGovernanceSpecialistSkill(input: {
   projectId: string
   agentKey: GovernanceReadAgentKey
@@ -100,19 +116,18 @@ export async function evaluateGovernanceSpecialistSkill(input: {
   output: Record<string, unknown>
   observedAt?: string
 }) {
-  const refs = evidenceRefs(input.nativeToolInvocationId)
-  const skillKey = PRIMARY_SPECIALIST_SKILL[input.agentKey]
+  const evaluationInput = buildGovernanceSpecialistSkillEvaluationInput(input)
   const engine = createGovernanceEvaluationEngine()
 
   const record = await recordAgentSkillOutcomeEvaluation(engine, {
     projectId: input.projectId,
     agentKey: input.agentKey,
-    skillKey,
+    skillKey: evaluationInput.skillKey,
     agentRunId: input.agentRunId,
-    output: skillOutput(input.agentKey, input.output, refs),
-    evidenceRefs: refs,
-    invokedTools: ['governance_specialist_investigate'],
-    authorityViolations: [],
+    output: evaluationInput.output,
+    evidenceRefs: evaluationInput.evidenceRefs,
+    invokedTools: evaluationInput.invokedTools,
+    authorityViolations: evaluationInput.authorityViolations,
     evaluatorType: 'DETERMINISTIC_SPECIALIST_RUNTIME',
     observedAt: input.observedAt,
     metadata: {
@@ -125,7 +140,7 @@ export async function evaluateGovernanceSpecialistSkill(input: {
 
   return {
     agentKey: input.agentKey,
-    skillKey,
+    skillKey: evaluationInput.skillKey,
     evaluation: record.evaluation,
     resultIds: record.receipts.map((receipt) => receipt.resultId),
   }
