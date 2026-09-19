@@ -20,6 +20,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
   const [sourceId, setSourceId] = useState('')
   const [name, setName] = useState('')
   const [sourceIdentifier, setSourceIdentifier] = useState('')
+  const [sourceStorageObjectId, setSourceStorageObjectId] = useState<string | null>(null)
   const [description, setDescription] = useState('')
   const [businessDomain, setBusinessDomain] = useState('')
   const [newProjectName, setNewProjectName] = useState('')
@@ -90,6 +91,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
     setProjectMode('existing'); setProjectId(value)
     setSourceId(availableSources.find(source => source.projectId === value && ['ACTIVE', 'CONFIGURED'].includes(String(source.status).toUpperCase()))?.id ?? '')
     setSourceIdentifier('')
+    setSourceStorageObjectId(null)
     setStatus(null)
   }
 
@@ -113,7 +115,9 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
     if (projectMode !== 'existing' || !projectId) { setStatus('Select an existing project before uploading a dataset file.'); return }
     setStatus(`Authorizing upload for ${file.name}…`)
     setUploadingFile(true)
-    let uploadedPath: string | null = null
+    let cleanupTarget: { storageObjectId: string; provider: 'supabase' | 'r2'; path: string; multipart: boolean } | null = null
+    let ready = false
+
     try {
       const uploadResponse = await fetch('/api/datasets/source/upload-file', {
         method: 'POST',
@@ -123,16 +127,88 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       const uploadPayload = await uploadResponse.json()
       if (!uploadResponse.ok) throw new Error(uploadPayload.error ?? 'Dataset file upload authorization failed.')
 
+      const storageObjectId = String(uploadPayload.storageObjectId ?? '').trim()
+      const provider = uploadPayload.provider === 'r2' ? 'r2' : uploadPayload.provider === 'supabase' ? 'supabase' : null
+      const path = String(uploadPayload.path ?? '').trim()
+      if (!storageObjectId || !provider || !path) throw new Error('Dataset upload authorization returned an incomplete storage contract.')
+      cleanupTarget = { storageObjectId, provider, path, multipart: uploadPayload.uploadMode === 'multipart' }
+
       setStatus(`Uploading ${file.name} directly to private project storage…`)
-      const supabase = createClient()
-      const { error: storageError } = await supabase.storage.from(uploadPayload.bucket).uploadToSignedUrl(
-        uploadPayload.path,
-        uploadPayload.token,
-        file,
-        { contentType: file.type || 'application/octet-stream', cacheControl: '3600' },
-      )
-      if (storageError) throw new Error(`Dataset file upload failed: ${storageError.message}`)
-      uploadedPath = String(uploadPayload.path)
+      if (uploadPayload.uploadMode === 'multipart') {
+        if (provider !== 'r2') throw new Error('Multipart uploads are only supported by the R2 storage provider.')
+        const partSize = Number(uploadPayload.multipart?.partSizeBytes)
+        const partCount = Number(uploadPayload.multipart?.partCount)
+        const endpoint = String(uploadPayload.multipart?.authorizationEndpoint ?? '')
+        if (!Number.isInteger(partSize) || partSize <= 0 || !Number.isInteger(partCount) || partCount <= 0 || !endpoint) {
+          throw new Error('Multipart upload authorization returned an invalid part plan.')
+        }
+
+        const completedParts: Array<{ partNumber: number; etag: string }> = []
+        for (let partNumber = 1; partNumber <= partCount; partNumber += 1) {
+          setStatus(`Uploading ${file.name} part ${partNumber} of ${partCount}…`)
+          const partResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, storageObjectId, action: 'authorize-part', partNumber }),
+          })
+          const partPayload = await partResponse.json()
+          if (!partResponse.ok) throw new Error(partPayload.error ?? `Unable to authorize upload part ${partNumber}.`)
+
+          const partUrl = String(partPayload.uploadUrl ?? '')
+          if (!partUrl) throw new Error(`Upload part ${partNumber} did not return a signed URL.`)
+          const startByte = (partNumber - 1) * partSize
+          const endByte = Math.min(file.size, startByte + partSize)
+          const putResponse = await fetch(partUrl, {
+            method: 'PUT',
+            headers: partPayload.uploadHeaders ?? {},
+            body: file.slice(startByte, endByte),
+          })
+          if (!putResponse.ok) throw new Error(`Dataset file upload failed for part ${partNumber} with status ${putResponse.status}.`)
+          const etag = putResponse.headers.get('etag')?.trim() ?? ''
+          if (!etag) throw new Error(`Dataset file upload part ${partNumber} completed without an ETag.`)
+          completedParts.push({ partNumber, etag })
+        }
+
+        const completeResponse = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, storageObjectId, action: 'complete', parts: completedParts }),
+        })
+        const completePayload = await completeResponse.json()
+        if (!completeResponse.ok) throw new Error(completePayload.error ?? 'Unable to complete multipart dataset upload.')
+      } else if (provider === 'r2') {
+        const uploadUrl = String(uploadPayload.uploadUrl ?? '')
+        if (!uploadUrl) throw new Error('R2 upload authorization did not return a signed upload URL.')
+        const r2Response = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: uploadPayload.uploadHeaders ?? {},
+          body: file,
+        })
+        if (!r2Response.ok) throw new Error(`Dataset file upload failed with status ${r2Response.status}.`)
+      } else {
+        const token = String(uploadPayload.token ?? '')
+        if (!token) throw new Error('Supabase upload authorization did not return a signed upload token.')
+        const supabase = createClient()
+        const { error: storageError } = await supabase.storage.from(uploadPayload.bucket).uploadToSignedUrl(
+          path,
+          token,
+          file,
+          { contentType: file.type || 'application/octet-stream', cacheControl: '3600' },
+        )
+        if (storageError) throw new Error(`Dataset file upload failed: ${storageError.message}`)
+      }
+
+      setStatus(`Verifying ${file.name} in private project storage…`)
+      const verificationResponse = await fetch('/api/datasets/source/upload-file/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, storageObjectId }),
+      })
+      const verificationPayload = await verificationResponse.json()
+      if (!verificationResponse.ok || verificationPayload.ready !== true) {
+        throw new Error(verificationPayload.error ?? 'Uploaded object verification failed.')
+      }
+      ready = true
 
       setStatus(`Validating ${file.name} for profiling…`)
       const fileExtension = String(uploadPayload.file?.extension ?? '').toLowerCase()
@@ -145,7 +221,6 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       })
       const sourcePayload = await sourceResponse.json()
       if (!sourceResponse.ok) throw new Error(sourcePayload.error ?? sourcePayload.validation?.errors?.join(' ') ?? 'Uploaded file source registration failed.')
-      uploadedPath = null
 
       const source: SourceOption = {
         id: sourcePayload.source.id,
@@ -157,17 +232,31 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       setAvailableSources(current => [...current.filter(item => item.id !== source.id), source].sort((a, b) => a.name.localeCompare(b.name)))
       setSourceId(source.id)
       setSourceIdentifier(uploadPayload.sourceUri)
+      setSourceStorageObjectId(storageObjectId)
       if (!name.trim()) setName(file.name.replace(/\.[^.]+$/, ''))
-      setStatus(`${file.name} uploaded and validated. The FILE source is selected and ready for dataset registration.`)
+      setStatus(`${file.name} uploaded, verified, and selected as the dataset source.`)
       router.refresh()
     } catch (error) {
-      if (uploadedPath) {
+      if (cleanupTarget && !ready) {
+        if (cleanupTarget.multipart) {
+          await fetch('/api/datasets/source/upload-file/multipart', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, storageObjectId: cleanupTarget.storageObjectId }),
+          }).catch(() => undefined)
+        }
         await fetch('/api/datasets/source/upload-file', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId, path: uploadedPath }),
+          body: JSON.stringify({
+            projectId,
+            storageObjectId: cleanupTarget.storageObjectId,
+            provider: cleanupTarget.provider,
+            path: cleanupTarget.path,
+          }),
         }).catch(() => undefined)
       }
+      setSourceStorageObjectId(null)
       setStatus(error instanceof Error ? error.message : 'Dataset file upload failed.')
     } finally {
       setUploadingFile(false)
@@ -186,7 +275,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
     if (!submittedProjectId || submittedProjectId === CREATE_PROJECT || !submittedSourceId || !submittedName || !submittedSourceIdentifier) { setStatus('Select an existing project, select a data source, then enter dataset name and source identifier.'); return }
     setRunning(true)
     try {
-      const response = await fetch('/api/datasets/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: submittedProjectId, sourceId: submittedSourceId, name: submittedName, sourceIdentifier: submittedSourceIdentifier, description: submittedDescription, businessDomain: submittedBusinessDomain }) })
+      const response = await fetch('/api/datasets/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: submittedProjectId, sourceId: submittedSourceId, name: submittedName, sourceIdentifier: submittedSourceIdentifier, storageObjectId: sourceStorageObjectId, description: submittedDescription, businessDomain: submittedBusinessDomain }) })
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? payload.source_validation?.errors?.join(' ') ?? 'Dataset registration failed.')
       const profilingReady = payload.profiling_ready === true
       setStatus(profilingReady
@@ -194,7 +283,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
         : `Registered ${payload.dataset.name} v${payload.version.version_number}. Dataset is saved, but profiling is not ready yet: ${payload.source_validation?.warnings?.at(-1) ?? 'validate the source before profiling.'}`)
       if (profilingReady && payload.agentDefinitionId) setProfilingTarget({ projectId: submittedProjectId, datasetVersionId: payload.version.id, agentDefinitionId: payload.agentDefinitionId })
       else setProfilingTarget(null)
-      setName(''); setSourceIdentifier(''); setDescription(''); setBusinessDomain(''); router.refresh()
+      setName(''); setSourceIdentifier(''); setSourceStorageObjectId(null); setDescription(''); setBusinessDomain(''); router.refresh()
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Dataset registration failed.') } finally { setRunning(false) }
   }
 
@@ -219,7 +308,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
         <div className="space-y-2 text-sm"><label className="space-y-2 block"><span className="font-medium">Project</span><select name="projectId" value={projectMode === 'create' ? CREATE_PROJECT : projectId} onChange={e => changeProject(e.target.value)} disabled={busy} className="w-full rounded-md border bg-background px-3 py-2"><option value="">Select an existing project</option>{availableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}{canCreateProject && <option value={CREATE_PROJECT}>＋ Create new project…</option>}</select></label>
           {projectMode === 'create' && canCreateProject && <div className="rounded-lg border p-3 space-y-3"><p className="text-xs text-muted-foreground">Creating a project does not change your selected existing project. You can switch back to it at any time from the dropdown.</p><label className="space-y-1 block"><span className="text-xs font-medium">Organization</span><select value={selectedOrganizationId} onChange={e => setSelectedOrganizationId(e.target.value)} disabled={creatingProject} className="w-full rounded-md border bg-background px-3 py-2">{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><label className="space-y-1 block"><span className="text-xs font-medium">New project name</span><input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} disabled={creatingProject} placeholder="Finance Data Quality" autoFocus className="w-full rounded-md border bg-background px-3 py-2" /></label><label className="space-y-1 block"><span className="text-xs text-muted-foreground">Description</span><input value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} disabled={creatingProject} placeholder="Optional project description" className="w-full rounded-md border bg-background px-3 py-2" /></label><div className="flex gap-2"><button type="button" onClick={() => void createProject()} disabled={creatingProject || !newProjectName.trim()} className="rounded-md border px-3 py-2 text-xs font-medium disabled:opacity-50">{creatingProject ? 'Creating…' : 'Create project'}</button><button type="button" onClick={() => { setProjectMode('existing'); setSourceId(''); setNewProjectName(''); setNewProjectDescription(''); setStatus(null) }} disabled={creatingProject} className="rounded-md border px-3 py-2 text-xs">Cancel</button></div></div>}
         </div>
-        <label className="space-y-2 text-sm"><span className="font-medium">Data source</span><select name="sourceId" value={sourceId} onChange={e => setSourceId(e.target.value)} disabled={busy || projectSources.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">{projectSources.length ? 'Select a source' : 'Connect a source first'}</option>{projectSources.map(s => <option key={s.id} value={s.id}>{s.name} · {s.sourceType}{String(s.status).toUpperCase() === 'CONFIGURED' ? ' · saved connection' : ''}</option>)}</select><span className="text-xs text-muted-foreground">Active sources and saved configured connections for the selected project are available. A configured JDBC connection is activated automatically when dataset registration validates its schema and table.</span></label>
+        <label className="space-y-2 text-sm"><span className="font-medium">Data source</span><select name="sourceId" value={sourceId} onChange={e => { setSourceId(e.target.value); setSourceStorageObjectId(null) }} disabled={busy || projectSources.length === 0} className="w-full rounded-md border bg-background px-3 py-2"><option value="">{projectSources.length ? 'Select a source' : 'Connect a source first'}</option>{projectSources.map(s => <option key={s.id} value={s.id}>{s.name} · {s.sourceType}{String(s.status).toUpperCase() === 'CONFIGURED' ? ' · saved connection' : ''}</option>)}</select><span className="text-xs text-muted-foreground">Active sources and saved configured connections for the selected project are available. A configured JDBC connection is activated automatically when dataset registration validates its schema and table.</span></label>
 
         <div className="rounded-lg border p-4 text-sm md:col-span-1">
           <div className="font-medium">Upload CSV or file</div>
