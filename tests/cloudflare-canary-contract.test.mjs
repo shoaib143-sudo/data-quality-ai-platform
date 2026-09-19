@@ -30,6 +30,7 @@ test('Cloudflare canary ingress fails closed on production-authority endpoints',
   ]) {
     assert.match(router, new RegExp(path.replaceAll('/', '\\/')))
   }
+  assert.match(router, /url\.pathname\.startsWith\('\/api\/internal\/'\)/)
   assert.match(router, /status: 403/)
   assert.match(router, /READ_ONLY_CANARY_METHODS/)
   assert.match(router, /\['GET', 'HEAD', 'OPTIONS'\]/)
