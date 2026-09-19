@@ -12,16 +12,39 @@ export type R2CorsRule = {
   maxAgeSeconds: number
 }
 
-export const DATANEXUS_R2_CORS_RULES: R2CorsRule[] = [{
-  allowedOrigins: [
-    'https://data-quality-ai-platform.vercel.app',
-    'https://data-quality-ai-platform-git-r2-prereq-ha-4e83b5-shoaib143-sudo.vercel.app',
-  ],
-  allowedMethods: ['GET', 'PUT', 'HEAD'],
-  allowedHeaders: ['Content-Type'],
-  exposeHeaders: ['ETag', 'Content-Length'],
-  maxAgeSeconds: 3600,
-}]
+const PRODUCTION_ORIGIN = 'https://data-quality-ai-platform.vercel.app'
+
+function browserOrigin(value: string) {
+  const candidate = value.trim().replace(/\/+$/, '')
+  if (!candidate) throw new Error('R2 CORS origin cannot be empty.')
+  if (candidate === '*') throw new Error('R2 CORS wildcard origins are not allowed.')
+  const parsed = new URL(candidate)
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+    throw new Error('R2 CORS origin must be an exact HTTPS browser origin: ' + value)
+  }
+  return parsed.origin
+}
+
+export function configuredR2CorsOrigins() {
+  const additional = (process.env.R2_CORS_ADDITIONAL_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map(browserOrigin)
+  return [...new Set([PRODUCTION_ORIGIN, ...additional])]
+}
+
+export function dataNexusR2CorsRules(): R2CorsRule[] {
+  return [{
+    allowedOrigins: configuredR2CorsOrigins(),
+    allowedMethods: ['GET', 'PUT', 'HEAD'],
+    allowedHeaders: ['Content-Type'],
+    exposeHeaders: ['ETag', 'Content-Length'],
+    maxAgeSeconds: 3600,
+  }]
+}
+
+export const DATANEXUS_R2_CORS_RULES = dataNexusR2CorsRules()
 
 function required(name: string) {
   const value = process.env[name]?.trim()
@@ -63,7 +86,7 @@ export function r2CorsHasWildcardOrigin(xml: string) {
   return hasTag(xml, 'AllowedOrigin', '*')
 }
 
-export function r2CorsPolicyMatchesDesired(xml: string, rules = DATANEXUS_R2_CORS_RULES) {
+export function r2CorsPolicyMatchesDesired(xml: string, rules = dataNexusR2CorsRules()) {
   if (r2CorsHasWildcardOrigin(xml)) return false
   return rules.every((rule) =>
     rule.allowedOrigins.every((value) => hasTag(xml, 'AllowedOrigin', value))
@@ -74,7 +97,7 @@ export function r2CorsPolicyMatchesDesired(xml: string, rules = DATANEXUS_R2_COR
   )
 }
 
-export function corsPolicyXml(rules = DATANEXUS_R2_CORS_RULES) {
+export function corsPolicyXml(rules = dataNexusR2CorsRules()) {
   const body = rules.map((rule) => [
     '<CORSRule>',
     ...rule.allowedOrigins.map((value) => `<AllowedOrigin>${escapeXml(value)}</AllowedOrigin>`),
