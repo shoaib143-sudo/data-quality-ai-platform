@@ -21,7 +21,13 @@ test('Cloudflare preflight does not require Cloudflare credentials or paid activ
   assert.doesNotMatch(preflight, /CLOUDFLARE_API_TOKEN/)
   assert.doesNotMatch(preflight, /CLOUDFLARE_ACCOUNT_ID/)
   assert.doesNotMatch(preflight, /confirm_paid_activation == true/)
-  assert.doesNotMatch(preflight, /wrangler@/)
+  const wranglerDeployLines = preflight
+    .split(/\r?\n/)
+    .filter(line => /wrangler@4\.131\.1 deploy/.test(line))
+  assert.ok(wranglerDeployLines.length >= 2)
+  for (const line of wranglerDeployLines) {
+    assert.match(line, /deploy --dry-run/)
+  }
 })
 
 test('all runtime verification commands referenced by release governance are registered', () => {
