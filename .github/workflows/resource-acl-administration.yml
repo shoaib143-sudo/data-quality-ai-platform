@@ -3,6 +3,7 @@ name: Resource ACL Administration
 on:
   pull_request:
     paths:
+      - 'tests/resource-acl-effective-preview.test.mjs'
       - 'app/resource-access/**'
       - 'app/api/resource-access/**'
       - 'lib/governance/resource-access-admin-service.ts'
@@ -11,6 +12,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'tests/resource-acl-effective-preview.test.mjs'
       - 'app/resource-access/**'
       - 'app/api/resource-access/**'
       - 'lib/governance/resource-access-admin-service.ts'
@@ -32,3 +34,5 @@ jobs:
           node-version: 24
       - name: Verify resource ACL administration
         run: node scripts/verify-resource-acl-administration.mjs
+      - name: Verify effective-access preview negative cases
+        run: node --test tests/resource-acl-effective-preview.test.mjs
