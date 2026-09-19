@@ -22,6 +22,8 @@ create table if not exists agent.learning_candidate_benchmarks (
   adversarial_failures integer not null default 0 check (adversarial_failures >= 0),
   evidence_refs jsonb not null check (jsonb_typeof(evidence_refs) = 'array'),
   rollback_ref text not null,
+  minimum_case_count integer not null check (minimum_case_count > 0),
+  minimum_candidate_score numeric not null check (minimum_candidate_score >= 0 and minimum_candidate_score <= 1),
   decision text not null check (decision in ('NOT_READY','REVIEW_REQUIRED')),
   reasons jsonb not null check (jsonb_typeof(reasons) = 'array'),
   automatic_promotion_allowed boolean not null default false check (automatic_promotion_allowed = false),
@@ -76,6 +78,8 @@ create or replace function agent.record_learning_candidate_benchmark(
   p_adversarial_failures integer,
   p_evidence_refs text[],
   p_rollback_ref text,
+  p_minimum_case_count integer,
+  p_minimum_candidate_score numeric,
   p_decision text,
   p_reasons text[],
   p_actor_user_id uuid default null
@@ -122,6 +126,10 @@ begin
     raise exception 'benchmark evidence references must be unique';
   end if;
   if length(btrim(coalesce(p_rollback_ref,''))) = 0 then raise exception 'rollbackRef is required'; end if;
+  if p_minimum_case_count is null or p_minimum_case_count < 1 then raise exception 'minimumCaseCount must be positive'; end if;
+  if p_minimum_candidate_score is null or p_minimum_candidate_score < 0 or p_minimum_candidate_score > 1 then
+    raise exception 'minimumCandidateScore must be between 0 and 1';
+  end if;
   if p_decision not in ('NOT_READY','REVIEW_REQUIRED') then
     raise exception 'benchmark decision must be NOT_READY or REVIEW_REQUIRED';
   end if;
@@ -145,6 +153,12 @@ begin
   end if;
   if p_evaluator_id = v_candidate.agent_key then
     raise exception 'benchmark evaluator must be independent from the proposing agent';
+  end if;
+  if p_case_count < p_minimum_case_count and p_decision <> 'NOT_READY' then
+    raise exception 'insufficient benchmark cases require NOT_READY';
+  end if;
+  if p_candidate_score < p_minimum_candidate_score and p_decision <> 'NOT_READY' then
+    raise exception 'candidate score below governed threshold requires NOT_READY';
   end if;
   if p_authority_violations > 0 and p_decision <> 'NOT_READY' then
     raise exception 'authority violations require NOT_READY';
@@ -178,6 +192,8 @@ begin
       or v_existing.adversarial_failures <> p_adversarial_failures
       or v_existing.evidence_refs <> v_refs
       or v_existing.rollback_ref <> btrim(p_rollback_ref)
+      or v_existing.minimum_case_count <> p_minimum_case_count
+      or v_existing.minimum_candidate_score <> p_minimum_candidate_score
       or v_existing.decision <> p_decision
       or v_existing.reasons <> v_reasons
     then
@@ -200,7 +216,8 @@ begin
   insert into agent.learning_candidate_benchmarks(
     project_id, candidate_id, benchmark_id, evaluator_id, evaluator_type, observed_at,
     case_count, baseline_version, candidate_version, baseline_score, candidate_score,
-    authority_violations, adversarial_failures, evidence_refs, rollback_ref, decision,
+    authority_violations, adversarial_failures, evidence_refs, rollback_ref,
+    minimum_case_count, minimum_candidate_score, decision,
     reasons, automatic_promotion_allowed, automatic_authority_expansion_allowed,
     automatic_mutation_boundary_change_allowed, human_review_required,
     current_authorization_required_at_release
@@ -209,7 +226,7 @@ begin
     p_evaluator_type, p_observed_at, p_case_count, btrim(p_baseline_version),
     btrim(p_candidate_version), p_baseline_score, p_candidate_score,
     p_authority_violations, p_adversarial_failures, v_refs, btrim(p_rollback_ref),
-    p_decision, v_reasons, false, false, false, true, true
+    p_minimum_case_count, p_minimum_candidate_score, p_decision, v_reasons, false, false, false, true, true
   ) returning id into v_id;
 
   update agent.learning_candidates
@@ -228,7 +245,7 @@ end;
 $$;
 
 revoke all on function agent.record_learning_candidate_benchmark(
-  uuid,uuid,text,text,text,timestamptz,integer,text,text,numeric,numeric,integer,integer,text[],text,text,text[],uuid
+  uuid,uuid,text,text,text,timestamptz,integer,text,text,numeric,numeric,integer,integer,text[],text,integer,numeric,text,text[],uuid
 ) from public, anon, authenticated;
 grant execute on function agent.record_learning_candidate_benchmark(
   uuid,uuid,text,text,text,timestamptz,integer,text,text,numeric,numeric,integer,integer,text[],text,text,text[],uuid
