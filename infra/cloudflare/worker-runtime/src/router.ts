@@ -1,6 +1,14 @@
 import { Container } from '@cloudflare/containers'
 import { env } from 'cloudflare:workers'
 
+function definedEnvVars(values: Record<string, string | undefined>): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [name, value] of Object.entries(values)) {
+    if (typeof value === 'string' && value.length > 0) result[name] = value
+  }
+  return result
+}
+
 const READ_ONLY_METHODS = new Set(['GET', 'HEAD'])
 
 const ALLOWED_PATHS = new Set([
@@ -12,7 +20,8 @@ const ALLOWED_PATHS = new Set([
 export class DataNexusWorkerContainer extends Container {
   defaultPort = 3000
   sleepAfter = '10m'
-  envVars = {
+  pingEndpoint = '/api/health/live'
+  envVars = definedEnvVars({
     DATANEXUS_ENV: 'canary',
     DATANEXUS_PLATFORM: 'cloudflare',
     DATANEXUS_COMMIT_SHA: env.DATANEXUS_COMMIT_SHA,
@@ -22,7 +31,7 @@ export class DataNexusWorkerContainer extends Container {
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY,
     CRON_SECRET: env.DATANEXUS_WORKER_SECRET,
-  }
+  })
 }
 
 function workerRuntimeConfigured() {
