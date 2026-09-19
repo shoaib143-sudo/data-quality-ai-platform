@@ -75,10 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${DATANEXUS_CERTIFICATION_TARGET_URL:-}" || { echo "::error::DATANEXUS_CERTIFICATION_TARGET_URL must be configured in the protected production environment"; exit 1; }
-          case "$DATANEXUS_CERTIFICATION_TARGET_URL" in
-            https://data-quality-ai-platform.vercel.app|https://canary.datanexus.invalid) ;;
-            *) echo "::error::Certification target is not an approved governed endpoint"; exit 1 ;;
-          esac
+          test "$DATANEXUS_CERTIFICATION_TARGET_URL" = "https://data-quality-ai-platform.vercel.app" || { echo "::error::Production certification target is not the governed production endpoint"; exit 1; }
           test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || { echo "::error::GitHub OIDC request URL is unavailable"; exit 1; }
           test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || { echo "::error::GitHub OIDC request token is unavailable"; exit 1; }
 
