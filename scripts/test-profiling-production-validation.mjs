@@ -31,6 +31,7 @@ function validSnapshot(overrides = {}) {
     completedRuns: 2,
     activeSourceTypes: { FILE: 1, JDBC: 1 },
     ambiguousActiveSourceDatasetVersions: [],
+    activeDatasetVersionsWithoutCompletedProfile: [],
     latestRuns: [validRun(), validRun({ id: 'run-2', sourceType: 'JDBC' })],
     latestAttempts: [
       { id: 'run-1', datasetVersionId: 'dataset-file', status: 'COMPLETED', activeSource: true },
@@ -147,4 +148,14 @@ test('fails closed when a dataset version has multiple active execution sources'
   assert.equal(result.valid, false)
   assert.ok(result.failures.includes('AMBIGUOUS_ACTIVE_EXECUTION_SOURCE_dataset-ambiguous'))
   assert.equal(result.summary.ambiguousActiveSourceDatasetVersions, 1)
+})
+
+
+test('fails closed when an active execution source has never completed profiling', () => {
+  const result = evaluateProfilingProductionSnapshot(validSnapshot({
+    activeDatasetVersionsWithoutCompletedProfile: ['dataset-never-profiled'],
+  }))
+  assert.equal(result.valid, false)
+  assert.ok(result.failures.includes('ACTIVE_SOURCE_WITHOUT_COMPLETED_PROFILE_dataset-never-profiled'))
+  assert.equal(result.summary.activeDatasetVersionsWithoutCompletedProfile, 1)
 })
