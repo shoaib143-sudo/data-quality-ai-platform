@@ -1,6 +1,8 @@
 import { createHash, createHmac } from 'node:crypto'
 import type {
   HeadObjectResult,
+  MultipartObjectStorage,
+  MultipartUploadPart,
   ObjectStorage,
   PutObjectInput,
   SignedStorageOperation,
@@ -118,6 +120,7 @@ function presign(
   key: string,
   expiresInSeconds: number,
   contentType?: string,
+  operationParams: Record<string, string> = {},
 ) {
   if (!Number.isInteger(expiresInSeconds) || expiresInSeconds < 1 || expiresInSeconds > 604800) {
     throw new Error('R2 signed URL expiry must be between 1 and 604800 seconds.')
@@ -135,6 +138,7 @@ function presign(
   const signedHeaderList = signedHeaderNames.join(';')
 
   const params = {
+    ...operationParams,
     'X-Amz-Algorithm': ALGORITHM,
     'X-Amz-Credential': `${accessKeyId}/${scope}`,
     'X-Amz-Date': amz,
@@ -160,12 +164,13 @@ async function payloadHash(body?: BodyInit) {
 }
 
 async function signedFetch(
-  method: 'GET' | 'PUT' | 'HEAD' | 'DELETE',
+  method: 'GET' | 'PUT' | 'HEAD' | 'DELETE' | 'POST',
   bucket: string,
   key: string,
   body?: BodyInit,
   contentType?: string,
   extraHeaders: Record<string, string> = {},
+  queryParams: Record<string, string> = {},
 ) {
   const { accessKeyId, secretAccessKey } = config()
   const now = new Date()
@@ -184,15 +189,71 @@ async function signedFetch(
 
   const signedHeaderNames = Object.keys(headers).sort()
   const canonicalHeaders = signedHeaderNames.map((name) => `${name}:${headers[name].trim()}\n`).join('')
-  const canonicalRequest = [method, url.pathname, '', canonicalHeaders, signedHeaderNames.join(';'), hash].join('\n')
+  const query = canonicalQuery(queryParams)
+  const canonicalRequest = [method, url.pathname, query, canonicalHeaders, signedHeaderNames.join(';'), hash].join('\n')
   const stringToSign = [ALGORITHM, amz, scope, sha256(canonicalRequest)].join('\n')
   const signature = createHmac('sha256', signingKey(secretAccessKey, date)).update(stringToSign).digest('hex')
   const authorization = `${ALGORITHM} Credential=${accessKeyId}/${scope}, SignedHeaders=${signedHeaderNames.join(';')}, Signature=${signature}`
 
+  if (query) url.search = query
   const requestHeaders = new Headers(headers)
   requestHeaders.set('authorization', authorization)
   requestHeaders.delete('host')
   return fetch(url, { method, headers: requestHeaders, body })
+}
+
+function normalizeUploadId(uploadId: string) {
+  const value = uploadId.trim()
+  if (!value || value.length > 2048 || /[\u0000-\u001f\u007f]/.test(value)) {
+    throw new Error('R2 multipart upload id is invalid.')
+  }
+  return value
+}
+
+function normalizePartNumber(partNumber: number) {
+  if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10_000) {
+    throw new Error('R2 multipart part number must be between 1 and 10000.')
+  }
+  return partNumber
+}
+
+function normalizeCompletedParts(parts: MultipartUploadPart[]) {
+  if (!Array.isArray(parts) || parts.length < 1 || parts.length > 10_000) {
+    throw new Error('R2 multipart completion requires between 1 and 10000 parts.')
+  }
+  return parts.map((part, index) => {
+    const partNumber = normalizePartNumber(part.partNumber)
+    if (partNumber !== index + 1) {
+      throw new Error('R2 multipart completion parts must be contiguous and ordered.')
+    }
+    const etag = part.etag.trim().replace(/^"|"$/g, '')
+    if (!/^[0-9a-f]{32}$/i.test(etag)) {
+      throw new Error('R2 multipart part ETag is invalid.')
+    }
+    return { partNumber, etag }
+  })
+}
+
+function escapeXml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
+}
+
+function multipartCompleteXml(parts: MultipartUploadPart[]) {
+  const normalized = normalizeCompletedParts(parts)
+  return `<CompleteMultipartUpload>${normalized.map((part) =>
+    `<Part><PartNumber>${part.partNumber}</PartNumber><ETag>"${escapeXml(part.etag)}"</ETag></Part>`
+  ).join('')}</CompleteMultipartUpload>`
+}
+
+function uploadIdFromCreateResponse(xml: string) {
+  const match = xml.match(/<UploadId>([^<]+)<\/UploadId>/i)
+  if (!match?.[1]) throw new Error('R2 multipart initiation response did not include an upload id.')
+  return normalizeUploadId(match[1])
 }
 
 async function sizeFromRange(bucket: string, key: string) {
@@ -209,7 +270,7 @@ async function sizeFromRange(bucket: string, key: string) {
   }
 }
 
-export class R2StorageAdapter implements ObjectStorage {
+export class R2StorageAdapter implements ObjectStorage, MultipartObjectStorage {
   readonly provider = 'r2' as const
 
   private bucket() {
@@ -295,6 +356,90 @@ export class R2StorageAdapter implements ObjectStorage {
       key,
       url: presign('GET', bucket, key, input.expiresInSeconds),
       expiresAt: new Date(Date.now() + input.expiresInSeconds * 1000).toISOString(),
+    }
+  }
+
+  async createMultipartUpload(input: {
+    bucket: string
+    key: string
+    contentType?: string
+  }) {
+    const bucket = assertBucket(input.bucket || this.bucket())
+    const key = scopedKey(input.key)
+    const contentType = input.contentType?.trim()
+    const response = await signedFetch('POST', bucket, key, undefined, contentType, {}, { uploads: '' })
+    const xml = await response.text()
+    if (!response.ok) throw new Error(`R2 multipart initiation failed with status ${response.status}.`)
+    return {
+      provider: this.provider,
+      bucket,
+      key,
+      uploadId: uploadIdFromCreateResponse(xml),
+    } as const
+  }
+
+  async createMultipartPartAuthorization(input: {
+    bucket: string
+    key: string
+    uploadId: string
+    partNumber: number
+    expiresInSeconds: number
+  }) {
+    const bucket = assertBucket(input.bucket || this.bucket())
+    const key = scopedKey(input.key)
+    const uploadId = normalizeUploadId(input.uploadId)
+    const partNumber = normalizePartNumber(input.partNumber)
+    return {
+      provider: this.provider,
+      bucket,
+      key,
+      uploadId,
+      partNumber,
+      url: presign('PUT', bucket, key, input.expiresInSeconds, undefined, {
+        partNumber: String(partNumber),
+        uploadId,
+      }),
+      expiresAt: new Date(Date.now() + input.expiresInSeconds * 1000).toISOString(),
+    } as const
+  }
+
+  async completeMultipartUpload(input: {
+    bucket: string
+    key: string
+    uploadId: string
+    parts: MultipartUploadPart[]
+  }): Promise<StorageReference> {
+    const bucket = assertBucket(input.bucket || this.bucket())
+    const key = scopedKey(input.key)
+    const uploadId = normalizeUploadId(input.uploadId)
+    const body = multipartCompleteXml(input.parts)
+    const response = await signedFetch(
+      'POST',
+      bucket,
+      key,
+      body,
+      'application/xml',
+      {},
+      { uploadId },
+    )
+    const responseBody = await response.text()
+    if (!response.ok || /<Error(?:\s|>)/i.test(responseBody)) {
+      throw new Error(`R2 multipart completion failed with status ${response.status}.`)
+    }
+    return { provider: this.provider, bucket, key }
+  }
+
+  async abortMultipartUpload(input: {
+    bucket: string
+    key: string
+    uploadId: string
+  }): Promise<void> {
+    const bucket = assertBucket(input.bucket || this.bucket())
+    const key = scopedKey(input.key)
+    const uploadId = normalizeUploadId(input.uploadId)
+    const response = await signedFetch('DELETE', bucket, key, undefined, undefined, {}, { uploadId })
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`R2 multipart abort failed with status ${response.status}.`)
     }
   }
 }

@@ -67,3 +67,45 @@ export interface ObjectStorage {
     expiresInSeconds: number
   }): Promise<SignedStorageOperation>
 }
+
+
+export type MultipartUploadPart = {
+  partNumber: number
+  etag: string
+}
+
+export type MultipartUploadSession = {
+  provider: 'r2'
+  bucket: string
+  key: string
+  uploadId: string
+}
+
+export interface MultipartObjectStorage extends ObjectStorage {
+  createMultipartUpload(input: {
+    bucket: string
+    key: string
+    contentType?: string
+  }): Promise<MultipartUploadSession>
+
+  createMultipartPartAuthorization(input: {
+    bucket: string
+    key: string
+    uploadId: string
+    partNumber: number
+    expiresInSeconds: number
+  }): Promise<SignedStorageOperation & { partNumber: number; uploadId: string }>
+
+  completeMultipartUpload(input: {
+    bucket: string
+    key: string
+    uploadId: string
+    parts: MultipartUploadPart[]
+  }): Promise<StorageReference>
+
+  abortMultipartUpload(input: {
+    bucket: string
+    key: string
+    uploadId: string
+  }): Promise<void>
+}
