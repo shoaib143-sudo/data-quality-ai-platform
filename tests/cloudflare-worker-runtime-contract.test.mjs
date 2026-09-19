@@ -31,3 +31,14 @@ test('worker route keeps a dedicated execution secret and explicit Supabase runt
   assert.match(router, /NEXT_PUBLIC_SUPABASE_URL: env\.NEXT_PUBLIC_SUPABASE_URL/)
   assert.match(router, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: env\.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/)
 })
+
+
+test('worker ingress fails closed when execution is enabled without complete secrets and enforces methods', () => {
+  assert.match(router, /workerRuntimeConfigured/)
+  assert.match(router, /DATANEXUS_WORKER_SECRET\?\.trim/)
+  assert.match(router, /SUPABASE_SERVICE_ROLE_KEY\?\.trim/)
+  assert.match(router, /Worker execution is enabled but required runtime secrets are incomplete/)
+  assert.match(router, /request\.method\.toUpperCase\(\) !== 'POST'/)
+  assert.match(router, /status: 405/)
+  assert.match(router, /Allow: 'POST'/)
+})
