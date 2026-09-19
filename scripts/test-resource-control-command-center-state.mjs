@@ -2,12 +2,12 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import ts from 'typescript'
+import { stripTypeScriptTypes } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
 const sourcePath = path.resolve('lib/ai/resource-control-command-center-state.ts')
 const source = await fs.readFile(sourcePath, 'utf8')
-const transpiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText
+const transpiled = stripTypeScriptTypes(source, { mode: 'transform', sourceUrl: sourcePath })
 const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'resource-control-command-center-state-'))
 const modulePath = path.join(dir, 'resource-control-command-center-state.mjs')
 await fs.writeFile(modulePath, transpiled)
