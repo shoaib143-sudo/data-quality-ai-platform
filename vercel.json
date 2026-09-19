@@ -14,5 +14,11 @@
       "feat/frontend-*": true,
       "fix/frontend-*": true
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/internal/governance/approval-automation",
+      "schedule": "15 0 * * *"
+    }
+  ]
 }
