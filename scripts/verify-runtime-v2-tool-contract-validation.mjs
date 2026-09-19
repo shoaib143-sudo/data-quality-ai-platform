@@ -10,9 +10,13 @@ function requireText(source, text, message) {
 }
 
 const contracts = read('lib/agents/runtime/native-tool-contracts.ts')
+const rawInputSafety = read('lib/agents/runtime/native-tool-input-safety.ts')
 const profilingExecutor = read('lib/agents/executors/profiling-executor.ts')
 
 requireText(contracts, 'normalizeNativeToolContractInput', 'Native runtime must normalize tool input against the pinned schema.')
+requireText(contracts, 'assertNativeToolRawInputSafety({', 'Native runtime must validate raw caller fields before normalization.')
+requireText(rawInputSafety, 'undeclared raw properties are not allowed', 'Closed schemas must reject undeclared raw caller fields instead of silently dropping them.')
+requireText(rawInputSafety, 'conflicting aliases supplied', 'Conflicting snake/camel aliases must fail closed.')
 requireText(contracts, 'assertNativeJsonContract(contract.input_schema, normalized', 'Normalized tool input must be validated before execution.')
 requireText(contracts, "schema.additionalProperties === false", 'Input validation must reject undeclared fields when the schema is closed.')
 requireText(contracts, "schema.format === 'uuid'", 'UUID tool inputs must be validated.')
