@@ -164,11 +164,15 @@ const ambiguousActiveSourceDatasetVersions = Array.from(activeSourceCountByDatas
   .filter(([, count]) => count > 1)
   .map(([datasetVersionId]) => datasetVersionId)
 
+const activeDatasetVersionsWithoutCompletedProfile = Array.from(activeSourceTypeByDatasetVersion.keys())
+  .filter((datasetVersionId) => !latestByDatasetVersion.has(datasetVersionId))
+
 const snapshot = {
   profileRuns,
   completedRuns,
   activeSourceTypes,
   ambiguousActiveSourceDatasetVersions,
+  activeDatasetVersionsWithoutCompletedProfile,
   latestRuns,
   latestAttempts,
 }
