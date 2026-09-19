@@ -5,7 +5,7 @@ import fs from 'node:fs'
 const route = fs.readFileSync(new URL('../app/api/internal/storage/reference-cutover/route.ts', import.meta.url), 'utf8')
 
 test('reference cutover is internally authenticated and separately approval gated', () => {
-  assert.match(route, /requireInternalBearer\(request\)/)
+  assert.match(route, /await requireInternalAutomation\(request\)/)
   assert.match(route, /STORAGE_R2_REFERENCE_CUTOVER_APPROVED/)
   assert.match(route, /STORAGE_R2_REFERENCE_ROLLBACK_APPROVED/)
   assert.match(route, /mode === 'apply'/)

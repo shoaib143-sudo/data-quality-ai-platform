@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireInternalBearer } from '@/lib/security/internal-bearer'
+import { requireInternalAutomation } from '@/lib/security/internal-bearer'
 import { createObjectStorage } from '@/lib/storage/factory'
 import type { StorageReference } from '@/lib/storage/contracts'
 
@@ -124,7 +124,7 @@ async function persistVerifiedSourceChecksum(
 }
 
 export async function POST(request: Request) {
-  if (!requireInternalBearer(request)) {
+  if (!(await requireInternalAutomation(request))) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 

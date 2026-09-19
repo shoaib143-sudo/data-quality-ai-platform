@@ -24,7 +24,7 @@ test('R2 preparation uses fixed internal routes and never applies cutover or del
 
 test('R2 preparation remains bounded and secret-safe', () => {
   assert.match(certification, /--connect-timeout 10 --max-time 300/)
-  assert.match(certification, /Authorization: Bearer \$CRON_SECRET/)
+  assert.match(certification, /Authorization: Bearer \$OIDC_TOKEN/)
   assert.doesNotMatch(certification, /GITHUB_ENV|GITHUB_OUTPUT|upload-artifact|actions\/cache|set -x|printenv/)
 })
 
@@ -37,4 +37,14 @@ test('R2 production preparation proves reference cutover eligibility without cha
   assert.match(certification, /destructiveActions !== 0/)
   assert.match(certification, /SKIPPED_INTEGRITY_MISMATCH/)
   assert.doesNotMatch(certification, /"mode":"apply"/)
+})
+
+
+test('R2 production preparation uses GitHub OIDC instead of copied production secrets', () => {
+  assert.match(certification, /id-token: write/)
+  assert.match(certification, /OIDC_AUDIENCE: datanexus-r2-production/)
+  assert.match(certification, /ACTIONS_ID_TOKEN_REQUEST_URL/)
+  assert.match(certification, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/)
+  assert.match(certification, /Authorization: Bearer \$OIDC_TOKEN/)
+  assert.doesNotMatch(certification, /secrets\.CRON_SECRET|secrets\.R2_CERTIFICATION_APP_URL/)
 })
