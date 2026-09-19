@@ -8,7 +8,7 @@
 
 The DataNexus requirement baseline is frozen. Implementation now focuses on completion, integration, testing, defect remediation, production hardening, revalidation, independent adversarial audit, and exact-head production certification.
 
-The governance document assessment identified 35 enhancement candidates. The assessment is retained as the frozen requirements context. No additional requirements may be introduced during delivery without explicit approval.
+The governance document assessment identified 35 enhancement candidates. Those candidates remain **PENDING APPROVAL** and are not executable requirements. The assessment is retained as frozen context only. No additional requirements may be introduced during delivery without explicit approval.
 
 ## 2. Target lifecycle
 
