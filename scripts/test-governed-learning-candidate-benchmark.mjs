@@ -134,6 +134,8 @@ for (const invariant of [
   "p_candidate_score < p_baseline_score and p_decision <> 'NOT_READY'",
   "'EVIDENCE_READY', 'BENCHMARKING'",
   "'BENCHMARKING', p_decision",
+  'and v_candidate.status = p_decision',
+  'uuid,uuid,text,text,text,timestamptz,integer,text,text,numeric,numeric,integer,integer,text[],text,integer,numeric,text,text[],uuid',
   'revoke all on agent.learning_candidate_benchmarks from public, anon, authenticated, service_role',
   'grant select on agent.learning_candidate_benchmarks to authenticated, service_role',
 ]) {
