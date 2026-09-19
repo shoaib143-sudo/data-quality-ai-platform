@@ -57,6 +57,8 @@ assert.equal(ready.automaticAuthorityExpansionAllowed, false)
 assert.equal(ready.automaticMutationBoundaryChangeAllowed, false)
 assert.equal(ready.humanReviewRequired, true)
 assert.equal(ready.currentAuthorizationRequiredAtRelease, true)
+assert.equal(ready.minimumCaseCount, 20)
+assert.equal(ready.minimumCandidateScore, 0.8)
 assert.deepEqual(ready.evidenceRefs, ['benchmark-evidence-1'])
 
 const regressed = evaluateGovernedLearningCandidateBenchmark({
@@ -125,6 +127,8 @@ for (const invariant of [
   "v_candidate.status <> 'EVIDENCE_READY'",
   "p_decision not in ('NOT_READY','REVIEW_REQUIRED')",
   "p_evaluator_id = v_candidate.agent_key",
+  "p_case_count < p_minimum_case_count and p_decision <> 'NOT_READY'",
+  "p_candidate_score < p_minimum_candidate_score and p_decision <> 'NOT_READY'",
   "p_authority_violations > 0 and p_decision <> 'NOT_READY'",
   "p_adversarial_failures > 0 and p_decision <> 'NOT_READY'",
   "p_candidate_score < p_baseline_score and p_decision <> 'NOT_READY'",
