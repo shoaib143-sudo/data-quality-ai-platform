@@ -95,22 +95,6 @@ export async function tryReuseProfileEvidence(input: {
     }
   }
 
-  const sourceAccess = record(record(run.summary).source_access)
-  const contentHashAuthority = typeof sourceAccess.content_hash_authority === 'string'
-    ? sourceAccess.content_hash_authority.trim().toUpperCase()
-    : 'UNAVAILABLE'
-  if (contentHashAuthority !== 'SOURCE_BYTES_SHA256') {
-    return {
-      reused: false,
-      eligible: false,
-      reason: 'STRONG_FILE_FINGERPRINT_NOT_PERSISTED',
-      sourceProfileRunId: null,
-      contentHashAuthority,
-      configurationHash: null,
-      profileSignature: null,
-    }
-  }
-
   const contentHash = typeof run.content_hash === 'string' && run.content_hash.trim() ? run.content_hash.trim() : null
   const schemaHash = typeof run.schema_hash === 'string' && run.schema_hash.trim() ? run.schema_hash.trim() : null
   if (!contentHash || !schemaHash) {
