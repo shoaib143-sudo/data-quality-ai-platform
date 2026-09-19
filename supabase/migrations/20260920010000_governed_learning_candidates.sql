@@ -27,6 +27,12 @@ create table if not exists agent.learning_candidates (
   candidate_version text not null,
   evidence_cutoff_at timestamptz not null,
   source_agent_run_id uuid references agent.agent_runs(id) on delete restrict,
+  may_auto_apply boolean not null default false check (may_auto_apply = false),
+  may_self_promote boolean not null default false check (may_self_promote = false),
+  may_expand_tool_authority boolean not null default false check (may_expand_tool_authority = false),
+  may_change_mutation_boundary boolean not null default false check (may_change_mutation_boundary = false),
+  requires_human_review boolean not null default true check (requires_human_review = true),
+  current_authorization_required_at_release boolean not null default true check (current_authorization_required_at_release = true),
   status text not null default 'PROPOSED' check (status in (
     'PROPOSED','EVIDENCE_READY','BENCHMARKING','NOT_READY','REVIEW_REQUIRED',
     'APPROVED_FOR_CONTROLLED_RELEASE','REJECTED','CANARY','VERIFIED','ACTIVE',
@@ -290,11 +296,12 @@ begin
   insert into agent.learning_candidates(
     project_id, candidate_key, candidate_type, agent_key, skill_key, category,
     title, proposed_change, baseline_version, candidate_version, evidence_cutoff_at,
-    source_agent_run_id, status
+    source_agent_run_id, may_auto_apply, may_self_promote, may_expand_tool_authority,
+    may_change_mutation_boundary, requires_human_review, current_authorization_required_at_release, status
   ) values (
     p_project_id, btrim(p_candidate_key), p_candidate_type, p_agent_key, p_skill_key, p_category,
     btrim(p_title), btrim(p_proposed_change), btrim(p_baseline_version), btrim(p_candidate_version),
-    p_evidence_cutoff_at, p_source_agent_run_id, 'PROPOSED'
+    p_evidence_cutoff_at, p_source_agent_run_id, false, false, false, false, true, true, 'PROPOSED'
   )
   returning * into v_candidate;
 
