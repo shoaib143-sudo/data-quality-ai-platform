@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import ts from 'typescript'
+import { stripTypeScriptTypes } from 'node:module'
 
 const originalFetch = globalThis.fetch
 const keys = [
@@ -18,9 +18,10 @@ const originalEnv = Object.fromEntries(keys.map((key) => [key, process.env[key]]
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'datanexus-model-gateway-'))
 
 function transpile(sourcePath) {
-  return ts.transpileModule(fs.readFileSync(sourcePath, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-  }).outputText
+  return stripTypeScriptTypes(fs.readFileSync(sourcePath, 'utf8'), {
+    mode: 'transform',
+    sourceUrl: sourcePath,
+  })
 }
 
 try {
