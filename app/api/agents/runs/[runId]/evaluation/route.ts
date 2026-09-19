@@ -4,13 +4,19 @@ export async function GET(_request: Request, context: { params: Promise<{ runId:
     const { runId } = await context.params
     const admin = createAdminClient()
     const { data: run, error: runError } = await admin.schema('agent').from('agent_runs')
-      .select('id,project_id')
+      .select('id,project_id,dataset_id')
       .eq('id', runId)
       .maybeSingle()
     if (runError) throw new Error(`Unable to resolve agent run: ${runError.message}`)
     if (!run) return NextResponse.json({ error: 'Agent run not found.' }, { status: 404 })
 
-    await authorizeProject(user.id, run.project_id, 'agent.execute')
+    await authorizeAgentAction(
+      user.id,
+      'agent.execute',
+      run.dataset_id
+        ? { type: 'DATASET', projectId: run.project_id, datasetId: run.dataset_id }
+        : { type: 'PROJECT', projectId: run.project_id },
+    )
     const { data: evaluations, error: evaluationError } = await admin.schema('agent').from('agent_evaluations')
       .select('id,evaluator_type,evaluator_version,score,dimensions,feedback,created_at')
       .eq('agent_run_id', run.id)
@@ -27,7 +33,8 @@ export async function GET(_request: Request, context: { params: Promise<{ runId:
 
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
-import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizeAgentAction } from '@/lib/governance/agent-authorization'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
@@ -51,13 +58,19 @@ export async function POST(request: Request, context: { params: Promise<{ runId:
 
     const admin = createAdminClient()
     const { data: run, error: runError } = await admin.schema('agent').from('agent_runs')
-      .select('id,project_id,status,agent_definition_id')
+      .select('id,project_id,dataset_id,status,agent_definition_id')
       .eq('id', runId)
       .maybeSingle()
     if (runError) throw new Error(`Unable to resolve agent run: ${runError.message}`)
     if (!run) return NextResponse.json({ error: 'Agent run not found.' }, { status: 404 })
 
-    await authorizeProject(user.id, run.project_id, 'agent.execute')
+    await authorizeAgentAction(
+      user.id,
+      'agent.execute',
+      run.dataset_id
+        ? { type: 'DATASET', projectId: run.project_id, datasetId: run.dataset_id }
+        : { type: 'PROJECT', projectId: run.project_id },
+    )
     if (!['SUCCEEDED','COMPLETED','PARTIAL'].includes(String(run.status).toUpperCase())) {
       return NextResponse.json({ error: 'Only completed or partial runs can be evaluated.' }, { status: 409 })
     }

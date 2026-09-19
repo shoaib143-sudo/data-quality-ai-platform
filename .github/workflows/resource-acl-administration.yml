@@ -3,6 +3,11 @@ name: Resource ACL Administration
 on:
   pull_request:
     paths:
+      - 'lib/platform/resource-route-contracts.mjs'
+      - 'app/api/agents/runs/[runId]/evaluation/route.ts'
+      - 'app/agents/runs/[runId]/page.tsx'
+      - 'lib/governance/resource-authorization.ts'
+      - 'tests/agent-run-detail-resource-acl.test.mjs'
       - 'app/resource-access/**'
       - 'app/api/resource-access/**'
       - 'lib/governance/resource-access-admin-service.ts'
@@ -11,6 +16,9 @@ on:
   push:
     branches: [main]
     paths:
+      - 'app/agents/runs/[runId]/page.tsx'
+      - 'lib/governance/resource-authorization.ts'
+      - 'tests/agent-run-detail-resource-acl.test.mjs'
       - 'app/resource-access/**'
       - 'app/api/resource-access/**'
       - 'lib/governance/resource-access-admin-service.ts'
@@ -32,3 +40,5 @@ jobs:
           node-version: 24
       - name: Verify resource ACL administration
         run: node scripts/verify-resource-acl-administration.mjs
+      - name: Verify direct Agent Run resource ACL
+        run: node --test tests/agent-run-detail-resource-acl.test.mjs
