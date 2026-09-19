@@ -2,11 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 
-const workflow = await readFile('.github/workflows/profiling-production-validation.yml', 'utf8')
+const workflow = await readFile('.github/workflows/profiling-native-replay.yml', 'utf8')
 
 test('production credentials are never exposed to pull_request jobs', () => {
   assert.match(workflow, /live-production:\n\s+if: github\.event_name == 'push' \|\| github\.event_name == 'workflow_dispatch'/)
-  const contractBlock = workflow.slice(workflow.indexOf('  contract:'), workflow.indexOf('  live-production:'))
+  const contractBlock = workflow.slice(workflow.indexOf('  verify:'), workflow.indexOf('  live-production:'))
   assert.equal(contractBlock.includes('SUPABASE_SERVICE_ROLE_KEY'), false)
   assert.equal(contractBlock.includes('NEXT_PUBLIC_SUPABASE_URL'), false)
 })
@@ -43,6 +43,7 @@ test('production validation workflow retriggers on every certification artifact'
     "'scripts/test-profiling-scale-certification.mjs'",
     "'scripts/verify-native-supervisor-tier2-profiling.mjs'",
     "'tests/profiling-production-validation-workflow.test.mjs'",
+    "'tests/profiling-production-validation-source.test.mjs'",
   ]) {
     const occurrences = workflow.split(marker).length - 1
     assert.equal(occurrences, 2, `expected push and pull_request triggers for ${marker}`)
@@ -57,6 +58,7 @@ test('production validation workflow watches all certified runtime surfaces', ()
     "'lib/agents/runtime/native-supervisor-tier2-profiling.ts'",
     "'infra/profiling/**'",
     "'supabase/migrations/**profile**'",
+    "'lib/connectors/**'",
   ]) {
     const occurrences = workflow.split(marker).length - 1
     assert.equal(occurrences, 2, `expected push and pull_request triggers for ${marker}`)
@@ -68,12 +70,12 @@ test('live validation retains exact-head evidence without exposing it to pull re
   assert.ok(workflow.includes('PROFILING_PRODUCTION_VALIDATION_EVIDENCE_PATH'))
   assert.ok(workflow.includes('actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'))
   assert.ok(workflow.includes('profiling-production-validation-${{ github.sha }}'))
-  const contractBlock = workflow.slice(workflow.indexOf('  contract:'), workflow.indexOf('  live-production:'))
+  const contractBlock = workflow.slice(workflow.indexOf('  verify:'), workflow.indexOf('  live-production:'))
   assert.equal(contractBlock.includes('upload-artifact'), false)
 })
 
 
-test('profiling validation cancels stale pull-request runs', () => {
+test('profiling replay workflow cancels stale pull-request runs', () => {
   assert.ok(workflow.includes('group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}'))
   assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"))
 })
