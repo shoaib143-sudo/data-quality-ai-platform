@@ -1,15 +1,13 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
-import ts from 'typescript'
+import { stripTypeScriptTypes } from 'node:module'
 
 const helperSource = await readFile(new URL('../lib/profiling/request-input.ts', import.meta.url), 'utf8')
-const transpiled = ts.transpileModule(helperSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.ES2022,
-    target: ts.ScriptTarget.ES2022,
-  },
-}).outputText
+const transpiled = stripTypeScriptTypes(helperSource, {
+  mode: 'transform',
+  sourceUrl: 'lib/profiling/request-input.ts',
+})
 
 const helperModule = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString('base64')}`)
 const { sanitizeProfilingRequestInput } = helperModule
