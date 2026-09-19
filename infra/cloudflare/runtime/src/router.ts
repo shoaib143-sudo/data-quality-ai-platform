@@ -1,6 +1,8 @@
 import { Container } from '@cloudflare/containers'
 import { env } from 'cloudflare:workers'
 
+const READ_ONLY_CANARY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
 const BLOCKED_CANARY_PATHS = new Set([
   '/api/jobs/worker',
   '/api/internal/storage/configure-r2-cors',
@@ -28,6 +30,13 @@ export default {
     if (BLOCKED_CANARY_PATHS.has(url.pathname)) {
       return Response.json({
         error: 'This operation is disabled on the DataNexus canary runtime.',
+        environment: 'canary',
+      }, { status: 403 })
+    }
+
+    if (!READ_ONLY_CANARY_METHODS.has(request.method.toUpperCase())) {
+      return Response.json({
+        error: 'The DataNexus canary runtime is read-only until mutation authority is explicitly certified.',
         environment: 'canary',
       }, { status: 403 })
     }
