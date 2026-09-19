@@ -208,24 +208,24 @@ export function GlossaryManager({
         <div className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-violet-600" /><h2 className="text-xl font-bold">New governed term</h2></div>
         <p className="mt-2 text-sm text-slate-500">New terms always begin as drafts. Approval is an explicit lifecycle action with evidence.</p>
         <div className="mt-5 grid gap-3">
-          <select value={projectId} onChange={event => setProjectId(event.target.value)} className="rounded-xl border px-3 py-2.5">
+          <select aria-label="Project for new governed term" value={projectId} onChange={event => setProjectId(event.target.value)} className="rounded-xl border px-3 py-2.5">
             {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
-          <input required value={term} onChange={event => setTerm(event.target.value)} placeholder="Business term" className="rounded-xl border px-3 py-2.5" />
-          <textarea required value={definition} onChange={event => setDefinition(event.target.value)} placeholder="Business definition" rows={5} className="rounded-xl border px-3 py-2.5" />
-          <input value={domain} onChange={event => setDomain(event.target.value)} placeholder="Domain" className="rounded-xl border px-3 py-2.5" />
-          <input value={synonyms} onChange={event => setSynonyms(event.target.value)} placeholder="Synonyms, comma separated" className="rounded-xl border px-3 py-2.5" />
+          <input aria-label="Business term" required value={term} onChange={event => setTerm(event.target.value)} placeholder="Business term" className="rounded-xl border px-3 py-2.5" />
+          <textarea aria-label="Business definition" required value={definition} onChange={event => setDefinition(event.target.value)} placeholder="Business definition" rows={5} className="rounded-xl border px-3 py-2.5" />
+          <input aria-label="Business domain" value={domain} onChange={event => setDomain(event.target.value)} placeholder="Domain" className="rounded-xl border px-3 py-2.5" />
+          <input aria-label="Synonyms, comma separated" value={synonyms} onChange={event => setSynonyms(event.target.value)} placeholder="Synonyms, comma separated" className="rounded-xl border px-3 py-2.5" />
           <button disabled={busy || !projectId} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 font-bold text-white disabled:opacity-50">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Create draft
           </button>
-          {message ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</p> : null}
+          {message ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700" role="status" aria-live="polite">{message}</p> : null}
         </div>
       </form> : null}
 
       <section className="rounded-3xl border bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-xl font-bold">Semantic workbench</h2><p className="mt-1 text-sm text-slate-500">Published meaning survives draft revisions; mappings are reviewed against the approved term version.</p>{!canManageSelectedProject ? <p className="mt-1 text-xs font-semibold text-blue-600">Read-only glossary evidence for this project.</p> : null}</div>
-          <select value={projectId} onChange={event => setProjectId(event.target.value)} className="rounded-xl border px-3 py-2 text-sm font-semibold">
+          <select aria-label="Glossary project" value={projectId} onChange={event => setProjectId(event.target.value)} className="rounded-xl border px-3 py-2 text-sm font-semibold">
             {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
         </div>
@@ -344,19 +344,19 @@ function MappingForm({
   return <div className="mt-4 rounded-xl border border-dashed p-3">
     <div className="flex items-center gap-2 text-xs font-bold text-slate-600"><Link2 className="h-3.5 w-3.5" />Propose semantic mapping</div>
     <div className="mt-2 flex flex-wrap gap-2">
-      <select value={targetType} onChange={event => changeTargetType(event.target.value as 'DATASET' | 'CATALOG_ASSET')} className="rounded-lg border px-2 py-1.5 text-xs">
+      <select aria-label="Mapping target type" value={targetType} onChange={event => changeTargetType(event.target.value as 'DATASET' | 'CATALOG_ASSET')} className="rounded-lg border px-2 py-1.5 text-xs">
         <option value="CATALOG_ASSET" disabled={!catalogAssets.length}>Catalog asset</option>
         <option value="DATASET" disabled={!datasets.length}>Registered dataset</option>
       </select>
-      <select value={targetId} onChange={event => { setTargetId(event.target.value); setColumnName('') }} className="min-w-56 rounded-lg border px-2 py-1.5 text-xs">
+      <select aria-label="Mapping target" value={targetId} onChange={event => { setTargetId(event.target.value); setColumnName('') }} className="min-w-56 rounded-lg border px-2 py-1.5 text-xs">
         {targetType === 'DATASET'
           ? datasets.map(dataset => <option key={dataset.id} value={dataset.id}>{dataset.name}</option>)
           : catalogAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.asset_key}</option>)}
       </select>
-      {targetType === 'CATALOG_ASSET' ? <select value={columnName} onChange={event => setColumnName(event.target.value)} className="rounded-lg border px-2 py-1.5 text-xs">
+      {targetType === 'CATALOG_ASSET' ? <select aria-label="Catalog asset column" value={columnName} onChange={event => setColumnName(event.target.value)} className="rounded-lg border px-2 py-1.5 text-xs">
         <option value="">Whole asset</option>
         {availableColumns.map(name => <option key={name} value={name}>{name}</option>)}
-      </select> : <input value={columnName} onChange={event => setColumnName(event.target.value)} placeholder="Column optional" className="rounded-lg border px-2 py-1.5 text-xs" />}
+      </select> : <input aria-label="Dataset column, optional" value={columnName} onChange={event => setColumnName(event.target.value)} placeholder="Column optional" className="rounded-lg border px-2 py-1.5 text-xs" />}
       <button type="button" disabled={disabled || !targetId} onClick={() => void onMap(term, { targetType, targetId, columnName })} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">Propose</button>
     </div>
     {term.status === 'REFERENCE' ? <p className="mt-2 flex items-center gap-1 text-xs text-amber-700"><XCircle className="h-3.5 w-3.5" />Reference mappings can be proposed, but cannot be approved until the concept is adopted and governed.</p> : null}
