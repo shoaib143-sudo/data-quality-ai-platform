@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { writeFile } from 'node:fs/promises'
 import { evaluateProfilingProductionSnapshot } from './lib/profiling-production-validation.mjs'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -177,7 +178,20 @@ const snapshot = {
   latestAttempts,
 }
 const result = evaluateProfilingProductionSnapshot(snapshot)
-console.log(JSON.stringify({ snapshot, result }, null, 2))
+const evidence = {
+  schemaVersion: 1,
+  kind: 'PROFILING_PRODUCTION_VALIDATION',
+  generatedAt: new Date().toISOString(),
+  snapshot,
+  result,
+}
+console.log(JSON.stringify(evidence, null, 2))
+
+const evidencePath = process.env.PROFILING_PRODUCTION_VALIDATION_EVIDENCE_PATH
+if (evidencePath) {
+  await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8')
+}
+
 if (!result.valid) {
   throw new Error(`Profiling production validation failed: ${result.failures.join(', ')}`)
 }
