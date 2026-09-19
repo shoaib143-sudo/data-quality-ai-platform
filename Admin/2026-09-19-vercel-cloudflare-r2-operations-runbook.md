@@ -294,7 +294,7 @@ Before a deliberate release:
 
 At the time this runbook was written, protected `main` was observed at:
 
-`9bfe5d1b52fca19819c8785f583d1a8924c79b09`
+`dd2ae42b202fd880293028285fe8878492fc4bce`
 
 The repository already contained:
 
@@ -307,6 +307,44 @@ The repository already contained:
 - `infra/cloudflare/runtime/`;
 - `infra/cloudflare/worker-runtime/`.
 
-No automatic Cloudflare deployment workflow was found on `main` at that checkpoint.
+Manual, exact-SHA Cloudflare deployment operations and cost-free preflight operations are now governed through `.github/workflows/release-governance.yml`; paid activation remains explicit and manual.
 
 This section is time-sensitive. Revalidate before continuing implementation.
+
+## Cloudflare/R2 implementation continuation checkpoint
+
+**Baseline protected main at continuation start:** `dd2ae42b202fd880293028285fe8878492fc4bce`  
+**Canonical working branch:** `cloudflare/r2-readiness-20260919`
+
+The continuation is intentionally split into six independent workstreams that converge on one canonical branch to avoid recreating PR backlog:
+
+| Stream | Objective | Repository status | External gate |
+|---|---|---|---|
+| 1. R2 smoke security | Require explicit probe approval in addition to exact preview ref and internal bearer auth | Implemented on working branch | Stale Vercel preview must still be retired or superseded |
+| 2. R2 CORS | Keep exact-origin policy and make live mutation separately explicit | Implemented on working branch | Live bucket policy remains issue #605 until certified |
+| 3. Cloudflare web canary | Add cost-free exact-SHA build/container preflight before paid deployment | Implemented on working branch | Workers Paid activation and Cloudflare credentials |
+| 4. Cloudflare worker runtime | Fail closed if execution is enabled without complete secrets and enforce method boundaries | Implemented on working branch | Paid deployment, secrets, and execution approval |
+| 5. R2 cutover/rollback | Add non-mutating rollback readiness mode and preserve copy-before-cutover | Implemented on working branch | Production dry-run evidence before any apply action |
+| 6. Exact-head certification | Restore missing runtime verification scripts and keep production mutations opt-in | Implemented on working branch | Protected CI and exact-head merge/release evidence |
+
+### Live evidence for issue #604
+
+Vercel inspection on 2026-09-19 resolved the historical alias
+`data-quality-ai-platform-git-r2-prereq-ha-4e83b5-shoaib143-sudo.vercel.app`
+to deployment `dpl_FQRgNePBdBVP6sSVHUvcSKQt6xrT`, commit
+`5ada2d230c1110faea689f26d148bc8226ea9dc4`, branch
+`r2-prereq-hardening-20260916`. The deployment remains `READY`.
+
+Do not close issue #604 merely because current source is hardened. Closure requires either retiring that stale deployment/alias or superseding it with hardened code and then proving unauthenticated access returns `401` or `404`. Removing a live deployment or alias is an explicit destructive operational action and is not performed automatically.
+
+### Current activation order
+
+1. Merge and exact-head certify the repository hardening branch.
+2. Run `cloudflare-canary-preflight` and `cloudflare-worker-preflight` against the exact merged SHA. These are cost-free and do not deploy.
+3. Run Storage R2 Assurance in `production-readiness` mode. This is read-only by default.
+4. Resolve issue #604 by an explicitly approved Vercel retirement/supersession action.
+5. Resolve issue #605 by explicitly approving the governed R2 CORS mutation only if read-only inspection proves mismatch.
+6. Re-run R2 production certification and both cutover and rollback dry runs.
+7. Only after those gates pass, consider paid Cloudflare canary deployment.
+8. Keep worker execution disabled until queue lease, retry, idempotency, restart, authorization, exact-SHA, and scheduler-singularity certification pass.
+

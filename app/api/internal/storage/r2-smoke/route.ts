@@ -6,6 +6,10 @@ import type { StorageReference } from '@/lib/storage/contracts'
 // requireInternalBearer validates the CRON_SECRET using constant-time comparison.
 export const dynamic = 'force-dynamic'
 
+function probeApproved() {
+  return process.env.R2_SMOKE_PROBE_APPROVED?.trim().toLowerCase() === 'true'
+}
+
 function allowedPreview() {
   const allowedRef = process.env.R2_SMOKE_ALLOWED_REF?.trim()
   const currentRef = process.env.VERCEL_GIT_COMMIT_REF?.trim()
@@ -26,6 +30,9 @@ function allowsOrigin(header: string | null, origin: string) {
 }
 
 async function runSmokeProbe(request: Request) {
+  if (!probeApproved()) {
+    return NextResponse.json({ error: 'R2 smoke probe is not enabled.' }, { status: 404 })
+  }
   if (!allowedPreview()) {
     return NextResponse.json({ error: 'R2 smoke probe is not enabled for this preview branch.' }, { status: 404 })
   }

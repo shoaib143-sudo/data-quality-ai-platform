@@ -14,8 +14,8 @@ test('reference cutover scans beyond already-cut-over migration targets while re
 })
 
 test('reference cutover selects only migration targets that still participate in the requested direction', () => {
-  assert.match(route, /mode === 'rollback' \? page\.map\(\(row\) => row\.id\) : pageSourceIds/)
-  assert.match(route, /mode === 'rollback' \? target\.id : sourceId/)
+  assert.match(route, /rollbackMode \? page\.map\(\(row\) => row\.id\) : pageSourceIds/)
+  assert.match(route, /rollbackMode \? target\.id : sourceId/)
   assert.match(route, /from\('dataset_versions'\)/)
   assert.match(route, /\.in\('storage_object_id', referenceIds\)/)
 })
