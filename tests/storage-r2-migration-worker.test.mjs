@@ -66,3 +66,25 @@ test('R2 migration worker is idempotent and never treats an unverified source as
   assert.match(route, /\.eq\('provider', 'r2'\)/)
   assert.match(route, /\.eq\('bucket', r2Bucket\)/)
 })
+
+
+test('R2 migration worker scans beyond already-ready migration copies without unbounded selection', () => {
+  assert.match(route, /SOURCE_SCAN_PAGE_SIZE = 100/)
+  assert.match(route, /MAX_SOURCE_SCAN_ROWS = 1000/)
+  assert.match(route, /selectMigrationSources/)
+  assert.match(route, /\.range\(offset, offset \+ pageSize - 1\)/)
+  assert.match(route, /\.eq\('owner_type', 'MIGRATION_COPY'\)/)
+  assert.match(route, /\.eq\('state', 'READY'\)/)
+  assert.match(route, /\.in\('object_key', persistedKeys\)/)
+  assert.match(route, /readyKeys\.has\(persistedR2Key\(targetKey\(source\)\)\)/)
+  assert.match(route, /selected\.length < batchSize\(\)/)
+  assert.match(route, /sourceCandidatesExamined/)
+})
+
+test('R2 migration selection preserves retryable non-ready targets', () => {
+  const selectorStart = route.indexOf('async function selectMigrationSources')
+  const selectorEnd = route.indexOf('async function persistVerifiedSourceChecksum')
+  const selector = route.slice(selectorStart, selectorEnd)
+  assert.match(selector, /\.eq\('state', 'READY'\)/)
+  assert.doesNotMatch(selector, /PENDING|FAILED|VERIFYING|UPLOADED/)
+})
