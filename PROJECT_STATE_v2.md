@@ -12,7 +12,7 @@
 - **Current verified protected main head at this checkpoint:** `62ad03f95f0ef6737f9071a3a31c72e4f60aba2d`
 - **Current protected-main change at that head:** `Complete hybrid R2 large-object execution path (#776)`
 - **Production exact-SHA status:** not certified at this checkpoint. The canonical Vercel production URL returned `404` for `/api/build-info` on 2026-09-19 while that route exists on protected `main`; production must not be represented as source-converged until a deployment exposes matching build identity.
-- **Branch protection:** live ruleset `Protect main certification` currently requires GitHub Actions contexts `build`, `analyze`, `revalidate`, `certify`, and `release-governance`; squash merge and linear history are enforced, with no bypass actors.
+- **Branch protection:** effective protected-branch merge gating currently includes `build`, `analyze`, `revalidate`, `certify`, and `release-governance`; the active `Protect main certification` ruleset independently requires `build`, `analyze`, `dependency-audit`, and `repository-governance`. Squash merge, linear history, required thread resolution, and no-bypass rules remain enforced.
 
 ## 2. Current production architecture
 
