@@ -113,11 +113,8 @@ export async function loadFileSource(
     const response=await safeRemoteFileFetch(url,{headers,cache:'no-store'})
     if(!response.ok)throw new Error(`Unable to load FILE source: HTTP ${response.status} ${response.statusText}`)
     if (largeObservedObject && response.status !== 206) {
-      const declaredLength=Number(response.headers.get('content-length'))
       await response.body?.cancel().catch(()=>undefined)
-      if (!Number.isFinite(declaredLength) || declaredLength > maxBytes) {
-        throw new Error('Large FILE source did not honor the bounded byte-range request.')
-      }
+      throw new Error('Large FILE source did not honor the bounded byte-range request.')
     }
     const declaredLength=Number(response.headers.get('content-length'))
     if(!largeObservedObject&&Number.isFinite(declaredLength)&&declaredLength>maxBytes)throw new Error(`FILE source exceeds the execution engine technical safety ceiling of ${maxBytes} bytes.`)
