@@ -12,6 +12,8 @@ test('worker container is isolated from the web canary and disabled by default',
   assert.equal(config.containers[0].max_instances, 1)
   assert.equal(config.containers[0].image, '../../../Dockerfile')
   assert.deepEqual(config.containers[0].constraints?.regions, ['APAC'])
+  assert.equal(config.containers[0].instance_type, 'standard-1')
+  assert.equal(config.containers[0].ssh?.enabled, false)
 })
 
 test('worker ingress exposes only health, build identity, and durable execution', () => {
