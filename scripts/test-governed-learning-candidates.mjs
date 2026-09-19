@@ -139,6 +139,16 @@ for (const invariant of [
 assert.equal(/chain[-_ ]?of[-_ ]?thought/i.test(source), false)
 assert.equal(/hidden[-_ ]?reasoning/i.test(source), false)
 
+const serviceSource = fs.readFileSync('lib/agents/governed-learning-candidate-service.ts', 'utf8')
+for (const invariant of [
+  'createGovernedLearningCandidatesFromScorecard',
+  'readAgentSkillScorecard',
+  'buildGovernedLearningCandidateDraftsFromScorecard',
+  'persistGovernedLearningCandidate',
+]) {
+  assert.ok(serviceSource.includes(invariant), `missing scorecard-to-candidate service integration: ${invariant}`)
+}
+
 const migration = fs.readFileSync('supabase/migrations/20260920010000_governed_learning_candidates.sql', 'utf8')
 for (const invariant of [
   'create table if not exists agent.learning_candidates',
