@@ -6,6 +6,7 @@ import type { ModelGateway, ReasoningRouteContext } from './model-gateway'
 import type { ModelRegistry, RegisteredModelVersion } from './model-registry'
 import type { RoutingPolicy, RoutingPolicyEvaluator, RoutingPolicyProvider } from './routing-policy'
 import type { TelemetryTraceContext } from './telemetry-provider'
+import { ResilientReasoningProvider, type ProviderResiliencePolicyProvider } from './provider-resilience'
 
 export type IntelligentRouteContext = ReasoningRouteContext & {
   projectId: string
@@ -57,6 +58,7 @@ export type IntelligentRouterDependencies = {
   evaluatePolicy: RoutingPolicyEvaluator
   fallbackGateway: ModelGateway
   createProvider: (selection: ReasoningProviderSelection) => ReasoningProvider | null
+  resiliencePolicy?: ProviderResiliencePolicyProvider
   now?: () => Date
 }
 
@@ -147,31 +149,105 @@ export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter 
 
     const comparableEvidence = eligible.length > 1 && eligible.every((candidate) => candidate.evidence.averageScore !== null)
     const ranked = [...eligible].sort(comparableEvidence ? evidenceCompare : deterministicCompare)
+
+    const decisionFor = (candidate: typeof ranked[number], provider: ReasoningProvider): IntelligentRouteDecision => {
+      const providerId = candidate.entry.provider?.trim()
+      const modelName = candidate.entry.modelName?.trim()
+      if (!providerId || !modelName) {
+        return { source: 'UNAVAILABLE', reason: 'GOVERNED_CANDIDATES_NOT_EXECUTABLE', provider: null, evidence: null }
+      }
+      const fallbackReason = comparableEvidence
+        ? null
+        : ranked.find((entry) => entry.evidence.fallbackReason !== null)?.evidence.fallbackReason ?? 'INCOMPLETE_COMPARABLE_EVIDENCE'
+      return {
+        source: 'GOVERNED_REGISTRY',
+        reason: 'ACTIVE_GOVERNED_CANDIDATE_SELECTED',
+        provider,
+        evidence: {
+          aiSystemId: candidate.entry.aiSystemId,
+          aiSystemVersionId: candidate.entry.aiSystemVersionId,
+          systemKey: candidate.entry.systemKey,
+          provider: providerId,
+          modelName,
+          evaluationType: enforcedPolicy?.evaluationType ?? null,
+          evaluationMetricName: enforcedPolicy?.evaluationMetricName ?? null,
+          evaluationAverageScore: comparableEvidence ? candidate.evidence.averageScore : null,
+          evaluationScoredCount: comparableEvidence ? candidate.evidence.scoredCount : 0,
+          evaluationPassRate: comparableEvidence ? candidate.evidence.passRate : null,
+          evaluationEvidenceResultIds: comparableEvidence ? candidate.evidence.evidenceResultIds : [],
+          evaluationLastObservedAt: comparableEvidence ? candidate.evidence.lastObservedAt : null,
+          evaluationMode: comparableEvidence ? 'CANONICAL_EVALUATION' : 'DETERMINISTIC_FALLBACK',
+          evaluationFallbackReason: fallbackReason,
+          routingPolicyId: policy?.id ?? null,
+          routingPolicyReason: candidate.policyReason,
+        },
+      }
+    }
+
+    if (!this.dependencies.resiliencePolicy) {
+      for (const candidate of ranked) {
+        const providerId = candidate.entry.provider?.trim()
+        const modelName = candidate.entry.modelName?.trim()
+        if (!providerId || !modelName) continue
+        try {
+          const provider = this.dependencies.createProvider({ providerId, model: modelName })
+          if (!provider) continue
+          return decisionFor(candidate, provider)
+        } catch {}
+      }
+      return { source: 'UNAVAILABLE', reason: 'GOVERNED_CANDIDATES_NOT_EXECUTABLE', provider: null, evidence: null }
+    }
+
+    const executable: Array<{ candidate: typeof ranked[number]; provider: ReasoningProvider }> = []
     for (const candidate of ranked) {
       const providerId = candidate.entry.provider?.trim()
       const modelName = candidate.entry.modelName?.trim()
       if (!providerId || !modelName) continue
       try {
         const provider = this.dependencies.createProvider({ providerId, model: modelName })
-        if (!provider) continue
-        const fallbackReason = comparableEvidence ? null : ranked.find((entry) => entry.evidence.fallbackReason !== null)?.evidence.fallbackReason ?? 'INCOMPLETE_COMPARABLE_EVIDENCE'
-        return {
-          source: 'GOVERNED_REGISTRY', reason: 'ACTIVE_GOVERNED_CANDIDATE_SELECTED', provider,
-          evidence: {
-            aiSystemId: candidate.entry.aiSystemId, aiSystemVersionId: candidate.entry.aiSystemVersionId,
-            systemKey: candidate.entry.systemKey, provider: providerId, modelName,
-            evaluationType: enforcedPolicy?.evaluationType ?? null, evaluationMetricName: enforcedPolicy?.evaluationMetricName ?? null,
-            evaluationAverageScore: comparableEvidence ? candidate.evidence.averageScore : null,
-            evaluationScoredCount: comparableEvidence ? candidate.evidence.scoredCount : 0,
-            evaluationPassRate: comparableEvidence ? candidate.evidence.passRate : null,
-            evaluationEvidenceResultIds: comparableEvidence ? candidate.evidence.evidenceResultIds : [],
-            evaluationLastObservedAt: comparableEvidence ? candidate.evidence.lastObservedAt : null,
-            evaluationMode: comparableEvidence ? 'CANONICAL_EVALUATION' : 'DETERMINISTIC_FALLBACK', evaluationFallbackReason: fallbackReason,
-            routingPolicyId: policy?.id ?? null, routingPolicyReason: candidate.policyReason,
-          },
-        }
+        if (provider) executable.push({ candidate, provider })
       } catch {}
     }
-    return { source: 'UNAVAILABLE', reason: 'GOVERNED_CANDIDATES_NOT_EXECUTABLE', provider: null, evidence: null }
+    if (!executable.length) {
+      return { source: 'UNAVAILABLE', reason: 'GOVERNED_CANDIDATES_NOT_EXECUTABLE', provider: null, evidence: null }
+    }
+
+    const primary = executable[0]
+    let selectedProvider: ReasoningProvider = primary.provider
+    try {
+      const profiles = await this.dependencies.resiliencePolicy.resolveProfiles({
+        projectId,
+        aiSystemVersionIds: executable.map(item => item.candidate.entry.aiSystemVersionId),
+      })
+      const primaryProfile = profiles.get(primary.candidate.entry.aiSystemVersionId)
+      const primaryModelName = primary.candidate.entry.modelName?.trim()
+      if (primaryProfile && primaryModelName) {
+        const fallbacks = executable.slice(1).flatMap(item => {
+          const profile = profiles.get(item.candidate.entry.aiSystemVersionId)
+          const modelName = item.candidate.entry.modelName?.trim()
+          if (!profile || !modelName) return []
+          return [{
+            provider: item.provider,
+            modelName,
+            aiSystemVersionId: item.candidate.entry.aiSystemVersionId,
+            profile,
+          }]
+        })
+        if (fallbacks.length) {
+          selectedProvider = new ResilientReasoningProvider({
+            provider: primary.provider,
+            modelName: primaryModelName,
+            aiSystemVersionId: primary.candidate.entry.aiSystemVersionId,
+            profile: primaryProfile,
+          }, fallbacks)
+        }
+      }
+    } catch {
+      // Resilience-profile resolution is optional capacity protection. It cannot
+      // weaken primary routing authority or convert a governed primary route into
+      // an ungoverned fallback.
+    }
+
+    return decisionFor(primary.candidate, selectedProvider)
   }
 }
