@@ -1,72 +1,101 @@
-# DataNexus 37-Area Completion, Implementation, Certification and Post-Implementation Assurance Plan
+# DataNexus 37-Area Implementation Completion Plan
 
 **Date:** 2026-09-20  
 **Repository:** `shoaib143-sudo/data-quality-ai-platform`  
 **Protected-main baseline:** `15dbd65c9f32facf738979382a6d9afb8a8ab4c2`  
 **Baseline change:** PR #819, governed learning benchmark gate  
-**Objective:** Take the 37 preserved DataNexus operation families from their current state to evidence-backed, production-certified completion without weakening existing governance, truth, security or recovery boundaries.
+**Objective:** Complete the implementation scope for the 37 preserved DataNexus operation families without weakening existing governance, truth, security or recovery boundaries.
 
-## 1. Completion scoring model
+**Current scope decision:** Certification, production hardening and operationalization are deferred and are explicitly out of scope until reopened by the product owner. The deferred material is preserved later in this document only as future reference.
 
-Percentages below are engineering estimates of progress toward **production-certified completion**, not merely code completion.
+## 1. Active implementation completion model
 
-Each area is assessed across five dimensions:
+Percentages below now represent progress toward **implementation completeness**, not production certification or operational hardening.
+
+Active implementation scope includes:
 
 | Dimension | Weight |
 | --- | ---: |
-| Functional implementation | 40% |
-| Integration, governance and authorization | 20% |
-| Automated assurance: unit, integration, negative and failure testing | 20% |
-| Scale, performance, operations and recovery validation | 10% |
-| Exact-head production certification, evidence and documentation | 10% |
+| Functional capability implementation | 55% |
+| Integration, governance and authorization | 25% |
+| Essential developer assurance: unit, integration, negative and failure-path tests required to prove the implementation works correctly | 20% |
 
-A capability with substantial code but incomplete scale, failure or production certification therefore remains below 100%.
+Explicitly excluded from the active percentage are production certification, exact-head release certification, canary, production revalidation, large-scale load/chaos campaigns, DR exercises, operational SLO/error-budget hardening, release-provenance hardening and other operationalization work.
 
-## 2. Reconciled completion matrix
+Those activities remain preserved as a future deferred phase and must not block implementation completion.
 
-| # | Operation family | Completion | Principal remaining work to reach 100% |
+## 2. Active versus deferred scope
+
+### Active now
+
+- missing functional implementation;
+- APIs, database/schema and workflow implementation;
+- governed authorization/RLS/ACL behavior required for correctness;
+- lifecycle/state-machine behavior;
+- source onboarding, retrieval, analytics, lineage, agent, memory and learning functionality;
+- essential unit, integration, negative and targeted failure-path tests needed to establish implementation correctness;
+- migrations/backfills required by the implementation itself;
+- deterministic rollback/compensation code where it is part of the functional contract.
+
+### Deferred until operationalization is reopened
+
+- final exact-head certification;
+- production canary and production revalidation;
+- production hardening;
+- large-scale performance/load certification;
+- chaos campaigns;
+- platform DR exercises and measured RTO/RPO certification;
+- SLO/error-budget operational gates;
+- independent adversarial certification audit;
+- release/SBOM/provenance hardening beyond what existing CI already requires;
+- operational runbook and on-call hardening;
+- environment/configuration-drift certification.
+
+## 3. Reconciled implementation-completion matrix
+
+| # | Operation family | Implementation completion | Remaining implementation work |
 | ---: | --- | ---: | --- |
-| 1 | Transactional metadata | **92%** | Exact-head lifecycle certification, concurrency/race coverage, production revalidation across all mutation families. |
-| 2 | Bulk metadata discovery | **65%** | Certify million-scale ingest, bounded memory/queue behavior, checkpoint/restart, backpressure, throughput SLOs and recovery. |
-| 3 | Profiling execution | **91%** | Re-certify on latest exact main, repeat CSV/JDBC E2E, scale/failure/rollback validation after current-main changes. |
-| 4 | Historical profiling | **60%** | Production historical store/query path, multi-year trend model, retention/downsampling, OLAP-scale benchmarks and rebuild. |
-| 5 | DQ management | **92%** | Exact-head cross-persona certification, concurrency and failure-injection across rules/exceptions/approvals/scores. |
-| 6 | DQ analytics | **64%** | Enterprise trend/comparison/anomaly history, historical aggregation, scale tests, executive drilldown and reproducibility. |
-| 7 | Glossary | **90%** | Full mutation/read authorization matrix, concurrency/version tests, production E2E and exact-head revalidation. |
-| 8 | Policy management | **85%** | Complete version/effective-date workflow certification, policy-change impact tests, approval/retention/replay evidence. |
-| 9 | Policy text retrieval | **72%** | Exact + semantic hybrid retrieval, temporal/effective-date filtering, citation precision, large-corpus retrieval benchmarks. |
-| 10 | Regulatory research | **58%** | Dedicated regulatory corpus ingestion, exact article/term retrieval, source provenance, temporal versioning and evaluation set. |
-| 11 | RAG | **82%** | Large-corpus recall/precision/citation certification, authority weighting, injection resistance, fallback and latency/cost SLOs. |
-| 12 | Metadata search | **67%** | Million-field benchmark, faceting/filtering, relevance evaluation, index freshness, rebuild and authorization-scale tests. |
-| 13 | Similarity | **65%** | Productize similarity workflows for columns/terms/issues, thresholds, quality evaluation, authorization filtering and scale. |
-| 14 | Lineage | **68%** | Obtain Databricks `system.access` permission, ingest source-authoritative lineage, verify authority classes, scale traversal. |
-| 15 | Impact analysis | **62%** | Bind authoritative lineage and governance relationships into deterministic impact traversal with evidence and scale tests. |
-| 16 | Root cause | **84%** | E2E enterprise investigation certification, false-correlation negative tests, latency/cost budgets and production evidence. |
-| 17 | Cross-dataset relationships | **68%** | Complete relationship ingestion/provenance, relationship confidence/authority model, enterprise graph traversal and rebuild. |
-| 18 | Agent investigation | **88%** | Full persona/agent acceptance, malformed-evidence tests, tool/provider failure paths and exact-head production certification. |
-| 19 | Human approval | **93%** | Final E2E/cross-channel revalidation, concurrency/race tests, expiry/revocation storms and exact-head certification. |
-| 20 | Remediation | **89%** | Broader tool-specific compensation/replay certification, partial-failure tests and production rollback exercises. |
-| 21 | Verification | **90%** | Cross-domain before/after validation suite, stale-evidence negatives, concurrency and exact-head certification. |
-| 22 | Rollback | **82%** | Platform-wide rollback matrix, destructive-boundary validation, rollback failure injection and controlled production exercise. |
-| 23 | Incident management | **90%** | Scale/concurrency certification, escalation storms, external notification failures and exact-head persona acceptance. |
-| 24 | Operational monitoring | **68%** | High-volume telemetry architecture, million/billion-event load tests, retention/downsampling, cardinality controls and DR. |
-| 25 | Agent monitoring | **84%** | Runtime v2 telemetry convergence, cost/token/tool/provider completeness, load/SLO tests and exact-head production evidence. |
-| 26 | Agent memory | **70%** | Verified-memory promotion/consumption lifecycle, retention/deletion/legal hold, poisoning resistance, rebuild and evaluation. |
-| 27 | Agent learning | **72%** | PR #820 approval binding, PR #821 controlled release/rollback, canary evaluation, negative/adversarial tests and production certification. |
-| 28 | Executive analytics | **65%** | Enterprise KPI/risk/benefit semantic model, historical aggregation, drilldown provenance, scale and executive acceptance. |
-| 29 | Audit | **93%** | Exact-head high-volume/retention/restore validation, audit-query performance and production recovery evidence. |
-| 30 | Audit analytics | **62%** | Multi-year analytical store/path, large-range queries, domain/action segmentation, retention and workload benchmarks. |
-| 31 | Export/reporting | **78%** | Async/streaming large exports, pagination/resume, access-safe bulk output, historical scale and failure recovery. |
-| 32 | Retention | **82%** | Cross-domain retention execution, legal-hold precedence, archive/delete verification, scale and restore-from-archive tests. |
-| 33 | Reindex/rebuild | **65%** | Unified rebuild orchestration for search/vector/graph/projections, checkpoint/retry, consistency verification and runbooks. |
-| 34 | Disaster recovery | **58%** | Full business-truth restore drill, RTO/RPO measurement, backup integrity, dependency recovery ordering and failover exercise. |
-| 35 | ML/AI evaluation | **90%** | Complete production evaluation cadence, drift triggers, model/provider promotion gates and exact-head revalidation. |
-| 36 | Re-embedding | **60%** | Versioned embedding migration, dual-read/shadow index, incremental/full rebuild, cutover/rollback and retrieval regression tests. |
-| 37 | Natural-language support | **86%** | Full persona question set, grounding/citation negatives, ambiguity handling, prompt-injection tests and production SLO certification. |
+| 1 | Transactional metadata | **97%** | Close remaining lifecycle/concurrency correctness gaps only. |
+| 2 | Bulk metadata discovery | **78%** | Complete scalable discovery workflow, checkpointing/backpressure logic and resumable ingestion behavior. |
+| 3 | Profiling execution | **97%** | Close any remaining current-main CSV/JDBC execution and persistence gaps. |
+| 4 | Historical profiling | **72%** | Complete historical profile model, storage/query path and trend aggregation implementation. |
+| 5 | DQ management | **97%** | Close remaining rule/exception/approval/score functional gaps. |
+| 6 | DQ analytics | **76%** | Complete enterprise trend/comparison/anomaly-history implementation. |
+| 7 | Glossary | **96%** | Close remaining version/mutation/read workflow gaps. |
+| 8 | Policy management | **92%** | Complete version/effective-date and policy-change workflow implementation. |
+| 9 | Policy text retrieval | **83%** | Complete exact + semantic hybrid retrieval and temporal/effective-date behavior. |
+| 10 | Regulatory research | **70%** | Implement dedicated regulatory corpus ingestion, exact article/term retrieval and provenance model. |
+| 11 | RAG | **91%** | Close remaining hybrid retrieval, authority weighting and evidence/citation behavior. |
+| 12 | Metadata search | **79%** | Complete large-catalog search, filtering/faceting and index freshness/rebuild behavior. |
+| 13 | Similarity | **77%** | Productize column/term/issue similarity workflows and authorization filtering. |
+| 14 | Lineage | **74%** | Obtain Databricks `system.access`, then implement source-authoritative lineage ingestion and traversal. |
+| 15 | Impact analysis | **73%** | Complete deterministic impact traversal over authoritative relationships. |
+| 16 | Root cause | **91%** | Close remaining evidence-correlation and bounded RCA workflow gaps. |
+| 17 | Cross-dataset relationships | **79%** | Complete relationship ingestion/provenance and relationship projection. |
+| 18 | Agent investigation | **94%** | Close remaining evidence/tool/handoff functional gaps. |
+| 19 | Human approval | **98%** | Close edge-case lifecycle/concurrency correctness only. |
+| 20 | Remediation | **95%** | Complete tool-specific compensation/replay behavior where functionally required. |
+| 21 | Verification | **96%** | Close remaining cross-domain before/after verification behavior. |
+| 22 | Rollback | **91%** | Complete rollback/compensation implementations and baseline restoration logic. |
+| 23 | Incident management | **96%** | Close remaining lifecycle/escalation functional gaps. |
+| 24 | Operational monitoring | **80%** | Complete telemetry ingestion/projection, retention logic and monitoring surfaces. |
+| 25 | Agent monitoring | **91%** | Complete runtime telemetry coverage for tool/provider/token/cost/retry/error states. |
+| 26 | Agent memory | **82%** | Complete verified-memory promotion/consumption, lifecycle and poisoning/staleness controls. |
+| 27 | Agent learning | **82%** | Complete #820 approval binding and #821 controlled release/rollback workflow. |
+| 28 | Executive analytics | **76%** | Complete enterprise KPI/risk/benefit semantic model and historical drilldown. |
+| 29 | Audit | **98%** | Close remaining audit query/restore functional gaps only. |
+| 30 | Audit analytics | **73%** | Implement multi-year analytical query path and domain/action segmentation. |
+| 31 | Export/reporting | **87%** | Complete async/streaming export, resumability and access-safe bulk output. |
+| 32 | Retention | **90%** | Complete cross-domain retention/archive/legal-hold execution behavior. |
+| 33 | Reindex/rebuild | **78%** | Complete unified rebuild orchestration for search/vector/graph/projections. |
+| 34 | Disaster recovery | **70%** | Keep only required restore/recovery implementation in scope; defer full DR exercise/certification. |
+| 35 | ML/AI evaluation | **96%** | Close remaining evaluation/drift/promotion functional integration. |
+| 36 | Re-embedding | **73%** | Implement versioned dual-index re-embedding, cutover and rollback. |
+| 37 | Natural-language support | **93%** | Close remaining grounding/citation/ambiguity behavior across personas. |
 
-**Simple portfolio completion estimate:** approximately **76%** toward fully implemented and production-certified coverage. This is not a substitute for requirement-by-requirement PASS evidence.
+**Simple implementation-only portfolio estimate:** approximately **86%**. This replaces the earlier 76% production-certified estimate for the current phase.
 
-## 3. Improvement priority
+## 4. Improvement priority
 
 ### P0: blockers and shared foundations
 
@@ -94,9 +123,9 @@ A capability with substantial code but incomplete scale, failure or production c
 
 Areas already above approximately 80% should not receive broad redesign. Close their remaining gaps through exact-head testing, failure injection, load testing, production revalidation and evidence reconciliation.
 
-## 4. Optimum implementation plan to 100%
+## 5. Optimum implementation plan to 100% implementation
 
-Use **six parallel implementation workstreams** with a seventh convergence/certification lane. Parallel branches must not redefine the same schema contract independently.
+Use **six parallel implementation workstreams** with a seventh integration/reconciliation lane. Parallel branches must not redefine the same schema contract independently. Production certification and hardening are excluded.
 
 ### Workstream A: Scale, history and analytical plane
 
@@ -257,9 +286,9 @@ Do not redesign. Freeze contracts and close only evidence-backed gaps:
 
 This workstream should move rapidly because core implementation already exists.
 
-### Workstream G: Convergence and independent certification
+### Workstream G: Integration and implementation reconciliation
 
-This lane starts immediately with evidence mapping and becomes the final merge/certification authority.
+This lane starts immediately with evidence mapping and becomes the final integration/reconciliation authority for the implementation phase.
 
 Responsibilities:
 
@@ -267,24 +296,20 @@ Responsibilities:
 2. Prevent duplicate/conflicting implementations across A-F.
 3. Define fixed golden datasets/corpora and load profiles.
 4. Run exact-head test suites after every convergence merge.
-5. Own final clean-room, adversarial, load, chaos, security, DR and production certification.
-6. Refuse a 100% status while any required gate lacks evidence.
+5. Own implementation-level integration, regression and targeted negative/failure validation.
+6. Refuse a 100% implementation status while a required functional contract remains incomplete.
 
-## 5. Implementation sequence and gates
+## 6. Implementation sequence and gates
 
 ### Gate 0: Baseline
 
-- Freeze current exact main.
+- Freeze the active implementation baseline.
 - Inventory current PRs and schema ownership.
-- Map all 37 areas to code/tests/evidence.
+- Map all 37 areas to code/tests.
 - Record external blockers.
-- Establish benchmark fixtures and acceptance thresholds.
-- Complete threat models, trust-boundary/data-flow review, data classification and abuse cases for every material new execution or data path.
-- Record SLO/SLI, error-budget, RTO/RPO and capacity assumptions before implementation.
-- Record schema/data migration compatibility strategy, including forward/backward compatibility and rollback.
-- Capture software supply-chain baseline: dependency inventory, SBOM/provenance expectations, pinned build inputs and release-artifact identity.
+- Preserve existing architecture and authority boundaries.
 
-### Gate 1: Shared foundations
+### Gate 1: Shared implementation foundations
 
 Complete:
 
@@ -298,75 +323,51 @@ Complete:
 
 Run Workstreams A-F in parallel.
 
-Each feature is merged only with:
+Each feature is merged with the minimum evidence required to establish implementation correctness:
 
 - implementation;
 - direct unit/contract tests;
-- negative cases;
+- integration tests for changed boundaries;
+- negative cases for authorization/state validity;
+- targeted failure-path tests where partial state or duplicate effects are possible;
 - migration validation when applicable;
-- documentation/evidence update;
-- threat-model/abuse-case delta when the trust boundary changes;
-- backward/forward compatibility evidence for schema or API changes;
-- property/fuzz tests for parsers, state machines or untrusted structured inputs where applicable;
-- release artifact and dependency provenance evidence for deployable changes.
+- documentation/evidence update.
 
-### Gate 3: Integrated environment
+### Gate 3: Integrated implementation
 
-Deploy a full release candidate to a controlled environment and run:
+Run the functional integration paths needed to prove the implementation coheres:
 
-- CSV golden path;
-- database/JDBC golden path;
+- CSV path;
+- database/JDBC path;
 - policy/RAG path;
-- lineage/impact path;
+- lineage/impact path where source permission is available;
 - agent investigation/remediation path;
 - learning controlled-release path;
 - historical analytics path;
 - rebuild path.
 
-### Gate 4: Scale and resilience
+### Gate 4: Implementation complete
 
-Execute:
+An area reaches 100% for the current phase when:
 
-- load/performance;
-- concurrency/races;
-- long-running historical queries;
-- queue saturation;
-- provider failures;
-- database/network failures;
-- index/rebuild failures;
-- large export failures;
-- telemetry spikes;
-- rollback/compensation.
+- the defined functional capability exists;
+- required APIs/schema/workflows are implemented;
+- governance and authorization required for correctness are implemented;
+- essential unit/integration/negative/targeted failure tests pass;
+- no known P0/P1 implementation defect remains;
+- known operationalization-only items are clearly deferred rather than mixed into implementation status.
 
-### Gate 5: Independent assurance
+### Deferred Gate 5: Certification and hardening
 
-Run independently authored tests attempting to disprove correctness.
+**OFF LIMITS FOR THE CURRENT PHASE.**
 
-### Gate 6: Exact-head production certification
+When operationalization is explicitly reopened, use the preserved post-implementation assurance material below as the starting point. Do not execute it now and do not use it to block implementation completion.
 
-After the final implementation merge:
+## 7. Deferred future certification and hardening plan
 
-1. capture exact SHA;
-2. fresh checkout;
-3. clean migration replay;
-4. all unit/integration/negative/failure suites;
-5. full E2E;
-6. load/chaos/security;
-7. preview/test deployment;
-8. controlled canary;
-9. production exact-SHA verification;
-10. production revalidation;
-11. recovery/rollback drill;
-12. evidence reconciliation;
-13. verify release artifact provenance and dependency/SBOM evidence;
-14. verify SLO/error-budget based canary acceptance or automated rollback;
-15. verify database/schema/data migration compatibility and downgrade/forward-recovery path.
+**Status: DEFERRED / OFF LIMITS until operationalization is explicitly reopened.**
 
-Any code change after certification invalidates exact-head certification and requires the applicable subset to rerun.
-
-## 6. Post-implementation assurance plan
-
-Post-implementation validation is a separate phase. Passing implementation CI alone is insufficient.
+This material is preserved so it is not lost, but it is not part of the current implementation objective, current percentage, current definition of done or current execution queue.
 
 ### 6.1 Clean-room revalidation
 
@@ -775,9 +776,9 @@ Every final certification should produce a machine-readable evidence manifest bi
 The manifest is the canonical proof of what was certified. A later change to any bound material input invalidates only the affected certification scope, while a new release candidate still receives full exact-head certification.
 
 
-## 7. Final 100% acceptance criteria
+## 8. Deferred future production-certification criteria
 
-A 37-area capability may be marked 100% only when all applicable criteria pass:
+When operationalization is reopened, production-certified status may require the following applicable criteria. These are not current implementation-completion gates:
 
 - functional requirement complete;
 - governance/authorization complete;
@@ -805,24 +806,24 @@ A 37-area capability may be marked 100% only when all applicable criteria pass:
 - immutable certification evidence manifest is complete;
 - no unresolved P0/P1 defect remains.
 
-## 8. External dependency required for literal 100%
+## 9. External dependency affecting implementation
 
 Source-authoritative lineage cannot reach 100% while the Databricks source does not expose the required `system.access` lineage evidence.
 
 The completion plan therefore requires the external permission to be granted and the authoritative lineage acceptance suite to pass. Until then, DataNexus must continue to label inferred/AI-assisted lineage separately and must not manufacture source-observed lineage.
 
-## 9. Current immediate execution order
+## 10. Current immediate implementation order
 
-1. Continue the current learning chain: #820 → restacked #821 → canary/rollback certification.
-2. Establish analytical/history contracts for Workstream A.
-3. Establish retrieval/re-embedding contracts for Workstream B.
+1. Continue the current learning chain: #820 approval binding → #821 controlled-release/rollback implementation.
+2. Establish analytical/history contracts and complete missing implementation in Workstream A.
+3. Establish retrieval/re-embedding contracts and complete missing implementation in Workstream B.
 4. Resolve Databricks lineage permission and implement authoritative ingestion in Workstream C.
-5. Implement unified rebuild/DR contracts in Workstream E.
-6. In parallel, close exact-head certification gaps for mature capabilities in Workstream F.
-7. Converge through Workstream G with independent assurance on every release candidate.
+5. Implement unified rebuild/recovery contracts needed by current functionality in Workstream E.
+6. In parallel, close remaining functional gaps in mature capabilities through Workstream F.
+7. Reconcile all implementation streams through Workstream G. Do not start certification or production-hardening work.
 
 
-## 10. External best-practice alignment used for final optimization
+## 11. Preserved future assurance references
 
 The implementation and assurance model should be maintained as a practical crosswalk rather than a compliance claim.
 
