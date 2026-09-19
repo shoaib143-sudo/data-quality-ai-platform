@@ -279,6 +279,10 @@ Responsibilities:
 - Map all 37 areas to code/tests/evidence.
 - Record external blockers.
 - Establish benchmark fixtures and acceptance thresholds.
+- Complete threat models, trust-boundary/data-flow review, data classification and abuse cases for every material new execution or data path.
+- Record SLO/SLI, error-budget, RTO/RPO and capacity assumptions before implementation.
+- Record schema/data migration compatibility strategy, including forward/backward compatibility and rollback.
+- Capture software supply-chain baseline: dependency inventory, SBOM/provenance expectations, pinned build inputs and release-artifact identity.
 
 ### Gate 1: Shared foundations
 
@@ -300,7 +304,11 @@ Each feature is merged only with:
 - direct unit/contract tests;
 - negative cases;
 - migration validation when applicable;
-- documentation/evidence update.
+- documentation/evidence update;
+- threat-model/abuse-case delta when the trust boundary changes;
+- backward/forward compatibility evidence for schema or API changes;
+- property/fuzz tests for parsers, state machines or untrusted structured inputs where applicable;
+- release artifact and dependency provenance evidence for deployable changes.
 
 ### Gate 3: Integrated environment
 
@@ -349,7 +357,10 @@ After the final implementation merge:
 9. production exact-SHA verification;
 10. production revalidation;
 11. recovery/rollback drill;
-12. evidence reconciliation.
+12. evidence reconciliation;
+13. verify release artifact provenance and dependency/SBOM evidence;
+14. verify SLO/error-budget based canary acceptance or automated rollback;
+15. verify database/schema/data migration compatibility and downgrade/forward-recovery path.
 
 Any code change after certification invalidates exact-head certification and requires the applicable subset to rerun.
 
@@ -592,6 +603,124 @@ Before final closure:
 6. run core E2E against restored environment;
 7. capture immutable evidence.
 
+
+### 6.13 Threat modeling and abuse-case review
+
+Before implementation is considered complete for a material capability, maintain a lightweight but explicit threat model covering:
+
+- assets and authoritative truth;
+- trust boundaries and privileged components;
+- identity, tenant/project/resource boundaries;
+- external providers and connector boundaries;
+- sensitive data and model context;
+- agent/tool authority;
+- attacker goals and abuse cases;
+- failure escalation paths;
+- detection and recovery controls.
+
+Threat-model changes are mandatory when a change introduces a new external integration, privileged API, model/tool capability, persistence store, upload/parser path, autonomous action, cross-tenant query path or production mutation.
+
+Certification must prove that mitigations are represented in code/tests rather than only in documentation.
+
+### 6.14 Property-based, fuzz and parser robustness testing
+
+Example-based unit tests are necessary but insufficient for parsers, state machines and combinatorial validation logic.
+
+Where applicable add:
+
+- property-based tests for invariants;
+- fuzzing of parsers, structured tool inputs, file/metadata ingestion, search/query parameters and serialization boundaries;
+- malformed Unicode, encoding, truncation, oversized/nested payloads and schema ambiguity;
+- state-machine sequence generation for invalid transitions;
+- differential tests where two independent implementations/projections should agree;
+- metamorphic tests for retrieval, scoring or analytics invariants where a fixed oracle is difficult.
+
+Any fuzz-discovered defect becomes a minimized permanent regression case.
+
+### 6.15 Schema, API and data migration safety
+
+Every material database, index, event, API or persisted-agent-state change must declare compatibility explicitly.
+
+Use expand → migrate/backfill → verify → switch → contract where destructive replacement is avoidable.
+
+Required evidence includes:
+
+- old-code/new-schema compatibility during rollout;
+- new-code/old-data compatibility where deployment order can expose it;
+- idempotent resumable backfill;
+- row/object counts and checksums or semantic reconciliation;
+- no silent defaulting of authoritative values;
+- rollback or forward-recovery strategy;
+- migration interruption and restart tests;
+- production-sized migration timing where scale matters.
+
+Destructive schema contraction occurs only after proving no supported reader/writer depends on the old representation.
+
+### 6.16 Software supply-chain and release integrity
+
+Treat release integrity as a certification requirement, not only repository security.
+
+Required controls for production artifacts should include:
+
+- dependency lock and review;
+- software bill of materials where supported;
+- automated vulnerability/dependency scanning;
+- pinned and reviewed CI/CD actions/tooling;
+- build provenance bound to source revision and artifact digest;
+- signed or otherwise verifiable provenance from the hosted build pipeline where available;
+- immutable exact-SHA release identity;
+- verification that the deployed artifact is the artifact that passed certification;
+- protected release credentials and separation of build/release authority.
+
+A green source commit is insufficient if the deployed binary/container/artifact cannot be traced back to that certified source and build.
+
+### 6.17 Privacy and sensitive-data assurance
+
+Security testing must include privacy and data-minimization behavior.
+
+Validate:
+
+- PII/sensitive values are not unnecessarily copied into logs, traces, prompts, embeddings, analytics or learning memory;
+- tenant/project/resource isolation applies equally to derived stores and retrieval indexes;
+- deletion/retention/legal-hold rules propagate correctly to derived representations;
+- test/evaluation corpora do not introduce uncontrolled production-sensitive data;
+- exports enforce the same authorization and classification rules as interactive reads;
+- prompt/tool/model telemetry redacts protected values;
+- model/provider routing respects configured data-handling restrictions.
+
+### 6.18 Operational-readiness review and SLO gates
+
+Before production certification, each material service/job must have:
+
+- defined owner;
+- documented SLIs/SLOs;
+- actionable alerts;
+- dashboards for golden signals and business-critical workflow health;
+- runbooks for common failure modes;
+- capacity assumptions and saturation indicators;
+- dependency inventory;
+- recovery and escalation path;
+- kill switch/feature flag where risk warrants it.
+
+Canary promotion must be based on measured control-versus-candidate health and explicit SLO/error-budget criteria. A deployment that remains technically reachable but materially degrades an SLO is not a successful certification.
+
+### 6.19 Stronger independent-audit separation
+
+The independent adversarial audit must be structurally separate enough to challenge implementation assumptions.
+
+Use, where practical:
+
+- a separate auditor/agent or reviewer from the implementation stream;
+- an independently derived test charter from frozen requirements and threat models;
+- independent test data and adversarial fixtures;
+- both white-box review and black-box runtime testing;
+- no reuse of implementation-only assertions as the sole acceptance oracle;
+- immutable audit findings with severity, reproduction and evidence;
+- retest by the independent lane after remediation.
+
+Critical findings cannot be waived implicitly by the implementing workstream. Any accepted exception requires explicit owner, rationale, compensating controls, expiry/review date and evidence.
+
+
 ## 7. Final 100% acceptance criteria
 
 A 37-area capability may be marked 100% only when all applicable criteria pass:
@@ -606,6 +735,11 @@ A 37-area capability may be marked 100% only when all applicable criteria pass:
 - concurrency tests pass;
 - performance/load target passes;
 - security review passes;
+- threat model and abuse-case mitigations are verified;
+- privacy/sensitive-data assurance passes;
+- software supply-chain and release-provenance checks pass;
+- migration/API compatibility and backfill verification pass where applicable;
+- property/fuzz robustness testing passes where applicable;
 - adversarial audit passes or has an explicitly approved exception;
 - rollback/recovery passes;
 - relevant scale target is proven;
@@ -631,3 +765,18 @@ The completion plan therefore requires the external permission to be granted and
 6. In parallel, close exact-head certification gaps for mature capabilities in Workstream F.
 7. Converge through Workstream G with independent assurance on every release candidate.
 
+
+## 10. External best-practice alignment used for final optimization
+
+The implementation and assurance model should be maintained as a practical crosswalk rather than a compliance claim.
+
+Relevant reference families include:
+
+- NIST Secure Software Development Framework (SSDF), including AI-specific secure-development guidance;
+- NIST AI Risk Management Framework and Generative AI Profile for lifecycle risk, evaluation and governance;
+- OWASP ASVS for web/application security verification;
+- OWASP Top 10 and OWASP GenAI/LLM risk guidance for application and AI-specific abuse cases;
+- SLSA concepts for build provenance and software supply-chain integrity;
+- SRE practices for SLOs, error budgets, reproducible releases, canary analysis and automated rollback.
+
+Where DataNexus requirements are stricter than a reference baseline, the stricter DataNexus requirement remains authoritative.
