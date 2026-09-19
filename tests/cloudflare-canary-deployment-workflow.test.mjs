@@ -56,3 +56,9 @@ test('Cloudflare canary preflight builds governed image and validates Wrangler w
   assert.match(workflow, /cloudflare-canary-preflight/)
   assert.match(workflow, /wrangler@4\.131\.1 deploy --dry-run/)
 })
+
+
+test('release evidence parsers do not shadow JSON stdin with heredoc scripts', () => {
+  assert.doesNotMatch(workflow, /<\/tmp\/[^\n]+<<'NODE'/)
+  assert.match(workflow, /readFileSync\(process\.argv\[[23]\], 'utf8'\)/)
+})
