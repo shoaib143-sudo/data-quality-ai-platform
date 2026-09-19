@@ -12,6 +12,8 @@ const DEFAULT_BATCH = 5
 const MAX_BATCH = 20
 const DEFAULT_MAX_OBJECT_BYTES = 250 * 1024 * 1024
 const HARD_MAX_OBJECT_BYTES = 1024 * 1024 * 1024
+const SOURCE_SCAN_PAGE_SIZE = 100
+const MAX_SOURCE_SCAN_ROWS = 1000
 
 type SourceRow = {
   id: string
@@ -77,6 +79,58 @@ async function targetChecksum(storage: ReturnType<typeof createObjectStorage>, r
   return { checksum: sha256(bytes), sizeBytes: bytes.byteLength }
 }
 
+
+async function selectMigrationSources(
+  admin: ReturnType<typeof createAdminClient>,
+  r2Bucket: string,
+) {
+  const selected: SourceRow[] = []
+  let offset = 0
+  let examined = 0
+
+  while (selected.length < batchSize() && examined < MAX_SOURCE_SCAN_ROWS) {
+    const pageSize = Math.min(SOURCE_SCAN_PAGE_SIZE, MAX_SOURCE_SCAN_ROWS - examined)
+    const { data, error } = await admin
+      .schema('catalog')
+      .from('storage_objects')
+      .select('id, project_id, bucket, object_key, object_type, original_filename, content_type, size_bytes, checksum, checksum_algorithm, verified_at')
+      .eq('provider', 'supabase')
+      .eq('state', 'READY')
+      .order('created_at', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+
+    if (error) throw new Error(`Unable to load verified Supabase source objects: ${error.message}`)
+    const page = (data ?? []) as SourceRow[]
+    if (page.length === 0) break
+
+    examined += page.length
+    const persistedKeys = page.map((source) => persistedR2Key(targetKey(source)))
+    const { data: readyTargets, error: targetError } = await admin
+      .schema('catalog')
+      .from('storage_objects')
+      .select('object_key')
+      .eq('provider', 'r2')
+      .eq('bucket', r2Bucket)
+      .eq('owner_type', 'MIGRATION_COPY')
+      .eq('state', 'READY')
+      .in('object_key', persistedKeys)
+
+    if (targetError) throw new Error(`Unable to inspect existing R2 migration targets: ${targetError.message}`)
+    const readyKeys = new Set((readyTargets ?? []).map((row) => row.object_key as string))
+
+    for (const source of page) {
+      if (readyKeys.has(persistedR2Key(targetKey(source)))) continue
+      selected.push(source)
+      if (selected.length >= batchSize()) break
+    }
+
+    if (page.length < pageSize) break
+    offset += page.length
+  }
+
+  return { rows: selected, examined }
+}
+
 async function persistVerifiedSourceChecksum(
   admin: ReturnType<typeof createAdminClient>,
   source: SourceRow,
@@ -138,17 +192,16 @@ export async function POST(request: Request) {
   const targetStorage = createObjectStorage('r2')
   const objectLimit = maxObjectBytes()
 
-  const { data: sourceRows, error: sourceError } = await admin
-    .schema('catalog')
-    .from('storage_objects')
-    .select('id, project_id, bucket, object_key, object_type, original_filename, content_type, size_bytes, checksum, checksum_algorithm, verified_at')
-    .eq('provider', 'supabase')
-    .eq('state', 'READY')
-    .order('created_at', { ascending: true })
-    .limit(batchSize())
-
-  if (sourceError) {
-    return NextResponse.json({ error: `Unable to load verified Supabase source objects: ${sourceError.message}` }, { status: 500 })
+  let sourceRows: SourceRow[]
+  let sourceCandidatesExamined = 0
+  try {
+    const selection = await selectMigrationSources(admin, r2Bucket)
+    sourceRows = selection.rows
+    sourceCandidatesExamined = selection.examined
+  } catch (selectionError) {
+    return NextResponse.json({
+      error: selectionError instanceof Error ? selectionError.message : 'Unable to select R2 migration sources.',
+    }, { status: 500 })
   }
 
   const results: Array<Record<string, unknown>> = []
@@ -372,7 +425,8 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    examined: sourceRows?.length ?? 0,
+    examined: sourceRows.length,
+    sourceCandidatesExamined,
     results,
     sourceObjectsDeleted: 0,
     datasetVersionReferencesChanged: 0,
