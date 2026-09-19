@@ -78,6 +78,7 @@ node scripts/verify-domain-cell-job-monitor.mjs
 
 if [[ -n "${NEXT_PUBLIC_SUPABASE_URL:-}" && -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
   pnpm run verify:database
+  PROFILING_PRODUCTION_VALIDATION_REQUIRED=true node scripts/verify-profiling-production-validation.mjs
 else
   echo 'Live database verification is NOT_MEASURED because protected credentials are unavailable.'
 fi
