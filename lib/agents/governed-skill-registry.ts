@@ -50,7 +50,7 @@ export const GOVERNED_SKILLS: Record<GovernedSkillKey, GovernedSkillDefinition> 
     requiredToolsByAgent: {
       profiling_agent: ['profiling.metrics.execute'],
       data_quality_agent: ['quality.rules.read'],
-      investigator_agent: ['profiling.history.read'],
+      investigator_agent: ['governance_specialist_investigate'],
     },
     inputContract: ['project_id', 'objective', 'available_evidence'],
     outputContract: ['coverage_gaps', 'recommended_evidence', 'expected_information_gain'],
@@ -64,8 +64,8 @@ export const GOVERNED_SKILLS: Record<GovernedSkillKey, GovernedSkillDefinition> 
     eligibleAgents: ['data_quality_agent', 'governance_analyst_agent', 'investigator_agent'],
     requiredToolsByAgent: {
       data_quality_agent: ['quality.rules.read', 'quality.incident.read'],
-      governance_analyst_agent: ['governance.dataset.read'],
-      investigator_agent: ['quality.history.read', 'quality.incident.read'],
+      governance_analyst_agent: ['governance_specialist_investigate'],
+      investigator_agent: ['governance_specialist_investigate'],
     },
     inputContract: ['project_id', 'objective', 'quality_evidence'],
     outputContract: ['violations', 'severity_assessment', 'evidence_refs', 'confidence'],
@@ -91,8 +91,8 @@ export const GOVERNED_SKILLS: Record<GovernedSkillKey, GovernedSkillDefinition> 
     purpose: 'Identify evidence-backed gaps in ownership, glossary, CDE, classification, stewardship, certification, and governance coverage.',
     eligibleAgents: ['steward_agent', 'governance_analyst_agent'],
     requiredToolsByAgent: {
-      steward_agent: ['governance.glossary.read', 'governance.cde.read', 'governance.classification.read', 'governance.stewardship.read'],
-      governance_analyst_agent: ['governance.dataset.read', 'governance.policy.read'],
+      steward_agent: ['governance_specialist_investigate'],
+      governance_analyst_agent: ['governance_specialist_investigate'],
     },
     inputContract: ['project_id', 'objective'],
     outputContract: ['gaps', 'evidence_refs', 'recommendations', 'approval_requirements'],
@@ -105,8 +105,8 @@ export const GOVERNED_SKILLS: Record<GovernedSkillKey, GovernedSkillDefinition> 
     purpose: 'Synthesize project-scoped policy, control, risk, contract, quality, and relationship evidence into an auditable answer.',
     eligibleAgents: ['governance_analyst_agent', 'executive_agent', 'steward_agent'],
     requiredToolsByAgent: {
-      governance_analyst_agent: ['governance.policy.read', 'governance.control.read', 'governance.contract.read', 'governance.risk.read'],
-      executive_agent: ['governance.risk.read', 'governance.control.read'],
+      governance_analyst_agent: ['governance_specialist_investigate'],
+      executive_agent: ['governance_specialist_investigate'],
       steward_agent: ['governance_specialist_investigate'],
     },
     inputContract: ['project_id', 'question'],
@@ -120,10 +120,10 @@ export const GOVERNED_SKILLS: Record<GovernedSkillKey, GovernedSkillDefinition> 
     purpose: 'Traverse authorized lineage and dependency evidence to bound downstream impact and expose missing lineage explicitly.',
     eligibleAgents: ['architect_agent', 'governance_analyst_agent', 'investigator_agent', 'support_agent'],
     requiredToolsByAgent: {
-      architect_agent: ['lineage.read', 'contracts.read'],
-      governance_analyst_agent: ['lineage.read'],
-      investigator_agent: ['lineage.read'],
-      support_agent: ['lineage.read'],
+      architect_agent: ['governance_specialist_investigate'],
+      governance_analyst_agent: ['governance_specialist_investigate'],
+      investigator_agent: ['governance_specialist_investigate'],
+      support_agent: ['governance_specialist_investigate'],
     },
     inputContract: ['project_id', 'asset_ref', 'change_or_incident'],
     outputContract: ['affected_assets', 'dependency_paths', 'unknowns', 'evidence_refs'],
@@ -136,7 +136,7 @@ export const GOVERNED_SKILLS: Record<GovernedSkillKey, GovernedSkillDefinition> 
     purpose: 'Generate and test competing incident hypotheses using quality history, profiling history, lineage, issues, and remediation evidence.',
     eligibleAgents: ['investigator_agent'],
     requiredToolsByAgent: {
-      investigator_agent: ['quality.incident.read', 'quality.history.read', 'profiling.history.read', 'lineage.read', 'governance.issue.read', 'remediation.history.read'],
+      investigator_agent: ['governance_specialist_investigate'],
     },
     inputContract: ['project_id', 'incident_ref', 'objective'],
     outputContract: ['hypotheses', 'probable_causes', 'alternative_causes', 'confidence', 'evidence_refs', 'recommended_follow_up'],
@@ -149,7 +149,7 @@ export const GOVERNED_SKILLS: Record<GovernedSkillKey, GovernedSkillDefinition> 
     purpose: 'Prioritize authoritative governance and quality signals by materiality without inventing unsupported business impact.',
     eligibleAgents: ['executive_agent'],
     requiredToolsByAgent: {
-      executive_agent: ['governance.scorecard.read', 'governance.risk.read', 'governance.certification.read', 'quality.summary.read'],
+      executive_agent: ['governance_specialist_investigate'],
     },
     inputContract: ['project_id', 'reporting_objective'],
     outputContract: ['priorities', 'material_drivers', 'evidence_refs', 'uncertainties'],
@@ -162,7 +162,7 @@ export const GOVERNED_SKILLS: Record<GovernedSkillKey, GovernedSkillDefinition> 
     purpose: 'Investigate product and operational support cases using governed history, incidents, issues, lineage, and remediation evidence.',
     eligibleAgents: ['support_agent'],
     requiredToolsByAgent: {
-      support_agent: ['profiling.history.read', 'quality.incident.read', 'governance.issue.read', 'remediation.history.read'],
+      support_agent: ['governance_specialist_investigate'],
     },
     inputContract: ['project_id', 'case_objective'],
     outputContract: ['diagnosis', 'safe_next_actions', 'evidence_refs', 'handoff_recommendation'],
