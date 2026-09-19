@@ -3,6 +3,10 @@ name: Continuous Learning Governance
 on:
   pull_request:
     paths:
+      - 'lib/agents/governed-learning-benchmarks.ts'
+      - 'lib/agents/governed-learning-benchmark-service.ts'
+      - 'scripts/test-governed-learning-benchmarks.mjs'
+      - 'supabase/migrations/20260920011000_governed_learning_candidate_benchmarks.sql'
       - 'lib/agents/governed-learning-candidates.ts'
       - 'lib/agents/governed-learning-candidate-service.ts'
       - 'scripts/test-governed-learning-candidates.mjs'
@@ -14,6 +18,10 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/agents/governed-learning-benchmarks.ts'
+      - 'lib/agents/governed-learning-benchmark-service.ts'
+      - 'scripts/test-governed-learning-benchmarks.mjs'
+      - 'supabase/migrations/20260920011000_governed_learning_candidate_benchmarks.sql'
       - 'lib/agents/governed-learning-candidates.ts'
       - 'lib/agents/governed-learning-candidate-service.ts'
       - 'scripts/test-governed-learning-candidates.mjs'
@@ -38,6 +46,8 @@ jobs:
           node-version: '24'
       - name: Run governed learning candidate tests
         run: node --experimental-strip-types scripts/test-governed-learning-candidates.mjs
+      - name: Run governed learning benchmark tests
+        run: node --experimental-strip-types scripts/test-governed-learning-benchmarks.mjs
       - name: Run continuous learning governance tests
         run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
       - name: Run independent continuous learning governance adversarial audit
