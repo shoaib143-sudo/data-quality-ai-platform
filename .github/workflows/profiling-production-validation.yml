@@ -12,6 +12,13 @@ on:
       - 'scripts/verify-profiling-production-validation.mjs'
       - 'scripts/test-profiling-production-validation.mjs'
       - 'scripts/lib/profiling-production-validation.mjs'
+      - 'package.json'
+      - 'scripts/ci-full-quality-gate.sh'
+      - 'scripts/test-profiling-request-input.mjs'
+      - 'scripts/verify-profiling-scale-certification.mjs'
+      - 'scripts/test-profiling-scale-certification.mjs'
+      - 'scripts/verify-native-supervisor-tier2-profiling.mjs'
+      - 'tests/profiling-production-validation-workflow.test.mjs'
       - '.github/workflows/profiling-production-validation.yml'
   push:
     branches: [main]
@@ -24,6 +31,13 @@ on:
       - 'scripts/verify-profiling-production-validation.mjs'
       - 'scripts/test-profiling-production-validation.mjs'
       - 'scripts/lib/profiling-production-validation.mjs'
+      - 'package.json'
+      - 'scripts/ci-full-quality-gate.sh'
+      - 'scripts/test-profiling-request-input.mjs'
+      - 'scripts/verify-profiling-scale-certification.mjs'
+      - 'scripts/test-profiling-scale-certification.mjs'
+      - 'scripts/verify-native-supervisor-tier2-profiling.mjs'
+      - 'tests/profiling-production-validation-workflow.test.mjs'
       - '.github/workflows/profiling-production-validation.yml'
   workflow_dispatch:
 
