@@ -31,6 +31,10 @@ function validSnapshot(overrides = {}) {
     completedRuns: 2,
     activeSourceTypes: { FILE: 1, JDBC: 1 },
     latestRuns: [validRun(), validRun({ id: 'run-2', sourceType: 'JDBC' })],
+    latestAttempts: [
+      { id: 'run-1', datasetVersionId: 'dataset-file', status: 'COMPLETED', activeSource: true },
+      { id: 'run-2', datasetVersionId: 'dataset-jdbc', status: 'COMPLETED', activeSource: true },
+    ],
     ...overrides,
   }
 }
@@ -109,4 +113,27 @@ test('fails when active source types exist but no completed FILE profile is cert
   }))
   assert.equal(result.valid, false)
   assert.ok(result.failures.includes('NO_COMPLETED_FILE_PROFILE'))
+})
+
+
+test('surfaces a newer failed attempt on an active dataset without invalidating older certified output', () => {
+  const result = evaluateProfilingProductionSnapshot(validSnapshot({
+    latestAttempts: [
+      { id: 'run-3', datasetVersionId: 'dataset-file', status: 'FAILED', activeSource: true },
+      { id: 'run-2', datasetVersionId: 'dataset-jdbc', status: 'COMPLETED', activeSource: true },
+    ],
+  }))
+  assert.equal(result.valid, true)
+  assert.ok(result.warnings.includes('LATEST_ATTEMPT_dataset-file_FAILED'))
+  assert.equal(result.summary.activeDatasetsWithNonCompletedLatestAttempt, 1)
+})
+
+test('does not warn on historical failed attempts for inactive dataset versions', () => {
+  const result = evaluateProfilingProductionSnapshot(validSnapshot({
+    latestAttempts: [
+      { id: 'run-old', datasetVersionId: 'inactive-dataset', status: 'FAILED', activeSource: false },
+    ],
+  }))
+  assert.equal(result.valid, true)
+  assert.equal(result.warnings.some((warning) => warning.includes('inactive-dataset')), false)
 })
