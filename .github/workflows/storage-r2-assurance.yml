@@ -33,6 +33,26 @@ on:
       - 'tests/storage-*.test.mjs'
       - '.github/workflows/storage-r2-assurance.yml'
   workflow_dispatch:
+    inputs:
+      operation:
+        description: R2 assurance operation
+        required: true
+        type: choice
+        default: verify
+        options:
+          - verify
+          - production-readiness
+          - production-certify
+      allow_cors_mutation:
+        description: Explicitly allow governed R2 CORS mutation during production certification
+        required: false
+        default: false
+        type: boolean
+      allow_r2_copy:
+        description: Explicitly allow non-destructive Supabase-to-R2 copy during production certification
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: storage-r2-assurance-${{ github.event.pull_request.number || github.ref }}
@@ -60,7 +80,7 @@ jobs:
         run: node --test tests/storage-*.test.mjs
 
   live-production-certification:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.operation != 'verify'
     needs: storage-contract-and-adversarial-guards
     runs-on: ubuntu-latest
     environment: production
@@ -79,7 +99,9 @@ jobs:
           test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || { echo "::error::GitHub OIDC request URL is unavailable"; exit 1; }
           test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || { echo "::error::GitHub OIDC request token is unavailable"; exit 1; }
 
-      - name: Verify or apply approved R2 CORS policy
+      - name: Verify or apply explicitly approved R2 CORS policy
+        env:
+          ALLOW_CORS_MUTATION: ${{ inputs.operation == 'production-certify' && inputs.allow_cors_mutation == true }}
         run: |
           set -euo pipefail
           oidc_response="$(curl --fail-with-body --silent --show-error \\
@@ -109,6 +131,10 @@ jobs:
             '; then
             echo "R2 CORS policy already matches the governed desired state."
           else
+            if [ "$ALLOW_CORS_MUTATION" != "true" ]; then
+              echo "::error::R2 CORS does not match desired state. Re-run production-certify with allow_cors_mutation=true only after explicit operational approval."
+              exit 1
+            fi
             curl --fail-with-body --silent --show-error \
               --connect-timeout 10 --max-time 60 \
               -X POST \
@@ -126,6 +152,7 @@ jobs:
           fi
 
       - name: Copy and verify Supabase objects into R2
+        if: inputs.operation == 'production-certify' && inputs.allow_r2_copy == true
         run: |
           set -euo pipefail
           oidc_response="$(curl --fail-with-body --silent --show-error \\
@@ -224,6 +251,49 @@ jobs:
               if ((result.examinedTargets ?? 0) < 1 || (result.eligibleReferences ?? 0) < 1) process.exit(3);
               if (result.changedReferences !== 0 || result.destructiveActions !== 0) process.exit(4);
               if (rows.some(r => r.action === "ERROR" || r.action === "SKIPPED_INTEGRITY_MISMATCH")) process.exit(5);
+              console.log(JSON.stringify({
+                mode: result.mode,
+                examinedTargets: result.examinedTargets,
+                eligibleReferences: result.eligibleReferences,
+                changedReferences: result.changedReferences,
+                destructiveActions: result.destructiveActions
+              },null,2));
+            });
+          '
+
+      - name: Verify R2 reference rollback dry run remains non-mutating
+        run: |
+          set -euo pipefail
+          oidc_response="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          OIDC_TOKEN="$(printf '%s' "$oidc_response" | node -e '
+            let body="";
+            process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const result=JSON.parse(body);
+              if (typeof result.value !== "string" || result.value.split(".").length !== 3) process.exit(2);
+              process.stdout.write(result.value);
+            });
+          ')"
+          response="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 300 \
+            -X POST \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"mode":"dry-run-rollback"}' \
+            "$DATANEXUS_CERTIFICATION_TARGET_URL/api/internal/storage/reference-cutover")"
+          printf '%s' "$response" | node -e '
+            let body="";
+            process.stdin.on("data", c => body += c);
+            process.stdin.on("end", () => {
+              const result=JSON.parse(body);
+              const rows=Array.isArray(result.results) ? result.results : [];
+              if (result.mode !== "dry-run-rollback") process.exit(2);
+              if (result.changedReferences !== 0 || result.destructiveActions !== 0) process.exit(3);
+              if ((result.sourceObjectsDeleted ?? 0) !== 0 || (result.targetObjectsDeleted ?? 0) !== 0) process.exit(4);
+              if (rows.some(r => r.action === "ERROR")) process.exit(5);
               console.log(JSON.stringify({
                 mode: result.mode,
                 examinedTargets: result.examinedTargets,
