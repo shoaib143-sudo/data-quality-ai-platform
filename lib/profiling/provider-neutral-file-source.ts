@@ -103,6 +103,8 @@ export async function resolveProviderNeutralFileConfig(config: FileSourceConfig)
     bucket: objectStorage.bucket,
     key: objectStorage.key,
   }
+  const head = await storage.headObject(reference)
+  if (!head.exists) throw new Error('R2 file source does not exist.')
   const authorization = await storage.createDownloadAuthorization({ reference, expiresInSeconds: R2_READ_TTL_SECONDS })
   if (!authorization.url) throw new Error('R2 file source could not be authorized for server-side reading.')
 
@@ -117,6 +119,10 @@ export async function resolveProviderNeutralFileConfig(config: FileSourceConfig)
         storage_provider: 'r2',
         storage_bucket: objectStorage.bucket,
         storage_path: objectStorage.key,
+        storage_size_bytes: head.sizeBytes,
+        storage_content_type: head.contentType,
+        storage_etag: head.etag,
+        storage_size_bytes_authority: head.sizeBytes === undefined ? 'UNKNOWN' : 'SOURCE_OBSERVED',
       },
     },
   }
