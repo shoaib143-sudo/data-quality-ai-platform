@@ -38,3 +38,14 @@ test('Cloudflare canary deployment passes only public Supabase browser configura
   const canaryJob = workflow.slice(workflow.indexOf('deploy-cloudflare-canary:'), workflow.indexOf('deploy-cloudflare-worker:'))
   assert.doesNotMatch(canaryJob, /SUPABASE_SERVICE_ROLE_KEY/)
 })
+
+
+test('Cloudflare canary release verifies exact deployed identity and read-only mutation boundary', () => {
+  assert.match(workflow, /DATANEXUS_CLOUDFLARE_CANARY_URL: \$\{\{ vars\.DATANEXUS_CLOUDFLARE_CANARY_URL \}\}/)
+  assert.match(workflow, /api\/build-info/)
+  assert.match(workflow, /body\.commitSha !== expected/)
+  assert.match(workflow, /body\.environment !== 'canary'/)
+  assert.match(workflow, /body\.platform !== 'cloudflare'/)
+  assert.match(workflow, /mutation_code/)
+  assert.match(workflow, /test "\$mutation_code" = "403"/)
+})
