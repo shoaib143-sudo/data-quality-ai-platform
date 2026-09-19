@@ -49,3 +49,10 @@ test('Cloudflare canary release verifies exact deployed identity and read-only m
   assert.match(workflow, /mutation_code/)
   assert.match(workflow, /test "\$mutation_code" = "403"/)
 })
+
+
+test('Cloudflare canary preflight builds governed image and validates Wrangler without deployment', () => {
+  assert.match(workflow, /build-cloudflare-container\.mjs/)
+  assert.match(workflow, /cloudflare-canary-preflight/)
+  assert.match(workflow, /wrangler@4\.131\.1 deploy --dry-run/)
+})

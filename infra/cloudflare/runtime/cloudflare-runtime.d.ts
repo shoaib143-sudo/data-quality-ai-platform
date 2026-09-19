@@ -2,7 +2,8 @@ declare module '@cloudflare/containers' {
   export class Container {
     defaultPort: number
     sleepAfter: string
-    envVars: Record<string, string | undefined>
+    envVars: Record<string, string>
+    pingEndpoint: string
   }
 }
 

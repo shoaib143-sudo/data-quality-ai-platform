@@ -122,7 +122,19 @@ jobs:
           pnpm run verify:container-runtime
           pnpm exec tsc --noEmit
           pnpm build
-          docker build --tag "datanexus-canary-preflight:${{ inputs.commit_sha }}" .
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --tag "datanexus-canary-preflight:${{ inputs.commit_sha }}"
+
+      - name: Install pinned Cloudflare tooling for dry run
+        run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.131.1 @cloudflare/containers@0.3.7
+
+      - name: Validate canary Wrangler bundle without deployment
+        run: |
+          set -euo pipefail
+          npx wrangler@4.131.1 deploy --dry-run \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --outdir /tmp/datanexus-canary-preflight
 
   preflight-cloudflare-worker:
     name: cloudflare-worker-preflight
@@ -174,7 +186,19 @@ jobs:
           pnpm run verify:worker-runtime
           pnpm exec tsc --noEmit
           pnpm build
-          docker build --tag "datanexus-worker-preflight:${{ inputs.commit_sha }}" .
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --tag "datanexus-worker-preflight:${{ inputs.commit_sha }}"
+
+      - name: Install pinned Cloudflare tooling for dry run
+        run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.131.1 @cloudflare/containers@0.3.7
+
+      - name: Validate worker Wrangler bundle without deployment
+        run: |
+          set -euo pipefail
+          npx wrangler@4.131.1 deploy --dry-run \
+            --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --outdir /tmp/datanexus-worker-preflight
 
   deploy-cloudflare-canary:
     name: cloudflare-canary-deploy
@@ -234,7 +258,10 @@ jobs:
       - name: Build standalone container locally
         env:
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
-        run: docker build --tag "datanexus-canary:$EXACT_SHA" .
+        run: |
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --tag "datanexus-canary:$EXACT_SHA"
 
       - name: Install pinned Cloudflare deployment tooling
         run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.131.1 @cloudflare/containers@0.3.7
@@ -344,7 +371,10 @@ jobs:
       - name: Build worker container locally
         env:
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
-        run: docker build --tag "datanexus-worker:$EXACT_SHA" .
+        run: |
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --tag "datanexus-worker:$EXACT_SHA"
 
       - name: Install pinned Cloudflare deployment tooling
         run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.131.1 @cloudflare/containers@0.3.7

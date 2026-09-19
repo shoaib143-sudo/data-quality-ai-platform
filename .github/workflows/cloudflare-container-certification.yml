@@ -1,0 +1,136 @@
+name: Cloudflare Container Certification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - next.config.mjs
+      - scripts/build-cloudflare-container.mjs
+      - infra/cloudflare/**
+      - app/api/health/live/**
+      - app/api/build-info/**
+      - lib/runtime/**
+      - lib/supabase/**
+      - tests/container-runtime-contract.test.mjs
+      - tests/cloudflare-canary-contract.test.mjs
+      - tests/cloudflare-worker-runtime-contract.test.mjs
+      - .github/workflows/cloudflare-container-certification.yml
+      - .github/workflows/release-governance.yml
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - next.config.mjs
+      - scripts/build-cloudflare-container.mjs
+      - infra/cloudflare/**
+      - app/api/health/live/**
+      - app/api/build-info/**
+      - lib/runtime/**
+      - lib/supabase/**
+      - tests/container-runtime-contract.test.mjs
+      - tests/cloudflare-canary-contract.test.mjs
+      - tests/cloudflare-worker-runtime-contract.test.mjs
+      - .github/workflows/cloudflare-container-certification.yml
+      - .github/workflows/release-governance.yml
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    name: certify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Cloudflare runtime contracts
+        run: |
+          set -euo pipefail
+          pnpm run verify:provider-neutral-runtime
+          pnpm run verify:container-runtime
+          pnpm run verify:worker-runtime
+          pnpm exec tsc --noEmit
+          pnpm build
+
+      - name: Build governed container image
+        run: |
+          set -euo pipefail
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --tag "datanexus-cloudflare-ci:${GITHUB_SHA}"
+
+      - name: Smoke-test standalone container
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          docker run --detach \
+            --name datanexus-cloudflare-ci \
+            --publish 127.0.0.1:3000:3000 \
+            --env DATANEXUS_ENV=canary \
+            --env DATANEXUS_PLATFORM=cloudflare \
+            --env DATANEXUS_COMMIT_SHA="$GITHUB_SHA" \
+            --env DATANEXUS_RELEASE_ID="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --env DATANEXUS_BUILD_TIMESTAMP="$BUILD_TIMESTAMP" \
+            "datanexus-cloudflare-ci:${GITHUB_SHA}"
+          trap 'docker rm --force datanexus-cloudflare-ci >/dev/null 2>&1 || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/api/health/live >/tmp/cloudflare-live.json; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs datanexus-cloudflare-ci
+              exit 1
+            fi
+            sleep 2
+          done
+
+          curl --fail --silent --show-error http://127.0.0.1:3000/api/build-info >/tmp/cloudflare-build.json
+          node - "$GITHUB_SHA" </tmp/cloudflare-build.json <<'NODE'
+          const fs = require('node:fs')
+          const expected = process.argv[2]
+          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') {
+            console.error(body)
+            process.exit(1)
+          }
+          NODE
+
+      - name: Install pinned Cloudflare tooling
+        run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.131.1 @cloudflare/containers@0.3.7
+
+      - name: Validate Wrangler canary and worker bundles without deployment
+        run: |
+          set -euo pipefail
+          npx wrangler@4.131.1 deploy --dry-run \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --outdir /tmp/datanexus-canary-dry-run
+          npx wrangler@4.131.1 deploy --dry-run \
+            --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --outdir /tmp/datanexus-worker-dry-run

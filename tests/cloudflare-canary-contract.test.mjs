@@ -18,6 +18,8 @@ test('Cloudflare canary is a single-instance secondary container runtime', () =>
   assert.deepEqual(config.containers[0].constraints?.regions, ['APAC'])
   assert.equal(config.containers[0].instance_type, 'basic')
   assert.equal(config.containers[0].ssh?.enabled, false)
+  assert.equal(config.containers[0].image_vars?.NEXT_PUBLIC_SUPABASE_URL, 'https://tvjnavjxuehpesxcfvrx.supabase.co')
+  assert.match(config.containers[0].image_vars?.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '', /^sb_publishable_/)
   assert.equal(config.durable_objects.bindings[0].name, 'DATANEXUS_CANARY')
   assert.deepEqual(config.migrations[0].new_sqlite_classes, ['DataNexusCanary'])
 })
@@ -42,6 +44,8 @@ test('Cloudflare canary ingress fails closed on production-authority endpoints',
   assert.match(router, /DATANEXUS_BUILD_TIMESTAMP/)
   assert.match(router, /NEXT_PUBLIC_SUPABASE_URL/)
   assert.match(router, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/)
+  assert.match(router, /pingEndpoint = 'container\/api\/health\/live'/)
+  assert.match(router, /definedEnvVars/)
   assert.doesNotMatch(router, /SUPABASE_SERVICE_ROLE_KEY/)
 })
 
