@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireInternalBearer } from '@/lib/security/internal-bearer'
+import { requireInternalAutomation } from '@/lib/security/internal-bearer'
 import { createObjectStorage } from '@/lib/storage/factory'
 import type { StorageReference } from '@/lib/storage/contracts'
 
@@ -121,7 +121,7 @@ function registryPairEligible(source: StorageRow, target: StorageRow) {
 }
 
 export async function POST(request: Request) {
-  if (!requireInternalBearer(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
+  if (!(await requireInternalAutomation(request))) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
 
   let body: Record<string, unknown> = {}
   try {
