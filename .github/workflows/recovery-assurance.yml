@@ -22,6 +22,20 @@ on:
       - 'lib/orchestration/governance-outcome-report*.ts'
       - 'lib/orchestration/governance-report-*.ts'
       - 'lib/orchestration/governance-recovery*.ts'
+      - 'lib/orchestration/execution-recovery*.ts'
+      - 'lib/orchestration/worker.ts'
+      - 'lib/agents/run-profiling-job.ts'
+      - 'lib/profiling/readiness-remediation-*.ts'
+      - 'lib/profiling/source-readiness-repair.ts'
+      - 'scripts/test-execution-recovery-*.mjs'
+      - 'scripts/setup-execution-recovery-persistence-test.sql'
+      - 'scripts/test-execution-recovery-persistence.sql'
+      - 'scripts/setup-execution-recovery-concurrency.sql'
+      - 'scripts/assert-execution-recovery-concurrency.sql'
+      - 'scripts/setup-native-compensation-crash-recovery.sql'
+      - 'scripts/test-native-compensation-crash-recovery.sql'
+      - 'scripts/verify-native-compensation-crash-recovery.mjs'
+      - 'package.json'
       - 'lib/orchestration/governance-orchestrator-approval-service.ts'
       - 'app/agents/autonomous-governance/**'
       - 'supabase/migrations/**'
@@ -63,6 +77,79 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL for isolated recovery persistence tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-client
+          sudo systemctl start postgresql
+      - name: Execute isolated recovery persistence acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/setup-execution-recovery-persistence-test.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918022000_execution_recovery_closed_loop_contract.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918022500_execution_recovery_atomic_claim.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918023500_execution_recovery_action_evidence.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260918025000_execution_recovery_validated_resume.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/test-execution-recovery-persistence.sql
+      - name: Exercise concurrent autonomous recovery claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/setup-execution-recovery-concurrency.sql
+
+          sudo -u postgres psql -At -v ON_ERROR_STOP=1 -c "select orchestration.claim_execution_recovery_auto_repair('30000000-0000-4000-8000-000000000011',0,'lease_reconcile','project-a/job-race');" > /tmp/recovery-race-a.out &
+          race_a=$!
+          sudo -u postgres psql -At -v ON_ERROR_STOP=1 -c "select orchestration.claim_execution_recovery_auto_repair('30000000-0000-4000-8000-000000000011',0,'lease_reconcile','project-a/job-race');" > /tmp/recovery-race-b.out &
+          race_b=$!
+          wait "$race_a"
+          wait "$race_b"
+
+          claimed="$(cat /tmp/recovery-race-a.out /tmp/recovery-race-b.out | grep -c '"claimed": true' || true)"
+          if [ "$claimed" -ne 1 ]; then
+            echo "Expected exactly one concurrent repair claim; got $claimed"
+            cat /tmp/recovery-race-a.out /tmp/recovery-race-b.out
+            exit 1
+          fi
+
+          sudo -u postgres psql -At -v ON_ERROR_STOP=1 -c "select orchestration.claim_execution_recovery_auto_repair('30000000-0000-4000-8000-000000000021',0,'profile_reconcile','project-a/run-a');" > /tmp/recovery-isolation-a.out &
+          isolation_a=$!
+          sudo -u postgres psql -At -v ON_ERROR_STOP=1 -c "select orchestration.claim_execution_recovery_auto_repair('30000000-0000-4000-8000-000000000031',0,'profile_reconcile','project-b/run-b');" > /tmp/recovery-isolation-b.out &
+          isolation_b=$!
+          wait "$isolation_a"
+          wait "$isolation_b"
+
+          independent="$(cat /tmp/recovery-isolation-a.out /tmp/recovery-isolation-b.out | grep -c '"claimed": true' || true)"
+          if [ "$independent" -ne 2 ]; then
+            echo "Expected independent concurrent cases to both claim repair; got $independent"
+            cat /tmp/recovery-isolation-a.out /tmp/recovery-isolation-b.out
+            exit 1
+          fi
+
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/assert-execution-recovery-concurrency.sql
+      - name: Exercise fenced crash recovery and stale-worker protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260919030000_execution_recovery_crash_fencing.sql
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/setup-native-compensation-crash-recovery.sql
+
+          sudo -u postgres psql -At -v ON_ERROR_STOP=1 -c "select orchestration.claim_execution_recovery_auto_repair('41000000-0000-4000-8000-000000000011',0,'lease_reconcile','project/race',1,true,300);" > /tmp/fenced-race-a.out &
+          race_a=$!
+          sudo -u postgres psql -At -v ON_ERROR_STOP=1 -c "select orchestration.claim_execution_recovery_auto_repair('41000000-0000-4000-8000-000000000011',0,'lease_reconcile','project/race',1,true,300);" > /tmp/fenced-race-b.out &
+          race_b=$!
+          wait "$race_a"
+          wait "$race_b"
+          claimed="$(cat /tmp/fenced-race-a.out /tmp/fenced-race-b.out | grep -c '"claimed": true' || true)"
+          in_flight="$(cat /tmp/fenced-race-a.out /tmp/fenced-race-b.out | grep -c '"reason": "ATTEMPT_IN_FLIGHT"' || true)"
+          if [ "$claimed" -ne 1 ] || [ "$in_flight" -ne 1 ]; then
+            echo "Expected one fenced executor and one in-flight rejection; claimed=$claimed in_flight=$in_flight"
+            cat /tmp/fenced-race-a.out /tmp/fenced-race-b.out
+            exit 1
+          fi
+
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -f scripts/test-native-compensation-crash-recovery.sql
+          node scripts/verify-native-compensation-crash-recovery.mjs
       - name: Verify repository governance after consolidation
         run: |
           node scripts/verify-github-governance.mjs
@@ -81,6 +168,8 @@ jobs:
         run: node --test scripts/test-post-implementation-certification-decision.mjs
       - name: Verify platform recovery assurance
         run: pnpm run verify:recovery-assurance
+      - name: Verify closed-loop Execution Recovery Agent
+        run: pnpm run verify:execution-recovery
       - name: Verify governance orchestrator runtime wiring
         run: node scripts/verify-governance-runtime-wiring.mjs
       - name: Re-run deterministic orchestrator contracts
