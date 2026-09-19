@@ -29,7 +29,7 @@ export default {
   async fetch(request: Request, bindings: { DATANEXUS_CANARY: DurableObjectNamespace<DataNexusCanary> }) {
     const url = new URL(request.url)
 
-    if (BLOCKED_CANARY_PATHS.has(url.pathname)) {
+    if (url.pathname.startsWith('/api/internal/') || BLOCKED_CANARY_PATHS.has(url.pathname)) {
       return Response.json({
         error: 'This operation is disabled on the DataNexus canary runtime.',
         environment: 'canary',
