@@ -9,9 +9,9 @@
 - **Production URL:** `https://data-quality-ai-platform.vercel.app`
 - **Supabase project:** `tvjnavjxuehpesxcfvrx`
 - **Vercel project:** `data-quality-ai-platform`
-- **Current verified main head at this checkpoint:** `dbe511ad4f7664fdb398ff701df3601d4523d551`
-- **Current production change at that head:** `Align Job Monitor feature cells and neural links (#448)`
-- **Branch protection:** `main` protected with required contexts `certify`, `analyze`, `build`, and `revalidate`.
+- **Current verified main head at this checkpoint:** `e8db6507d80e1c3148a8bf6539b5f675754aef90`
+- **Current production change at that head:** `Agent Policy v2 acceptance convergence (#736)`
+- **Branch protection:** `main` protected with required contexts `build`, `analyze`, `dependency-audit`, and `repository-governance`; squash merge and linear-history policy remain enforced.
 
 ## 2. Current production architecture
 
@@ -233,9 +233,46 @@ DataNexus retains authority over identity, tenant/project scope, RLS/authorizati
 
 ## 11. Runtime v2 implementation program
 
-Item 1 (secret rotation) is intentionally deferred as accepted operational risk.
+The active objective is now **DataNexus Agent Policy v2 + Agent Runtime & Execution Orchestration v2** as one production-ready governed execution platform.
 
-Items 2–29 are sufficiently specified for autonomous implementation.
+Expanded scope:
+1. deterministic Job Monitor execute/retry/cancel/approve/admin capabilities;
+2. secret hygiene;
+3. PROJECT_STATE_v2 continuity;
+4. documentation consolidation;
+5. approval administration UX;
+6. delegation management UX;
+7. external notification UX;
+8. Supabase advisor review;
+9. duplicate/unused index review;
+10. notification delivery robustness;
+11. resource ACL administration;
+12. tool input/output validation;
+13. artifact governance;
+14. message governance;
+15. SLA enforcement automation;
+16. cost/token accounting;
+17. approval/runtime integration depth;
+18. Job Monitor deeper drilldown;
+19. runtime observability;
+20. execution concurrency controls;
+21. production provider resilience;
+22. performance/load testing;
+23. agent version lifecycle;
+24. chaos/failure testing;
+25. governed tool execution;
+26. end-to-end agent acceptance;
+27. multi-agent orchestration;
+28. failure/recovery framework;
+29. Agent Runtime & Execution Orchestration v2.
+
+Actual secret rotation remains a separate operational action. Hygiene controls are in scope; rotation is not assumed.
+
+### Policy hold: break-glass semantics
+
+ADR-008 states that break-glass execution is not supported. A later Runtime v2 checkpoint mentions time-limited break-glass access. Until a product-policy decision explicitly reconciles those statements, implementation must fail closed: **no break-glass production execution path may be introduced**. This is a documented policy hold, not permission to weaken approval or execution controls.
+
+Items 2–29 are sufficiently specified for autonomous implementation subject to that fail-closed hold and normal external-credential boundaries.
 
 Optimized execution phases:
 
@@ -258,6 +295,28 @@ Optimized execution phases:
 - Do not weaken tests, authorization, SLO thresholds, or governance merely to make CI pass.
 - Prefer reversible, additive, forward-only changes.
 - An item is complete only after relevant unit/negative/adversarial/integration validation, exact-head CI, preview/production checks where applicable, and evidence/documentation updates.
+
+### Post-implementation certification
+
+The expanded Runtime v2 program is not complete at merge time. Final certification requires:
+
+1. requirement-to-code-to-test evidence reconciliation;
+2. unit tests;
+3. negative and failure-case tests;
+4. independent adversarial audit;
+5. clean database reconstruction and migration validation;
+6. integration and end-to-end persona acceptance;
+7. performance/load certification;
+8. chaos/fault-injection certification;
+9. security and secret-hygiene review;
+10. exact-head protected CI;
+11. preview validation;
+12. controlled production canary;
+13. production revalidation;
+14. rollback/recovery exercise;
+15. final documentation and evidence reconciliation.
+
+A validation suite must be capable of disproving the implementation rather than simply mirroring it.
 
 ## 13. Immediate next work
 
