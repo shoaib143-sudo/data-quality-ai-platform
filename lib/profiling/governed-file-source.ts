@@ -124,6 +124,8 @@ export async function loadGovernedFileSource(
   const loaded = sanitizeProviderNeutralFileResult(rawLoaded, resolved.canonicalSourceUri, resolved.provider)
   const extension = String(loaded.metadata.extension ?? '').toLowerCase()
   const canOcr = OCR_EXTENSIONS.has(extension)
+  const observationScope = String(loaded.metadata.source_observation_scope ?? 'FULL_OBJECT_BYTES')
+  if (observationScope === 'METADATA_ONLY') return loaded
 
   if (loaded.format !== 'binary') {
     if (!canOcr || nativeTextIsReadable(loaded)) return loaded
