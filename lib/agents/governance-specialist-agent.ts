@@ -5,6 +5,7 @@ import {
   type GovernanceReadAgentKey,
 } from '@/lib/agents/governance-read-agent'
 import { getGovernedAgentPolicy } from '@/lib/agents/governed-agent-registry'
+import { evaluateGovernanceSpecialistSkill } from '@/lib/agents/governance-specialist-skill-evaluation'
 import { buildInvestigatorEvidenceAnalysis } from '@/lib/agents/investigator-evidence-discrimination'
 import { authorizedDatasetScopeForProject } from '@/lib/governance/resource-authorization'
 import { assertGovernedInvestigationGrounding, buildGovernedInvestigation } from '@/lib/agents/governed-investigation'
@@ -716,6 +717,27 @@ export async function executeGovernanceSpecialistAgent(input: {
     })
     lifecycleFinished = true
 
+    let skillEvaluationStatus: 'RECORDED' | 'UNAVAILABLE' = 'UNAVAILABLE'
+    let skillEvaluationSkillKey: string | null = null
+    let skillEvaluationResultIds: string[] = []
+    try {
+      const skillEvaluation = await evaluateGovernanceSpecialistSkill({
+        projectId: input.projectId,
+        agentKey,
+        agentRunId: run.id,
+        nativeToolInvocationId: admission.invocationId,
+        output,
+        observedAt: new Date().toISOString(),
+      })
+      skillEvaluationStatus = 'RECORDED'
+      skillEvaluationSkillKey = skillEvaluation.skillKey
+      skillEvaluationResultIds = skillEvaluation.resultIds
+    } catch {
+      // Evaluation is learning evidence, not execution authority. A persistence outage
+      // must not rewrite an otherwise successful deterministic specialist result.
+      skillEvaluationStatus = 'UNAVAILABLE'
+    }
+
     await writeGovernanceAudit({
       projectId: input.projectId,
       actorUserId: input.actorUserId,
@@ -741,6 +763,9 @@ export async function executeGovernanceSpecialistAgent(input: {
         investigation_evidence_ref_count: investigation.grounding.evidenceRefCount,
         investigation_referenced_evidence_count: investigation.grounding.referencedEvidenceCount,
         native_tool_invocation_id: admission.invocationId,
+        skill_evaluation_status: skillEvaluationStatus,
+        skill_evaluation_skill_key: skillEvaluationSkillKey,
+        skill_evaluation_result_ids: skillEvaluationResultIds,
       },
     })
 
