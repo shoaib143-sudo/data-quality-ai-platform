@@ -877,3 +877,522 @@ Do not add major new capability while a P0 Golden Path remains incomplete unless
 The near-term objective is to convert the existing breadth of DataNexus into a smaller number of fully integrated, fully usable, fully certified journeys.
 
 That is the shortest path from the current strong engineering foundation to the originally intended DataNexus product experience.
+
+
+## 15. Best-practice hardening review and revised controls
+
+This section records the second-pass review performed before finalization. It strengthens the original implementation and post-implementation plan against current secure-development, application-security, AI-risk, software-supply-chain, accessibility, resilience and test-engineering practices.
+
+### 15.1 Reference baseline
+
+The program should map its controls to the following external references where applicable:
+
+- NIST SP 800-218 SSDF Version 1.1 as the current final Secure Software Development Framework baseline.
+- NIST SP 800-218 Rev. 1 / SSDF 1.2 draft as a forward-looking reference only until finalized.
+- NIST SP 800-218A for AI-specific secure software development practices.
+- NIST AI RMF 1.0 and NIST AI 600-1 Generative AI Profile for AI risk management.
+- OWASP ASVS 5.0.0 for application security verification.
+- OWASP API Security Top 10 for API-specific authorization, resource-consumption, SSRF, inventory and third-party API risks.
+- OWASP Top 10 for LLM and Generative AI Applications 2025 for prompt injection, sensitive-information disclosure, supply-chain, poisoning and output-handling risks.
+- OWASP SCVS for software-component verification.
+- SLSA 1.2 for build provenance and software-supply-chain integrity.
+- W3C WCAG 2.2, target AA conformance for user-facing DataNexus workflows.
+
+These references are verification guides, not substitutes for DataNexus-specific threat modeling and risk decisions.
+
+### 15.2 Add a requirements and threat-model gate before implementation
+
+Every P0/P1 capability must have an implementation-ready requirement pack containing:
+
+- business objective
+- user/persona
+- authoritative data owner
+- trust boundaries
+- assets requiring protection
+- allowed and prohibited actions
+- authorization rules
+- data classification
+- risk tier
+- audit requirements
+- SLOs and error budgets
+- failure semantics
+- rollback or recovery semantics
+- migration impact
+- observability requirements
+- accessibility requirements
+- acceptance criteria
+- abuse cases
+- security invariants
+- AI-specific misuse cases where applicable
+
+For material capabilities, maintain a lightweight threat model covering:
+
+- spoofing and identity confusion
+- tenant/project boundary escape
+- authorization bypass
+- tampering
+- repudiation/audit gaps
+- information disclosure
+- denial of service/resource exhaustion
+- privilege escalation
+- prompt and tool injection
+- poisoned retrieval or memory
+- unsafe third-party API consumption
+- excessive agent authority
+- autonomous escalation chains
+
+**Gate:** implementation may begin only when the requirement pack is sufficient to derive tests independently from the implementation.
+
+### 15.3 Replace percentage-only completion with evidence-backed traceability
+
+Maintain a requirements traceability matrix for every P0/P1 capability:
+
+```text
+Requirement
+→ Threat / Abuse Case
+→ Design / ADR
+→ Code / Migration
+→ Unit Test
+→ Contract Test
+→ Integration Test
+→ Negative Test
+→ Failure Test
+→ E2E Test
+→ Runtime Evidence
+→ Documentation
+```
+
+No item reaches 100% because a percentage field was manually updated. It reaches 100% only when required evidence links exist and the certification gates pass.
+
+### 15.4 Adopt a layered test strategy
+
+Use a test portfolio rather than relying on unit tests plus E2E tests.
+
+#### Required layers
+
+1. static analysis and type checks
+2. unit tests
+3. property-based tests for invariants and boundary-heavy logic
+4. mutation tests for critical policy/scoring/authorization modules
+5. schema and contract tests
+6. database/RLS tests
+7. component tests
+8. integration tests
+9. API security tests
+10. UI interaction tests
+11. E2E persona tests
+12. performance tests
+13. chaos/fault-injection tests
+14. adversarial security tests
+15. AI evaluation and red-team tests
+16. production smoke and synthetic tests
+
+#### Testing principles
+
+- tests must be derivable from requirements, not copied from implementation
+- every important positive case must have one or more negative cases
+- test oracles must be explicit
+- deterministic fixtures should be preferred for certification
+- randomized/property tests should persist failing seeds
+- flaky tests must not be silently retried until green
+- quarantine requires an owner, reason, expiry date and non-blocking justification
+- critical security/governance tests may not be quarantined to unblock release
+- regression tests are mandatory for every escaped defect
+- incident fixes must add a test reproducing the original failure where practical
+
+### 15.5 Strengthen critical-module verification beyond coverage percentages
+
+Coverage thresholds remain useful but are not sufficient.
+
+For authorization, policy, risk, approval, scoring, recovery, idempotency and state-machine modules:
+
+- require branch and decision coverage
+- require boundary-value cases
+- require illegal-transition cases
+- use mutation testing to prove tests detect meaningful logic changes
+- use property-based testing for invariants
+- use concurrency/race tests where state can be updated by parallel workers
+- use fuzz testing on parser, schema, API and external-input boundaries where practical
+
+Key invariants should include:
+
+- DENY always overrides ALLOW
+- project/tenant scope is never widened implicitly
+- approval cannot survive a material fingerprint change
+- the same actor cannot satisfy incompatible approval axes
+- revoked/expired delegation never grants authority
+- retries do not duplicate side effects
+- cancellation cannot create a successful terminal state after unauthorized continuation
+- recovery cannot exceed original or current policy authority
+- audit evidence is append-only or immutably revisioned as designed
+- unavailable metrics cannot silently become valid zeros
+- score calculations are deterministic for identical authoritative inputs
+
+### 15.6 Add consumer-driven contract and compatibility testing
+
+For boundaries between DataNexus domains, establish explicit versioned contracts and compatibility tests.
+
+Required boundaries include:
+
+- Source → Dataset
+- Dataset → Profiling
+- Profiling → Metrics
+- Metrics → Findings
+- Findings → Score
+- Score → Governance
+- Governance → Runtime
+- Runtime → Tool
+- Runtime → Job Monitor
+- Runtime → Notifications
+- Approval → Execution
+- Delegation → Approval
+- Recovery → Runtime
+- Outcome → Learning
+
+Test:
+
+- backward compatibility
+- missing optional fields
+- unknown future fields
+- incompatible schema versions
+- null/unavailable semantics
+- idempotent replay
+- duplicate delivery
+- out-of-order events
+
+### 15.7 Formalize API and resource-abuse testing
+
+Add explicit verification for:
+
+- object-level authorization
+- property-level authorization
+- function-level authorization
+- authentication/session integrity
+- resource and cost consumption limits
+- sensitive business-flow automation abuse
+- SSRF
+- security misconfiguration
+- API inventory/version drift
+- unsafe third-party API consumption
+- pagination and query abuse
+- oversized payloads
+- recursive/deeply nested input
+- expensive filter/sort combinations
+- request smuggling/header ambiguity where relevant
+- rate-limit bypass
+- batch endpoint privilege mixing
+
+### 15.8 Add software-supply-chain certification
+
+The release pipeline should produce and verify:
+
+- dependency lockfile integrity
+- SBOM
+- vulnerability scan
+- license/policy review where required
+- artifact digest
+- build provenance
+- source revision identity
+- builder identity
+- immutable mapping from deployed artifact to Git commit
+- provenance verification before production promotion
+
+Target SLSA controls appropriate to the current GitHub/Vercel build architecture. Do not claim a SLSA level until its requirements are actually evidenced.
+
+### 15.9 Add UI accessibility and usability certification
+
+User Experience closure must include accessibility as a release criterion.
+
+Target WCAG 2.2 AA for principal DataNexus workflows.
+
+Validate at least:
+
+- keyboard-only navigation
+- logical focus order
+- visible focus states
+- accessible names and labels
+- contrast
+- zoom/reflow
+- tables and data-grid semantics
+- form validation and error association
+- dialogs/drawers
+- charts with non-visual equivalents
+- status not conveyed only by color
+- live progress announcements where appropriate
+- reduced-motion behavior for neural/job-monitor animation
+- timeout/session-extension behavior
+- screen-reader navigation for primary Golden Paths
+
+Also run task-based usability validation for Golden Paths 1 to 4 with measurable completion, error and recovery rates.
+
+### 15.10 Add observability quality gates
+
+A feature is not production-ready if failures cannot be diagnosed from supported telemetry.
+
+For material flows, require:
+
+- correlation/trace ID
+- project and resource scope
+- run/job ID
+- agent/tool identity
+- state transition events
+- latency
+- retries
+- failure category
+- authorization decision
+- approval state
+- recovery action
+- final outcome
+- privacy-safe error context
+- relevant cost/token metrics
+- SLO indicators
+
+Define telemetry cardinality and sensitive-data rules to prevent observability itself becoming a security or cost risk.
+
+### 15.11 Use SLO-based release gates
+
+For critical user journeys, define and measure:
+
+- availability
+- success rate
+- p95/p99 latency
+- queue delay
+- run completion time
+- retry rate
+- error rate
+- recovery success rate
+- stale-run rate
+- notification delivery rate where applicable
+- cost/token envelopes where applicable
+
+Release/canary promotion should be blocked when objective SLO or error-budget thresholds are exceeded without an approved exception.
+
+### 15.12 Strengthen AI and agent adversarial testing
+
+In addition to conventional application-security tests, all agent-enabled flows must test:
+
+- direct prompt injection
+- indirect prompt injection from documents, metadata, webpages or tool outputs
+- tool instruction hijacking
+- retrieval poisoning
+- memory poisoning
+- cross-agent context contamination
+- malicious handoff content
+- fabricated citations/evidence
+- unsupported confidence claims
+- sensitive-data exfiltration through prompts or tools
+- unsafe output handling
+- hidden instructions in uploaded content
+- tool parameter smuggling
+- excessive agency
+- unauthorized tool chaining
+- recursive agent delegation
+- budget exhaustion
+- denial-of-wallet behavior
+- model/provider fallback that weakens policy
+- unsafe learned behavior promotion
+- malicious feedback manipulating learning
+- hallucinated authorization or approval
+- attempts to treat model text as authoritative policy
+
+**Gate:** model output must never create authority by itself. Authoritative permissions, policies, approvals and governed state remain server-controlled.
+
+### 15.13 Formalize AI evaluation and non-regression
+
+For every production agent/version maintain:
+
+- versioned evaluation dataset
+- expected evidence requirements
+- tool-selection expectations
+- authorization expectations
+- refusal/deny expectations
+- groundedness checks
+- hallucination/error checks
+- confidence calibration checks
+- latency/cost measures
+- regression baseline
+
+Evaluate new agent/model/provider versions against the same baseline before promotion.
+
+Use shadow or canary evaluation for material changes. A new version must not become default solely because it performs better on a single aggregate score. Security, authorization and critical-governance regressions are release blockers.
+
+### 15.14 Strengthen chaos engineering discipline
+
+Fault injection should follow controlled chaos principles:
+
+1. define steady-state behavior
+2. define a falsifiable hypothesis
+3. constrain blast radius
+4. run in non-production first
+5. use synthetic/safe production scope only when explicitly permitted
+6. observe recovery and user-visible impact
+7. stop automatically when safety thresholds are exceeded
+8. persist evidence
+9. convert failures into regression tests
+
+Do not use chaos testing as a substitute for deterministic failure testing.
+
+### 15.15 Add data-quality and migration safety gates
+
+For all material data model changes:
+
+- migration linting
+- forward compatibility check
+- backward compatibility during rolling deployment
+- lock-duration assessment
+- query-plan review for large tables
+- backfill resumability
+- backfill idempotency
+- partial-backfill recovery
+- constraint validation strategy
+- dual-read/write period where needed
+- clean reconstruction
+- representative-volume rehearsal
+- production verification query set
+
+Destructive cleanup should be a later explicit phase after read/write cutover and evidence confirms old paths are unused.
+
+### 15.16 Add test-data governance
+
+Certification data must be:
+
+- synthetic or explicitly approved
+- reproducible
+- versioned
+- free of unnecessary production secrets/PII
+- representative of edge cases
+- large enough for scale tests
+- designed to include invalid, partial and adversarial examples
+
+Golden datasets should carry expected outputs so changes in metrics, findings and scores are objectively detectable.
+
+### 15.17 Add release-artifact and rollback verification
+
+Before production promotion verify:
+
+- exact source SHA
+- exact dependency lock state
+- exact migration set
+- artifact digest
+- build provenance
+- environment/config version
+- feature flags
+- model/provider version
+- policy version
+
+Rollback/recovery tests must verify not only that the application comes back, but that:
+
+- schema compatibility is preserved
+- in-flight runs settle correctly
+- duplicate side effects do not occur
+- approvals remain valid only when their binding still matches
+- evidence remains intact
+- Job Monitor reflects the real terminal state
+
+### 15.18 Add post-release observation period and defect feedback loop
+
+After each material production rollout:
+
+- watch defined SLOs and error budgets
+- compare canary versus baseline
+- review new error signatures
+- review authorization denials/anomalies
+- inspect retry/recovery patterns
+- review cost/token deviations
+- confirm no unexpected migration or query load
+- reconcile production state with documentation
+
+Every confirmed production defect must feed back into:
+
+```text
+Defect
+→ root cause
+→ missing/failed control
+→ regression test
+→ control improvement
+→ documentation update
+```
+
+### 15.19 Independent assurance separation
+
+For P0 and security-sensitive P1 capabilities, independence should be explicit.
+
+Where practical:
+
+- implementer writes implementation and primary tests
+- independent reviewer derives acceptance/adversarial tests from requirements
+- security reviewer examines trust boundaries and abuse cases
+- certification runner executes the final suite against exact head
+- production revalidation uses the deployed artifact identity, not a locally rebuilt approximation
+
+No reviewer should approve merely because the implementation team reports its own test suite as green.
+
+## 16. Revised 100% completion gates
+
+The following are now non-negotiable for a capability to be called 100% complete where applicable:
+
+| Gate | Requirement |
+|---|---|
+| Requirement completeness | Acceptance criteria, failure semantics and invariants documented |
+| Threat model | Trust boundaries and abuse cases reviewed |
+| Data model | Schema and migrations validated |
+| Authorization | Server-side positive and negative cases pass |
+| Core implementation | Service/engine behavior complete |
+| Contracts | Boundary compatibility tests pass |
+| UX | Complete normal, empty, loading, denied, partial and failed states |
+| Accessibility | Principal flows meet WCAG 2.2 AA target |
+| Observability | Supported telemetry can explain state and failure |
+| Unit/property tests | Critical logic proven at boundaries and invariants |
+| Mutation/fuzz tests | Applied to critical or parser/input-heavy modules as appropriate |
+| Integration | All dependent domain boundaries pass |
+| Negative/failure | Denied and injected-failure cases pass |
+| Security | ASVS/API/AI-relevant controls verified |
+| Supply chain | SBOM, dependency/security checks and provenance controls pass |
+| Performance | SLO/load envelopes pass |
+| E2E | Relevant Golden Paths pass |
+| Adversarial | Independent adversarial suite passes |
+| Exact-head CI | Protected required checks pass on exact commit |
+| Deployment | Preview/canary/production artifact identity verified |
+| Production revalidation | Synthetic/safe production checks pass |
+| Documentation | Project state and evidence map reconciled |
+
+## 17. Revised post-implementation certification sequence
+
+The recommended final sequence is:
+
+```text
+Implementation freeze for release candidate
+→ Requirements traceability reconciliation
+→ Threat-model review
+→ Static/type/security analysis
+→ Unit + property + mutation/fuzz verification
+→ Contract + DB/RLS testing
+→ Integration testing
+→ Negative and failure-case testing
+→ API security testing
+→ AI/agent adversarial evaluation
+→ E2E persona and Golden Path acceptance
+→ Accessibility/usability validation
+→ Performance/load/SLO certification
+→ Controlled chaos/recovery exercises
+→ Supply-chain/SBOM/provenance verification
+→ Independent adversarial audit
+→ Clean database reconstruction
+→ Exact-head protected CI
+→ Preview validation
+→ Canary deployment
+→ Canary SLO/error-budget evaluation
+→ Production promotion
+→ Production synthetic revalidation
+→ Post-release observation
+→ Final evidence/documentation reconciliation
+→ Certification sign-off
+```
+
+## 18. Best-practice conclusion
+
+The implementation plan is optimal only if it prioritizes closure of the canonical user journeys and prevents infrastructure or agent-runtime expansion from outrunning product usability.
+
+The post-implementation plan is optimal only if certification can fail independently of implementation, tests can falsify the design rather than mirror it, exact deployed artifacts are verified, and security, resilience, accessibility, supply-chain integrity and AI-specific adversarial behavior are treated as first-class release gates.
+
+This hardened plan supersedes any weaker interpretation of the earlier completion criteria in this document.
