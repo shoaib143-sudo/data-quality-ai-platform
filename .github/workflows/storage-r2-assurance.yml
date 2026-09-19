@@ -261,6 +261,7 @@ jobs:
             });
           '
 
+
       - name: Verify R2 reference rollback dry run remains non-mutating
         run: |
           set -euo pipefail
@@ -303,4 +304,3 @@ jobs:
               },null,2));
             });
           '
-
