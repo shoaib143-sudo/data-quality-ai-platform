@@ -34,3 +34,9 @@ test('Cloudflare worker release verifies exact identity and remains execution-di
   assert.match(workflow, /disabled_code/)
   assert.match(workflow, /test "\$disabled_code" = "503"/)
 })
+
+
+test('Cloudflare worker preflight validates Wrangler without deployment', () => {
+  assert.match(workflow, /cloudflare-worker-preflight/)
+  assert.match(workflow, /wrangler@4\.131\.1 deploy --dry-run/)
+})
