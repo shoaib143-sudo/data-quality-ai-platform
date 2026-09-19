@@ -1,66 +1,128 @@
-name: Profiling Native Replay
+name: Profiling Native Replay and Production Validation
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'lib/agents/executors/profiling-executor.ts'
-      - 'lib/profiling/derived-tools.ts'
-      - 'lib/profiling/executor.ts'
-      - 'lib/profiling/investigation-replay.ts'
-      - 'lib/profiling/metric-replay.ts'
-      - 'lib/profiling/profile-dataset-replay.ts'
-      - 'lib/profiling/replay-safe-tools.ts'
-      - 'lib/profiling/replay-safe-comparison.ts'
-      - 'supabase/migrations/**profiling**'
-      - 'scripts/verify-profiling-native-replay.mjs'
-      - 'scripts/verify-profiling-safe-mutation-replay.mjs'
-      - 'scripts/verify-profiling-compare-replay.mjs'
-      - 'scripts/verify-profiling-investigation-replay.mjs'
-      - 'scripts/verify-profiling-metric-replay.mjs'
-      - 'scripts/verify-profiling-dataset-replay.mjs'
-      - '.github/workflows/profiling-native-replay.yml'
   pull_request:
     branches: [main]
     paths:
+      - 'lib/profiling/**'
+      - 'lib/connectors/**'
       - 'lib/agents/executors/profiling-executor.ts'
-      - 'lib/profiling/derived-tools.ts'
-      - 'lib/profiling/executor.ts'
-      - 'lib/profiling/investigation-replay.ts'
-      - 'lib/profiling/metric-replay.ts'
-      - 'lib/profiling/profile-dataset-replay.ts'
-      - 'lib/profiling/replay-safe-tools.ts'
-      - 'lib/profiling/replay-safe-comparison.ts'
+      - 'app/api/profiling/**'
+      - 'app/api/agents/run/route.ts'
+      - 'app/api/agents/supervisor/tier2/profiling-snapshot/route.ts'
+      - 'lib/agents/runtime/native-supervisor-tier2-profiling.ts'
+      - 'infra/profiling/**'
+      - 'supabase/migrations/**profile**'
       - 'supabase/migrations/**profiling**'
-      - 'scripts/verify-profiling-native-replay.mjs'
-      - 'scripts/verify-profiling-safe-mutation-replay.mjs'
-      - 'scripts/verify-profiling-compare-replay.mjs'
-      - 'scripts/verify-profiling-investigation-replay.mjs'
-      - 'scripts/verify-profiling-metric-replay.mjs'
-      - 'scripts/verify-profiling-dataset-replay.mjs'
+      - 'scripts/verify-profiling-production-validation.mjs'
+      - 'scripts/test-profiling-production-validation.mjs'
+      - 'scripts/lib/profiling-production-validation.mjs'
+      - 'package.json'
+      - 'scripts/ci-full-quality-gate.sh'
+      - 'scripts/test-profiling-request-input.mjs'
+      - 'scripts/verify-profiling-scale-certification.mjs'
+      - 'scripts/test-profiling-scale-certification.mjs'
+      - 'scripts/verify-native-supervisor-tier2-profiling.mjs'
+      - 'tests/profiling-production-validation-workflow.test.mjs'
+      - 'tests/profiling-production-validation-source.test.mjs'
       - '.github/workflows/profiling-native-replay.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/profiling/**'
+      - 'lib/connectors/**'
+      - 'lib/agents/executors/profiling-executor.ts'
+      - 'app/api/profiling/**'
+      - 'app/api/agents/run/route.ts'
+      - 'app/api/agents/supervisor/tier2/profiling-snapshot/route.ts'
+      - 'lib/agents/runtime/native-supervisor-tier2-profiling.ts'
+      - 'infra/profiling/**'
+      - 'supabase/migrations/**profile**'
+      - 'supabase/migrations/**profiling**'
+      - 'scripts/verify-profiling-production-validation.mjs'
+      - 'scripts/test-profiling-production-validation.mjs'
+      - 'scripts/lib/profiling-production-validation.mjs'
+      - 'package.json'
+      - 'scripts/ci-full-quality-gate.sh'
+      - 'scripts/test-profiling-request-input.mjs'
+      - 'scripts/verify-profiling-scale-certification.mjs'
+      - 'scripts/test-profiling-scale-certification.mjs'
+      - 'scripts/verify-native-supervisor-tier2-profiling.mjs'
+      - 'tests/profiling-production-validation-workflow.test.mjs'
+      - 'tests/profiling-production-validation-source.test.mjs'
+      - '.github/workflows/profiling-native-replay.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  verify:
+  contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - name: Verify profiling native read-only replay certification
-        run: node scripts/verify-profiling-native-replay.mjs
-      - name: Verify profiling replay-safe mutations
-        run: node scripts/verify-profiling-safe-mutation-replay.mjs
-      - name: Verify profiling replay-safe comparison
-        run: node scripts/verify-profiling-compare-replay.mjs
-      - name: Verify profiling replay-safe investigation
-        run: node scripts/verify-profiling-investigation-replay.mjs
-      - name: Verify profiling replay-safe metric execution
-        run: node scripts/verify-profiling-metric-replay.mjs
-      - name: Verify profiling replay-safe dataset execution
-        run: node scripts/verify-profiling-dataset-replay.mjs
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Profiling production validation negative and failure cases
+        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs tests/profiling-production-validation-source.test.mjs
+      - name: Existing profiling lifecycle contract
+        run: pnpm run verify:profiling-lifecycle
+      - name: Profiling governance insights contract
+        run: node scripts/verify-profiling-governance-insights.mjs
+      - name: Profiling replay contracts
+        run: |
+          node scripts/verify-profiling-native-replay.mjs
+          node scripts/verify-profiling-metric-replay.mjs
+          node scripts/verify-profiling-dataset-replay.mjs
+      - name: Profiling request trust boundary
+        run: node scripts/test-profiling-request-input.mjs
+      - name: Profiling scale certification
+        run: |
+          node scripts/verify-profiling-scale-certification.mjs
+          node --experimental-strip-types scripts/test-profiling-scale-certification.mjs
+      - name: Controlled Tier 2 profiling supervisor
+        run: node scripts/verify-native-supervisor-tier2-profiling.mjs
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
+
+  live-production:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate live production profiling estate
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PROFILING_PRODUCTION_VALIDATION_REQUIRED: 'true'
+          PROFILING_PRODUCTION_VALIDATION_EVIDENCE_PATH: ${{ runner.temp }}/profiling-production-validation.json
+        run: node scripts/verify-profiling-production-validation.mjs
+      - name: Upload profiling production validation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: profiling-production-validation-${{ github.sha }}
+          path: ${{ runner.temp }}/profiling-production-validation.json
+          retention-days: 90
+          if-no-files-found: error
