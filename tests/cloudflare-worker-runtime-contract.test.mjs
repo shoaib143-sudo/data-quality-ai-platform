@@ -14,6 +14,8 @@ test('worker container is isolated from the web canary and disabled by default',
   assert.deepEqual(config.containers[0].constraints?.regions, ['APAC'])
   assert.equal(config.containers[0].instance_type, 'standard-1')
   assert.equal(config.containers[0].ssh?.enabled, false)
+  assert.equal(config.containers[0].image_vars?.NEXT_PUBLIC_SUPABASE_URL, 'https://tvjnavjxuehpesxcfvrx.supabase.co')
+  assert.match(config.containers[0].image_vars?.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '', /^sb_publishable_/)
 })
 
 test('worker ingress exposes only health, build identity, and durable execution', () => {
