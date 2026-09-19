@@ -3,6 +3,9 @@ name: Approval Notification Robustness
 on:
   pull_request:
     paths:
+      - 'lib/governance/approval-inbox.ts'
+      - 'app/approvals/approval-inbox.tsx'
+      - 'tests/approval-notification-status-ux.test.mjs'
       - 'lib/governance/approval-sla.ts'
       - 'app/api/internal/governance/approval-automation/route.ts'
       - 'tests/approval-sla-automation.test.mjs'
@@ -15,6 +18,9 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/governance/approval-inbox.ts'
+      - 'app/approvals/approval-inbox.tsx'
+      - 'tests/approval-notification-status-ux.test.mjs'
       - 'lib/governance/approval-sla.ts'
       - 'app/api/internal/governance/approval-automation/route.ts'
       - 'tests/approval-sla-automation.test.mjs'
@@ -40,5 +46,7 @@ jobs:
           node-version: 24
       - name: Verify approval notification robustness
         run: node scripts/verify-approval-notification-robustness.mjs
+      - name: Verify approval notification status UX
+        run: node --test tests/approval-notification-status-ux.test.mjs
       - name: Verify approval SLA automation boundaries
         run: node --test tests/approval-sla-automation.test.mjs

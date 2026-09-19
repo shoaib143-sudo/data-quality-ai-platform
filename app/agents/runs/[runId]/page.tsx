@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { canViewExecutionRun } from '@/lib/governance/resource-authorization'
+import { authorizeAgentAction } from '@/lib/governance/agent-authorization'
 
 type AgentRun = {
   id: string
@@ -71,6 +72,67 @@ type AgentArtifact = {
   created_at: string
 }
 
+type AgentToolInvocation = {
+  id: string
+  tool_key: string
+  tool_version: string
+  executor_key: string
+  read_only: boolean
+  idempotent: boolean
+  status: string
+  input_hash: string
+  output_hash: string | null
+  contract_hash: string
+  approval_interrupt_id: string | null
+  started_at: string
+  completed_at: string | null
+  error_code: string | null
+  error_summary: string | null
+}
+
+type AgentCheckpoint = {
+  id: string
+  checkpoint_seq: number
+  checkpoint_kind: string
+  state_version: string
+  state_hash: string
+  step_name: string | null
+  step_order: number | null
+  created_at: string
+}
+
+type AgentInterrupt = {
+  id: string
+  interrupt_type: string
+  status: string
+  decision: string | null
+  request_summary: string | null
+  action_key: string | null
+  action_payload_hash: string | null
+  requested_at: string
+  expires_at: string | null
+  resolved_at: string | null
+  resumed_at: string | null
+}
+
+type AgentSupervisorEvent = {
+  id: string
+  event_type: string
+  plan_hash: string
+  step_id: string | null
+  step_order: number | null
+  agent_key: string | null
+  tool_key: string | null
+  contract_hash: string | null
+  input_hash: string | null
+  output_hash: string | null
+  execution_decision: string | null
+  risk_tier: number | null
+  attempt: number | null
+  detail_code: string | null
+  created_at: string
+}
+
 function JsonBlock({ value }: { value: unknown }) {
   if (value === null || value === undefined) return <span className="text-muted-foreground">None</span>
   return (
@@ -97,13 +159,38 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
   if (runError) throw new Error(`Unable to load agent run: ${runError.message}`)
   if (!run) notFound()
   if (!await canViewExecutionRun(user.id, run as AgentRun)) notFound()
+  try {
+    await authorizeAgentAction(
+      user.id,
+      'execution.view_evidence',
+      run.dataset_id
+        ? { type: 'DATASET', projectId: run.project_id, datasetId: run.dataset_id }
+        : { type: 'PROJECT', projectId: run.project_id },
+    )
+  } catch {
+    notFound()
+  }
 
-  const [stepsResult, logsResult, messagesResult, artifactsResult, agentResult] = await Promise.all([
+  const [
+    stepsResult,
+    logsResult,
+    messagesResult,
+    artifactsResult,
+    agentResult,
+    toolsResult,
+    checkpointsResult,
+    interruptsResult,
+    supervisorEventsResult,
+  ] = await Promise.all([
     supabase.schema('agent').from('agent_run_steps').select('id, step_name, step_order, status, attempt, input, output, started_at, completed_at, error_code, error_message, created_at').eq('agent_run_id', runId).order('step_order'),
     supabase.schema('agent').from('agent_run_logs').select('id, agent_run_step_id, level, event_type, message, details, created_at').eq('agent_run_id', runId).order('created_at'),
     supabase.schema('agent').from('agent_messages').select('id, source_agent_run_id, target_agent_run_id, message_type, correlation_id, payload, status, created_at, delivered_at, processed_at').or(`source_agent_run_id.eq.${runId},target_agent_run_id.eq.${runId}`).order('created_at'),
     supabase.schema('agent').from('agent_artifacts').select('id, artifact_type, artifact_version, name, payload, storage_uri, content_hash, created_at').eq('agent_run_id', runId).order('created_at'),
     supabase.schema('agent').from('agent_definitions').select('name, agent_key, version').eq('id', run.agent_definition_id).maybeSingle(),
+    supabase.schema('agent').from('agent_tool_invocations').select('id, tool_key, tool_version, executor_key, read_only, idempotent, status, input_hash, output_hash, contract_hash, approval_interrupt_id, started_at, completed_at, error_code, error_summary').eq('agent_run_id', runId).order('started_at'),
+    supabase.schema('agent').from('agent_run_checkpoints').select('id, checkpoint_seq, checkpoint_kind, state_version, state_hash, step_name, step_order, created_at').eq('agent_run_id', runId).order('checkpoint_seq'),
+    supabase.schema('agent').from('agent_run_interrupts').select('id, interrupt_type, status, decision, request_summary, action_key, action_payload_hash, requested_at, expires_at, resolved_at, resumed_at').eq('agent_run_id', runId).order('requested_at'),
+    supabase.schema('agent').from('agent_supervisor_events').select('id, event_type, plan_hash, step_id, step_order, agent_key, tool_key, contract_hash, input_hash, output_hash, execution_decision, risk_tier, attempt, detail_code, created_at').eq('agent_run_id', runId).order('created_at'),
   ])
 
   if (stepsResult.error) throw new Error(`Unable to load run steps: ${stepsResult.error.message}`)
@@ -111,12 +198,20 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
   if (messagesResult.error) throw new Error(`Unable to load run messages: ${messagesResult.error.message}`)
   if (artifactsResult.error) throw new Error(`Unable to load run artifacts: ${artifactsResult.error.message}`)
   if (agentResult.error) throw new Error(`Unable to load agent definition: ${agentResult.error.message}`)
+  if (toolsResult.error) throw new Error(`Unable to load governed tool invocations: ${toolsResult.error.message}`)
+  if (checkpointsResult.error) throw new Error(`Unable to load runtime checkpoints: ${checkpointsResult.error.message}`)
+  if (interruptsResult.error) throw new Error(`Unable to load runtime interrupts: ${interruptsResult.error.message}`)
+  if (supervisorEventsResult.error) throw new Error(`Unable to load supervisor evidence: ${supervisorEventsResult.error.message}`)
 
   const typedRun = run as AgentRun
   const steps = (stepsResult.data ?? []) as AgentRunStep[]
   const logs = (logsResult.data ?? []) as AgentRunLog[]
   const messages = (messagesResult.data ?? []) as AgentMessage[]
   const artifacts = (artifactsResult.data ?? []) as AgentArtifact[]
+  const tools = (toolsResult.data ?? []) as AgentToolInvocation[]
+  const checkpoints = (checkpointsResult.data ?? []) as AgentCheckpoint[]
+  const interrupts = (interruptsResult.data ?? []) as AgentInterrupt[]
+  const supervisorEvents = (supervisorEventsResult.data ?? []) as AgentSupervisorEvent[]
   const agent = agentResult.data
 
   return (
@@ -187,6 +282,28 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
               ))}
             </div>
           )}
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-xl border p-6">
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Governed tool invocations</h2><span className="text-xs text-muted-foreground">{tools.length}</span></div>
+            {tools.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No governed tool invocations were recorded.</p> : <div className="mt-4 space-y-3">{tools.map(tool => <article key={tool.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><span className="font-medium">{tool.tool_key} v{tool.tool_version}</span><span className="rounded-full border px-2 py-1 text-xs">{tool.status}</span></div><p className="mt-2 text-xs text-muted-foreground">Executor {tool.executor_key} · {tool.read_only ? 'read-only' : 'side-effecting'} · {tool.idempotent ? 'idempotent' : 'non-idempotent'}</p><p className="mt-2 break-all text-xs text-muted-foreground">Contract {tool.contract_hash}</p><p className="mt-1 break-all text-xs text-muted-foreground">Input {tool.input_hash}{tool.output_hash ? ` · Output ${tool.output_hash}` : ''}</p>{tool.approval_interrupt_id ? <p className="mt-1 break-all text-xs text-muted-foreground">Approval interrupt {tool.approval_interrupt_id}</p> : null}{tool.error_code ? <p className="mt-2 text-sm">{tool.error_code}{tool.error_summary ? `: ${tool.error_summary}` : ''}</p> : null}<p className="mt-2 text-xs text-muted-foreground">Started {formatDate(tool.started_at)} · Completed {formatDate(tool.completed_at)}</p></article>)}</div>}
+          </div>
+          <div className="rounded-xl border p-6">
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Runtime checkpoints</h2><span className="text-xs text-muted-foreground">{checkpoints.length}</span></div>
+            {checkpoints.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No runtime checkpoints were recorded.</p> : <div className="mt-4 space-y-3">{checkpoints.map(checkpoint => <article key={checkpoint.id} className="rounded-lg border p-4"><div className="flex items-center justify-between gap-3"><span className="font-medium">#{checkpoint.checkpoint_seq} {checkpoint.checkpoint_kind}</span><span className="text-xs text-muted-foreground">state v{checkpoint.state_version}</span></div><p className="mt-2 text-xs text-muted-foreground">{checkpoint.step_name ? `Step ${checkpoint.step_order ?? '—'} · ${checkpoint.step_name}` : 'Run boundary'}</p><p className="mt-1 break-all text-xs text-muted-foreground">State hash {checkpoint.state_hash}</p><p className="mt-1 text-xs text-muted-foreground">{formatDate(checkpoint.created_at)}</p></article>)}</div>}
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-xl border p-6">
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Approval and runtime interrupts</h2><span className="text-xs text-muted-foreground">{interrupts.length}</span></div>
+            {interrupts.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No runtime interrupts were recorded.</p> : <div className="mt-4 space-y-3">{interrupts.map(interrupt => <article key={interrupt.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><span className="font-medium">{interrupt.interrupt_type}</span><span className="rounded-full border px-2 py-1 text-xs">{interrupt.status}</span></div>{interrupt.request_summary ? <p className="mt-2 text-sm">{interrupt.request_summary}</p> : null}<p className="mt-2 text-xs text-muted-foreground">{interrupt.action_key ? `Action ${interrupt.action_key}` : 'No action key'}{interrupt.decision ? ` · Decision ${interrupt.decision}` : ''}</p>{interrupt.action_payload_hash ? <p className="mt-1 break-all text-xs text-muted-foreground">Payload {interrupt.action_payload_hash}</p> : null}<p className="mt-1 text-xs text-muted-foreground">Requested {formatDate(interrupt.requested_at)} · Expires {formatDate(interrupt.expires_at)} · Resolved {formatDate(interrupt.resolved_at)} · Resumed {formatDate(interrupt.resumed_at)}</p></article>)}</div>}
+          </div>
+          <div className="rounded-xl border p-6">
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Supervisor trajectory</h2><span className="text-xs text-muted-foreground">{supervisorEvents.length}</span></div>
+            {supervisorEvents.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No supervisor trajectory evidence was recorded.</p> : <div className="mt-4 space-y-3">{supervisorEvents.map(event => <article key={event.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><span className="font-medium">{event.event_type}</span><span className="text-xs text-muted-foreground">{formatDate(event.created_at)}</span></div><p className="mt-2 text-xs text-muted-foreground">{event.agent_key ? `Agent ${event.agent_key}` : 'Supervisor'}{event.tool_key ? ` · Tool ${event.tool_key}` : ''}{event.step_order ? ` · Step ${event.step_order}` : ''}{event.attempt ? ` · Attempt ${event.attempt}` : ''}</p>{event.execution_decision ? <p className="mt-1 text-xs text-muted-foreground">Decision {event.execution_decision}{event.risk_tier !== null ? ` · Risk tier ${event.risk_tier}` : ''}</p> : null}<p className="mt-1 break-all text-xs text-muted-foreground">Plan {event.plan_hash}</p>{event.detail_code ? <p className="mt-1 text-xs text-muted-foreground">Detail {event.detail_code}</p> : null}</article>)}</div>}
+          </div>
         </section>
 
         <section className="rounded-xl border p-6">
