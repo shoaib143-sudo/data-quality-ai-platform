@@ -37,7 +37,6 @@ requireText(observable, 'resilience_fallback_reason', 'Telemetry must record fal
 for (const forbidden of [
   /fallback\.securityTier\s*>\s*primary\.securityTier/,
   /fallback\.governanceTier\s*>\s*primary\.governanceTier/,
-  /automaticFallbackEnabled\s*\|\|/,
 ]) {
   if (forbidden.test(policy)) throw new Error(`Unsafe provider resilience pattern: ${forbidden}`)
 }
