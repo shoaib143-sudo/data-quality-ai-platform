@@ -8,6 +8,7 @@ export type ApprovalInboxItem = {
   request: Record<string, unknown>
   eligibleAxes: ApprovalAxis[]
   decisions: Record<string, unknown>[]
+  notifications: Record<string, unknown>[]
   isRequester: boolean
   canExecute: boolean
 }
@@ -47,6 +48,20 @@ function approvalDecisionClientView(decision: Record<string, unknown>) {
     channel: decision.channel ?? null,
     decided_at: decision.decided_at ?? null,
     delegated: Boolean(decision.on_behalf_of_user_id),
+  }
+}
+
+function approvalNotificationClientView(notification: Record<string, unknown>) {
+  return {
+    id: notification.id ?? null,
+    channel: notification.channel ?? null,
+    event_type: notification.event_type ?? null,
+    status: notification.status ?? null,
+    attempt_count: Number(notification.attempt_count ?? 0),
+    last_attempt_at: notification.last_attempt_at ?? null,
+    next_attempt_at: notification.next_attempt_at ?? null,
+    sent_at: notification.sent_at ?? null,
+    dead_lettered_at: notification.dead_lettered_at ?? null,
   }
 }
 
@@ -127,15 +142,33 @@ export async function loadApprovalInbox(userId: string): Promise<ApprovalInboxIt
     : { data: [], error: null }
   if (decisionError) throw new Error(`Unable to load approval decisions: ${decisionError.message}`)
 
+  const { data: notifications, error: notificationError } = ids.length
+    ? await admin.schema('governance').from('agent_approval_notification_outbox')
+        .select('id,approval_request_id,channel,event_type,status,attempt_count,last_attempt_at,next_attempt_at,sent_at,dead_lettered_at')
+        .in('approval_request_id', ids)
+        .order('created_at', { ascending: false })
+    : { data: [], error: null }
+  if (notificationError) throw new Error(`Unable to load approval notification status: ${notificationError.message}`)
+
   const byRequest = new Map<string, Record<string, unknown>[]>()
   for (const decision of decisions ?? []) {
     const key = String(decision.approval_request_id)
     byRequest.set(key, [...(byRequest.get(key) ?? []), approvalDecisionClientView(decision as Record<string, unknown>)])
   }
 
+  const notificationsByRequest = new Map<string, Record<string, unknown>[]>()
+  for (const notification of notifications ?? []) {
+    const key = String(notification.approval_request_id)
+    notificationsByRequest.set(key, [
+      ...(notificationsByRequest.get(key) ?? []),
+      approvalNotificationClientView(notification as Record<string, unknown>),
+    ])
+  }
+
   return visible.map(item => ({
     ...item,
     request: approvalRequestClientView(item.request),
     decisions: byRequest.get(String(item.request.id)) ?? [],
+    notifications: notificationsByRequest.get(String(item.request.id)) ?? [],
   }))
 }
