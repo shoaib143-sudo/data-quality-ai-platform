@@ -1,14 +1,14 @@
 import {
   getAgentExcellenceContract,
   type AgentRecursionBudget,
-} from '../agent-excellence-contracts'
-import type { GovernedAgentKey } from '../governed-agent-registry'
+} from '../agent-excellence-contracts.ts'
+import type { GovernedAgentKey } from '../governed-agent-registry.ts'
 import {
   runBoundedRecursion,
   type BoundedRecursionIterationContext,
   type BoundedRecursionIterationResult,
   type BoundedRecursionResult,
-} from './bounded-recursion-runtime'
+} from './bounded-recursion-runtime.ts'
 
 export type AgentExcellenceIterationContext<TState> = BoundedRecursionIterationContext<TState> & {
   agentKey: GovernedAgentKey

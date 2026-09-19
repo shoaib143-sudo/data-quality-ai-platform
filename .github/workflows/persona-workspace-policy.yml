@@ -24,6 +24,8 @@ jobs:
         run: node --experimental-strip-types scripts/verify-persona-workspace-policy.mjs
       - name: Verify Agent Policy v2 foundation
         run: node --experimental-strip-types scripts/verify-agent-policy-v2.mjs
+      - name: Verify deterministic operational capabilities
+        run: node scripts/verify-agent-policy-operational-capabilities.mjs
       - name: Run Agent Policy v2 unit tests
         run: node --experimental-strip-types scripts/test-agent-policy-v2-unit.mjs
       - name: Run independent Agent Policy v2 adversarial audit
