@@ -71,3 +71,9 @@ test('live validation retains exact-head evidence without exposing it to pull re
   const contractBlock = workflow.slice(workflow.indexOf('  contract:'), workflow.indexOf('  live-production:'))
   assert.equal(contractBlock.includes('upload-artifact'), false)
 })
+
+
+test('profiling validation cancels stale pull-request runs', () => {
+  assert.ok(workflow.includes('group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}'))
+  assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"))
+})
