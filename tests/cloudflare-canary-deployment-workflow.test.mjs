@@ -15,8 +15,8 @@ test('Cloudflare canary deployment is manual-only and cost-gated', () => {
 test('Cloudflare canary deploys an immutable validated SHA', () => {
   assert.match(workflow, /commit_sha:/)
   assert.match(workflow, /ref: \$\{\{ inputs\.commit_sha \}\}/)
-  assert.match(workflow, /test "\$GITHUB_SHA" = "\$\{\{ inputs\.commit_sha \}\}"/)
-  assert.match(workflow, /DATANEXUS_COMMIT_SHA:\$GITHUB_SHA/)
+  assert.match(workflow, /test "\$HEAD_SHA" = "\$REQUESTED_SHA"/)
+  assert.match(workflow, /DATANEXUS_COMMIT_SHA:\$EXACT_SHA/)
   assert.match(workflow, /DATANEXUS_ENV:canary/)
   assert.match(workflow, /DATANEXUS_PLATFORM:cloudflare/)
 })
