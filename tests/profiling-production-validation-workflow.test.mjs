@@ -32,3 +32,19 @@ test('pull requests certify lifecycle, replay, governance insights, and TypeScri
     assert.ok(workflow.includes(marker), `missing workflow certification marker: ${marker}`)
   }
 })
+
+
+test('production validation workflow retriggers on every certification artifact', () => {
+  for (const marker of [
+    "'package.json'",
+    "'scripts/ci-full-quality-gate.sh'",
+    "'scripts/test-profiling-request-input.mjs'",
+    "'scripts/verify-profiling-scale-certification.mjs'",
+    "'scripts/test-profiling-scale-certification.mjs'",
+    "'scripts/verify-native-supervisor-tier2-profiling.mjs'",
+    "'tests/profiling-production-validation-workflow.test.mjs'",
+  ]) {
+    const occurrences = workflow.split(marker).length - 1
+    assert.equal(occurrences, 2, `expected push and pull_request triggers for ${marker}`)
+  }
+})
