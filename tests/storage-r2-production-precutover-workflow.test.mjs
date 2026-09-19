@@ -40,6 +40,14 @@ test('R2 production preparation proves reference cutover eligibility without cha
 })
 
 
+test('R2 production preparation uses a protected provider-neutral certification target', () => {
+  assert.match(certification, /DATANEXUS_CERTIFICATION_TARGET_URL: \$\{\{ vars\.DATANEXUS_CERTIFICATION_TARGET_URL \}\}/)
+  assert.match(certification, /test -n "\$\{DATANEXUS_CERTIFICATION_TARGET_URL:-\}"/)
+  assert.match(certification, /Production certification target is not the governed production endpoint/)
+  assert.match(certification, /\$DATANEXUS_CERTIFICATION_TARGET_URL\/api\/internal\/storage\//)
+  assert.doesNotMatch(certification, /APP_URL:/)
+})
+
 test('R2 production preparation uses GitHub OIDC instead of copied production secrets', () => {
   assert.match(certification, /id-token: write/)
   assert.match(certification, /OIDC_AUDIENCE: datanexus-r2-production/)
