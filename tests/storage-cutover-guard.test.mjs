@@ -7,7 +7,8 @@ const runtime = fs.readFileSync(new URL('../scripts/verify-r2-runtime.mjs', impo
 
 test('production cannot select R2 without explicit cutover approval', () => {
   assert.match(factory, /value === 'r2'/)
-  assert.match(factory, /VERCEL_ENV === 'production'/)
+  assert.match(factory, /isProductionEnvironment\(\)/)
+  assert.doesNotMatch(factory, /VERCEL_ENV/)
   assert.match(factory, /STORAGE_R2_PRODUCTION_CUTOVER_APPROVED/)
   assert.match(factory, /Production R2 storage cutover requires/)
 })
@@ -18,8 +19,14 @@ test('runtime verification requires exact account-scoped R2 endpoint', () => {
   assert.doesNotMatch(runtime, /endpoint\.hostname\.endsWith/)
 })
 
-test('runtime verification independently blocks unapproved production R2 default', () => {
-  assert.match(runtime, /provider === 'r2' && process\.env\.VERCEL_ENV === 'production'/)
+test('runtime verification independently blocks unapproved provider-neutral production R2 default', () => {
+  assert.match(runtime, /DATANEXUS_ENV/)
+  assert.match(runtime, /environment === 'production'/)
   assert.match(runtime, /STORAGE_R2_PRODUCTION_CUTOVER_APPROVED/)
   assert.match(runtime, /Production R2 cutover has not been explicitly approved/)
+})
+
+test('runtime verification preserves fail-closed Vercel production compatibility while DATANEXUS_ENV is rolled out', () => {
+  assert.match(runtime, /VERCEL_ENV/)
+  assert.match(runtime, /return process\.env\.VERCEL_ENV/)
 })

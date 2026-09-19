@@ -25,6 +25,7 @@ const requiredFiles = [
   'supabase/functions/profiling-executor/deno.json',
   'supabase/migrations/20260912000000_recovery_assurance_v2.sql',
   'supabase/migrations/20260916103000_durable_worker_scheduler_authority.sql',
+  'supabase/migrations/20260919121000_provider_neutral_durable_worker_url.sql',
   '.github/workflows/recovery-assurance.yml',
 ]
 
