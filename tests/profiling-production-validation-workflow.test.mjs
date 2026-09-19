@@ -62,3 +62,12 @@ test('production validation workflow watches all certified runtime surfaces', ()
     assert.equal(occurrences, 2, `expected push and pull_request triggers for ${marker}`)
   }
 })
+
+
+test('live validation retains exact-head evidence without exposing it to pull requests', () => {
+  assert.ok(workflow.includes('PROFILING_PRODUCTION_VALIDATION_EVIDENCE_PATH'))
+  assert.ok(workflow.includes('actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'))
+  assert.ok(workflow.includes('profiling-production-validation-${{ github.sha }}'))
+  const contractBlock = workflow.slice(workflow.indexOf('  contract:'), workflow.indexOf('  live-production:'))
+  assert.equal(contractBlock.includes('upload-artifact'), false)
+})
