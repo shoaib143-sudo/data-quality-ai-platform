@@ -46,7 +46,7 @@
     "verify:quality-intelligence": "node scripts/verify-quality-intelligence.mjs",
     "verify:file-onboarding": "node scripts/verify-file-onboarding.mjs",
     "verify:profiling-lifecycle": "node scripts/verify-profiling-lifecycle-contracts.mjs",
-    "verify:worker-runtime": "node scripts/verify-worker-runtime.mjs && node --test tests/provider-neutral-worker-service.test.mjs tests/cloudflare-worker-runtime-contract.test.mjs tests/cloudflare-worker-deployment-workflow.test.mjs",
+    "verify:worker-runtime": "node scripts/verify-worker-runtime.mjs",
     "verify:profiling-explorer": "node scripts/verify-profiling-explorer.mjs",
     "verify:governance": "node scripts/verify-governance-architecture.mjs && node scripts/verify-single-organization-runtime.mjs",
     "verify:semantic": "node scripts/verify-semantic-governance.mjs",
@@ -65,8 +65,7 @@
     "verify:execution-modes": "node --experimental-strip-types --test scripts/test-execution-mode-contracts.mjs && node scripts/audit-execution-modes-adversarial.mjs && node --test scripts/test-execution-mode-ui-ux.mjs && node --test scripts/test-execution-mode-ui-accessibility.mjs",
     "verify:agent-policy-v2": "node --experimental-strip-types scripts/verify-agent-policy-v2.mjs && node --experimental-strip-types scripts/test-agent-policy-v2-unit.mjs && node --experimental-strip-types scripts/audit-agent-policy-v2-adversarial.mjs && node scripts/verify-agent-approval-hardening.mjs && node scripts/verify-agent-approval-validity.mjs && node scripts/audit-agent-approval-validity-adversarial.mjs && node scripts/verify-approval-notification-robustness.mjs",
     "verify:orchestrator-capability-coverage": "node --experimental-strip-types scripts/test-orchestrator-capability-coverage.mjs",
-    "verify:provider-neutral-runtime": "node --experimental-strip-types --test tests/provider-neutral-runtime.test.mjs && node --test tests/build-info-contract.test.mjs tests/durable-worker-provider-neutral-url.test.mjs && node scripts/test-durable-worker-scheduler-authority.mjs && node --test tests/storage-cutover-guard.test.mjs tests/storage-r2-production-precutover-workflow.test.mjs",
-    "verify:container-runtime": "node --test tests/container-runtime-contract.test.mjs tests/cloudflare-canary-contract.test.mjs tests/cloudflare-canary-deployment-workflow.test.mjs"
+    "verify:profiling-production": "node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs tests/profiling-production-validation-source.test.mjs && node scripts/verify-profiling-lifecycle-contracts.mjs && node scripts/verify-profiling-governance-insights.mjs && node scripts/verify-profiling-native-replay.mjs && node scripts/verify-profiling-metric-replay.mjs && node scripts/verify-profiling-dataset-replay.mjs && node scripts/test-profiling-request-input.mjs && node scripts/verify-profiling-scale-certification.mjs && node --experimental-strip-types scripts/test-profiling-scale-certification.mjs && node scripts/verify-native-supervisor-tier2-profiling.mjs && node scripts/verify-profiling-production-validation.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
