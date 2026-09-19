@@ -14,7 +14,7 @@ const HARD_MAX_VERIFY_BYTES = 1024 * 1024 * 1024
 const TARGET_SCAN_PAGE_SIZE = 100
 const MAX_TARGET_SCAN_ROWS = 1000
 
-type Mode = 'dry-run' | 'apply' | 'rollback'
+type Mode = 'dry-run' | 'dry-run-rollback' | 'apply' | 'rollback'
 
 type StorageRow = {
   id: string
@@ -129,7 +129,8 @@ export async function POST(request: Request) {
   } catch {
     // Empty body is a dry-run by default.
   }
-  const mode: Mode = body.mode === 'apply' || body.mode === 'rollback' ? body.mode : 'dry-run'
+  const mode: Mode = body.mode === 'apply' || body.mode === 'rollback' || body.mode === 'dry-run-rollback' ? body.mode : 'dry-run'
+  const rollbackMode = mode === 'rollback' || mode === 'dry-run-rollback'
   if (mode === 'apply' && !approved('STORAGE_R2_REFERENCE_CUTOVER_APPROVED')) {
     return NextResponse.json({ error: 'R2 reference cutover is not approved.' }, { status: 409 })
   }
@@ -159,7 +160,7 @@ export async function POST(request: Request) {
     if (page.length === 0) break
 
     const pageSourceIds = page.map(sourceStorageId).filter((value): value is string => Boolean(value))
-    const referenceIds = mode === 'rollback' ? page.map((row) => row.id) : pageSourceIds
+    const referenceIds = rollbackMode ? page.map((row) => row.id) : pageSourceIds
     if (referenceIds.length > 0) {
       const { data: referencedRows, error: referenceError } = await admin
         .schema('catalog')
@@ -173,7 +174,7 @@ export async function POST(request: Request) {
       const referencedIds = new Set((referencedRows ?? []).map((row) => row.storage_object_id).filter(Boolean))
       for (const target of page) {
         const sourceId = sourceStorageId(target)
-        const referenceId = mode === 'rollback' ? target.id : sourceId
+        const referenceId = rollbackMode ? target.id : sourceId
         if (referenceId && referencedIds.has(referenceId)) targets.push(target)
         if (targets.length >= batchSize()) break
       }
@@ -192,7 +193,7 @@ export async function POST(request: Request) {
       .schema('catalog')
       .from('dataset_versions')
       .select('id, dataset_id, storage_object_id')
-      .in('storage_object_id', mode === 'rollback' ? targets.map((row) => row.id) : sourceIds),
+      .in('storage_object_id', rollbackMode ? targets.map((row) => row.id) : sourceIds),
   ])
   const initialErrors = [sourceError, versionError].filter(Boolean)
   if (initialErrors.length) {
@@ -230,7 +231,7 @@ export async function POST(request: Request) {
         if (sourceDigest.checksum !== target.checksum || sourceDigest.sizeBytes !== Number(target.size_bytes)) {
           return { ok: false, reason: 'SOURCE_NO_LONGER_MATCHES_MIGRATION_TARGET' }
         }
-        if (mode !== 'rollback') {
+        if (!rollbackMode) {
           const targetDigest = await digestLive(target, maxVerifyBytes())
           if (targetDigest.checksum !== sourceDigest.checksum || targetDigest.sizeBytes !== sourceDigest.sizeBytes) {
             return { ok: false, reason: 'LIVE_SOURCE_TARGET_MISMATCH' }
@@ -251,7 +252,7 @@ export async function POST(request: Request) {
 
   for (const version of (versionRows ?? []) as VersionRow[]) {
     const currentId = version.storage_object_id
-    const source = mode === 'rollback'
+    const source = rollbackMode
       ? (currentId ? sourceByTargetId.get(currentId) : undefined)
       : (currentId ? sourcesById.get(currentId) : undefined)
     const target = source ? targetBySourceId.get(source.id) : undefined
@@ -273,13 +274,18 @@ export async function POST(request: Request) {
     }
 
     eligibleReferences += 1
-    const desiredId = mode === 'rollback' ? source.id : target.id
-    if (mode === 'dry-run') {
-      results.push({ datasetVersionId: version.id, action: 'ELIGIBLE', currentProvider: 'supabase', desiredProvider: 'r2' })
+    const desiredId = rollbackMode ? source.id : target.id
+    if (mode === 'dry-run' || mode === 'dry-run-rollback') {
+      results.push({
+        datasetVersionId: version.id,
+        action: 'ELIGIBLE',
+        currentProvider: rollbackMode ? 'r2' : 'supabase',
+        desiredProvider: rollbackMode ? 'supabase' : 'r2',
+      })
       continue
     }
 
-    const expectedCurrentId = mode === 'rollback' ? target.id : source.id
+    const expectedCurrentId = rollbackMode ? target.id : source.id
     const { data: changed, error: updateError } = await admin
       .schema('catalog')
       .from('dataset_versions')
