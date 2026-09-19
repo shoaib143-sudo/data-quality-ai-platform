@@ -115,7 +115,10 @@ requireText('app/api/agents/governance/handoff/route.ts', [
   'GOVERNED_AGENT_HANDOFF_COMPLETED',
 ])
 requireText('app/api/agents/runs/[runId]/evaluation/route.ts', [
-  "authorizeProject(user.id, run.project_id, 'agent.execute')",
+  'authorizeAgentAction(',
+  "'agent.execute'",
+  "type: 'DATASET'",
+  "type: 'PROJECT'",
   'USER_FEEDBACK:',
   'AGENT_RUN_USER_EVALUATED',
   "score must be between 0 and 1",
