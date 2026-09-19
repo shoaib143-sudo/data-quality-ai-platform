@@ -28,3 +28,13 @@ test('Cloudflare credentials remain step-scoped and deployment tooling is pinned
   assert.match(workflow, /CLOUDFLARE_ACCOUNT_ID: \$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/)
   assert.doesNotMatch(workflow.slice(0, workflow.indexOf('steps:')), /CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID/)
 })
+
+
+test('Cloudflare canary deployment passes only public Supabase browser configuration', () => {
+  assert.match(workflow, /NEXT_PUBLIC_SUPABASE_URL: \$\{\{ vars\.NEXT_PUBLIC_SUPABASE_URL \}\}/)
+  assert.match(workflow, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: \$\{\{ vars\.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \}\}/)
+  assert.match(workflow, /--var "NEXT_PUBLIC_SUPABASE_URL:\$NEXT_PUBLIC_SUPABASE_URL"/)
+  assert.match(workflow, /--var "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:\$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"/)
+  const canaryJob = workflow.slice(workflow.indexOf('deploy-cloudflare-canary:'), workflow.indexOf('deploy-cloudflare-worker:'))
+  assert.doesNotMatch(canaryJob, /SUPABASE_SERVICE_ROLE_KEY/)
+})
