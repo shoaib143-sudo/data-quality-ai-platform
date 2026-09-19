@@ -21,7 +21,7 @@ test('worker deployment revalidates portable worker and exact build', () => {
   assert.match(workflow, /pnpm run verify:worker-runtime/)
   assert.match(workflow, /pnpm exec tsc --noEmit/)
   assert.match(workflow, /pnpm build/)
-  assert.match(workflow, /docker build --tag "datanexus-worker:\$EXACT_SHA"/)
+  assert.match(workflow, /build-cloudflare-container\.mjs/)
   assert.match(workflow, /wrangler@4\.131\.1/)
 })
 
