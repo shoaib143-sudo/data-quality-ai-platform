@@ -55,7 +55,7 @@ for (let from = 0; ; from += pageSize) {
   const { data: page, error } = await supabase
     .schema('profiling')
     .from('profile_runs')
-    .select('id,dataset_version_id,status,started_at,completed_at')
+    .select('id,dataset_version_id,status,error_code,started_at,completed_at')
     .order('started_at', { ascending: false, nullsFirst: false })
     .range(from, from + pageSize - 1)
   if (error) throw new Error(`Unable to enumerate profiling attempts: ${error.message}`)
@@ -149,6 +149,7 @@ const latestAttempts = Array.from(latestAttemptsByDatasetVersion.values()).map((
   id: run.id,
   datasetVersionId: run.dataset_version_id,
   status: run.status,
+  errorCode: run.error_code ?? null,
   activeSource: activeSourceTypeByDatasetVersion.has(run.dataset_version_id),
 }))
 
