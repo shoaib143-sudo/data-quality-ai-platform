@@ -24,3 +24,13 @@ test('worker deployment revalidates portable worker and exact build', () => {
   assert.match(workflow, /docker build --tag "datanexus-worker:\$EXACT_SHA"/)
   assert.match(workflow, /wrangler@4\.131\.1/)
 })
+
+
+test('Cloudflare worker release verifies exact identity and remains execution-disabled', () => {
+  assert.match(workflow, /DATANEXUS_CLOUDFLARE_WORKER_URL: \$\{\{ vars\.DATANEXUS_CLOUDFLARE_WORKER_URL \}\}/)
+  assert.match(workflow, /body\.commitSha !== expected/)
+  assert.match(workflow, /body\.environment !== 'canary'/)
+  assert.match(workflow, /body\.platform !== 'cloudflare'/)
+  assert.match(workflow, /disabled_code/)
+  assert.match(workflow, /test "\$disabled_code" = "503"/)
+})
