@@ -37,7 +37,7 @@ export function deploymentCommitSha(env: NodeJS.ProcessEnv = process.env) {
 }
 
 export function deploymentReleaseId(env: NodeJS.ProcessEnv = process.env) {
-  const value = (env.DATANEXUS_RELEASE_ID ?? env.VERCEL_DEPLOYMENT_ID ?? '').trim()
+  const value = (env.DATANEXUS_RELEASE_ID ?? env.CLOUDFLARE_DEPLOYMENT_ID ?? env.VERCEL_DEPLOYMENT_ID ?? '').trim()
   return value || null
 }
 
