@@ -1,6 +1,7 @@
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertProjectBelongsToInstanceOrganization, resolveInstanceOrganizationMembership } from './instance-organization'
+import { canViewDatasetResource } from './resource-authorization'
 
 type GrantEffect = 'ALLOW' | 'DENY'
 
@@ -18,6 +19,86 @@ async function managedProjects(userId: string, organizationId: string) {
     allowed: await hasProjectCapability(userId, String(project.id), 'admin.manage'),
   })))
   return checks.filter(project => project.allowed).map(({ allowed: _allowed, ...project }) => project)
+}
+
+
+async function validateResourceAccessTarget(input: {
+  actorUserId: string
+  projectId: string
+  datasetId: string
+  targetUserId: string
+}) {
+  await assertProjectBelongsToInstanceOrganization(input.projectId)
+  if (!await hasProjectCapability(input.actorUserId, input.projectId, 'admin.manage')) {
+    throw new Error('Project administrator authority is required to manage resource access.')
+  }
+
+  const admin = createAdminClient()
+  const membership = await resolveInstanceOrganizationMembership(input.actorUserId)
+  const [{ data: dataset, error: datasetError }, { data: target, error: targetError }] = await Promise.all([
+    admin.schema('catalog').from('datasets').select('id,project_id,owner_user_id').eq('id', input.datasetId).maybeSingle(),
+    admin.schema('app').from('organization_members')
+      .select('user_id')
+      .eq('organization_id', membership.organizationId)
+      .eq('user_id', input.targetUserId)
+      .maybeSingle(),
+  ])
+  if (datasetError) throw new Error(`Unable to validate resource dataset: ${datasetError.message}`)
+  if (!dataset || String(dataset.project_id) !== input.projectId) throw new Error('Dataset does not belong to the managed project.')
+  if (targetError) throw new Error(`Unable to validate resource-access member: ${targetError.message}`)
+  if (!target) throw new Error('Resource-access target must be a member of this DataNexus organization.')
+
+  return { admin, dataset }
+}
+
+async function activeResourceAccessGrant(input: {
+  projectId: string
+  datasetId: string
+  targetUserId: string
+}) {
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+  const { data, error } = await admin.schema('governance').from('resource_access_grants')
+    .select('id,effect,starts_at,ends_at')
+    .eq('project_id', input.projectId)
+    .eq('resource_type', 'DATASET')
+    .eq('resource_id', input.datasetId)
+    .eq('user_id', input.targetUserId)
+    .eq('active', true)
+    .lte('starts_at', now)
+    .or(`ends_at.is.null,ends_at.gt.${now}`)
+    .limit(1)
+  if (error) throw new Error(`Unable to validate existing resource access: ${error.message}`)
+  return data?.[0] ?? null
+}
+
+export async function previewResourceAccessGrant(input: {
+  actorUserId: string
+  projectId: string
+  datasetId: string
+  targetUserId: string
+  effect: GrantEffect
+}) {
+  if (!['ALLOW', 'DENY'].includes(input.effect)) throw new Error('Resource-access effect must be ALLOW or DENY.')
+  const { dataset } = await validateResourceAccessTarget(input)
+  const [currentAccess, existingGrant] = await Promise.all([
+    canViewDatasetResource(input.targetUserId, input.datasetId),
+    activeResourceAccessGrant(input),
+  ])
+
+  return {
+    currentEffectiveAccess: currentAccess ? 'ALLOWED' : 'DENIED',
+    proposedEffectiveAccess: input.effect === 'DENY' ? 'DENIED' : 'ALLOWED',
+    proposedEffect: input.effect,
+    datasetOwner: String(dataset.owner_user_id ?? '') === input.targetUserId,
+    replacementRequired: Boolean(existingGrant),
+    existingEffect: existingGrant ? String(existingGrant.effect) : null,
+    warning: existingGrant
+      ? `An active ${String(existingGrant.effect)} rule already exists and must be revoked before this change can be committed.`
+      : input.effect === 'DENY'
+        ? 'DENY takes precedence over owner, steward, and ordinary project-member access.'
+        : 'ALLOW is resource scoped and does not grant capabilities the person does not otherwise hold.',
+  }
 }
 
 export async function loadResourceAccessWorkspace(userId: string) {
@@ -99,25 +180,7 @@ export async function createResourceAccessGrant(input: {
 }) {
   if (!input.reason.trim()) throw new Error('A resource-access reason is required.')
   if (!['ALLOW', 'DENY'].includes(input.effect)) throw new Error('Resource-access effect must be ALLOW or DENY.')
-  await assertProjectBelongsToInstanceOrganization(input.projectId)
-  if (!await hasProjectCapability(input.actorUserId, input.projectId, 'admin.manage')) {
-    throw new Error('Project administrator authority is required to manage resource access.')
-  }
-
-  const admin = createAdminClient()
-  const membership = await resolveInstanceOrganizationMembership(input.actorUserId)
-  const [{ data: dataset, error: datasetError }, { data: target, error: targetError }] = await Promise.all([
-    admin.schema('catalog').from('datasets').select('id,project_id').eq('id', input.datasetId).maybeSingle(),
-    admin.schema('app').from('organization_members')
-      .select('user_id')
-      .eq('organization_id', membership.organizationId)
-      .eq('user_id', input.targetUserId)
-      .maybeSingle(),
-  ])
-  if (datasetError) throw new Error(`Unable to validate resource dataset: ${datasetError.message}`)
-  if (!dataset || String(dataset.project_id) !== input.projectId) throw new Error('Dataset does not belong to the managed project.')
-  if (targetError) throw new Error(`Unable to validate resource-access member: ${targetError.message}`)
-  if (!target) throw new Error('Resource-access target must be a member of this DataNexus organization.')
+  const { admin } = await validateResourceAccessTarget(input)
 
   const startsAt = input.startsAt ? new Date(input.startsAt) : new Date()
   const endsAt = input.endsAt ? new Date(input.endsAt) : null
@@ -125,20 +188,9 @@ export async function createResourceAccessGrant(input: {
   if (endsAt && !Number.isFinite(endsAt.getTime())) throw new Error('Resource-access end time is invalid.')
   if (endsAt && endsAt <= startsAt) throw new Error('Resource-access end time must be after its start time.')
 
-  const now = new Date().toISOString()
-  const { data: existing, error: existingError } = await admin.schema('governance').from('resource_access_grants')
-    .select('id,effect')
-    .eq('project_id', input.projectId)
-    .eq('resource_type', 'DATASET')
-    .eq('resource_id', input.datasetId)
-    .eq('user_id', input.targetUserId)
-    .eq('active', true)
-    .lte('starts_at', now)
-    .or(`ends_at.is.null,ends_at.gt.${now}`)
-    .limit(1)
-  if (existingError) throw new Error(`Unable to validate existing resource access: ${existingError.message}`)
-  if (existing?.length) {
-    throw new Error(`An active ${existing[0].effect} grant already exists for this person and dataset. Revoke it before replacing the rule.`)
+  const existing = await activeResourceAccessGrant(input)
+  if (existing) {
+    throw new Error(`An active ${existing.effect} grant already exists for this person and dataset. Revoke it before replacing the rule.`)
   }
 
   const { data, error } = await admin.schema('governance').from('resource_access_grants').insert({
