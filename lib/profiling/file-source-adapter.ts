@@ -30,6 +30,7 @@ const OFFICE_ZIP_EXTENSIONS = new Set(['docx','pptx','xlsx'])
 const OCR_EXTENSIONS = new Set(['pdf','png','jpg','jpeg','gif','webp','bmp','tif','tiff'])
 const MAX_EXTRACTED_ENTRY_BYTES = 50 * 1024 * 1024
 const MAX_EXTRACTED_TOTAL_BYTES = 250 * 1024 * 1024
+const RANGE_SAMPLE_EXTENSIONS = new Set(['csv','jsonl','ndjson',...TEXT_EXTENSIONS])
 
 function environmentInt(name:string,fallback:number,min:number,max:number){
   const parsed=Number(process.env[name])
@@ -46,18 +47,84 @@ export async function loadFileSource(
   const executionConfig = config.executionConfig ?? {}
   const sourceUri = config.sourceUri?.trim() || null
   const url = getString(executionConfig,['url','source_url','sourceUrl']) ?? (sourceUri && /^https?:\/\//i.test(sourceUri) ? sourceUri : null)
+  const observedSizeValue = Number(executionConfig.storage_size_bytes ?? executionConfig.size_bytes)
+  const observedSize = Number.isFinite(observedSizeValue) && observedSizeValue >= 0 ? observedSizeValue : null
+  const observedContentType = getString(executionConfig,['storage_content_type','content_type','contentType'])
+  const observedEtag = getString(executionConfig,['storage_etag','etag'])
+  const canonicalName = sourceName(sourceUri ?? url ?? 'file')
+  const canonicalExtension = canonicalName.includes('.') ? canonicalName.split('.').pop()!.toLowerCase() : ''
+  const largeObservedObject = observedSize !== null && observedSize > maxBytes
+
+  if (url && largeObservedObject && !RANGE_SAMPLE_EXTENSIONS.has(canonicalExtension)) {
+    const metadataHash = createHash('sha256')
+      .update(`object-metadata:${observedEtag ?? 'no-etag'}:${observedSize}:${canonicalName}`)
+      .digest('hex')
+    const metadata: Record<string, unknown> = {
+      file_name: canonicalName,
+      extension: canonicalExtension || null,
+      content_type: observedContentType,
+      byte_size: observedSize,
+      source_size_bytes: observedSize,
+      sha256: metadataHash,
+      source_uri: sourceUri ?? url,
+      content_hash_authority: 'OBJECT_METADATA_FINGERPRINT',
+      source_observation_scope: 'METADATA_ONLY',
+      text_extraction_supported: false,
+    }
+    return {
+      rows: [{
+        document_index: 1,
+        file_name: canonicalName,
+        extension: canonicalExtension || null,
+        content_type: observedContentType,
+        byte_size: observedSize,
+        object_etag: observedEtag,
+        text_extraction_supported: false,
+      }],
+      rowCount: 1,
+      contentHash: metadataHash,
+      sourceUri: sourceUri ?? url,
+      contentType: observedContentType,
+      format: 'binary',
+      metadata,
+      warnings: [
+        `Large object is ${observedSize} bytes, above the in-memory source ceiling of ${maxBytes} bytes; profiling is metadata-only for this format.`,
+        canonicalExtension === 'json'
+          ? 'Large JSON documents require JSONL/NDJSON or a partitioned snapshot for row-level sampled profiling.'
+          : 'Use a streamable text format or partitioned snapshot for row-level profiling of this large object.',
+      ],
+    }
+  }
 
   let bytes: Uint8Array
   let resolvedSourceUri: string
-  let contentType: string | null = null
+  let contentType: string | null = observedContentType
+  let prefixSampled = false
+
   if(url){
-    const response=await safeRemoteFileFetch(url,{headers:{accept:'text/csv,text/plain,application/json,application/pdf,application/octet-stream;q=0.9,*/*;q=0.8'},cache:'no-store'})
+    const rangeSampleBytes = Math.min(
+      maxBytes,
+      environmentInt('FILE_RANGE_SAMPLE_BYTES',16*1024*1024,1024*1024,64*1024*1024),
+    )
+    const headers: Record<string,string> = {
+      accept:'text/csv,text/plain,application/json,application/pdf,application/octet-stream;q=0.9,*/*;q=0.8',
+    }
+    if (largeObservedObject) headers.range = `bytes=0-${rangeSampleBytes - 1}`
+    const response=await safeRemoteFileFetch(url,{headers,cache:'no-store'})
     if(!response.ok)throw new Error(`Unable to load FILE source: HTTP ${response.status} ${response.statusText}`)
+    if (largeObservedObject && response.status !== 206) {
+      const declaredLength=Number(response.headers.get('content-length'))
+      await response.body?.cancel().catch(()=>undefined)
+      if (!Number.isFinite(declaredLength) || declaredLength > maxBytes) {
+        throw new Error('Large FILE source did not honor the bounded byte-range request.')
+      }
+    }
     const declaredLength=Number(response.headers.get('content-length'))
-    if(Number.isFinite(declaredLength)&&declaredLength>maxBytes)throw new Error(`FILE source exceeds the execution engine technical safety ceiling of ${maxBytes} bytes.`)
+    if(!largeObservedObject&&Number.isFinite(declaredLength)&&declaredLength>maxBytes)throw new Error(`FILE source exceeds the execution engine technical safety ceiling of ${maxBytes} bytes.`)
     bytes=new Uint8Array(await response.arrayBuffer())
     resolvedSourceUri=url
-    contentType=response.headers.get('content-type')
+    contentType=response.headers.get('content-type') ?? observedContentType
+    prefixSampled = largeObservedObject && response.status === 206
   }else{
     const bucket=getString(executionConfig,['bucket','bucket_id','bucketId','storage_bucket','storageBucket'])
     const path=getString(executionConfig,['path','storage_path','storagePath','object_path','objectPath'])??sourceUri
@@ -71,26 +138,46 @@ export async function loadFileSource(
   if(bytes.byteLength>maxBytes)throw new Error(`FILE source exceeds the execution engine technical safety ceiling of ${maxBytes} bytes.`)
 
   const contentHash=createHash('sha256').update(bytes).digest('hex')
-  const fileName=sourceName(resolvedSourceUri)
+  const fileName=sourceName(sourceUri ?? resolvedSourceUri)
   const extension=fileName.includes('.')?fileName.split('.').pop()!.toLowerCase():''
   const decodedText=decodeTextBytes(bytes)
-  const decoded=decodedText.text
+  let decoded=decodedText.text
+  if (prefixSampled && ['csv','jsonl','ndjson'].includes(extension)) {
+    const lastNewline = decoded.lastIndexOf('\n')
+    if (lastNewline > 0) decoded = decoded.slice(0,lastNewline + 1)
+  }
   const format=detectFormat(decoded,contentType,extension)
-  const metadata:Record<string,unknown>={file_name:fileName,extension:extension||null,content_type:contentType,byte_size:bytes.byteLength,sha256:contentHash,source_uri:resolvedSourceUri,text_encoding:decodedText.encoding,text_bom:decodedText.hadBom}
+  const metadata:Record<string,unknown>={
+    file_name:fileName,
+    extension:extension||null,
+    content_type:contentType,
+    byte_size:bytes.byteLength,
+    source_size_bytes:observedSize ?? bytes.byteLength,
+    sha256:contentHash,
+    source_uri:resolvedSourceUri,
+    text_encoding:decodedText.encoding,
+    text_bom:decodedText.hadBom,
+    content_hash_authority:prefixSampled?'SOURCE_PREFIX_SHA256':'SOURCE_BYTES_SHA256',
+    source_observation_scope:prefixSampled?'BOUNDED_PREFIX_SAMPLE':'FULL_OBJECT_BYTES',
+    sampled_prefix_bytes:prefixSampled?bytes.byteLength:null,
+  }
+  const prefixWarnings = prefixSampled
+    ? [`Large object row evidence was sampled from the first ${bytes.byteLength} bytes of an observed ${observedSize} byte object; complete source coverage is not claimed.`]
+    : []
 
-  if(format==='csv')return parsedResult(parseCsv(decoded,maxRows),contentHash,resolvedSourceUri,contentType,format,metadata)
+  if(format==='csv'){const result=parsedResult(parseCsv(decoded,maxRows),contentHash,resolvedSourceUri,contentType,format,metadata);result.warnings=[...prefixWarnings,...result.warnings];return result}
   if(format==='json')return parsedResult(parseJson(decoded,maxRows),contentHash,resolvedSourceUri,contentType,format,metadata)
-  if(format==='jsonl')return parsedResult(parseJsonLines(decoded,maxRows),contentHash,resolvedSourceUri,contentType,format,metadata)
-  if(format==='text')return parsedResult(parseTextDocument(decoded,maxRows,metadata),contentHash,resolvedSourceUri,contentType,format,metadata)
+  if(format==='jsonl'){const result=parsedResult(parseJsonLines(decoded,maxRows),contentHash,resolvedSourceUri,contentType,format,metadata);result.warnings=[...prefixWarnings,...result.warnings];return result}
+  if(format==='text'){const result=parsedResult(parseTextDocument(decoded,maxRows,metadata),contentHash,resolvedSourceUri,contentType,format,metadata);result.warnings=[...prefixWarnings,...result.warnings];return result}
 
   const extracted=extractUnstructuredDocumentText(bytes,extension)
   if(extracted.text.trim()){
     const extractedMetadata={...metadata,text_extraction_supported:true,text_extraction_method:extracted.method,extracted_character_count:extracted.text.length}
     const parsed=parseTextDocument(extracted.text,maxRows,extractedMetadata)
-    return {rows:parsed.rows,rowCount:parsed.rowCount,contentHash,sourceUri:resolvedSourceUri,contentType,format:'text',metadata:extractedMetadata,warnings:[...extracted.warnings,...parsed.warnings]}
+    return {rows:parsed.rows,rowCount:parsed.rowCount,contentHash,sourceUri:resolvedSourceUri,contentType,format:'text',metadata:extractedMetadata,warnings:[...prefixWarnings,...extracted.warnings,...parsed.warnings]}
   }
 
-  if(OCR_EXTENSIONS.has(extension)){
+  if(OCR_EXTENSIONS.has(extension)&&!prefixSampled){
     try{
       const ocr=await extractWithOcrSpace({bytes,fileName,contentType})
       if(ocr.text.trim()){
@@ -110,9 +197,9 @@ export async function loadFileSource(
   }
 
   return {
-    rows:[{document_index:1,file_name:fileName,extension:extension||null,content_type:contentType,byte_size:bytes.byteLength,sha256:contentHash,text_extraction_supported:false}],
+    rows:[{document_index:1,file_name:fileName,extension:extension||null,content_type:contentType,byte_size:observedSize??bytes.byteLength,sha256:contentHash,text_extraction_supported:false}],
     rowCount:1,contentHash,sourceUri:resolvedSourceUri,contentType,format:'binary',metadata,
-    warnings:[...extracted.warnings,'Binary file metadata was scanned successfully. No readable text content was available from the native extractor or configured OCR provider.'],
+    warnings:[...prefixWarnings,...extracted.warnings,'Binary file metadata was scanned successfully. No readable text content was available from the native extractor or configured OCR provider.'],
   }
 }
 

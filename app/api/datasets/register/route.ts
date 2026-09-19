@@ -140,9 +140,18 @@ export async function POST(request: Request) {
       version_number: versionNumber,
       source_uri: effectiveSourceIdentifier,
       storage_object_id: verifiedStorageObject?.id ?? null,
+      size_bytes: verifiedStorageObject?.size_bytes ?? null,
       status: sourceReady ? 'AVAILABLE' : 'PROCESSING',
       observed_at: new Date().toISOString(),
-      metadata: { registration: 'manual', source_type: source.source_type, source_validation: sourceValidation, profiling_ready: sourceReady, storage_object_id: verifiedStorageObject?.id ?? null },
+      metadata: {
+        registration: 'manual',
+        source_type: source.source_type,
+        source_validation: sourceValidation,
+        profiling_ready: sourceReady,
+        storage_object_id: verifiedStorageObject?.id ?? null,
+        source_size_bytes: verifiedStorageObject?.size_bytes ?? null,
+        source_size_bytes_authority: verifiedStorageObject?.size_bytes == null ? 'UNKNOWN' : 'SOURCE_OBSERVED',
+      },
     }).select('id, dataset_id, version_number, source_uri, storage_object_id, status, observed_at, created_at').single()
     if (versionError || !version) throw new Error(`Unable to create dataset version: ${versionError?.message ?? 'unknown error'}`)
     versionId = version.id

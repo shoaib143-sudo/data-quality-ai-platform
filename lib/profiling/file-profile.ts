@@ -63,13 +63,17 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
     { maxRows: sampling.loadLimit, maxBytes: sampling.technicalMaxFileBytes },
   )
 
-  const governedDocument = await persistGovernedDocumentContent(supabase, {
-    projectId: sampling.projectId,
-    datasetId: version.dataset_id,
-    datasetVersionId,
-    profileRunId: profilingRunId,
-    loaded,
-  })
+  const contentHashAuthority = String(loaded.metadata.content_hash_authority ?? 'SOURCE_BYTES_SHA256')
+  const fullSourceBytesObserved = contentHashAuthority === 'SOURCE_BYTES_SHA256'
+  const governedDocument = fullSourceBytesObserved
+    ? await persistGovernedDocumentContent(supabase, {
+        projectId: sampling.projectId,
+        datasetId: version.dataset_id,
+        datasetVersionId,
+        profileRunId: profilingRunId,
+        loaded,
+      })
+    : null
 
   const sampled = applySamplingPolicy(loaded.rows as Record<string, unknown>[], loaded.rowCount, sampling)
   const sampledRows = sampled.rows
@@ -109,7 +113,7 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
     mode: loaded.format === 'binary' ? 'metadata_only' : 'source_rows',
     connector: { kind: 'file', format: loaded.format, source_uri: loaded.sourceUri },
     content_hash: loaded.contentHash,
-    content_hash_authority: 'SOURCE_BYTES_SHA256',
+    content_hash_authority: contentHashAuthority,
     sampled_rows: sampled.sampledRows,
     sampling_policy: sampled.policy,
     warnings: [...loaded.warnings, ...sampled.warnings],
@@ -142,6 +146,6 @@ export async function executeFileProfileDataset(datasetVersionId: string, profil
       governed_document: sourceAccess.governed_document,
       columns: columns.map((column) => ({ name: column.name, type: column.inferred_type })),
     },
-    contentHash: loaded.contentHash,
+    contentHash: fullSourceBytesObserved ? loaded.contentHash : null,
   })
 }
