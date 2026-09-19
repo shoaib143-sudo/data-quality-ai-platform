@@ -52,15 +52,20 @@ for (const run of completed) {
 const { data: activeSources, error: sourceError } = await supabase
   .schema('profiling')
   .from('dataset_execution_sources')
-  .select('source_type')
+  .select('dataset_version_id,source_type,updated_at')
   .eq('active', true)
+  .order('updated_at', { ascending: false })
 if (sourceError) throw new Error(`Unable to enumerate active execution sources: ${sourceError.message}`)
 
 const activeSourceTypes = {}
+const activeSourceTypeByDatasetVersion = new Map()
 for (const source of activeSources ?? []) {
   const key = String(source.source_type ?? '').toUpperCase()
   if (!key) continue
   activeSourceTypes[key] = Number(activeSourceTypes[key] ?? 0) + 1
+  if (source.dataset_version_id && !activeSourceTypeByDatasetVersion.has(source.dataset_version_id)) {
+    activeSourceTypeByDatasetVersion.set(source.dataset_version_id, key)
+  }
 }
 
 function hasCanonicalInvestigation(summary) {
@@ -111,6 +116,7 @@ const latestRuns = await Promise.all(Array.from(latestByDatasetVersion.values())
   return {
     id: run.id,
     datasetVersionId: run.dataset_version_id,
+    sourceType: activeSourceTypeByDatasetVersion.get(run.dataset_version_id) ?? null,
     contract: contractResult.data,
     profileColumns: profileColumnsResult.count ?? 0,
     metrics: metricsResult.count ?? 0,
