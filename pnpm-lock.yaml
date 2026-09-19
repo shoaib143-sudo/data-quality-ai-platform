@@ -3616,7 +3616,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.4
       '@img/sharp-win32-ia32': 0.35.4
       '@img/sharp-win32-x64': 0.35.4
-      '@types/node': 24.10.4
+      '@types/node': 26.6.1
     optional: true
 
   shebang-command@2.0.0:
