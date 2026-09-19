@@ -18,6 +18,8 @@ export type GovernedLearningBenchmarkDecision = {
   adversarialFailures: number
   evidenceRefs: string[]
   rollbackRef: string
+  minimumCaseCount: number
+  minimumCandidateScore: number
   reasons: string[]
   automaticPromotionAllowed: false
   automaticAuthorityExpansionAllowed: false
@@ -55,14 +57,17 @@ export function evaluateGovernedLearningCandidateBenchmark(input: {
     ] as const,
   }
 
+  const minimumCaseCount = input.minimumCaseCount ?? 20
+  const minimumCandidateScore = input.minimumCandidateScore ?? 0.8
+
   const result = evaluateGovernedSkillPromotion({
     proposal,
     currentVersion: input.candidate.baselineVersion,
     candidateVersion: input.candidate.candidateVersion,
     rollbackRef: input.rollbackRef,
     benchmark: input.benchmark,
-    minimumCaseCount: input.minimumCaseCount,
-    minimumCandidateScore: input.minimumCandidateScore,
+    minimumCaseCount,
+    minimumCandidateScore,
   })
 
   if (result.status !== 'NOT_READY' && result.status !== 'ELIGIBLE_FOR_HUMAN_REVIEW') {
@@ -85,6 +90,8 @@ export function evaluateGovernedLearningCandidateBenchmark(input: {
     adversarialFailures: input.benchmark.adversarialFailures,
     evidenceRefs: [...result.benchmarkEvidenceRefs],
     rollbackRef: result.rollbackRef,
+    minimumCaseCount,
+    minimumCandidateScore,
     reasons: [...result.reasons],
     automaticPromotionAllowed: false,
     automaticAuthorityExpansionAllowed: false,
