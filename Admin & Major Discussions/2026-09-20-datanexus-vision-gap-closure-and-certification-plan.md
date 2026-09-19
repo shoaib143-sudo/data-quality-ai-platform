@@ -1396,3 +1396,503 @@ The implementation plan is optimal only if it prioritizes closure of the canonic
 The post-implementation plan is optimal only if certification can fail independently of implementation, tests can falsify the design rather than mirror it, exact deployed artifacts are verified, and security, resilience, accessibility, supply-chain integrity and AI-specific adversarial behavior are treated as first-class release gates.
 
 This hardened plan supersedes any weaker interpretation of the earlier completion criteria in this document.
+
+
+## 19. Scope decision: operational certification and hardening deferred
+
+By product decision, operational certification and production hardening are not active implementation objectives at this stage because DataNexus is not being operationalized imminently.
+
+The following are therefore **deferred, not deleted**:
+
+- production certification
+- production hardening
+- canary rollout
+- production revalidation
+- chaos certification
+- release sign-off
+- production SLO/error-budget gates
+- operational supply-chain certification
+- production rollback rehearsal
+- operational post-release observation
+
+Development-level quality remains in scope:
+
+- unit testing
+- property and invariant testing where useful
+- contract testing
+- integration testing
+- negative testing
+- failure-case testing
+- E2E functional testing
+- UI/UX component functionality testing
+- agent acceptance tests
+- safe adversarial development tests
+
+The active definition of done is therefore **functional implementation completeness with development-level validation**, not operational certification.
+
+## 20. DataNexus agent learning taxonomy
+
+DataNexus should distinguish learning mechanisms instead of treating every adaptation as "self-learning."
+
+### 20.1 Level A: Runtime working learning
+
+Short-lived learning within one run.
+
+Examples:
+
+- observations gathered during the run
+- tool results
+- intermediate hypotheses
+- rejected hypotheses
+- current task constraints
+- active plan and checkpoints
+
+This context expires with the run except for evidence that is deliberately promoted into a durable case.
+
+### 20.2 Level B: Episodic case learning
+
+The agent stores an approved prior case containing:
+
+- problem/context
+- authoritative inputs
+- relevant project/domain characteristics
+- tools used
+- decisive evidence
+- actions/trajectory
+- outcome
+- verification result
+- human decision
+- reusable lessons
+- conditions under which the case is applicable
+- conditions under which it is not applicable
+
+A later similar case may retrieve and adapt this experience.
+
+### 20.3 Level C: Positive and negative experience learning
+
+The learning store should include both:
+
+- successful patterns worth reusing
+- failed/rejected patterns worth avoiding
+
+Negative cases are first-class because they prevent repeated mistakes, false positives and ineffective strategies.
+
+### 20.4 Level D: Feedback learning
+
+Capture explicit human signals such as:
+
+- accepted recommendation
+- rejected recommendation
+- modified recommendation
+- false positive
+- false negative
+- useful explanation
+- poor explanation
+- correct evidence
+- missing evidence
+- correct escalation
+- unnecessary escalation
+- preferred action
+- rejection reason
+
+Feedback should be tied to the exact agent/version/use case and evidence context.
+
+### 20.5 Level E: Outcome and effectiveness learning
+
+Do not equate "execution completed" with "execution was good."
+
+Where the domain supports it, capture:
+
+- before state
+- action/recommendation
+- after state
+- verification result
+- stakeholder satisfaction
+- recurrence/non-recurrence
+- measurable improvement
+- side effects
+- reversals
+- time/cost saved
+- whether the original confidence was calibrated
+
+### 20.6 Level F: Strategy learning
+
+Agents may learn reusable problem-solving patterns, for example:
+
+- which evidence sources are most useful
+- which tool sequence is effective
+- which profiling strategy fits a dataset class
+- which traversal strategy works for governance investigation
+- which explanations are most useful to stakeholders
+- which findings tend to be noise
+- which escalation paths are appropriate
+
+Strategy learning must remain versioned and explainable.
+
+### 20.7 Level G: Retrieval and relevance learning
+
+Agents may improve how they retrieve prior cases and evidence by learning:
+
+- which attributes make two cases truly similar
+- which past cases are misleading despite superficial similarity
+- which evidence should carry more weight
+- which domain-specific relationships matter
+- when a prior case should not be reused
+
+### 20.8 Level H: Cross-agent transferable learning
+
+A case learned by one agent may become useful to another agent only when the shared knowledge has an explicit reusable contract.
+
+Example:
+
+```text
+Profiling Agent detects recurring distribution shift
+→ approved case records evidence pattern
+→ Data Quality Agent retrieves it as a candidate drift signal
+→ Governance Analyst uses the same verified case as supporting evidence
+```
+
+Cross-agent learning must not transfer authority, hidden state or unrestricted prompts.
+
+### 20.9 Level I: Proactive human-validated case acquisition
+
+This is the additional learning mode approved for DataNexus.
+
+It is **not autonomous self-learning**.
+
+Recommended name:
+
+**Proactive Governed Case Learning (PGCL)**
+
+Alternative descriptive name:
+
+**Admin-Validated Positive Case Learning**
+
+#### Trigger
+
+After a successful **Supervised** or **Handsfree E2E** run, each participating agent evaluates whether its own portion of the run produced a potentially reusable use case.
+
+The agent does not automatically learn it.
+
+Instead:
+
+```text
+Successful Supervised / Handsfree E2E run
+→ participating agent identifies candidate reusable lesson
+→ agent creates Candidate Learning Case
+→ agent explains:
+   • what happened
+   • why it believes the case succeeded
+   • what evidence proves success
+   • what part is reusable
+   • applicability boundaries
+   • risks of reuse
+→ Data Governance Admin receives learning proposal
+→ Admin chooses:
+   APPROVE POSITIVE CASE
+   APPROVE WITH EDITS
+   REJECT
+   DEFER
+   MARK AS ONE-OFF / NON-REUSABLE
+→ only approved case enters reusable experience memory
+→ future similar runs may retrieve the approved case
+```
+
+#### Important rule
+
+A technically successful execution is not automatically a positive learning example.
+
+The system must separate:
+
+- execution success
+- governance correctness
+- outcome quality
+- reusability
+
+A case is promoted only after the Data Governance Admin confirms that it is an appropriate positive precedent.
+
+#### Candidate case record
+
+Each proposal should capture:
+
+- run ID
+- contributing agent
+- agent version
+- use-case type
+- problem signature
+- dataset/asset characteristics
+- evidence used
+- tools/actions used
+- execution trajectory summary
+- result
+- verification evidence
+- stakeholder/approval context
+- reason proposed as positive
+- reusable lesson
+- applicability conditions
+- exclusion conditions
+- confidence
+- Data Governance Admin decision
+- Admin edits
+- decision reason
+- promoted case version
+- later usage count
+- later success/failure feedback
+
+#### Avoid notification fatigue
+
+Do not ask the Admin after every trivially successful step.
+
+Candidate generation should apply a significance filter such as:
+
+- new use-case pattern
+- materially different context
+- high-value successful resolution
+- first success after previous failures
+- novel but verified tool sequence
+- reusable governance decision pattern
+- material efficiency improvement
+- repeated pattern reaching promotion threshold
+- existing case whose applicability can be broadened
+
+Duplicate or near-duplicate candidate cases should be clustered before asking for confirmation.
+
+### 20.10 Level J: Pattern consolidation learning
+
+After enough approved cases accumulate, the system may propose a generalized pattern:
+
+```text
+Approved Case A
++ Approved Case B
++ Approved Case C
+→ common pattern detected
+→ generalized reusable guidance proposed
+→ Data Governance Admin reviews
+→ approved guidance becomes a versioned skill/pattern
+```
+
+The source cases remain linked so the generalized pattern has provenance.
+
+### 20.11 Level K: Governed adaptive learning
+
+Agents may propose improvements to:
+
+- prompts/instructions
+- tool-selection guidance
+- retrieval strategies
+- heuristics
+- case-indexing rules
+- recommendation templates
+- investigation plans
+
+These changes must be versioned and must not silently alter:
+
+- authorization
+- RLS
+- agent/tool authority
+- approval rules
+- prohibited actions
+- governance policy
+- stakeholder authority
+
+### 20.12 Autonomous self-modification remains out of scope
+
+Agents must not directly rewrite or promote their own production behavior, authority, tool permissions, policies or approval requirements.
+
+## 21. Priority-agent learning catalogue
+
+### 21.1 Profiling Agent
+
+The Profiling Agent should be able to learn:
+
+- dataset archetypes
+- schema archetypes
+- domain-specific column patterns
+- semantic-type patterns
+- candidate-key patterns
+- composite-key patterns
+- profile depth needed for different column/data types
+- metric combinations useful for particular data classes
+- sampling strategies
+- full-scan versus sampled profiling decisions
+- thresholds at which deeper profiling becomes useful
+- high-cardinality handling patterns
+- skew/distribution patterns
+- missingness patterns
+- duplicate patterns
+- temporal-data patterns
+- string-pattern families
+- outlier patterns
+- suspicious distribution shapes
+- normal seasonality where verified
+- recurring schema drift patterns
+- recurring profile drift patterns
+- expected relationships among metrics
+- columns that typically require deeper profiling
+- metrics that repeatedly produce low-value noise
+- failed metric strategies
+- timeout-prone strategies
+- successful fallback strategies
+- useful source-specific profiling techniques
+- profile comparison patterns
+- confidence calibration for semantic-type suggestions
+- false-positive profiling findings
+- false-negative patterns discovered later
+- reusable investigation paths
+- successful tool sequences
+- cost/time-efficient profiling strategies
+- dataset-specific baselines when approved
+- cross-dataset reusable profiling templates
+- conditions where prior cases should not be reused
+
+### 21.2 Data Quality Agent
+
+The Data Quality Agent should be able to learn:
+
+- effective DQ-rule patterns
+- domain-specific rule templates
+- accepted/rejected rule recommendations
+- useful completeness thresholds
+- validity thresholds
+- uniqueness expectations
+- referential-integrity expectations
+- timeliness/freshness expectations
+- consistency expectations
+- business-rule patterns
+- distribution-drift thresholds
+- anomaly patterns
+- seasonal exceptions
+- expected-value ranges
+- schema-quality relationships
+- metric-to-rule mappings
+- common false positives
+- common false negatives
+- waiver/exception patterns
+- recurrent violations
+- recurring root causes
+- relationship between profile changes and DQ failures
+- high-signal evidence combinations
+- business-impact patterns
+- CDE-specific quality expectations
+- policy-sensitive quality patterns
+- useful severity mappings
+- confidence calibration
+- accepted recommendations
+- rejected recommendations and reasons
+- recommendation modifications
+- successful non-data remediation patterns
+- ineffective remediation recommendations
+- verification methods that best demonstrate resolution
+- recurrence after apparent closure
+- escalation patterns
+- ownership-routing patterns
+- SLA-risk patterns
+- known transient versus persistent failure signatures
+- successful investigation sequences
+- useful historical comparison windows
+- cases where no rule should be proposed
+- cases requiring stakeholder judgment rather than automated recommendation
+
+### 21.3 Governance Analyst Agent
+
+The Governance Analyst Agent should be able to learn:
+
+- recurring governance questions
+- evidence sources most useful for each question class
+- authoritative versus supporting evidence
+- useful cross-domain joins
+- graph traversal patterns
+- common policy-to-asset relationships
+- regulation-policy-control mappings
+- glossary/CDE relationships
+- ownership/stewardship patterns
+- certification evidence patterns
+- contract-governance patterns
+- sensitive-data governance patterns
+- high-risk combinations of evidence
+- risk-factor contributions
+- historical risk patterns
+- common governance gaps
+- issue recurrence patterns
+- business-impact relationships
+- technical versus business impact distinction
+- useful investigation plans
+- successful hypothesis-elimination strategies
+- alternate hypotheses that proved important
+- stakeholder-specific explanation preferences
+- executive versus steward-level explanation patterns
+- evidence depth required for different decisions
+- unsupported conclusion patterns
+- previously rejected interpretations
+- confidence calibration
+- useful citation/provenance patterns
+- patterns requiring escalation
+- patterns requiring stakeholder approval
+- patterns fully within DG Admin authority
+- cases where insufficient evidence should result in abstention
+- recurring governance opportunities
+- effective prioritization heuristics
+- outcome patterns following previous recommendations
+- reusable governance precedents approved by DG Admin
+
+### 21.4 Data Steward Agent
+
+The Data Steward Agent should be able to learn:
+
+- approved glossary mappings
+- rejected glossary mappings
+- preferred business terms
+- synonyms and aliases
+- domain terminology
+- semantic definitions
+- term-to-column mapping patterns
+- classification patterns
+- sensitive-data patterns
+- classification false positives
+- classification false negatives
+- approved CDE nominations
+- rejected CDE nominations
+- CDE-to-column mapping patterns
+- ownership patterns
+- stewardship-routing patterns
+- domain-owner relationships
+- orphan-asset patterns
+- unmapped-column patterns
+- conflicting-definition patterns
+- duplicate-term patterns
+- policy applicability patterns
+- certification evidence patterns
+- contract metadata patterns
+- stewardship SLA patterns
+- waiver/exception patterns
+- approved metadata corrections
+- recurring metadata gaps
+- accepted/rejected stewardship recommendations
+- useful evidence for classification suggestions
+- confidence calibration
+- when a human steward is required
+- when DG Admin authority is sufficient
+- stakeholder response patterns
+- reusable stewardship cases
+- successful bulk-governance patterns
+- data-domain-specific conventions
+- conditions where a learned mapping must not be propagated
+
+## 22. DataNexus learning governance rule
+
+The learning hierarchy should be:
+
+```text
+Observe
+→ Record
+→ Evaluate
+→ Propose
+→ Human-validate where promotion is material
+→ Promote as versioned case/pattern
+→ Retrieve
+→ Adapt
+→ Measure outcome
+→ Reinforce, revise or retire
+```
+
+DataNexus should learn from both success and failure, but **reusable positive precedent must be intentionally promoted rather than inferred solely from technical success**.
