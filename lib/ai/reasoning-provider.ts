@@ -26,6 +26,15 @@ export type ReasoningResult = {
   latencyMs: number
   usage?: ReasoningUsage
   providerRequestId?: string
+  resilience?: {
+    requestedProvider: string
+    requestedModel: string
+    actualProvider: string
+    actualModel: string
+    fallbackApplied: boolean
+    fallbackReason: string | null
+    attempts: number
+  }
 }
 
 export interface ReasoningProvider {
