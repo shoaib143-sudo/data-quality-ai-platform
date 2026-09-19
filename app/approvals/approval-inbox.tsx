@@ -94,6 +94,31 @@ export function ApprovalInbox({ items }: { items: ApprovalInboxItem[] }) {
               </div>
             </div>
 
+            {item.notifications.length ? (
+              <div className="mt-4 border-t pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notification delivery</p>
+                  <span className="text-xs text-muted-foreground">DataNexus remains authoritative</span>
+                </div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  {(['DATANEXUS','EMAIL','TEAMS'] as const).map(channel => {
+                    const rows = item.notifications.filter(notification => value(notification, 'channel') === channel)
+                    const latest = rows[0]
+                    if (!latest) return <div key={channel} className="rounded-xl border p-3 text-xs"><p className="font-semibold">{channel}</p><p className="mt-1 text-muted-foreground">No delivery record</p></div>
+                    const deliveryStatus = value(latest, 'status')
+                    const attempts = value(latest, 'attempt_count')
+                    return <div key={channel} className="rounded-xl border p-3 text-xs">
+                      <div className="flex items-center justify-between gap-2"><p className="font-semibold">{channel}</p><span className="rounded-full border px-2 py-0.5">{deliveryStatus}</span></div>
+                      <p className="mt-1 text-muted-foreground">{value(latest, 'event_type')} · attempts {attempts || '0'}</p>
+                      {value(latest, 'sent_at') ? <p className="mt-1 text-muted-foreground">Sent {new Date(value(latest, 'sent_at')).toLocaleString()}</p> : null}
+                      {value(latest, 'next_attempt_at') && !['SENT','DEAD_LETTER'].includes(deliveryStatus) ? <p className="mt-1 text-muted-foreground">Next retry {new Date(value(latest, 'next_attempt_at')).toLocaleString()}</p> : null}
+                      {deliveryStatus === 'DEAD_LETTER' ? <p className="mt-1 font-semibold text-amber-700 dark:text-amber-300">Delivery exhausted. Use DataNexus and investigate provider health.</p> : null}
+                    </div>
+                  })}
+                </div>
+              </div>
+            ) : null}
+
             {item.decisions.length ? (
               <div className="mt-4 space-y-2 border-t pt-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Decision history</p>
