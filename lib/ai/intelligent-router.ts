@@ -6,7 +6,7 @@ import type { ModelGateway, ReasoningRouteContext } from './model-gateway'
 import type { ModelRegistry, RegisteredModelVersion } from './model-registry'
 import type { RoutingPolicy, RoutingPolicyEvaluator, RoutingPolicyProvider } from './routing-policy'
 import type { TelemetryTraceContext } from './telemetry-provider'
-import { ResilientReasoningProvider, type ProviderResiliencePolicyProvider } from './provider-resilience'
+import { ResilientReasoningProvider, type ProviderResiliencePolicyProvider } from './provider-resilience.ts'
 
 export type IntelligentRouteContext = ReasoningRouteContext & {
   projectId: string
