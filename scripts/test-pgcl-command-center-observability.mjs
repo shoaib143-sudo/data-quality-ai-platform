@@ -98,13 +98,6 @@ for (const invariant of [
   'candidate.succeededCount',
   'candidate.failedCount',
   'candidate.averageRelevance',
-  'pgcl.counts.profilingApplications',
-  'pgcl.counts.dataQualityApplications',
-  'pgcl.counts.supervisorApplications',
-  'pgcl.counts.directSpecialistApplications',
-  'pgcl.counts.authoritativeOutcomes',
-  'candidate.executionSurfaces',
-  'candidate.authoritativeOutcomeCount',
 ]) {
   assert.ok(page.includes(invariant), `missing PGCL Command Center UI invariant: ${invariant}`)
 }
@@ -132,6 +125,13 @@ for (const invariant of [
   'Learning portfolio by agent',
   'Positive learning cases',
   'Controlled learning lifecycle',
+  'pgcl.counts.profilingApplications',
+  'pgcl.counts.dataQualityApplications',
+  'pgcl.counts.supervisorApplications',
+  'pgcl.counts.directSpecialistApplications',
+  'pgcl.counts.authoritativeOutcomes',
+  'candidate.executionSurfaces',
+  'candidate.authoritativeOutcomeCount',
   'Reuse execution surfaces',
   'Direct specialist',
   'Handsfree specialist',
