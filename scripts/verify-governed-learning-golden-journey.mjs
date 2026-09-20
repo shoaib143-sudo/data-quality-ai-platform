@@ -13,6 +13,9 @@ const approvalCode = fs.readFileSync('lib/agents/governed-learning-release-appro
 const releaseCode = fs.readFileSync('lib/agents/governed-learning-controlled-release.ts', 'utf8')
 const memoryCode = fs.readFileSync('lib/agents/agent-memory-learning.ts', 'utf8')
 const pgclCode = fs.readFileSync('lib/agents/proactive-governed-case-learning.ts', 'utf8')
+const pgclRuntimeCode = fs.readFileSync('lib/agents/proactive-governed-case-learning-runtime.ts', 'utf8')
+const pgclServiceCode = fs.readFileSync('lib/agents/proactive-governed-case-learning-service.ts', 'utf8')
+const pgclCommandCenterCode = fs.readFileSync('lib/ai/pgcl-command-center-state.ts', 'utf8')
 
 const phases = [
   ['verified outcome authority', outcomeMigration, [
@@ -45,8 +48,15 @@ const phases = [
   ]],
   ['proactive governed case learning', pgclMigration, [
     'create table if not exists agent.positive_learning_cases',
+    'create table if not exists agent.positive_learning_case_reviews',
+    'create table if not exists agent.positive_learning_case_usages',
     "'PGCL_POSITIVE_CASE'",
     'list_approved_positive_learning_cases',
+    'validate_positive_learning_case_usage',
+    'Data Governance Admin authority is required to review a positive learning case',
+    "candidate_type = 'POSITIVE_CASE'",
+    "status = 'REVIEW_REQUIRED'",
+    "'PGCL_ADMIN_DECISION:' || p_decision",
   ]],
 ]
 
@@ -128,6 +138,51 @@ for (const invariant of [
 }
 
 for (const invariant of [
+  "profiling_agent: 'profile_evidence_analysis'",
+  "data_quality_agent: 'quality_rule_analysis'",
+  "steward_agent: 'stewardship_gap_analysis'",
+  "governance_analyst_agent: 'governance_evidence_synthesis'",
+  "architect_agent: 'lineage_impact_analysis'",
+  "investigator_agent: 'incident_root_cause_analysis'",
+  "executive_agent: 'executive_materiality_analysis'",
+  "support_agent: 'support_case_investigation'",
+]) {
+  assert.ok(pgclCode.includes(invariant), `PGCL eight-agent skill mapping missing: ${invariant}`)
+}
+
+for (const invariant of [
+  'proposePgclCaseFromVerifiedAgentRun',
+  'proposePgclCasesFromVerifiedSupervisorRun',
+  'derivePgclCandidateFromVerifiedRun',
+  'native_trajectory_evaluation:',
+]) {
+  assert.ok(pgclRuntimeCode.includes(invariant), `PGCL verified-run integration missing: ${invariant}`)
+}
+
+for (const invariant of [
+  'persistProactiveGovernedCaseLearningCandidate',
+  'recordPositiveLearningCaseRetrievals',
+  'recordPositiveLearningCaseOutcome',
+  'reconcilePositiveLearningCaseUsagesFromGovernedOutcome',
+  "attribution: 'AUTHORITATIVE_GOVERNED_OUTCOME'",
+]) {
+  assert.ok(pgclServiceCode.includes(invariant), `PGCL feedback-loop integration missing: ${invariant}`)
+}
+
+for (const invariant of [
+  "from('positive_learning_cases')",
+  "from('positive_learning_case_reviews')",
+  "from('positive_learning_case_occurrences')",
+  "from('positive_learning_case_usages')",
+  "from('agent_learning_cases')",
+  'contextOnly: true',
+  'mayAuthorizeAction: false',
+  'automaticPromotionAllowed: false',
+]) {
+  assert.ok(pgclCommandCenterCode.includes(invariant), `PGCL observability contract missing: ${invariant}`)
+}
+
+for (const invariant of [
   'Learned cases cannot authorize, approve, execute, or promote a new governance action',
   'current_authorization_required_for_every_action: true',
   'current_policy_decision_required_for_every_action: true',
@@ -146,4 +201,4 @@ assert.equal(
   'human approval must remain separate from activation',
 )
 
-console.log('Phase 11 golden journey is cumulatively certified from verified outcome through governed reuse, with fail-closed benchmark, approval, canary, activation, rollback, and future-use authority boundaries.')
+console.log('Phase 11 golden journey certifies both governed skill improvement and PGCL positive-case learning, including all-eight-agent proposal coverage, Admin review, reusable context, outcome feedback, observability, fail-closed release gates, rollback, and future-use authority boundaries.')

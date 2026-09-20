@@ -94,8 +94,30 @@ export async function collectProjectKnowledgeSemanticCandidates(projectId: strin
       const document = documentById.get(requirement.document_id)
       return {
         objectType: 'KNOWLEDGE_REQUIREMENT', objectKey: requirement.requirement_key, objectId: requirement.id,
-        content: compact([requirement.title, requirement.requirement_text, `Obligation type: ${requirement.obligation_type}`, `Priority: ${requirement.priority}`, document ? `Source document: ${document.title}` : null]),
-        metadata: { document_id: requirement.document_id, document_key: document?.document_key ?? null, document_title: document?.title ?? null, document_review_status: document?.review_status ?? null, obligation_type: requirement.obligation_type, priority: requirement.priority, ...(requirement.metadata ?? {}) },
+        content: compact([
+          requirement.title,
+          requirement.requirement_text,
+          `Obligation type: ${requirement.obligation_type}`,
+          `Priority: ${requirement.priority}`,
+          document ? `Source document: ${document.title}` : null,
+          document?.document_type ? `Source document type: ${document.document_type}` : null,
+          document?.domain ? `Source domain: ${document.domain}` : null,
+          document?.jurisdiction ? `Source jurisdiction: ${document.jurisdiction}` : null,
+        ]),
+        metadata: {
+          source_document_id: requirement.document_id,
+          source_document_key: document?.document_key ?? null,
+          source_document_title: document?.title ?? null,
+          source_document_type: document?.document_type ?? null,
+          source_document_domain: document?.domain ?? null,
+          source_document_jurisdiction: document?.jurisdiction ?? null,
+          source_document_kind: document?.source_kind ?? null,
+          source_document_url: document?.source_url ?? null,
+          source_document_review_status: document?.review_status ?? null,
+          obligation_type: requirement.obligation_type,
+          priority: requirement.priority,
+          ...(requirement.metadata ?? {}),
+        },
       }
     }),
     ...(cdes.data ?? []).map((cde) => ({
