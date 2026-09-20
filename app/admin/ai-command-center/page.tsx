@@ -5,6 +5,7 @@ import { authorizeProject } from '@/lib/auth/authorize'
 import { createGovernanceCommandCenterState } from '@/lib/ai/governance-command-center-state'
 import { createGovernanceLearningEngine } from '@/lib/ai/governance-learning-engine'
 import { readGovernedLearningLifecycleCommandCenter } from '@/lib/ai/governed-learning-command-center-state'
+import { readPgclCommandCenterState } from '@/lib/ai/pgcl-command-center-state'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -31,16 +32,18 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
   const selectedProjectId = projects.some((project) => project.id === params.projectId) ? params.projectId! : projects[0]?.id
   const control = selectedProjectId ? await (async () => {
     await authorizeProject(user.id, selectedProjectId, 'admin.manage')
-    const [state, learning, learningLifecycle] = await Promise.all([
+    const [state, learning, learningLifecycle, pgcl] = await Promise.all([
       createGovernanceCommandCenterState().read(selectedProjectId),
       createGovernanceLearningEngine().assess({ projectId: selectedProjectId, limit: 25 }),
       readGovernedLearningLifecycleCommandCenter(selectedProjectId),
+      readPgclCommandCenterState(selectedProjectId),
     ])
-    return { state, learning, learningLifecycle }
+    return { state, learning, learningLifecycle, pgcl }
   })() : null
   const state = control?.state ?? null
   const learning = control?.learning ?? null
   const learningLifecycle = control?.learningLifecycle ?? null
+  const pgcl = control?.pgcl ?? null
 
   const systemName = new Map(state?.aiSystems.map((system) => [system.id, system.name]) ?? [])
   const versionLabel = new Map(state?.aiSystemVersions.map((version) => [version.id, `v${version.version_number}`]) ?? [])
@@ -58,7 +61,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
 
       <form method="get" className="rounded-2xl border bg-white p-5"><label className="block text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 block w-full max-w-xl rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><button className="mt-3 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load control state</button></form>
 
-      {!state || !learning || !learningLifecycle ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
+      {!state || !learning || !learningLifecycle || !pgcl ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-10">
           <article className="rounded-2xl border bg-white p-5"><Bot className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.aiSystems}</p><p className="text-xs font-bold uppercase text-slate-500">AI systems</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.aiSystemDecisions}</p><p className="text-xs font-bold uppercase text-slate-500">Human decisions</p></article>
@@ -122,6 +125,63 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
                 </tr>)}
               </tbody>
             </table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No durable governed learning lifecycle candidates are recorded for this project.</p>}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-black">Positive-case learning feedback loop</h2>
+              <p className="mt-1 max-w-4xl text-sm text-slate-500">Verified supervised and Handsfree successes become reviewable PGCL cases. Only Data Governance Admin-approved cases are promoted into reusable context, and subsequent retrieval/application outcomes remain evidence only. They never authorize an action or bypass current policy.</p>
+            </div>
+            <div className="text-right text-xs text-slate-500">
+              <p>{pgcl.counts.total} cases · {pgcl.counts.agentsRepresented}/8 agents represented</p>
+              <p>{pgcl.counts.promotedActive} active context cases · {pgcl.counts.usageEvents} reuse records</p>
+              <p>{pgcl.counts.productionEligible} production eligible · {pgcl.counts.nonProductionOrUnclassified} blocked/unclassified</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
+            <p>Context authority: {pgcl.authority.contextOnly ? 'context only' : 'authoritative'}</p>
+            <p>Action authorization: {pgcl.authority.mayAuthorizeAction ? 'allowed' : 'prohibited'}</p>
+            <p>Auto-promotion: {pgcl.authority.automaticPromotionAllowed ? 'enabled' : 'disabled'}</p>
+            <p>Admin review: {pgcl.authority.adminReviewRequired ? 'required' : 'not required'}</p>
+            <p>Current policy: {pgcl.authority.currentPolicyReevaluationRequired ? 're-evaluated' : 'not required'}</p>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {pgcl.agentCoverage.map((agent) => <article key={agent.agentKey} className="rounded-xl border p-4">
+              <div className="flex items-start justify-between gap-2"><p className="font-bold">{agent.agentKey}</p><span className="text-xs text-slate-400">{agent.candidateCount} cases</span></div>
+              <p className="mt-2 text-xs text-slate-500">{agent.approvedCount} approved · {agent.productionEligibleCount} production eligible · {agent.promotedActiveCount} active context</p>
+              <p className="mt-1 text-xs text-slate-500">{agent.usageCount} reuse · {agent.succeededCount} succeeded · {agent.failedCount} failed</p>
+            </article>)}
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
+            {[
+              ['Pending review', pgcl.counts.pendingReview],
+              ['Approved', pgcl.counts.approved],
+              ['Deferred', pgcl.counts.deferred],
+              ['Rejected', pgcl.counts.rejected],
+              ['Applied', pgcl.counts.applied],
+              ['Succeeded', pgcl.counts.succeeded],
+              ['Failed', pgcl.counts.failed],
+            ].map(([label, value]) => <div key={String(label)} className="rounded-xl border bg-slate-50 p-3"><p className="text-2xl font-black">{value}</p><p className="text-xs font-bold uppercase text-slate-500">{label}</p></div>)}
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            {pgcl.candidates.length ? <table className="w-full min-w-[1320px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500">
+                <tr><th className="p-3">Agent / skill</th><th className="p-3">Use case</th><th className="p-3">Review</th><th className="p-3">Verified occurrences</th><th className="p-3">Promoted context</th><th className="p-3">Reuse outcomes</th><th className="p-3">Last activity</th></tr>
+              </thead>
+              <tbody>
+                {pgcl.candidates.map((candidate) => <tr key={candidate.candidateId} className="border-b align-top last:border-0">
+                  <td className="p-3"><p className="font-bold">{candidate.agentKey}</p><p className="text-xs text-slate-400">{candidate.skillKey} · {candidate.runMode}</p></td>
+                  <td className="p-3"><p className="max-w-sm font-semibold">{candidate.title}</p><p className="mt-1 max-w-sm text-xs text-slate-500">{candidate.resultSummary}</p><p className="mt-1 text-[11px] text-slate-400">{candidate.significanceSignals.join(', ') || 'No significance signal recorded'}</p></td>
+                  <td className="p-3"><Badge value={candidate.reviewStatus}/><div className="mt-1"><Badge value={candidate.productionEligible ? 'PRODUCTION_ELIGIBLE' : 'NOT_PRODUCTION_ELIGIBLE'}/></div><p className="mt-1 text-xs text-slate-400">{candidate.latestDecision ?? 'No Admin decision recorded'}</p><p className="mt-1 text-[11px] text-slate-400">{candidate.learningProvenanceRecordedAt ? `Provenance ${new Date(candidate.learningProvenanceRecordedAt).toLocaleString()}` : 'Trusted production provenance not recorded'}</p></td>
+                  <td className="p-3"><p className="font-bold">{candidate.occurrenceCount}</p><p className="text-xs text-slate-400">same governed case pattern</p></td>
+                  <td className="p-3">{candidate.promotedLearningCaseId ? <><Badge value={candidate.promotedLearningCaseStatus ?? 'RECORDED'}/><p className="mt-1 font-mono text-[11px] text-slate-400">{candidate.promotedLearningCaseId}</p></> : <span className="text-slate-400">Not promoted</span>}</td>
+                  <td className="p-3"><p>{candidate.usageCount} total · {candidate.appliedCount} applied</p><p className="mt-1 text-xs text-slate-500">{candidate.succeededCount} succeeded · {candidate.failedCount} failed · {candidate.dismissedCount} dismissed</p><p className="mt-1 text-xs text-slate-400">Avg relevance: {candidate.averageRelevance == null ? 'not scored' : candidate.averageRelevance.toFixed(3)}</p></td>
+                  <td className="p-3 text-xs text-slate-500">{candidate.lastUsedAt ? new Date(candidate.lastUsedAt).toLocaleString() : new Date(candidate.updatedAt).toLocaleString()}</td>
+                </tr>)}
+              </tbody>
+            </table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No PGCL positive cases are recorded for this project. Absence means no approved reusable positive-case evidence has been recorded, not that agent execution is unhealthy.</p>}
           </div>
         </section>
 
