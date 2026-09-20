@@ -1,5 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import {
+  loadApprovedPgclPrecedents,
+  markPgclPrecedentsApplied,
+  type AppliedPgclPrecedent,
+} from '@/lib/agents/pgcl-approved-precedent'
 
 type Severity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 
@@ -255,7 +260,7 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
   const { data: agentRun, error: runError } = await admin
     .schema('agent')
     .from('agent_runs')
-    .select('id,project_id,dataset_id,dataset_version_id,status,input,output')
+    .select('id,project_id,dataset_id,dataset_version_id,agent_definition_id,status,input,output')
     .eq('id', input.agentRunId)
     .maybeSingle()
   if (runError || !agentRun) throw new Error(`Unable to resolve data quality agent run: ${runError?.message ?? 'not found'}`)
@@ -304,6 +309,29 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
   const severity = failedRules.length ? maxSeverity(failedRules.map(({ rule }) => rule.severity)) : 'INFO'
   const probableRootCauses = failedRules.map(({ rule, runs }) => rootCauseFor(rule, runs.length))
 
+  let pgclStatus: 'AVAILABLE' | 'NO_MATCH' | 'UNAVAILABLE' = agentRun.agent_definition_id ? 'NO_MATCH' : 'UNAVAILABLE'
+  let pgclPrecedents: AppliedPgclPrecedent[] = []
+  if (agentRun.agent_definition_id) {
+    try {
+      const precedentQuery = [
+        'data quality quality rule analysis',
+        ...failedRules.map(({ rule }) => `${rule.name} ${rule.dimension} ${rule.metric_key} ${rule.column_name ?? ''}`),
+        noActiveControls ? 'no active controls' : '',
+      ].join(' ')
+      pgclPrecedents = await loadApprovedPgclPrecedents({
+        projectId: String(agentRun.project_id),
+        agentDefinitionId: String(agentRun.agent_definition_id),
+        agentRunId: input.agentRunId,
+        query: precedentQuery,
+        limit: 5,
+      })
+      pgclStatus = pgclPrecedents.length ? 'AVAILABLE' : 'NO_MATCH'
+    } catch (error) {
+      pgclStatus = 'UNAVAILABLE'
+      console.error('[data-quality-investigation] approved PGCL precedent retrieval failed safely:', error)
+    }
+  }
+
   const recommendationMap = new Map<string, Record<string, unknown>>()
   for (const { rule, runs } of failedRules) {
     const recommendation = recommendationFor(rule, runs.map((row) => row.id))
@@ -342,6 +370,21 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
     row_exceptions: exceptions?.length ?? 0,
     quarantined_records: quarantine?.filter((row) => row.status === 'QUARANTINED').length ?? 0,
     profile_run_id: profileRunId,
+    approved_positive_case_learning: {
+      status: pgclStatus,
+      matches: pgclPrecedents.length,
+      authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+      cases: pgclPrecedents.map((learningCase) => ({
+        learning_case_id: learningCase.learningCaseId,
+        candidate_id: learningCase.candidateId,
+        case_key: learningCase.caseKey,
+        problem_type: learningCase.problemType,
+        reusable_lesson: learningCase.reusableLesson,
+        relevance: learningCase.relevance,
+        evidence: learningCase.evidence,
+      })),
+    },
+    applied_positive_case_ids: pgclPrecedents.map((learningCase) => learningCase.candidateId),
     failed_rules: failedRules.map(({ rule, runs }) => ({
       rule_definition_id: rule.id,
       rule_key: rule.rule_key,
@@ -439,8 +482,23 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
       failed_rule_definitions: failedRules.length,
       approval_required: approvalRequired,
       workflow_instance_id: workflow?.instanceId ?? null,
+      approved_positive_case_matches: pgclPrecedents.length,
+      approved_positive_case_authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
     },
   })
+
+  if (pgclPrecedents.length) {
+    try {
+      await markPgclPrecedentsApplied({
+        projectId: String(agentRun.project_id),
+        agentRunId: input.agentRunId,
+        cases: pgclPrecedents,
+        executionSurface: 'DATA_QUALITY_INVESTIGATION',
+      })
+    } catch (error) {
+      console.error('[data-quality-investigation] approved PGCL precedent attribution failed safely:', error)
+    }
+  }
 
   return {
     investigationId: investigation.id,
@@ -454,6 +512,12 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
     recommendations,
     probableRootCauses,
     evidence,
+    approvedPositiveCaseLearning: {
+      status: pgclStatus,
+      matches: pgclPrecedents.length,
+      appliedCandidateIds: pgclPrecedents.map((learningCase) => learningCase.candidateId),
+      authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+    },
     workflow,
   }
 }
