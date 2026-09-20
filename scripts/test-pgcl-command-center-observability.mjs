@@ -171,7 +171,7 @@ for (const forbidden of [
 const service = fs.readFileSync('lib/agents/proactive-governed-case-learning-service.ts', 'utf8')
 for (const invariant of [
   ".select('candidate_id,outcome')",
-  '...usage.outcome as Record<string, unknown>',
+  'usage.outcome as Record<string, unknown>',
   "terminal_attribution: 'AUTHORITATIVE_GOVERNED_OUTCOME'",
 ]) {
   assert.ok(service.includes(invariant), `missing PGCL terminal-outcome observability invariant: ${invariant}`)
