@@ -398,6 +398,29 @@ for (const file of files) {
   const targetPath = path.join(targetDir, targetName)
   fs.copyFileSync(sourcePath, targetPath)
 
+  if (file === '20260920014000_proactive_governed_case_learning.sql') {
+    const originalSql = fs.readFileSync(targetPath, 'utf8')
+    const malformedOpen = '\nas $\n  select\n'
+    const malformedClose = '\n$;\n\nrevoke all on function agent.list_approved_positive_learning_cases'
+    const validOpen = '\nas $\n  select\n'
+    const validClose = '\n$;\n\nrevoke all on function agent.list_approved_positive_learning_cases'
+    if (!originalSql.includes(malformedOpen) || !originalSql.includes(malformedClose)) {
+      throw new Error('Historical PGCL dollar-quote defect no longer matches the audited replay repair contract')
+    }
+    const repairedSql = originalSql
+      .replace(malformedOpen, validOpen)
+      .replace(malformedClose, validClose)
+    fs.writeFileSync(targetPath, repairedSql)
+    manifest.push({
+      source: file,
+      replay: targetName,
+      normalized: replayVersion !== originalVersion,
+      reconstructed: true,
+      reason: 'Disposable replay repairs the immutable historical PGCL SQL-function dollar quote; production uses the forward-only reconciliation migration.',
+    })
+    continue
+  }
+
   if (file === '20260828000000_job_monitor_operations.sql') {
     const originalSql = fs.readFileSync(targetPath, 'utf8')
     const legacyPolicy = `  exists (\n    select 1\n    from agent.agent_runs r\n    join catalog.project_members pm on pm.project_id = r.project_id\n    where r.id = agent_run_logs.agent_run_id\n      and pm.user_id = auth.uid()\n  )`
