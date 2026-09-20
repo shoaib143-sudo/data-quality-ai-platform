@@ -1,6 +1,18 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createGovernanceMemoryProvider } from '@/lib/ai/governance-memory-provider'
 
+type ApprovedPositiveLearningCaseRow = {
+  id: string
+  case_key: string
+  problem_type: string
+  context: Record<string, unknown> | null
+  recommendation: Record<string, unknown> | null
+  evidence: Record<string, unknown> | null
+  effectiveness: number | null
+  confidence: number | null
+  updated_at: string
+}
+
 function terms(value: string) {
   return value.trim().toLowerCase().split(/\s+/).filter((term) => term.length > 2)
 }
@@ -55,7 +67,7 @@ export async function retrieveGovernedLearningContext(input: {
 
   if (positiveCaseError) throw new Error(`Unable to retrieve approved positive learning cases: ${positiveCaseError.message}`)
 
-  const approvedPositiveCases = (positiveCases ?? [])
+  const approvedPositiveCases = ((positiveCases ?? []) as ApprovedPositiveLearningCaseRow[])
     .map((learningCase) => {
       const searchable = [
         learningCase.case_key,
