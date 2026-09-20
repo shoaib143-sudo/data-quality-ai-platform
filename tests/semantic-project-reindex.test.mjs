@@ -49,7 +49,7 @@ test('reindexes the complete governed semantic corpus and aggregates group outco
   ])
   assert.ok(calls.every((call) => call.projectId === 'project-a'))
   assert.ok(calls.every((call) => call.options.concurrency === 8))
-  assert.equal(result.total, 23)
+  assert.equal(result.total, 21)
   assert.equal(result.indexed, 18)
   assert.equal(result.unchanged, 2)
   assert.equal(result.failed, 1)
