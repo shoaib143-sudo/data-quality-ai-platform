@@ -10,14 +10,14 @@ type CheckResult = {
   status: 'READY' | 'UNAVAILABLE'
 }
 
-async function tableCheck(schema: string, table: string, column: string): Promise<CheckResult> {
-  const admin = createAdminClient()
-  const { error } = await admin.schema(schema).from(table).select(column, { head: true, count: 'exact' })
+type AdminClient = ReturnType<typeof createAdminClient>
+
+async function tableCheck(admin: AdminClient, schema: string, table: string, column: string): Promise<CheckResult> {
+  const { error } = await admin.schema(schema).from(table).select(column, { head: true }).limit(1)
   return { status: error ? 'UNAVAILABLE' : 'READY' }
 }
 
-async function operationalCapabilityCheck(): Promise<CheckResult> {
-  const admin = createAdminClient()
+async function operationalCapabilityCheck(admin: AdminClient): Promise<CheckResult> {
   const expected = new Map<string, string[]>([
     ['DATA_OWNER', ['execution.approve']],
     ['DATA_STEWARD', ['execution.approve']],
@@ -66,14 +66,33 @@ export async function GET() {
     })
   }
 
+  const admin = createAdminClient()
+  const [
+    agentVersionLifecycle,
+    providerResilienceProfiles,
+    governedLearningCandidates,
+    governedLearningReleases,
+    positiveLearningCases,
+    operationalCapabilities,
+    recoveryCrashFencing,
+  ] = await Promise.all([
+    tableCheck(admin, 'agent', 'agent_version_lifecycle', 'agent_definition_id'),
+    tableCheck(admin, 'governance', 'ai_provider_resilience_profile_versions', 'id'),
+    tableCheck(admin, 'agent', 'learning_candidates', 'id'),
+    tableCheck(admin, 'agent', 'learning_candidate_releases', 'id'),
+    tableCheck(admin, 'agent', 'positive_learning_cases', 'id'),
+    operationalCapabilityCheck(admin),
+    tableCheck(admin, 'orchestration', 'recovery_actions', 'execution_token'),
+  ])
+
   const checks = {
-    agent_version_lifecycle: await tableCheck('agent', 'agent_version_lifecycle', 'agent_definition_id'),
-    provider_resilience_profiles: await tableCheck('governance', 'ai_provider_resilience_profile_versions', 'id'),
-    governed_learning_candidates: await tableCheck('agent', 'learning_candidates', 'id'),
-    governed_learning_releases: await tableCheck('agent', 'learning_candidate_releases', 'id'),
-    positive_learning_cases: await tableCheck('agent', 'positive_learning_cases', 'id'),
-    agent_policy_operational_capabilities: await operationalCapabilityCheck(),
-    recovery_crash_fencing: await tableCheck('orchestration', 'recovery_actions', 'execution_token'),
+    agent_version_lifecycle: agentVersionLifecycle,
+    provider_resilience_profiles: providerResilienceProfiles,
+    governed_learning_candidates: governedLearningCandidates,
+    governed_learning_releases: governedLearningReleases,
+    positive_learning_cases: positiveLearningCases,
+    agent_policy_operational_capabilities: operationalCapabilities,
+    recovery_crash_fencing: recoveryCrashFencing,
   }
 
   const unavailable = Object.values(checks).some((check) => check.status !== 'READY')
