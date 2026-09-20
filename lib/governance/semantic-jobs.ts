@@ -1,7 +1,8 @@
 import { enqueueDurableJob } from '@/lib/orchestration/queue'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const SEMANTIC_INDEX_JOB_VERSION = 'v4'
+const SEMANTIC_INDEX_JOB_VERSION = 'v5'
+const CATALOG_METADATA_INDEX_VERSION = 'v1'
 
 export function semanticEmbeddingConfigured() {
   const supabaseNative = Boolean(
@@ -37,18 +38,44 @@ export async function enqueueDailySemanticIndexJobs(limit = 100) {
 
   const day = utcDayKey()
   let queued = 0
+  let catalogQueued = 0
   for (const project of projects ?? []) {
+    const projectId = String(project.id)
     await enqueueDurableJob({
-      projectId: String(project.id),
+      projectId,
       jobType: 'SEMANTIC_INDEX',
-      entityId: String(project.id),
+      entityId: projectId,
       idempotencyKey: `semantic-index:${SEMANTIC_INDEX_JOB_VERSION}:${project.id}:${day}`,
-      payload: { projectId: String(project.id), trigger: 'DAILY_SEMANTIC_INDEX', day, version: SEMANTIC_INDEX_JOB_VERSION },
+      payload: { projectId, trigger: 'DAILY_SEMANTIC_INDEX', day, version: SEMANTIC_INDEX_JOB_VERSION },
       priority: 160,
       maxAttempts: 3,
     })
     queued += 1
+
+    await enqueueDurableJob({
+      projectId,
+      jobType: 'SEMANTIC_INDEX',
+      entityId: projectId,
+      idempotencyKey: `semantic-catalog:${CATALOG_METADATA_INDEX_VERSION}:${project.id}:${day}:root`,
+      payload: {
+        projectId,
+        trigger: 'CATALOG_METADATA_INDEX',
+        day,
+        version: CATALOG_METADATA_INDEX_VERSION,
+        cursor: null,
+      },
+      priority: 165,
+      maxAttempts: 3,
+    })
+    queued += 1
+    catalogQueued += 1
   }
 
-  return { configured: true, queued, projects: projects?.length ?? 0, skipped: false }
+  return {
+    configured: true,
+    queued,
+    catalogQueued,
+    projects: projects?.length ?? 0,
+    skipped: false,
+  }
 }
