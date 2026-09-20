@@ -13,7 +13,6 @@ for (const invariant of [
   'Data Governance Admin actorUserId is required',
   'PGCL review reason is required',
   'APPROVE_WITH_EDITS requires a revised reusable lesson',
-  "v_case.review_status not in ('PENDING_REVIEW','DEFERRED')",
   "on conflict (candidate_id, source_agent_run_id) do nothing",
   "'BROADENED_APPLICABILITY' = any(v_significance)",
 ]) {
@@ -30,6 +29,7 @@ for (const invariant of [
   "review_status in ('PENDING_REVIEW','APPROVED','REJECTED','DEFERRED','ONE_OFF','RETIRED')",
   'create or replace function agent.create_positive_learning_case',
   'create or replace function agent.review_positive_learning_case',
+  "v_case.review_status not in ('PENDING_REVIEW','DEFERRED')",
   "p_run_mode not in ('SUPERVISED','HANDSFREE')",
   'source agent run is missing or cross-project',
   "b.role_key = 'DATA_GOVERNANCE_ADMIN'",
