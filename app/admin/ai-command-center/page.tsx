@@ -137,6 +137,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
             <div className="text-right text-xs text-slate-500">
               <p>{pgcl.counts.total} cases · {pgcl.counts.agentsRepresented}/8 agents represented</p>
               <p>{pgcl.counts.promotedActive} active context cases · {pgcl.counts.usageEvents} reuse records</p>
+              <p>{pgcl.counts.productionEligible} production eligible · {pgcl.counts.nonProductionOrUnclassified} blocked/unclassified</p>
             </div>
           </div>
           <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
@@ -149,7 +150,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {pgcl.agentCoverage.map((agent) => <article key={agent.agentKey} className="rounded-xl border p-4">
               <div className="flex items-start justify-between gap-2"><p className="font-bold">{agent.agentKey}</p><span className="text-xs text-slate-400">{agent.candidateCount} cases</span></div>
-              <p className="mt-2 text-xs text-slate-500">{agent.approvedCount} approved · {agent.promotedActiveCount} active context</p>
+              <p className="mt-2 text-xs text-slate-500">{agent.approvedCount} approved · {agent.productionEligibleCount} production eligible · {agent.promotedActiveCount} active context</p>
               <p className="mt-1 text-xs text-slate-500">{agent.usageCount} reuse · {agent.succeededCount} succeeded · {agent.failedCount} failed</p>
             </article>)}
           </div>
@@ -173,7 +174,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
                 {pgcl.candidates.map((candidate) => <tr key={candidate.candidateId} className="border-b align-top last:border-0">
                   <td className="p-3"><p className="font-bold">{candidate.agentKey}</p><p className="text-xs text-slate-400">{candidate.skillKey} · {candidate.runMode}</p></td>
                   <td className="p-3"><p className="max-w-sm font-semibold">{candidate.title}</p><p className="mt-1 max-w-sm text-xs text-slate-500">{candidate.resultSummary}</p><p className="mt-1 text-[11px] text-slate-400">{candidate.significanceSignals.join(', ') || 'No significance signal recorded'}</p></td>
-                  <td className="p-3"><Badge value={candidate.reviewStatus}/><p className="mt-1 text-xs text-slate-400">{candidate.latestDecision ?? 'No Admin decision recorded'}</p></td>
+                  <td className="p-3"><Badge value={candidate.reviewStatus}/><div className="mt-1"><Badge value={candidate.productionEligible ? 'PRODUCTION_ELIGIBLE' : 'NOT_PRODUCTION_ELIGIBLE'}/></div><p className="mt-1 text-xs text-slate-400">{candidate.latestDecision ?? 'No Admin decision recorded'}</p><p className="mt-1 text-[11px] text-slate-400">{candidate.learningProvenanceRecordedAt ? `Provenance ${new Date(candidate.learningProvenanceRecordedAt).toLocaleString()}` : 'Trusted production provenance not recorded'}</p></td>
                   <td className="p-3"><p className="font-bold">{candidate.occurrenceCount}</p><p className="text-xs text-slate-400">same governed case pattern</p></td>
                   <td className="p-3">{candidate.promotedLearningCaseId ? <><Badge value={candidate.promotedLearningCaseStatus ?? 'RECORDED'}/><p className="mt-1 font-mono text-[11px] text-slate-400">{candidate.promotedLearningCaseId}</p></> : <span className="text-slate-400">Not promoted</span>}</td>
                   <td className="p-3"><p>{candidate.usageCount} total · {candidate.appliedCount} applied</p><p className="mt-1 text-xs text-slate-500">{candidate.succeededCount} succeeded · {candidate.failedCount} failed · {candidate.dismissedCount} dismissed</p><p className="mt-1 text-xs text-slate-400">Avg relevance: {candidate.averageRelevance == null ? 'not scored' : candidate.averageRelevance.toFixed(3)}</p></td>

@@ -12,6 +12,8 @@ export type PgclCommandCenterCandidate = {
   useCaseKey: string
   resultSummary: string
   reviewStatus: string
+  productionEligible: boolean
+  learningProvenanceRecordedAt: string | null
   latestDecision: string | null
   reviewedAt: string | null
   significanceSignals: string[]
@@ -34,6 +36,7 @@ export type PgclAgentCoverage = {
   agentKey: string
   candidateCount: number
   approvedCount: number
+  productionEligibleCount: number
   promotedActiveCount: number
   usageCount: number
   succeededCount: number
@@ -48,6 +51,8 @@ export type PgclCommandCenterState = {
     agentsRepresented: number
     pendingReview: number
     approved: number
+    productionEligible: number
+    nonProductionOrUnclassified: number
     rejected: number
     deferred: number
     oneOff: number
@@ -100,7 +105,7 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       .order('updated_at', { ascending: false })
       .limit(100),
     supabase.schema('agent').from('positive_learning_cases')
-      .select('candidate_id,run_mode,use_case_key,result_summary,significance_signals,review_status,reviewed_at,created_at,updated_at')
+      .select('candidate_id,run_mode,use_case_key,result_summary,significance_signals,review_status,production_eligible,learning_provenance_recorded_at,reviewed_at,created_at,updated_at')
       .eq('project_id', projectId)
       .order('updated_at', { ascending: false })
       .limit(100),
@@ -219,6 +224,10 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       useCaseKey: String(positiveCase.use_case_key),
       resultSummary: String(positiveCase.result_summary),
       reviewStatus: String(positiveCase.review_status),
+      productionEligible: positiveCase.production_eligible === true,
+      learningProvenanceRecordedAt: positiveCase.learning_provenance_recorded_at
+        ? String(positiveCase.learning_provenance_recorded_at)
+        : null,
       latestDecision: latestReview ? String(latestReview.decision) : null,
       reviewedAt: positiveCase.reviewed_at ? String(positiveCase.reviewed_at) : null,
       significanceSignals: stringArray(positiveCase.significance_signals),
@@ -246,6 +255,7 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       agentKey,
       candidateCount: agentCandidates.length,
       approvedCount: agentCandidates.filter((candidate) => candidate.reviewStatus === 'APPROVED').length,
+      productionEligibleCount: agentCandidates.filter((candidate) => candidate.productionEligible).length,
       promotedActiveCount: agentCandidates.filter((candidate) => candidate.promotedLearningCaseStatus === 'ACTIVE').length,
       usageCount: agentCandidates.reduce((sum, candidate) => sum + candidate.usageCount, 0),
       succeededCount: agentCandidates.reduce((sum, candidate) => sum + candidate.succeededCount, 0),
@@ -261,6 +271,8 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       agentsRepresented: new Set(candidates.map((candidate) => candidate.agentKey)).size,
       pendingReview: candidates.filter((candidate) => candidate.reviewStatus === 'PENDING_REVIEW').length,
       approved: candidates.filter((candidate) => candidate.reviewStatus === 'APPROVED').length,
+      productionEligible: candidates.filter((candidate) => candidate.productionEligible).length,
+      nonProductionOrUnclassified: candidates.filter((candidate) => !candidate.productionEligible).length,
       rejected: candidates.filter((candidate) => candidate.reviewStatus === 'REJECTED').length,
       deferred: candidates.filter((candidate) => candidate.reviewStatus === 'DEFERRED').length,
       oneOff: candidates.filter((candidate) => candidate.reviewStatus === 'ONE_OFF').length,

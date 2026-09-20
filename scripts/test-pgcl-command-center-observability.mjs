@@ -3,7 +3,6 @@ import fs from 'node:fs'
 
 const state = fs.readFileSync('lib/ai/pgcl-command-center-state.ts', 'utf8')
 for (const invariant of [
-  "createAdminClient",
   "authorizeProject",
   "readPgclCommandCenterState(projectId: string, actorUserId: string)",
   "authorizeProject(actorUserId, projectId, 'admin.manage')",
@@ -17,8 +16,13 @@ for (const invariant of [
   ".eq('source_kind', 'PGCL_POSITIVE_CASE')",
   ".eq('project_id', projectId)",
   'GOVERNED_AGENT_KEYS',
+  'createAdminClient',
   'agentCoverage',
   'agentsRepresented',
+  'production_eligible',
+  'learning_provenance_recorded_at',
+  'productionEligibleCount',
+  'nonProductionOrUnclassified',
   'occurrenceEvents',
   'usageEvents',
   'succeeded',
@@ -55,6 +59,8 @@ const page = fs.readFileSync('app/admin/ai-command-center/page.tsx', 'utf8')
 for (const invariant of [
   'readPgclCommandCenterState',
   'readPgclCommandCenterState(selectedProjectId, user.id)',
+  'authorizeProject',
+  "'admin.manage'",
   'Positive-case learning feedback loop',
   '8 agents represented',
   'Context authority:',
@@ -68,6 +74,10 @@ for (const invariant of [
   'agent.succeededCount',
   'agent.failedCount',
   'candidate.reviewStatus',
+  'candidate.productionEligible',
+  'pgcl.counts.productionEligible',
+  'pgcl.counts.nonProductionOrUnclassified',
+  'agent.productionEligibleCount',
   'candidate.occurrenceCount',
   'candidate.promotedLearningCaseId',
   'candidate.usageCount',
@@ -91,7 +101,6 @@ for (const forbidden of [
   )
 }
 
-
 const learningPage = fs.readFileSync('app/admin/ai-command-center/learning-governance/page.tsx', 'utf8')
 for (const invariant of [
   'Learning Governance',
@@ -107,7 +116,7 @@ for (const invariant of [
   assert.ok(learningPage.includes(invariant), `missing dedicated learning governance invariant: ${invariant}`)
 }
 for (const forbidden of [
-  "method=\"post\"",
+  'method="post"',
   "'use server'",
   'reviewPositiveLearningCase(',
   'createPositiveLearningCase(',
