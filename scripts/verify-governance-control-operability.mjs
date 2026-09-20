@@ -6,7 +6,8 @@ const continuous = fs.readFileSync('supabase/migrations/20260905065604_continuou
 const schedulerMigration = fs.readFileSync('supabase/migrations/20260916103000_durable_worker_scheduler_authority.sql', 'utf8')
 const providerNeutralSchedulerMigration = fs.readFileSync('supabase/migrations/20260919121000_provider_neutral_durable_worker_url.sql', 'utf8')
 const intelligence = fs.readFileSync('lib/governance/ai-governance-intelligence.ts', 'utf8')
-const worker = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
+const workerRoute = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
+const workerService = fs.readFileSync('lib/orchestration/worker-service.ts', 'utf8')
 const posture = fs.readFileSync('app/api/governance/controls/posture/route.ts', 'utf8')
 const vercelText = fs.readFileSync('vercel.json', 'utf8')
 const schedulerAuthority = verifyDurableWorkerSchedulerAuthority({
@@ -27,7 +28,8 @@ const checks = [
   ['all-project reconciler service-role only', /revoke execute on function governance\.refresh_all_governance_control_intelligence\(\) from public, anon, authenticated/.test(continuous) && /grant execute on function governance\.refresh_all_governance_control_intelligence\(\) to service_role/.test(continuous)],
   ['AI governance sweep invokes all-project reconciler', /rpc\('refresh_all_governance_control_intelligence'\)/.test(intelligence)],
   ['AI governance sweep propagates reconciliation failures', /controls\?\.failure_count/.test(intelligence) || /controls\?\.failure_count/.test(intelligence.replaceAll(' ', '')) || /failureCount/.test(intelligence) && /throw new Error\(`Governance control intelligence reconciliation reported/.test(intelligence)],
-  ['scheduled worker invokes AI governance sweep', /refreshAllAIGovernanceIntelligence\(\)/.test(worker)],
+  ['scheduled worker route delegates to governed scheduled cycle', /runScheduledWorkerCycle\(workerId\)/.test(workerRoute)],
+  ['scheduled worker invokes AI governance sweep', /refreshAllAIGovernanceIntelligence\(\)/.test(workerService)],
   ['worker scheduler authority is governed and minutely', schedulerAuthority.authority === 'SUPABASE_PG_CRON' && schedulerAuthority.schedule === '* * * * *' && /cron\.schedule/.test(schedulerMigration) && /'dgp-durable-worker-kick'/.test(schedulerMigration) && /'\* \* \* \* \*'/.test(schedulerMigration) && /'select orchestration\.kick_durable_worker\(\);'/.test(schedulerMigration)],
   ['read model exposes separate control posture', /controlPosture:\s*ControlPosture/.test(intelligence)],
   ['read model distinguishes proposed and active controls', /proposedControls/.test(intelligence) && /activeControls/.test(intelligence) && /review_status/.test(intelligence) && /authority_class/.test(intelligence)],
