@@ -29,6 +29,9 @@ on:
       - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
       - 'scripts/test-proactive-governed-case-learning.mjs'
+      - 'lib/ai/governed-learning-command-center-state.ts'
+      - 'app/admin/ai-command-center/page.tsx'
+      - 'scripts/test-governed-learning-command-center.mjs'
       - 'lib/agents/governed-learning-controlled-release.ts'
       - 'scripts/test-governed-learning-controlled-release.mjs'
       - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
@@ -77,6 +80,9 @@ on:
       - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
       - 'scripts/test-proactive-governed-case-learning.mjs'
+      - 'lib/ai/governed-learning-command-center-state.ts'
+      - 'app/admin/ai-command-center/page.tsx'
+      - 'scripts/test-governed-learning-command-center.mjs'
       - 'lib/agents/governed-learning-controlled-release.ts'
       - 'scripts/test-governed-learning-controlled-release.mjs'
       - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
@@ -132,6 +138,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-governed-learning-release-approval.mjs
       - name: Run governed learning controlled release tests
         run: node --experimental-strip-types scripts/test-governed-learning-controlled-release.mjs
+      - name: Run governed learning Command Center tests
+        run: node --experimental-strip-types scripts/test-governed-learning-command-center.mjs
       - name: Run continuous learning governance tests
         run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
       - name: Run independent continuous learning governance adversarial audit
