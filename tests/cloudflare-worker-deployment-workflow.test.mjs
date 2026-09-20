@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const workflow = fs.readFileSync(new URL('../.github/workflows/release-governance.yml', import.meta.url), 'utf8')
+const tooling = fs.readFileSync(new URL('../scripts/prepare-cloudflare-tooling.mjs', import.meta.url), 'utf8')
 
 test('Cloudflare worker deployment is manual, exact-SHA, and paid-activation gated', () => {
   assert.match(workflow, /cloudflare-worker-deploy/)
@@ -22,7 +23,7 @@ test('worker deployment revalidates portable worker and exact build', () => {
   assert.match(workflow, /pnpm exec tsc --noEmit/)
   assert.match(workflow, /pnpm build/)
   assert.match(workflow, /build-cloudflare-container\.mjs/)
-  assert.match(workflow, /wrangler@4\.131\.1/)
+  assert.match(tooling, /wrangler: '4\.131\.1'/)
 })
 
 
@@ -38,5 +39,5 @@ test('Cloudflare worker release verifies exact identity and remains execution-di
 
 test('Cloudflare worker preflight validates Wrangler without deployment', () => {
   assert.match(workflow, /cloudflare-worker-preflight/)
-  assert.match(workflow, /dlx wrangler deploy --dry-run/)
+  assert.match(workflow, /datanexus-cloudflare-tools\/node_modules\/\.bin\/wrangler.*deploy --dry-run/)
 })
