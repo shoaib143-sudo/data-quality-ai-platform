@@ -147,3 +147,14 @@ test('search route validates current project assets before returning semantic me
   assert.match(route, /CATALOG_ASSET/)
   assert.match(route, /CATALOG_FIELD/)
 })
+
+
+test('global search only surfaces current catalog metadata projections', () => {
+  const route = fs.readFileSync('app/api/search/route.ts', 'utf8')
+  assert.match(route, /'CATALOG_ASSET'/)
+  assert.match(route, /'CATALOG_FIELD'/)
+  assert.match(route, /currentCatalogIds/)
+  assert.match(route, /from\('discovered_assets'\)/)
+  assert.match(route, /\.eq\('is_current', true\)/)
+  assert.match(route, /\/catalog\/physical-assets/)
+})
