@@ -19,6 +19,8 @@ export type PositiveLearningCaseAdminItem = {
   verificationEvidenceRefs: string[]
   significanceSignals: string[]
   reviewStatus: string
+  occurrenceCount: number
+  lastObservedAt: string | null
   createdAt: string
 }
 
@@ -46,15 +48,39 @@ export async function loadPositiveLearningCaseAdminInbox(
   if (projectsError) throw new Error(`Unable to load PGCL project names: ${projectsError.message}`)
 
   const candidateIds = (cases ?? []).map((item) => String(item.candidate_id))
-  const { data: candidates, error: candidateError } = candidateIds.length
-    ? await admin
-        .schema('agent')
-        .from('learning_candidates')
-        .select('id,agent_key,skill_key')
-        .in('id', candidateIds)
-    : { data: [], error: null }
+  const [{ data: candidates, error: candidateError }, { data: occurrences, error: occurrenceError }] = candidateIds.length
+    ? await Promise.all([
+        admin
+          .schema('agent')
+          .from('learning_candidates')
+          .select('id,agent_key,skill_key')
+          .in('id', candidateIds),
+        admin
+          .schema('agent')
+          .from('positive_learning_case_occurrences')
+          .select('candidate_id,observed_at')
+          .in('candidate_id', candidateIds)
+          .order('observed_at', { ascending: false }),
+      ])
+    : [{ data: [], error: null }, { data: [], error: null }]
 
   if (candidateError) throw new Error(`Unable to load PGCL candidate metadata: ${candidateError.message}`)
+  if (occurrenceError) throw new Error(`Unable to load PGCL occurrence history: ${occurrenceError.message}`)
+
+  const occurrenceByCandidate = new Map<string, { count: number; lastObservedAt: string | null }>()
+  for (const occurrence of occurrences ?? []) {
+    const candidateId = String(occurrence.candidate_id)
+    const current = occurrenceByCandidate.get(candidateId) ?? { count: 0, lastObservedAt: null }
+    occurrenceByCandidate.set(candidateId, {
+      count: current.count + 1,
+      lastObservedAt: current.lastObservedAt ?? String(occurrence.observed_at),
+    })
+  }
+
+  const legacyCandidateResult = candidateIds.length
+    ? { data: candidates, error: null }
+    : { data: [], error: null }
+  void legacyCandidateResult
 
   const projectNameById = new Map((projects ?? []).map((project) => [String(project.id), String(project.name)]))
   const candidateById = new Map((candidates ?? []).map((candidate) => [String(candidate.id), candidate]))
@@ -79,6 +105,8 @@ export async function loadPositiveLearningCaseAdminInbox(
       verificationEvidenceRefs: Array.isArray(item.verification_evidence_refs) ? item.verification_evidence_refs.map(String) : [],
       significanceSignals: Array.isArray(item.significance_signals) ? item.significance_signals.map(String) : [],
       reviewStatus: String(item.review_status),
+      occurrenceCount: occurrenceByCandidate.get(String(item.candidate_id))?.count ?? 1,
+      lastObservedAt: occurrenceByCandidate.get(String(item.candidate_id))?.lastObservedAt ?? null,
       createdAt: String(item.created_at),
     }
   })
