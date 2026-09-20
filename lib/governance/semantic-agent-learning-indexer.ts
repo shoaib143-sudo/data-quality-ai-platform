@@ -5,6 +5,7 @@ type LearningCaseRow = {
   id: string
   case_key: string
   source_kind: string
+  source_agent_run_id: string | null
   problem_type: string
   context: Record<string, unknown>
   recommendation: Record<string, unknown>
@@ -15,6 +16,29 @@ type LearningCaseRow = {
   evidence: Record<string, unknown>
   occurred_at: string | null
   updated_at: string
+}
+
+function hasSyntheticBootstrap(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasSyntheticBootstrap)
+  if (!value || typeof value !== 'object') return false
+  return Object.entries(value as Record<string, unknown>).some(([key, nested]) =>
+    (key.toLowerCase() === 'synthetic_bootstrap' && nested === true) || hasSyntheticBootstrap(nested),
+  )
+}
+
+function hasGovernedOutcomeEvidence(evidence: unknown) {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) return false
+  const outcomeId = (evidence as Record<string, unknown>).governed_action_outcome_id
+  return typeof outcomeId === 'string' && outcomeId.trim().length > 0
+}
+
+function indexableLearningCase(row: LearningCaseRow) {
+  return row.source_kind === 'GOVERNED_ACTION_OUTCOME'
+    && Boolean(row.source_agent_run_id?.trim())
+    && row.decision_status === 'VERIFIED'
+    && row.outcome_status === 'VERIFIED'
+    && hasGovernedOutcomeEvidence(row.evidence)
+    && !hasSyntheticBootstrap(row.evidence)
 }
 
 function content(row: LearningCaseRow) {
@@ -35,14 +59,14 @@ export async function reindexProjectAgentLearningCases(projectId: string, option
   const { data, error } = await admin
     .schema('agent')
     .from('agent_learning_cases')
-    .select('id,case_key,source_kind,problem_type,context,recommendation,decision_status,outcome_status,effectiveness,confidence,evidence,occurred_at,updated_at')
+    .select('id,case_key,source_kind,source_agent_run_id,problem_type,context,recommendation,decision_status,outcome_status,effectiveness,confidence,evidence,occurred_at,updated_at')
     .eq('project_id', projectId)
     .eq('status', 'ACTIVE')
     .order('updated_at', { ascending: false })
     .limit(5000)
   if (error) throw new Error(`Unable to collect agent learning cases: ${error.message}`)
 
-  const rows = (data ?? []) as LearningCaseRow[]
+  const rows = ((data ?? []) as LearningCaseRow[]).filter(indexableLearningCase)
   const concurrency = Math.max(1, Math.min(8, options.concurrency ?? 3))
   let cursor = 0
   let indexed = 0
@@ -62,6 +86,7 @@ export async function reindexProjectAgentLearningCases(projectId: string, option
           metadata: {
             case_key: row.case_key,
             source_kind: row.source_kind,
+            source_agent_run_id: row.source_agent_run_id,
             problem_type: row.problem_type,
             decision_status: row.decision_status,
             outcome_status: row.outcome_status,
