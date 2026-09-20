@@ -23,7 +23,7 @@
     "verify:learning-engine": "node scripts/verify-learning-engine.mjs && node --experimental-strip-types scripts/test-learning-engine.mjs",
     "verify:command-center-explorer": "node scripts/verify-command-center-explorer.mjs && node --experimental-strip-types scripts/test-command-center-explorer.mjs",
     "verify:retrieval-evaluation-command-center": "node scripts/verify-retrieval-evaluation-command-center.mjs",
-    "verify:command-center": "node scripts/verify-command-center-state.mjs && node scripts/test-command-center-state.mjs && node scripts/test-audit-command-center-state.mjs && node scripts/verify-resource-control-command-center.mjs && node scripts/test-resource-control-command-center-state.mjs && pnpm run verify:command-center-explorer && pnpm run verify:retrieval-evaluation-command-center",
+    "verify:command-center": "node scripts/verify-command-center-state.mjs && node scripts/test-command-center-state.mjs && node scripts/test-audit-command-center-state.mjs && node scripts/verify-resource-control-command-center.mjs && node scripts/test-resource-control-command-center-state.mjs && pnpm run verify:command-center-explorer && pnpm run verify:retrieval-evaluation-command-center && pnpm run verify:governed-learning-command-center",
     "verify:execution-controller": "node scripts/verify-execution-controller.mjs && node --experimental-strip-types scripts/test-execution-controller.mjs && node scripts/verify-resource-budget-admission.mjs && node scripts/verify-adr006-runtime-cost-enforcement.mjs",
     "verify:telemetry-provider": "node scripts/verify-telemetry-provider.mjs && node --experimental-strip-types scripts/test-telemetry-provider.mjs",
     "verify:retrieval-benchmark-api": "node scripts/verify-retrieval-benchmark-api.mjs",
@@ -74,7 +74,8 @@
     "verify:governed-learning-release-approval": "node --experimental-strip-types scripts/test-governed-learning-release-approval.mjs",
     "verify:semantic-reembedding": "node --experimental-strip-types scripts/test-semantic-reembedding.mjs",
     "verify:governed-learning-controlled-release": "node --experimental-strip-types scripts/test-governed-learning-controlled-release.mjs",
-    "verify:proactive-governed-case-learning": "node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs && node scripts/test-proactive-governed-case-learning-ui.mjs && node scripts/test-proactive-governed-case-learning-retrieval.mjs && node scripts/test-proactive-governed-case-learning-execution.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-supervisor.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs"
+    "verify:proactive-governed-case-learning": "node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs && node scripts/test-proactive-governed-case-learning-ui.mjs && node scripts/test-proactive-governed-case-learning-retrieval.mjs && node scripts/test-proactive-governed-case-learning-execution.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-supervisor.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs",
+    "verify:governed-learning-command-center": "node --experimental-strip-types scripts/test-governed-learning-command-center.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
