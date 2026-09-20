@@ -95,7 +95,19 @@ export async function collectProjectKnowledgeSemanticCandidates(projectId: strin
       return {
         objectType: 'KNOWLEDGE_REQUIREMENT', objectKey: requirement.requirement_key, objectId: requirement.id,
         content: compact([requirement.title, requirement.requirement_text, `Obligation type: ${requirement.obligation_type}`, `Priority: ${requirement.priority}`, document ? `Source document: ${document.title}` : null]),
-        metadata: { document_id: requirement.document_id, document_key: document?.document_key ?? null, document_title: document?.title ?? null, document_review_status: document?.review_status ?? null, obligation_type: requirement.obligation_type, priority: requirement.priority, ...(requirement.metadata ?? {}) },
+        metadata: {
+          document_id: requirement.document_id,
+          document_key: document?.document_key ?? null,
+          document_title: document?.title ?? null,
+          document_type: document?.document_type ?? null,
+          document_jurisdiction: document?.jurisdiction ?? null,
+          document_source_kind: document?.source_kind ?? null,
+          document_source_url: document?.source_url ?? null,
+          document_review_status: document?.review_status ?? null,
+          obligation_type: requirement.obligation_type,
+          priority: requirement.priority,
+          ...(requirement.metadata ?? {}),
+        },
       }
     }),
     ...(cdes.data ?? []).map((cde) => ({
