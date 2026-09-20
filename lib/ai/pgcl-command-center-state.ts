@@ -26,6 +26,13 @@ export type PgclCommandCenterCandidate = {
   succeededCount: number
   failedCount: number
   dismissedCount: number
+  profilingApplicationCount: number
+  dataQualityApplicationCount: number
+  supervisorApplicationCount: number
+  directSpecialistApplicationCount: number
+  authoritativeOutcomeCount: number
+  unknownApplicationSurfaceCount: number
+  executionSurfaces: string[]
   averageRelevance: number | null
   lastUsedAt: string | null
   createdAt: string
@@ -39,8 +46,14 @@ export type PgclAgentCoverage = {
   productionEligibleCount: number
   promotedActiveCount: number
   usageCount: number
+  appliedCount: number
   succeededCount: number
   failedCount: number
+  profilingApplicationCount: number
+  dataQualityApplicationCount: number
+  supervisorApplicationCount: number
+  directSpecialistApplicationCount: number
+  authoritativeOutcomeCount: number
 }
 
 export type PgclCommandCenterState = {
@@ -64,6 +77,12 @@ export type PgclCommandCenterState = {
     succeeded: number
     failed: number
     dismissed: number
+    profilingApplications: number
+    dataQualityApplications: number
+    supervisorApplications: number
+    directSpecialistApplications: number
+    authoritativeOutcomes: number
+    unknownApplicationSurfaces: number
   }
   authority: {
     contextOnly: true
@@ -120,7 +139,7 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       .order('observed_at', { ascending: false })
       .limit(1000),
     supabase.schema('agent').from('positive_learning_case_usages')
-      .select('candidate_id,learning_case_id,relevance,usage_status,first_retrieved_at,updated_at')
+      .select('candidate_id,learning_case_id,relevance,usage_status,outcome,first_retrieved_at,updated_at')
       .eq('project_id', projectId)
       .order('updated_at', { ascending: false })
       .limit(1000),
@@ -162,6 +181,13 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
     succeededCount: number
     failedCount: number
     dismissedCount: number
+    profilingApplicationCount: number
+    dataQualityApplicationCount: number
+    supervisorApplicationCount: number
+    directSpecialistApplicationCount: number
+    authoritativeOutcomeCount: number
+    unknownApplicationSurfaceCount: number
+    executionSurfaces: Set<string>
     relevanceTotal: number
     relevanceCount: number
     lastUsedAt: string | null
@@ -176,6 +202,13 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       succeededCount: 0,
       failedCount: 0,
       dismissedCount: 0,
+      profilingApplicationCount: 0,
+      dataQualityApplicationCount: 0,
+      supervisorApplicationCount: 0,
+      directSpecialistApplicationCount: 0,
+      authoritativeOutcomeCount: 0,
+      unknownApplicationSurfaceCount: 0,
+      executionSurfaces: new Set<string>(),
       relevanceTotal: 0,
       relevanceCount: 0,
       lastUsedAt: null,
@@ -187,6 +220,29 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
     if (status === 'SUCCEEDED') current.succeededCount += 1
     if (status === 'FAILED') current.failedCount += 1
     if (status === 'DISMISSED') current.dismissedCount += 1
+
+    const outcome = record(row.outcome)
+    const explicitSurface = String(outcome.execution_surface ?? '').trim()
+    const inferredSurface = explicitSurface
+      || (outcome.attribution === 'EXPLICIT_AGENT_OUTPUT' ? 'DIRECT_SPECIALIST' : '')
+    if (inferredSurface) current.executionSurfaces.add(inferredSurface)
+
+    const wasApplied = ['APPLIED', 'SUCCEEDED', 'FAILED', 'DISMISSED'].includes(status)
+    if (wasApplied) {
+      if (inferredSurface === 'PROFILING_INVESTIGATION') current.profilingApplicationCount += 1
+      else if (inferredSurface === 'DATA_QUALITY_INVESTIGATION') current.dataQualityApplicationCount += 1
+      else if (inferredSurface === 'SUPERVISOR_SPECIALIST') current.supervisorApplicationCount += 1
+      else if (inferredSurface === 'DIRECT_SPECIALIST') current.directSpecialistApplicationCount += 1
+      else current.unknownApplicationSurfaceCount += 1
+    }
+
+    if (
+      outcome.terminal_attribution === 'AUTHORITATIVE_GOVERNED_OUTCOME'
+      || outcome.attribution === 'AUTHORITATIVE_GOVERNED_OUTCOME'
+    ) {
+      current.authoritativeOutcomeCount += 1
+    }
+
     if (row.relevance != null && Number.isFinite(Number(row.relevance))) {
       current.relevanceTotal += Number(row.relevance)
       current.relevanceCount += 1
@@ -240,6 +296,13 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       succeededCount: usage?.succeededCount ?? 0,
       failedCount: usage?.failedCount ?? 0,
       dismissedCount: usage?.dismissedCount ?? 0,
+      profilingApplicationCount: usage?.profilingApplicationCount ?? 0,
+      dataQualityApplicationCount: usage?.dataQualityApplicationCount ?? 0,
+      supervisorApplicationCount: usage?.supervisorApplicationCount ?? 0,
+      directSpecialistApplicationCount: usage?.directSpecialistApplicationCount ?? 0,
+      authoritativeOutcomeCount: usage?.authoritativeOutcomeCount ?? 0,
+      unknownApplicationSurfaceCount: usage?.unknownApplicationSurfaceCount ?? 0,
+      executionSurfaces: usage ? [...usage.executionSurfaces].sort() : [],
       averageRelevance: usage?.relevanceCount
         ? usage.relevanceTotal / usage.relevanceCount
         : null,
@@ -258,8 +321,14 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       productionEligibleCount: agentCandidates.filter((candidate) => candidate.productionEligible).length,
       promotedActiveCount: agentCandidates.filter((candidate) => candidate.promotedLearningCaseStatus === 'ACTIVE').length,
       usageCount: agentCandidates.reduce((sum, candidate) => sum + candidate.usageCount, 0),
+      appliedCount: agentCandidates.reduce((sum, candidate) => sum + candidate.appliedCount, 0),
       succeededCount: agentCandidates.reduce((sum, candidate) => sum + candidate.succeededCount, 0),
       failedCount: agentCandidates.reduce((sum, candidate) => sum + candidate.failedCount, 0),
+      profilingApplicationCount: agentCandidates.reduce((sum, candidate) => sum + candidate.profilingApplicationCount, 0),
+      dataQualityApplicationCount: agentCandidates.reduce((sum, candidate) => sum + candidate.dataQualityApplicationCount, 0),
+      supervisorApplicationCount: agentCandidates.reduce((sum, candidate) => sum + candidate.supervisorApplicationCount, 0),
+      directSpecialistApplicationCount: agentCandidates.reduce((sum, candidate) => sum + candidate.directSpecialistApplicationCount, 0),
+      authoritativeOutcomeCount: agentCandidates.reduce((sum, candidate) => sum + candidate.authoritativeOutcomeCount, 0),
     }
   })
 
@@ -284,6 +353,12 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       succeeded: candidates.reduce((sum, candidate) => sum + candidate.succeededCount, 0),
       failed: candidates.reduce((sum, candidate) => sum + candidate.failedCount, 0),
       dismissed: candidates.reduce((sum, candidate) => sum + candidate.dismissedCount, 0),
+      profilingApplications: candidates.reduce((sum, candidate) => sum + candidate.profilingApplicationCount, 0),
+      dataQualityApplications: candidates.reduce((sum, candidate) => sum + candidate.dataQualityApplicationCount, 0),
+      supervisorApplications: candidates.reduce((sum, candidate) => sum + candidate.supervisorApplicationCount, 0),
+      directSpecialistApplications: candidates.reduce((sum, candidate) => sum + candidate.directSpecialistApplicationCount, 0),
+      authoritativeOutcomes: candidates.reduce((sum, candidate) => sum + candidate.authoritativeOutcomeCount, 0),
+      unknownApplicationSurfaces: candidates.reduce((sum, candidate) => sum + candidate.unknownApplicationSurfaceCount, 0),
     },
     authority: {
       contextOnly: true,
