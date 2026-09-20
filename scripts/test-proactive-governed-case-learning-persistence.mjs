@@ -12,6 +12,7 @@ for (const invariant of [
   "rpc('review_positive_learning_case'",
   'Data Governance Admin actorUserId is required',
   'PGCL review reason is required',
+  'APPROVE_WITH_EDITS requires a revised reusable lesson',
 ]) {
   assert.ok(service.includes(invariant), `missing PGCL service invariant: ${invariant}`)
 }
@@ -21,6 +22,7 @@ for (const invariant of [
   "'POSITIVE_CASE_EXPERIENCE'",
   'create table if not exists agent.positive_learning_cases',
   'create table if not exists agent.positive_learning_case_reviews',
+  'positive_learning_cases_candidate_project_uq',
   "review_status in ('PENDING_REVIEW','APPROVED','REJECTED','DEFERRED','ONE_OFF','RETIRED')",
   'create or replace function agent.create_positive_learning_case',
   'create or replace function agent.review_positive_learning_case',
