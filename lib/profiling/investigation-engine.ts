@@ -1,6 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enrichInvestigationWithModel } from '@/lib/ai/investigation-model'
 import { loadRecommendationEffectiveness } from '@/lib/profiling/recommendation-learning'
+import {
+  loadApprovedPgclPrecedents,
+  markPgclPrecedentsApplied,
+  type AppliedPgclPrecedent,
+} from '@/lib/agents/pgcl-approved-precedent'
 
 type Finding = {
   id: string
@@ -40,7 +45,7 @@ export async function investigateProfilingRun(
     supabase
       .schema('profiling')
       .from('profile_runs')
-      .select('id, dataset_version_id, row_count, column_count, summary, status')
+      .select('id, dataset_version_id, agent_run_id, row_count, column_count, summary, status')
       .eq('id', profilingRunId)
       .single(),
     supabase
@@ -173,6 +178,42 @@ export async function investigateProfilingRun(
     })
   }
 
+  let pgclStatus: 'AVAILABLE' | 'NO_MATCH' | 'UNAVAILABLE' = projectId && profileRun.agent_run_id ? 'NO_MATCH' : 'UNAVAILABLE'
+  let pgclPrecedents: AppliedPgclPrecedent[] = []
+
+  if (projectId && profileRun.agent_run_id) {
+    try {
+      const { data: sourceRun, error: sourceRunError } = await supabase
+        .schema('agent')
+        .from('agent_runs')
+        .select('id,agent_definition_id')
+        .eq('id', profileRun.agent_run_id)
+        .eq('project_id', projectId)
+        .maybeSingle()
+      if (sourceRunError) throw new Error(sourceRunError.message)
+
+      if (sourceRun?.agent_definition_id) {
+        const precedentQuery = [
+          'profiling profile evidence analysis',
+          ...typedFindings.map((finding) => `${finding.finding_type} ${finding.title}`),
+          ...recommendations.map((recommendation) => String(recommendation.action ?? '')),
+        ].join(' ')
+
+        pgclPrecedents = await loadApprovedPgclPrecedents({
+          projectId,
+          agentDefinitionId: String(sourceRun.agent_definition_id),
+          agentRunId: String(profileRun.agent_run_id),
+          query: precedentQuery,
+          limit: 5,
+        })
+        pgclStatus = pgclPrecedents.length ? 'AVAILABLE' : 'NO_MATCH'
+      }
+    } catch (error) {
+      pgclStatus = 'UNAVAILABLE'
+      console.error('[profiling-investigation] approved PGCL precedent retrieval failed safely:', error)
+    }
+  }
+
   let learningStatus: 'AVAILABLE' | 'NO_HISTORY' | 'UNAVAILABLE' = projectId ? 'NO_HISTORY' : 'UNAVAILABLE'
   let historicalActions = 0
   let recommendationsWithLearning = recommendations
@@ -245,6 +286,22 @@ export async function investigateProfilingRun(
       historical_actions_found: historicalActions,
       policy: 'Historical effectiveness is advisory evidence only and never bypasses approval requirements.',
     },
+    approved_positive_case_learning: {
+      status: pgclStatus,
+      project_id: projectId,
+      matches: pgclPrecedents.length,
+      authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+      cases: pgclPrecedents.map((learningCase) => ({
+        learning_case_id: learningCase.learningCaseId,
+        candidate_id: learningCase.candidateId,
+        case_key: learningCase.caseKey,
+        problem_type: learningCase.problemType,
+        reusable_lesson: learningCase.reusableLesson,
+        relevance: learningCase.relevance,
+        evidence: learningCase.evidence,
+      })),
+    },
+    appliedPositiveCaseIds: pgclPrecedents.map((learningCase) => learningCase.candidateId),
     approval_required: recommendations.some((recommendation) => recommendation.approval_required === true),
     confidence: investigationConfidence,
     evidence,
@@ -252,6 +309,7 @@ export async function investigateProfilingRun(
       'Root cause attribution is evidence based and does not claim upstream causality without lineage or operational evidence.',
       'Business impact is qualitative until business criticality, lineage, usage, and financial or operational impact data are available.',
       'Historical recommendation effectiveness is observational evidence and does not prove causality or automatically authorize a future action.',
+      'Data Governance Admin-approved positive cases are historical precedent only and cannot alter metric truth, readiness, authorization, or approval requirements.',
       'No production data, schema, governance policy, or pipeline change is executed by this investigation step.',
     ],
   }
@@ -304,6 +362,19 @@ export async function investigateProfilingRun(
   if (persistError) throw new Error(`Unable to persist profiling investigation: ${persistError.message}`)
   if (!persistedRun) {
     throw new Error(`Profiling run ${profilingRunId} was cancelled or changed before investigation persistence completed.`)
+  }
+
+  if (projectId && profileRun.agent_run_id && pgclPrecedents.length) {
+    try {
+      await markPgclPrecedentsApplied({
+        projectId,
+        agentRunId: String(profileRun.agent_run_id),
+        cases: pgclPrecedents,
+        executionSurface: 'PROFILING_INVESTIGATION',
+      })
+    } catch (error) {
+      console.error('[profiling-investigation] approved PGCL precedent attribution failed safely:', error)
+    }
   }
 
   return investigation

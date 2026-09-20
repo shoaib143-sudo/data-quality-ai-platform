@@ -16,6 +16,11 @@ import { evaluateNativeSupervisorTrajectory } from '@/lib/agents/runtime/native-
 import { proposePgclCasesFromVerifiedSupervisorRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
 import type { PgclRunMode } from '@/lib/agents/proactive-governed-case-learning'
 import {
+  loadApprovedPgclPrecedents,
+  markPgclPrecedentsApplied,
+  type AppliedPgclPrecedent,
+} from '@/lib/agents/pgcl-approved-precedent'
+import {
   createGovernedHandoffEnvelope,
   evaluateExitGate,
   validateGovernedHandoff,
@@ -340,16 +345,62 @@ export async function runNativeSpecialistSupervisor(input: {
           refs: handoffRefs,
         })
 
+        let pgclPrecedents: AppliedPgclPrecedent[] = []
+        try {
+          pgclPrecedents = await loadApprovedPgclPrecedents({
+            projectId,
+            agentDefinitionId: worker.agentDefinitionId,
+            agentRunId: binding.agentRunId,
+            query: [
+              worker.agentKey,
+              worker.question ?? '',
+              'governance specialist verified precedent',
+            ].join(' '),
+            limit: 5,
+          })
+        } catch (learningError) {
+          console.error(
+            '[native-supervisor] approved PGCL precedent retrieval failed safely:',
+            learningError instanceof Error ? learningError.message : learningError,
+          )
+        }
+
         const executed = await executeGovernanceSpecialistAgent({
           projectId,
           agentDefinitionId: worker.agentDefinitionId,
           actorUserId,
           question: worker.question,
+          positiveLearningCases: pgclPrecedents.map((learningCase) => ({
+            id: learningCase.learningCaseId,
+            candidateId: learningCase.candidateId,
+            caseKey: learningCase.caseKey,
+            problemType: learningCase.problemType,
+            reusableLesson: learningCase.reusableLesson,
+            relevance: learningCase.relevance,
+            evidence: learningCase.evidence,
+          })),
           handoffRefs,
           existingAgentRunId: binding.agentRunId,
           nativeAttempt: attempt,
         })
         if (executed.runId !== binding.agentRunId) throw new Error(`${step.id}: specialist executor returned an unexpected child run`)
+
+        if (pgclPrecedents.length) {
+          try {
+            await markPgclPrecedentsApplied({
+              projectId,
+              agentRunId: binding.agentRunId,
+              cases: pgclPrecedents,
+              executionSurface: 'SUPERVISOR_SPECIALIST',
+            })
+          } catch (learningError) {
+            console.error(
+              '[native-supervisor] approved PGCL precedent attribution failed safely:',
+              learningError instanceof Error ? learningError.message : learningError,
+            )
+          }
+        }
+
         return { ...(executed.output as Record<string, unknown>), governedHandoffEnvelopeIds: envelopeIds }
       },
       validateOutcome: async ({ step, output }) => {

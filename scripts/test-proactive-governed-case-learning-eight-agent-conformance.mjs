@@ -105,13 +105,52 @@ for (const invariant of [
   'proposePgclCasesFromVerifiedSupervisorRun',
   'childRunIds',
   'supervisorEvaluationId',
+  'loadApprovedPgclPrecedents',
+  'positiveLearningCases: pgclPrecedents.map',
+  'markPgclPrecedentsApplied',
+  "executionSurface: 'SUPERVISOR_SPECIALIST'",
 ]) {
   assert.ok(supervisor.includes(invariant), `missing supervisor PGCL integration: ${invariant}`)
 }
 
 const profilingJob = fs.readFileSync('lib/agents/run-profiling-job.ts', 'utf8')
 assert.ok(profilingJob.includes('proposePgclCaseFromVerifiedAgentRun'))
+const profilingInvestigation = fs.readFileSync('lib/profiling/investigation-engine.ts', 'utf8')
+for (const invariant of [
+  'loadApprovedPgclPrecedents',
+  'approved_positive_case_learning',
+  'appliedPositiveCaseIds',
+  'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+  'markPgclPrecedentsApplied',
+  "executionSurface: 'PROFILING_INVESTIGATION'",
+]) {
+  assert.ok(profilingInvestigation.includes(invariant), `missing Profiling approved-case reuse invariant: ${invariant}`)
+}
+
 const dqWorker = fs.readFileSync('lib/orchestration/worker.ts', 'utf8')
 assert.ok(dqWorker.includes('proposePgclCaseFromVerifiedAgentRun'))
+const dqInvestigation = fs.readFileSync('lib/data-quality/autonomous-operations.ts', 'utf8')
+for (const invariant of [
+  'loadApprovedPgclPrecedents',
+  'approved_positive_case_learning',
+  'applied_positive_case_ids',
+  'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+  'markPgclPrecedentsApplied',
+  "executionSurface: 'DATA_QUALITY_INVESTIGATION'",
+]) {
+  assert.ok(dqInvestigation.includes(invariant), `missing Data Quality approved-case reuse invariant: ${invariant}`)
+}
 
-console.log('All eight canonical agents share the same governed positive-case learning contract, retain current-policy authority boundaries, and have certified execution-surface integration.')
+const sharedAdapter = fs.readFileSync('lib/agents/pgcl-approved-precedent.ts', 'utf8')
+for (const invariant of [
+  'retrieveGovernedLearningContext',
+  'recordPositiveLearningCaseRetrievals',
+  "status: 'APPLIED'",
+  "attribution: 'CONTEXT_ONLY_EXECUTION'",
+  'current_authorization_still_required: true',
+  'current_policy_still_required: true',
+]) {
+  assert.ok(sharedAdapter.includes(invariant), `missing shared PGCL precedent invariant: ${invariant}`)
+}
+
+console.log('All eight canonical agents share the same governed positive-case learning contract, retain current-policy authority boundaries, and can both propose and consume approved precedent across direct, Profiling, Data Quality, and Handsfree specialist execution surfaces.')

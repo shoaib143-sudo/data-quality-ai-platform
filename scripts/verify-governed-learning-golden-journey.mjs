@@ -15,6 +15,10 @@ const memoryCode = fs.readFileSync('lib/agents/agent-memory-learning.ts', 'utf8'
 const pgclCode = fs.readFileSync('lib/agents/proactive-governed-case-learning.ts', 'utf8')
 const pgclRuntimeCode = fs.readFileSync('lib/agents/proactive-governed-case-learning-runtime.ts', 'utf8')
 const pgclServiceCode = fs.readFileSync('lib/agents/proactive-governed-case-learning-service.ts', 'utf8')
+const pgclPrecedentCode = fs.readFileSync('lib/agents/pgcl-approved-precedent.ts', 'utf8')
+const profilingInvestigationCode = fs.readFileSync('lib/profiling/investigation-engine.ts', 'utf8')
+const dataQualityInvestigationCode = fs.readFileSync('lib/data-quality/autonomous-operations.ts', 'utf8')
+const nativeSupervisorCode = fs.readFileSync('lib/agents/runtime/native-supervisor-service.ts', 'utf8')
 const pgclCommandCenterCode = fs.readFileSync('lib/ai/pgcl-command-center-state.ts', 'utf8')
 
 const phases = [
@@ -170,6 +174,40 @@ for (const invariant of [
 }
 
 for (const invariant of [
+  'retrieveGovernedLearningContext',
+  'recordPositiveLearningCaseRetrievals',
+  'markPgclPrecedentsApplied',
+  "attribution: 'CONTEXT_ONLY_EXECUTION'",
+  'current_authorization_still_required: true',
+  'current_policy_still_required: true',
+]) {
+  assert.ok(pgclPrecedentCode.includes(invariant), `PGCL approved-precedent adapter missing: ${invariant}`)
+}
+
+for (const [label, source, surface] of [
+  ['profiling', profilingInvestigationCode, 'PROFILING_INVESTIGATION'],
+  ['data quality', dataQualityInvestigationCode, 'DATA_QUALITY_INVESTIGATION'],
+]) {
+  for (const invariant of [
+    'loadApprovedPgclPrecedents',
+    'markPgclPrecedentsApplied',
+    'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+    surface,
+  ]) {
+    assert.ok(source.includes(invariant), `${label} approved-case consumption missing: ${invariant}`)
+  }
+}
+
+for (const invariant of [
+  'loadApprovedPgclPrecedents',
+  'positiveLearningCases: pgclPrecedents.map',
+  'markPgclPrecedentsApplied',
+  'SUPERVISOR_SPECIALIST',
+]) {
+  assert.ok(nativeSupervisorCode.includes(invariant), `native supervisor approved-case consumption missing: ${invariant}`)
+}
+
+for (const invariant of [
   "from('positive_learning_cases')",
   "from('positive_learning_case_reviews')",
   "from('positive_learning_case_occurrences')",
@@ -201,4 +239,4 @@ assert.equal(
   'human approval must remain separate from activation',
 )
 
-console.log('Phase 11 golden journey certifies both governed skill improvement and PGCL positive-case learning, including all-eight-agent proposal coverage, Admin review, reusable context, outcome feedback, observability, fail-closed release gates, rollback, and future-use authority boundaries.')
+console.log('Phase 11 golden journey certifies governed skill improvement and PGCL positive-case learning across all eight agents, including proposal generation, approved-precedent consumption, usage attribution, Admin review, outcome feedback, observability, fail-closed release gates, rollback, and future-use authority boundaries.')
