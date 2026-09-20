@@ -3,6 +3,7 @@ name: Governed Analytics Foundation
 on:
   pull_request:
     paths:
+      - 'lib/analytics/governance-history-contract.ts'
       - 'lib/analytics/governance-outcome-history.ts'
       - 'lib/analytics/audit-event-history.ts'
       - 'app/api/analytics/governance-outcome-trends/route.ts'
@@ -23,6 +24,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/analytics/governance-history-contract.ts'
       - 'lib/analytics/governance-outcome-history.ts'
       - 'lib/analytics/audit-event-history.ts'
       - 'app/api/analytics/governance-outcome-trends/route.ts'
