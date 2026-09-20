@@ -1,6 +1,14 @@
 import { Container } from '@cloudflare/containers'
 import { env } from 'cloudflare:workers'
 
+function definedEnvVars(values: Record<string, string | undefined>): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [name, value] of Object.entries(values)) {
+    if (typeof value === 'string' && value.length > 0) result[name] = value
+  }
+  return result
+}
+
 const READ_ONLY_CANARY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 const BLOCKED_CANARY_PATHS = new Set([
@@ -14,7 +22,8 @@ const BLOCKED_CANARY_PATHS = new Set([
 export class DataNexusCanary extends Container {
   defaultPort = 3000
   sleepAfter = '10m'
-  envVars = {
+  pingEndpoint = 'container/api/health/live'
+  envVars = definedEnvVars({
     DATANEXUS_ENV: 'canary',
     DATANEXUS_PLATFORM: 'cloudflare',
     DATANEXUS_COMMIT_SHA: env.DATANEXUS_COMMIT_SHA,
@@ -22,7 +31,7 @@ export class DataNexusCanary extends Container {
     DATANEXUS_BUILD_TIMESTAMP: env.DATANEXUS_BUILD_TIMESTAMP,
     NEXT_PUBLIC_SUPABASE_URL: env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  }
+  })
 }
 
 export default {

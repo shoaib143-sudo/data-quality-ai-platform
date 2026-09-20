@@ -71,6 +71,110 @@ jobs:
           grep -q 'V6 Operational Certification / certify' docs/release-governance.md
 
 
+  certify-cloudflare-container:
+    name: cloudflare-container-certification
+    if: github.event_name == 'pull_request'
+    needs: release-governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Cloudflare runtime contracts
+        run: |
+          set -euo pipefail
+          pnpm run verify:provider-neutral-runtime
+          pnpm run verify:container-runtime
+          pnpm run verify:worker-runtime
+          pnpm exec tsc --noEmit
+          pnpm build
+
+      - name: Build governed container image
+        run: |
+          set -euo pipefail
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --tag "datanexus-cloudflare-ci:${GITHUB_SHA}"
+
+      - name: Smoke-test standalone container
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          docker run --detach \
+            --name datanexus-cloudflare-ci \
+            --publish 127.0.0.1:3000:3000 \
+            --env DATANEXUS_ENV=canary \
+            --env DATANEXUS_PLATFORM=cloudflare \
+            --env DATANEXUS_COMMIT_SHA="$GITHUB_SHA" \
+            --env DATANEXUS_RELEASE_ID="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --env DATANEXUS_BUILD_TIMESTAMP="$BUILD_TIMESTAMP" \
+            "datanexus-cloudflare-ci:${GITHUB_SHA}"
+          trap 'docker logs datanexus-cloudflare-ci >/tmp/datanexus-cloudflare-ci.log 2>&1 || true; docker rm --force datanexus-cloudflare-ci >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if ! docker inspect --format '{{.State.Running}}' datanexus-cloudflare-ci 2>/dev/null | grep -qx true; then
+              echo "::error::DataNexus container exited before readiness"
+              docker logs datanexus-cloudflare-ci || true
+              exit 1
+            fi
+
+            if curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
+                http://127.0.0.1:3000/api/health/live >/tmp/cloudflare-live.json 2>/tmp/cloudflare-live.err \
+              && curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
+                http://127.0.0.1:3000/api/build-info >/tmp/cloudflare-build.json 2>/tmp/cloudflare-build.err \
+              && node - "$GITHUB_SHA" /tmp/cloudflare-build.json <<'NODE'
+          const fs = require('node:fs')
+          const expected = process.argv[2]
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
+          if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
+          NODE
+            then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::DataNexus container did not become healthy with valid build identity"
+            cat /tmp/cloudflare-live.err 2>/dev/null || true
+            cat /tmp/cloudflare-build.err 2>/dev/null || true
+            docker logs datanexus-cloudflare-ci || true
+            exit 1
+          fi
+
+
+      - name: Validate Wrangler canary and worker bundles without deployment
+        run: |
+          set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --outdir /tmp/datanexus-canary-dry-run
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
+            --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --outdir /tmp/datanexus-worker-dry-run
+
+
 
   preflight-cloudflare-canary:
     name: cloudflare-canary-preflight
@@ -122,7 +226,18 @@ jobs:
           pnpm run verify:container-runtime
           pnpm exec tsc --noEmit
           pnpm build
-          docker build --tag "datanexus-canary-preflight:${{ inputs.commit_sha }}" .
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --tag "datanexus-canary-preflight:${{ inputs.commit_sha }}"
+
+
+      - name: Validate canary Wrangler bundle without deployment
+        run: |
+          set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --outdir /tmp/datanexus-canary-preflight
 
   preflight-cloudflare-worker:
     name: cloudflare-worker-preflight
@@ -174,7 +289,18 @@ jobs:
           pnpm run verify:worker-runtime
           pnpm exec tsc --noEmit
           pnpm build
-          docker build --tag "datanexus-worker-preflight:${{ inputs.commit_sha }}" .
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --tag "datanexus-worker-preflight:${{ inputs.commit_sha }}"
+
+
+      - name: Validate worker Wrangler bundle without deployment
+        run: |
+          set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
+            --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --outdir /tmp/datanexus-worker-preflight
 
   deploy-cloudflare-canary:
     name: cloudflare-canary-deploy
@@ -234,10 +360,11 @@ jobs:
       - name: Build standalone container locally
         env:
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
-        run: docker build --tag "datanexus-canary:$EXACT_SHA" .
+        run: |
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/runtime/wrangler.jsonc \
+            --tag "datanexus-canary:$EXACT_SHA"
 
-      - name: Install pinned Cloudflare deployment tooling
-        run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.131.1 @cloudflare/containers@0.3.7
 
       - name: Deploy exact-SHA Cloudflare canary
         env:
@@ -249,6 +376,7 @@ jobs:
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
         run: |
           set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$NEXT_PUBLIC_SUPABASE_URL"
@@ -256,7 +384,7 @@ jobs:
           test -n "$DATANEXUS_CLOUDFLARE_CANARY_URL"
           BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           RELEASE_ID="github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          npx wrangler@4.131.1 deploy --config infra/cloudflare/runtime/wrangler.jsonc \
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --config infra/cloudflare/runtime/wrangler.jsonc \
             --var "DATANEXUS_ENV:canary" \
             --var "DATANEXUS_PLATFORM:cloudflare" \
             --var "DATANEXUS_COMMIT_SHA:$EXACT_SHA" \
@@ -276,10 +404,10 @@ jobs:
           test "$live_code" = "200"
           build_code="$(curl --silent --show-error --output /tmp/canary-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
           test "$build_code" = "200"
-          node - "$EXACT_SHA" </tmp/canary-build.json <<'NODE'
+          node - "$EXACT_SHA" /tmp/canary-build.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
           if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
           NODE
           mutation_code="$(curl --silent --show-error --output /tmp/canary-mutation.json --write-out '%{http_code}' -X POST "$BASE_URL/api/internal/governance/approval-automation")"
@@ -344,10 +472,11 @@ jobs:
       - name: Build worker container locally
         env:
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
-        run: docker build --tag "datanexus-worker:$EXACT_SHA" .
+        run: |
+          node scripts/build-cloudflare-container.mjs \
+            --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --tag "datanexus-worker:$EXACT_SHA"
 
-      - name: Install pinned Cloudflare deployment tooling
-        run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.131.1 @cloudflare/containers@0.3.7
 
       - name: Deploy disabled exact-SHA worker runtime
         env:
@@ -357,12 +486,13 @@ jobs:
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
         run: |
           set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           RELEASE_ID="github-worker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          npx wrangler@4.131.1 deploy --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --config infra/cloudflare/worker-runtime/wrangler.jsonc \
             --var "DATANEXUS_ENV:canary" \
             --var "DATANEXUS_PLATFORM:cloudflare" \
             --var "DATANEXUS_WORKER_EXECUTION_ENABLED:false" \
@@ -382,10 +512,10 @@ jobs:
           test "$live_code" = "200"
           build_code="$(curl --silent --show-error --output /tmp/worker-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
           test "$build_code" = "200"
-          node - "$EXACT_SHA" </tmp/worker-build.json <<'NODE'
+          node - "$EXACT_SHA" /tmp/worker-build.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
           if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
           NODE
           disabled_code="$(curl --silent --show-error --output /tmp/worker-disabled.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"mode":"ADAPTIVE_DISPATCH"}' "$BASE_URL/api/jobs/worker")"
@@ -419,18 +549,18 @@ jobs:
 
           live_code="$(curl --silent --show-error --output /tmp/vercel-live.json --write-out '%{http_code}' "$BASE_URL/api/health/live")"
           test "$live_code" = "200"
-          node </tmp/vercel-live.json <<'NODE'
+          node - /tmp/vercel-live.json <<'NODE'
           const fs = require('node:fs')
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
           if (body.status !== 'ALIVE') process.exit(1)
           NODE
 
           build_code="$(curl --silent --show-error --output /tmp/vercel-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
           test "$build_code" = "200"
-          node - "$EXPECTED_SHA" </tmp/vercel-build.json <<'NODE'
+          node - "$EXPECTED_SHA" /tmp/vercel-build.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
           if (body.commitSha !== expected || body.environment !== 'production' || body.platform !== 'vercel') process.exit(1)
           NODE
 
@@ -440,9 +570,9 @@ jobs:
           set -euo pipefail
           BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
           curl --fail-with-body --silent --show-error             --connect-timeout 10 --max-time 60             "$BASE_URL/api/health/ready"             --output /tmp/vercel-ready.json
-          node </tmp/vercel-ready.json <<'NODE'
+          node - /tmp/vercel-ready.json <<'NODE'
           const fs = require('node:fs')
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
           if (body.status !== 'READY') process.exit(1)
           NODE
 
@@ -453,8 +583,8 @@ jobs:
           BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
           code="$(curl --silent --show-error --output /tmp/r2-cert-auth.json --write-out '%{http_code}' "$BASE_URL/api/internal/storage/certify-r2")"
           test "$code" = "401"
-          node </tmp/r2-cert-auth.json <<'NODE'
+          node - /tmp/r2-cert-auth.json <<'NODE'
           const fs = require('node:fs')
-          const body = JSON.parse(fs.readFileSync(0, 'utf8'))
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
           if (body.error !== 'Unauthorized.') process.exit(1)
           NODE

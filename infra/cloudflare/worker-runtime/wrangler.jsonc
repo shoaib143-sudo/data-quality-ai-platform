@@ -21,6 +21,10 @@
       "instance_type": "standard-1",
       "ssh": {
         "enabled": false
+      },
+      "image_vars": {
+        "NEXT_PUBLIC_SUPABASE_URL": "https://tvjnavjxuehpesxcfvrx.supabase.co",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_ieDM8jckP5nlIORLW7gnVA_ZSHfwFZq"
       }
     }
   ],

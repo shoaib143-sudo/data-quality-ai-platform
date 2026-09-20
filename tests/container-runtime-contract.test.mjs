@@ -11,8 +11,12 @@ test('Next.js portable runtime uses standalone output', () => {
 })
 
 test('container builds the same Next.js source and runs standalone server', () => {
+  assert.match(dockerfile, /COPY package\.json pnpm-lock\.yaml pnpm-workspace\.yaml \.\//)
+  assert.match(dockerfile, /ARG NEXT_PUBLIC_SUPABASE_URL/)
+  assert.match(dockerfile, /ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/)
+  assert.match(dockerfile, /RUN test -n \"\$NEXT_PUBLIC_SUPABASE_URL\" && test -n \"\$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\" && pnpm build/)
   assert.match(dockerfile, /pnpm install --frozen-lockfile/)
-  assert.match(dockerfile, /RUN pnpm build/)
+  assert.match(dockerfile, /pnpm build/)
   assert.match(dockerfile, /\/app\/\.next\/standalone/)
   assert.match(dockerfile, /\/app\/\.next\/static/)
   assert.match(dockerfile, /CMD \["node", "server\.js"\]/)
