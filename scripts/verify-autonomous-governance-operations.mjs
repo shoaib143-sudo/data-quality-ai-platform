@@ -185,9 +185,16 @@ if (worker.indexOf('queueDataQualityVerificationAfterFreshProfile') > worker.ind
   throw new Error('Fresh profiling verification handoff must be wired before Data Quality outcome verification.')
 }
 
-requireText('app/api/jobs/worker/route.ts', [
+const workerService = requireText('lib/orchestration/worker-service.ts', [
+  'runScheduledWorkerCycle',
   'evaluateIncidentSlaEscalations',
   'incidentEscalations',
+])
+if (workerService.indexOf('evaluateIncidentSlaEscalations(50)') > workerService.indexOf('incidentEscalations')) {
+  throw new Error('Scheduled worker must evaluate incident SLA escalations before projecting incidentEscalations into the response.')
+}
+requireText('app/api/jobs/worker/route.ts', [
+  'runScheduledWorkerCycle',
 ])
 requireText('app/api/issues/[issueId]/route.ts', [
   'scheduleFreshDataQualityVerificationFromIssue',
