@@ -45,6 +45,19 @@ export async function retrieveGovernedLearningContext(input: {
     ? await memoryProvider.retrieve({ projectId: input.projectId, classes: ['episodic'], limit: Math.min(limit * 3, 100) })
     : []
 
+  const { data: learningCases, error: learningCaseError } = query
+    ? await admin.schema('agent').rpc('search_learning_cases', {
+        p_project_id: input.projectId,
+        p_query: query,
+        p_limit: Math.min(limit * 3, 50),
+      })
+    : { data: [], error: null }
+  if (learningCaseError) throw new Error(`Unable to retrieve governed learning cases: ${learningCaseError.message}`)
+
+  const approvedPositiveCases = (learningCases ?? [])
+    .filter((learningCase) => learningCase.source_kind === 'PGCL_POSITIVE_CASE')
+    .slice(0, limit)
+
   const rankedEpisodes = episodes
     .map((episode) => {
       const searchable = `${episode.key} ${JSON.stringify(episode.content)}`.toLowerCase()
@@ -56,5 +69,9 @@ export async function retrieveGovernedLearningContext(input: {
     .sort((a, b) => b.relevance - a.relevance || String(b.occurredAt ?? '').localeCompare(String(a.occurredAt ?? '')))
     .slice(0, limit)
 
-  return { memories: rankedMemories, verifiedEpisodes: rankedEpisodes }
+  return {
+    memories: rankedMemories,
+    verifiedEpisodes: rankedEpisodes,
+    approvedPositiveCases,
+  }
 }
