@@ -114,19 +114,19 @@ export async function placeAgentEvidenceLegalHold(input: {
   const reason = input.reason.trim()
   if (!reason) throw new Error('A legal-hold reason is required.')
   await assertGovernanceAdminLegalHoldAuthority(input.actorUserId, input.projectId)
-  await assertEvidenceProject(input)
 
   const admin = createAdminClient()
-  const { data, error } = await admin.schema('agent').from('evidence_legal_holds').insert({
-    project_id: input.projectId,
-    evidence_type: input.evidenceType,
-    evidence_id: input.evidenceId,
-    reason,
-    active: true,
-    placed_by: input.actorUserId,
-  }).select('id,project_id,evidence_type,evidence_id,reason,placed_by,placed_at').single()
-  if (error || !data) throw new Error(`Unable to place agent evidence legal hold: ${error?.message ?? 'unknown error'}`)
-  return data
+  const { data, error } = await admin.schema('agent').rpc('place_evidence_legal_hold_internal', {
+    p_project_id: input.projectId,
+    p_evidence_type: input.evidenceType,
+    p_evidence_id: input.evidenceId,
+    p_reason: reason,
+    p_placed_by: input.actorUserId,
+  })
+  if (error) throw new Error(`Unable to place agent evidence legal hold: ${error.message}`)
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row?.id) throw new Error('Agent evidence legal hold persistence returned incomplete evidence.')
+  return row
 }
 
 export async function releaseAgentEvidenceLegalHold(input: {
@@ -173,4 +173,30 @@ export async function isAgentEvidenceDeletionBlocked(input: {
     .eq('active', true)
   if (error) throw new Error(`Unable to evaluate agent evidence legal hold: ${error.message}`)
   return (count ?? 0) > 0
+}
+
+
+export async function cleanupExpiredAgentEvidence(limit = 50) {
+  const boundedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.trunc(limit))) : 50
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('agent').rpc('cleanup_expired_evidence_internal', {
+    p_limit: boundedLimit,
+  })
+  if (error) throw new Error(`Unable to enforce agent evidence retention: ${error.message}`)
+
+  const results = (data ?? []).map((row: Record<string, unknown>) => ({
+    evidenceType: String(row.evidence_type ?? ''),
+    evidenceId: String(row.evidence_id ?? ''),
+    disposition: String(row.disposition ?? 'UNKNOWN'),
+    detail: typeof row.detail === 'string' ? row.detail : null,
+  }))
+
+  return {
+    examined: results.length,
+    deleted: results.filter((row) => row.disposition === 'DELETED').length,
+    held: results.filter((row) => row.disposition === 'LEGAL_HOLD').length,
+    governanceReferenced: results.filter((row) => row.disposition === 'GOVERNANCE_REFERENCE').length,
+    storageBacked: results.filter((row) => row.disposition === 'STORAGE_BACKED').length,
+    results,
+  }
 }
