@@ -2,14 +2,15 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import ts from 'typescript'
+import { stripTypeScriptTypes } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
 async function transpileModule(sourcePath, outputName) {
   const source = await fs.readFile(sourcePath, 'utf8')
-  const transpiled = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
-  }).outputText
+  const transpiled = stripTypeScriptTypes(source, {
+    mode: 'transform',
+    sourceMap: false,
+  })
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), `${outputName}-`))
   const modulePath = path.join(dir, `${outputName}.mjs`)
   await fs.writeFile(modulePath, transpiled)
