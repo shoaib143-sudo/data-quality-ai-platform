@@ -133,9 +133,9 @@ begin
     raise exception 'cross-agent learning requires at least two source candidates';
   end if;
 
-  select array_agg(distinct candidate_id order by candidate_id)
+  select array_agg(distinct source.candidate_id order by source.candidate_id)
   into v_candidate_ids
-  from unnest(p_source_candidate_ids) candidate_id;
+  from unnest(p_source_candidate_ids) as source(candidate_id);
 
   if cardinality(v_candidate_ids) < 2 then
     raise exception 'cross-agent learning requires at least two distinct source candidates';
