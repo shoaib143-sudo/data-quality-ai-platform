@@ -5,6 +5,7 @@ import fs from 'node:fs'
 const workflow = fs.readFileSync(new URL('../.github/workflows/release-governance.yml', import.meta.url), 'utf8')
 const tooling = fs.readFileSync(new URL('../scripts/prepare-cloudflare-tooling.mjs', import.meta.url), 'utf8')
 const supabaseHealth = fs.readFileSync(new URL('../app/api/health/supabase/route.ts', import.meta.url), 'utf8')
+const releaseSchemaHealth = fs.readFileSync(new URL('../app/api/health/release-schema/route.ts', import.meta.url), 'utf8')
 
 test('Cloudflare canary deployment is manual-only and cost-gated', () => {
   assert.match(workflow, /workflow_dispatch:/)
@@ -87,4 +88,29 @@ test('Cloudflare canary deployment proves live Supabase public Data API connecti
   assert.match(workflow, /body\.status !== 'READY'/)
   assert.match(workflow, /body\.provider !== 'supabase'/)
   assert.match(workflow, /body\.boundary !== 'public-data-api'/)
+})
+
+
+test('Cloudflare activation is gated on primary Vercel exact release and Supabase schema parity', () => {
+  assert.match(workflow, /Verify primary Vercel release and Supabase schema parity/)
+  assert.match(workflow, /DATANEXUS_VERCEL_PRODUCTION_URL: https:\/\/data-quality-ai-platform\.vercel\.app/)
+  assert.match(workflow, /vercel-primary-build\.json/)
+  assert.match(workflow, /body\.commitSha !== expected \|\| body\.environment !== 'production' \|\| body\.platform !== 'vercel'/)
+  assert.match(workflow, /api\/health\/release-schema/)
+  assert.match(workflow, /cloudflare-supabase-release-v1/)
+  assert.match(workflow, /Object\.values\(body\.checks\).*status !== 'READY'/)
+
+  assert.match(releaseSchemaHealth, /cloudflare-supabase-release-v1/)
+  assert.match(releaseSchemaHealth, /dataNexusEnvironment\(\) !== 'production'/)
+  assert.match(releaseSchemaHealth, /dataNexusPlatform\(\) !== 'vercel'/)
+  assert.match(releaseSchemaHealth, /agent_version_lifecycle/)
+  assert.match(releaseSchemaHealth, /ai_provider_resilience_profile_versions/)
+  assert.match(releaseSchemaHealth, /learning_candidates/)
+  assert.match(releaseSchemaHealth, /learning_candidate_releases/)
+  assert.match(releaseSchemaHealth, /positive_learning_cases/)
+  assert.match(releaseSchemaHealth, /agent_policy_operational_capabilities/)
+  assert.match(releaseSchemaHealth, /execution\.approve/)
+  assert.match(releaseSchemaHealth, /agent\.admin/)
+  assert.match(releaseSchemaHealth, /recovery_actions/)
+  assert.match(releaseSchemaHealth, /execution_token/)
 })
