@@ -3,6 +3,32 @@ name: Continuous Learning Governance
 on:
   pull_request:
     paths:
+      - 'app/api/agents/run/route.ts'
+      - 'lib/agents/run-profiling-job.ts'
+      - 'lib/data-quality/queue.ts'
+      - 'lib/data-quality/automation.ts'
+      - 'lib/orchestration/worker.ts'
+      - 'scripts/test-proactive-governed-case-learning-priority-agents.mjs'
+      - 'app/api/agents/supervisor/run/route.ts'
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'lib/agents/proactive-governed-case-learning-runtime.ts'
+      - 'scripts/test-proactive-governed-case-learning-supervisor.mjs'
+      - 'app/api/agents/governance/run/route.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'lib/governance/governed-outcome-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-execution.mjs'
+      - 'lib/agents/governed-learning-context.ts'
+      - 'lib/agents/agent-memory-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-retrieval.mjs'
+      - 'app/admin/learning-cases/**'
+      - 'app/api/admin/learning-cases/**'
+      - 'lib/agents/proactive-governed-case-learning-admin.ts'
+      - 'scripts/test-proactive-governed-case-learning-ui.mjs'
+      - 'lib/agents/proactive-governed-case-learning-service.ts'
+      - 'scripts/test-proactive-governed-case-learning-persistence.mjs'
+      - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
+      - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'lib/agents/governed-learning-controlled-release.ts'
       - 'scripts/test-governed-learning-controlled-release.mjs'
       - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
@@ -25,6 +51,32 @@ on:
   push:
     branches: [main]
     paths:
+      - 'app/api/agents/run/route.ts'
+      - 'lib/agents/run-profiling-job.ts'
+      - 'lib/data-quality/queue.ts'
+      - 'lib/data-quality/automation.ts'
+      - 'lib/orchestration/worker.ts'
+      - 'scripts/test-proactive-governed-case-learning-priority-agents.mjs'
+      - 'app/api/agents/supervisor/run/route.ts'
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'lib/agents/proactive-governed-case-learning-runtime.ts'
+      - 'scripts/test-proactive-governed-case-learning-supervisor.mjs'
+      - 'app/api/agents/governance/run/route.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'lib/governance/governed-outcome-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-execution.mjs'
+      - 'lib/agents/governed-learning-context.ts'
+      - 'lib/agents/agent-memory-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-retrieval.mjs'
+      - 'app/admin/learning-cases/**'
+      - 'app/api/admin/learning-cases/**'
+      - 'lib/agents/proactive-governed-case-learning-admin.ts'
+      - 'scripts/test-proactive-governed-case-learning-ui.mjs'
+      - 'lib/agents/proactive-governed-case-learning-service.ts'
+      - 'scripts/test-proactive-governed-case-learning-persistence.mjs'
+      - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
+      - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'lib/agents/governed-learning-controlled-release.ts'
       - 'scripts/test-governed-learning-controlled-release.mjs'
       - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
@@ -58,6 +110,20 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+      - name: Run proactive governed case learning tests
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs
+      - name: Run PGCL persistence tests
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs
+      - name: Run PGCL admin review UI tests
+        run: node scripts/test-proactive-governed-case-learning-ui.mjs
+      - name: Run PGCL approved-case retrieval tests
+        run: node scripts/test-proactive-governed-case-learning-retrieval.mjs
+      - name: Run PGCL execution attribution tests
+        run: node scripts/test-proactive-governed-case-learning-execution.mjs
+      - name: Run PGCL supervisor proposal tests
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-supervisor.mjs
+      - name: Run priority-agent PGCL hook tests
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs
       - name: Run governed learning candidate tests
         run: node --experimental-strip-types scripts/test-governed-learning-candidates.mjs
       - name: Run governed learning benchmark tests

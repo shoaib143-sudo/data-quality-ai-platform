@@ -13,6 +13,8 @@ import type { NativeBoundedPlan } from '@/lib/agents/runtime/native-autonomy-ker
 import { startNativeAgentLifecycle } from '@/lib/agents/runtime/native-agent-lifecycle'
 import { hashNativeRuntimeValue } from '@/lib/agents/runtime/native-tool-contracts'
 import { evaluateNativeSupervisorTrajectory } from '@/lib/agents/runtime/native-trajectory-evaluation'
+import { proposePgclCasesFromVerifiedSupervisorRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
+import type { PgclRunMode } from '@/lib/agents/proactive-governed-case-learning'
 import {
   createGovernedHandoffEnvelope,
   evaluateExitGate,
@@ -45,6 +47,13 @@ export type NativeSupervisorRunResult = {
   completedStepIds: string[]
   failedStepId?: string
   code?: string
+  learningEvaluation?: {
+    status: 'COMPLETED' | 'FAILED'
+    evaluated: number
+    proposed: number
+    candidateIds: string[]
+    error?: string
+  }
 }
 
 const allowedSpecialists = new Set<string>(GOVERNANCE_SPECIALIST_AGENT_KEYS)
@@ -163,6 +172,7 @@ export async function runNativeSpecialistSupervisor(input: {
   actorUserId: string
   goal: string
   workers: NativeSupervisorWorkerRequest[]
+  learningRunMode?: PgclRunMode
 }): Promise<NativeSupervisorRunResult> {
   const projectId = boundedText(input.projectId, 200, 'projectId')
   const actorUserId = boundedText(input.actorUserId, 200, 'actorUserId')
@@ -363,12 +373,52 @@ export async function runNativeSpecialistSupervisor(input: {
 
     if (result.status === 'SUCCEEDED') {
       const trajectoryEvaluation = await evaluateNativeSupervisorTrajectory(supervisorRun.id)
+      let learningEvaluation: NonNullable<NativeSupervisorRunResult['learningEvaluation']>
+      try {
+        const pgcl = await proposePgclCasesFromVerifiedSupervisorRun({
+          projectId,
+          childRunIds,
+          runMode: input.learningRunMode ?? 'HANDSFREE',
+          supervisorEvaluationId: String(trajectoryEvaluation.id),
+          actorUserId,
+        })
+        learningEvaluation = {
+          status: 'COMPLETED',
+          evaluated: pgcl.evaluated,
+          proposed: pgcl.proposed,
+          candidateIds: pgcl.candidateIds,
+        }
+      } catch (learningError) {
+        learningEvaluation = {
+          status: 'FAILED',
+          evaluated: 0,
+          proposed: 0,
+          candidateIds: [],
+          error: learningError instanceof Error ? learningError.message.slice(0, 1000) : String(learningError).slice(0, 1000),
+        }
+      }
+
       await updateSupervisorRun({
         supervisorRunId: supervisorRun.id,
         status: 'SUCCEEDED',
-        output: { plan_hash: boundPlan.planHash, completed_step_ids: result.completedStepIds, child_run_ids: childRunIds, execution_mode: 'native_supervisor_specialist_v1', trajectory_evaluation_id: trajectoryEvaluation.id, trajectory_score: trajectoryEvaluation.score },
+        output: {
+          plan_hash: boundPlan.planHash,
+          completed_step_ids: result.completedStepIds,
+          child_run_ids: childRunIds,
+          execution_mode: 'native_supervisor_specialist_v1',
+          trajectory_evaluation_id: trajectoryEvaluation.id,
+          trajectory_score: trajectoryEvaluation.score,
+          pgcl_evaluation: learningEvaluation,
+        },
       })
-      return { supervisorRunId: supervisorRun.id, planHash: boundPlan.planHash, childRunIds, status: 'SUCCEEDED', completedStepIds: result.completedStepIds }
+      return {
+        supervisorRunId: supervisorRun.id,
+        planHash: boundPlan.planHash,
+        childRunIds,
+        status: 'SUCCEEDED',
+        completedStepIds: result.completedStepIds,
+        learningEvaluation,
+      }
     }
 
     if (result.status === 'WAITING_APPROVAL') {
