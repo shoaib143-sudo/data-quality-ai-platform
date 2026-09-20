@@ -9,7 +9,9 @@ function requireText(source, text, message) {
 }
 
 const migration = read('supabase/migrations/20260915025000_agent_evidence_retention_and_legal_hold.sql')
+const cleanupMigration = read('supabase/migrations/20260920048000_agent_evidence_retention_cleanup.sql')
 const service = read('lib/agents/evidence-lifecycle.ts')
+const worker = read('lib/orchestration/worker-service.ts')
 
 requireText(migration, 'retention_years between 5 and 7', 'Retention must stay inside the approved 5-7 year range.')
 requireText(migration, "default (now() + interval '7 years')", 'Artifacts/messages must default to seven-year retention.')
@@ -38,3 +40,21 @@ requireText(service, 'if (retentionUntil > Date.now()) return true', 'Deletion m
 requireText(service, ".eq('active', true)", 'Deletion checks must honor active legal holds.')
 
 console.log('Agent evidence retention and legal hold contract verified.')
+
+
+requireText(cleanupMigration, 'place_evidence_legal_hold_internal', 'Legal-hold placement must use the atomic database boundary.')
+requireText(cleanupMigration, "pg_advisory_xact_lock(hashtextextended(p_evidence_type || ':' || p_evidence_id::text, 0))", 'Legal-hold placement must acquire the shared evidence lock.')
+requireText(cleanupMigration, "pg_advisory_xact_lock(hashtextextended('ARTIFACT:' || v_candidate.id::text, 0))", 'Artifact cleanup must acquire the shared evidence lock.')
+requireText(cleanupMigration, "pg_advisory_xact_lock(hashtextextended('MESSAGE:' || v_candidate.id::text, 0))", 'Message cleanup must acquire the shared evidence lock.')
+requireText(cleanupMigration, "h.active = true", 'Retention cleanup must recheck active legal holds while holding the evidence lock.')
+requireText(cleanupMigration, 'governance.ai_governance_suggestions', 'Governance-referenced artifacts must be preserved.')
+requireText(cleanupMigration, "disposition := 'STORAGE_BACKED'", 'Storage-backed artifacts must be preserved until object lifecycle cleanup is linked.')
+requireText(cleanupMigration, 'delete from agent.agent_artifacts', 'Expired inline artifacts must be deleted by the governed cleanup boundary.')
+requireText(cleanupMigration, 'delete from agent.agent_messages', 'Expired messages must be deleted by the governed cleanup boundary.')
+requireText(cleanupMigration, 'from public, anon, authenticated', 'Retention cleanup RPCs must not be executable by end-user roles.')
+if (cleanupMigration.includes('delete from governance.audit_events')) {
+  throw new Error('Immutable governance audit records must never be deleted by agent evidence retention.')
+}
+requireText(service, "rpc('place_evidence_legal_hold_internal'", 'Legal-hold placement must use the atomic server-only RPC.')
+requireText(service, "rpc('cleanup_expired_evidence_internal'", 'Scheduled retention must use the governed cleanup RPC.')
+requireText(worker, "cleanupExpiredAgentEvidence(50)", 'Scheduled workers must enforce agent evidence retention.')
