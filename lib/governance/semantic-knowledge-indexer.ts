@@ -38,7 +38,7 @@ export async function collectProjectKnowledgeSemanticCandidates(projectId: strin
   const admin = createAdminClient()
   const [documents, requirements, cdes, contracts, certifications, remediation, accountability, applicability, classifications] = await Promise.all([
     admin.schema('governance').from('knowledge_documents')
-      .select('id,document_key,document_type,title,summary,content,domain,jurisdiction,source_kind,source_url,review_status,metadata')
+      .select('id,document_key,document_type,title,summary,content,domain,jurisdiction,effective_at,expires_at,source_kind,source_url,review_status,metadata')
       .eq('project_id', projectId).eq('status', 'ACTIVE').limit(5000),
     admin.schema('governance').from('knowledge_requirements')
       .select('id,document_id,requirement_key,title,requirement_text,obligation_type,priority,metadata')
@@ -88,7 +88,7 @@ export async function collectProjectKnowledgeSemanticCandidates(projectId: strin
     ...documentRows.map((document) => ({
       objectType: 'KNOWLEDGE_DOCUMENT', objectKey: document.document_key, objectId: document.id,
       content: compact([document.title, document.summary, `Document type: ${document.document_type}`, document.domain ? `Domain: ${document.domain}` : null, document.jurisdiction ? `Jurisdiction: ${document.jurisdiction}` : null, document.content]),
-      metadata: { document_type: document.document_type, domain: document.domain, jurisdiction: document.jurisdiction, source_kind: document.source_kind, source_url: document.source_url, review_status: document.review_status, ...(document.metadata ?? {}) },
+      metadata: { ...(document.metadata ?? {}), document_type: document.document_type, domain: document.domain, jurisdiction: document.jurisdiction, effective_at: document.effective_at, expires_at: document.expires_at, source_kind: document.source_kind, source_url: document.source_url, review_status: document.review_status },
     })),
     ...requirementRows.map((requirement) => {
       const document = documentById.get(requirement.document_id)
@@ -105,18 +105,20 @@ export async function collectProjectKnowledgeSemanticCandidates(projectId: strin
           document?.jurisdiction ? `Source jurisdiction: ${document.jurisdiction}` : null,
         ]),
         metadata: {
+          ...(requirement.metadata ?? {}),
           source_document_id: requirement.document_id,
           source_document_key: document?.document_key ?? null,
           source_document_title: document?.title ?? null,
           source_document_type: document?.document_type ?? null,
           source_document_domain: document?.domain ?? null,
           source_document_jurisdiction: document?.jurisdiction ?? null,
+          source_document_effective_at: document?.effective_at ?? null,
+          source_document_expires_at: document?.expires_at ?? null,
           source_document_kind: document?.source_kind ?? null,
           source_document_url: document?.source_url ?? null,
           source_document_review_status: document?.review_status ?? null,
           obligation_type: requirement.obligation_type,
           priority: requirement.priority,
-          ...(requirement.metadata ?? {}),
         },
       }
     }),
