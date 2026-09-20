@@ -1,8 +1,7 @@
-import '../scripts/lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-const { aggregateGovernanceOutcomeHistory } = await import('../lib/analytics/governance-outcome-history.ts')
+const { aggregateGovernanceOutcomeHistory } = await import('../lib/analytics/governance-history-contract.ts')
 
 test('aggregates executive outcome history from persisted evidence-backed reports', () => {
   const rows = [
