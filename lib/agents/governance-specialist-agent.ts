@@ -465,6 +465,15 @@ export async function executeGovernanceSpecialistAgent(input: {
   agentDefinitionId: string
   actorUserId: string
   question?: string | null
+  positiveLearningCases?: Array<{
+    id: string
+    candidateId: string
+    caseKey: string
+    problemType: string
+    reusableLesson: string
+    relevance: number
+    evidence: Record<string, unknown>
+  }>
   handoffRefs?: Array<{
     sourceStepId: string
     sourceAgentKey: GovernanceReadAgentKey
@@ -494,6 +503,14 @@ export async function executeGovernanceSpecialistAgent(input: {
     }
   }
   let query = suppliedQuestion || defaultQuestion(agentKey)
+  const positiveLearningCases = (input.positiveLearningCases ?? [])
+    .filter((learningCase) =>
+      learningCase.candidateId.trim()
+      && learningCase.reusableLesson.trim()
+      && Number.isFinite(learningCase.relevance)
+      && learningCase.relevance > 0)
+    .sort((left, right) => right.relevance - left.relevance)
+    .slice(0, 5)
 
   let run: { id: string }
   if (input.existingAgentRunId) {
@@ -638,7 +655,21 @@ export async function executeGovernanceSpecialistAgent(input: {
       'governance.lineage_assets', 'governance.lineage_transformations', 'governance.lineage_column_mappings', 'governance.lineage_edges',
       'governance.knowledge_relationships',
     ]
-    const evidenceCount = knowledgeMatches.length + graph.edges.length + ctx.alerts.length + ctx.ruleRuns.length + ctx.issues.length + ctx.incidents.length + ctx.lineageTransformations.length + ctx.lineageColumnMappings.length + ctx.lineageTransformationEdges.length
+    const precedentRecommendations = positiveLearningCases.map((learningCase) => ({
+      priority: 'LEARNED_PRECEDENT',
+      action: learningCase.reusableLesson,
+      evidence: [learningCase.id],
+      source: 'PGCL_POSITIVE_CASE',
+      candidateId: learningCase.candidateId,
+      caseKey: learningCase.caseKey,
+      priorProblemType: learningCase.problemType,
+      relevance: learningCase.relevance,
+      authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+    }))
+    const baseRecommendations = Array.isArray((specialized as any).recommendations)
+      ? (specialized as any).recommendations
+      : []
+    const evidenceCount = knowledgeMatches.length + graph.edges.length + ctx.alerts.length + ctx.ruleRuns.length + ctx.issues.length + ctx.incidents.length + ctx.lineageTransformations.length + ctx.lineageColumnMappings.length + ctx.lineageTransformationEdges.length + positiveLearningCases.length
     const confidence = Math.max(0.45, Math.min(0.98, 0.55 + Math.min(0.25, evidenceCount / 200) + (graph.edges.length ? 0.08 : 0) + (knowledgeMatches.length ? 0.08 : 0)))
 
     const output = {
@@ -663,10 +694,22 @@ export async function executeGovernanceSpecialistAgent(input: {
           lineageTransformations: ctx.lineageTransformations.length,
           lineageColumnMappings: ctx.lineageColumnMappings.length,
           lineageTransformationEdges: ctx.lineageTransformationEdges.length,
+          approvedPositiveCases: positiveLearningCases.length,
         },
       },
+      learnedPositiveCases: positiveLearningCases.map((learningCase) => ({
+        learningCaseId: learningCase.id,
+        candidateId: learningCase.candidateId,
+        caseKey: learningCase.caseKey,
+        problemType: learningCase.problemType,
+        reusableLesson: learningCase.reusableLesson,
+        relevance: learningCase.relevance,
+        authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+        evidence: learningCase.evidence,
+      })),
+      appliedPositiveCaseIds: positiveLearningCases.map((learningCase) => learningCase.candidateId),
       observations: (specialized as any).observations ?? [],
-      recommendations: (specialized as any).recommendations ?? [],
+      recommendations: [...baseRecommendations, ...precedentRecommendations],
       hypotheses: (specialized as any).hypotheses ?? [],
       priorities: (specialized as any).priorities ?? [],
       specialist: specialized,
@@ -677,7 +720,11 @@ export async function executeGovernanceSpecialistAgent(input: {
       investigation,
       confidence,
       evidence_count: evidenceCount,
-      evidence_sources: [...evidenceSources, 'governed_investigation.contract.v1'],
+      evidence_sources: [
+        ...evidenceSources,
+        'governed_investigation.contract.v1',
+        ...(positiveLearningCases.length ? ['agent.agent_learning_cases:PGCL_POSITIVE_CASE'] : []),
+      ],
       approval_status: 'NOT_APPLICABLE_READ_ONLY',
       limitations: [
         'This run is deterministic and read-only; it does not execute governance mutations.',
