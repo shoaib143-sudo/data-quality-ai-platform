@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'lib/data-quality/governed-analysis-foundation.ts'
+      - 'lib/analytics/profiling-history-trends.ts'
+      - 'app/api/analytics/profiling-trends/route.ts'
+      - 'tests/profiling-history-trends.test.mjs'
       - 'supabase/migrations/20260915102000_governed_analytics_foundation.sql'
       - 'scripts/test-governed-analysis-foundation.mjs'
       - '.github/workflows/governed-analytics-foundation.yml'
@@ -11,6 +14,9 @@ on:
     branches: [main]
     paths:
       - 'lib/data-quality/governed-analysis-foundation.ts'
+      - 'lib/analytics/profiling-history-trends.ts'
+      - 'app/api/analytics/profiling-trends/route.ts'
+      - 'tests/profiling-history-trends.test.mjs'
       - 'supabase/migrations/20260915102000_governed_analytics_foundation.sql'
       - 'scripts/test-governed-analysis-foundation.mjs'
       - '.github/workflows/governed-analytics-foundation.yml'
@@ -30,3 +36,5 @@ jobs:
           node-version: 24
       - name: Verify governed analytics foundation
         run: node --experimental-strip-types scripts/test-governed-analysis-foundation.mjs
+      - name: Verify profiling history trends
+        run: node --experimental-strip-types --test tests/profiling-history-trends.test.mjs
