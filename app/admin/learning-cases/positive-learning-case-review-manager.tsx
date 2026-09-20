@@ -108,6 +108,7 @@ export function PositiveLearningCaseReviewManager({
               </div>
               <p className="mt-2 font-bold">{item.useCaseKey}</p>
               <p className="mt-1 text-xs text-slate-500">{item.projectName} · {item.agentKey}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Observed {item.occurrenceCount} time{item.occurrenceCount === 1 ? '' : 's'}{item.lastObservedAt ? ' · latest ' + new Date(item.lastObservedAt).toLocaleString() : ''}</p>
               <p className="mt-2 line-clamp-2 text-sm text-slate-600">{item.resultSummary}</p>
             </button>
           ))}
@@ -123,6 +124,11 @@ export function PositiveLearningCaseReviewManager({
               <p className="mt-1 text-sm text-slate-500">{selected.projectName} · {selected.agentKey} · {selected.skillKey}</p>
             </div>
             <span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700">{selected.runMode}</span>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+            This pattern has been observed <strong>{selected.occurrenceCount}</strong> time{selected.occurrenceCount === 1 ? '' : 's'}.
+            {selected.lastObservedAt ? ' Latest verified occurrence: ' + new Date(selected.lastObservedAt).toLocaleString() + '.' : ''}
           </div>
 
           <div className="mt-5 grid gap-4">
