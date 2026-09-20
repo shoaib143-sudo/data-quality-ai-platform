@@ -76,6 +76,10 @@ export default async function LearningGovernancePage({
       </form>
 
       {!lifecycle || !pgcl ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
+        {!pgcl.schemaCompatibility.productionProvenanceColumnsAvailable && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+          <p className="font-black">Production learning provenance schema pending</p>
+          <p className="mt-1">The connected database does not expose the PGCL production-provenance columns yet. Positive cases remain visible but are treated as non-production or unclassified until migration <span className="font-mono">20260920016000_pgcl_production_learning_provenance</span> is reconciled.</p>
+        </section>}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <article className="rounded-2xl border bg-white p-5"><BookOpenCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.total}</p><p className="text-xs font-bold uppercase text-slate-500">Lifecycle candidates</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.active}</p><p className="text-xs font-bold uppercase text-slate-500">Active releases</p></article>
