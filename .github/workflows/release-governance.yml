@@ -166,10 +166,11 @@ jobs:
       - name: Validate Wrangler canary and worker bundles without deployment
         run: |
           set -euo pipefail
-          pnpm --package=wrangler@4.131.1 --package=@cloudflare/containers@0.3.7 dlx wrangler deploy --dry-run \
+          node scripts/prepare-cloudflare-tooling.mjs
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
             --config infra/cloudflare/runtime/wrangler.jsonc \
             --outdir /tmp/datanexus-canary-dry-run
-          pnpm --package=wrangler@4.131.1 --package=@cloudflare/containers@0.3.7 dlx wrangler deploy --dry-run \
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
             --config infra/cloudflare/worker-runtime/wrangler.jsonc \
             --outdir /tmp/datanexus-worker-dry-run
 
@@ -233,7 +234,8 @@ jobs:
       - name: Validate canary Wrangler bundle without deployment
         run: |
           set -euo pipefail
-          pnpm --package=wrangler@4.131.1 --package=@cloudflare/containers@0.3.7 dlx wrangler deploy --dry-run \
+          node scripts/prepare-cloudflare-tooling.mjs
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
             --config infra/cloudflare/runtime/wrangler.jsonc \
             --outdir /tmp/datanexus-canary-preflight
 
@@ -295,7 +297,8 @@ jobs:
       - name: Validate worker Wrangler bundle without deployment
         run: |
           set -euo pipefail
-          pnpm --package=wrangler@4.131.1 --package=@cloudflare/containers@0.3.7 dlx wrangler deploy --dry-run \
+          node scripts/prepare-cloudflare-tooling.mjs
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
             --config infra/cloudflare/worker-runtime/wrangler.jsonc \
             --outdir /tmp/datanexus-worker-preflight
 
@@ -373,6 +376,7 @@ jobs:
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
         run: |
           set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$NEXT_PUBLIC_SUPABASE_URL"
@@ -380,7 +384,7 @@ jobs:
           test -n "$DATANEXUS_CLOUDFLARE_CANARY_URL"
           BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           RELEASE_ID="github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          pnpm --package=wrangler@4.131.1 --package=@cloudflare/containers@0.3.7 dlx wrangler deploy --config infra/cloudflare/runtime/wrangler.jsonc \
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --config infra/cloudflare/runtime/wrangler.jsonc \
             --var "DATANEXUS_ENV:canary" \
             --var "DATANEXUS_PLATFORM:cloudflare" \
             --var "DATANEXUS_COMMIT_SHA:$EXACT_SHA" \
@@ -487,7 +491,7 @@ jobs:
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           RELEASE_ID="github-worker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          pnpm --package=wrangler@4.131.1 --package=@cloudflare/containers@0.3.7 dlx wrangler deploy --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --config infra/cloudflare/worker-runtime/wrangler.jsonc \
             --var "DATANEXUS_ENV:canary" \
             --var "DATANEXUS_PLATFORM:cloudflare" \
             --var "DATANEXUS_WORKER_EXECUTION_ENABLED:false" \
