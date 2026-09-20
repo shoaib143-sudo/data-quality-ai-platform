@@ -40,7 +40,7 @@ export default async function LearningGovernancePage({
     await authorizeProject(user.id, selectedProjectId, 'admin.manage')
     const [lifecycle, pgcl] = await Promise.all([
       readGovernedLearningLifecycleCommandCenter(selectedProjectId),
-      readPgclCommandCenterState(selectedProjectId),
+      readPgclCommandCenterState(selectedProjectId, user.id),
     ])
     return { lifecycle, pgcl }
   })() : null
