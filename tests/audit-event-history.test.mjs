@@ -1,9 +1,8 @@
-import '../scripts/lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import test from 'node:test'
 
-const { normalizeAuditHistoryRows } = await import('../lib/analytics/audit-event-history.ts')
+const { normalizeAuditHistoryRows } = await import('../lib/analytics/governance-history-contract.ts')
 
 test('normalizes grouped immutable audit analytics rows', () => {
   const rows = normalizeAuditHistoryRows([
