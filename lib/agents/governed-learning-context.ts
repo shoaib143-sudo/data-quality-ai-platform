@@ -1,6 +1,17 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createGovernanceMemoryProvider } from '@/lib/ai/governance-memory-provider'
 
+export type ApprovedPositiveLearningCase = {
+  id: string
+  candidate_id: string
+  case_key: string
+  problem_type: string
+  context: Record<string, unknown>
+  recommendation: Record<string, unknown>
+  evidence: Record<string, unknown>
+  updated_at: string
+}
+
 function terms(value: string) {
   return value.trim().toLowerCase().split(/\s+/).filter((term) => term.length > 2)
 }
@@ -45,6 +56,35 @@ export async function retrieveGovernedLearningContext(input: {
     ? await memoryProvider.retrieve({ projectId: input.projectId, classes: ['episodic'], limit: Math.min(limit * 3, 100) })
     : []
 
+  const { data: positiveCases, error: positiveCaseError } = input.agentDefinitionId && query
+    ? await admin.schema('agent').rpc('list_approved_positive_learning_cases', {
+        p_project_id: input.projectId,
+        p_agent_definition_id: input.agentDefinitionId,
+        p_limit: Math.min(limit * 5, 100),
+      })
+    : { data: [], error: null }
+
+  if (positiveCaseError) throw new Error(`Unable to retrieve approved positive learning cases: ${positiveCaseError.message}`)
+
+  const approvedPositiveCases = ((positiveCases ?? []) as ApprovedPositiveLearningCase[])
+    .map((learningCase) => {
+      const searchable = [
+        learningCase.case_key,
+        learningCase.problem_type,
+        JSON.stringify(learningCase.context),
+        JSON.stringify(learningCase.recommendation),
+        JSON.stringify(learningCase.evidence),
+      ].join(' ').toLowerCase()
+      const matches = queryTerms.filter((term) => searchable.includes(term)).length
+      const relevance = queryTerms.length ? matches / queryTerms.length : 0
+      return { ...learningCase, relevance }
+    })
+    .filter((learningCase) => learningCase.relevance > 0)
+    .sort((left, right) =>
+      right.relevance - left.relevance
+      || String(right.updated_at).localeCompare(String(left.updated_at)))
+    .slice(0, limit)
+
   const rankedEpisodes = episodes
     .map((episode) => {
       const searchable = `${episode.key} ${JSON.stringify(episode.content)}`.toLowerCase()
@@ -56,5 +96,9 @@ export async function retrieveGovernedLearningContext(input: {
     .sort((a, b) => b.relevance - a.relevance || String(b.occurredAt ?? '').localeCompare(String(a.occurredAt ?? '')))
     .slice(0, limit)
 
-  return { memories: rankedMemories, verifiedEpisodes: rankedEpisodes }
+  return {
+    memories: rankedMemories,
+    verifiedEpisodes: rankedEpisodes,
+    approvedPositiveCases,
+  }
 }

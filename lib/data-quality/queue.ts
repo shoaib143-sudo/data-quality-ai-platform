@@ -115,6 +115,7 @@ export async function queueDataQualityAutomation(input: {
         userId: input.userId ?? '',
         agentRunId: run.id,
         trigger,
+        learningRunMode: input.requestedByUser ? 'SUPERVISED' : 'HANDSFREE',
         workflowInstanceId: input.workflowInstanceId ?? '',
         verificationGeneration: input.verificationGeneration ?? null,
         parentDurableJobId,
