@@ -4,6 +4,8 @@ import fs from 'node:fs'
 
 const service = fs.readFileSync('lib/agents/proactive-governed-case-learning-service.ts', 'utf8')
 const migration = fs.readFileSync('supabase/migrations/20260920014000_proactive_governed_case_learning.sql', 'utf8')
+const forwardMigration = fs.readFileSync('supabase/migrations/20260920015000_reconcile_proactive_governed_case_learning.sql', 'utf8')
+const replayPreparation = fs.readFileSync('scripts/prepare-clean-migration-replay.mjs', 'utf8')
 
 for (const invariant of [
   'persistProactiveGovernedCaseLearningCandidate',
@@ -89,5 +91,24 @@ for (const invariant of [
 
 assert.equal(/chain[-_ ]?of[-_ ]?thought/i.test(service + migration), false)
 assert.equal(/hidden[-_ ]?reasoning/i.test(service + migration), false)
+
+assert.match(migration, /\nas \$\n[\s\S]*\n\$;\n/, 'immutable historical PGCL migration should retain its audited syntax defect')
+assert.equal(/\nas \$\n/.test(forwardMigration), false, 'forward PGCL reconciliation must not reuse malformed dollar quoting')
+assert.equal(/\n\$;\n/.test(forwardMigration), false, 'forward PGCL reconciliation must not close malformed dollar quoting')
+assert.ok(forwardMigration.includes('create table if not exists agent.positive_learning_cases'))
+assert.ok(forwardMigration.includes('create or replace function agent.list_approved_positive_learning_cases'))
+for (const invariant of [
+  "file === '20260920014000_proactive_governed_case_learning.sql'",
+  "const malformedOpen = '\\nas $\\n  select\\n'",
+  "const malformedClose = '\\n$;\\n\\nrevoke all on function agent.list_approved_positive_learning_cases'",
+  "const validOpen = '\\nas $\\n  select\\n'",
+  "const validClose = '\\n$;\\n\\nrevoke all on function agent.list_approved_positive_learning_cases'",
+  "replace(malformedOpen, validOpen)",
+  "replace(malformedClose, validClose)",
+  'Historical PGCL dollar-quote defect no longer matches the audited replay repair contract',
+  'production uses the forward-only reconciliation migration',
+]) {
+  assert.ok(replayPreparation.includes(invariant), `missing immutable PGCL replay repair invariant: ${invariant}`)
+}
 
 console.log('PGCL durable persistence remains project-scoped, canonically verified, admin-reviewed, and non-self-promoting.')
