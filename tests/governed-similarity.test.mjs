@@ -1,12 +1,11 @@
-import '../scripts/lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
 const {
-  findSimilarGovernanceObjects,
+  findSimilarGovernanceObjectsWithDependencies,
   normalizeSimilarityTargetTypes,
   similarityCapability,
-} = await import('../lib/governance/governed-similarity.ts')
+} = await import('../lib/governance/governed-similarity-contract.ts')
 
 test('maps supported similarity types to existing read capabilities', () => {
   assert.equal(similarityCapability('COLUMN'), 'profiling.read')
@@ -29,7 +28,7 @@ test('normalizes and deduplicates target types with safe defaults', () => {
 
 test('finds similar objects, excludes the source and bounds the request', async () => {
   const calls = []
-  const result = await findSimilarGovernanceObjects({
+  const result = await findSimilarGovernanceObjectsWithDependencies({
     projectId: 'project-1',
     sourceType: 'COLUMN',
     sourceKey: 'column-1',
@@ -78,7 +77,7 @@ test('finds similar objects, excludes the source and bounds the request', async 
 
 test('fails closed when the source is missing from the governed semantic index', async () => {
   await assert.rejects(
-    () => findSimilarGovernanceObjects({
+    () => findSimilarGovernanceObjectsWithDependencies({
       projectId: 'project-1',
       sourceType: 'GLOSSARY_TERM',
       sourceKey: 'missing',
