@@ -153,4 +153,4 @@ for (const invariant of [
   assert.ok(sharedAdapter.includes(invariant), `missing shared PGCL precedent invariant: ${invariant}`)
 }
 
-console.log('All eight canonical agents can propose and consume governed positive-case precedent, with Profiling/Data Quality usage attribution and current-policy authority boundaries preserved.')
+console.log('All eight canonical agents share the same governed positive-case learning contract, retain current-policy authority boundaries, and can both propose and consume approved precedent across direct, Profiling, Data Quality, and Handsfree specialist execution surfaces.')
