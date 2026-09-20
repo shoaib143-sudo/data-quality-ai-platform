@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'lib/ai/retrieval-provider.ts'
+      - 'lib/governance/semantic-project-reindex.ts'
+      - 'lib/governance/semantic-project-reindex-runtime.ts'
+      - 'app/api/search/semantic/reindex/route.ts'
+      - 'tests/semantic-project-reindex.test.mjs'
       - 'lib/ai/retrieval-metadata-normalization.ts'
       - 'scripts/verify-retrieval-provider.mjs'
       - 'scripts/test-retrieval-provider.mjs'
@@ -13,6 +17,10 @@ on:
     branches: [main]
     paths:
       - 'lib/ai/retrieval-provider.ts'
+      - 'lib/governance/semantic-project-reindex.ts'
+      - 'lib/governance/semantic-project-reindex-runtime.ts'
+      - 'app/api/search/semantic/reindex/route.ts'
+      - 'tests/semantic-project-reindex.test.mjs'
       - 'lib/ai/retrieval-metadata-normalization.ts'
       - 'scripts/verify-retrieval-provider.mjs'
       - 'scripts/test-retrieval-provider.mjs'
@@ -39,5 +47,7 @@ jobs:
         run: node scripts/verify-retrieval-provider.mjs
       - name: Retrieval provider behavior
         run: node --experimental-strip-types scripts/test-retrieval-provider.mjs
+      - name: Semantic project reindex behavior
+        run: node --experimental-strip-types --test tests/semantic-project-reindex.test.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
