@@ -4,6 +4,7 @@ import fs from 'node:fs'
 const migration = fs.readFileSync('supabase/migrations/20260920012000_proactive_governed_case_learning.sql', 'utf8')
 const context = fs.readFileSync('lib/agents/governed-learning-context.ts', 'utf8')
 const memory = fs.readFileSync('lib/agents/agent-memory-learning.ts', 'utf8')
+const service = fs.readFileSync('lib/agents/proactive-governed-case-learning-service.ts', 'utf8')
 
 for (const invariant of [
   "p_decision in ('APPROVE_POSITIVE_CASE','APPROVE_WITH_EDITS')",
@@ -38,6 +39,7 @@ for (const invariant of [
   'use_admin_approved_positive_cases_as_context: true',
   'approved_positive_case_ids',
   'Learned cases cannot authorize, approve, execute, or promote a new governance action',
+  'recordPositiveLearningCaseRetrievals',
 ]) {
   assert.ok(memory.includes(invariant), 'missing PGCL memory-context invariant: ' + invariant)
 }
@@ -49,5 +51,23 @@ assert.equal(
 )
 
 assert.ok(context.includes('input.agentDefinitionId && query'), 'PGCL retrieval must fail closed without an explicit agent definition')
+
+for (const invariant of [
+  'recordPositiveLearningCaseRetrievals',
+  'recordPositiveLearningCaseOutcome',
+  "from('positive_learning_case_usages')",
+  "usage_status: 'RETRIEVED'",
+  "status: 'APPLIED' | 'SUCCEEDED' | 'FAILED' | 'DISMISSED'",
+]) {
+  assert.ok(service.includes(invariant), 'missing PGCL usage tracking invariant: ' + invariant)
+}
+
+for (const invariant of [
+  'create table if not exists agent.positive_learning_case_usages',
+  "usage_status in ('RETRIEVED','APPLIED','SUCCEEDED','FAILED','DISMISSED')",
+  'positive_learning_case_usages_uq',
+]) {
+  assert.ok(migration.includes(invariant), 'missing PGCL usage schema invariant: ' + invariant)
+}
 
 console.log('Approved PGCL cases are promoted into governed learning cases, scoped to the originating agent, and exposed as context without granting authority.')
