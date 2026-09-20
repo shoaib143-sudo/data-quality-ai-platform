@@ -114,6 +114,46 @@ export function aggregateGovernanceOutcomeHistory(rows: Array<{
     .sort((a, b) => a.bucketStart.localeCompare(b.bucketStart))
 }
 
+export function normalizeGovernanceOutcomeHistoryRows(rows: unknown[]): GovernanceOutcomeHistoryPoint[] {
+  return rows.flatMap((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+    const row = value as Record<string, unknown>
+    const bucketStart = typeof row.bucket_start === 'string' ? row.bucket_start : ''
+    const reportCount = Number(row.report_count)
+    const measuredOverallAverage = row.measured_overall_average == null
+      ? null
+      : Number(row.measured_overall_average)
+    const unresolvedIssues = Number(row.unresolved_issues)
+    const autonomousActions = Number(row.autonomous_actions)
+    const humanInterventions = Number(row.human_interventions)
+    const changesRevalidated = Number(row.changes_revalidated)
+    const criticalFindings = Number(row.critical_findings)
+    const highFindings = Number(row.high_findings)
+    const counts = [
+      reportCount,
+      unresolvedIssues,
+      autonomousActions,
+      humanInterventions,
+      changesRevalidated,
+      criticalFindings,
+      highFindings,
+    ]
+    if (!bucketStart || counts.some((count) => !Number.isFinite(count) || count < 0)) return []
+    if (measuredOverallAverage !== null && !Number.isFinite(measuredOverallAverage)) return []
+    return [{
+      bucketStart,
+      reportCount,
+      measuredOverallAverage,
+      unresolvedIssues,
+      autonomousActions,
+      humanInterventions,
+      changesRevalidated,
+      criticalFindings,
+      highFindings,
+    }]
+  }).sort((a, b) => a.bucketStart.localeCompare(b.bucketStart))
+}
+
 export function normalizeAuditHistoryRows(rows: unknown[]): AuditHistoryBucket[] {
   return rows.flatMap((value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return []
