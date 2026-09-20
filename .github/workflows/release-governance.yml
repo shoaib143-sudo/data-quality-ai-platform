@@ -410,6 +410,13 @@ jobs:
           const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
           if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
           NODE
+          supabase_code="$(curl --silent --show-error --output /tmp/canary-supabase.json --write-out '%{http_code}' "$BASE_URL/api/health/supabase")"
+          test "$supabase_code" = "200"
+          node - /tmp/canary-supabase.json <<'NODE'
+          const fs = require('node:fs')
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          if (body.status !== 'READY' || body.provider !== 'supabase' || body.boundary !== 'public-data-api') process.exit(1)
+          NODE
           mutation_code="$(curl --silent --show-error --output /tmp/canary-mutation.json --write-out '%{http_code}' -X POST "$BASE_URL/api/internal/governance/approval-automation")"
           test "$mutation_code" = "403"
 
