@@ -71,7 +71,7 @@
     "verify:provider-resilience": "node scripts/verify-provider-resilience.mjs && node --experimental-strip-types scripts/test-provider-resilience.mjs",
     "verify:governed-learning-candidates": "node --experimental-strip-types scripts/test-governed-learning-candidates.mjs",
     "verify:governed-learning-benchmarks": "node --experimental-strip-types scripts/test-governed-learning-benchmarks.mjs",
-    "verify:proactive-governed-case-learning": "node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs && node scripts/test-proactive-governed-case-learning-ui.mjs"
+    "verify:proactive-governed-case-learning": "node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs && node scripts/test-proactive-governed-case-learning-ui.mjs && node scripts/test-proactive-governed-case-learning-retrieval.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
