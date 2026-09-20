@@ -55,6 +55,7 @@ on:
       - 'supabase/migrations/20260920010000_governed_learning_candidates.sql'
       - 'lib/ai/continuous-learning-governance.ts'
       - 'scripts/test-continuous-learning-governance.mjs'
+      - 'scripts/audit-governed-learning-phase11-adversarial.mjs'
       - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
       - '.github/workflows/continuous-learning-governance.yml'
   push:
@@ -112,6 +113,7 @@ on:
       - 'supabase/migrations/20260920010000_governed_learning_candidates.sql'
       - 'lib/ai/continuous-learning-governance.ts'
       - 'scripts/test-continuous-learning-governance.mjs'
+      - 'scripts/audit-governed-learning-phase11-adversarial.mjs'
       - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
       - '.github/workflows/continuous-learning-governance.yml'
 
@@ -132,6 +134,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs
       - name: Run governed learning golden journey
         run: node scripts/verify-governed-learning-golden-journey.mjs
+      - name: Run Phase 11 governed learning adversarial audit
+        run: node scripts/audit-governed-learning-phase11-adversarial.mjs
       - name: Run governed learning production readiness tests
         run: node --experimental-strip-types scripts/test-governed-learning-production-readiness.mjs
       - name: Run eight-agent PGCL conformance
