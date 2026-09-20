@@ -27,6 +27,8 @@ for (const invariant of [
   'Do not reuse when',
   'Verification evidence',
   'No learning cases need review',
+  'occurrenceCount',
+  'Latest verified occurrence',
 ]) {
   assert.ok(manager.includes(invariant), 'missing PGCL UI state/action: ' + invariant)
 }
@@ -48,6 +50,7 @@ for (const invariant of [
   "DEFERRED",
   'positive_learning_cases',
   'learning_candidates',
+  'positive_learning_case_occurrences',
 ]) {
   assert.ok(adminLoader.includes(invariant), 'missing PGCL inbox invariant: ' + invariant)
 }
