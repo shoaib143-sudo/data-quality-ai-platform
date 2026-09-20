@@ -13,6 +13,9 @@ for (const invariant of [
   'Data Governance Admin actorUserId is required',
   'PGCL review reason is required',
   'APPROVE_WITH_EDITS requires a revised reusable lesson',
+  "v_case.review_status not in ('PENDING_REVIEW','DEFERRED')",
+  "on conflict (candidate_id, source_agent_run_id) do nothing",
+  "'BROADENED_APPLICABILITY' = any(v_significance)",
 ]) {
   assert.ok(service.includes(invariant), `missing PGCL service invariant: ${invariant}`)
 }
@@ -21,6 +24,7 @@ for (const invariant of [
   "candidate_type in ('SKILL_IMPROVEMENT','POSITIVE_CASE')",
   "'POSITIVE_CASE_EXPERIENCE'",
   'create table if not exists agent.positive_learning_cases',
+  'create table if not exists agent.positive_learning_case_occurrences',
   'create table if not exists agent.positive_learning_case_reviews',
   'positive_learning_cases_candidate_project_uq',
   "review_status in ('PENDING_REVIEW','APPROVED','REJECTED','DEFERRED','ONE_OFF','RETIRED')",
