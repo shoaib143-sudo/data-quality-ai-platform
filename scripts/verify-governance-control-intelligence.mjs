@@ -19,6 +19,7 @@ const schedulerAuthorityMigration = fs.readFileSync(schedulerAuthorityMigrationP
 const providerNeutralSchedulerMigration = fs.readFileSync(providerNeutralSchedulerMigrationPath, 'utf8')
 const aiGovernanceSweep = fs.readFileSync('lib/governance/ai-governance-intelligence.ts', 'utf8')
 const workerRoute = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
+const workerService = fs.readFileSync('lib/orchestration/worker-service.ts', 'utf8')
 const vercelConfig = JSON.parse(fs.readFileSync('vercel.json', 'utf8'))
 const scheduler = verifyDurableWorkerSchedulerAuthority({ migrationSql: providerNeutralSchedulerMigration, vercelConfig })
 const files = {
@@ -85,7 +86,9 @@ const checks = [
   ['all-project reconciliation service-role boundary', /revoke execute on function governance\.refresh_all_governance_control_intelligence\(\)[\s\S]*from public, anon, authenticated/i.test(continuousMigration) && /grant execute on function governance\.refresh_all_governance_control_intelligence\(\)[\s\S]*to service_role/i.test(continuousMigration)],
   ['AI governance sweep invokes control reconciliation', /rpc\('refresh_all_governance_control_intelligence'\)/.test(aiGovernanceSweep) && /Promise\.all/.test(aiGovernanceSweep)],
   ['AI governance sweep propagates control failures', /failure_count/.test(aiGovernanceSweep) && /throw new Error\(`Governance control intelligence reconciliation reported/.test(aiGovernanceSweep)],
-  ['scheduled worker invokes AI governance sweep', /refreshAllAIGovernanceIntelligence\(\)/.test(workerRoute)],
+  ['scheduled worker invokes AI governance sweep', /runScheduledWorkerCycle/.test(workerRoute)
+    && /export async function runScheduledWorkerCycle/.test(workerService)
+    && /refreshAllAIGovernanceIntelligence\(\)/.test(workerService)],
   ['database scheduler authority remains singular and one-minute', /cron\.schedule/i.test(schedulerAuthorityMigration)
     && /'dgp-durable-worker-kick'/.test(schedulerAuthorityMigration)
     && /'\* \* \* \* \*'/.test(schedulerAuthorityMigration)
