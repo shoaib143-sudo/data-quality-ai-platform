@@ -408,8 +408,8 @@ for (const file of files) {
       throw new Error('Historical PGCL dollar-quote defect no longer matches the audited replay repair contract')
     }
     const repairedSql = originalSql
-      .replace(malformedOpen, validOpen)
-      .replace(malformedClose, validClose)
+      .replace(malformedOpen, () => validOpen)
+      .replace(malformedClose, () => validClose)
     fs.writeFileSync(targetPath, repairedSql)
     manifest.push({
       source: file,
