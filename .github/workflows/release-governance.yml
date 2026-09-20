@@ -486,6 +486,7 @@ jobs:
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
         run: |
           set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
