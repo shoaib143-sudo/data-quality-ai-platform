@@ -3,6 +3,8 @@ name: Continuous Learning Governance
 on:
   pull_request:
     paths:
+      - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'lib/agents/governed-learning-benchmarks.ts'
       - 'lib/agents/governed-learning-benchmark-service.ts'
       - 'scripts/test-governed-learning-benchmarks.mjs'
@@ -18,6 +20,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'lib/agents/governed-learning-benchmarks.ts'
       - 'lib/agents/governed-learning-benchmark-service.ts'
       - 'scripts/test-governed-learning-benchmarks.mjs'
@@ -44,6 +48,8 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+      - name: Run proactive governed case learning tests
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs
       - name: Run governed learning candidate tests
         run: node --experimental-strip-types scripts/test-governed-learning-candidates.mjs
       - name: Run governed learning benchmark tests
