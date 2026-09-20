@@ -77,10 +77,6 @@ export async function loadPositiveLearningCaseAdminInbox(
     })
   }
 
-  const legacyCandidateResult = candidateIds.length
-    ? { data: candidates, error: null }
-    : { data: [], error: null }
-  void legacyCandidateResult
 
   const projectNameById = new Map((projects ?? []).map((project) => [String(project.id), String(project.name)]))
   const candidateById = new Map((candidates ?? []).map((candidate) => [String(candidate.id), candidate]))
