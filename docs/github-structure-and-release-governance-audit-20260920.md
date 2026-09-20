@@ -81,3 +81,32 @@ Keep this global suppression during the deployment-flood audit. Restore selectiv
 6. Increase required approvals to one and enable code-owner review when an independent maintainer is available.
 
 Tracking issue: #915.
+
+
+## Reconciliation update
+
+Reconciled against current `main` and repository history on 2026-09-20.
+
+### Work already implemented
+
+- The 132-workflow inventory is an explicit governed ceiling, enforced by `scripts/verify-github-governance.mjs`; it is not an accidental unbounded count.
+- Repository Governance validates unique workflow names, immutable action references, least-privilege permissions, required workflow contracts, the committed ruleset contract, Dependabot coverage, and security policy requirements.
+- The merge-critical fast-path model is already implemented and enforced by `scripts/verify-fast-path-ci.mjs`: pull requests run lightweight blocking sentinels while full certification remains on merged `main`.
+- The six required workflow contracts already use PR/ref-scoped concurrency groups and cancel only superseded pull-request runs.
+- All eight committed required check contexts are implemented:
+  - `build` in `quality-gate.yml`
+  - `analyze` in `codeql-security.yml`
+  - `revalidate` in `p0-p4-revalidation.yml`
+  - `certify`, `runtime-slo`, and `clean-database-reconstruction` in `v6-operational-certification.yml`
+  - `dependency-audit` in `dependency-review.yml`
+  - `repository-governance` in `repository-governance.yml`
+- No exact duplicate workflow blobs were found.
+- Prior workflow-consolidation work, including PR #545, deliberately folded temporary completion workflows into governed workflows and established the workflow-count ceiling.
+- Five verified duplicate branch refs were removed while retaining the canonical UX and sensitive-governance refs.
+- PR #917 targets `main` and is quality-gate work, so it remains eligible under the temporary merge freeze.
+
+### Remaining configuration-only gap
+
+The live ruleset still requires only `build`, `analyze`, `dependency-audit`, and `repository-governance`, with strict status checks disabled. The committed contract requires all eight contexts and strict status checks. Since the missing contexts now have verified workflow producers, the remaining work is a live GitHub ruleset reconciliation, not new workflow implementation.
+
+Do not mass-disable or consolidate workflows solely from the raw count. Any future consolidation must preserve required context names, the PR fast path, full post-merge certification, permission boundaries, and the governed ceiling.
