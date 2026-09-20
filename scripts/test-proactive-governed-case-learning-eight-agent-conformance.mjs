@@ -105,6 +105,10 @@ for (const invariant of [
   'proposePgclCasesFromVerifiedSupervisorRun',
   'childRunIds',
   'supervisorEvaluationId',
+  'loadApprovedPgclPrecedents',
+  'positiveLearningCases: pgclPrecedents.map',
+  'markPgclPrecedentsApplied',
+  "executionSurface: 'SUPERVISOR_SPECIALIST'",
 ]) {
   assert.ok(supervisor.includes(invariant), `missing supervisor PGCL integration: ${invariant}`)
 }
