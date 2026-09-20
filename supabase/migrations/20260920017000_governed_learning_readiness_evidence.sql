@@ -42,17 +42,17 @@ begin
 
   select bool_and(to_regclass(table_name) is not null)
   into v_required_tables_present
-  from unnest(v_required_tables) as table_name;
+  from unnest(v_required_tables) as t(table_name);
 
   select coalesce(bool_and(c.relrowsecurity), false)
   into v_required_rls_enabled
-  from unnest(v_required_tables) as table_name
+  from unnest(v_required_tables) as t(table_name)
   join pg_class c on c.oid = to_regclass(table_name)
   where to_regclass(table_name) is not null;
 
   if (select count(*) from unnest(v_required_tables)) <> (
     select count(*)
-    from unnest(v_required_tables) as table_name
+    from unnest(v_required_tables) as t(table_name)
     where to_regclass(table_name) is not null
   ) then
     v_required_rls_enabled := false;
