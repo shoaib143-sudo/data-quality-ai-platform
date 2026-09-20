@@ -72,7 +72,7 @@ export async function markPgclPrecedentsApplied(input: {
   projectId: string
   agentRunId: string
   cases: readonly AppliedPgclPrecedent[]
-  executionSurface: 'PROFILING_INVESTIGATION' | 'DATA_QUALITY_INVESTIGATION'
+  executionSurface: 'PROFILING_INVESTIGATION' | 'DATA_QUALITY_INVESTIGATION' | 'SUPERVISOR_SPECIALIST'
 }) {
   for (const learningCase of input.cases) {
     await recordPositiveLearningCaseOutcome({
