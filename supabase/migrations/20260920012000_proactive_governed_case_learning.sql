@@ -569,6 +569,56 @@ begin
 end;
 $$;
 
+create or replace function agent.list_approved_positive_learning_cases(
+  p_project_id uuid,
+  p_agent_definition_id uuid,
+  p_limit integer default 50
+)
+returns table(
+  id uuid,
+  candidate_id text,
+  case_key text,
+  problem_type text,
+  context jsonb,
+  recommendation jsonb,
+  evidence jsonb,
+  updated_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = pg_catalog, agent
+as $
+  select
+    lc.id,
+    lc.evidence->>'pgcl_candidate_id' as candidate_id,
+    lc.case_key,
+    lc.problem_type,
+    lc.context,
+    lc.recommendation,
+    lc.evidence,
+    lc.updated_at
+  from agent.agent_learning_cases lc
+  where lc.project_id = p_project_id
+    and lc.agent_definition_id = p_agent_definition_id
+    and lc.source_kind = 'PGCL_POSITIVE_CASE'
+    and lc.status = 'ACTIVE'
+    and lc.decision_status = 'VERIFIED'
+    and lc.outcome_status = 'VERIFIED'
+    and nullif(btrim(lc.evidence->>'pgcl_candidate_id'),'') is not null
+    and nullif(btrim(lc.recommendation->>'reusable_lesson'),'') is not null
+  order by lc.updated_at desc
+  limit greatest(1, least(coalesce(p_limit, 50), 100));
+$;
+
+revoke all on function agent.list_approved_positive_learning_cases(uuid,uuid,integer)
+  from public, anon, authenticated;
+grant execute on function agent.list_approved_positive_learning_cases(uuid,uuid,integer)
+  to service_role;
+
+comment on function agent.list_approved_positive_learning_cases(uuid,uuid,integer) is
+  'Returns only active, verified, Data Governance Admin-approved PGCL cases for the same project and originating agent definition. Cases remain context only and confer no authority.';
+
 revoke all on function agent.create_positive_learning_case(
   uuid,text,text,text,uuid,text,text,text,text,text,text[],text[],text[],text[],text[],uuid
 ) from public, anon, authenticated;
