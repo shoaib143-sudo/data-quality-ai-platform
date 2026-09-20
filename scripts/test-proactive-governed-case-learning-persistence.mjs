@@ -90,4 +90,7 @@ for (const invariant of [
 assert.equal(/chain[-_ ]?of[-_ ]?thought/i.test(service + migration), false)
 assert.equal(/hidden[-_ ]?reasoning/i.test(service + migration), false)
 
+
+assert.equal(/\nas \$\n/.test(migration), false, 'PGCL SQL functions must use valid dollar-quoted delimiters')
+assert.equal(/\n\$;\n/.test(migration), false, 'PGCL SQL functions must close with valid dollar-quoted delimiters')
 console.log('PGCL durable persistence remains project-scoped, canonically verified, admin-reviewed, and non-self-promoting.')
