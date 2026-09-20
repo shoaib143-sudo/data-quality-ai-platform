@@ -143,7 +143,7 @@ const checks = [
     "policyDecision.decision !== 'ALLOW'",
     'executeGovernanceSpecialistAgent',
   ]],
-  ['app/api/jobs/worker/route.ts', [
+  ['lib/orchestration/worker-service.ts', [
     'refreshAllPredictiveRisk',
     'applyAllPredictiveRiskGovernedActions',
     'governedAutonomy',
@@ -220,7 +220,7 @@ for (const forbidden of ['function riskRank(', 'function allowedTarget(', 'const
   if (autonomy.includes(forbidden)) failures.push(`governed autonomy must not duplicate PDP decision logic: ${forbidden}`)
 }
 
-const worker = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
+const worker = fs.readFileSync('lib/orchestration/worker-service.ts', 'utf8')
 const refreshAt = worker.indexOf('const predictiveRisk = await refreshAllPredictiveRisk()')
 const autonomyAt = worker.indexOf('const governedAutonomy = await applyAllPredictiveRiskGovernedActions()')
 if (refreshAt < 0 || autonomyAt < 0 || autonomyAt <= refreshAt) failures.push('worker must refresh predictive risk before applying governed autonomy')
