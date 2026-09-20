@@ -9,6 +9,12 @@ on:
       - 'tests/governed-similarity.test.mjs'
       - 'lib/governance/semantic-knowledge-indexer.ts'
       - 'scripts/test-regulatory-retrieval-provenance.mjs'
+      - 'lib/governance/catalog-metadata-semantic-contract.ts'
+      - 'lib/governance/catalog-metadata-semantic-indexer.ts'
+      - 'lib/governance/semantic-jobs.ts'
+      - 'lib/governance/semantic-job-worker.ts'
+      - 'app/api/catalog/metadata/search/route.ts'
+      - 'tests/catalog-metadata-semantic-search.test.mjs'
       - 'lib/ai/retrieval-provider.ts'
       - 'lib/governance/semantic-project-reindex.ts'
       - 'lib/governance/semantic-project-reindex-runtime.ts'
@@ -28,6 +34,12 @@ on:
       - 'tests/governed-similarity.test.mjs'
       - 'lib/governance/semantic-knowledge-indexer.ts'
       - 'scripts/test-regulatory-retrieval-provenance.mjs'
+      - 'lib/governance/catalog-metadata-semantic-contract.ts'
+      - 'lib/governance/catalog-metadata-semantic-indexer.ts'
+      - 'lib/governance/semantic-jobs.ts'
+      - 'lib/governance/semantic-job-worker.ts'
+      - 'app/api/catalog/metadata/search/route.ts'
+      - 'tests/catalog-metadata-semantic-search.test.mjs'
       - 'lib/ai/retrieval-provider.ts'
       - 'lib/governance/semantic-project-reindex.ts'
       - 'lib/governance/semantic-project-reindex-runtime.ts'
@@ -65,5 +77,7 @@ jobs:
         run: node scripts/test-regulatory-retrieval-provenance.mjs
       - name: Governed object similarity
         run: node --experimental-strip-types --test tests/governed-similarity.test.mjs
+      - name: Scalable catalog metadata semantic indexing
+        run: node --experimental-strip-types --test tests/catalog-metadata-semantic-search.test.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit

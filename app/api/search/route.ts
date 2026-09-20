@@ -94,6 +94,16 @@ function semanticResult(match: RetrievalMatch): SearchResult {
       label = textMetadata(metadata, 'name') ?? externalId ?? label
       href = `/lineage?transformation=${encodeURIComponent(objectId)}`
       break
+    case 'CATALOG_ASSET':
+      label = textMetadata(metadata, 'asset_key') ?? textMetadata(metadata, 'name') ?? label
+      href = '/catalog/physical-assets'
+      break
+    case 'CATALOG_FIELD': {
+      const assetKey = textMetadata(metadata, 'asset_key') ?? textMetadata(metadata, 'asset_name')
+      label = assetKey && columnName ? `${assetKey}.${columnName}` : columnName ?? label
+      href = '/catalog/physical-assets'
+      break
+    }
   }
 
   return {
@@ -207,12 +217,34 @@ export async function GET(request: Request) {
     const retrieved = await retrieval.retrieve({
       query,
       projectIds: (projects ?? []).map((project) => project.id),
-      objectTypes: ['DATASET', 'COLUMN', 'FINDING', 'QUALITY_INCIDENT', 'DOCUMENT', 'DOCUMENT_CHUNK', 'GLOSSARY_TERM', 'POLICY', 'LINEAGE_TRANSFORMATION'],
+      objectTypes: ['DATASET', 'COLUMN', 'FINDING', 'QUALITY_INCIDENT', 'DOCUMENT', 'DOCUMENT_CHUNK', 'GLOSSARY_TERM', 'POLICY', 'LINEAGE_TRANSFORMATION', 'CATALOG_ASSET', 'CATALOG_FIELD'],
       modes: ['semantic'],
       limit: 75,
       threshold: 0.35,
     })
-    semantic = retrieved.matches.map(semanticResult)
+    const catalogAssetIds = [...new Set(retrieved.matches.flatMap((match) =>
+      ['CATALOG_ASSET', 'CATALOG_FIELD'].includes(match.objectType) && match.objectId
+        ? [match.objectId]
+        : [],
+    ))]
+    const currentCatalogIds = new Set<string>()
+    if (catalogAssetIds.length) {
+      const { data: currentCatalogAssets, error: currentCatalogError } = await supabase
+        .schema('catalog')
+        .from('discovered_assets')
+        .select('id')
+        .in('id', catalogAssetIds)
+        .eq('is_current', true)
+      if (currentCatalogError) throw new Error(`Unable to validate current catalog search matches: ${currentCatalogError.message}`)
+      for (const asset of currentCatalogAssets ?? []) currentCatalogIds.add(String(asset.id))
+    }
+
+    semantic = retrieved.matches
+      .filter((match) =>
+        !['CATALOG_ASSET', 'CATALOG_FIELD'].includes(match.objectType)
+        || Boolean(match.objectId && currentCatalogIds.has(match.objectId)),
+      )
+      .map(semanticResult)
   } catch (error) {
     semanticStatus = error instanceof Error && error.name === 'EmbeddingProviderNotConfiguredError' ? 'NOT_CONFIGURED' : 'UNAVAILABLE'
     if (semanticStatus === 'UNAVAILABLE') console.error('Hybrid semantic search unavailable', error)
