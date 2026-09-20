@@ -63,4 +63,33 @@ test('loads governed DQ score history through the configured analytics provider'
   assert.equal(requests[0].metric, 'dq.score_history')
   assert.deepEqual(requests[0].filters, { datasetId: 'dataset-1' })
   assert.equal(requests[0].limit, 500)
+  assert.equal(requests[0].completeRange, true)
+})
+
+
+test('bounds response buckets only after complete-range aggregation', async () => {
+  const provider = {
+    providerKey: 'test-provider',
+    async query(request) {
+      assert.equal(request.completeRange, true)
+      return [
+        { observedAt: '2026-09-01T08:00:00Z', overallScore: 90 },
+        { observedAt: '2026-09-02T08:00:00Z', overallScore: 80 },
+        { observedAt: '2026-09-03T08:00:00Z', overallScore: 70 },
+      ]
+    },
+  }
+
+  const result = await loadDataQualityHistory({
+    projectId: 'project-1',
+    limit: 2,
+    changeThreshold: 5,
+  }, provider)
+
+  assert.deepEqual(result.buckets.map((bucket) => bucket.bucketStart), [
+    '2026-09-02T00:00:00.000Z',
+    '2026-09-03T00:00:00.000Z',
+  ])
+  assert.equal(result.comparisons.length, 2)
+  assert.equal(result.materialChangeCount, 2)
 })
