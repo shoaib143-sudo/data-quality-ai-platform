@@ -34,7 +34,7 @@ for (const invariant of [
 }
 
 for (const invariant of [
-  'requireUser',
+  'requireApiUser',
   'authorizeDataGovernanceSuperAdmin',
   'reviewProactiveGovernedCaseLearningCandidate',
   'A valid PGCL decision is required.',
