@@ -14,8 +14,10 @@ const structural = {
   canonicallyVerifiedRunCount: 1,
   positiveCaseCount: 0,
   approvedPositiveCaseCount: 0,
+  productionEligibleApprovedPositiveCaseCount: 0,
   appliedPositiveCaseUsageCount: 0,
   successfulPositiveCaseUsageCount: 0,
+  productionEligibleSuccessfulPositiveCaseUsageCount: 0,
 }
 
 const blocked = evaluateGovernedLearningProductionReadiness({
@@ -53,16 +55,29 @@ const appliedWithoutSuccess = evaluateGovernedLearningProductionReadiness({
 })
 assert.equal(appliedWithoutSuccess.status, 'EVIDENCE_IN_PROGRESS')
 
+const nonProductionReuse = evaluateGovernedLearningProductionReadiness({
+  ...structural,
+  positiveCaseCount: 1,
+  approvedPositiveCaseCount: 1,
+  productionEligibleApprovedPositiveCaseCount: 0,
+  successfulPositiveCaseUsageCount: 1,
+  productionEligibleSuccessfulPositiveCaseUsageCount: 0,
+})
+assert.equal(nonProductionReuse.status, 'EVIDENCE_IN_PROGRESS')
+
 const certified = evaluateGovernedLearningProductionReadiness({
   ...structural,
   positiveCaseCount: 1,
   approvedPositiveCaseCount: 1,
+  productionEligibleApprovedPositiveCaseCount: 1,
   appliedPositiveCaseUsageCount: 0,
   successfulPositiveCaseUsageCount: 1,
+  productionEligibleSuccessfulPositiveCaseUsageCount: 1,
 })
 assert.equal(certified.status, 'CERTIFIED')
 assert.equal(certified.controls.humanReviewRequired, true)
 assert.equal(certified.controls.successfulReuseRequiredForCertification, true)
+assert.equal(certified.controls.productionEligibleEvidenceRequiredForCertification, true)
 assert.equal(certified.evidence.appliedPositiveCaseUsageCount, 0, 'SUCCEEDED is the terminal proof of prior application')
 
 const missingStructural = evaluateGovernedLearningProductionReadiness({
