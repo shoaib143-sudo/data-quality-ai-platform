@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth/require-user'
+import { requireApiUser } from '@/lib/auth/require-api-user'
 import {
   authorizeDataGovernanceSuperAdmin,
 } from '@/lib/auth/data-governance-super-admin'
@@ -21,7 +21,7 @@ export async function POST(
   context: { params: Promise<{ candidateId: string }> },
 ) {
   try {
-    const user = await requireUser()
+    const user = await requireApiUser()
     const { candidateId } = await context.params
     const body = await request.json()
     const decision = text(body.decision).toUpperCase() as PgclAdminDecision
