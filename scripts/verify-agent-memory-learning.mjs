@@ -24,6 +24,7 @@ requireText('lib/agents/agent-memory.ts', [
 ])
 requireText('lib/agents/governed-learning-context.ts', [
   'createGovernanceMemoryProvider', "classes: ['episodic']", 'verifiedEpisodes',
+  'governedDurableMemoryEligible', "memoryType !== 'SEMANTIC'", 'human_validated === true',
 ])
 requireText('lib/agents/agent-memory-learning.ts', [
   'retrieveGovernedLearningContext','verifiedEpisodeMatches','verifiedEpisodes',
@@ -40,6 +41,12 @@ if (activeLearning.includes('retrieveRelevantAgentMemory')) {
 requireText('app/api/agents/governance/run/route.ts', ['enrichGovernedAgentWithMemory','persistGovernedAgentMemoryAndEvaluation'])
 requireText('app/api/agents/governance/handoff/route.ts', ['enrichGovernedAgentWithMemory','memory_informed: true'])
 requireText('lib/governance/semantic-agent-learning-indexer.ts', ['AGENT_LEARNING_CASE','reindexProjectAgentLearningCases'])
+requireText('lib/governance/semantic-agent-memory-indexer.ts', [
+  'indexableAgentMemory',
+  "memory.memory_type.trim().toUpperCase() !== 'SEMANTIC'",
+  'memory.content?.human_validated === true',
+  '.filter(indexableAgentMemory)',
+])
 requireText('lib/governance/semantic-job-worker.ts', ['reindexProjectAgentLearningCases','agentLearning.indexed'])
 
 console.log('Layered agent memory and verified learning contracts verified.')
