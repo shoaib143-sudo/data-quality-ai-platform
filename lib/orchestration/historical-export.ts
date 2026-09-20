@@ -1,133 +1,16 @@
 import { getObjectStore } from '@/lib/data-plane/object-store'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import {
+  HISTORICAL_EXPORT_KINDS,
+  boundHistoricalExportChunkSize,
+  boundHistoricalExportRetentionDays,
+  normalizeHistoricalExportFilters,
+  normalizeHistoricalExportKind,
+  planHistoricalExportChunk,
+  type HistoricalExportKind,
+} from '@/lib/orchestration/historical-export-contract'
 import { enqueueDurableJob, type DurableJob } from '@/lib/orchestration/queue'
 import { createAdminClient } from '@/lib/supabase/admin'
-
-export const HISTORICAL_EXPORT_KINDS = [
-  'AUDIT_EVENTS',
-  'ANALYTICS_EVENTS',
-  'GOVERNANCE_OUTCOME_REPORTS',
-] as const
-
-export type HistoricalExportKind = typeof HISTORICAL_EXPORT_KINDS[number]
-
-type ExportPart = {
-  part: number
-  key: string
-  rows: number
-}
-
-type ExportRow = Record<string, unknown>
-
-type ExportJobRow = {
-  id: string
-  project_id: string
-  requested_by: string | null
-  export_kind: HistoricalExportKind
-  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
-  filters: Record<string, unknown>
-  cursor_state: Record<string, unknown>
-  object_parts: ExportPart[]
-  manifest_key: string | null
-  chunk_size: number
-  snapshot_at: string
-  part_count: number
-  rows_exported: number
-  idempotency_key: string | null
-  expires_at: string
-  last_error: string | null
-  created_at: string
-  started_at: string | null
-  completed_at: string | null
-  updated_at: string
-}
-
-function text(value: unknown) {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function optionalTimestamp(value: unknown, name: string) {
-  const normalized = text(value)
-  if (!normalized) return null
-  const parsed = new Date(normalized)
-  if (Number.isNaN(parsed.getTime())) throw new Error(`${name} must be a valid timestamp.`)
-  return parsed.toISOString()
-}
-
-function safeFilterToken(value: unknown, name: string) {
-  const normalized = text(value)
-  if (!normalized) return null
-  if (!/^[A-Za-z0-9_.:-]{1,120}$/.test(normalized)) {
-    throw new Error(`${name} contains unsupported characters.`)
-  }
-  return normalized
-}
-
-function normalizeExportKind(value: unknown): HistoricalExportKind {
-  const normalized = text(value).toUpperCase()
-  if (!HISTORICAL_EXPORT_KINDS.includes(normalized as HistoricalExportKind)) {
-    throw new Error(`Unsupported historical export kind: ${normalized || String(value)}`)
-  }
-  return normalized as HistoricalExportKind
-}
-
-export function normalizeHistoricalExportFilters(
-  kindValue: HistoricalExportKind | string,
-  input: Record<string, unknown> | null | undefined,
-) {
-  const kind = normalizeExportKind(kindValue)
-  const source = input ?? {}
-  const from = optionalTimestamp(source.from, 'from')
-  const to = optionalTimestamp(source.to, 'to')
-  if (from && to && new Date(from).getTime() > new Date(to).getTime()) {
-    throw new Error('from must be earlier than or equal to to.')
-  }
-
-  if (kind === 'AUDIT_EVENTS') {
-    const actorType = text(source.actorType).toUpperCase() || null
-    if (actorType && !['USER', 'SYSTEM', 'AGENT'].includes(actorType)) {
-      throw new Error('actorType must be USER, SYSTEM or AGENT.')
-    }
-    return {
-      from,
-      to,
-      actorType,
-      eventPrefix: safeFilterToken(source.eventPrefix, 'eventPrefix'),
-      entityType: safeFilterToken(source.entityType, 'entityType'),
-    }
-  }
-
-  if (kind === 'ANALYTICS_EVENTS') {
-    return {
-      from,
-      to,
-      eventPrefix: safeFilterToken(source.eventPrefix, 'eventPrefix'),
-      aggregateType: safeFilterToken(source.aggregateType, 'aggregateType'),
-    }
-  }
-
-  const persona = text(source.persona).toUpperCase() || null
-  const depth = text(source.depth).toUpperCase() || null
-  if (persona && !['EXECUTIVE', 'GOVERNANCE_COUNCIL', 'DATA_STEWARD', 'AUDIT'].includes(persona)) {
-    throw new Error('persona is unsupported.')
-  }
-  if (depth && !['EXECUTIVE', 'GOVERNANCE', 'AUDIT'].includes(depth)) {
-    throw new Error('depth is unsupported.')
-  }
-  return { from, to, persona, depth }
-}
-
-function boundedChunkSize(value: unknown) {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) return 500
-  return Math.max(100, Math.min(2000, Math.trunc(numeric)))
-}
-
-function boundedRetentionDays(value: unknown) {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) return 7
-  return Math.max(1, Math.min(90, Math.trunc(numeric)))
-}
 
 function boundedOffset(cursor: Record<string, unknown>) {
   const numeric = Number(cursor.offset ?? 0)
@@ -225,10 +108,10 @@ export async function createHistoricalExport(input: {
   const requestedBy = input.requestedBy.trim()
   if (!projectId || !requestedBy) throw new Error('projectId and requestedBy are required.')
 
-  const exportKind = normalizeExportKind(input.exportKind)
+  const exportKind = normalizeHistoricalExportKind(input.exportKind)
   const filters = normalizeHistoricalExportFilters(exportKind, input.filters)
-  const chunkSize = boundedChunkSize(input.chunkSize)
-  const retentionDays = boundedRetentionDays(input.retentionDays)
+  const chunkSize = boundHistoricalExportChunkSize(input.chunkSize)
+  const retentionDays = boundHistoricalExportRetentionDays(input.retentionDays)
   const idempotencyKey = input.idempotencyKey?.trim() || null
   const admin = createAdminClient()
 
