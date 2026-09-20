@@ -36,7 +36,10 @@ requireText(helper, 'returned incomplete evidence', 'artifact evidence completen
 requireText(route, 'persistAgentRunResultArtifact', 'governance run artifact persistence')
 requireText(route, "operation: 'governed_agent_result_artifact'", 'artifact telemetry stage')
 requireText(route, 'artifact_id: artifact.artifactId', 'artifact provenance telemetry')
-requireText(route, 'output, artifact, memory', 'artifact API evidence')
+requireText(route, 'output,', 'artifact API output evidence')
+requireText(route, 'artifact,', 'artifact API artifact evidence')
+requireText(route, 'memory,', 'artifact API memory evidence')
+requireText(route, 'learningEvaluation,', 'artifact API governed learning evidence')
 
 requireText(profilingMigration, 'trg_enforce_profiling_success_output', 'profiling success/output integrity trigger')
 requireText(profilingMigration, "d.agent_key = 'profiling_agent'", 'profiling-agent scope')
