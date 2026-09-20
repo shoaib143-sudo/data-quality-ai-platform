@@ -1,5 +1,5 @@
 import { GOVERNED_AGENT_KEYS } from '@/lib/agents/governed-agent-registry'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export type PgclCommandCenterCandidate = {
   candidateId: string
@@ -81,7 +81,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 export async function readPgclCommandCenterState(projectId: string): Promise<PgclCommandCenterState> {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const [
     candidateResult,
