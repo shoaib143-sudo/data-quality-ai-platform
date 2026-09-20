@@ -138,6 +138,7 @@ export type AnalyticsQueryRequest = TenantScope & {
   dimensions?: string[]
   filters?: Record<string, string | number | boolean | null>
   limit?: number
+  completeRange?: boolean
 }
 
 export type AnalyticsQueryRow = Record<string, string | number | boolean | null>
