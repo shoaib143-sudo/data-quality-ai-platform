@@ -150,7 +150,7 @@ export async function reconcilePositiveLearningCaseUsagesFromGovernedOutcome(inp
   const { data: usages, error } = await admin
     .schema('agent')
     .from('positive_learning_case_usages')
-    .select('candidate_id')
+    .select('candidate_id,outcome')
     .eq('project_id', input.projectId)
     .eq('consumer_agent_run_id', input.consumerAgentRunId)
     .eq('usage_status', 'APPLIED')
@@ -172,11 +172,14 @@ export async function reconcilePositiveLearningCaseUsagesFromGovernedOutcome(inp
       consumerAgentRunId: input.consumerAgentRunId,
       status: terminalStatus,
       outcome: {
+        ...((usage.outcome && typeof usage.outcome === 'object' && !Array.isArray(usage.outcome))
+          ? usage.outcome as Record<string, unknown>
+          : {}),
         governed_outcome_id: input.governedOutcomeId,
         verification_state: input.verificationState,
         outcome_type: input.outcomeType,
         effectiveness: input.effectiveness ?? null,
-        attribution: 'AUTHORITATIVE_GOVERNED_OUTCOME',
+        terminal_attribution: 'AUTHORITATIVE_GOVERNED_OUTCOME',
       },
     })
   }
