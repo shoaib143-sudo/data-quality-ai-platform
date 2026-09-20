@@ -23,10 +23,10 @@ test('Cloudflare preflight does not require Cloudflare credentials or paid activ
   assert.doesNotMatch(preflight, /confirm_paid_activation == true/)
   const wranglerDeployLines = preflight
     .split(/\r?\n/)
-    .filter(line => /wrangler@4\.131\.1 deploy/.test(line))
+    .filter(line => /dlx wrangler deploy/.test(line))
   assert.ok(wranglerDeployLines.length >= 2)
   for (const line of wranglerDeployLines) {
-    assert.match(line, /deploy --dry-run/)
+    assert.match(line, /dlx wrangler deploy --dry-run/)
   }
 })
 
