@@ -14,6 +14,13 @@ function numeric(value: unknown, fallback: number | null = null) {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+function governedDurableMemoryEligible(memory: { memory_type?: unknown; content?: unknown }) {
+  const memoryType = typeof memory.memory_type === 'string' ? memory.memory_type.trim().toUpperCase() : ''
+  if (memoryType !== 'SEMANTIC') return true
+  if (!memory.content || typeof memory.content !== 'object' || Array.isArray(memory.content)) return false
+  return (memory.content as Record<string, unknown>).human_validated === true
+}
+
 export async function persistAgentWorkingMemory(input: {
   projectId: string
   agentRunId: string
@@ -59,7 +66,7 @@ export async function retrieveRelevantAgentMemory(input: {
   const { data: memories, error: memoryError } = await memoryQuery
   if (memoryError) throw new Error(`Unable to retrieve durable agent memory: ${memoryError.message}`)
 
-  const rankedMemories = (memories ?? []).map((memory) => {
+  const rankedMemories = (memories ?? []).filter(governedDurableMemoryEligible).map((memory) => {
     const searchable = `${memory.memory_key} ${JSON.stringify(memory.content)}`.toLowerCase()
     const terms = query.split(/\s+/).filter((term) => term.length > 2)
     const matches = terms.filter((term) => searchable.includes(term)).length
