@@ -20,6 +20,13 @@ export type LearningLifecycleCandidate = {
   verifiedAt: string | null
   activatedAt: string | null
   rolledBackAt: string | null
+  transitionCount: number
+  latestTransition: string | null
+  latestTransitionAt: string | null
+  canaryEvidenceCount: number
+  canaryPassCount: number
+  canaryFailureCount: number
+  canaryAverageScore: number | null
 }
 
 export type LearningLifecycleCommandCenterState = {
@@ -33,6 +40,10 @@ export type LearningLifecycleCommandCenterState = {
     active: number
     rolledBack: number
     notReadyOrRejected: number
+    transitionEvents: number
+    canaryEvidenceEvents: number
+    canaryPasses: number
+    canaryFailures: number
   }
   authority: {
     selfPromotionAllowed: false
@@ -48,7 +59,7 @@ export async function readGovernedLearningLifecycleCommandCenter(
 ): Promise<LearningLifecycleCommandCenterState> {
   const supabase = await createClient()
 
-  const [candidateResult, benchmarkResult, approvalResult, releaseResult] = await Promise.all([
+  const [candidateResult, benchmarkResult, approvalResult, releaseResult, transitionResult, canaryEvidenceResult] = await Promise.all([
     supabase.schema('agent').from('learning_candidates')
       .select('id,agent_key,skill_key,category,title,baseline_version,candidate_version,status,created_at,updated_at')
       .eq('project_id', projectId)
@@ -66,12 +77,24 @@ export async function readGovernedLearningLifecycleCommandCenter(
       .select('candidate_id,status,canary_started_at,verified_at,activated_at,rolled_back_at,created_at')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false }),
+    supabase.schema('agent').from('learning_candidate_transitions')
+      .select('candidate_id,from_status,to_status,created_at')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(1000),
+    supabase.schema('agent').from('learning_candidate_canary_evidence')
+      .select('candidate_id,score,pass,observed_at')
+      .eq('project_id', projectId)
+      .order('observed_at', { ascending: false })
+      .limit(1000),
   ])
 
   if (candidateResult.error) throw new Error(`Unable to load governed learning candidates: ${candidateResult.error.message}`)
   if (benchmarkResult.error) throw new Error(`Unable to load governed learning benchmarks: ${benchmarkResult.error.message}`)
   if (approvalResult.error) throw new Error(`Unable to load governed learning approvals: ${approvalResult.error.message}`)
   if (releaseResult.error) throw new Error(`Unable to load governed learning releases: ${releaseResult.error.message}`)
+  if (transitionResult.error) throw new Error(`Unable to load governed learning transitions: ${transitionResult.error.message}`)
+  if (canaryEvidenceResult.error) throw new Error(`Unable to load governed learning canary evidence: ${canaryEvidenceResult.error.message}`)
 
   const latestBenchmark = new Map<string, (typeof benchmarkResult.data)[number]>()
   for (const row of benchmarkResult.data ?? []) {
@@ -91,10 +114,40 @@ export async function readGovernedLearningLifecycleCommandCenter(
     if (!latestRelease.has(key)) latestRelease.set(key, row)
   }
 
+  type TransitionStats = { count: number; latest: string | null; latestAt: string | null }
+  const transitionByCandidate = new Map<string, TransitionStats>()
+  for (const row of transitionResult.data ?? []) {
+    const key = String(row.candidate_id)
+    const current = transitionByCandidate.get(key) ?? { count: 0, latest: null, latestAt: null }
+    current.count += 1
+    if (!current.latestAt) {
+      current.latest = `${row.from_status ?? 'START'} → ${row.to_status}`
+      current.latestAt = String(row.created_at)
+    }
+    transitionByCandidate.set(key, current)
+  }
+
+  type CanaryStats = { count: number; passes: number; failures: number; scoreTotal: number; scoreCount: number }
+  const canaryByCandidate = new Map<string, CanaryStats>()
+  for (const row of canaryEvidenceResult.data ?? []) {
+    const key = String(row.candidate_id)
+    const current = canaryByCandidate.get(key) ?? { count: 0, passes: 0, failures: 0, scoreTotal: 0, scoreCount: 0 }
+    current.count += 1
+    if (row.pass === true) current.passes += 1
+    else current.failures += 1
+    if (row.score != null && Number.isFinite(Number(row.score))) {
+      current.scoreTotal += Number(row.score)
+      current.scoreCount += 1
+    }
+    canaryByCandidate.set(key, current)
+  }
+
   const candidates: LearningLifecycleCandidate[] = (candidateResult.data ?? []).map((row) => {
     const benchmark = latestBenchmark.get(String(row.id))
     const approval = latestApproval.get(String(row.id))
     const release = latestRelease.get(String(row.id))
+    const transitions = transitionByCandidate.get(String(row.id))
+    const canary = canaryByCandidate.get(String(row.id))
     return {
       id: String(row.id),
       agentKey: String(row.agent_key),
@@ -115,6 +168,13 @@ export async function readGovernedLearningLifecycleCommandCenter(
       verifiedAt: release?.verified_at ? String(release.verified_at) : null,
       activatedAt: release?.activated_at ? String(release.activated_at) : null,
       rolledBackAt: release?.rolled_back_at ? String(release.rolled_back_at) : null,
+      transitionCount: transitions?.count ?? 0,
+      latestTransition: transitions?.latest ?? null,
+      latestTransitionAt: transitions?.latestAt ?? null,
+      canaryEvidenceCount: canary?.count ?? 0,
+      canaryPassCount: canary?.passes ?? 0,
+      canaryFailureCount: canary?.failures ?? 0,
+      canaryAverageScore: canary?.scoreCount ? canary.scoreTotal / canary.scoreCount : null,
     }
   })
 
@@ -130,6 +190,10 @@ export async function readGovernedLearningLifecycleCommandCenter(
       active: statuses.filter((status) => status === 'ACTIVE').length,
       rolledBack: statuses.filter((status) => status === 'ROLLED_BACK').length,
       notReadyOrRejected: statuses.filter((status) => status === 'NOT_READY' || status === 'REJECTED').length,
+      transitionEvents: candidates.reduce((sum, candidate) => sum + candidate.transitionCount, 0),
+      canaryEvidenceEvents: candidates.reduce((sum, candidate) => sum + candidate.canaryEvidenceCount, 0),
+      canaryPasses: candidates.reduce((sum, candidate) => sum + candidate.canaryPassCount, 0),
+      canaryFailures: candidates.reduce((sum, candidate) => sum + candidate.canaryFailureCount, 0),
     },
     authority: {
       selfPromotionAllowed: false,
