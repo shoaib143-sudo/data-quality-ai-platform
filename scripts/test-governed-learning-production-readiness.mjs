@@ -57,12 +57,13 @@ const certified = evaluateGovernedLearningProductionReadiness({
   ...structural,
   positiveCaseCount: 1,
   approvedPositiveCaseCount: 1,
-  appliedPositiveCaseUsageCount: 1,
+  appliedPositiveCaseUsageCount: 0,
   successfulPositiveCaseUsageCount: 1,
 })
 assert.equal(certified.status, 'CERTIFIED')
 assert.equal(certified.controls.humanReviewRequired, true)
 assert.equal(certified.controls.successfulReuseRequiredForCertification, true)
+assert.equal(certified.evidence.appliedPositiveCaseUsageCount, 0, 'SUCCEEDED is the terminal proof of prior application')
 
 const missingStructural = evaluateGovernedLearningProductionReadiness({
   ...structural,
