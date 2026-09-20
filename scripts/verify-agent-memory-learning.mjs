@@ -14,12 +14,18 @@ requireText('supabase/migrations/20260904215057_agent_memory_learning_layers.sql
   "'EPISODE'","'SEMANTIC'",'expire_working_memory','search_learning_cases','dgp-agent-working-memory-expiry',
   'enable row level security',
 ])
+requireText('supabase/migrations/20260920045000_agent_learning_retrieval_safety.sql', [
+  "lc.source_kind = 'GOVERNED_ACTION_OUTCOME'", "lc.decision_status = 'VERIFIED'",
+  "lc.outcome_status = 'VERIFIED'", 'lc.source_agent_run_id is not null',
+  "governed_action_outcome_id", 'synthetic_bootstrap',
+])
 requireText('supabase/migrations/20260904215149_project_governance_learning_into_agent_cases.sql', [
   'project_remediation_knowledge_case','project_profiling_recommendation_case','project_dq_recommendation_case',
   'GOVERNANCE_REMEDIATION_KNOWLEDGE','PROFILING_RECOMMENDATION_LEARNING','DATA_QUALITY_RECOMMENDATION_LEARNING',
 ])
 requireText('lib/agents/agent-memory.ts', [
   'persistAgentWorkingMemory','retrieveRelevantAgentMemory','EPISODE','SEMANTIC','agent_memory_relationships',
+  'governedDurableMemoryEligible', "memoryType !== 'SEMANTIC'", 'human_validated === true', '.filter(governedDurableMemoryEligible)',
   'SYSTEM_CONTRACT','evidence_count','specialist_reasoning_contract',
 ])
 requireText('lib/agents/governed-learning-context.ts', [
@@ -40,7 +46,12 @@ if (activeLearning.includes('retrieveRelevantAgentMemory')) {
 }
 requireText('app/api/agents/governance/run/route.ts', ['enrichGovernedAgentWithMemory','persistGovernedAgentMemoryAndEvaluation'])
 requireText('app/api/agents/governance/handoff/route.ts', ['enrichGovernedAgentWithMemory','memory_informed: true'])
-requireText('lib/governance/semantic-agent-learning-indexer.ts', ['AGENT_LEARNING_CASE','reindexProjectAgentLearningCases'])
+requireText('lib/governance/semantic-agent-learning-indexer.ts', [
+  'AGENT_LEARNING_CASE','reindexProjectAgentLearningCases','indexableLearningCase',
+  "row.source_kind === 'GOVERNED_ACTION_OUTCOME'", "row.decision_status === 'VERIFIED'",
+  "row.outcome_status === 'VERIFIED'", 'hasGovernedOutcomeEvidence(row.evidence)',
+  '!hasSyntheticBootstrap(row.evidence)', '.filter(indexableLearningCase)',
+])
 requireText('lib/governance/semantic-agent-memory-indexer.ts', [
   'indexableAgentMemory',
   "memory.memory_type.trim().toUpperCase() !== 'SEMANTIC'",
