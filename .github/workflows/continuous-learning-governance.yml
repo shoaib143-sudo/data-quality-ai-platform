@@ -29,6 +29,7 @@ on:
       - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
       - 'scripts/test-proactive-governed-case-learning.mjs'
+      - 'scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs'
       - 'lib/agents/governed-learning-controlled-release.ts'
       - 'scripts/test-governed-learning-controlled-release.mjs'
       - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
@@ -77,6 +78,7 @@ on:
       - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
       - 'scripts/test-proactive-governed-case-learning.mjs'
+      - 'scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs'
       - 'lib/agents/governed-learning-controlled-release.ts'
       - 'scripts/test-governed-learning-controlled-release.mjs'
       - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
@@ -112,6 +114,8 @@ jobs:
           node-version: '24'
       - name: Run proactive governed case learning tests
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs
+      - name: Run eight-agent PGCL conformance
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs
       - name: Run PGCL persistence tests
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs
       - name: Run PGCL admin review UI tests
