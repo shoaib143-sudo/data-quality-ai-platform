@@ -51,6 +51,15 @@ export async function reviewProactiveGovernedCaseLearningCandidate(input: {
     throw new Error('PGCL review reason is required')
   }
 
+  const edits = input.edits ?? {}
+  if (input.decision === 'APPROVE_WITH_EDITS') {
+    const reusableLesson = edits.reusableLesson
+    if (typeof reusableLesson !== 'string' || !reusableLesson.trim()) {
+      throw new Error('APPROVE_WITH_EDITS requires a revised reusable lesson')
+    }
+    edits.reusableLesson = reusableLesson.trim()
+  }
+
   const admin = createAdminClient()
   const { data, error } = await admin.schema('agent').rpc('review_positive_learning_case', {
     p_project_id: input.projectId,
@@ -58,7 +67,7 @@ export async function reviewProactiveGovernedCaseLearningCandidate(input: {
     p_actor_user_id: input.actorUserId,
     p_decision: input.decision,
     p_reason: input.reason.trim(),
-    p_edits: input.edits ?? {},
+    p_edits: edits,
   })
 
   if (error || !data) {
