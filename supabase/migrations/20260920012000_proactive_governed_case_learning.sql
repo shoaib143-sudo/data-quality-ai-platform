@@ -295,6 +295,8 @@ as $$
 declare
   v_case agent.positive_learning_cases%rowtype;
   v_target_status text;
+  v_agent_definition_id uuid;
+  v_effective_lesson text;
 begin
   if p_project_id is null or p_candidate_id is null or p_actor_user_id is null then
     raise exception 'project, candidate and actor are required';
@@ -340,9 +342,26 @@ begin
     when 'MARK_ONE_OFF' then 'ONE_OFF'
   end;
 
+  v_effective_lesson := case
+    when p_decision = 'APPROVE_WITH_EDITS'
+      and length(btrim(coalesce(p_edits->>'reusableLesson',''))) > 0
+      then btrim(p_edits->>'reusableLesson')
+    else v_case.reusable_lesson
+  end;
+
+  select r.agent_definition_id into v_agent_definition_id
+  from agent.agent_runs r
+  where r.id = v_case.source_agent_run_id
+    and r.project_id = p_project_id;
+
+  if v_agent_definition_id is null then
+    raise exception 'source agent definition is unavailable for positive learning case';
+  end if;
+
   update agent.positive_learning_cases
   set
     review_status = v_target_status,
+    reusable_lesson = v_effective_lesson,
     admin_edits = coalesce(p_edits, '{}'::jsonb),
     reviewed_by = p_actor_user_id,
     reviewed_at = now(),
@@ -356,6 +375,68 @@ begin
     p_candidate_id, p_project_id, p_decision, btrim(p_reason),
     coalesce(p_edits, '{}'::jsonb), p_actor_user_id
   );
+
+  if p_decision in ('APPROVE_POSITIVE_CASE','APPROVE_WITH_EDITS') then
+    insert into agent.agent_learning_cases(
+      project_id,
+      agent_definition_id,
+      source_agent_run_id,
+      case_key,
+      source_kind,
+      problem_type,
+      context,
+      recommendation,
+      decision_status,
+      outcome_status,
+      effectiveness,
+      confidence,
+      evidence,
+      status,
+      occurred_at,
+      updated_at
+    ) values (
+      p_project_id,
+      v_agent_definition_id,
+      v_case.source_agent_run_id,
+      'pgcl:' || p_candidate_id::text,
+      'PGCL_POSITIVE_CASE',
+      v_case.use_case_key,
+      jsonb_build_object(
+        'pgcl_candidate_id', p_candidate_id,
+        'run_mode', v_case.run_mode,
+        'problem_signature', v_case.problem_signature,
+        'result_summary', v_case.result_summary,
+        'applicability_conditions', v_case.applicability_conditions,
+        'exclusion_conditions', v_case.exclusion_conditions,
+        'significance_signals', v_case.significance_signals,
+        'admin_review_reason', btrim(p_reason)
+      ),
+      jsonb_build_object('reusable_lesson', v_effective_lesson),
+      'VERIFIED',
+      'VERIFIED',
+      null,
+      null,
+      jsonb_build_object(
+        'pgcl_candidate_id', p_candidate_id,
+        'evidence_refs', v_case.evidence_refs,
+        'verification_evidence_refs', v_case.verification_evidence_refs,
+        'reviewed_by', p_actor_user_id,
+        'reviewed_at', now()
+      ),
+      'ACTIVE',
+      now(),
+      now()
+    )
+    on conflict (project_id, case_key) do update
+    set
+      recommendation = excluded.recommendation,
+      context = excluded.context,
+      evidence = excluded.evidence,
+      decision_status = 'VERIFIED',
+      outcome_status = 'VERIFIED',
+      status = 'ACTIVE',
+      updated_at = now();
+  end if;
 
   return p_candidate_id;
 end;
