@@ -3,6 +3,13 @@ name: Governed Analytics Foundation
 on:
   pull_request:
     paths:
+      - 'lib/analytics/governance-outcome-history.ts'
+      - 'lib/analytics/audit-event-history.ts'
+      - 'app/api/analytics/governance-outcome-trends/route.ts'
+      - 'app/api/analytics/audit-event-trends/route.ts'
+      - 'tests/governance-outcome-history.test.mjs'
+      - 'tests/audit-event-history.test.mjs'
+      - 'supabase/migrations/20260920043000_governance_audit_history_analytics.sql'
       - 'lib/analytics/profiling-history-trends.ts'
       - 'app/api/analytics/profiling-trends/route.ts'
       - 'tests/profiling-history-trends.test.mjs'
@@ -16,6 +23,13 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/analytics/governance-outcome-history.ts'
+      - 'lib/analytics/audit-event-history.ts'
+      - 'app/api/analytics/governance-outcome-trends/route.ts'
+      - 'app/api/analytics/audit-event-trends/route.ts'
+      - 'tests/governance-outcome-history.test.mjs'
+      - 'tests/audit-event-history.test.mjs'
+      - 'supabase/migrations/20260920043000_governance_audit_history_analytics.sql'
       - 'lib/analytics/profiling-history-trends.ts'
       - 'app/api/analytics/profiling-trends/route.ts'
       - 'tests/profiling-history-trends.test.mjs'
@@ -46,3 +60,7 @@ jobs:
         run: node --experimental-strip-types --test tests/profiling-history-trends.test.mjs
       - name: Verify Data Quality history analysis
         run: node --experimental-strip-types --test tests/data-quality-history.test.mjs
+      - name: Verify executive outcome history
+        run: node --experimental-strip-types --test tests/governance-outcome-history.test.mjs
+      - name: Verify immutable audit history analytics
+        run: node --experimental-strip-types --test tests/audit-event-history.test.mjs
