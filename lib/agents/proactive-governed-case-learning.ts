@@ -4,6 +4,27 @@ import type { GovernedSkillKey } from './governed-skill-registry'
 export const PGCL_RUN_MODES = ['SUPERVISED', 'HANDSFREE'] as const
 export type PgclRunMode = typeof PGCL_RUN_MODES[number]
 
+
+export const PGCL_AGENT_DEFAULT_SKILL: Record<GovernedAgentKey, GovernedSkillKey> = {
+  profiling_agent: 'profile_evidence_analysis',
+  data_quality_agent: 'quality_rule_analysis',
+  steward_agent: 'stewardship_gap_analysis',
+  governance_analyst_agent: 'governance_evidence_synthesis',
+  architect_agent: 'lineage_impact_analysis',
+  investigator_agent: 'incident_root_cause_analysis',
+  executive_agent: 'executive_materiality_analysis',
+  support_agent: 'support_case_investigation',
+}
+
+export type PgclRunSnapshot = {
+  id: string
+  project_id: string
+  status: string
+  agent_definition_id: string
+  input: Record<string, unknown> | null
+  output: Record<string, unknown> | null
+}
+
 export const PGCL_SIGNIFICANCE_SIGNALS = [
   'NEW_USE_CASE',
   'NOVEL_VERIFIED_STRATEGY',
@@ -169,3 +190,94 @@ export function buildProactiveGovernedCaseLearningCandidate(
     allowedAdminDecisions: PGCL_ADMIN_DECISIONS,
   }
 }
+
+function pgclRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function pgclText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function pgclSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120)
+}
+
+function firstPgclObservation(output: Record<string, unknown>) {
+  const observations = Array.isArray(output.observations) ? output.observations : []
+  for (const observation of observations) {
+    if (typeof observation === 'string' && observation.trim()) return observation.trim().slice(0, 1000)
+  }
+  return ''
+}
+
+export function derivePgclRunIdentity(input: {
+  run: PgclRunSnapshot
+  agentKey: GovernedAgentKey
+}) {
+  const skillKey = PGCL_AGENT_DEFAULT_SKILL[input.agentKey]
+  const output = pgclRecord(input.run.output)
+  const specialist = pgclRecord(output.specialist)
+  const focus = pgclText(specialist.focus) || pgclText(output.focus) || skillKey
+  return {
+    skillKey,
+    focus,
+    useCaseKey: `${input.agentKey}:${skillKey}:${pgclSlug(focus) || 'verified-run'}`,
+  }
+}
+
+export function derivePgclCandidateFromVerifiedRun(input: {
+  run: PgclRunSnapshot
+  agentKey: GovernedAgentKey
+  runMode: PgclRunMode
+  verificationEvidenceRefs: readonly string[]
+  priorPositiveCaseExists: boolean
+}): ProactiveGovernedCaseLearningCandidate | null {
+  if (input.run.status !== 'SUCCEEDED') return null
+
+  const { skillKey, focus, useCaseKey } = derivePgclRunIdentity({
+    run: input.run,
+    agentKey: input.agentKey,
+  })
+  const runInput = pgclRecord(input.run.input)
+  const output = pgclRecord(input.run.output)
+  const question = pgclText(runInput.question) || pgclText(runInput.evidence_query)
+  const resultSummary = firstPgclObservation(output)
+    || `${input.agentKey} completed ${focus} with verified governed execution evidence.`
+
+  return buildProactiveGovernedCaseLearningCandidate({
+    projectId: input.run.project_id,
+    agentRunId: input.run.id,
+    agentKey: input.agentKey,
+    skillKey,
+    runMode: input.runMode,
+    executionSucceeded: true,
+    verificationSucceeded: input.verificationEvidenceRefs.length > 0,
+    useCaseKey,
+    problemSignature: question || focus,
+    resultSummary,
+    reusableLesson: `For ${focus}, reuse the verified evidence-collection and bounded analysis pattern demonstrated by this successful ${input.agentKey} run; re-evaluate all current authorization, policy, and asset-specific evidence before acting.`,
+    applicabilityConditions: [
+      `agent_key=${input.agentKey}`,
+      `skill_key=${skillKey}`,
+      `focus=${focus}`,
+    ],
+    exclusionConditions: [
+      'current authorization or policy differs',
+      'required verification evidence is unavailable',
+      'the future case requires source/business data mutation',
+    ],
+    evidenceRefs: [`agent_run:${input.run.id}`],
+    verificationEvidenceRefs: [...input.verificationEvidenceRefs],
+    significanceSignals: [
+      input.priorPositiveCaseExists ? 'REPEATED_SUCCESS_THRESHOLD' : 'NEW_USE_CASE',
+    ],
+  })
+}
+
