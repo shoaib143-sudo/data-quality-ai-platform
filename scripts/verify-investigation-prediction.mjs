@@ -46,7 +46,11 @@ const checks = [
     'predictive_investigation',
   ]],
   ['app/api/jobs/worker/route.ts', [
+    'runScheduledWorkerCycle',
+  ]],
+  ['lib/orchestration/worker-service.ts', [
     'refreshAllPredictiveRisk',
+    'const predictiveRisk = await refreshAllPredictiveRisk()',
     'predictiveRisk',
   ]],
 ]
