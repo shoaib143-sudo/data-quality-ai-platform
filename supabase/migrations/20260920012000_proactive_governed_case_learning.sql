@@ -112,16 +112,45 @@ create table if not exists agent.positive_learning_case_reviews (
 create index if not exists positive_learning_case_reviews_candidate_idx
   on agent.positive_learning_case_reviews(project_id, candidate_id, created_at desc);
 
+
+create table if not exists agent.positive_learning_case_usages (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  candidate_id uuid not null,
+  learning_case_id uuid not null references agent.agent_learning_cases(id) on delete cascade,
+  consumer_agent_run_id uuid not null references agent.agent_runs(id) on delete cascade,
+  relevance numeric null check (relevance is null or (relevance >= 0 and relevance <= 1)),
+  usage_status text not null default 'RETRIEVED'
+    check (usage_status in ('RETRIEVED','APPLIED','SUCCEEDED','FAILED','DISMISSED')),
+  outcome jsonb not null default '{}'::jsonb,
+  first_retrieved_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint positive_learning_case_usages_candidate_fk
+    foreign key (candidate_id, project_id)
+    references agent.positive_learning_cases(candidate_id, project_id)
+    on delete cascade,
+  constraint positive_learning_case_usages_uq
+    unique (project_id, candidate_id, consumer_agent_run_id)
+);
+
+create index if not exists positive_learning_case_usages_candidate_idx
+  on agent.positive_learning_case_usages(project_id, candidate_id, updated_at desc);
+create index if not exists positive_learning_case_usages_consumer_run_idx
+  on agent.positive_learning_case_usages(consumer_agent_run_id, updated_at desc);
+
 alter table agent.positive_learning_cases enable row level security;
 alter table agent.positive_learning_case_occurrences enable row level security;
 alter table agent.positive_learning_case_reviews enable row level security;
+alter table agent.positive_learning_case_usages enable row level security;
 
 revoke all on agent.positive_learning_cases from public, anon, authenticated, service_role;
 revoke all on agent.positive_learning_case_occurrences from public, anon, authenticated, service_role;
 revoke all on agent.positive_learning_case_reviews from public, anon, authenticated, service_role;
+revoke all on agent.positive_learning_case_usages from public, anon, authenticated, service_role;
 grant select, insert, update on agent.positive_learning_cases to service_role;
 grant select, insert on agent.positive_learning_case_occurrences to service_role;
 grant select, insert on agent.positive_learning_case_reviews to service_role;
+grant select, insert, update on agent.positive_learning_case_usages to service_role;
 
 create or replace function agent.create_positive_learning_case(
   p_project_id uuid,
@@ -560,3 +589,5 @@ comment on table agent.positive_learning_case_occurrences is
   'Occurrence provenance for clustered PGCL cases. Repeated verified runs do not create duplicate Admin prompts unless applicability materially broadens.';
 comment on table agent.positive_learning_case_reviews is
   'Append-only Data Governance Admin review history for PGCL positive cases.';
+comment on table agent.positive_learning_case_usages is
+  'Tracks retrieval and downstream outcome of Admin-approved PGCL cases by consuming agent runs.';
