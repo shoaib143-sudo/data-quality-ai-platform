@@ -1,3 +1,4 @@
+import { authorizeProject } from '@/lib/auth/authorize'
 import { GOVERNED_AGENT_KEYS } from '@/lib/agents/governed-agent-registry'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -80,7 +81,8 @@ function record(value: unknown): Record<string, unknown> {
     : {}
 }
 
-export async function readPgclCommandCenterState(projectId: string): Promise<PgclCommandCenterState> {
+export async function readPgclCommandCenterState(projectId: string, actorUserId: string): Promise<PgclCommandCenterState> {
+  await authorizeProject(actorUserId, projectId, 'admin.manage')
   const supabase = createAdminClient()
 
   const [
