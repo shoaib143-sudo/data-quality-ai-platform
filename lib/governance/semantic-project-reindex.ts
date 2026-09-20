@@ -1,8 +1,3 @@
-import { reindexProjectAgentLearningCases } from '@/lib/governance/semantic-agent-learning-indexer'
-import { reindexProjectAgentMemories } from '@/lib/governance/semantic-agent-memory-indexer'
-import { reindexProjectDocumentSemanticObjects } from '@/lib/governance/semantic-document-indexer'
-import { reindexProjectKnowledgeSemanticObjects } from '@/lib/governance/semantic-knowledge-indexer'
-import { reindexProjectSemanticObjects } from '@/lib/governance/semantic-indexer'
 
 type ReindexResult = {
   total?: number
@@ -13,20 +8,12 @@ type ReindexResult = {
   [key: string]: unknown
 }
 
-type ReindexDependencies = {
+export type ReindexDependencies = {
   governance: (projectId: string, options?: { concurrency?: number }) => Promise<ReindexResult>
   documents: (projectId: string, options?: { concurrency?: number }) => Promise<ReindexResult>
   knowledge: (projectId: string, options?: { concurrency?: number }) => Promise<ReindexResult>
   agentMemories: (projectId: string, options?: { concurrency?: number }) => Promise<ReindexResult>
   agentLearning: (projectId: string, options?: { concurrency?: number }) => Promise<ReindexResult>
-}
-
-const defaultDependencies: ReindexDependencies = {
-  governance: reindexProjectSemanticObjects,
-  documents: reindexProjectDocumentSemanticObjects,
-  knowledge: reindexProjectKnowledgeSemanticObjects,
-  agentMemories: reindexProjectAgentMemories,
-  agentLearning: reindexProjectAgentLearningCases,
 }
 
 function total(result: ReindexResult) {
@@ -37,7 +24,7 @@ function total(result: ReindexResult) {
 export async function reindexProjectSemanticCorpus(
   projectId: string,
   options: { concurrency?: number } = {},
-  dependencies: ReindexDependencies = defaultDependencies,
+  dependencies: ReindexDependencies,
 ) {
   const concurrency = typeof options.concurrency === 'number' && Number.isFinite(options.concurrency)
     ? Math.max(1, Math.min(8, Math.trunc(options.concurrency)))
