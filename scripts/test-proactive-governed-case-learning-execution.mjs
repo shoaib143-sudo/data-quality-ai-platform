@@ -14,6 +14,25 @@ assert.ok(route.includes('positiveLearningCases: approvedPositiveCases'))
 assert.ok(route.includes("authority_effect: 'CONTEXT_ONLY'"))
 assert.ok(route.includes('preloadedLearningContext: preExecutionLearning'))
 
+
+for (const invariant of [
+  'proposePgclCaseFromVerifiedAgentRun',
+  "runMode: 'SUPERVISED'",
+  'agent_run:${result.runId}:succeeded',
+  'agent_result_artifact:${artifact.artifactId}',
+  'PGCL evaluation failed without changing governed agent success',
+  'learningEvaluation',
+]) {
+  assert.ok(route.includes(invariant), 'missing supervised governance PGCL proposal invariant: ' + invariant)
+}
+const resultArtifactIndex = route.indexOf('persistAgentRunResultArtifact({')
+const memoryEvaluationIndex = route.indexOf('persistGovernedAgentMemoryAndEvaluation({')
+const proposalIndex = route.indexOf('proposePgclCaseFromVerifiedAgentRun({')
+assert.ok(
+  resultArtifactIndex >= 0 && memoryEvaluationIndex > resultArtifactIndex && proposalIndex > memoryEvaluationIndex,
+  'supervised PGCL proposal must occur only after canonical result artifact and execution-contract evaluation',
+)
+
 for (const invariant of [
   'positiveLearningCases?: Array<{',
   "priority: 'LEARNED_PRECEDENT'",
