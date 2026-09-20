@@ -4,6 +4,8 @@ import { RunAgentForm, type AgentOption, type DatasetVersionOption, type Project
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { requireUser } from '@/lib/supabase/auth'
 import { hasProjectCapability } from '@/lib/auth/authorize'
+import { isDataGovernanceSuperAdmin } from '@/lib/auth/data-governance-super-admin'
+import { loadPositiveLearningCaseAdminInbox } from '@/lib/agents/proactive-governed-case-learning-admin'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { resolveConversationPolicy } from '@/lib/governance/conversation-policy'
 import { canViewDatasetResource, filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
@@ -59,6 +61,10 @@ export default async function AgentsPage() {
     persona: accessContext.persona,
   })
   const supabase = await createClient()
+  const governanceSuperAdmin = await isDataGovernanceSuperAdmin(user.id)
+  const pendingLearningCases = governanceSuperAdmin
+    ? (await loadPositiveLearningCaseAdminInbox(user.id)).length
+    : 0
 
   const [agentsResult, projectsResult, datasetsResult, versionsResult, runsResult] = await Promise.all([
     supabase.schema('agent').from('agent_definitions')
@@ -161,7 +167,14 @@ export default async function AgentsPage() {
       <div className="mx-auto max-w-6xl space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={canonicalRoutes.dashboard} className="text-sm underline">← Back to dashboard</Link>
-          <Link href={canonicalRoutes.monitoring} className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link>
+          <div className="flex flex-wrap gap-2">
+            {governanceSuperAdmin ? (
+              <Link href="/admin/learning-cases" className="rounded-lg border border-violet-200 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50">
+                Review learning cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}
+              </Link>
+            ) : null}
+            <Link href={canonicalRoutes.monitoring} className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link>
+          </div>
         </div>
 
         <header>

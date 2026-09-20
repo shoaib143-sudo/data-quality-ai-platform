@@ -144,6 +144,7 @@ export async function POST(request: Request) {
       datasetVersionId,
       agentDefinitionId: agentDefinition.id,
       ...requestInput,
+      learningRunMode: 'SUPERVISED',
       idempotencyKey: rawIdempotencyKey || null,
     }
     const runInsert = await admin.schema('agent').from('agent_runs').insert({
@@ -200,7 +201,7 @@ export async function POST(request: Request) {
           agentVersion: agentDefinition.version,
           agentRunId: activeAgentRunId,
           profilingRunId,
-          requestInput,
+          requestInput: { ...requestInput, learningRunMode: 'SUPERVISED' },
         },
         maxAttempts: 3,
       })

@@ -654,6 +654,7 @@ export async function executeQualityAutomation(input: {
     const summary = {
       execution_completed: true,
       data_quality_job: true,
+      focus: 'quality_rule_analysis',
       dataset_version_id: datasetVersionId,
       profile_run_id: profileRunId,
       rules_total: totalCount,
