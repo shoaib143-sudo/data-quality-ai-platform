@@ -1,5 +1,4 @@
 import type { AnalyticsQueryProvider, AnalyticsQueryRow } from '@/lib/data-plane/contracts'
-import { getAnalyticsQueryProvider } from '@/lib/data-plane/analytics-query-provider'
 
 export type ProfilingHistoryTrendRequest = {
   projectId: string
@@ -124,7 +123,7 @@ export function aggregateProfilingHistoryTrends(
 
 export async function loadProfilingHistoryTrends(
   request: ProfilingHistoryTrendRequest,
-  provider: AnalyticsQueryProvider = getAnalyticsQueryProvider(),
+  provider: AnalyticsQueryProvider,
 ) {
   const limit = Number.isFinite(request.limit)
     ? Math.max(1, Math.min(500, Math.trunc(request.limit as number)))
