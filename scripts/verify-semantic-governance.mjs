@@ -79,7 +79,7 @@ const checks = [
   [containsAll(files.governanceEmbeddingProvider, ['embedGovernanceTextWithEvidence', 'embeddingSpaceId', 'modelRevision']), 'EmbeddingProvider adapter preserves governed embedding-space evidence'],
   [containsAll(files.governanceRetrievalProvider, ['createGovernanceEmbeddingProvider', 'semanticSearchByEmbedding']), 'RetrievalProvider composes EmbeddingProvider with governed pgvector search'],
   [!files.governanceRetrievalProvider.includes('embedGovernanceText'), 'RetrievalProvider does not bypass EmbeddingProvider'],
-  [containsAll(files.globalSearch, ['createGovernanceRetrievalProvider', "modes: ['semantic']", 'retrieved.matches.map(semanticResult)']), 'global search uses RetrievalProvider boundary'],
+  [containsAll(files.globalSearch, ['createGovernanceRetrievalProvider', 'retrieval.retrieve({', "modes: ['semantic']", '.map(semanticResult)']), 'global search uses RetrievalProvider boundary'],
   [!files.globalSearch.includes('semanticSearchByEmbedding') && !files.globalSearch.includes('embedGovernanceText'), 'global search does not bypass RetrievalProvider'],
   [containsAll(files.globalSearch, ['retrieval_projection', 'match.provenance.projection']), 'global search exposes semantic projection truth metadata'],
   [containsAll(files.globalSearch, ['QUALITY_INCIDENT', '/issues?issue=']), 'quality incident semantic navigation'],
