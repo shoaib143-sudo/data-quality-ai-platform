@@ -14,6 +14,7 @@ test('R2 assurance path coverage includes Cloudflare runtime, release governance
   assert.match(workflow, /tests\/cloudflare-\*\.test\.mjs/)
   assert.match(workflow, /tests\/profiling-large-object-bounded-read\.test\.mjs/)
   assert.match(workflow, /\.github\/workflows\/release-governance\.yml/)
+  assert.match(workflow, /supabase\/migrations\/\*r2\*\.sql/)
   assert.match(workflow, /package\.json/)
 })
 
