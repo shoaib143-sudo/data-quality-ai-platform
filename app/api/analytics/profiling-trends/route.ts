@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
 import { authorizeProject, AuthorizationError } from '@/lib/auth/authorize'
 import { loadProfilingHistoryTrends } from '@/lib/analytics/profiling-history-trends'
+import { getAnalyticsQueryProvider } from '@/lib/data-plane/analytics-query-provider'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
       from,
       to,
       limit: typeof body.limit === 'number' ? body.limit : undefined,
-    })
+    }, getAnalyticsQueryProvider())
 
     return NextResponse.json(result)
   } catch (error) {
