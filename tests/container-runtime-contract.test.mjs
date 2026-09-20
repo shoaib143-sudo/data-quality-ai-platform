@@ -6,15 +6,15 @@ const nextConfig = fs.readFileSync(new URL('../next.config.mjs', import.meta.url
 const dockerfile = fs.readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8')
 const dockerignore = fs.readFileSync(new URL('../.dockerignore', import.meta.url), 'utf8')
 
-test('Next.js portable runtime uses standalone output', () => {
-  assert.match(nextConfig, /output:\s*['"]standalone['"]/)
+test('Next.js portable runtime uses standalone output outside Vercel', () => {
+  assert.match(nextConfig, /output:\s*process\.env\.VERCEL\s*\?\s*undefined\s*:\s*['"]standalone['"]/)
 })
 
 test('container builds the same Next.js source and runs standalone server', () => {
   assert.match(dockerfile, /COPY package\.json pnpm-lock\.yaml pnpm-workspace\.yaml \.\//)
   assert.match(dockerfile, /ARG NEXT_PUBLIC_SUPABASE_URL/)
   assert.match(dockerfile, /ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/)
-  assert.match(dockerfile, /RUN test -n \"\$NEXT_PUBLIC_SUPABASE_URL\" && test -n \"\$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY\" && pnpm build/)
+  assert.match(dockerfile, /RUN test -n "\$NEXT_PUBLIC_SUPABASE_URL" && test -n "\$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" && pnpm build/)
   assert.match(dockerfile, /pnpm install --frozen-lockfile/)
   assert.match(dockerfile, /pnpm build/)
   assert.match(dockerfile, /\/app\/\.next\/standalone/)
