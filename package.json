@@ -74,11 +74,12 @@
     "verify:governed-learning-release-approval": "node --experimental-strip-types scripts/test-governed-learning-release-approval.mjs",
     "verify:semantic-reembedding": "node --experimental-strip-types scripts/test-semantic-reembedding.mjs",
     "verify:governed-learning-controlled-release": "node --experimental-strip-types scripts/test-governed-learning-controlled-release.mjs",
-    "verify:proactive-governed-case-learning": "node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs && node scripts/test-proactive-governed-case-learning-ui.mjs && node scripts/test-proactive-governed-case-learning-retrieval.mjs && node scripts/test-proactive-governed-case-learning-execution.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-supervisor.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs",
+    "verify:proactive-governed-case-learning": "node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs && node scripts/test-proactive-governed-case-learning-ui.mjs && node scripts/test-proactive-governed-case-learning-retrieval.mjs && node scripts/test-proactive-governed-case-learning-execution.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-supervisor.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs && node scripts/test-pgcl-production-learning-provenance.mjs",
     "verify:governed-learning-command-center": "node --experimental-strip-types scripts/test-governed-learning-command-center.mjs && node scripts/test-pgcl-command-center-observability.mjs",
     "verify:pgcl-eight-agent-conformance": "node --experimental-strip-types scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs",
     "verify:governed-learning-golden-journey": "node scripts/verify-governed-learning-golden-journey.mjs && node scripts/audit-governed-learning-phase11-adversarial.mjs",
-    "verify:governed-learning-production-readiness": "node --experimental-strip-types scripts/test-governed-learning-production-readiness.mjs"
+    "verify:governed-learning-production-readiness": "node --experimental-strip-types scripts/test-governed-learning-production-readiness.mjs",
+    "verify:pgcl-production-learning-provenance": "node scripts/test-pgcl-production-learning-provenance.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

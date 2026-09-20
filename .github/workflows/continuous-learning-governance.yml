@@ -27,6 +27,9 @@ on:
       - 'lib/agents/proactive-governed-case-learning-service.ts'
       - 'scripts/test-proactive-governed-case-learning-persistence.mjs'
       - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
+      - 'lib/agents/pgcl-run-learning-provenance.ts'
+      - 'scripts/test-pgcl-production-learning-provenance.mjs'
+      - 'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
       - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'scripts/verify-governed-learning-golden-journey.mjs'
@@ -85,6 +88,9 @@ on:
       - 'lib/agents/proactive-governed-case-learning-service.ts'
       - 'scripts/test-proactive-governed-case-learning-persistence.mjs'
       - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
+      - 'lib/agents/pgcl-run-learning-provenance.ts'
+      - 'scripts/test-pgcl-production-learning-provenance.mjs'
+      - 'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
       - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'scripts/verify-governed-learning-golden-journey.mjs'
@@ -142,6 +148,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs
       - name: Run PGCL persistence tests
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs
+      - name: Run PGCL production-learning provenance tests
+        run: node scripts/test-pgcl-production-learning-provenance.mjs
       - name: Run PGCL admin review UI tests
         run: node scripts/test-proactive-governed-case-learning-ui.mjs
       - name: Run PGCL approved-case retrieval tests

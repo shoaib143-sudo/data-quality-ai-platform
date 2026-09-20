@@ -10,6 +10,7 @@ const releaseMigration = read('supabase/migrations/20260920013000_governed_learn
 const pgclMigration = read('supabase/migrations/20260920014000_proactive_governed_case_learning.sql')
 const pgclForwardMigration = read('supabase/migrations/20260920015000_reconcile_proactive_governed_case_learning.sql')
 const pgclTriggerAcl = read('supabase/migrations/20260920015500_restrict_pgcl_trigger_function_execute.sql')
+const pgclProvenanceMigration = read('supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql')
 
 const candidateCode = read('lib/agents/governed-learning-candidates.ts')
 const benchmarkCode = read('lib/agents/governed-learning-benchmarks.ts')
@@ -17,6 +18,7 @@ const approvalCode = read('lib/agents/governed-learning-release-approval.ts')
 const releaseCode = read('lib/agents/governed-learning-controlled-release.ts')
 const pgclCode = read('lib/agents/proactive-governed-case-learning.ts')
 const pgclRuntime = read('lib/agents/proactive-governed-case-learning-runtime.ts')
+const pgclProvenanceCode = read('lib/agents/pgcl-run-learning-provenance.ts')
 const memoryCode = read('lib/agents/agent-memory-learning.ts')
 
 const candidateTests = read('scripts/test-governed-learning-candidates.mjs')
@@ -227,6 +229,41 @@ requireAll('PGCL trigger ACL', pgclTriggerAcl, [
   'from public, anon, authenticated, service_role',
   'Direct execution is prohibited; invocation is trigger-only',
 ])
+requireAll('PGCL production provenance', pgclProvenanceMigration, [
+  'create table if not exists agent.agent_run_learning_provenance',
+  "classification in ('PRODUCTION_ELIGIBLE','SYNTHETIC_OR_TEST')",
+  "classification_source = 'PGCL_GOVERNED_RUNTIME'",
+  'production_eligible boolean not null',
+  'reject_agent_run_learning_provenance_mutation',
+  "v_run.input->>'synthetic'",
+  "v_project_metadata->>'created_via'",
+  "'backend_regression_test'",
+  'PGCL source run has no trusted production learning provenance',
+  'synthetic or test evidence is not eligible for PGCL production learning',
+  'unclassified or non-production PGCL evidence cannot be approved for reusable learning',
+  'plc.production_eligible = true',
+])
+assert.equal(
+  pgclProvenanceMigration.includes('grant execute on function agent.record_pgcl_run_learning_provenance(uuid,uuid)\n  to authenticated'),
+  false,
+  'browser-authenticated users must not classify PGCL source runs as production-eligible',
+)
+assert.equal(
+  pgclProvenanceMigration.includes('production_eligible boolean not null default true'),
+  false,
+  'legacy or unclassified positive cases must fail closed',
+)
+requireAll('PGCL production provenance adapter', pgclProvenanceCode, [
+  "rpc('record_pgcl_run_learning_provenance'",
+  "result.classification !== 'PRODUCTION_ELIGIBLE'",
+  'result.productionEligible !== true',
+  'result.syntheticOrTestDetected !== false',
+])
+requireAll('PGCL runtime provenance order', pgclRuntime, [
+  'recordPgclRunLearningProvenance',
+  'persistProactiveGovernedCaseLearningCandidate',
+])
+
 assert.equal(
   pgclMigration.includes(`to authenticated;
 grant execute on function agent.create_positive_learning_case`),
@@ -275,6 +312,7 @@ for (const source of [
   releaseCode,
   pgclCode,
   pgclRuntime,
+  pgclProvenanceCode,
   memoryCode,
 ]) {
   assert.equal(/chain[-_ ]?of[-_ ]?thought/i.test(source), false, 'Phase 11 source must not persist or expose chain-of-thought')
