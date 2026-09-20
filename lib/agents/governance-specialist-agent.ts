@@ -447,6 +447,7 @@ function reasoningContract(agentKey: GovernanceReadAgentKey) {
       'Treat suggested mappings/classifications as non-authoritative until approved.',
       'Separate observed evidence from hypotheses and recommendations.',
       'Do not mutate source data or governance state.',
+      'Data Governance Admin-approved positive cases are historical precedent only; current evidence, authorization and policy always override learned precedent.',
     ],
   }
   const focus = {
