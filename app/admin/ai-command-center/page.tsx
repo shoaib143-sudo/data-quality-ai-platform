@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, Bot, LockKeyhole, ShieldCheck } from 'lucide-r
 import { authorizeProject } from '@/lib/auth/authorize'
 import { createGovernanceCommandCenterState } from '@/lib/ai/governance-command-center-state'
 import { createGovernanceLearningEngine } from '@/lib/ai/governance-learning-engine'
+import { readGovernedLearningLifecycleCommandCenter } from '@/lib/ai/governed-learning-command-center-state'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -30,14 +31,16 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
   const selectedProjectId = projects.some((project) => project.id === params.projectId) ? params.projectId! : projects[0]?.id
   const control = selectedProjectId ? await (async () => {
     await authorizeProject(user.id, selectedProjectId, 'admin.manage')
-    const [state, learning] = await Promise.all([
+    const [state, learning, learningLifecycle] = await Promise.all([
       createGovernanceCommandCenterState().read(selectedProjectId),
       createGovernanceLearningEngine().assess({ projectId: selectedProjectId, limit: 25 }),
+      readGovernedLearningLifecycleCommandCenter(selectedProjectId),
     ])
-    return { state, learning }
+    return { state, learning, learningLifecycle }
   })() : null
   const state = control?.state ?? null
   const learning = control?.learning ?? null
+  const learningLifecycle = control?.learningLifecycle ?? null
 
   const systemName = new Map(state?.aiSystems.map((system) => [system.id, system.name]) ?? [])
   const versionLabel = new Map(state?.aiSystemVersions.map((version) => [version.id, `v${version.version_number}`]) ?? [])
@@ -55,7 +58,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
 
       <form method="get" className="rounded-2xl border bg-white p-5"><label className="block text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 block w-full max-w-xl rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><button className="mt-3 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load control state</button></form>
 
-      {!state || !learning ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
+      {!state || !learning || !learningLifecycle ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-10">
           <article className="rounded-2xl border bg-white p-5"><Bot className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.aiSystems}</p><p className="text-xs font-bold uppercase text-slate-500">AI systems</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.aiSystemDecisions}</p><p className="text-xs font-bold uppercase text-slate-500">Human decisions</p></article>
@@ -83,6 +86,44 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
         <section className="rounded-2xl border bg-white p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">Automated evaluation evidence</h2><p className="mt-1 max-w-4xl text-sm text-slate-500">Evaluation results are append-only machine evidence for quality, routing and analysis. PASS or a high score does not approve an AI system, activate a version, or grant deployment authority.</p></div><div className="text-right text-xs text-slate-500"><p>{state.counts.aiEvaluationPasses} pass · {state.counts.aiEvaluationFailures} fail</p><p>{state.counts.aiEvaluationUnresolved} without pass/fail outcome</p></div></div><div className="mt-5 overflow-x-auto">{state.aiEvaluationResults.length ? <table className="w-full min-w-[1000px] text-left text-sm"><thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Observed</th><th className="p-3">System / version</th><th className="p-3">Evaluation</th><th className="p-3">Metric</th><th className="p-3">Score</th><th className="p-3">Outcome</th><th className="p-3">Evaluator</th><th className="p-3">Evidence refs</th></tr></thead><tbody>{state.aiEvaluationResults.map((evaluation) => <tr key={evaluation.id} className="border-b last:border-0"><td className="p-3 text-xs">{new Date(evaluation.observed_at).toLocaleString()}</td><td className="p-3">{evaluation.ai_system_id ? systemName.get(evaluation.ai_system_id) ?? evaluation.ai_system_id : 'Not bound'}<p className="text-xs text-slate-400">{evaluation.ai_system_version_id ? versionLabel.get(evaluation.ai_system_version_id) ?? evaluation.ai_system_version_id : 'No version'}</p></td><td className="p-3">{evaluation.evaluation_type}<p className="text-xs text-slate-400">{evaluation.capability ?? 'No capability'}</p></td><td className="p-3 font-semibold">{evaluation.metric_name}</td><td className="p-3">{evaluation.score == null ? 'Not scored' : Number(evaluation.score).toFixed(4)}</td><td className="p-3"><Badge value={evaluation.pass == null ? 'NOT_ASSESSED' : evaluation.pass ? 'PASS' : 'FAIL'}/></td><td className="p-3">{evaluation.evaluator_type}<p className="text-xs text-slate-400">{evaluation.evaluator_version ?? 'Version not recorded'}</p></td><td className="p-3">{evaluation.evidence_refs.length}</td></tr>)}</tbody></table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No automated AI evaluation evidence is recorded for this project. Absence means evaluation evidence has not been recorded, not that the governed AI systems passed evaluation.</p>}</div></section>
 
         <section className="rounded-2xl border bg-white p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">Governed learning candidates</h2><p className="mt-1 max-w-4xl text-sm text-slate-500">Verified outcomes and semantic memories are candidate learning only. They remain non-authoritative until explicit promotion authority is recorded, and this Command Center provides no promotion action.</p></div><div className="text-right text-xs text-slate-500"><p>{learning.verifiedOutcomeCandidates.length} verified outcome candidates · {learning.semanticMemories.length} semantic memories</p><p>{learning.authoritativeSemanticCount} authoritative semantic memories</p></div></div><div className="mt-4 grid gap-2 text-sm sm:grid-cols-3"><p>Semantic promotion: {learning.semanticPromotionEnabled ? 'enabled' : 'disabled'}</p><p>Procedural promotion: {learning.proceduralPromotionEnabled ? 'enabled' : 'disabled'}</p><p>Offline adaptation: {learning.offlineAdaptationEnabled ? 'enabled' : 'disabled'}</p></div><div className="mt-5 grid gap-4 lg:grid-cols-2"><article><h3 className="font-black">Verified outcome candidates</h3><div className="mt-3 space-y-3">{learning.verifiedOutcomeCandidates.length ? learning.verifiedOutcomeCandidates.map((item) => <div key={item.id} className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-bold">{item.problemType ?? item.sourceKind}</p><p className="text-xs text-slate-400">{item.evidence.source} · {item.evidence.recordId}</p></div><Badge value={item.status}/></div><p className="mt-2 text-sm text-slate-600">Confidence: {item.confidence == null ? 'Not recorded' : item.confidence.toFixed(2)} · Effectiveness: {item.effectiveness == null ? 'Not recorded' : item.effectiveness.toFixed(2)}</p><p className="mt-2 text-xs text-slate-500">Authoritative: no · Blocker: {item.blockers.join(', ')}</p></div>) : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No verified outcome learning candidates are recorded for this project.</p>}</div></article><article><h3 className="font-black">Semantic memories</h3><div className="mt-3 space-y-3">{learning.semanticMemories.length ? learning.semanticMemories.map((item) => <div key={item.id} className="rounded-xl border p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-bold">{item.sourceKind}</p><p className="text-xs text-slate-400">{item.evidence.source} · {item.evidence.recordId}</p></div><Badge value={item.status}/></div><p className="mt-2 text-sm text-slate-600">Human validated: {item.humanValidated ? 'yes' : 'no'} · Authoritative: no</p><p className="mt-2 text-xs text-slate-500">Blockers: {item.blockers.join(', ')}</p></div>) : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No semantic learning memories are recorded for this project. Absence does not imply learning promotion or enterprise authority.</p>}</div></article></div></section>
+
+        <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-black">Governed learning lifecycle</h2>
+              <p className="mt-1 max-w-4xl text-sm text-slate-500">Read-only visibility from candidate proposal through benchmark, human approval, shadow canary, verified activation and rollback. This view exposes evidence and state only; it grants no promotion or mutation authority.</p>
+            </div>
+            <div className="text-right text-xs text-slate-500">
+              <p>{learningLifecycle.counts.total} durable candidates · {learningLifecycle.counts.active} active</p>
+              <p>{learningLifecycle.counts.canary} canary · {learningLifecycle.counts.rolledBack} rolled back</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
+            <p>Self-promotion: {learningLifecycle.authority.selfPromotionAllowed ? 'enabled' : 'disabled'}</p>
+            <p>Authority expansion: {learningLifecycle.authority.automaticAuthorityExpansionAllowed ? 'enabled' : 'disabled'}</p>
+            <p>Mutation expansion: {learningLifecycle.authority.automaticMutationBoundaryChangeAllowed ? 'enabled' : 'disabled'}</p>
+            <p>Human review: {learningLifecycle.authority.humanReviewRequired ? 'required' : 'not required'}</p>
+            <p>Release authorization: {learningLifecycle.authority.currentAuthorizationRequiredAtRelease ? 'revalidated' : 'not required'}</p>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            {learningLifecycle.candidates.length ? <table className="w-full min-w-[1200px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500">
+                <tr><th className="p-3">Updated</th><th className="p-3">Agent / skill</th><th className="p-3">Candidate</th><th className="p-3">Lifecycle</th><th className="p-3">Benchmark</th><th className="p-3">Approval</th><th className="p-3">Release</th></tr>
+              </thead>
+              <tbody>
+                {learningLifecycle.candidates.map((candidate) => <tr key={candidate.id} className="border-b last:border-0">
+                  <td className="p-3 text-xs">{new Date(candidate.updatedAt).toLocaleString()}</td>
+                  <td className="p-3"><p className="font-bold">{candidate.agentKey}</p><p className="text-xs text-slate-400">{candidate.skillKey}</p></td>
+                  <td className="p-3"><p className="font-semibold">{candidate.title}</p><p className="text-xs text-slate-400">{candidate.baselineVersion} → {candidate.candidateVersion} · {candidate.category}</p></td>
+                  <td className="p-3"><Badge value={candidate.status}/></td>
+                  <td className="p-3">{candidate.benchmarkStatus ? <><Badge value={candidate.benchmarkStatus}/><p className="mt-1 text-xs text-slate-400">{candidate.benchmarkBaselineScore == null || candidate.benchmarkScore == null ? 'Score not recorded' : `${candidate.benchmarkBaselineScore.toFixed(3)} → ${candidate.benchmarkScore.toFixed(3)}`}</p></> : <span className="text-slate-400">Not recorded</span>}</td>
+                  <td className="p-3">{candidate.approvalRequestId ? <span className="font-mono text-xs">{candidate.approvalRequestId}</span> : <span className="text-slate-400">Not requested</span>}</td>
+                  <td className="p-3">{candidate.releaseStatus ? <><Badge value={candidate.releaseStatus}/><p className="mt-1 text-xs text-slate-400">{candidate.activatedAt ? `Activated ${new Date(candidate.activatedAt).toLocaleString()}` : candidate.verifiedAt ? `Verified ${new Date(candidate.verifiedAt).toLocaleString()}` : candidate.canaryStartedAt ? `Canary ${new Date(candidate.canaryStartedAt).toLocaleString()}` : candidate.rolledBackAt ? `Rolled back ${new Date(candidate.rolledBackAt).toLocaleString()}` : 'Release evidence recorded'}</p></> : <span className="text-slate-400">Not released</span>}</td>
+                </tr>)}
+              </tbody>
+            </table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No durable governed learning lifecycle candidates are recorded for this project.</p>}
+          </div>
+        </section>
 
         <section className="rounded-2xl border bg-white p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">Governed routing policy versions</h2><p className="mt-1 max-w-4xl text-sm text-slate-500">Routing policy versions are human-reviewed constraints consumed by the Intelligent Router. Displaying a policy does not approve an AI system or replace exact-version deployment authority.</p></div><div className="text-right text-xs text-slate-500"><p>{state.counts.enabledRoutingPolicyVersions} enabled · {state.counts.routingPolicyVersions} recorded versions</p><p>Policy mutation remains disabled here</p></div></div><div className="mt-5 overflow-x-auto">{state.routingPolicies.length ? <table className="w-full min-w-[1100px] text-left text-sm"><thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Created</th><th className="p-3">Task</th><th className="p-3">Sensitivity / risk</th><th className="p-3">Status</th><th className="p-3">Allowed systems</th><th className="p-3">Evaluation gate</th><th className="p-3">Environment fallback</th><th className="p-3">Reviewer</th></tr></thead><tbody>{state.routingPolicies.map((policy) => <tr key={policy.id} className="border-b last:border-0"><td className="p-3 text-xs">{new Date(policy.created_at).toLocaleString()}</td><td className="p-3 font-bold">{policy.task}</td><td className="p-3">{policy.sensitivity} / {policy.risk}</td><td className="p-3"><Badge value={policy.enabled ? 'ACTIVE' : 'DISABLED'}/></td><td className="p-3">{policy.allowed_ai_system_ids.length ? policy.allowed_ai_system_ids.map((id) => systemName.get(id) ?? id).join(', ') : 'No explicit allowlist'}</td><td className="p-3">Score {policy.min_evaluation_score == null ? 'not set' : Number(policy.min_evaluation_score).toFixed(2)} · samples {policy.min_scored_count}</td><td className="p-3">{policy.allow_environment_fallback ? 'Allowed' : 'Blocked'}</td><td className="p-3">{policy.reviewer_capability}<p className="text-xs text-slate-400">{policy.review_note}</p></td></tr>)}</tbody></table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No governed AI routing policy versions are recorded for this project. Absence means routing-policy evidence has not been recorded, not that unrestricted routing has governance approval.</p>}</div></section>
 
