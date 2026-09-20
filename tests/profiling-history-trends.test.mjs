@@ -76,8 +76,46 @@ test('loads bounded history through the provider contract with dataset-scoped fi
   assert.equal(result.provider, 'fake')
   assert.equal(calls.length, 2)
   assert.equal(calls[0].limit, 500)
+  assert.equal(calls[0].completeRange, true)
+  assert.equal(calls[1].completeRange, true)
   assert.deepEqual(calls[0].filters, { datasetId: 'dataset-a', metricKey: 'null_rate' })
   assert.deepEqual(calls[1].filters, { datasetId: 'dataset-a' })
   assert.equal(result.metrics.length, 1)
   assert.equal(result.qualityScores.length, 1)
+})
+
+
+test('bounds profiling response after complete-range aggregation', async () => {
+  const provider = {
+    providerKey: 'fake',
+    async query(request) {
+      assert.equal(request.completeRange, true)
+      return request.metric === 'profiling.metric_history'
+        ? [
+            { observedAt: '2026-09-01T00:00:00Z', metricKey: 'null_rate', numericValue: 0.1 },
+            { observedAt: '2026-09-02T00:00:00Z', metricKey: 'null_rate', numericValue: 0.2 },
+            { observedAt: '2026-09-03T00:00:00Z', metricKey: 'null_rate', numericValue: 0.3 },
+          ]
+        : [
+            { observedAt: '2026-09-01T00:00:00Z', overallScore: 90 },
+            { observedAt: '2026-09-02T00:00:00Z', overallScore: 80 },
+            { observedAt: '2026-09-03T00:00:00Z', overallScore: 70 },
+          ]
+    },
+  }
+
+  const result = await loadProfilingHistoryTrends({
+    projectId: 'project-a',
+    datasetId: 'dataset-a',
+    limit: 2,
+  }, provider)
+
+  assert.deepEqual(result.metrics.map((point) => point.bucketStart), [
+    '2026-09-02T00:00:00.000Z',
+    '2026-09-03T00:00:00.000Z',
+  ])
+  assert.deepEqual(result.qualityScores.map((point) => point.bucketStart), [
+    '2026-09-02T00:00:00.000Z',
+    '2026-09-03T00:00:00.000Z',
+  ])
 })
