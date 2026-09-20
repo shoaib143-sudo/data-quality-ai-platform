@@ -12,6 +12,8 @@ import {
 import { enqueueDurableJob, type DurableJob } from '@/lib/orchestration/queue'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+export { HISTORICAL_EXPORT_KINDS } from '@/lib/orchestration/historical-export-contract'
+
 type ExportPart = {
   part: number
   key: string
