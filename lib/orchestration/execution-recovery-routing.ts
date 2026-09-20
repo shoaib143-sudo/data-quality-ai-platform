@@ -22,6 +22,7 @@ const LEASE_RETRY_SAFE_JOB_TYPES = new Set<DurableJobType>([
   'LINEAGE_ENRICHMENT',
   'SEMANTIC_INDEX',
   'GOVERNANCE_AGENT',
+  'EXPORT',
 ])
 
 export function recoveryStageFromFailure(jobType: DurableJobType, message: string): RecoveryStage {
