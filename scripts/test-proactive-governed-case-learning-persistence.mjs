@@ -6,6 +6,7 @@ const service = fs.readFileSync('lib/agents/proactive-governed-case-learning-ser
 const migration = fs.readFileSync('supabase/migrations/20260920014000_proactive_governed_case_learning.sql', 'utf8')
 const forwardMigration = fs.readFileSync('supabase/migrations/20260920015000_reconcile_proactive_governed_case_learning.sql', 'utf8')
 const replayPreparation = fs.readFileSync('scripts/prepare-clean-migration-replay.mjs', 'utf8')
+const triggerAclMigration = fs.readFileSync('supabase/migrations/20260920015500_restrict_pgcl_trigger_function_execute.sql', 'utf8')
 
 for (const invariant of [
   'persistProactiveGovernedCaseLearningCandidate',
@@ -109,6 +110,15 @@ for (const invariant of [
   'production uses the forward-only reconciliation migration',
 ]) {
   assert.ok(replayPreparation.includes(invariant), `missing immutable PGCL replay repair invariant: ${invariant}`)
+}
+
+
+for (const invariant of [
+  'revoke all on function agent.validate_positive_learning_case_usage()',
+  'from public, anon, authenticated, service_role',
+  'Direct execution is prohibited; invocation is trigger-only',
+]) {
+  assert.ok(triggerAclMigration.includes(invariant), `missing PGCL trigger ACL invariant: ${invariant}`)
 }
 
 console.log('PGCL durable persistence remains project-scoped, canonically verified, admin-reviewed, and non-self-promoting.')
