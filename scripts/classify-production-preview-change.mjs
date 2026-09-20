@@ -30,14 +30,10 @@ const deployableExact = new Set([
   'vercel.json',
 ])
 
-const automaticPreviewBranchPrefixes = [
-  'ux/',
-  'preview/',
-  'feat/ui-',
-  'fix/ui-',
-  'feat/frontend-',
-  'fix/frontend-',
-]
+// Automatic Git-triggered Vercel previews are disabled to prevent Hobby
+// deployment-attempt multiplication. Deployable-file classification remains
+// available for deliberate preview/release tooling.
+const automaticPreviewBranchPrefixes = []
 
 export function requiresProductionPreview(files) {
   return files.some((file) =>
