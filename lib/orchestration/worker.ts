@@ -11,6 +11,7 @@ import { deliverNotificationJob } from '@/lib/observability/notifications'
 import { executeMetadataDiscovery } from '@/lib/catalog/discovery'
 import { executeLineageEnrichment } from '@/lib/catalog/lineage-enrichment'
 import { enrichObservabilityIncidentWithLineageImpact } from '@/lib/governance/lineage-impact'
+import { executeHistoricalExportChunk, markHistoricalExportFailed } from '@/lib/orchestration/historical-export'
 import { verifyRemediationOutcome } from '@/lib/profiling/remediation-verification'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
@@ -481,6 +482,11 @@ export async function executeDurableJob(job: DurableJob) {
     return
   }
 
+  if (job.job_type === 'EXPORT') {
+    await executeHistoricalExportChunk(job)
+    return
+  }
+
   throw new Error(`Unsupported durable job type: ${job.job_type}`)
 }
 
@@ -616,6 +622,9 @@ export async function processDurableJobs(jobs: DurableJob[]) {
       results.push({ jobId: job.id, agentRunId: job.agent_run_id, status: 'SUCCEEDED' })
     } catch (error) {
       await markDurableJobFailed(job, error)
+      if (job.job_type === 'EXPORT' && job.attempts >= job.max_attempts) {
+        await markHistoricalExportFailed(job, error)
+      }
       let recovery: Record<string, unknown> | null = null
       if (job.attempts >= job.max_attempts) {
         try {

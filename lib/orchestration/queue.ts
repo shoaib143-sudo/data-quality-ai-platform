@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { recordSourceConcurrencyOutcome } from '@/lib/orchestration/source-concurrency'
 import { assessPoolClaimOutcomes, assessStaleReleaseFailure, formatPoolClaimFailures } from '@/lib/orchestration/pool-claim-policy'
 
-export type DurableJobType = 'PROFILING' | 'DATA_QUALITY' | 'NOTIFICATION' | 'OBSERVABILITY' | 'DISCOVERY' | 'LINEAGE_ENRICHMENT' | 'SEMANTIC_INDEX' | 'GOVERNANCE_AGENT'
+export type DurableJobType = 'PROFILING' | 'DATA_QUALITY' | 'NOTIFICATION' | 'OBSERVABILITY' | 'DISCOVERY' | 'LINEAGE_ENRICHMENT' | 'SEMANTIC_INDEX' | 'GOVERNANCE_AGENT' | 'EXPORT'
 export type DurableWorkloadPool = 'CORE' | 'SEMANTIC' | 'GOVERNANCE'
 export type DurableJobDependencyType = 'SUCCESS' | 'TERMINAL'
 export type DurableJobDependency = { jobId: string; dependencyType?: DurableJobDependencyType }
