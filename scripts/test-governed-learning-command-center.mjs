@@ -33,6 +33,18 @@ for (const forbidden of [
   )
 }
 
+
+const readinessState = fs.readFileSync('lib/ai/governed-learning-readiness-command-center-state.ts', 'utf8')
+for (const invariant of [
+  'readGovernedLearningLiveReadinessEvidence',
+  'evaluateGovernedLearningProductionReadiness',
+]) {
+  assert.ok(readinessState.includes(invariant), `missing learning readiness state invariant: ${invariant}`)
+}
+for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(', 'activate_learning_candidate']) {
+  assert.equal(readinessState.includes(forbidden), false, `readiness state must remain read-only: ${forbidden}`)
+}
+
 const page = fs.readFileSync('app/admin/ai-command-center/page.tsx', 'utf8')
 for (const invariant of [
   'readGovernedLearningLifecycleCommandCenter',

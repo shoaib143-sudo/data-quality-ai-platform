@@ -1,0 +1,67 @@
+# Focused Phase 11 governed-learning integration gate.
+name: Governed Learning Phase 11 Integration
+
+on:
+  pull_request:
+    paths:
+      - 'lib/agents/governed-learning-**'
+      - 'lib/agents/proactive-governed-case-learning**'
+      - 'lib/agents/pgcl-run-learning-provenance.ts'
+      - 'lib/ai/governed-learning-**'
+      - 'lib/ai/pgcl-command-center-state.ts'
+      - 'app/admin/ai-command-center/**'
+      - 'app/admin/learning-cases/**'
+      - 'app/api/admin/learning-cases/**'
+      - 'supabase/migrations/2026092001*.sql'
+      - 'scripts/*governed-learning*'
+      - 'scripts/*proactive-governed-case-learning*'
+      - 'scripts/*pgcl*'
+      - 'package.json'
+      - '.github/workflows/governed-learning-phase11.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/agents/governed-learning-**'
+      - 'lib/agents/proactive-governed-case-learning**'
+      - 'lib/agents/pgcl-run-learning-provenance.ts'
+      - 'lib/ai/governed-learning-**'
+      - 'lib/ai/pgcl-command-center-state.ts'
+      - 'app/admin/ai-command-center/**'
+      - 'app/admin/learning-cases/**'
+      - 'app/api/admin/learning-cases/**'
+      - 'supabase/migrations/2026092001*.sql'
+      - 'scripts/*governed-learning*'
+      - 'scripts/*proactive-governed-case-learning*'
+      - 'scripts/*pgcl*'
+      - 'package.json'
+      - '.github/workflows/governed-learning-phase11.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  phase11:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Candidate through rollback golden journey
+        run: node scripts/verify-governed-learning-golden-journey.mjs && node scripts/audit-governed-learning-phase11-adversarial.mjs
+      - name: Eight-agent PGCL conformance
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs
+      - name: Production-learning provenance
+        run: node scripts/test-pgcl-production-learning-provenance.mjs
+      - name: Production readiness contract
+        run: node --experimental-strip-types scripts/test-governed-learning-production-readiness.mjs
+      - name: Live readiness evidence contract
+        run: node scripts/test-governed-learning-readiness-live.mjs
+      - name: Readiness false-certification adversarial audit
+        run: node --experimental-strip-types scripts/audit-governed-learning-readiness-adversarial.mjs
+      - name: Command Center learning observability
+        run: node --experimental-strip-types scripts/test-governed-learning-command-center.mjs && node scripts/test-pgcl-command-center-observability.mjs
+      - name: Phase 11 independent adversarial audit
+        run: node scripts/audit-governed-learning-phase11-adversarial.mjs
