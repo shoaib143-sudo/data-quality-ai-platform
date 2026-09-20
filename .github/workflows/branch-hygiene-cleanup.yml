@@ -13,7 +13,7 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Delete branches belonging to merged PRs
+      - name: Prune merged and archive stale branches
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -25,6 +25,7 @@ jobs:
           import json
           import os
           import sys
+          import urllib.error
           import urllib.parse
           import urllib.request
 
@@ -41,8 +42,13 @@ jobs:
               "User-Agent": "datanexus-branch-hygiene",
           }
 
-          def request(path, method="GET"):
-              req = urllib.request.Request(api + path, headers=headers, method=method)
+          def request(path, method="GET", payload=None):
+              data = None
+              req_headers = dict(headers)
+              if payload is not None:
+                  data = json.dumps(payload).encode("utf-8")
+                  req_headers["Content-Type"] = "application/json"
+              req = urllib.request.Request(api + path, data=data, headers=req_headers, method=method)
               with urllib.request.urlopen(req) as resp:
                   body = resp.read().decode("utf-8")
                   return json.loads(body) if body else None
@@ -59,66 +65,136 @@ jobs:
                       break
                   page += 1
 
+          def delete_branch(name):
+              ref = urllib.parse.quote(f"heads/{name}", safe="/")
+              request(f"/repos/{repo}/git/refs/{ref}", method="DELETE")
+
+          def ensure_archive_tag(name, sha, category):
+              tag_name = f"archive/{category}/{name}"
+              ref_value = f"refs/tags/{tag_name}"
+              try:
+                  request(
+                      f"/repos/{repo}/git/refs",
+                      method="POST",
+                      payload={"ref": ref_value, "sha": sha},
+                  )
+                  return tag_name
+              except urllib.error.HTTPError as exc:
+                  if exc.code != 422:
+                      raise
+                  encoded = urllib.parse.quote(f"tags/{tag_name}", safe="/")
+                  existing = request(f"/repos/{repo}/git/ref/{encoded}")
+                  existing_sha = ((existing or {}).get("object") or {}).get("sha")
+                  if existing_sha != sha:
+                      raise RuntimeError(
+                          f"Archive tag {tag_name} already exists at {existing_sha}, expected {sha}"
+                      )
+                  return tag_name
+
           open_heads = set()
           for pr in paged(f"/repos/{repo}/pulls?state=open"):
               head = pr.get("head") or {}
-              head_repo = (head.get("repo") or {}).get("full_name")
-              if head_repo == repo and head.get("ref"):
+              if (head.get("repo") or {}).get("full_name") == repo and head.get("ref"):
                   open_heads.add(head["ref"])
 
           merged_heads = set()
+          closed_unmerged_heads = set()
           for pr in paged(f"/repos/{repo}/pulls?state=closed&sort=updated&direction=desc"):
-              if not pr.get("merged_at"):
-                  continue
               head = pr.get("head") or {}
-              head_repo = (head.get("repo") or {}).get("full_name")
-              if head_repo == repo and head.get("ref"):
+              if (head.get("repo") or {}).get("full_name") != repo or not head.get("ref"):
+                  continue
+              if pr.get("merged_at"):
                   merged_heads.add(head["ref"])
+              else:
+                  closed_unmerged_heads.add(head["ref"])
 
-          branches = [b["name"] for b in paged(f"/repos/{repo}/branches")]
-          protected = {default_branch, maintenance_branch}
-          candidates = sorted(
-              b for b in branches
-              if b in merged_heads and b not in open_heads and b not in protected
-          )
+          branch_rows = list(paged(f"/repos/{repo}/branches"))
+          branches = {row["name"]: (row.get("commit") or {}).get("sha") for row in branch_rows}
+          protected = {default_branch, maintenance_branch} | open_heads
 
-          deleted = []
+          deleted_merged = []
+          archived_closed = []
+          archived_ephemeral = []
           failed = []
-          for branch in candidates:
-              ref = urllib.parse.quote(f"heads/{branch}", safe="/")
+
+          for name in sorted(set(branches) & merged_heads):
+              if name in protected:
+                  continue
               try:
-                  request(f"/repos/{repo}/git/refs/{ref}", method="DELETE")
-                  deleted.append(branch)
+                  delete_branch(name)
+                  deleted_merged.append(name)
+                  branches.pop(name, None)
+              except urllib.error.HTTPError as exc:
+                  if exc.code != 422:
+                      failed.append((name, f"merged-delete: HTTP {exc.code}"))
+
+          for name in sorted(set(branches) & closed_unmerged_heads):
+              if name in protected:
+                  continue
+              sha = branches.get(name)
+              if not sha:
+                  continue
+              try:
+                  tag = ensure_archive_tag(name, sha, "closed-pr")
+                  delete_branch(name)
+                  archived_closed.append((name, tag, sha))
+                  branches.pop(name, None)
               except Exception as exc:
-                  failed.append((branch, str(exc)))
+                  failed.append((name, f"closed-pr-archive: {exc}"))
+
+          ephemeral = {
+              name for name in branches
+              if (
+                  name.startswith("backup/")
+                  or name.startswith("tmp/")
+                  or name.startswith("tmp-")
+                  or name in {"noop", "noop-check", "noop-ignore", "noop-temp", "tmp-noop"}
+              )
+          }
+
+          for name in sorted(ephemeral):
+              if name in protected:
+                  continue
+              sha = branches.get(name)
+              if not sha:
+                  continue
+              try:
+                  tag = ensure_archive_tag(name, sha, "ephemeral")
+                  delete_branch(name)
+                  archived_ephemeral.append((name, tag, sha))
+                  branches.pop(name, None)
+              except Exception as exc:
+                  failed.append((name, f"ephemeral-archive: {exc}"))
+
+          result = {
+              "branches_scanned": len(branch_rows),
+              "open_pr_heads_protected": len(open_heads),
+              "merged_pr_heads_found": len(merged_heads),
+              "closed_unmerged_heads_found": len(closed_unmerged_heads),
+              "deleted_merged_count": len(deleted_merged),
+              "archived_closed_pr_count": len(archived_closed),
+              "archived_ephemeral_count": len(archived_ephemeral),
+              "remaining_branch_count_estimate": len(branches),
+              "failed_count": len(failed),
+              "deleted_merged": deleted_merged,
+              "archived_closed_pr": archived_closed,
+              "archived_ephemeral": archived_ephemeral,
+              "failed": failed,
+          }
+
+          print(json.dumps(result, indent=2))
 
           summary = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary:
               with open(summary, "a", encoding="utf-8") as f:
                   f.write("## Branch hygiene cleanup\n\n")
-                  f.write(f"- Branches scanned: {len(branches)}\n")
-                  f.write(f"- Open PR heads protected: {len(open_heads)}\n")
-                  f.write(f"- Merged PR heads found: {len(merged_heads)}\n")
-                  f.write(f"- Deleted merged branches: {len(deleted)}\n")
-                  f.write(f"- Failed deletions: {len(failed)}\n\n")
-                  if deleted:
-                      f.write("### Deleted branches\n")
-                      for branch in deleted:
-                          f.write(f"- `{branch}`\n")
-                  if failed:
-                      f.write("\n### Failed deletions\n")
-                      for branch, error in failed:
-                          f.write(f"- `{branch}`: {error}\n")
-
-          print(json.dumps({
-              "branches_scanned": len(branches),
-              "open_pr_heads_protected": len(open_heads),
-              "merged_pr_heads_found": len(merged_heads),
-              "deleted_count": len(deleted),
-              "failed_count": len(failed),
-              "deleted": deleted,
-              "failed": failed,
-          }, indent=2))
+                  f.write(f"- Branches scanned: {result['branches_scanned']}\n")
+                  f.write(f"- Open PR heads protected: {result['open_pr_heads_protected']}\n")
+                  f.write(f"- Merged branches deleted: {result['deleted_merged_count']}\n")
+                  f.write(f"- Closed-unmerged branches archived then deleted: {result['archived_closed_pr_count']}\n")
+                  f.write(f"- Backup/tmp/noop branches archived then deleted: {result['archived_ephemeral_count']}\n")
+                  f.write(f"- Estimated remaining branches: {result['remaining_branch_count_estimate']}\n")
+                  f.write(f"- Failed operations: {result['failed_count']}\n")
 
           if failed:
               sys.exit(1)
