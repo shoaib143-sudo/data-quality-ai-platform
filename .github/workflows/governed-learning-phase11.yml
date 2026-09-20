@@ -50,14 +50,14 @@ jobs:
         with:
           node-version: '24'
       - name: Candidate through rollback golden journey
-        run: pnpm run verify:governed-learning-golden-journey
+        run: node scripts/verify-governed-learning-golden-journey.mjs && node scripts/audit-governed-learning-phase11-adversarial.mjs
       - name: Eight-agent PGCL conformance
-        run: pnpm run verify:pgcl-eight-agent-conformance
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs
       - name: Production-learning provenance
-        run: pnpm run verify:pgcl-production-learning-provenance
+        run: node scripts/test-pgcl-production-learning-provenance.mjs
       - name: Production readiness contract
-        run: pnpm run verify:governed-learning-production-readiness
+        run: node --experimental-strip-types scripts/test-governed-learning-production-readiness.mjs
       - name: Command Center learning observability
-        run: pnpm run verify:governed-learning-command-center
+        run: node --experimental-strip-types scripts/test-governed-learning-command-center.mjs && node scripts/test-pgcl-command-center-observability.mjs
       - name: Phase 11 independent adversarial audit
         run: node scripts/audit-governed-learning-phase11-adversarial.mjs
