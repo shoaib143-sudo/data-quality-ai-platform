@@ -68,6 +68,30 @@ create index if not exists positive_learning_cases_use_case_idx
 create index if not exists positive_learning_cases_source_run_idx
   on agent.positive_learning_cases(source_agent_run_id);
 
+
+create table if not exists agent.positive_learning_case_occurrences (
+  id uuid primary key default gen_random_uuid(),
+  candidate_id uuid not null,
+  project_id uuid not null references app.projects(id) on delete cascade,
+  source_agent_run_id uuid not null references agent.agent_runs(id) on delete restrict,
+  evidence_refs text[] not null,
+  verification_evidence_refs text[] not null,
+  significance_signals text[] not null,
+  observed_at timestamptz not null default now(),
+  constraint positive_learning_case_occurrences_candidate_fk
+    foreign key (candidate_id, project_id)
+    references agent.positive_learning_cases(candidate_id, project_id)
+    on delete cascade,
+  constraint positive_learning_case_occurrences_evidence_ck check (cardinality(evidence_refs) > 0),
+  constraint positive_learning_case_occurrences_verification_ck check (cardinality(verification_evidence_refs) > 0),
+  constraint positive_learning_case_occurrences_significance_ck check (cardinality(significance_signals) > 0),
+  constraint positive_learning_case_occurrences_run_uq
+    unique (candidate_id, source_agent_run_id)
+);
+
+create index if not exists positive_learning_case_occurrences_project_idx
+  on agent.positive_learning_case_occurrences(project_id, candidate_id, observed_at desc);
+
 create table if not exists agent.positive_learning_case_reviews (
   id uuid primary key default gen_random_uuid(),
   candidate_id uuid not null,
@@ -89,11 +113,14 @@ create index if not exists positive_learning_case_reviews_candidate_idx
   on agent.positive_learning_case_reviews(project_id, candidate_id, created_at desc);
 
 alter table agent.positive_learning_cases enable row level security;
+alter table agent.positive_learning_case_occurrences enable row level security;
 alter table agent.positive_learning_case_reviews enable row level security;
 
 revoke all on agent.positive_learning_cases from public, anon, authenticated, service_role;
+revoke all on agent.positive_learning_case_occurrences from public, anon, authenticated, service_role;
 revoke all on agent.positive_learning_case_reviews from public, anon, authenticated, service_role;
 grant select, insert, update on agent.positive_learning_cases to service_role;
+grant select, insert on agent.positive_learning_case_occurrences to service_role;
 grant select, insert on agent.positive_learning_case_reviews to service_role;
 
 create or replace function agent.create_positive_learning_case(
@@ -125,6 +152,7 @@ declare
   v_evidence_refs text[];
   v_verification_refs text[];
   v_significance text[];
+  v_cluster_candidate_id uuid;
 begin
   if p_project_id is null or p_source_agent_run_id is null then
     raise exception 'project and source agent run are required';
@@ -181,6 +209,54 @@ begin
       and r.project_id = p_project_id
   ) then
     raise exception 'source agent run is missing or cross-project';
+  end if;
+
+  if not ('BROADENED_APPLICABILITY' = any(v_significance)) then
+    select plc.candidate_id into v_cluster_candidate_id
+    from agent.positive_learning_cases plc
+    join agent.learning_candidates lc
+      on lc.id = plc.candidate_id
+     and lc.project_id = plc.project_id
+    where plc.project_id = p_project_id
+      and lc.agent_key = p_agent_key
+      and lc.skill_key = p_skill_key
+      and plc.use_case_key = btrim(p_use_case_key)
+      and plc.review_status in ('PENDING_REVIEW','DEFERRED','APPROVED')
+    order by
+      case plc.review_status
+        when 'PENDING_REVIEW' then 0
+        when 'DEFERRED' then 1
+        else 2
+      end,
+      plc.updated_at desc
+    limit 1
+    for update of plc;
+
+    if v_cluster_candidate_id is not null then
+      insert into agent.positive_learning_case_occurrences(
+        candidate_id,
+        project_id,
+        source_agent_run_id,
+        evidence_refs,
+        verification_evidence_refs,
+        significance_signals
+      ) values (
+        v_cluster_candidate_id,
+        p_project_id,
+        p_source_agent_run_id,
+        v_evidence_refs,
+        v_verification_refs,
+        v_significance
+      )
+      on conflict (candidate_id, source_agent_run_id) do nothing;
+
+      update agent.positive_learning_cases
+      set updated_at = now()
+      where candidate_id = v_cluster_candidate_id
+        and project_id = p_project_id;
+
+      return v_cluster_candidate_id;
+    end if;
   end if;
 
   select * into v_existing
@@ -264,6 +340,22 @@ begin
     btrim(p_reusable_lesson),
     coalesce(p_applicability_conditions, '{}'::text[]),
     coalesce(p_exclusion_conditions, '{}'::text[]),
+    v_evidence_refs,
+    v_verification_refs,
+    v_significance
+  );
+
+  insert into agent.positive_learning_case_occurrences(
+    candidate_id,
+    project_id,
+    source_agent_run_id,
+    evidence_refs,
+    verification_evidence_refs,
+    significance_signals
+  ) values (
+    v_candidate_id,
+    p_project_id,
+    p_source_agent_run_id,
     v_evidence_refs,
     v_verification_refs,
     v_significance
@@ -464,5 +556,7 @@ grant execute on function agent.review_positive_learning_case(
 
 comment on table agent.positive_learning_cases is
   'PGCL positive cases proposed from verified successful Supervised/Handsfree runs. Reuse requires Data Governance Admin approval.';
+comment on table agent.positive_learning_case_occurrences is
+  'Occurrence provenance for clustered PGCL cases. Repeated verified runs do not create duplicate Admin prompts unless applicability materially broadens.';
 comment on table agent.positive_learning_case_reviews is
   'Append-only Data Governance Admin review history for PGCL positive cases.';
