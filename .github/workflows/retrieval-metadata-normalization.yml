@@ -3,6 +3,7 @@ name: Retrieval Metadata Normalization
 on:
   pull_request:
     paths:
+      - 'lib/governance/governed-similarity-contract.ts'
       - 'lib/governance/governed-similarity.ts'
       - 'app/api/search/similar/route.ts'
       - 'tests/governed-similarity.test.mjs'
@@ -19,6 +20,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/governance/governed-similarity-contract.ts'
       - 'lib/governance/governed-similarity.ts'
       - 'app/api/search/similar/route.ts'
       - 'tests/governed-similarity.test.mjs'
