@@ -428,8 +428,8 @@ begin
   if not found then
     raise exception 'positive learning case not found in project';
   end if;
-  if v_case.review_status <> 'PENDING_REVIEW' and p_decision <> 'DEFER' then
-    raise exception 'positive learning case is no longer pending review';
+  if v_case.review_status not in ('PENDING_REVIEW','DEFERRED') then
+    raise exception 'positive learning case is no longer reviewable';
   end if;
 
   v_target_status := case p_decision
