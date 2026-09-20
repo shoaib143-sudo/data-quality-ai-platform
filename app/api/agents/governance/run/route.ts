@@ -6,6 +6,7 @@ import { GOVERNANCE_READ_AGENT_KEYS } from '@/lib/agents/governance-read-agent'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
 import { retrieveGovernedLearningContext } from '@/lib/agents/governed-learning-context'
+import { proposePgclCaseFromVerifiedAgentRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { persistAgentRunResultArtifact } from '@/lib/agents/run-result-artifact'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
@@ -345,7 +346,34 @@ export async function POST(request: Request) {
       attributes: { agent_key: result.output.agent.key },
     })
 
-    return NextResponse.json({ accepted: true, runId: result.runId, output, artifact, memory, conversationContext }, { status: 200 })
+    let learningEvaluation: Awaited<ReturnType<typeof proposePgclCaseFromVerifiedAgentRun>> | null = null
+    try {
+      learningEvaluation = await proposePgclCaseFromVerifiedAgentRun({
+        projectId,
+        agentRunId: result.runId,
+        runMode: 'SUPERVISED',
+        verificationEvidenceRefs: [
+          `agent_run:${result.runId}:succeeded`,
+          `agent_result_artifact:${artifact.artifactId}`,
+        ],
+        actorUserId: user.id,
+      })
+    } catch (learningError) {
+      console.error(
+        '[governance-agent] PGCL evaluation failed without changing governed agent success:',
+        learningError instanceof Error ? learningError.message : learningError,
+      )
+    }
+
+    return NextResponse.json({
+      accepted: true,
+      runId: result.runId,
+      output,
+      artifact,
+      memory,
+      conversationContext,
+      learningEvaluation,
+    }, { status: 200 })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
