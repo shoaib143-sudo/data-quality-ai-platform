@@ -36,7 +36,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
       createGovernanceCommandCenterState().read(selectedProjectId),
       createGovernanceLearningEngine().assess({ projectId: selectedProjectId, limit: 25 }),
       readGovernedLearningLifecycleCommandCenter(selectedProjectId),
-      readPgclCommandCenterState(selectedProjectId),
+      readPgclCommandCenterState(selectedProjectId, user.id),
     ])
     return { state, learning, learningLifecycle, pgcl }
   })() : null

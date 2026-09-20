@@ -3,6 +3,10 @@ import fs from 'node:fs'
 
 const state = fs.readFileSync('lib/ai/pgcl-command-center-state.ts', 'utf8')
 for (const invariant of [
+  "createAdminClient",
+  "authorizeProject",
+  "readPgclCommandCenterState(projectId: string, actorUserId: string)",
+  "authorizeProject(actorUserId, projectId, 'admin.manage')",
   "from('learning_candidates')",
   ".eq('candidate_type', 'POSITIVE_CASE')",
   "from('positive_learning_cases')",
@@ -34,6 +38,7 @@ for (const forbidden of [
   '.delete(',
   '.upsert(',
   '.rpc(',
+  'createClient',
   'review_positive_learning_case',
   'create_positive_learning_case',
   'activate_learning_candidate',
@@ -49,6 +54,7 @@ for (const forbidden of [
 const page = fs.readFileSync('app/admin/ai-command-center/page.tsx', 'utf8')
 for (const invariant of [
   'readPgclCommandCenterState',
+  'readPgclCommandCenterState(selectedProjectId, user.id)',
   'Positive-case learning feedback loop',
   '8 agents represented',
   'Context authority:',
@@ -85,4 +91,41 @@ for (const forbidden of [
   )
 }
 
-console.log('PGCL Command Center observability is project-scoped, outcome-aware, read-only, and non-authoritative.')
+
+const learningPage = fs.readFileSync('app/admin/ai-command-center/learning-governance/page.tsx', 'utf8')
+for (const invariant of [
+  'Learning Governance',
+  'authorizeProject',
+  "'admin.manage'",
+  'readGovernedLearningLifecycleCommandCenter',
+  'readPgclCommandCenterState(selectedProjectId, user.id)',
+  'Learning portfolio by agent',
+  'Positive learning cases',
+  'Controlled learning lifecycle',
+  'Reusable lessons, raw evidence payloads and hidden reasoning are intentionally not rendered.',
+]) {
+  assert.ok(learningPage.includes(invariant), `missing dedicated learning governance invariant: ${invariant}`)
+}
+for (const forbidden of [
+  "method=\"post\"",
+  "'use server'",
+  'reviewPositiveLearningCase(',
+  'createPositiveLearningCase(',
+  'activateGovernedLearningCandidate(',
+  'rollbackGovernedLearningCandidate(',
+  'reusableLesson',
+  'evidenceRefs',
+  'verificationEvidenceRefs',
+]) {
+  assert.equal(
+    learningPage.includes(forbidden),
+    false,
+    `dedicated learning governance view must remain summary-safe and read-only: ${forbidden}`,
+  )
+}
+
+const layout = fs.readFileSync('app/admin/ai-command-center/layout.tsx', 'utf8')
+assert.ok(layout.includes("/admin/ai-command-center/learning-governance"))
+assert.ok(layout.includes('Learning governance'))
+
+console.log('PGCL Command Center observability is project-scoped, actor-authorized, server-only, outcome-aware, read-only, and non-authoritative.')
