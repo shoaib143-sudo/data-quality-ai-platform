@@ -22,11 +22,9 @@ for (const invariant of [
 }
 
 for (const invariant of [
-  ".from('agent_learning_cases')",
-  ".eq('source_kind', 'PGCL_POSITIVE_CASE')",
-  ".eq('decision_status', 'VERIFIED')",
-  ".eq('outcome_status', 'VERIFIED')",
-  ".eq('agent_definition_id', input.agentDefinitionId)",
+  "rpc('list_approved_positive_learning_cases'",
+  'p_project_id: input.projectId',
+  'p_agent_definition_id: input.agentDefinitionId',
   'approvedPositiveCases',
 ]) {
   assert.ok(context.includes(invariant), 'missing PGCL retrieval invariant: ' + invariant)
@@ -51,6 +49,7 @@ assert.equal(
 )
 
 assert.ok(context.includes('input.agentDefinitionId && query'), 'PGCL retrieval must fail closed without an explicit agent definition')
+assert.equal(context.includes(".from('agent_learning_cases')"), false, 'PGCL retrieval must use the canonical database boundary')
 
 for (const invariant of [
   'recordPositiveLearningCaseRetrievals',
@@ -64,6 +63,12 @@ for (const invariant of [
 
 for (const invariant of [
   'create table if not exists agent.positive_learning_case_usages',
+  'create or replace function agent.list_approved_positive_learning_cases',
+  "lc.source_kind = 'PGCL_POSITIVE_CASE'",
+  "lc.agent_definition_id = p_agent_definition_id",
+  "lc.decision_status = 'VERIFIED'",
+  "lc.outcome_status = 'VERIFIED'",
+  "grant execute on function agent.list_approved_positive_learning_cases",
   "usage_status in ('RETRIEVED','APPLIED','SUCCEEDED','FAILED','DISMISSED')",
   'positive_learning_case_usages_uq',
 ]) {
