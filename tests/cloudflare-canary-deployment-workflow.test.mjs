@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const workflow = fs.readFileSync(new URL('../.github/workflows/release-governance.yml', import.meta.url), 'utf8')
+const tooling = fs.readFileSync(new URL('../scripts/prepare-cloudflare-tooling.mjs', import.meta.url), 'utf8')
 
 test('Cloudflare canary deployment is manual-only and cost-gated', () => {
   assert.match(workflow, /workflow_dispatch:/)
@@ -22,8 +23,8 @@ test('Cloudflare canary deploys an immutable validated SHA', () => {
 })
 
 test('Cloudflare credentials remain step-scoped and deployment tooling is pinned', () => {
-  assert.match(workflow, /wrangler@4\.131\.1/)
-  assert.match(workflow, /@cloudflare\/containers@0\.3\.7/)
+  assert.match(tooling, /wrangler: '4\.131\.1'/)
+  assert.match(tooling, /'@cloudflare\/containers': '0\.3\.7'/)
   assert.match(workflow, /CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/)
   assert.match(workflow, /CLOUDFLARE_ACCOUNT_ID: \$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/)
   assert.doesNotMatch(workflow.slice(0, workflow.indexOf('steps:')), /CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID/)
@@ -54,7 +55,7 @@ test('Cloudflare canary release verifies exact deployed identity and read-only m
 test('Cloudflare canary preflight builds governed image and validates Wrangler without deployment', () => {
   assert.match(workflow, /build-cloudflare-container\.mjs/)
   assert.match(workflow, /cloudflare-canary-preflight/)
-  assert.match(workflow, /dlx wrangler deploy --dry-run/)
+  assert.match(workflow, /datanexus-cloudflare-tools\/node_modules\/\.bin\/wrangler.*deploy --dry-run/)
 })
 
 
@@ -64,8 +65,11 @@ test('release evidence parsers do not shadow JSON stdin with heredoc scripts', (
 })
 
 
-test('Cloudflare tooling runs through isolated pnpm dlx instead of mutating the pnpm workspace with npm', () => {
-  assert.match(workflow, /pnpm --package=wrangler@4\.131\.1 --package=@cloudflare\/containers@0\.3\.7 dlx wrangler deploy/)
-  assert.doesNotMatch(workflow, /npm install --no-save[^\n]*wrangler@4\.131\.1/)
-  assert.doesNotMatch(workflow, /npx wrangler@4\.131\.1/)
+test('Cloudflare tooling runs from an isolated pinned workspace and exposes the Containers SDK to Wrangler', () => {
+  assert.match(workflow, /prepare-cloudflare-tooling\.mjs/)
+  assert.match(workflow, /datanexus-cloudflare-tools\/node_modules\/\.bin\/wrangler/)
+  assert.match(tooling, /fs\.symlinkSync\(installedContainers, workspaceContainers/)
+  assert.doesNotMatch(workflow, /npm install --no-save[^\n]*wrangler/)
+  assert.doesNotMatch(workflow, /npx wrangler/)
+  assert.doesNotMatch(workflow, /dlx wrangler/)
 })
