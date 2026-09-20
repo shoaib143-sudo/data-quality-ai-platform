@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { verifyDurableWorkerSchedulerAuthority } from '../lib/recovery/durable-worker-scheduler-authority.mjs'
@@ -67,4 +68,27 @@ test('rejects duplicate Vercel worker scheduling', () => {
     ...cleanVercel,
     crons: [{ path: '/api/jobs/worker', schedule: '* * * * *' }],
   }, 'DURABLE_WORKER_DUPLICATE_VERCEL_CRON_PRESENT')
+})
+
+
+test('repository migrations preserve singular scheduler cadence with provider-neutral effective destination', () => {
+  const schedulerAuthority = fs.readFileSync(
+    new URL('../supabase/migrations/20260916103000_durable_worker_scheduler_authority.sql', import.meta.url),
+    'utf8',
+  )
+  const providerNeutral = fs.readFileSync(
+    new URL('../supabase/migrations/20260919121000_provider_neutral_durable_worker_url.sql', import.meta.url),
+    'utf8',
+  )
+  const vercelConfig = JSON.parse(fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+
+  assert.match(schedulerAuthority, /cron\.schedule/)
+  assert.match(schedulerAuthority, /'dgp-durable-worker-kick'/)
+  assert.match(schedulerAuthority, /'\* \* \* \* \*'/)
+  assert.match(schedulerAuthority, /'select orchestration\.kick_durable_worker\(\);'/)
+
+  const result = verifyDurableWorkerSchedulerAuthority({ migrationSql: providerNeutral, vercelConfig })
+  assert.equal(result.authority, 'SUPABASE_PG_CRON')
+  assert.equal(result.schedule, '* * * * *')
+  assert.equal(result.workerUrlSecretName, 'DGP_DURABLE_WORKER_URL')
 })
