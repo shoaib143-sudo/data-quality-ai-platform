@@ -3,6 +3,7 @@ import { Activity, BookOpenCheck, ShieldCheck } from 'lucide-react'
 
 import { authorizeProject } from '@/lib/auth/authorize'
 import { readGovernedLearningLifecycleCommandCenter } from '@/lib/ai/governed-learning-command-center-state'
+import { readGovernedLearningProductionReadinessState } from '@/lib/ai/governed-learning-readiness-command-center-state'
 import { readPgclCommandCenterState } from '@/lib/ai/pgcl-command-center-state'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
@@ -10,9 +11,9 @@ import { createClient } from '@/lib/supabase/server'
 type Project = { id: string; name: string }
 
 function tone(value: string) {
-  if (['REJECTED', 'FAILED', 'ROLLED_BACK', 'NOT_READY'].includes(value)) return 'border-red-200 bg-red-50 text-red-800'
-  if (['PENDING_REVIEW', 'DEFERRED', 'REVIEW_REQUIRED', 'CANARY'].includes(value)) return 'border-amber-200 bg-amber-50 text-amber-800'
-  if (['APPROVED', 'ACTIVE', 'VERIFIED', 'SUCCEEDED'].includes(value)) return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  if (['REJECTED', 'FAILED', 'ROLLED_BACK', 'NOT_READY', 'BLOCKED'].includes(value)) return 'border-red-200 bg-red-50 text-red-800'
+  if (['PENDING_REVIEW', 'DEFERRED', 'REVIEW_REQUIRED', 'CANARY', 'READY_FOR_PROOF', 'EVIDENCE_IN_PROGRESS'].includes(value)) return 'border-amber-200 bg-amber-50 text-amber-800'
+  if (['APPROVED', 'ACTIVE', 'VERIFIED', 'SUCCEEDED', 'CERTIFIED'].includes(value)) return 'border-emerald-200 bg-emerald-50 text-emerald-800'
   return 'border-slate-200 bg-slate-50 text-slate-700'
 }
 
@@ -38,15 +39,20 @@ export default async function LearningGovernancePage({
 
   const control = selectedProjectId ? await (async () => {
     await authorizeProject(user.id, selectedProjectId, 'admin.manage')
-    const [lifecycle, pgcl] = await Promise.all([
+    const [lifecycle, pgcl, readiness] = await Promise.all([
       readGovernedLearningLifecycleCommandCenter(selectedProjectId),
       readPgclCommandCenterState(selectedProjectId, user.id),
+      readGovernedLearningProductionReadinessState({
+        projectId: selectedProjectId,
+        actorUserId: user.id,
+      }),
     ])
-    return { lifecycle, pgcl }
+    return { lifecycle, pgcl, readiness }
   })() : null
 
   const lifecycle = control?.lifecycle ?? null
   const pgcl = control?.pgcl ?? null
+  const readiness = control?.readiness ?? null
 
   return <main className="min-h-screen bg-slate-50 p-5 sm:p-8">
     <div className="mx-auto max-w-7xl space-y-7">
@@ -75,7 +81,7 @@ export default async function LearningGovernancePage({
         <button className="mt-3 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load learning evidence</button>
       </form>
 
-      {!lifecycle || !pgcl ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
+      {!lifecycle || !pgcl || !readiness ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <article className="rounded-2xl border bg-white p-5"><BookOpenCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.total}</p><p className="text-xs font-bold uppercase text-slate-500">Lifecycle candidates</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.active}</p><p className="text-xs font-bold uppercase text-slate-500">Active releases</p></article>
@@ -85,6 +91,32 @@ export default async function LearningGovernancePage({
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.occurrenceEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Verified occurrences</p></article>
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.usageEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Reuse records</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.succeeded}</p><p className="text-xs font-bold uppercase text-slate-500">Successful reuse</p></article>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-600">Production learning proof</p>
+              <h2 className="mt-1 text-xl font-black">Governed learning readiness</h2>
+              <p className="mt-1 max-w-4xl text-sm text-slate-500">Read-only evidence from required tables/RLS, current Admin authority, verified production-eligible runs, approved positive cases, and successful reuse.</p>
+            </div>
+            <Badge value={readiness.status}/>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+            <div className="rounded-xl border bg-slate-50 p-3"><p className="text-2xl font-black">{readiness.evidence.activeDataGovernanceAdminBindingCount}</p><p className="text-xs font-bold uppercase text-slate-500">Active governance admins</p></div>
+            <div className="rounded-xl border bg-slate-50 p-3"><p className="text-2xl font-black">{readiness.evidence.successfulGovernedRunCount}</p><p className="text-xs font-bold uppercase text-slate-500">Successful runs</p></div>
+            <div className="rounded-xl border bg-slate-50 p-3"><p className="text-2xl font-black">{readiness.evidence.canonicallyVerifiedRunCount}</p><p className="text-xs font-bold uppercase text-slate-500">Verified eligible runs</p></div>
+            <div className="rounded-xl border bg-slate-50 p-3"><p className="text-2xl font-black">{readiness.evidence.approvedPositiveCaseCount}</p><p className="text-xs font-bold uppercase text-slate-500">Approved cases</p></div>
+            <div className="rounded-xl border bg-slate-50 p-3"><p className="text-2xl font-black">{readiness.evidence.successfulPositiveCaseUsageCount}</p><p className="text-xs font-bold uppercase text-slate-500">Successful reuse</p></div>
+            <div className="rounded-xl border bg-slate-50 p-3"><p className="text-2xl font-black">{readiness.evidence.allEightAgentsCovered ? '8/8' : 'Incomplete'}</p><p className="text-xs font-bold uppercase text-slate-500">Agent coverage</p></div>
+          </div>
+          <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <p>Required Phase 11 tables: <strong>{readiness.evidence.requiredTablesPresent ? 'present' : 'missing'}</strong></p>
+            <p>Required table RLS: <strong>{readiness.evidence.requiredRlsEnabled ? 'enabled' : 'incomplete'}</strong></p>
+            <p>Synthetic evidence may certify: <strong>{readiness.controls.syntheticEvidenceMayCertify ? 'yes' : 'no'}</strong></p>
+            <p>Human review: <strong>{readiness.controls.humanReviewRequired ? 'required' : 'not required'}</strong></p>
+          </div>
+          {readiness.blockers.length ? <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-900">Current blockers</p><p className="mt-1 text-xs text-amber-800">{readiness.blockers.join(' · ')}</p></div> : <p className="mt-4 text-sm text-emerald-700">No structural readiness blockers are recorded.</p>}
         </section>
 
         <section className="rounded-2xl border bg-white p-6">
