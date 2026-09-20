@@ -115,6 +115,7 @@ jobs:
           deleted_merged = []
           archived_closed = []
           archived_ephemeral = []
+          deleted_ancestry_contained = []
           failed = []
 
           for name in sorted(set(branches) & merged_heads):
@@ -166,6 +167,21 @@ jobs:
               except Exception as exc:
                   failed.append((name, f"ephemeral-archive: {exc}"))
 
+          # Final safe pass: remove branches whose exact head commit is already
+          # reachable from main. This never deletes branches with unique commits.
+          main_sha = (request(f"/repos/{repo}/branches/{default_branch}").get("commit") or {}).get("sha")
+          for name, sha in sorted(list(branches.items())):
+              if name in protected or not sha or not main_sha:
+                  continue
+              try:
+                  compare = request(f"/repos/{repo}/compare/{sha}...{main_sha}")
+                  if compare.get("status") in {"ahead", "identical"}:
+                      delete_branch(name)
+                      deleted_ancestry_contained.append(name)
+                      branches.pop(name, None)
+              except Exception as exc:
+                  failed.append((name, f"ancestry-check: {exc}"))
+
           result = {
               "branches_scanned": len(branch_rows),
               "open_pr_heads_protected": len(open_heads),
@@ -174,11 +190,13 @@ jobs:
               "deleted_merged_count": len(deleted_merged),
               "archived_closed_pr_count": len(archived_closed),
               "archived_ephemeral_count": len(archived_ephemeral),
+              "deleted_ancestry_contained_count": len(deleted_ancestry_contained),
               "remaining_branch_count_estimate": len(branches),
               "failed_count": len(failed),
               "deleted_merged": deleted_merged,
               "archived_closed_pr": archived_closed,
               "archived_ephemeral": archived_ephemeral,
+              "deleted_ancestry_contained": deleted_ancestry_contained,
               "failed": failed,
           }
 
