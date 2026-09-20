@@ -85,6 +85,7 @@ declare
   v_dataset_metadata jsonb := '{}'::jsonb;
   v_version_metadata jsonb := '{}'::jsonb;
   v_source_metadata jsonb := '{}'::jsonb;
+  v_project_metadata jsonb := '{}'::jsonb;
   v_nonproduction boolean := false;
   v_reason text := 'TRUSTED_GOVERNED_RUNTIME_NON_SYNTHETIC';
   v_classification text := 'PRODUCTION_ELIGIBLE';
@@ -112,6 +113,11 @@ begin
     where r.id = v_run.parent_run_id
       and r.project_id = p_project_id;
   end if;
+
+  select coalesce(p.metadata, '{}'::jsonb)
+  into v_project_metadata
+  from app.projects p
+  where p.id = p_project_id;
 
   if v_run.dataset_version_id is not null then
     select
@@ -152,6 +158,14 @@ begin
     or lower(coalesce(v_version_metadata->>'synthetic_bootstrap', 'false')) = 'true'
     or lower(coalesce(v_source_metadata->>'synthetic', 'false')) = 'true'
     or lower(coalesce(v_source_metadata->>'synthetic_bootstrap', 'false')) = 'true'
+    or lower(coalesce(v_project_metadata->>'synthetic', 'false')) = 'true'
+    or lower(coalesce(v_project_metadata->>'synthetic_bootstrap', 'false')) = 'true'
+    or lower(coalesce(v_project_metadata->>'test_fixture', 'false')) = 'true'
+    or lower(coalesce(v_project_metadata->>'created_via', '')) in (
+      'backend_regression_test',
+      'synthetic_fixture',
+      'test_fixture'
+    )
     or (
       v_run.parent_run_id is not null
       and (
@@ -217,7 +231,16 @@ begin
       'parentRunId', v_run.parent_run_id,
       'datasetSynthetic', lower(coalesce(v_dataset_metadata->>'synthetic', 'false')) = 'true',
       'versionSynthetic', lower(coalesce(v_version_metadata->>'synthetic', 'false')) = 'true',
-      'sourceSynthetic', lower(coalesce(v_source_metadata->>'synthetic', 'false')) = 'true'
+      'sourceSynthetic', lower(coalesce(v_source_metadata->>'synthetic', 'false')) = 'true',
+      'projectSyntheticOrTest',
+        lower(coalesce(v_project_metadata->>'synthetic', 'false')) = 'true'
+        or lower(coalesce(v_project_metadata->>'synthetic_bootstrap', 'false')) = 'true'
+        or lower(coalesce(v_project_metadata->>'test_fixture', 'false')) = 'true'
+        or lower(coalesce(v_project_metadata->>'created_via', '')) in (
+          'backend_regression_test',
+          'synthetic_fixture',
+          'test_fixture'
+        )
     )
   );
 
