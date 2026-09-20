@@ -2,7 +2,7 @@ import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const { derivePgclCandidateFromVerifiedRun } = await import('../lib/agents/proactive-governed-case-learning-runtime.ts')
+const { derivePgclCandidateFromVerifiedRun } = await import('../lib/agents/proactive-governed-case-learning.ts')
 
 const profiling = derivePgclCandidateFromVerifiedRun({
   run: {
@@ -82,4 +82,4 @@ assert.ok(
   'Data Quality PGCL evaluation must run only after the governed quality execution and downstream evidence path completes',
 )
 
-console.log('All four priority agents now have PGCL derivation coverage, with Profiling and Data Quality wired at their successful completion boundaries.')
+console.log('Profiling and Data Quality PGCL derivation remain dependency-free and wired at their successful completion boundaries.')
