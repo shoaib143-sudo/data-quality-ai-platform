@@ -2,7 +2,7 @@ import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const { derivePgclCandidateFromVerifiedRun } = await import('../lib/agents/proactive-governed-case-learning-runtime.ts')
+const { derivePgclCandidateFromVerifiedRun } = await import('../lib/agents/proactive-governed-case-learning.ts')
 
 const run = {
   id: 'run-steward-1',
@@ -82,9 +82,23 @@ for (const [agentKey, expectedSkillKey] of remainingSpecialists) {
   assert.equal(candidate.maySelfLearn, false)
 }
 
+const contract = fs.readFileSync('lib/agents/proactive-governed-case-learning.ts', 'utf8')
 const runtime = fs.readFileSync('lib/agents/proactive-governed-case-learning-runtime.ts', 'utf8')
 const supervisor = fs.readFileSync('lib/agents/runtime/native-supervisor-service.ts', 'utf8')
 const route = fs.readFileSync('app/api/agents/supervisor/run/route.ts', 'utf8')
+
+for (const invariant of [
+  "profiling_agent: 'profile_evidence_analysis'",
+  "data_quality_agent: 'quality_rule_analysis'",
+  "steward_agent: 'stewardship_gap_analysis'",
+  "governance_analyst_agent: 'governance_evidence_synthesis'",
+  "architect_agent: 'lineage_impact_analysis'",
+  "investigator_agent: 'incident_root_cause_analysis'",
+  "executive_agent: 'executive_materiality_analysis'",
+  "support_agent: 'support_case_investigation'",
+]) {
+  assert.ok(contract.includes(invariant), 'missing canonical PGCL skill mapping: ' + invariant)
+}
 
 for (const invariant of [
   'proposePgclCasesFromVerifiedSupervisorRun',
@@ -92,10 +106,6 @@ for (const invariant of [
   "run.status !== 'SUCCEEDED'",
   "REPEATED_SUCCESS_THRESHOLD",
   "NEW_USE_CASE",
-  "architect_agent: 'lineage_impact_analysis'",
-  "investigator_agent: 'incident_root_cause_analysis'",
-  "executive_agent: 'executive_materiality_analysis'",
-  "support_agent: 'support_case_investigation'",
   'native_trajectory_evaluation:',
 ]) {
   assert.ok(runtime.includes(invariant), 'missing PGCL supervisor runtime invariant: ' + invariant)
