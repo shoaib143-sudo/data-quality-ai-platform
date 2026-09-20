@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     }
 
     const targetTypes = normalizeSimilarityTargetTypes(sourceType, targetTypesRaw)
-    const capabilities = new Set<string>([
+    const capabilities = new Set([
       similarityCapability(sourceType),
       ...targetTypes.map(similarityCapability),
     ])
