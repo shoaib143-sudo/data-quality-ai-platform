@@ -25,10 +25,9 @@ assert.ok(
   'source-document provenance must be attached to requirement-level retrieval candidates',
 )
 
-assert.equal(
-  source.includes('document_review_status: document?.review_status'),
-  false,
-  'legacy ambiguous requirement provenance key must not remain after source-scoped normalization',
+assert.ok(
+  source.includes('source_document_review_status: document?.review_status ?? null'),
+  'requirement provenance must use an explicit source-scoped review-status key',
 )
 
 console.log('Requirement-level policy/regulatory retrieval preserves source document provenance for filtering and citation context.')
