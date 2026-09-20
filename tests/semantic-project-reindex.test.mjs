@@ -1,6 +1,29 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { reindexProjectSemanticCorpus } from '../lib/governance/semantic-project-reindex.ts'
+import { existsSync } from 'node:fs'
+import { registerHooks } from 'node:module'
+import { pathToFileURL, fileURLToPath } from 'node:url'
+import path from 'node:path'
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('@/')) {
+      const base = path.resolve(process.cwd(), specifier.slice(2))
+      for (const suffix of ['.ts', '.tsx', '.js', '.mjs']) {
+        if (existsSync(base + suffix)) return nextResolve(pathToFileURL(base + suffix).href, context)
+      }
+    }
+    if (specifier.startsWith('.') && !/\.[a-z0-9]+$/i.test(specifier) && context.parentURL?.startsWith('file:')) {
+      for (const suffix of ['.ts', '.tsx', '.js', '.mjs']) {
+        const candidate = new URL(`${specifier}${suffix}`, context.parentURL)
+        if (existsSync(fileURLToPath(candidate))) return nextResolve(candidate.href, context)
+      }
+    }
+    return nextResolve(specifier, context)
+  },
+})
+
+const { reindexProjectSemanticCorpus } = await import('../lib/governance/semantic-project-reindex.ts')
 
 test('reindexes the complete governed semantic corpus and aggregates group outcomes', async () => {
   const calls = []
