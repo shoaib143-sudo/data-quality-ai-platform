@@ -12,7 +12,7 @@ function requireAbsent(text, pattern, message) {
   if (pattern.test(text)) throw new Error(message)
 }
 
-const [adapter, csvSource, jsonSource, textDecoding, remoteGuard, providerNeutral, discovery, registration, uploadRoute, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
+const [adapter, csvSource, jsonSource, textDecoding, remoteGuard, providerNeutral, discovery, registration, uploadRoute, supabaseStorage, r2Storage, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
   source('lib/profiling/file-source-adapter.ts'),
   source('lib/profiling/csv-source.ts'),
   source('lib/profiling/json-source.ts'),
@@ -22,6 +22,8 @@ const [adapter, csvSource, jsonSource, textDecoding, remoteGuard, providerNeutra
   source('app/api/datasets/source/discover-file/route.ts'),
   source('app/api/datasets/source/register/route.ts'),
   source('app/api/datasets/source/upload-file/route.ts'),
+  source('lib/storage/supabase.ts'),
+  source('lib/storage/r2.ts'),
   source('app/api/datasets/register/route.ts'),
   source('app/datasets/register-dataset-form.tsx'),
   source('lib/profiling/metric-engine.ts'),
@@ -83,7 +85,9 @@ requireMatch(providerNeutral, /parsed\.provider\s*===\s*['"]r2['"]/, 'Provider-n
 requireMatch(providerNeutral, /configuredBucket\s*=\s*process\.env\.R2_BUCKET/, 'R2 file sources must remain constrained to the configured application bucket.')
 
 requireMatch(uploadRoute, /authorizeProject\(user\.id,\s*projectId,\s*['"]source\.manage['"]\)/, 'Dataset upload authorization must require source.manage.')
-requireMatch(uploadRoute, /createSignedUploadUrl/, 'Dataset uploads must use signed direct-to-Storage upload authorization.')
+requireMatch(uploadRoute, /createUploadAuthorization\(/, 'Dataset upload route must delegate signed direct upload authorization through the provider-neutral storage contract.')
+requireMatch(supabaseStorage, /createSignedUploadUrl\(/, 'Supabase dataset uploads must use Supabase signed direct-upload authorization.')
+requireMatch(r2Storage, /url:\s*presign\(['"]PUT['"]/, 'R2 dataset uploads must use signed direct-upload authorization.')
 requireAbsent(uploadRoute, /request\.formData\(/, 'Dataset upload route must not proxy multipart file bodies through Vercel.')
 requireMatch(uploadRoute, /export\s+async\s+function\s+DELETE/, 'Dataset upload route must expose cleanup for failed post-upload validation.')
 requireMatch(uploadRoute, /projects\/\$\{projectId\}\/uploads\//, 'Dataset upload objects must remain under the project uploads prefix.')
