@@ -26,6 +26,13 @@ export type PgclCommandCenterCandidate = {
   succeededCount: number
   failedCount: number
   dismissedCount: number
+  profilingApplicationCount: number
+  dataQualityApplicationCount: number
+  supervisorApplicationCount: number
+  directSpecialistApplicationCount: number
+  authoritativeOutcomeCount: number
+  unknownApplicationSurfaceCount: number
+  executionSurfaces: string[]
   averageRelevance: number | null
   lastUsedAt: string | null
   createdAt: string
@@ -39,8 +46,14 @@ export type PgclAgentCoverage = {
   productionEligibleCount: number
   promotedActiveCount: number
   usageCount: number
+  appliedCount: number
   succeededCount: number
   failedCount: number
+  profilingApplicationCount: number
+  dataQualityApplicationCount: number
+  supervisorApplicationCount: number
+  directSpecialistApplicationCount: number
+  authoritativeOutcomeCount: number
 }
 
 export type PgclCommandCenterState = {
@@ -64,6 +77,15 @@ export type PgclCommandCenterState = {
     succeeded: number
     failed: number
     dismissed: number
+    profilingApplications: number
+    dataQualityApplications: number
+    supervisorApplications: number
+    directSpecialistApplications: number
+    authoritativeOutcomes: number
+    unknownApplicationSurfaces: number
+  }
+  schemaCompatibility: {
+    productionProvenanceColumnsAvailable: boolean
   }
   authority: {
     contextOnly: true
@@ -86,13 +108,66 @@ function record(value: unknown): Record<string, unknown> {
     : {}
 }
 
+type PositiveCaseProjectionRow = {
+  candidate_id: unknown
+  run_mode: unknown
+  use_case_key: unknown
+  result_summary: unknown
+  significance_signals: unknown
+  review_status: unknown
+  production_eligible?: unknown
+  learning_provenance_recorded_at?: unknown
+  reviewed_at: unknown
+  created_at: unknown
+  updated_at: unknown
+}
+
+async function loadPositiveCaseProjection(
+  supabase: ReturnType<typeof createAdminClient>,
+  projectId: string,
+) {
+  const current = await supabase.schema('agent').from('positive_learning_cases')
+    .select('candidate_id,run_mode,use_case_key,result_summary,significance_signals,review_status,production_eligible,learning_provenance_recorded_at,reviewed_at,created_at,updated_at')
+    .eq('project_id', projectId)
+    .order('updated_at', { ascending: false })
+    .limit(100)
+
+  if (!current.error) {
+    return {
+      rows: (current.data ?? []) as PositiveCaseProjectionRow[],
+      productionProvenanceColumnsAvailable: true,
+    }
+  }
+
+  const missingProductionProvenanceColumns =
+    current.error.message.includes('production_eligible')
+    || current.error.message.includes('learning_provenance_recorded_at')
+
+  if (!missingProductionProvenanceColumns) {
+    throw new Error(`Unable to load PGCL positive cases: ${current.error.message}`)
+  }
+
+  const legacy = await supabase.schema('agent').from('positive_learning_cases')
+    .select('candidate_id,run_mode,use_case_key,result_summary,significance_signals,review_status,reviewed_at,created_at,updated_at')
+    .eq('project_id', projectId)
+    .order('updated_at', { ascending: false })
+    .limit(100)
+
+  if (legacy.error) throw new Error(`Unable to load PGCL positive cases: ${legacy.error.message}`)
+
+  return {
+    rows: (legacy.data ?? []) as PositiveCaseProjectionRow[],
+    productionProvenanceColumnsAvailable: false,
+  }
+}
+
 export async function readPgclCommandCenterState(projectId: string, actorUserId: string): Promise<PgclCommandCenterState> {
   await authorizeProject(actorUserId, projectId, 'admin.manage')
   const supabase = createAdminClient()
 
   const [
     candidateResult,
-    positiveCaseResult,
+    positiveCaseProjection,
     reviewResult,
     occurrenceResult,
     usageResult,
@@ -104,11 +179,7 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       .eq('candidate_type', 'POSITIVE_CASE')
       .order('updated_at', { ascending: false })
       .limit(100),
-    supabase.schema('agent').from('positive_learning_cases')
-      .select('candidate_id,run_mode,use_case_key,result_summary,significance_signals,review_status,production_eligible,learning_provenance_recorded_at,reviewed_at,created_at,updated_at')
-      .eq('project_id', projectId)
-      .order('updated_at', { ascending: false })
-      .limit(100),
+    loadPositiveCaseProjection(supabase, projectId),
     supabase.schema('agent').from('positive_learning_case_reviews')
       .select('candidate_id,decision,created_at')
       .eq('project_id', projectId)
@@ -120,7 +191,7 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       .order('observed_at', { ascending: false })
       .limit(1000),
     supabase.schema('agent').from('positive_learning_case_usages')
-      .select('candidate_id,learning_case_id,relevance,usage_status,first_retrieved_at,updated_at')
+      .select('candidate_id,learning_case_id,relevance,usage_status,outcome,first_retrieved_at,updated_at')
       .eq('project_id', projectId)
       .order('updated_at', { ascending: false })
       .limit(1000),
@@ -133,14 +204,13 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
   ])
 
   if (candidateResult.error) throw new Error(`Unable to load PGCL canonical candidates: ${candidateResult.error.message}`)
-  if (positiveCaseResult.error) throw new Error(`Unable to load PGCL positive cases: ${positiveCaseResult.error.message}`)
   if (reviewResult.error) throw new Error(`Unable to load PGCL reviews: ${reviewResult.error.message}`)
   if (occurrenceResult.error) throw new Error(`Unable to load PGCL occurrences: ${occurrenceResult.error.message}`)
   if (usageResult.error) throw new Error(`Unable to load PGCL usage evidence: ${usageResult.error.message}`)
   if (learningCaseResult.error) throw new Error(`Unable to load promoted PGCL learning cases: ${learningCaseResult.error.message}`)
 
   const positiveCaseByCandidate = new Map(
-    (positiveCaseResult.data ?? []).map((row) => [String(row.candidate_id), row]),
+    positiveCaseProjection.rows.map((row) => [String(row.candidate_id), row]),
   )
 
   const latestReviewByCandidate = new Map<string, (typeof reviewResult.data)[number]>()
@@ -162,6 +232,13 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
     succeededCount: number
     failedCount: number
     dismissedCount: number
+    profilingApplicationCount: number
+    dataQualityApplicationCount: number
+    supervisorApplicationCount: number
+    directSpecialistApplicationCount: number
+    authoritativeOutcomeCount: number
+    unknownApplicationSurfaceCount: number
+    executionSurfaces: Set<string>
     relevanceTotal: number
     relevanceCount: number
     lastUsedAt: string | null
@@ -176,6 +253,13 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       succeededCount: 0,
       failedCount: 0,
       dismissedCount: 0,
+      profilingApplicationCount: 0,
+      dataQualityApplicationCount: 0,
+      supervisorApplicationCount: 0,
+      directSpecialistApplicationCount: 0,
+      authoritativeOutcomeCount: 0,
+      unknownApplicationSurfaceCount: 0,
+      executionSurfaces: new Set<string>(),
       relevanceTotal: 0,
       relevanceCount: 0,
       lastUsedAt: null,
@@ -187,6 +271,29 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
     if (status === 'SUCCEEDED') current.succeededCount += 1
     if (status === 'FAILED') current.failedCount += 1
     if (status === 'DISMISSED') current.dismissedCount += 1
+
+    const outcome = record(row.outcome)
+    const explicitSurface = String(outcome.execution_surface ?? '').trim()
+    const inferredSurface = explicitSurface
+      || (outcome.attribution === 'EXPLICIT_AGENT_OUTPUT' ? 'DIRECT_SPECIALIST' : '')
+    if (inferredSurface) current.executionSurfaces.add(inferredSurface)
+
+    const wasApplied = ['APPLIED', 'SUCCEEDED', 'FAILED', 'DISMISSED'].includes(status)
+    if (wasApplied) {
+      if (inferredSurface === 'PROFILING_INVESTIGATION') current.profilingApplicationCount += 1
+      else if (inferredSurface === 'DATA_QUALITY_INVESTIGATION') current.dataQualityApplicationCount += 1
+      else if (inferredSurface === 'SUPERVISOR_SPECIALIST') current.supervisorApplicationCount += 1
+      else if (inferredSurface === 'DIRECT_SPECIALIST') current.directSpecialistApplicationCount += 1
+      else current.unknownApplicationSurfaceCount += 1
+    }
+
+    if (
+      outcome.terminal_attribution === 'AUTHORITATIVE_GOVERNED_OUTCOME'
+      || outcome.attribution === 'AUTHORITATIVE_GOVERNED_OUTCOME'
+    ) {
+      current.authoritativeOutcomeCount += 1
+    }
+
     if (row.relevance != null && Number.isFinite(Number(row.relevance))) {
       current.relevanceTotal += Number(row.relevance)
       current.relevanceCount += 1
@@ -224,8 +331,12 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       useCaseKey: String(positiveCase.use_case_key),
       resultSummary: String(positiveCase.result_summary),
       reviewStatus: String(positiveCase.review_status),
-      productionEligible: positiveCase.production_eligible === true,
-      learningProvenanceRecordedAt: positiveCase.learning_provenance_recorded_at
+      productionEligible:
+        positiveCaseProjection.productionProvenanceColumnsAvailable
+        && positiveCase.production_eligible === true,
+      learningProvenanceRecordedAt:
+        positiveCaseProjection.productionProvenanceColumnsAvailable
+        && positiveCase.learning_provenance_recorded_at
         ? String(positiveCase.learning_provenance_recorded_at)
         : null,
       latestDecision: latestReview ? String(latestReview.decision) : null,
@@ -240,6 +351,13 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       succeededCount: usage?.succeededCount ?? 0,
       failedCount: usage?.failedCount ?? 0,
       dismissedCount: usage?.dismissedCount ?? 0,
+      profilingApplicationCount: usage?.profilingApplicationCount ?? 0,
+      dataQualityApplicationCount: usage?.dataQualityApplicationCount ?? 0,
+      supervisorApplicationCount: usage?.supervisorApplicationCount ?? 0,
+      directSpecialistApplicationCount: usage?.directSpecialistApplicationCount ?? 0,
+      authoritativeOutcomeCount: usage?.authoritativeOutcomeCount ?? 0,
+      unknownApplicationSurfaceCount: usage?.unknownApplicationSurfaceCount ?? 0,
+      executionSurfaces: usage ? [...usage.executionSurfaces].sort() : [],
       averageRelevance: usage?.relevanceCount
         ? usage.relevanceTotal / usage.relevanceCount
         : null,
@@ -258,8 +376,14 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       productionEligibleCount: agentCandidates.filter((candidate) => candidate.productionEligible).length,
       promotedActiveCount: agentCandidates.filter((candidate) => candidate.promotedLearningCaseStatus === 'ACTIVE').length,
       usageCount: agentCandidates.reduce((sum, candidate) => sum + candidate.usageCount, 0),
+      appliedCount: agentCandidates.reduce((sum, candidate) => sum + candidate.appliedCount, 0),
       succeededCount: agentCandidates.reduce((sum, candidate) => sum + candidate.succeededCount, 0),
       failedCount: agentCandidates.reduce((sum, candidate) => sum + candidate.failedCount, 0),
+      profilingApplicationCount: agentCandidates.reduce((sum, candidate) => sum + candidate.profilingApplicationCount, 0),
+      dataQualityApplicationCount: agentCandidates.reduce((sum, candidate) => sum + candidate.dataQualityApplicationCount, 0),
+      supervisorApplicationCount: agentCandidates.reduce((sum, candidate) => sum + candidate.supervisorApplicationCount, 0),
+      directSpecialistApplicationCount: agentCandidates.reduce((sum, candidate) => sum + candidate.directSpecialistApplicationCount, 0),
+      authoritativeOutcomeCount: agentCandidates.reduce((sum, candidate) => sum + candidate.authoritativeOutcomeCount, 0),
     }
   })
 
@@ -284,6 +408,15 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       succeeded: candidates.reduce((sum, candidate) => sum + candidate.succeededCount, 0),
       failed: candidates.reduce((sum, candidate) => sum + candidate.failedCount, 0),
       dismissed: candidates.reduce((sum, candidate) => sum + candidate.dismissedCount, 0),
+      profilingApplications: candidates.reduce((sum, candidate) => sum + candidate.profilingApplicationCount, 0),
+      dataQualityApplications: candidates.reduce((sum, candidate) => sum + candidate.dataQualityApplicationCount, 0),
+      supervisorApplications: candidates.reduce((sum, candidate) => sum + candidate.supervisorApplicationCount, 0),
+      directSpecialistApplications: candidates.reduce((sum, candidate) => sum + candidate.directSpecialistApplicationCount, 0),
+      authoritativeOutcomes: candidates.reduce((sum, candidate) => sum + candidate.authoritativeOutcomeCount, 0),
+      unknownApplicationSurfaces: candidates.reduce((sum, candidate) => sum + candidate.unknownApplicationSurfaceCount, 0),
+    },
+    schemaCompatibility: {
+      productionProvenanceColumnsAvailable: positiveCaseProjection.productionProvenanceColumnsAvailable,
     },
     authority: {
       contextOnly: true,

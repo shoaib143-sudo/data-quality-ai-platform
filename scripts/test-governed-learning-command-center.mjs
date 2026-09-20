@@ -8,6 +8,16 @@ for (const invariant of [
   "from('learning_candidate_benchmarks')",
   "from('learning_candidate_approval_links')",
   "from('learning_candidate_releases')",
+  "from('learning_candidate_transitions')",
+  "from('learning_candidate_canary_evidence')",
+  'transitionCount',
+  'latestTransition',
+  'canaryEvidenceCount',
+  'canaryPassCount',
+  'canaryFailureCount',
+  'canaryAverageScore',
+  'transitionEvents',
+  'canaryEvidenceEvents',
   'selfPromotionAllowed: false',
   'automaticAuthorityExpansionAllowed: false',
   'automaticMutationBoundaryChangeAllowed: false',
@@ -64,5 +74,22 @@ assert.equal(
   false,
   'AI Command Center must not expose learning rollback actions',
 )
+
+
+const learningPage = fs.readFileSync('app/admin/ai-command-center/learning-governance/page.tsx', 'utf8')
+for (const invariant of [
+  'Transition evidence',
+  'Canary evidence',
+  'lifecycle.counts.transitionEvents',
+  'lifecycle.counts.canaryEvidenceEvents',
+  'candidate.transitionCount',
+  'candidate.latestTransition',
+  'candidate.canaryEvidenceCount',
+  'candidate.canaryPassCount',
+  'candidate.canaryFailureCount',
+  'candidate.canaryAverageScore',
+]) {
+  assert.ok(learningPage.includes(invariant), `missing learning lifecycle evidence UI invariant: ${invariant}`)
+}
 
 console.log('AI Command Center exposes the complete governed learning lifecycle as read-only evidence without promotion authority.')

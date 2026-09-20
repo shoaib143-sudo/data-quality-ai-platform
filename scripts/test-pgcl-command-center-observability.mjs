@@ -27,6 +27,25 @@ for (const invariant of [
   'usageEvents',
   'succeeded',
   'failed',
+  "select('candidate_id,learning_case_id,relevance,usage_status,outcome,first_retrieved_at,updated_at')",
+  'execution_surface',
+  'DIRECT_SPECIALIST',
+  'PROFILING_INVESTIGATION',
+  'DATA_QUALITY_INVESTIGATION',
+  'SUPERVISOR_SPECIALIST',
+  'terminal_attribution',
+  'AUTHORITATIVE_GOVERNED_OUTCOME',
+  'profilingApplications',
+  'dataQualityApplications',
+  'supervisorApplications',
+  'directSpecialistApplications',
+  'authoritativeOutcomes',
+  'unknownApplicationSurfaces',
+  'loadPositiveCaseProjection',
+  'productionProvenanceColumnsAvailable',
+  "current.error.message.includes('production_eligible')",
+  "current.error.message.includes('learning_provenance_recorded_at')",
+  "select('candidate_id,run_mode,use_case_key,result_summary,significance_signals,review_status,reviewed_at,created_at,updated_at')",
   'contextOnly: true',
   'mayAuthorizeAction: false',
   'automaticPromotionAllowed: false',
@@ -111,6 +130,29 @@ for (const invariant of [
   'Learning portfolio by agent',
   'Positive learning cases',
   'Controlled learning lifecycle',
+  'pgcl.counts.profilingApplications',
+  'pgcl.counts.dataQualityApplications',
+  'pgcl.counts.supervisorApplications',
+  'pgcl.counts.directSpecialistApplications',
+  'pgcl.counts.authoritativeOutcomes',
+  'candidate.executionSurfaces',
+  'candidate.authoritativeOutcomeCount',
+  'Reuse execution surfaces',
+  'Direct specialist',
+  'Handsfree specialist',
+  'Profiling investigation',
+  'Data Quality investigation',
+  'Verified outcomes',
+  'Legacy/unknown surface',
+  'Production learning provenance schema pending',
+  '20260920016000_pgcl_production_learning_provenance',
+  'pgcl.schemaCompatibility.productionProvenanceColumnsAvailable',
+  'candidate.executionSurfaces',
+  'candidate.authoritativeOutcomeCount',
+  'candidate.transitionCount',
+  'candidate.canaryEvidenceCount',
+  'candidate.canaryPassCount',
+  'candidate.canaryFailureCount',
   'Reusable lessons, raw evidence payloads and hidden reasoning are intentionally not rendered.',
 ]) {
   assert.ok(learningPage.includes(invariant), `missing dedicated learning governance invariant: ${invariant}`)
@@ -132,6 +174,19 @@ for (const forbidden of [
     `dedicated learning governance view must remain summary-safe and read-only: ${forbidden}`,
   )
 }
+
+
+const service = fs.readFileSync('lib/agents/proactive-governed-case-learning-service.ts', 'utf8')
+for (const invariant of [
+  ".select('candidate_id,outcome')",
+  'usage.outcome as Record<string, unknown>',
+  "terminal_attribution: 'AUTHORITATIVE_GOVERNED_OUTCOME'",
+]) {
+  assert.ok(service.includes(invariant), `missing PGCL terminal-outcome observability invariant: ${invariant}`)
+}
+
+const memory = fs.readFileSync('lib/agents/agent-memory-learning.ts', 'utf8')
+assert.ok(memory.includes("execution_surface: 'DIRECT_SPECIALIST'"))
 
 const layout = fs.readFileSync('app/admin/ai-command-center/layout.tsx', 'utf8')
 assert.ok(layout.includes("/admin/ai-command-center/learning-governance"))

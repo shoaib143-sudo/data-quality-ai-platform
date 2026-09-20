@@ -76,6 +76,10 @@ export default async function LearningGovernancePage({
       </form>
 
       {!lifecycle || !pgcl ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
+        {!pgcl.schemaCompatibility.productionProvenanceColumnsAvailable && <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+          <p className="font-black">Production learning provenance schema pending</p>
+          <p className="mt-1">The connected database does not expose the PGCL production-provenance columns yet. Positive cases remain visible but are treated as non-production or unclassified until migration <span className="font-mono">20260920016000_pgcl_production_learning_provenance</span> is reconciled.</p>
+        </section>}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <article className="rounded-2xl border bg-white p-5"><BookOpenCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.total}</p><p className="text-xs font-bold uppercase text-slate-500">Lifecycle candidates</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.active}</p><p className="text-xs font-bold uppercase text-slate-500">Active releases</p></article>
@@ -85,6 +89,21 @@ export default async function LearningGovernancePage({
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.occurrenceEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Verified occurrences</p></article>
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.usageEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Reuse records</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.succeeded}</p><p className="text-xs font-bold uppercase text-slate-500">Successful reuse</p></article>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-xl font-black">Reuse execution surfaces</h2><p className="mt-1 text-sm text-slate-500">Where approved precedent was applied, separated from terminal governed-outcome verification.</p></div>
+            <p className="text-xs text-slate-500">{pgcl.counts.authoritativeOutcomes} authoritative terminal outcomes</p>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{pgcl.counts.directSpecialistApplications}</p><p className="text-xs font-bold uppercase text-slate-500">Direct specialist</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{pgcl.counts.supervisorApplications}</p><p className="text-xs font-bold uppercase text-slate-500">Handsfree specialist</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{pgcl.counts.profilingApplications}</p><p className="text-xs font-bold uppercase text-slate-500">Profiling investigation</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{pgcl.counts.dataQualityApplications}</p><p className="text-xs font-bold uppercase text-slate-500">Data Quality investigation</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{pgcl.counts.authoritativeOutcomes}</p><p className="text-xs font-bold uppercase text-slate-500">Verified outcomes</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{pgcl.counts.unknownApplicationSurfaces}</p><p className="text-xs font-bold uppercase text-slate-500">Legacy/unknown surface</p></article>
+          </div>
         </section>
 
         <section className="rounded-2xl border bg-white p-6">
@@ -109,8 +128,8 @@ export default async function LearningGovernancePage({
           </div>
           <div className="mt-5 overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent</th><th className="p-3">Cases</th><th className="p-3">Approved</th><th className="p-3">Active context</th><th className="p-3">Reuse</th><th className="p-3">Succeeded</th><th className="p-3">Failed</th></tr></thead>
-              <tbody>{pgcl.agentCoverage.map((agent) => <tr key={agent.agentKey} className="border-b last:border-0"><td className="p-3 font-bold">{agent.agentKey}</td><td className="p-3">{agent.candidateCount}</td><td className="p-3">{agent.approvedCount}</td><td className="p-3">{agent.promotedActiveCount}</td><td className="p-3">{agent.usageCount}</td><td className="p-3">{agent.succeededCount}</td><td className="p-3">{agent.failedCount}</td></tr>)}</tbody>
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent</th><th className="p-3">Cases</th><th className="p-3">Approved</th><th className="p-3">Active context</th><th className="p-3">Reuse</th><th className="p-3">Applied</th><th className="p-3">Succeeded</th><th className="p-3">Failed</th><th className="p-3">Verified outcomes</th></tr></thead>
+              <tbody>{pgcl.agentCoverage.map((agent) => <tr key={agent.agentKey} className="border-b last:border-0"><td className="p-3 font-bold">{agent.agentKey}</td><td className="p-3">{agent.candidateCount}</td><td className="p-3">{agent.approvedCount}</td><td className="p-3">{agent.promotedActiveCount}</td><td className="p-3">{agent.usageCount}</td><td className="p-3">{agent.appliedCount}</td><td className="p-3">{agent.succeededCount}</td><td className="p-3">{agent.failedCount}</td><td className="p-3">{agent.authoritativeOutcomeCount}</td></tr>)}</tbody>
             </table>
           </div>
         </section>
@@ -129,7 +148,7 @@ export default async function LearningGovernancePage({
                 <td className="p-3"><Badge value={candidate.reviewStatus}/><p className="mt-1 text-xs text-slate-400">{candidate.latestDecision ?? 'No Admin decision recorded'}</p></td>
                 <td className="p-3"><p className="font-bold">{candidate.occurrenceCount}</p><p className="text-xs text-slate-400">same governed case pattern</p></td>
                 <td className="p-3">{candidate.promotedLearningCaseId ? <><Badge value={candidate.promotedLearningCaseStatus ?? 'RECORDED'}/><p className="mt-1 font-mono text-[11px] text-slate-400">{candidate.promotedLearningCaseId}</p></> : <span className="text-slate-400">Not promoted</span>}</td>
-                <td className="p-3"><p>{candidate.usageCount} total · {candidate.appliedCount} applied</p><p className="mt-1 text-xs text-slate-500">{candidate.succeededCount} succeeded · {candidate.failedCount} failed · {candidate.dismissedCount} dismissed</p><p className="mt-1 text-xs text-slate-400">Avg relevance: {candidate.averageRelevance == null ? 'not scored' : candidate.averageRelevance.toFixed(3)}</p></td>
+                <td className="p-3"><p>{candidate.usageCount} total · {candidate.appliedCount} applied</p><p className="mt-1 text-xs text-slate-500">{candidate.succeededCount} succeeded · {candidate.failedCount} failed · {candidate.dismissedCount} dismissed</p><p className="mt-1 text-xs text-slate-400">Avg relevance: {candidate.averageRelevance == null ? 'not scored' : candidate.averageRelevance.toFixed(3)}</p><p className="mt-1 text-xs text-slate-400">Surfaces: {candidate.executionSurfaces.join(', ') || 'legacy/unknown'}</p><p className="mt-1 text-xs text-slate-400">Authoritative outcomes: {candidate.authoritativeOutcomeCount}</p></td>
                 <td className="p-3 text-xs text-slate-500">{candidate.lastUsedAt ? new Date(candidate.lastUsedAt).toLocaleString() : new Date(candidate.updatedAt).toLocaleString()}</td>
               </tr>)}</tbody>
             </table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No PGCL positive cases are recorded for this project.</p>}
@@ -137,11 +156,11 @@ export default async function LearningGovernancePage({
         </section>
 
         <section className="rounded-2xl border bg-white p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">Controlled learning lifecycle</h2><p className="mt-1 text-sm text-slate-500">Canonical proposal, benchmark, approval, canary, activation and rollback state.</p></div><p className="text-xs text-slate-500">{lifecycle.counts.reviewRequired} review required · {lifecycle.counts.canary} canary · {lifecycle.counts.rolledBack} rolled back</p></div>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">Controlled learning lifecycle</h2><p className="mt-1 text-sm text-slate-500">Canonical proposal, benchmark, approval, canary, activation and rollback state with transition and canary evidence counts.</p></div><p className="text-xs text-slate-500">{lifecycle.counts.transitionEvents} transitions · {lifecycle.counts.canaryEvidenceEvents} canary evidence rows · {lifecycle.counts.rolledBack} rolled back</p></div>
           <div className="mt-5 overflow-x-auto">
             {lifecycle.candidates.length ? <table className="w-full min-w-[1050px] text-left text-sm">
-              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent / skill</th><th className="p-3">Candidate</th><th className="p-3">Lifecycle</th><th className="p-3">Benchmark</th><th className="p-3">Approval</th><th className="p-3">Release</th></tr></thead>
-              <tbody>{lifecycle.candidates.map((candidate) => <tr key={candidate.id} className="border-b last:border-0"><td className="p-3"><p className="font-bold">{candidate.agentKey}</p><p className="text-xs text-slate-400">{candidate.skillKey}</p></td><td className="p-3"><p className="font-semibold">{candidate.title}</p><p className="text-xs text-slate-400">{candidate.baselineVersion} → {candidate.candidateVersion}</p></td><td className="p-3"><Badge value={candidate.status}/></td><td className="p-3">{candidate.benchmarkStatus ? <Badge value={candidate.benchmarkStatus}/> : <span className="text-slate-400">Not recorded</span>}</td><td className="p-3">{candidate.approvalRequestId ? <span className="font-mono text-xs">{candidate.approvalRequestId}</span> : <span className="text-slate-400">Not requested</span>}</td><td className="p-3">{candidate.releaseStatus ? <Badge value={candidate.releaseStatus}/> : <span className="text-slate-400">Not released</span>}</td></tr>)}</tbody>
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent / skill</th><th className="p-3">Candidate</th><th className="p-3">Lifecycle</th><th className="p-3">Transition evidence</th><th className="p-3">Benchmark</th><th className="p-3">Canary evidence</th><th className="p-3">Approval</th><th className="p-3">Release</th></tr></thead>
+              <tbody>{lifecycle.candidates.map((candidate) => <tr key={candidate.id} className="border-b last:border-0"><td className="p-3"><p className="font-bold">{candidate.agentKey}</p><p className="text-xs text-slate-400">{candidate.skillKey}</p></td><td className="p-3"><p className="font-semibold">{candidate.title}</p><p className="text-xs text-slate-400">{candidate.baselineVersion} → {candidate.candidateVersion}</p></td><td className="p-3"><Badge value={candidate.status}/></td><td className="p-3"><p>{candidate.transitionCount} transitions</p><p className="mt-1 text-xs text-slate-400">{candidate.latestTransition ?? 'No transition recorded'}</p></td><td className="p-3">{candidate.benchmarkStatus ? <Badge value={candidate.benchmarkStatus}/> : <span className="text-slate-400">Not recorded</span>}</td><td className="p-3"><p>{candidate.canaryEvidenceCount} cases</p><p className="mt-1 text-xs text-slate-500">{candidate.canaryPassCount} pass · {candidate.canaryFailureCount} fail</p><p className="mt-1 text-xs text-slate-400">Avg: {candidate.canaryAverageScore == null ? 'n/a' : candidate.canaryAverageScore.toFixed(3)}</p></td><td className="p-3">{candidate.approvalRequestId ? <span className="font-mono text-xs">{candidate.approvalRequestId}</span> : <span className="text-slate-400">Not requested</span>}</td><td className="p-3">{candidate.releaseStatus ? <Badge value={candidate.releaseStatus}/> : <span className="text-slate-400">Not released</span>}</td></tr>)}</tbody>
             </table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No durable governed learning lifecycle candidates are recorded for this project.</p>}
           </div>
         </section>
