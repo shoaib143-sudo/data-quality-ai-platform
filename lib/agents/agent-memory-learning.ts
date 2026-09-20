@@ -86,6 +86,7 @@ export async function enrichGovernedAgentWithMemory(input: {
       status: 'APPLIED',
       outcome: {
         attribution: 'EXPLICIT_AGENT_OUTPUT',
+        execution_surface: 'DIRECT_SPECIALIST',
         current_authorization_still_required: true,
       },
     })
