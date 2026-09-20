@@ -8,11 +8,15 @@ import { persistProactiveGovernedCaseLearningCandidate } from '@/lib/agents/proa
 import { isGovernedAgentKey, type GovernedAgentKey } from '@/lib/agents/governed-agent-registry'
 import type { GovernedSkillKey } from '@/lib/agents/governed-skill-registry'
 
-const PRIORITY_AGENT_DEFAULT_SKILL: Partial<Record<GovernedAgentKey, GovernedSkillKey>> = {
+const AGENT_DEFAULT_LEARNING_SKILL: Record<GovernedAgentKey, GovernedSkillKey> = {
   profiling_agent: 'profile_evidence_analysis',
   data_quality_agent: 'quality_rule_analysis',
   steward_agent: 'stewardship_gap_analysis',
   governance_analyst_agent: 'governance_evidence_synthesis',
+  architect_agent: 'lineage_impact_analysis',
+  investigator_agent: 'incident_root_cause_analysis',
+  executive_agent: 'executive_materiality_analysis',
+  support_agent: 'support_case_investigation',
 }
 
 type SuccessfulRunSnapshot = {
@@ -59,7 +63,7 @@ export function derivePgclCandidateFromVerifiedRun(input: {
 }): ProactiveGovernedCaseLearningCandidate | null {
   if (input.run.status !== 'SUCCEEDED') return null
 
-  const skillKey = PRIORITY_AGENT_DEFAULT_SKILL[input.agentKey]
+  const skillKey = AGENT_DEFAULT_LEARNING_SKILL[input.agentKey]
   if (!skillKey) return null
 
   const runInput = record(input.run.input)
@@ -130,12 +134,11 @@ export async function proposePgclCaseFromVerifiedAgentRun(input: {
   }
 
   const rawAgentKey = String(definition.agent_key)
-  if (!isGovernedAgentKey(rawAgentKey) || !PRIORITY_AGENT_DEFAULT_SKILL[rawAgentKey]) {
+  if (!isGovernedAgentKey(rawAgentKey)) {
     return { evaluated: 0, proposed: 0, candidateId: null as string | null }
   }
 
-  const skillKey = PRIORITY_AGENT_DEFAULT_SKILL[rawAgentKey]
-  if (!skillKey) return { evaluated: 0, proposed: 0, candidateId: null as string | null }
+  const skillKey = AGENT_DEFAULT_LEARNING_SKILL[rawAgentKey]
 
   const output = record(run.output)
   const specialist = record(output.specialist)
@@ -201,11 +204,9 @@ export async function proposePgclCasesFromVerifiedSupervisorRun(input: {
     const run = rawRun as SuccessfulRunSnapshot
     const rawAgentKey = agentKeyByDefinitionId.get(String(run.agent_definition_id))
     if (!isGovernedAgentKey(rawAgentKey)) continue
-    if (!PRIORITY_AGENT_DEFAULT_SKILL[rawAgentKey]) continue
     evaluated += 1
 
-    const skillKey = PRIORITY_AGENT_DEFAULT_SKILL[rawAgentKey]
-    if (!skillKey) continue
+    const skillKey = AGENT_DEFAULT_LEARNING_SKILL[rawAgentKey]
 
     const output = record(run.output)
     const specialist = record(output.specialist)
