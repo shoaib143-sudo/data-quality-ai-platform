@@ -18,6 +18,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/governance/semantic-knowledge-indexer.ts'
+      - 'scripts/test-regulatory-retrieval-provenance.mjs'
       - 'lib/ai/retrieval-provider.ts'
       - 'lib/governance/semantic-project-reindex.ts'
       - 'lib/governance/semantic-project-reindex-runtime.ts'
