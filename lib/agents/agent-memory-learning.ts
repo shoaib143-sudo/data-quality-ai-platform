@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { persistAgentWorkingMemory } from '@/lib/agents/agent-memory'
 import { retrieveGovernedLearningContext } from '@/lib/agents/governed-learning-context'
+import { recordPositiveLearningCaseRetrievals } from '@/lib/agents/proactive-governed-case-learning-service'
 
 export async function enrichGovernedAgentWithMemory(input: {
   projectId: string
@@ -34,14 +35,34 @@ export async function enrichGovernedAgentWithMemory(input: {
     evidence_verified: episode.evidence.verified,
   }))
 
-  const approvedPositiveCases = prior.approvedPositiveCases.map((learningCase) => ({
-    id: learningCase.id,
-    case_key: learningCase.case_key,
-    problem_type: learningCase.problem_type,
-    reusable_lesson: learningCase.recommendation?.reusable_lesson ?? null,
-    relevance: learningCase.relevance,
-    evidence: learningCase.evidence,
-  }))
+  const approvedPositiveCases = prior.approvedPositiveCases.map((learningCase) => {
+    const evidence = learningCase.evidence && typeof learningCase.evidence === 'object' && !Array.isArray(learningCase.evidence)
+      ? learningCase.evidence as Record<string, unknown>
+      : {}
+    return {
+      id: learningCase.id,
+      candidate_id: typeof evidence.pgcl_candidate_id === 'string' ? evidence.pgcl_candidate_id : null,
+      case_key: learningCase.case_key,
+      problem_type: learningCase.problem_type,
+      reusable_lesson: learningCase.recommendation && typeof learningCase.recommendation === 'object' && !Array.isArray(learningCase.recommendation)
+        ? (learningCase.recommendation as Record<string, unknown>).reusable_lesson ?? null
+        : null,
+      relevance: learningCase.relevance,
+      evidence,
+    }
+  })
+
+  await recordPositiveLearningCaseRetrievals({
+    projectId: input.projectId,
+    consumerAgentRunId: input.agentRunId,
+    cases: approvedPositiveCases
+      .filter((learningCase): learningCase is typeof learningCase & { candidate_id: string } => Boolean(learningCase.candidate_id))
+      .map((learningCase) => ({
+        candidateId: learningCase.candidate_id,
+        learningCaseId: String(learningCase.id),
+        relevance: Number(learningCase.relevance ?? 0),
+      })),
+  })
 
   const enriched = {
     ...input.output,
