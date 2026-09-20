@@ -187,7 +187,6 @@ for (const invariant of [
 for (const [label, source, surface] of [
   ['profiling', profilingInvestigationCode, 'PROFILING_INVESTIGATION'],
   ['data quality', dataQualityInvestigationCode, 'DATA_QUALITY_INVESTIGATION'],
-  ['native supervisor', nativeSupervisorCode, 'SUPERVISOR_SPECIALIST'],
 ]) {
   for (const invariant of [
     'loadApprovedPgclPrecedents',
@@ -197,6 +196,15 @@ for (const [label, source, surface] of [
   ]) {
     assert.ok(source.includes(invariant), `${label} approved-case consumption missing: ${invariant}`)
   }
+}
+
+for (const invariant of [
+  'loadApprovedPgclPrecedents',
+  'positiveLearningCases: pgclPrecedents.map',
+  'markPgclPrecedentsApplied',
+  'SUPERVISOR_SPECIALIST',
+]) {
+  assert.ok(nativeSupervisorCode.includes(invariant), `native supervisor approved-case consumption missing: ${invariant}`)
 }
 
 for (const invariant of [
