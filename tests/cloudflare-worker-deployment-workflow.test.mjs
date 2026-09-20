@@ -38,5 +38,5 @@ test('Cloudflare worker release verifies exact identity and remains execution-di
 
 test('Cloudflare worker preflight validates Wrangler without deployment', () => {
   assert.match(workflow, /cloudflare-worker-preflight/)
-  assert.match(workflow, /wrangler@4\.131\.1 deploy --dry-run/)
+  assert.match(workflow, /dlx wrangler deploy --dry-run/)
 })
