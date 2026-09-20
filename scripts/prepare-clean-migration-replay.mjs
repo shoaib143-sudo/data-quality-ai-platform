@@ -402,8 +402,8 @@ for (const file of files) {
     const originalSql = fs.readFileSync(targetPath, 'utf8')
     const malformedOpen = '\nas $\n  select\n'
     const malformedClose = '\n$;\n\nrevoke all on function agent.list_approved_positive_learning_cases'
-    const validOpen = '\nas $\n  select\n'
-    const validClose = '\n$;\n\nrevoke all on function agent.list_approved_positive_learning_cases'
+    const validOpen = '\nas $$\n  select\n'
+    const validClose = '\n$$;\n\nrevoke all on function agent.list_approved_positive_learning_cases'
     if (!originalSql.includes(malformedOpen) || !originalSql.includes(malformedClose)) {
       throw new Error('Historical PGCL dollar-quote defect no longer matches the audited replay repair contract')
     }
