@@ -34,6 +34,15 @@ export async function enrichGovernedAgentWithMemory(input: {
     evidence_verified: episode.evidence.verified,
   }))
 
+  const approvedPositiveCases = prior.approvedPositiveCases.map((learningCase) => ({
+    id: learningCase.id,
+    case_key: learningCase.case_key,
+    problem_type: learningCase.problem_type,
+    reusable_lesson: learningCase.recommendation?.reusable_lesson ?? null,
+    relevance: learningCase.relevance,
+    evidence: learningCase.evidence,
+  }))
+
   const enriched = {
     ...input.output,
     recommendations: existingRecommendations,
@@ -42,6 +51,8 @@ export async function enrichGovernedAgentWithMemory(input: {
       durableMemoryMatches: prior.memories.length,
       verifiedEpisodeMatches: verifiedEpisodes.length,
       verifiedEpisodes,
+      approvedPositiveCaseMatches: approvedPositiveCases.length,
+      approvedPositiveCases,
       influenceEvidence: verifiedEpisodes.map((episode) => ({
         learning_case_id: episode.id,
         source_kind: episode.source_kind,
@@ -49,6 +60,12 @@ export async function enrichGovernedAgentWithMemory(input: {
         evidence_record_id: episode.evidence_record_id,
         verified: episode.evidence_verified,
         relevance: episode.relevance,
+      })),
+      positiveCaseInfluenceEvidence: approvedPositiveCases.map((learningCase) => ({
+        learning_case_id: learningCase.id,
+        case_key: learningCase.case_key,
+        relevance: learningCase.relevance,
+        evidence: learningCase.evidence,
       })),
       durableMemories: prior.memories.slice(0, 5).map((memory) => ({
         id: memory.id,
@@ -61,13 +78,14 @@ export async function enrichGovernedAgentWithMemory(input: {
     },
     learningPolicy: {
       use_verified_prior_episodes_as_context: true,
+      use_admin_approved_positive_cases_as_context: true,
       reuse_prior_recommendation_prose: false,
       semantic_memory_requires_separate_authority_gate: true,
       human_validated_semantic_memory_required_for_high_risk_action: true,
       memory_never_authorizes_actions: true,
       current_authorization_required_for_every_action: true,
       current_policy_decision_required_for_every_action: true,
-      note: 'Verified prior episodes are provenance-bearing context only. Memory cannot authorize, approve, execute, or promote a new governance action; current deterministic authorization and policy controls remain independent.',
+      note: 'Verified prior episodes and Data Governance Admin-approved positive cases are provenance-bearing context only. Learned cases cannot authorize, approve, execute, or promote a new governance action; current deterministic authorization and policy controls remain independent.',
     },
   }
 
@@ -84,6 +102,7 @@ export async function enrichGovernedAgentWithMemory(input: {
       query,
       observations: observations.slice(0, 10),
       retrieved_memory_ids: prior.memories.map((memory) => memory.id),
+      approved_positive_case_ids: approvedPositiveCases.map((learningCase) => learningCase.id),
       verified_episode_ids: prior.verifiedEpisodes.map((episode) => episode.id),
       verified_episode_influence_evidence: verifiedEpisodes.map((episode) => ({
         learning_case_id: episode.id,
