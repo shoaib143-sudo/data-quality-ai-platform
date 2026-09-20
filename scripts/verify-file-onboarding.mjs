@@ -12,12 +12,13 @@ function requireAbsent(text, pattern, message) {
   if (pattern.test(text)) throw new Error(message)
 }
 
-const [adapter, csvSource, jsonSource, textDecoding, remoteGuard, discovery, registration, uploadRoute, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
+const [adapter, csvSource, jsonSource, textDecoding, remoteGuard, providerNeutral, discovery, registration, uploadRoute, datasetRegistration, form, metricEngine, smokeFixture] = await Promise.all([
   source('lib/profiling/file-source-adapter.ts'),
   source('lib/profiling/csv-source.ts'),
   source('lib/profiling/json-source.ts'),
   source('lib/profiling/text-decoding.ts'),
   source('lib/profiling/safe-remote-file.ts'),
+  source('lib/profiling/provider-neutral-file-source.ts'),
   source('app/api/datasets/source/discover-file/route.ts'),
   source('app/api/datasets/source/register/route.ts'),
   source('app/api/datasets/source/upload-file/route.ts'),
@@ -73,10 +74,13 @@ requireMatch(metricEngine, /candidateKeyConfidence\s*=\s*rowCount\s*\?\s*round\(
 requireMatch(metricEngine, /completeness_rate:\s*round\(completenessRate\)/, 'Column metric results must expose blank-aware completeness to scoring.')
 requireMatch(metricEngine, /const\s+completeness\s*=\s*results\.length\s*\?\s*results\.reduce\(\(sum,\s*result\)\s*=>\s*sum\s*\+\s*result\.completeness_rate/, 'Global completeness score must aggregate the blank-aware column completeness rate.')
 
-for (const [name, text] of [['FILE discovery', discovery], ['source registration', registration]]) {
-  requireMatch(text, /dataset-files/, `${name} must constrain Supabase Storage reads to dataset-files.`)
-  requireMatch(text, /projects\/\$\{projectId\}\//, `${name} must constrain Storage paths to the active project.`)
-}
+requireMatch(discovery, /dataset-files/, 'FILE discovery must constrain Supabase Storage reads to dataset-files.')
+requireMatch(discovery, /projects\/\$\{projectId\}\//, 'FILE discovery must constrain Storage paths to the active project.')
+requireMatch(registration, /assertProjectScopedObjectStorageSource\(parsed,\s*projectId\)/, 'Source registration must delegate object-storage scope validation to the provider-neutral guard.')
+requireMatch(providerNeutral, /parsed\.bucket\s*!==\s*['"]dataset-files['"]/, 'Provider-neutral guard must constrain Supabase Storage reads to dataset-files.')
+requireMatch(providerNeutral, /const\s+requiredPrefix\s*=\s*`projects\/\$\{projectId\}\//, 'Provider-neutral guard must constrain object-storage paths to the active project.')
+requireMatch(providerNeutral, /parsed\.provider\s*===\s*['"]r2['"]/, 'Provider-neutral guard must preserve explicit R2 scope validation.')
+requireMatch(providerNeutral, /configuredBucket\s*=\s*process\.env\.R2_BUCKET/, 'R2 file sources must remain constrained to the configured application bucket.')
 
 requireMatch(uploadRoute, /authorizeProject\(user\.id,\s*projectId,\s*['"]source\.manage['"]\)/, 'Dataset upload authorization must require source.manage.')
 requireMatch(uploadRoute, /createSignedUploadUrl/, 'Dataset uploads must use signed direct-to-Storage upload authorization.')
@@ -99,6 +103,7 @@ console.log(JSON.stringify({
   contracts: {
     guardedRemoteReads: true,
     tenantScopedStorage: true,
+    providerNeutralStorageScope: true,
     signedDirectUploads: true,
     failedUploadCleanup: true,
     csvExecutionType: 'FILE',
