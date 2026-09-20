@@ -3,7 +3,17 @@ name: Retrieval Metadata Normalization
 on:
   pull_request:
     paths:
+      - 'lib/governance/governed-similarity-contract.ts'
+      - 'lib/governance/governed-similarity.ts'
+      - 'app/api/search/similar/route.ts'
+      - 'tests/governed-similarity.test.mjs'
+      - 'lib/governance/semantic-knowledge-indexer.ts'
+      - 'scripts/test-regulatory-retrieval-provenance.mjs'
       - 'lib/ai/retrieval-provider.ts'
+      - 'lib/governance/semantic-project-reindex.ts'
+      - 'lib/governance/semantic-project-reindex-runtime.ts'
+      - 'app/api/search/semantic/reindex/route.ts'
+      - 'tests/semantic-project-reindex.test.mjs'
       - 'lib/ai/retrieval-metadata-normalization.ts'
       - 'scripts/verify-retrieval-provider.mjs'
       - 'scripts/test-retrieval-provider.mjs'
@@ -12,7 +22,17 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/governance/governed-similarity-contract.ts'
+      - 'lib/governance/governed-similarity.ts'
+      - 'app/api/search/similar/route.ts'
+      - 'tests/governed-similarity.test.mjs'
+      - 'lib/governance/semantic-knowledge-indexer.ts'
+      - 'scripts/test-regulatory-retrieval-provenance.mjs'
       - 'lib/ai/retrieval-provider.ts'
+      - 'lib/governance/semantic-project-reindex.ts'
+      - 'lib/governance/semantic-project-reindex-runtime.ts'
+      - 'app/api/search/semantic/reindex/route.ts'
+      - 'tests/semantic-project-reindex.test.mjs'
       - 'lib/ai/retrieval-metadata-normalization.ts'
       - 'scripts/verify-retrieval-provider.mjs'
       - 'scripts/test-retrieval-provider.mjs'
@@ -39,5 +59,11 @@ jobs:
         run: node scripts/verify-retrieval-provider.mjs
       - name: Retrieval provider behavior
         run: node --experimental-strip-types scripts/test-retrieval-provider.mjs
+      - name: Semantic project reindex behavior
+        run: node --experimental-strip-types --test tests/semantic-project-reindex.test.mjs
+      - name: Regulatory retrieval provenance
+        run: node scripts/test-regulatory-retrieval-provenance.mjs
+      - name: Governed object similarity
+        run: node --experimental-strip-types --test tests/governed-similarity.test.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit

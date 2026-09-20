@@ -1,3 +1,4 @@
+import { proposePgclCaseFromVerifiedAgentRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
 import { executePreparedProfilingJob } from '@/lib/agents/run-profiling-job'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { investigateDataQualityRun } from '@/lib/data-quality/autonomous-operations'
@@ -426,6 +427,21 @@ export async function executeDurableJob(job: DurableJob) {
     const incident = await investigateObservabilityIncident({ datasetVersionId, profileRunId, userId: userId || null })
     await enrichIncidentImpact({ incident, userId: userId || null })
     await correlateIncidentProject({ incident, userId: userId || null })
+
+    try {
+      await proposePgclCaseFromVerifiedAgentRun({
+        projectId: job.project_id,
+        agentRunId: result.agentRunId,
+        runMode: text(payload.learningRunMode) === 'SUPERVISED' ? 'SUPERVISED' : 'HANDSFREE',
+        verificationEvidenceRefs: [
+          `agent_run:${result.agentRunId}:succeeded`,
+          `profile_run:${profileRunId}`,
+        ],
+        actorUserId: userId || null,
+      })
+    } catch (learningError) {
+      console.error('[data-quality-worker] PGCL evaluation failed without changing data-quality success:', learningError)
+    }
     return
   }
 

@@ -3,15 +3,123 @@ name: Continuous Learning Governance
 on:
   pull_request:
     paths:
+      - 'app/api/agents/run/route.ts'
+      - 'lib/agents/run-profiling-job.ts'
+      - 'lib/data-quality/queue.ts'
+      - 'lib/data-quality/automation.ts'
+      - 'lib/orchestration/worker.ts'
+      - 'scripts/test-proactive-governed-case-learning-priority-agents.mjs'
+      - 'app/api/agents/supervisor/run/route.ts'
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'lib/agents/proactive-governed-case-learning-runtime.ts'
+      - 'scripts/test-proactive-governed-case-learning-supervisor.mjs'
+      - 'app/api/agents/governance/run/route.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'lib/governance/governed-outcome-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-execution.mjs'
+      - 'lib/agents/governed-learning-context.ts'
+      - 'lib/agents/agent-memory-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-retrieval.mjs'
+      - 'app/admin/learning-cases/**'
+      - 'app/api/admin/learning-cases/**'
+      - 'lib/agents/proactive-governed-case-learning-admin.ts'
+      - 'scripts/test-proactive-governed-case-learning-ui.mjs'
+      - 'lib/agents/proactive-governed-case-learning-service.ts'
+      - 'scripts/test-proactive-governed-case-learning-persistence.mjs'
+      - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
+      - 'lib/agents/pgcl-run-learning-provenance.ts'
+      - 'scripts/test-pgcl-production-learning-provenance.mjs'
+      - 'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql'
+      - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning.mjs'
+      - 'scripts/verify-governed-learning-golden-journey.mjs'
+      - 'lib/agents/governed-learning-production-readiness.ts'
+      - 'scripts/test-governed-learning-production-readiness.mjs'
+      - 'scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs'
+      - 'lib/ai/governed-learning-command-center-state.ts'
+      - 'lib/ai/pgcl-command-center-state.ts'
+      - 'app/admin/ai-command-center/page.tsx'
+      - 'scripts/test-governed-learning-command-center.mjs'
+      - 'scripts/test-pgcl-command-center-observability.mjs'
+      - 'lib/agents/governed-learning-controlled-release.ts'
+      - 'scripts/test-governed-learning-controlled-release.mjs'
+      - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
+      - 'lib/agents/governed-learning-release-approval.ts'
+      - 'lib/governance/agent-action-catalog.ts'
+      - 'scripts/test-governed-learning-release-approval.mjs'
+      - 'supabase/migrations/20260920012000_governed_learning_release_approval.sql'
+      - 'lib/agents/governed-learning-benchmarks.ts'
+      - 'lib/agents/governed-learning-benchmark-service.ts'
+      - 'scripts/test-governed-learning-benchmarks.mjs'
+      - 'supabase/migrations/20260920011000_governed_learning_candidate_benchmarks.sql'
+      - 'lib/agents/governed-learning-candidates.ts'
+      - 'lib/agents/governed-learning-candidate-service.ts'
+      - 'scripts/test-governed-learning-candidates.mjs'
+      - 'supabase/migrations/20260920010000_governed_learning_candidates.sql'
       - 'lib/ai/continuous-learning-governance.ts'
       - 'scripts/test-continuous-learning-governance.mjs'
+      - 'scripts/audit-governed-learning-phase11-adversarial.mjs'
       - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
       - '.github/workflows/continuous-learning-governance.yml'
   push:
     branches: [main]
     paths:
+      - 'app/api/agents/run/route.ts'
+      - 'lib/agents/run-profiling-job.ts'
+      - 'lib/data-quality/queue.ts'
+      - 'lib/data-quality/automation.ts'
+      - 'lib/orchestration/worker.ts'
+      - 'scripts/test-proactive-governed-case-learning-priority-agents.mjs'
+      - 'app/api/agents/supervisor/run/route.ts'
+      - 'lib/agents/runtime/native-supervisor-service.ts'
+      - 'lib/agents/proactive-governed-case-learning-runtime.ts'
+      - 'scripts/test-proactive-governed-case-learning-supervisor.mjs'
+      - 'app/api/agents/governance/run/route.ts'
+      - 'lib/agents/governance-specialist-agent.ts'
+      - 'lib/governance/governed-outcome-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-execution.mjs'
+      - 'lib/agents/governed-learning-context.ts'
+      - 'lib/agents/agent-memory-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-retrieval.mjs'
+      - 'app/admin/learning-cases/**'
+      - 'app/api/admin/learning-cases/**'
+      - 'lib/agents/proactive-governed-case-learning-admin.ts'
+      - 'scripts/test-proactive-governed-case-learning-ui.mjs'
+      - 'lib/agents/proactive-governed-case-learning-service.ts'
+      - 'scripts/test-proactive-governed-case-learning-persistence.mjs'
+      - 'supabase/migrations/20260920014000_proactive_governed_case_learning.sql'
+      - 'lib/agents/pgcl-run-learning-provenance.ts'
+      - 'scripts/test-pgcl-production-learning-provenance.mjs'
+      - 'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql'
+      - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning.mjs'
+      - 'scripts/verify-governed-learning-golden-journey.mjs'
+      - 'lib/agents/governed-learning-production-readiness.ts'
+      - 'scripts/test-governed-learning-production-readiness.mjs'
+      - 'scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs'
+      - 'lib/ai/governed-learning-command-center-state.ts'
+      - 'lib/ai/pgcl-command-center-state.ts'
+      - 'app/admin/ai-command-center/page.tsx'
+      - 'scripts/test-governed-learning-command-center.mjs'
+      - 'scripts/test-pgcl-command-center-observability.mjs'
+      - 'lib/agents/governed-learning-controlled-release.ts'
+      - 'scripts/test-governed-learning-controlled-release.mjs'
+      - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
+      - 'lib/agents/governed-learning-release-approval.ts'
+      - 'lib/governance/agent-action-catalog.ts'
+      - 'scripts/test-governed-learning-release-approval.mjs'
+      - 'supabase/migrations/20260920012000_governed_learning_release_approval.sql'
+      - 'lib/agents/governed-learning-benchmarks.ts'
+      - 'lib/agents/governed-learning-benchmark-service.ts'
+      - 'scripts/test-governed-learning-benchmarks.mjs'
+      - 'supabase/migrations/20260920011000_governed_learning_candidate_benchmarks.sql'
+      - 'lib/agents/governed-learning-candidates.ts'
+      - 'lib/agents/governed-learning-candidate-service.ts'
+      - 'scripts/test-governed-learning-candidates.mjs'
+      - 'supabase/migrations/20260920010000_governed_learning_candidates.sql'
       - 'lib/ai/continuous-learning-governance.ts'
       - 'scripts/test-continuous-learning-governance.mjs'
+      - 'scripts/audit-governed-learning-phase11-adversarial.mjs'
       - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
       - '.github/workflows/continuous-learning-governance.yml'
 
@@ -28,6 +136,42 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+      - name: Run proactive governed case learning tests
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning.mjs
+      - name: Run governed learning golden journey
+        run: node scripts/verify-governed-learning-golden-journey.mjs
+      - name: Run Phase 11 governed learning adversarial audit
+        run: node scripts/audit-governed-learning-phase11-adversarial.mjs
+      - name: Run governed learning production readiness tests
+        run: node --experimental-strip-types scripts/test-governed-learning-production-readiness.mjs
+      - name: Run eight-agent PGCL conformance
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs
+      - name: Run PGCL persistence tests
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs
+      - name: Run PGCL production-learning provenance tests
+        run: node scripts/test-pgcl-production-learning-provenance.mjs
+      - name: Run PGCL admin review UI tests
+        run: node scripts/test-proactive-governed-case-learning-ui.mjs
+      - name: Run PGCL approved-case retrieval tests
+        run: node scripts/test-proactive-governed-case-learning-retrieval.mjs
+      - name: Run PGCL execution attribution tests
+        run: node scripts/test-proactive-governed-case-learning-execution.mjs
+      - name: Run PGCL supervisor proposal tests
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-supervisor.mjs
+      - name: Run priority-agent PGCL hook tests
+        run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs
+      - name: Run governed learning candidate tests
+        run: node --experimental-strip-types scripts/test-governed-learning-candidates.mjs
+      - name: Run governed learning benchmark tests
+        run: node --experimental-strip-types scripts/test-governed-learning-benchmarks.mjs
+      - name: Run governed learning release approval tests
+        run: node --experimental-strip-types scripts/test-governed-learning-release-approval.mjs
+      - name: Run governed learning controlled release tests
+        run: node --experimental-strip-types scripts/test-governed-learning-controlled-release.mjs
+      - name: Run governed learning Command Center tests
+        run: node --experimental-strip-types scripts/test-governed-learning-command-center.mjs
+      - name: Run PGCL Command Center observability tests
+        run: node scripts/test-pgcl-command-center-observability.mjs
       - name: Run continuous learning governance tests
         run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
       - name: Run independent continuous learning governance adversarial audit

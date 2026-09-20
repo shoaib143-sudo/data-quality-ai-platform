@@ -6,6 +6,7 @@ import { recordProfileFailureAlert } from '@/lib/observability/evaluate'
 import type { ToolExecutionContext } from '@/lib/agents/types'
 import { syncProfileClassifications } from '@/lib/governance/classification'
 import { tryReuseProfileEvidence } from '@/lib/profiling/evidence-reuse'
+import { proposePgclCaseFromVerifiedAgentRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
 
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
@@ -200,6 +201,7 @@ export async function executePreparedProfilingJob(input: {
       const result = {
         execution_completed: true,
         execution_mode: 'REUSED',
+        focus: 'profiling_evidence_reuse',
         agent_run_id: agentRunId,
         profiling_run_id: profilingRunId,
         project_id: projectId,
@@ -208,12 +210,26 @@ export async function executePreparedProfilingJob(input: {
         reuse: reuseDecision,
         validation,
       }
-      await persistAgentRunResultArtifact({
+      const artifact = await persistAgentRunResultArtifact({
         agentRunId,
         output: result,
         name: 'Profiling agent result',
         completedAt: reusedAt,
       })
+      try {
+        await proposePgclCaseFromVerifiedAgentRun({
+          projectId,
+          agentRunId,
+          runMode: requestInput.learningRunMode === 'HANDSFREE' ? 'HANDSFREE' : 'SUPERVISED',
+          verificationEvidenceRefs: [
+            `profile_run:${profilingRunId}:validated`,
+            `agent_result_artifact:${artifact.artifactId}`,
+          ],
+          actorUserId: userId,
+        })
+      } catch (learningError) {
+        console.error('[profiling-job] PGCL evaluation failed without changing profiling success:', errorMessage(learningError, 'unknown learning error'))
+      }
       return
     }
 
@@ -260,6 +276,7 @@ export async function executePreparedProfilingJob(input: {
 
     const result = {
       execution_completed: true,
+      focus: 'profiling_evidence_analysis',
       agent_run_id: agentRunId,
       profiling_run_id: profilingRunId,
       project_id: projectId,
@@ -269,12 +286,26 @@ export async function executePreparedProfilingJob(input: {
       investigation: investigationResult,
       validation,
     }
-    await persistAgentRunResultArtifact({
+    const artifact = await persistAgentRunResultArtifact({
       agentRunId,
       output: result,
       name: 'Profiling agent result',
       completedAt,
     })
+    try {
+      await proposePgclCaseFromVerifiedAgentRun({
+        projectId,
+        agentRunId,
+        runMode: requestInput.learningRunMode === 'HANDSFREE' ? 'HANDSFREE' : 'SUPERVISED',
+        verificationEvidenceRefs: [
+          `profile_run:${profilingRunId}:validated`,
+          `agent_result_artifact:${artifact.artifactId}`,
+        ],
+        actorUserId: userId,
+      })
+    } catch (learningError) {
+      console.error('[profiling-job] PGCL evaluation failed without changing profiling success:', errorMessage(learningError, 'unknown learning error'))
+    }
 
   } catch (error) {
     const message = errorMessage(error, 'Unknown profiling execution error')

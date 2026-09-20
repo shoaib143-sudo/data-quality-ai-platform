@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { GOVERNANCE_READ_AGENT_KEYS } from '@/lib/agents/governance-read-agent'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
+import { retrieveGovernedLearningContext } from '@/lib/agents/governed-learning-context'
+import { proposePgclCaseFromVerifiedAgentRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { persistAgentRunResultArtifact } from '@/lib/agents/run-result-artifact'
 import { persistInvestigatorRiskAssessment } from '@/lib/governance/predictive-risk'
@@ -178,12 +180,53 @@ export async function POST(request: Request) {
       }, { status: policyDecision.decision === 'REQUIRE_APPROVAL' ? 409 : 403 })
     }
 
+    const learningStartedAt = Date.now()
+    const preExecutionLearning = await retrieveGovernedLearningContext({
+      projectId,
+      agentDefinitionId,
+      query: question || 'governance quality risk stewardship',
+      limit: 5,
+    })
+    const approvedPositiveCases = preExecutionLearning.approvedPositiveCases.flatMap((learningCase) => {
+      const evidence = learningCase.evidence && typeof learningCase.evidence === 'object' && !Array.isArray(learningCase.evidence)
+        ? learningCase.evidence as Record<string, unknown>
+        : {}
+      const recommendation = learningCase.recommendation && typeof learningCase.recommendation === 'object' && !Array.isArray(learningCase.recommendation)
+        ? learningCase.recommendation as Record<string, unknown>
+        : {}
+      const candidateId = typeof evidence.pgcl_candidate_id === 'string' ? evidence.pgcl_candidate_id : ''
+      const reusableLesson = typeof recommendation.reusable_lesson === 'string' ? recommendation.reusable_lesson.trim() : ''
+      if (!candidateId || !reusableLesson) return []
+      return [{
+        id: String(learningCase.id),
+        candidateId,
+        caseKey: String(learningCase.case_key),
+        problemType: String(learningCase.problem_type),
+        reusableLesson,
+        relevance: Number(learningCase.relevance ?? 0),
+        evidence,
+      }]
+    })
+    await recordStage({
+      telemetry,
+      traceContext,
+      projectId,
+      operation: 'governed_agent_pre_execution_learning',
+      startedAt: learningStartedAt,
+      attributes: {
+        agent_definition_id: agentDefinitionId,
+        approved_positive_case_count: approvedPositiveCases.length,
+        authority_effect: 'CONTEXT_ONLY',
+      },
+    })
+
     const specialistStartedAt = Date.now()
     const result = await executeGovernanceSpecialistAgent({
       projectId,
       agentDefinitionId,
       actorUserId: user.id,
       question: question || null,
+      positiveLearningCases: approvedPositiveCases,
     })
     await recordStage({
       telemetry,
@@ -253,6 +296,7 @@ export async function POST(request: Request) {
       agentRunId: result.runId,
       question: question || null,
       output: specialistOutput,
+      preloadedLearningContext: preExecutionLearning,
     })
     await recordStage({
       telemetry,
@@ -302,7 +346,34 @@ export async function POST(request: Request) {
       attributes: { agent_key: result.output.agent.key },
     })
 
-    return NextResponse.json({ accepted: true, runId: result.runId, output, artifact, memory, conversationContext }, { status: 200 })
+    let learningEvaluation: Awaited<ReturnType<typeof proposePgclCaseFromVerifiedAgentRun>> | null = null
+    try {
+      learningEvaluation = await proposePgclCaseFromVerifiedAgentRun({
+        projectId,
+        agentRunId: result.runId,
+        runMode: 'SUPERVISED',
+        verificationEvidenceRefs: [
+          `agent_run:${result.runId}:succeeded`,
+          `agent_result_artifact:${artifact.artifactId}`,
+        ],
+        actorUserId: user.id,
+      })
+    } catch (learningError) {
+      console.error(
+        '[governance-agent] PGCL evaluation failed without changing governed agent success:',
+        learningError instanceof Error ? learningError.message : learningError,
+      )
+    }
+
+    return NextResponse.json({
+      accepted: true,
+      runId: result.runId,
+      output,
+      artifact,
+      memory,
+      conversationContext,
+      learningEvaluation,
+    }, { status: 200 })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })

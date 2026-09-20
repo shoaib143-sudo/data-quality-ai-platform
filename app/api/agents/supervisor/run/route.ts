@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       projectId,
       actorUserId: user.id,
       goal,
+      learningRunMode: approvalRequestId ? 'SUPERVISED' : 'HANDSFREE',
       workers: workers.map((worker) => {
         const value = worker && typeof worker === 'object' && !Array.isArray(worker)
           ? worker as Record<string, unknown>
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
       completedStepIds: result.completedStepIds,
       failedStepId: result.failedStepId ?? null,
       code: result.code ?? null,
+      learningEvaluation: result.learningEvaluation ?? null,
       monitorUrl: `/monitoring?run=${encodeURIComponent(result.supervisorRunId)}`,
     }, { status: result.status === 'SUCCEEDED' ? 200 : result.status === 'WAITING_APPROVAL' ? 202 : 409 })
   } catch (error) {

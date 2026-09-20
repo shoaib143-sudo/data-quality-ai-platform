@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 
 const sql=fs.readFileSync('supabase/migrations/20260912064000_lineage_authority_classes.sql','utf8')
+const graphProvider=fs.readFileSync('lib/data-plane/providers/postgres-graph-provider.ts','utf8')
 const required=[
   'authority_state text',
   'origin text',
@@ -28,3 +29,12 @@ if(/where authority_state in \('SOURCE_OBSERVED','HUMAN_CONFIRMED','LEGACY_UNCLA
   throw new Error('Legacy unclassified lineage must not enter authoritative impact projection')
 }
 console.log('Lineage authority classes verified: observed, human-confirmed, and AI-inferred origin remain distinct; metadata cannot reclassify an established authority boundary.')
+
+
+if(!graphProvider.includes(".from('authoritative_lineage_edges')")){
+  throw new Error('Lineage graph provider must traverse governance.authoritative_lineage_edges for impact/governance consumers')
+}
+if(graphProvider.includes(".from('lineage_edges')")){
+  throw new Error('Lineage graph provider must not traverse raw governance.lineage_edges')
+}
+console.log('Lineage graph traversal verified against authoritative lineage projection only.')
