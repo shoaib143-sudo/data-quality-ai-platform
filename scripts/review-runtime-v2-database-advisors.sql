@@ -3,8 +3,14 @@
 
 with targets(schema_name, table_name) as (
   values
+    ('agent','agent_version_lifecycle'),
+    ('agent','agent_version_lifecycle_events'),
     ('agent','governed_handoffs'),
     ('agent','governed_run_gates'),
+    ('agent','positive_learning_case_occurrences'),
+    ('agent','positive_learning_case_reviews'),
+    ('agent','positive_learning_case_usages'),
+    ('agent','positive_learning_cases'),
     ('governance','agent_approval_authority_audit'),
     ('governance','governance_orchestrator_runs'),
     ('governance','governance_outcome_reports'),
@@ -19,7 +25,10 @@ select
   has_table_privilege('authenticated', format('%I.%I', t.schema_name, t.table_name), 'INSERT') as authenticated_insert,
   has_table_privilege('authenticated', format('%I.%I', t.schema_name, t.table_name), 'UPDATE') as authenticated_update,
   has_table_privilege('authenticated', format('%I.%I', t.schema_name, t.table_name), 'DELETE') as authenticated_delete,
-  has_table_privilege('service_role', format('%I.%I', t.schema_name, t.table_name), 'SELECT') as service_role_select
+  has_table_privilege('service_role', format('%I.%I', t.schema_name, t.table_name), 'SELECT') as service_role_select,
+  has_table_privilege('service_role', format('%I.%I', t.schema_name, t.table_name), 'INSERT') as service_role_insert,
+  has_table_privilege('service_role', format('%I.%I', t.schema_name, t.table_name), 'UPDATE') as service_role_update,
+  has_table_privilege('service_role', format('%I.%I', t.schema_name, t.table_name), 'DELETE') as service_role_delete
 from targets t
 order by 1, 2;
 
