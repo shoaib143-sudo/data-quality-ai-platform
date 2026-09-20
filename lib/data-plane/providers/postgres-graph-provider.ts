@@ -74,7 +74,7 @@ async function fetchAdjacentEdges(
     if (rows.length >= remaining) break
     const { data, error } = await admin
       .schema('governance')
-      .from('lineage_edges')
+      .from('authoritative_lineage_edges')
       .select('id,project_id,source_type,source_id,target_type,target_id,relationship,transformation_id,metadata,created_at')
       .eq('project_id', projectId)
       .eq(`${side}_type`, type)
