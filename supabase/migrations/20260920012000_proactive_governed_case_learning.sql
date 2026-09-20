@@ -23,6 +23,7 @@ alter table agent.learning_candidates
 create table if not exists agent.positive_learning_cases (
   candidate_id uuid primary key,
   project_id uuid not null references app.projects(id) on delete cascade,
+  constraint positive_learning_cases_candidate_project_uq unique (candidate_id, project_id),
   source_agent_run_id uuid not null references agent.agent_runs(id) on delete restrict,
   run_mode text not null check (run_mode in ('SUPERVISED','HANDSFREE')),
   use_case_key text not null,
@@ -308,6 +309,11 @@ begin
   end if;
   if length(btrim(coalesce(p_reason,''))) = 0 then
     raise exception 'PGCL review reason is required';
+  end if;
+  if p_decision = 'APPROVE_WITH_EDITS'
+    and length(btrim(coalesce(p_edits->>'reusableLesson',''))) = 0
+  then
+    raise exception 'APPROVE_WITH_EDITS requires a revised reusable lesson';
   end if;
 
   if not exists (
