@@ -21,8 +21,11 @@ for (const invariant of [
 }
 
 for (const invariant of [
-  "rpc('search_learning_cases'",
-  "learningCase.source_kind === 'PGCL_POSITIVE_CASE'",
+  ".from('agent_learning_cases')",
+  ".eq('source_kind', 'PGCL_POSITIVE_CASE')",
+  ".eq('decision_status', 'VERIFIED')",
+  ".eq('outcome_status', 'VERIFIED')",
+  ".eq('agent_definition_id', input.agentDefinitionId)",
   'approvedPositiveCases',
 ]) {
   assert.ok(context.includes(invariant), 'missing PGCL retrieval invariant: ' + invariant)
@@ -45,4 +48,6 @@ assert.equal(
   'rejected, deferred, and one-off cases must not enter reusable learning memory',
 )
 
-console.log('Approved PGCL cases are promoted into governed learning cases and exposed as context without granting authority.')
+assert.ok(context.includes('input.agentDefinitionId && query'), 'PGCL retrieval must fail closed without an explicit agent definition')
+
+console.log('Approved PGCL cases are promoted into governed learning cases, scoped to the originating agent, and exposed as context without granting authority.')
