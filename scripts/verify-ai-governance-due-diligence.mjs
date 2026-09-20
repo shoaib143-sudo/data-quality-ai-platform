@@ -13,7 +13,8 @@ function rejectText(text, needle, label) {
 }
 
 const worker = read('lib/agents/governance-job-worker.ts')
-const scheduledWorker = read('app/api/jobs/worker/route.ts')
+const scheduledWorkerRoute = read('app/api/jobs/worker/route.ts')
+const scheduledWorkerService = read('lib/orchestration/worker-service.ts')
 const directAgentRoute = read('app/api/agents/governance/run/route.ts')
 const runResultArtifact = read('lib/agents/run-result-artifact.ts')
 const handoffRoute = read('app/api/agents/governance/handoff/route.ts')
@@ -50,8 +51,10 @@ requireText(runResultArtifact, ".schema('agent').rpc('persist_agent_run_result'"
 rejectText(directAgentRoute, ".from('agent_runs').update({ output })", 'direct agent route must not bypass governed result persistence')
 requireText(handoffRoute, 'enrichOutputWithAIGovernanceIntelligence', 'handoff certification/ROI intelligence enrichment')
 requireText(handoffRoute, 'output,', 'handoff enriched output persistence')
-requireText(scheduledWorker, 'refreshAllAIGovernanceIntelligence', 'scheduled certification/ROI intelligence refresh')
-requireText(scheduledWorker, 'aiGovernanceIntelligence', 'worker exposes refreshed AI governance intelligence evidence')
+requireText(scheduledWorkerRoute, 'runScheduledWorkerCycle', 'scheduled worker route delegates canonical worker cycle')
+requireText(scheduledWorkerService, 'refreshAllAIGovernanceIntelligence', 'scheduled certification/ROI intelligence refresh')
+requireText(scheduledWorkerService, 'const aiGovernanceIntelligence = await refreshAllAIGovernanceIntelligence()', 'scheduled certification/ROI intelligence execution')
+requireText(scheduledWorkerService, 'aiGovernanceIntelligence', 'worker exposes refreshed AI governance intelligence evidence')
 
 requireText(fieldLineage, 'run_synthetic_field_lineage_integration_suite', 'self-cleaning field-lineage integration suite')
 requireText(fieldLineage, "'column_mappings_complete'", 'field-lineage mapping assertion')
