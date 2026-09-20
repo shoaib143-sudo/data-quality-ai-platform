@@ -88,6 +88,11 @@ requireText('lib/data-plane/object-lifecycle.ts', [
   'store.delete',
 ])
 requireText('app/api/jobs/worker/route.ts', [
+  'runScheduledWorkerCycle',
+  'runAdaptiveWorkerCycle',
+  'processClaimedDurableJob',
+])
+requireText('lib/orchestration/worker-service.ts', [
   'processSemanticIndexJobs',
   'enqueueDailySemanticIndexJobs',
   'cleanupExpiredObjectArtifacts',
