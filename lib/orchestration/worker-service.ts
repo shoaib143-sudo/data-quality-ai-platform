@@ -15,6 +15,7 @@ import { refreshAllAIGovernanceIntelligence } from '@/lib/governance/ai-governan
 import { processGovernanceAgentJobs } from '@/lib/agents/governance-job-worker'
 import { processApprovalNotificationOutbox } from '@/lib/governance/approval-notification-worker'
 import { evaluateAgentApprovalSlaEscalations } from '@/lib/governance/approval-sla'
+import { cleanupExpiredAgentEvidence } from '@/lib/agents/evidence-lifecycle'
 
 function logOutboxLaneDegradation(workerId: string, lane: OutboxLaneResult) {
   if (!lane.degraded || lane.disposition === 'SKIPPED_AFTER_DEGRADATION') return
@@ -92,11 +93,12 @@ export async function runScheduledWorkerCycle(workerId: string) {
   const scheduled = await enqueueDueSchedules(20)
   const dispatch = await dispatchAdaptiveRounds(workerId)
   const eventLane = await executeOutboxLane(workerId)
-  const [incidentEscalations, projections, semanticIndexScheduling, objectRetention] = await Promise.all([
+  const [incidentEscalations, projections, semanticIndexScheduling, objectRetention, agentEvidenceRetention] = await Promise.all([
     evaluateIncidentSlaEscalations(50),
     runProjectionWorker({ projectLimit: 10, batchSize: 200 }),
     enqueueDailySemanticIndexJobs(100),
     cleanupExpiredObjectArtifacts(25),
+    cleanupExpiredAgentEvidence(50),
   ])
   const approvalSla = await evaluateAgentApprovalSlaEscalations(100)
   const approvalNotifications = await processApprovalNotificationOutbox(25)
@@ -116,6 +118,7 @@ export async function runScheduledWorkerCycle(workerId: string) {
     governanceAgentResults: dispatch.governanceAgentResults,
     semanticIndexScheduling,
     objectRetention,
+    agentEvidenceRetention,
     approvalSla,
     approvalNotifications,
     predictiveRisk,
