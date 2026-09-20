@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
+import { GoldenPathNavigator } from '@/components/golden-path-navigator'
 import {
   Activity,
   ArrowRight,
@@ -84,6 +85,8 @@ type Drilldown =
 
 type Props = {
   run: ProfilingDashboardRun
+  projectId: string
+  datasetId: string
   datasetName: string
   datasetSubtitle: string | null
   columns: ProfilingDashboardColumn[]
@@ -150,7 +153,7 @@ function Card({ children, className = '', onClick }: { children: React.ReactNode
 
 const DOCUMENT_TECHNICAL_FIELDS = new Set(['chunk_index', 'file_name', 'content_type', 'text_extraction_method'])
 
-export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, columns, metrics, distributions, findings, samples }: Props) {
+export default function ProfilingDashboard({ run, projectId, datasetId, datasetName, datasetSubtitle, columns, metrics, distributions, findings, samples }: Props) {
   const [drilldown, setDrilldown] = useState<Drilldown>(null)
 
   const metricsByColumn = useMemo(() => {
@@ -202,7 +205,13 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
 
   return <main className="min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8">
-      <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <GoldenPathNavigator
+        current="PROFILING"
+        projectId={projectId}
+        datasetId={datasetId}
+        runId={run.id}
+      />
+      <header className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-500">Datasets <ChevronRight className="inline h-4 w-4" /> Profiling run</div>
@@ -227,7 +236,7 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
         <Link href="/monitoring" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md">
           <div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-2 text-blue-700"><Activity className="h-5 w-5" /></div><div><div className="font-black">Data Observability</div><div className="text-xs text-slate-500">Monitor data health and freshness</div></div></div>
         </Link>
-        <Link href="/data-quality" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+        <Link href={'/data-quality?projectId=' + encodeURIComponent(projectId) + '&datasetId=' + encodeURIComponent(datasetId) + '&runId=' + encodeURIComponent(run.id)} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md">
           <div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-2 text-blue-700"><ShieldCheck className="h-5 w-5" /></div><div><div className="font-black">Data Quality</div><div className="text-xs text-slate-500">Assess data quality and integrity</div></div></div>
         </Link>
       </nav>
