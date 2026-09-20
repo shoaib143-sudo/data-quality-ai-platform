@@ -54,11 +54,18 @@ test('Cloudflare canary release verifies exact deployed identity and read-only m
 test('Cloudflare canary preflight builds governed image and validates Wrangler without deployment', () => {
   assert.match(workflow, /build-cloudflare-container\.mjs/)
   assert.match(workflow, /cloudflare-canary-preflight/)
-  assert.match(workflow, /wrangler@4\.131\.1 deploy --dry-run/)
+  assert.match(workflow, /dlx wrangler deploy --dry-run/)
 })
 
 
 test('release evidence parsers do not shadow JSON stdin with heredoc scripts', () => {
   assert.doesNotMatch(workflow, /<\/tmp\/[^\n]+<<'NODE'/)
   assert.match(workflow, /readFileSync\(process\.argv\[[23]\], 'utf8'\)/)
+})
+
+
+test('Cloudflare tooling runs through isolated pnpm dlx instead of mutating the pnpm workspace with npm', () => {
+  assert.match(workflow, /pnpm --package=wrangler@4\.131\.1 --package=@cloudflare\/containers@0\.3\.7 dlx wrangler deploy/)
+  assert.doesNotMatch(workflow, /npm install --no-save[^\n]*wrangler@4\.131\.1/)
+  assert.doesNotMatch(workflow, /npx wrangler@4\.131\.1/)
 })
