@@ -13,6 +13,7 @@ for (const invariant of [
   ".eq('source_kind', 'PGCL_POSITIVE_CASE')",
   ".eq('project_id', projectId)",
   'GOVERNED_AGENT_KEYS',
+  'createAdminClient',
   'agentCoverage',
   'agentsRepresented',
   'production_eligible',
@@ -38,6 +39,7 @@ for (const forbidden of [
   '.delete(',
   '.upsert(',
   '.rpc(',
+  'createClient()',
   'review_positive_learning_case',
   'create_positive_learning_case',
   'activate_learning_candidate',
@@ -53,6 +55,8 @@ for (const forbidden of [
 const page = fs.readFileSync('app/admin/ai-command-center/page.tsx', 'utf8')
 for (const invariant of [
   'readPgclCommandCenterState',
+  'authorizeProject',
+  "'admin.manage'",
   'Positive-case learning feedback loop',
   '8 agents represented',
   'Context authority:',
