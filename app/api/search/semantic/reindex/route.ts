@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
-import { reindexProjectDocumentSemanticObjects } from '@/lib/governance/semantic-document-indexer'
-import { reindexProjectSemanticObjects } from '@/lib/governance/semantic-indexer'
+import { reindexProjectSemanticCorpus } from '@/lib/governance/semantic-project-reindex'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
@@ -31,22 +30,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const concurrency = typeof body?.concurrency === 'number' && Number.isFinite(body.concurrency)
-      ? body.concurrency
-      : undefined
-    const [governance, documents] = await Promise.all([
-      reindexProjectSemanticObjects(projectId, { concurrency }),
-      reindexProjectDocumentSemanticObjects(projectId, { concurrency }),
-    ])
-    const result = {
-      projectId,
-      total: governance.total + documents.total,
-      indexed: governance.indexed + documents.indexed,
-      unchanged: documents.unchanged,
-      failed: governance.failed + documents.failed,
-      pruned: governance.pruned + documents.pruned,
-      groups: { governance, documents },
-    }
+    const result = await reindexProjectSemanticCorpus(projectId, {
+      concurrency: typeof body?.concurrency === 'number' ? body.concurrency : undefined,
+    })
     return NextResponse.json(result, { status: result.failed ? 207 : 200 })
   } catch (error) {
     if (error instanceof Error && error.name === 'EmbeddingProviderNotConfiguredError') {
