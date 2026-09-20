@@ -1,7 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { persistAgentWorkingMemory } from '@/lib/agents/agent-memory'
 import { retrieveGovernedLearningContext } from '@/lib/agents/governed-learning-context'
-import { recordPositiveLearningCaseRetrievals } from '@/lib/agents/proactive-governed-case-learning-service'
+import {
+  recordPositiveLearningCaseOutcome,
+  recordPositiveLearningCaseRetrievals,
+} from '@/lib/agents/proactive-governed-case-learning-service'
 
 export async function enrichGovernedAgentWithMemory(input: {
   projectId: string
@@ -9,12 +12,13 @@ export async function enrichGovernedAgentWithMemory(input: {
   agentRunId: string
   question?: string | null
   output: Record<string, unknown>
+  preloadedLearningContext?: Awaited<ReturnType<typeof retrieveGovernedLearningContext>>
 }) {
   const observations = Array.isArray(input.output.observations)
     ? input.output.observations.filter((item): item is string => typeof item === 'string')
     : []
   const query = input.question?.trim() || observations.slice(0, 3).join(' ') || 'governance quality risk remediation'
-  const prior = await retrieveGovernedLearningContext({
+  const prior = input.preloadedLearningContext ?? await retrieveGovernedLearningContext({
     projectId: input.projectId,
     agentDefinitionId: input.agentDefinitionId,
     query,
@@ -62,6 +66,31 @@ export async function enrichGovernedAgentWithMemory(input: {
     }] : []),
   })
 
+  const retrievedCandidateIds = new Set(
+    approvedPositiveCases
+      .map((learningCase) => learningCase.candidate_id)
+      .filter((candidateId): candidateId is string => Boolean(candidateId)),
+  )
+  const appliedPositiveCaseIds = Array.isArray(input.output.appliedPositiveCaseIds)
+    ? [...new Set(input.output.appliedPositiveCaseIds
+        .filter((candidateId): candidateId is string => typeof candidateId === 'string')
+        .map((candidateId) => candidateId.trim())
+        .filter((candidateId) => retrievedCandidateIds.has(candidateId)))]
+    : []
+
+  for (const candidateId of appliedPositiveCaseIds) {
+    await recordPositiveLearningCaseOutcome({
+      projectId: input.projectId,
+      candidateId,
+      consumerAgentRunId: input.agentRunId,
+      status: 'APPLIED',
+      outcome: {
+        attribution: 'EXPLICIT_AGENT_OUTPUT',
+        current_authorization_still_required: true,
+      },
+    })
+  }
+
   const enriched = {
     ...input.output,
     recommendations: existingRecommendations,
@@ -72,6 +101,7 @@ export async function enrichGovernedAgentWithMemory(input: {
       verifiedEpisodes,
       approvedPositiveCaseMatches: approvedPositiveCases.length,
       approvedPositiveCases,
+      appliedPositiveCaseIds,
       influenceEvidence: verifiedEpisodes.map((episode) => ({
         learning_case_id: episode.id,
         source_kind: episode.source_kind,
