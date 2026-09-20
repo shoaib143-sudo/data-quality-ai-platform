@@ -86,7 +86,7 @@ The approved retention state is:
 
 ### Repository-side deployment allowlist
 
-`vercel.json` already limits automatic Git deployment eligibility to `main` and selected UI/preview branch patterns. This safeguard should remain even if the Vercel Git integration is later reconnected.
+`vercel.json` now disables automatic Git-triggered deployments for every branch, including `main`. Production and preview deployments are deliberate release actions rather than side effects of Git pushes. This repository-side safeguard remains in force even if the Vercel Git integration is later reconnected.
 
 ### Branch hygiene
 
