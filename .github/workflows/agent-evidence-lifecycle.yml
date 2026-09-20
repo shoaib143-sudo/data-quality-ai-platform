@@ -4,14 +4,20 @@ on:
   pull_request:
     paths:
       - 'lib/agents/evidence-lifecycle.ts'
+      - 'lib/orchestration/worker-service.ts'
       - 'supabase/migrations/20260915025000_agent_evidence_retention_and_legal_hold.sql'
+      - 'supabase/migrations/20260920048000_agent_evidence_retention_cleanup.sql'
+      - 'tests/agent-evidence-retention-cleanup.test.mjs'
       - 'scripts/verify-agent-evidence-lifecycle.mjs'
       - '.github/workflows/agent-evidence-lifecycle.yml'
   push:
     branches: [main]
     paths:
       - 'lib/agents/evidence-lifecycle.ts'
+      - 'lib/orchestration/worker-service.ts'
       - 'supabase/migrations/20260915025000_agent_evidence_retention_and_legal_hold.sql'
+      - 'supabase/migrations/20260920048000_agent_evidence_retention_cleanup.sql'
+      - 'tests/agent-evidence-retention-cleanup.test.mjs'
       - 'scripts/verify-agent-evidence-lifecycle.mjs'
       - '.github/workflows/agent-evidence-lifecycle.yml'
 
@@ -30,3 +36,5 @@ jobs:
           node-version: 24
       - name: Verify governed evidence lifecycle
         run: node scripts/verify-agent-evidence-lifecycle.mjs
+      - name: Test atomic retention cleanup contract
+        run: node --test tests/agent-evidence-retention-cleanup.test.mjs
