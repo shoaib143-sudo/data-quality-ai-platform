@@ -3,6 +3,8 @@ name: Retrieval Metadata Normalization
 on:
   pull_request:
     paths:
+      - 'lib/governance/semantic-knowledge-indexer.ts'
+      - 'scripts/test-regulatory-retrieval-provenance.mjs'
       - 'lib/ai/retrieval-provider.ts'
       - 'lib/governance/semantic-project-reindex.ts'
       - 'lib/governance/semantic-project-reindex-runtime.ts'
@@ -16,6 +18,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/governance/semantic-knowledge-indexer.ts'
+      - 'scripts/test-regulatory-retrieval-provenance.mjs'
       - 'lib/ai/retrieval-provider.ts'
       - 'lib/governance/semantic-project-reindex.ts'
       - 'lib/governance/semantic-project-reindex-runtime.ts'
@@ -49,5 +53,7 @@ jobs:
         run: node --experimental-strip-types scripts/test-retrieval-provider.mjs
       - name: Semantic project reindex behavior
         run: node --experimental-strip-types --test tests/semantic-project-reindex.test.mjs
+      - name: Regulatory retrieval provenance
+        run: node scripts/test-regulatory-retrieval-provenance.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
