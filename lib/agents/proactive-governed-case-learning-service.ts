@@ -66,3 +66,62 @@ export async function reviewProactiveGovernedCaseLearningCandidate(input: {
   }
   return String(data)
 }
+
+
+export async function recordPositiveLearningCaseRetrievals(input: {
+  projectId: string
+  consumerAgentRunId: string
+  cases: Array<{
+    candidateId: string
+    learningCaseId: string
+    relevance: number
+  }>
+}) {
+  if (!input.cases.length) return 0
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+  const rows = input.cases.map((item) => ({
+    project_id: input.projectId,
+    candidate_id: item.candidateId,
+    learning_case_id: item.learningCaseId,
+    consumer_agent_run_id: input.consumerAgentRunId,
+    relevance: Math.max(0, Math.min(1, item.relevance)),
+    usage_status: 'RETRIEVED',
+    updated_at: now,
+  }))
+
+  const { error } = await admin
+    .schema('agent')
+    .from('positive_learning_case_usages')
+    .upsert(rows, { onConflict: 'project_id,candidate_id,consumer_agent_run_id' })
+
+  if (error) throw new Error(`Unable to record PGCL case retrieval: ${error.message}`)
+  return rows.length
+}
+
+export async function recordPositiveLearningCaseOutcome(input: {
+  projectId: string
+  candidateId: string
+  consumerAgentRunId: string
+  status: 'APPLIED' | 'SUCCEEDED' | 'FAILED' | 'DISMISSED'
+  outcome?: Record<string, unknown>
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .schema('agent')
+    .from('positive_learning_case_usages')
+    .update({
+      usage_status: input.status,
+      outcome: input.outcome ?? {},
+      updated_at: new Date().toISOString(),
+    })
+    .eq('project_id', input.projectId)
+    .eq('candidate_id', input.candidateId)
+    .eq('consumer_agent_run_id', input.consumerAgentRunId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) throw new Error(`Unable to record PGCL case outcome: ${error.message}`)
+  if (!data) throw new Error('PGCL case usage was not found for outcome recording')
+  return String(data.id)
+}
