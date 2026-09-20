@@ -34,6 +34,10 @@ const approvedPrivilegedExceptions = new Map([
     classification: 'PUBLIC_HEALTH_PROBE',
     requiredMarkers: ['verify_database_api_security_posture', "headers: { 'Cache-Control': 'no-store' }"],
   }],
+  ['app/api/health/release-schema/route.ts', {
+    classification: 'PUBLIC_HEALTH_PROBE',
+    requiredMarkers: ["dataNexusEnvironment() !== 'production'", "dataNexusPlatform() !== 'vercel'", "headers: { 'Cache-Control': 'no-store' }"],
+  }],
   ['app/api/scim/v2/Users/route.ts', {
     classification: 'SCIM_DIRECTORY_AUTH',
     requiredMarkers: ['requireScimDirectory('],
