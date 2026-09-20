@@ -9,8 +9,10 @@ export type GovernedLearningProductionReadinessInput = {
   canonicallyVerifiedRunCount: number
   positiveCaseCount: number
   approvedPositiveCaseCount: number
+  productionEligibleApprovedPositiveCaseCount: number
   appliedPositiveCaseUsageCount: number
   successfulPositiveCaseUsageCount: number
+  productionEligibleSuccessfulPositiveCaseUsageCount: number
 }
 
 export type GovernedLearningProductionReadinessStatus =
@@ -30,6 +32,7 @@ export type GovernedLearningProductionReadiness = {
     authorizationBypassAllowed: false
     humanReviewRequired: true
     successfulReuseRequiredForCertification: true
+    productionEligibleEvidenceRequiredForCertification: true
   }
 }
 
@@ -53,6 +56,10 @@ export function evaluateGovernedLearningProductionReadiness(
     canonicallyVerifiedRunCount: nonNegativeInteger(input.canonicallyVerifiedRunCount, 'canonicallyVerifiedRunCount'),
     positiveCaseCount: nonNegativeInteger(input.positiveCaseCount, 'positiveCaseCount'),
     approvedPositiveCaseCount: nonNegativeInteger(input.approvedPositiveCaseCount, 'approvedPositiveCaseCount'),
+    productionEligibleApprovedPositiveCaseCount: nonNegativeInteger(
+      input.productionEligibleApprovedPositiveCaseCount,
+      'productionEligibleApprovedPositiveCaseCount',
+    ),
     appliedPositiveCaseUsageCount: nonNegativeInteger(
       input.appliedPositiveCaseUsageCount,
       'appliedPositiveCaseUsageCount',
@@ -60,6 +67,10 @@ export function evaluateGovernedLearningProductionReadiness(
     successfulPositiveCaseUsageCount: nonNegativeInteger(
       input.successfulPositiveCaseUsageCount,
       'successfulPositiveCaseUsageCount',
+    ),
+    productionEligibleSuccessfulPositiveCaseUsageCount: nonNegativeInteger(
+      input.productionEligibleSuccessfulPositiveCaseUsageCount,
+      'productionEligibleSuccessfulPositiveCaseUsageCount',
     ),
   }
 
@@ -77,7 +88,9 @@ export function evaluateGovernedLearningProductionReadiness(
     if (evidence.positiveCaseCount > 0) status = 'EVIDENCE_IN_PROGRESS'
     if (
       evidence.approvedPositiveCaseCount > 0
+      && evidence.productionEligibleApprovedPositiveCaseCount > 0
       && evidence.successfulPositiveCaseUsageCount > 0
+      && evidence.productionEligibleSuccessfulPositiveCaseUsageCount > 0
     ) {
       status = 'CERTIFIED'
     }
@@ -94,6 +107,7 @@ export function evaluateGovernedLearningProductionReadiness(
       authorizationBypassAllowed: false,
       humanReviewRequired: true,
       successfulReuseRequiredForCertification: true,
+      productionEligibleEvidenceRequiredForCertification: true,
     },
   }
 }
