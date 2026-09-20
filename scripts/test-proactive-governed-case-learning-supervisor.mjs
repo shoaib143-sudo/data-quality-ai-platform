@@ -60,13 +60,27 @@ assert.equal(derivePgclCandidateFromVerifiedRun({
   priorPositiveCaseExists: false,
 }), null, 'verified execution evidence is mandatory')
 
-assert.equal(derivePgclCandidateFromVerifiedRun({
-  run,
-  agentKey: 'architect_agent',
-  runMode: 'HANDSFREE',
-  verificationEvidenceRefs: ['native_trajectory_evaluation:eval-3'],
-  priorPositiveCaseExists: false,
-}), null, 'PGCL automatic proposal scope is currently limited to the four priority agents')
+const remainingSpecialists = [
+  ['architect_agent', 'lineage_impact_analysis'],
+  ['investigator_agent', 'incident_root_cause_analysis'],
+  ['executive_agent', 'executive_materiality_analysis'],
+  ['support_agent', 'support_case_investigation'],
+]
+
+for (const [agentKey, expectedSkillKey] of remainingSpecialists) {
+  const candidate = derivePgclCandidateFromVerifiedRun({
+    run: { ...run, id: `run-${agentKey}` },
+    agentKey,
+    runMode: 'HANDSFREE',
+    verificationEvidenceRefs: [`native_trajectory_evaluation:eval-${agentKey}`],
+    priorPositiveCaseExists: false,
+  })
+  assert.ok(candidate, `PGCL candidate expected for ${agentKey}`)
+  assert.equal(candidate.skillKey, expectedSkillKey)
+  assert.equal(candidate.requiresDataGovernanceAdminReview, true)
+  assert.equal(candidate.mayAutoPromote, false)
+  assert.equal(candidate.maySelfLearn, false)
+}
 
 const runtime = fs.readFileSync('lib/agents/proactive-governed-case-learning-runtime.ts', 'utf8')
 const supervisor = fs.readFileSync('lib/agents/runtime/native-supervisor-service.ts', 'utf8')
@@ -78,6 +92,10 @@ for (const invariant of [
   "run.status !== 'SUCCEEDED'",
   "REPEATED_SUCCESS_THRESHOLD",
   "NEW_USE_CASE",
+  "architect_agent: 'lineage_impact_analysis'",
+  "investigator_agent: 'incident_root_cause_analysis'",
+  "executive_agent: 'executive_materiality_analysis'",
+  "support_agent: 'support_case_investigation'",
   'native_trajectory_evaluation:',
 ]) {
   assert.ok(runtime.includes(invariant), 'missing PGCL supervisor runtime invariant: ' + invariant)
