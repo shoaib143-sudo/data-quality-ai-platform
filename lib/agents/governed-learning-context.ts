@@ -45,24 +45,12 @@ export async function retrieveGovernedLearningContext(input: {
     ? await memoryProvider.retrieve({ projectId: input.projectId, classes: ['episodic'], limit: Math.min(limit * 3, 100) })
     : []
 
-  let positiveCaseQuery = admin
-    .schema('agent')
-    .from('agent_learning_cases')
-    .select('id,agent_definition_id,source_agent_run_id,case_key,source_kind,problem_type,context,recommendation,decision_status,outcome_status,effectiveness,confidence,evidence,occurred_at,updated_at')
-    .eq('project_id', input.projectId)
-    .eq('source_kind', 'PGCL_POSITIVE_CASE')
-    .eq('status', 'ACTIVE')
-    .eq('decision_status', 'VERIFIED')
-    .eq('outcome_status', 'VERIFIED')
-    .order('updated_at', { ascending: false })
-    .limit(Math.min(limit * 5, 100))
-
-  if (input.agentDefinitionId) {
-    positiveCaseQuery = positiveCaseQuery.eq('agent_definition_id', input.agentDefinitionId)
-  }
-
   const { data: positiveCases, error: positiveCaseError } = input.agentDefinitionId && query
-    ? await positiveCaseQuery
+    ? await admin.schema('agent').rpc('list_approved_positive_learning_cases', {
+        p_project_id: input.projectId,
+        p_agent_definition_id: input.agentDefinitionId,
+        p_limit: Math.min(limit * 5, 100),
+      })
     : { data: [], error: null }
 
   if (positiveCaseError) throw new Error(`Unable to retrieve approved positive learning cases: ${positiveCaseError.message}`)
