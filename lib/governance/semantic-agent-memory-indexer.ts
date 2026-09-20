@@ -22,6 +22,11 @@ function memoryContent(memory: AgentMemoryRow) {
   ].filter(Boolean).join('\n')
 }
 
+function indexableAgentMemory(memory: AgentMemoryRow) {
+  if (memory.memory_type.trim().toUpperCase() !== 'SEMANTIC') return true
+  return memory.content?.human_validated === true
+}
+
 export async function reindexProjectAgentMemories(projectId: string, options: { concurrency?: number } = {}) {
   const admin = createAdminClient()
   const now = new Date().toISOString()
@@ -36,7 +41,7 @@ export async function reindexProjectAgentMemories(projectId: string, options: { 
     .limit(5000)
   if (memoryError) throw new Error(`Unable to collect governed agent memories: ${memoryError.message}`)
 
-  const rows = (memories ?? []) as AgentMemoryRow[]
+  const rows = ((memories ?? []) as AgentMemoryRow[]).filter(indexableAgentMemory)
   const concurrency = Math.max(1, Math.min(8, options.concurrency ?? 3))
   let cursor = 0
   let indexed = 0

@@ -16,6 +16,13 @@ function terms(value: string) {
   return value.trim().toLowerCase().split(/\s+/).filter((term) => term.length > 2)
 }
 
+function governedDurableMemoryEligible(memory: { memory_type?: unknown; content?: unknown }) {
+  const memoryType = typeof memory.memory_type === 'string' ? memory.memory_type.trim().toUpperCase() : ''
+  if (memoryType !== 'SEMANTIC') return true
+  if (!memory.content || typeof memory.content !== 'object' || Array.isArray(memory.content)) return false
+  return (memory.content as Record<string, unknown>).human_validated === true
+}
+
 export async function retrieveGovernedLearningContext(input: {
   projectId: string
   agentDefinitionId?: string | null
@@ -41,6 +48,7 @@ export async function retrieveGovernedLearningContext(input: {
 
   const queryTerms = terms(query)
   const rankedMemories = (memories ?? [])
+    .filter(governedDurableMemoryEligible)
     .map((memory) => {
       const searchable = `${memory.memory_key} ${JSON.stringify(memory.content)}`.toLowerCase()
       const matches = queryTerms.filter((term) => searchable.includes(term)).length
