@@ -77,7 +77,6 @@ export function evaluateGovernedLearningProductionReadiness(
     if (evidence.positiveCaseCount > 0) status = 'EVIDENCE_IN_PROGRESS'
     if (
       evidence.approvedPositiveCaseCount > 0
-      && evidence.appliedPositiveCaseUsageCount > 0
       && evidence.successfulPositiveCaseUsageCount > 0
     ) {
       status = 'CERTIFIED'
