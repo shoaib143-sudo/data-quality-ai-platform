@@ -240,6 +240,15 @@ begin
     raise exception 'source agent run is missing or cross-project';
   end if;
 
+  if not exists (
+    select 1 from agent.agent_runs r
+    where r.id = p_source_agent_run_id
+      and r.project_id = p_project_id
+      and r.status = 'SUCCEEDED'
+  ) then
+    raise exception 'only SUCCEEDED agent runs may create positive learning cases';
+  end if;
+
   if not ('BROADENED_APPLICABILITY' = any(v_significance)) then
     select plc.candidate_id into v_cluster_candidate_id
     from agent.positive_learning_cases plc
