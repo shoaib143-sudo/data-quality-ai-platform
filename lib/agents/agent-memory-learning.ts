@@ -55,13 +55,11 @@ export async function enrichGovernedAgentWithMemory(input: {
   await recordPositiveLearningCaseRetrievals({
     projectId: input.projectId,
     consumerAgentRunId: input.agentRunId,
-    cases: approvedPositiveCases
-      .filter((learningCase): learningCase is typeof learningCase & { candidate_id: string } => Boolean(learningCase.candidate_id))
-      .map((learningCase) => ({
-        candidateId: learningCase.candidate_id,
-        learningCaseId: String(learningCase.id),
-        relevance: Number(learningCase.relevance ?? 0),
-      })),
+    cases: approvedPositiveCases.flatMap((learningCase) => learningCase.candidate_id ? [{
+      candidateId: learningCase.candidate_id,
+      learningCaseId: String(learningCase.id),
+      relevance: Number(learningCase.relevance ?? 0),
+    }] : []),
   })
 
   const enriched = {
