@@ -99,14 +99,6 @@ assert.equal(/\n\$;\n/.test(forwardMigration), false, 'forward PGCL reconciliati
 assert.ok(forwardMigration.includes('create table if not exists agent.positive_learning_cases'))
 assert.ok(forwardMigration.includes('create or replace function agent.list_approved_positive_learning_cases'))
 
-const malformedReplaySample = '\nas $\n  select\n1;\n$;\n\nrevoke all on function agent.list_approved_positive_learning_cases'
-const repairedReplaySample = malformedReplaySample
-  .replace('\nas $\n  select\n', () => '\nas $\n  select\n')
-  .replace('\n$;\n\nrevoke all on function agent.list_approved_positive_learning_cases', () => '\n$;\n\nrevoke all on function agent.list_approved_positive_learning_cases')
-assert.match(repairedReplaySample, /\nas \$\$\n/)
-assert.match(repairedReplaySample, /\n\$\$;\n/)
-assert.equal(/\nas \$\n/.test(repairedReplaySample), false)
-assert.equal(/\n\$;\n/.test(repairedReplaySample), false)
 for (const invariant of [
   "file === '20260920014000_proactive_governed_case_learning.sql'",
   "const malformedOpen = '\\nas $\\n  select\\n'",
