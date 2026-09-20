@@ -133,6 +133,28 @@ function boundedOffset(cursor: Record<string, unknown>) {
   return Number.isFinite(numeric) ? Math.max(0, Math.trunc(numeric)) : 0
 }
 
+
+export function planHistoricalExportChunk(input: {
+  offset: number
+  partCount: number
+  rowsExported: number
+  chunkSize: number
+  rowCount: number
+}) {
+  const offset = Math.max(0, Math.trunc(input.offset))
+  const partCount = Math.max(0, Math.trunc(input.partCount))
+  const rowsExported = Math.max(0, Math.trunc(input.rowsExported))
+  const chunkSize = Math.max(1, Math.trunc(input.chunkSize))
+  const rowCount = Math.max(0, Math.trunc(input.rowCount))
+  if (rowCount > chunkSize) throw new Error('Historical export page exceeds configured chunk size.')
+  return {
+    partNumber: rowCount > 0 ? partCount + 1 : null,
+    nextOffset: offset + rowCount,
+    nextRowsExported: rowsExported + rowCount,
+    complete: rowCount < chunkSize,
+  }
+}
+
 function objectParts(value: unknown): ExportPart[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((item) => {
@@ -406,7 +428,15 @@ export async function executeHistoricalExportChunk(job: DurableJob) {
       return { exportId, status: 'COMPLETED', rowsExported: exportJob.rows_exported, partCount: existingParts.length }
     }
 
-    const partNumber = exportJob.part_count + 1
+    const plan = planHistoricalExportChunk({
+      offset,
+      partCount: exportJob.part_count,
+      rowsExported: exportJob.rows_exported,
+      chunkSize: exportJob.chunk_size,
+      rowCount: rows.length,
+    })
+    const partNumber = plan.partNumber
+    if (partNumber === null) throw new Error('Historical export page planning returned no part for non-empty rows.')
     const key = exportKey(exportJob.id, partNumber)
     await getObjectStore().put({
       projectId: exportJob.project_id,
@@ -427,9 +457,9 @@ export async function executeHistoricalExportChunk(job: DurableJob) {
       ...existingParts.filter((part) => part.part !== partNumber),
       { part: partNumber, key, rows: rows.length },
     ].sort((a, b) => a.part - b.part)
-    const rowsExported = exportJob.rows_exported + rows.length
-    const nextOffset = offset + rows.length
-    const isComplete = rows.length < exportJob.chunk_size
+    const rowsExported = plan.nextRowsExported
+    const nextOffset = plan.nextOffset
+    const isComplete = plan.complete
 
     if (isComplete) {
       const manifest = await writeManifest(exportJob, parts, rowsExported)
