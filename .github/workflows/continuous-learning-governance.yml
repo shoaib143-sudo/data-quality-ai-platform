@@ -34,6 +34,9 @@ on:
       - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'scripts/verify-governed-learning-golden-journey.mjs'
       - 'lib/agents/governed-learning-production-readiness.ts'
+      - 'lib/agents/governed-learning-readiness-live.ts'
+      - 'scripts/test-governed-learning-readiness-live.mjs'
+      - 'supabase/migrations/20260920017000_governed_learning_readiness_evidence.sql'
       - 'scripts/test-governed-learning-production-readiness.mjs'
       - 'scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs'
       - 'lib/ai/governed-learning-command-center-state.ts'
@@ -59,6 +62,7 @@ on:
       - 'lib/ai/continuous-learning-governance.ts'
       - 'scripts/test-continuous-learning-governance.mjs'
       - 'scripts/audit-governed-learning-phase11-adversarial.mjs'
+      - 'scripts/audit-governed-learning-readiness-adversarial.mjs'
       - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
       - '.github/workflows/continuous-learning-governance.yml'
   push:
@@ -95,6 +99,9 @@ on:
       - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'scripts/verify-governed-learning-golden-journey.mjs'
       - 'lib/agents/governed-learning-production-readiness.ts'
+      - 'lib/agents/governed-learning-readiness-live.ts'
+      - 'scripts/test-governed-learning-readiness-live.mjs'
+      - 'supabase/migrations/20260920017000_governed_learning_readiness_evidence.sql'
       - 'scripts/test-governed-learning-production-readiness.mjs'
       - 'scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs'
       - 'lib/ai/governed-learning-command-center-state.ts'
@@ -120,6 +127,7 @@ on:
       - 'lib/ai/continuous-learning-governance.ts'
       - 'scripts/test-continuous-learning-governance.mjs'
       - 'scripts/audit-governed-learning-phase11-adversarial.mjs'
+      - 'scripts/audit-governed-learning-readiness-adversarial.mjs'
       - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
       - '.github/workflows/continuous-learning-governance.yml'
 
@@ -142,8 +150,12 @@ jobs:
         run: node scripts/verify-governed-learning-golden-journey.mjs
       - name: Run Phase 11 governed learning adversarial audit
         run: node scripts/audit-governed-learning-phase11-adversarial.mjs
+      - name: Run governed learning readiness adversarial audit
+        run: node --experimental-strip-types scripts/audit-governed-learning-readiness-adversarial.mjs
       - name: Run governed learning production readiness tests
         run: node --experimental-strip-types scripts/test-governed-learning-production-readiness.mjs
+      - name: Run governed learning live readiness evidence tests
+        run: node scripts/test-governed-learning-readiness-live.mjs
       - name: Run eight-agent PGCL conformance
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs
       - name: Run PGCL persistence tests

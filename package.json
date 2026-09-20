@@ -79,7 +79,10 @@
     "verify:pgcl-eight-agent-conformance": "node --experimental-strip-types scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs",
     "verify:governed-learning-golden-journey": "node scripts/verify-governed-learning-golden-journey.mjs && node scripts/audit-governed-learning-phase11-adversarial.mjs",
     "verify:governed-learning-production-readiness": "node --experimental-strip-types scripts/test-governed-learning-production-readiness.mjs",
-    "verify:pgcl-production-learning-provenance": "node scripts/test-pgcl-production-learning-provenance.mjs"
+    "verify:pgcl-production-learning-provenance": "node scripts/test-pgcl-production-learning-provenance.mjs",
+    "verify:governed-learning-readiness-live": "node scripts/test-governed-learning-readiness-live.mjs",
+    "verify:governed-learning-readiness-adversarial": "node --experimental-strip-types scripts/audit-governed-learning-readiness-adversarial.mjs",
+    "verify:governed-learning-phase11": "node scripts/verify-governed-learning-golden-journey.mjs && node scripts/audit-governed-learning-phase11-adversarial.mjs && node --experimental-strip-types scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs && node scripts/test-pgcl-production-learning-provenance.mjs && node --experimental-strip-types scripts/test-governed-learning-production-readiness.mjs && node scripts/test-governed-learning-readiness-live.mjs && node --experimental-strip-types scripts/audit-governed-learning-readiness-adversarial.mjs && node --experimental-strip-types scripts/test-governed-learning-command-center.mjs && node scripts/test-pgcl-command-center-observability.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
