@@ -6,6 +6,7 @@ import {
   type PgclRunSnapshot,
 } from '@/lib/agents/proactive-governed-case-learning'
 import { persistProactiveGovernedCaseLearningCandidate } from '@/lib/agents/proactive-governed-case-learning-service'
+import { recordPgclRunLearningProvenance } from '@/lib/agents/pgcl-run-learning-provenance'
 import { isGovernedAgentKey, type GovernedAgentKey } from '@/lib/agents/governed-agent-registry'
 export async function proposePgclCaseFromVerifiedAgentRun(input: {
   projectId: string
@@ -58,6 +59,11 @@ export async function proposePgclCaseFromVerifiedAgentRun(input: {
     priorPositiveCaseExists: Boolean(priorCases?.length),
   })
   if (!candidate) return { evaluated: 1, proposed: 0, candidateId: null as string | null }
+
+  await recordPgclRunLearningProvenance({
+    projectId: input.projectId,
+    agentRunId: run.id,
+  })
 
   const candidateId = await persistProactiveGovernedCaseLearningCandidate({
     candidate,
@@ -121,6 +127,11 @@ export async function proposePgclCasesFromVerifiedSupervisorRun(input: {
       priorPositiveCaseExists: Boolean(priorCases?.length),
     })
     if (!candidate) continue
+
+    await recordPgclRunLearningProvenance({
+      projectId: input.projectId,
+      agentRunId: run.id,
+    })
 
     candidateIds.push(await persistProactiveGovernedCaseLearningCandidate({
       candidate,
