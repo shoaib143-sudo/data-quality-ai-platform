@@ -10,6 +10,7 @@ node scripts/audit-user-facing-admin-routes.mjs
 node scripts/verify-migration-version-uniqueness.mjs
 node scripts/verify-delegation-admin-policy.mjs
 node --test tests/public-auth-proxy-fast-path.test.mjs
+node --experimental-strip-types --test tests/retention-policy-input.test.mjs
 node --experimental-strip-types --test scripts/test-*orchestrator*.mjs
 pnpm run verify:agent-portfolio
 pnpm exec tsc --noEmit
