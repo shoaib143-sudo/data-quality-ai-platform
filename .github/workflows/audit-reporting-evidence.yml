@@ -4,6 +4,14 @@ on:
   push:
     branches: [main, governed-audit-reporting]
     paths:
+      - 'lib/orchestration/historical-export.ts'
+      - 'lib/orchestration/historical-export-contract.ts'
+      - 'lib/orchestration/queue.ts'
+      - 'lib/orchestration/worker.ts'
+      - 'lib/orchestration/execution-recovery-routing.ts'
+      - 'app/api/exports/route.ts'
+      - 'app/api/exports/[exportId]/route.ts'
+      - 'tests/resumable-historical-export.test.mjs'
       - 'supabase/migrations/**'
       - 'scripts/verify-audit-reporting-evidence.mjs'
       - 'scripts/verify-governance-report-source-evidence.mjs'
@@ -14,6 +22,14 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'lib/orchestration/historical-export.ts'
+      - 'lib/orchestration/historical-export-contract.ts'
+      - 'lib/orchestration/queue.ts'
+      - 'lib/orchestration/worker.ts'
+      - 'lib/orchestration/execution-recovery-routing.ts'
+      - 'app/api/exports/route.ts'
+      - 'app/api/exports/[exportId]/route.ts'
+      - 'tests/resumable-historical-export.test.mjs'
       - 'supabase/migrations/**'
       - 'scripts/verify-audit-reporting-evidence.mjs'
       - 'scripts/verify-governance-report-source-evidence.mjs'
@@ -38,3 +54,5 @@ jobs:
         run: node scripts/verify-audit-reporting-evidence.mjs
       - name: Verify governed report source evidence propagation
         run: node scripts/verify-governance-report-source-evidence.mjs
+      - name: Verify resumable historical export contract
+        run: node --experimental-strip-types --test tests/resumable-historical-export.test.mjs
