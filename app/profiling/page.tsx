@@ -55,7 +55,7 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
   const datasetResult = await supabase
     .schema('catalog')
     .from('datasets')
-    .select('id,name,description,business_domain')
+    .select('id,project_id,name,description,business_domain')
     .eq('id', versionResult.data.dataset_id)
     .maybeSingle()
   if (datasetResult.error || !datasetResult.data) throw new Error(`Unable to resolve profiling dataset: ${datasetResult.error?.message ?? 'dataset not found'}`)
@@ -168,6 +168,8 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
 
   return <ProfilingDashboard
     run={run}
+    projectId={datasetResult.data.project_id}
+    datasetId={datasetResult.data.id}
     datasetName={datasetResult.data.name}
     datasetSubtitle={subtitleParts.length ? subtitleParts.join(' · ') : datasetResult.data.description}
     columns={columns as any}
