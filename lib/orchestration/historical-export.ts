@@ -1,4 +1,5 @@
 import { getObjectStore } from '@/lib/data-plane/object-store'
+import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { enqueueDurableJob, type DurableJob } from '@/lib/orchestration/queue'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -258,6 +259,20 @@ export async function createHistoricalExport(input: {
   const exportJob = await loadExportJob(String(data.id), projectId)
   if (!exportJob) throw new Error('Historical export disappeared after creation.')
 
+  await writeGovernanceAudit({
+    projectId,
+    actorUserId: requestedBy,
+    actorType: 'USER',
+    eventType: 'HISTORICAL_EXPORT_REQUESTED',
+    entityType: 'EXPORT_JOB',
+    entityId: exportJob.id,
+    metadata: {
+      export_kind: exportKind,
+      snapshot_at: exportJob.snapshot_at,
+      expires_at: exportJob.expires_at,
+    },
+  })
+
   try {
     await enqueueExportPart(exportJob)
   } catch (cause) {
@@ -425,6 +440,19 @@ export async function executeHistoricalExportChunk(job: DurableJob) {
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', exportJob.id).eq('project_id', exportJob.project_id)
+      await writeGovernanceAudit({
+        projectId: exportJob.project_id,
+        actorType: 'SYSTEM',
+        eventType: 'HISTORICAL_EXPORT_COMPLETED',
+        entityType: 'EXPORT_JOB',
+        entityId: exportJob.id,
+        metadata: {
+          export_kind: exportJob.export_kind,
+          rows_exported: exportJob.rows_exported,
+          part_count: existingParts.length,
+          manifest_key: manifest,
+        },
+      })
       return { exportId, status: 'COMPLETED', rowsExported: exportJob.rows_exported, partCount: existingParts.length }
     }
 
@@ -474,6 +502,19 @@ export async function executeHistoricalExportChunk(job: DurableJob) {
         last_error: null,
         updated_at: new Date().toISOString(),
       }).eq('id', exportJob.id).eq('project_id', exportJob.project_id)
+      await writeGovernanceAudit({
+        projectId: exportJob.project_id,
+        actorType: 'SYSTEM',
+        eventType: 'HISTORICAL_EXPORT_COMPLETED',
+        entityType: 'EXPORT_JOB',
+        entityId: exportJob.id,
+        metadata: {
+          export_kind: exportJob.export_kind,
+          rows_exported: rowsExported,
+          part_count: parts.length,
+          manifest_key: manifest,
+        },
+      })
       return { exportId, status: 'COMPLETED', rowsExported, partCount: parts.length }
     }
 
