@@ -1,3 +1,4 @@
+import type { AuthorizationCapability } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { semanticSearch, type SemanticMatch } from '@/lib/governance/semantic-search'
 
@@ -10,7 +11,7 @@ export const GOVERNED_SIMILARITY_TYPES = [
 
 export type GovernedSimilarityType = typeof GOVERNED_SIMILARITY_TYPES[number]
 
-const CAPABILITY_BY_TYPE: Record<GovernedSimilarityType, string> = {
+const CAPABILITY_BY_TYPE: Record<GovernedSimilarityType, AuthorizationCapability> = {
   COLUMN: 'profiling.read',
   GLOSSARY_TERM: 'glossary.read',
   FINDING: 'quality.read',
@@ -70,7 +71,7 @@ function normalizeType(value: unknown): GovernedSimilarityType {
   return normalized as GovernedSimilarityType
 }
 
-export function similarityCapability(objectType: GovernedSimilarityType) {
+export function similarityCapability(objectType: GovernedSimilarityType): AuthorizationCapability {
   return CAPABILITY_BY_TYPE[objectType]
 }
 
