@@ -1,0 +1,125 @@
+name: Branch Hygiene Cleanup
+
+on:
+  push:
+    branches:
+      - maintenance/branch-hygiene-20260920
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete branches belonging to merged PRs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: main
+          MAINTENANCE_BRANCH: maintenance/branch-hygiene-20260920
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.parse
+          import urllib.request
+
+          token = os.environ["GITHUB_TOKEN"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          default_branch = os.environ["DEFAULT_BRANCH"]
+          maintenance_branch = os.environ["MAINTENANCE_BRANCH"]
+          api = "https://api.github.com"
+
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "datanexus-branch-hygiene",
+          }
+
+          def request(path, method="GET"):
+              req = urllib.request.Request(api + path, headers=headers, method=method)
+              with urllib.request.urlopen(req) as resp:
+                  body = resp.read().decode("utf-8")
+                  return json.loads(body) if body else None
+
+          def paged(path):
+              page = 1
+              while True:
+                  sep = "&" if "?" in path else "?"
+                  items = request(f"{path}{sep}per_page=100&page={page}")
+                  if not items:
+                      break
+                  yield from items
+                  if len(items) < 100:
+                      break
+                  page += 1
+
+          open_heads = set()
+          for pr in paged(f"/repos/{repo}/pulls?state=open"):
+              head = pr.get("head") or {}
+              head_repo = (head.get("repo") or {}).get("full_name")
+              if head_repo == repo and head.get("ref"):
+                  open_heads.add(head["ref"])
+
+          merged_heads = set()
+          for pr in paged(f"/repos/{repo}/pulls?state=closed&sort=updated&direction=desc"):
+              if not pr.get("merged_at"):
+                  continue
+              head = pr.get("head") or {}
+              head_repo = (head.get("repo") or {}).get("full_name")
+              if head_repo == repo and head.get("ref"):
+                  merged_heads.add(head["ref"])
+
+          branches = [b["name"] for b in paged(f"/repos/{repo}/branches")]
+          protected = {default_branch, maintenance_branch}
+          candidates = sorted(
+              b for b in branches
+              if b in merged_heads and b not in open_heads and b not in protected
+          )
+
+          deleted = []
+          failed = []
+          for branch in candidates:
+              ref = urllib.parse.quote(f"heads/{branch}", safe="/")
+              try:
+                  request(f"/repos/{repo}/git/refs/{ref}", method="DELETE")
+                  deleted.append(branch)
+              except Exception as exc:
+                  failed.append((branch, str(exc)))
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as f:
+                  f.write("## Branch hygiene cleanup\n\n")
+                  f.write(f"- Branches scanned: {len(branches)}\n")
+                  f.write(f"- Open PR heads protected: {len(open_heads)}\n")
+                  f.write(f"- Merged PR heads found: {len(merged_heads)}\n")
+                  f.write(f"- Deleted merged branches: {len(deleted)}\n")
+                  f.write(f"- Failed deletions: {len(failed)}\n\n")
+                  if deleted:
+                      f.write("### Deleted branches\n")
+                      for branch in deleted:
+                          f.write(f"- `{branch}`\n")
+                  if failed:
+                      f.write("\n### Failed deletions\n")
+                      for branch, error in failed:
+                          f.write(f"- `{branch}`: {error}\n")
+
+          print(json.dumps({
+              "branches_scanned": len(branches),
+              "open_pr_heads_protected": len(open_heads),
+              "merged_pr_heads_found": len(merged_heads),
+              "deleted_count": len(deleted),
+              "failed_count": len(failed),
+              "deleted": deleted,
+              "failed": failed,
+          }, indent=2))
+
+          if failed:
+              sys.exit(1)
+          PY
