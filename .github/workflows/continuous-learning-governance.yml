@@ -32,8 +32,10 @@ on:
       - 'scripts/verify-governed-learning-golden-journey.mjs'
       - 'scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs'
       - 'lib/ai/governed-learning-command-center-state.ts'
+      - 'lib/ai/pgcl-command-center-state.ts'
       - 'app/admin/ai-command-center/page.tsx'
       - 'scripts/test-governed-learning-command-center.mjs'
+      - 'scripts/test-pgcl-command-center-observability.mjs'
       - 'lib/agents/governed-learning-controlled-release.ts'
       - 'scripts/test-governed-learning-controlled-release.mjs'
       - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
@@ -85,8 +87,10 @@ on:
       - 'scripts/verify-governed-learning-golden-journey.mjs'
       - 'scripts/test-proactive-governed-case-learning-eight-agent-conformance.mjs'
       - 'lib/ai/governed-learning-command-center-state.ts'
+      - 'lib/ai/pgcl-command-center-state.ts'
       - 'app/admin/ai-command-center/page.tsx'
       - 'scripts/test-governed-learning-command-center.mjs'
+      - 'scripts/test-pgcl-command-center-observability.mjs'
       - 'lib/agents/governed-learning-controlled-release.ts'
       - 'scripts/test-governed-learning-controlled-release.mjs'
       - 'supabase/migrations/20260920013000_governed_learning_controlled_release.sql'
@@ -148,6 +152,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-governed-learning-controlled-release.mjs
       - name: Run governed learning Command Center tests
         run: node --experimental-strip-types scripts/test-governed-learning-command-center.mjs
+      - name: Run PGCL Command Center observability tests
+        run: node scripts/test-pgcl-command-center-observability.mjs
       - name: Run continuous learning governance tests
         run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
       - name: Run independent continuous learning governance adversarial audit
