@@ -34,7 +34,10 @@ has(supervisor, 'trajectory_evaluation_id: trajectoryEvaluation.id', 'trajectory
 has(supervisor, 'trajectory_score: trajectoryEvaluation.score', 'trajectory score projection')
 
 has(route, 'export async function GET', 'evaluation read endpoint')
-has(route, "authorizeProject(user.id, run.project_id, 'agent.execute')", 'evaluation project authorization')
+has(route, 'authorizeAgentAction(', 'evaluation governed authorization')
+has(route, "'agent.execute'", 'evaluation execute capability')
+has(route, "type: 'DATASET'", 'evaluation dataset-scoped authorization')
+has(route, "type: 'PROJECT'", 'evaluation project-scoped fallback authorization')
 has(route, "from('agent_evaluations')", 'evaluation ledger read')
 
 console.log('Native trajectory evaluation verified.')
