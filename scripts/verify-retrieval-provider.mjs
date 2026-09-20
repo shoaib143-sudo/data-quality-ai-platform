@@ -66,7 +66,10 @@ requireText(adapter, 'new DeterministicRelevanceReranker()', 'initial determinis
 
 requireText(globalSearch, 'createGovernanceRetrievalProvider', 'global search provider construction')
 requireText(globalSearch, "modes: ['semantic']", 'global search explicit semantic mode')
-requireText(globalSearch, 'retrieved.matches.map(semanticResult)', 'global search provider result consumption')
+requireText(globalSearch, 'semantic = retrieved.matches', 'global search provider result consumption')
+requireText(globalSearch, ".filter((match) =>", 'global search current-catalog result filtering')
+requireText(globalSearch, "currentCatalogIds.has(match.objectId)", 'global search excludes stale catalog projections')
+requireText(globalSearch, '.map(semanticResult)', 'global search maps filtered provider results')
 requireText(globalSearch, 'similarity: match.baseScore ?? match.score', 'global search preserves vector similarity')
 requireText(globalSearch, 'rerank_score: match.provenance.rerankedBy ? match.score : null', 'global search rerank evidence')
 requireText(globalSearch, 'reranked_by: match.provenance.rerankedBy ?? null', 'global search reranker provenance')
