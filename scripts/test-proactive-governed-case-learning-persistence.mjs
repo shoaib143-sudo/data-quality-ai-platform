@@ -32,6 +32,7 @@ for (const invariant of [
   "v_case.review_status not in ('PENDING_REVIEW','DEFERRED')",
   "p_run_mode not in ('SUPERVISED','HANDSFREE')",
   'source agent run is missing or cross-project',
+  'only SUCCEEDED agent runs may create positive learning cases',
   "b.role_key = 'DATA_GOVERNANCE_ADMIN'",
   'Data Governance Admin authority is required to review a positive learning case',
   "when 'APPROVE_POSITIVE_CASE' then 'APPROVED'",
