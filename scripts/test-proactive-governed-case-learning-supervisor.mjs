@@ -101,11 +101,16 @@ for (const invariant of [
 }
 
 for (const invariant of [
+  'REPEATED_SUCCESS_THRESHOLD',
+  'NEW_USE_CASE',
+  "input.run.status !== 'SUCCEEDED'",
+]) {
+  assert.ok(contract.includes(invariant), 'missing pure PGCL derivation invariant: ' + invariant)
+}
+
+for (const invariant of [
   'proposePgclCasesFromVerifiedSupervisorRun',
   'persistProactiveGovernedCaseLearningCandidate',
-  "run.status !== 'SUCCEEDED'",
-  "REPEATED_SUCCESS_THRESHOLD",
-  "NEW_USE_CASE",
   'native_trajectory_evaluation:',
 ]) {
   assert.ok(runtime.includes(invariant), 'missing PGCL supervisor runtime invariant: ' + invariant)
