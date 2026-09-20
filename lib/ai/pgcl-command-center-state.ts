@@ -84,6 +84,9 @@ export type PgclCommandCenterState = {
     authoritativeOutcomes: number
     unknownApplicationSurfaces: number
   }
+  schemaCompatibility: {
+    productionProvenanceColumnsAvailable: boolean
+  }
   authority: {
     contextOnly: true
     mayAuthorizeAction: false
@@ -105,13 +108,66 @@ function record(value: unknown): Record<string, unknown> {
     : {}
 }
 
+type PositiveCaseProjectionRow = {
+  candidate_id: unknown
+  run_mode: unknown
+  use_case_key: unknown
+  result_summary: unknown
+  significance_signals: unknown
+  review_status: unknown
+  production_eligible?: unknown
+  learning_provenance_recorded_at?: unknown
+  reviewed_at: unknown
+  created_at: unknown
+  updated_at: unknown
+}
+
+async function loadPositiveCaseProjection(
+  supabase: ReturnType<typeof createAdminClient>,
+  projectId: string,
+) {
+  const current = await supabase.schema('agent').from('positive_learning_cases')
+    .select('candidate_id,run_mode,use_case_key,result_summary,significance_signals,review_status,production_eligible,learning_provenance_recorded_at,reviewed_at,created_at,updated_at')
+    .eq('project_id', projectId)
+    .order('updated_at', { ascending: false })
+    .limit(100)
+
+  if (!current.error) {
+    return {
+      rows: (current.data ?? []) as PositiveCaseProjectionRow[],
+      productionProvenanceColumnsAvailable: true,
+    }
+  }
+
+  const missingProductionProvenanceColumns =
+    current.error.message.includes('production_eligible')
+    || current.error.message.includes('learning_provenance_recorded_at')
+
+  if (!missingProductionProvenanceColumns) {
+    throw new Error(`Unable to load PGCL positive cases: ${current.error.message}`)
+  }
+
+  const legacy = await supabase.schema('agent').from('positive_learning_cases')
+    .select('candidate_id,run_mode,use_case_key,result_summary,significance_signals,review_status,reviewed_at,created_at,updated_at')
+    .eq('project_id', projectId)
+    .order('updated_at', { ascending: false })
+    .limit(100)
+
+  if (legacy.error) throw new Error(`Unable to load PGCL positive cases: ${legacy.error.message}`)
+
+  return {
+    rows: (legacy.data ?? []) as PositiveCaseProjectionRow[],
+    productionProvenanceColumnsAvailable: false,
+  }
+}
+
 export async function readPgclCommandCenterState(projectId: string, actorUserId: string): Promise<PgclCommandCenterState> {
   await authorizeProject(actorUserId, projectId, 'admin.manage')
   const supabase = createAdminClient()
 
   const [
     candidateResult,
-    positiveCaseResult,
+    positiveCaseProjection,
     reviewResult,
     occurrenceResult,
     usageResult,
@@ -123,11 +179,7 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       .eq('candidate_type', 'POSITIVE_CASE')
       .order('updated_at', { ascending: false })
       .limit(100),
-    supabase.schema('agent').from('positive_learning_cases')
-      .select('candidate_id,run_mode,use_case_key,result_summary,significance_signals,review_status,production_eligible,learning_provenance_recorded_at,reviewed_at,created_at,updated_at')
-      .eq('project_id', projectId)
-      .order('updated_at', { ascending: false })
-      .limit(100),
+    loadPositiveCaseProjection(supabase, projectId),
     supabase.schema('agent').from('positive_learning_case_reviews')
       .select('candidate_id,decision,created_at')
       .eq('project_id', projectId)
@@ -152,14 +204,13 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
   ])
 
   if (candidateResult.error) throw new Error(`Unable to load PGCL canonical candidates: ${candidateResult.error.message}`)
-  if (positiveCaseResult.error) throw new Error(`Unable to load PGCL positive cases: ${positiveCaseResult.error.message}`)
   if (reviewResult.error) throw new Error(`Unable to load PGCL reviews: ${reviewResult.error.message}`)
   if (occurrenceResult.error) throw new Error(`Unable to load PGCL occurrences: ${occurrenceResult.error.message}`)
   if (usageResult.error) throw new Error(`Unable to load PGCL usage evidence: ${usageResult.error.message}`)
   if (learningCaseResult.error) throw new Error(`Unable to load promoted PGCL learning cases: ${learningCaseResult.error.message}`)
 
   const positiveCaseByCandidate = new Map(
-    (positiveCaseResult.data ?? []).map((row) => [String(row.candidate_id), row]),
+    positiveCaseProjection.rows.map((row) => [String(row.candidate_id), row]),
   )
 
   const latestReviewByCandidate = new Map<string, (typeof reviewResult.data)[number]>()
@@ -280,8 +331,12 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       useCaseKey: String(positiveCase.use_case_key),
       resultSummary: String(positiveCase.result_summary),
       reviewStatus: String(positiveCase.review_status),
-      productionEligible: positiveCase.production_eligible === true,
-      learningProvenanceRecordedAt: positiveCase.learning_provenance_recorded_at
+      productionEligible:
+        positiveCaseProjection.productionProvenanceColumnsAvailable
+        && positiveCase.production_eligible === true,
+      learningProvenanceRecordedAt:
+        positiveCaseProjection.productionProvenanceColumnsAvailable
+        && positiveCase.learning_provenance_recorded_at
         ? String(positiveCase.learning_provenance_recorded_at)
         : null,
       latestDecision: latestReview ? String(latestReview.decision) : null,
@@ -359,6 +414,9 @@ export async function readPgclCommandCenterState(projectId: string, actorUserId:
       directSpecialistApplications: candidates.reduce((sum, candidate) => sum + candidate.directSpecialistApplicationCount, 0),
       authoritativeOutcomes: candidates.reduce((sum, candidate) => sum + candidate.authoritativeOutcomeCount, 0),
       unknownApplicationSurfaces: candidates.reduce((sum, candidate) => sum + candidate.unknownApplicationSurfaceCount, 0),
+    },
+    schemaCompatibility: {
+      productionProvenanceColumnsAvailable: positiveCaseProjection.productionProvenanceColumnsAvailable,
     },
     authority: {
       contextOnly: true,
