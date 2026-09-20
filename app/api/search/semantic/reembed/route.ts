@@ -1,15 +1,26 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth/require-user'
-import { reindexProjectSemanticCorpusWithRuntime } from '@/lib/governance/semantic-project-reindex-runtime'
+import { reembedProjectSemanticObjects } from '@/lib/governance/semantic-reembedding'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
   const user = await requireUser()
-  const body = (await request.json().catch(() => null)) as { projectId?: string; concurrency?: number } | null
-  const projectId = body?.projectId?.trim()
+  const body = (await request.json().catch(() => null)) as {
+    projectId?: string
+    model?: string
+    revision?: string
+    concurrency?: number
+  } | null
 
-  if (!projectId) {
-    return NextResponse.json({ error: 'projectId is required' }, { status: 400 })
+  const projectId = body?.projectId?.trim()
+  const model = body?.model?.trim()
+  const revision = body?.revision?.trim()
+
+  if (!projectId || !model || !revision) {
+    return NextResponse.json(
+      { error: 'projectId, model and revision are required' },
+      { status: 400 },
+    )
   }
 
   const supabase = await createClient()
@@ -22,7 +33,7 @@ export async function POST(request: Request) {
     })
 
   if (capabilityError) {
-    console.error('Unable to evaluate semantic indexing capability', capabilityError)
+    console.error('Unable to evaluate semantic re-embedding capability', capabilityError)
     return NextResponse.json({ error: 'Unable to verify project capability' }, { status: 500 })
   }
   if (!allowed) {
@@ -30,21 +41,26 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await reindexProjectSemanticCorpusWithRuntime(projectId, {
-      concurrency: typeof body?.concurrency === 'number' ? body.concurrency : undefined,
+    const result = await reembedProjectSemanticObjects({
+      projectId,
+      model,
+      revision,
+      concurrency: typeof body?.concurrency === 'number' && Number.isFinite(body.concurrency)
+        ? body.concurrency
+        : undefined,
     })
     return NextResponse.json(result, { status: result.failed ? 207 : 200 })
   } catch (error) {
     if (error instanceof Error && error.name === 'EmbeddingProviderNotConfiguredError') {
       return NextResponse.json(
         {
-          error: 'Semantic indexing is not configured',
+          error: 'Semantic embedding provider is not configured',
           code: 'SEMANTIC_EMBEDDING_PROVIDER_NOT_CONFIGURED',
         },
         { status: 503 },
       )
     }
-    console.error('Semantic reindex failed', error)
-    return NextResponse.json({ error: 'Semantic reindex failed' }, { status: 500 })
+    console.error('Semantic re-embedding failed', error)
+    return NextResponse.json({ error: 'Semantic re-embedding failed' }, { status: 500 })
   }
 }

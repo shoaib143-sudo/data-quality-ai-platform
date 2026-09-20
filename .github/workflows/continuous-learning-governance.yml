@@ -3,6 +3,18 @@ name: Continuous Learning Governance
 on:
   pull_request:
     paths:
+      - 'lib/agents/governed-learning-release-approval.ts'
+      - 'lib/governance/agent-action-catalog.ts'
+      - 'scripts/test-governed-learning-release-approval.mjs'
+      - 'supabase/migrations/20260920012000_governed_learning_release_approval.sql'
+      - 'lib/agents/governed-learning-benchmarks.ts'
+      - 'lib/agents/governed-learning-benchmark-service.ts'
+      - 'scripts/test-governed-learning-benchmarks.mjs'
+      - 'supabase/migrations/20260920011000_governed_learning_candidate_benchmarks.sql'
+      - 'lib/agents/governed-learning-candidates.ts'
+      - 'lib/agents/governed-learning-candidate-service.ts'
+      - 'scripts/test-governed-learning-candidates.mjs'
+      - 'supabase/migrations/20260920010000_governed_learning_candidates.sql'
       - 'lib/ai/continuous-learning-governance.ts'
       - 'scripts/test-continuous-learning-governance.mjs'
       - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
@@ -10,6 +22,18 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/agents/governed-learning-release-approval.ts'
+      - 'lib/governance/agent-action-catalog.ts'
+      - 'scripts/test-governed-learning-release-approval.mjs'
+      - 'supabase/migrations/20260920012000_governed_learning_release_approval.sql'
+      - 'lib/agents/governed-learning-benchmarks.ts'
+      - 'lib/agents/governed-learning-benchmark-service.ts'
+      - 'scripts/test-governed-learning-benchmarks.mjs'
+      - 'supabase/migrations/20260920011000_governed_learning_candidate_benchmarks.sql'
+      - 'lib/agents/governed-learning-candidates.ts'
+      - 'lib/agents/governed-learning-candidate-service.ts'
+      - 'scripts/test-governed-learning-candidates.mjs'
+      - 'supabase/migrations/20260920010000_governed_learning_candidates.sql'
       - 'lib/ai/continuous-learning-governance.ts'
       - 'scripts/test-continuous-learning-governance.mjs'
       - 'scripts/audit-continuous-learning-governance-adversarial.mjs'
@@ -28,6 +52,12 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+      - name: Run governed learning candidate tests
+        run: node --experimental-strip-types scripts/test-governed-learning-candidates.mjs
+      - name: Run governed learning benchmark tests
+        run: node --experimental-strip-types scripts/test-governed-learning-benchmarks.mjs
+      - name: Run governed learning release approval tests
+        run: node --experimental-strip-types scripts/test-governed-learning-release-approval.mjs
       - name: Run continuous learning governance tests
         run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
       - name: Run independent continuous learning governance adversarial audit
