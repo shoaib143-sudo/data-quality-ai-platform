@@ -77,7 +77,11 @@ async function loadAssetPage(input: {
   })) satisfies CatalogMetadataAsset[]
 }
 
-async function indexCandidates(candidates: ReturnType<typeof planCatalogMetadataCandidates>['candidates'], concurrency: number) {
+async function indexCandidates(
+  projectId: string,
+  candidates: ReturnType<typeof planCatalogMetadataCandidates>['candidates'],
+  concurrency: number,
+) {
   const boundedConcurrency = Math.max(1, Math.min(8, Math.trunc(concurrency)))
   const results: Array<{ objectType: string; objectKey: string; status: 'INDEXED' | 'FAILED'; error?: string }> = []
   let cursor = 0
@@ -89,7 +93,7 @@ async function indexCandidates(candidates: ReturnType<typeof planCatalogMetadata
       const candidate = candidates[index]
       try {
         await indexSemanticObject({
-          projectId: String(candidate.metadata.project_id ?? ''),
+          projectId,
           objectType: candidate.objectType,
           objectKey: candidate.objectKey,
           objectId: candidate.objectId,
@@ -193,7 +197,7 @@ export async function indexCatalogMetadataSemanticBatch(input: {
         indexing_authority: 'CURRENT_DISCOVERED_METADATA',
       },
     }))
-    const results = await indexCandidates(candidates, input.concurrency ?? 4)
+    const results = await indexCandidates(input.projectId, candidates, input.concurrency ?? 4)
     const failed = results.filter((result) => result.status === 'FAILED').length
     const indexed = results.length - failed
 
