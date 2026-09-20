@@ -73,6 +73,7 @@ export async function GET() {
     governedLearningCandidates,
     governedLearningReleases,
     positiveLearningCases,
+    pgclRunLearningProvenance,
     operationalCapabilities,
     recoveryCrashFencing,
   ] = await Promise.all([
@@ -80,7 +81,8 @@ export async function GET() {
     tableCheck(admin, 'governance', 'ai_provider_resilience_profile_versions', 'id'),
     tableCheck(admin, 'agent', 'learning_candidates', 'id'),
     tableCheck(admin, 'agent', 'learning_candidate_releases', 'id'),
-    tableCheck(admin, 'agent', 'positive_learning_cases', 'id'),
+    tableCheck(admin, 'agent', 'positive_learning_cases', 'production_eligible'),
+    tableCheck(admin, 'agent', 'agent_run_learning_provenance', 'production_eligible'),
     operationalCapabilityCheck(admin),
     tableCheck(admin, 'orchestration', 'recovery_actions', 'execution_token'),
   ])
@@ -91,6 +93,7 @@ export async function GET() {
     governed_learning_candidates: governedLearningCandidates,
     governed_learning_releases: governedLearningReleases,
     positive_learning_cases: positiveLearningCases,
+    pgcl_run_learning_provenance: pgclRunLearningProvenance,
     agent_policy_operational_capabilities: operationalCapabilities,
     recovery_crash_fencing: recoveryCrashFencing,
   }
