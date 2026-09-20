@@ -74,7 +74,7 @@ for (const invariant of [
   'proposePgclCaseFromVerifiedAgentRun',
   'positiveLearningCases: approvedPositiveCases',
   'approved_positive_case_count: approvedPositiveCases.length',
-  'recordAgentLearningInfluenceOutcome',
+  'enrichGovernedAgentWithMemory',
 ]) {
   assert.ok(governanceRoute.includes(invariant), `missing governance-specialist PGCL integration: ${invariant}`)
 }
