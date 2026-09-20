@@ -70,7 +70,8 @@
     "verify:profiling-production": "node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs tests/profiling-production-validation-source.test.mjs && node scripts/verify-profiling-lifecycle-contracts.mjs && node scripts/verify-profiling-governance-insights.mjs && node scripts/verify-profiling-native-replay.mjs && node scripts/verify-profiling-metric-replay.mjs && node scripts/verify-profiling-dataset-replay.mjs && node scripts/test-profiling-request-input.mjs && node scripts/verify-profiling-scale-certification.mjs && node --experimental-strip-types scripts/test-profiling-scale-certification.mjs && node scripts/verify-native-supervisor-tier2-profiling.mjs && node scripts/verify-profiling-production-validation.mjs",
     "verify:provider-resilience": "node scripts/verify-provider-resilience.mjs && node --experimental-strip-types scripts/test-provider-resilience.mjs",
     "verify:governed-learning-candidates": "node --experimental-strip-types scripts/test-governed-learning-candidates.mjs",
-    "verify:governed-learning-benchmarks": "node --experimental-strip-types scripts/test-governed-learning-benchmarks.mjs"
+    "verify:governed-learning-benchmarks": "node --experimental-strip-types scripts/test-governed-learning-benchmarks.mjs",
+    "verify:semantic-reembedding": "node --experimental-strip-types scripts/test-semantic-reembedding.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
