@@ -1,33 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-
-export type AuditHistoryBucket = {
-  bucketStart: string
-  actorType: string
-  eventType: string
-  entityType: string | null
-  domain: string | null
-  eventCount: number
-}
-
-export function normalizeAuditHistoryRows(rows: unknown[]): AuditHistoryBucket[] {
-  return rows.flatMap((value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
-    const row = value as Record<string, unknown>
-    const bucketStart = typeof row.bucket_start === 'string' ? row.bucket_start : ''
-    const actorType = typeof row.actor_type === 'string' ? row.actor_type : ''
-    const eventType = typeof row.event_type === 'string' ? row.event_type : ''
-    const count = Number(row.event_count)
-    if (!bucketStart || !actorType || !eventType || !Number.isFinite(count) || count < 0) return []
-    return [{
-      bucketStart,
-      actorType,
-      eventType,
-      entityType: typeof row.entity_type === 'string' ? row.entity_type : null,
-      domain: typeof row.domain === 'string' && row.domain.trim() ? row.domain.trim() : null,
-      eventCount: count,
-    }]
-  })
-}
+import { normalizeAuditHistoryRows } from '@/lib/analytics/governance-history-contract'
+export type { AuditHistoryBucket } from '@/lib/analytics/governance-history-contract'
+export { normalizeAuditHistoryRows } from '@/lib/analytics/governance-history-contract'
 
 export async function loadAuditEventHistory(input: {
   projectId: string
