@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { aggregateGovernanceOutcomeHistory } from '@/lib/analytics/governance-history-contract'
+import { normalizeGovernanceOutcomeHistoryRows } from '@/lib/analytics/governance-history-contract'
 export type { GovernanceOutcomeHistoryPoint } from '@/lib/analytics/governance-history-contract'
-export { aggregateGovernanceOutcomeHistory } from '@/lib/analytics/governance-history-contract'
+export { aggregateGovernanceOutcomeHistory, normalizeGovernanceOutcomeHistoryRows } from '@/lib/analytics/governance-history-contract'
 
 export async function loadGovernanceOutcomeHistory(input: {
   projectId: string
@@ -10,31 +10,23 @@ export async function loadGovernanceOutcomeHistory(input: {
   limit?: number
 }) {
   const limit = Number.isFinite(input.limit)
-    ? Math.max(1, Math.min(2000, Math.trunc(input.limit as number)))
-    : 1000
+    ? Math.max(1, Math.min(5000, Math.trunc(input.limit as number)))
+    : 2000
   const admin = createAdminClient()
-  let query = admin.schema('governance').from('governance_outcome_reports')
-    .select('created_at,report_payload')
-    .eq('project_id', input.projectId)
-    .order('created_at', { ascending: true })
-    .limit(limit)
-
-  if (input.from) query = query.gte('created_at', input.from)
-  if (input.to) query = query.lte('created_at', input.to)
-
-  const { data, error } = await query
+  const { data, error } = await admin.schema('governance').rpc('query_governance_outcome_history', {
+    p_project_id: input.projectId,
+    p_from: input.from ?? null,
+    p_to: input.to ?? null,
+    p_limit: limit,
+  })
   if (error) throw new Error(`Unable to load governance outcome history: ${error.message}`)
 
-  const rows = (data ?? []).map((row) => ({
-    createdAt: String(row.created_at),
-    report: row.report_payload,
-  }))
-
+  const buckets = normalizeGovernanceOutcomeHistoryRows(data ?? [])
   return {
     projectId: input.projectId,
     from: input.from ?? null,
     to: input.to ?? null,
-    rowsRead: rows.length,
-    buckets: aggregateGovernanceOutcomeHistory(rows),
+    rowsRead: buckets.reduce((sum, row) => sum + row.reportCount, 0),
+    buckets,
   }
 }
