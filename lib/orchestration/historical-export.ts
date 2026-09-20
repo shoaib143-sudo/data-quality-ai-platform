@@ -12,32 +12,46 @@ import {
 import { enqueueDurableJob, type DurableJob } from '@/lib/orchestration/queue'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+type ExportPart = {
+  part: number
+  key: string
+  rows: number
+}
+
+type ExportRow = Record<string, unknown>
+
+type ExportJobRow = {
+  id: string
+  project_id: string
+  requested_by: string | null
+  export_kind: HistoricalExportKind
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  filters: Record<string, unknown>
+  cursor_state: Record<string, unknown>
+  object_parts: ExportPart[]
+  manifest_key: string | null
+  chunk_size: number
+  snapshot_at: string
+  part_count: number
+  rows_exported: number
+  idempotency_key: string | null
+  expires_at: string
+  last_error: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  updated_at: string
+}
+
+function text(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 function boundedOffset(cursor: Record<string, unknown>) {
   const numeric = Number(cursor.offset ?? 0)
   return Number.isFinite(numeric) ? Math.max(0, Math.trunc(numeric)) : 0
 }
 
-
-export function planHistoricalExportChunk(input: {
-  offset: number
-  partCount: number
-  rowsExported: number
-  chunkSize: number
-  rowCount: number
-}) {
-  const offset = Math.max(0, Math.trunc(input.offset))
-  const partCount = Math.max(0, Math.trunc(input.partCount))
-  const rowsExported = Math.max(0, Math.trunc(input.rowsExported))
-  const chunkSize = Math.max(1, Math.trunc(input.chunkSize))
-  const rowCount = Math.max(0, Math.trunc(input.rowCount))
-  if (rowCount > chunkSize) throw new Error('Historical export page exceeds configured chunk size.')
-  return {
-    partNumber: rowCount > 0 ? partCount + 1 : null,
-    nextOffset: offset + rowCount,
-    nextRowsExported: rowsExported + rowCount,
-    complete: rowCount < chunkSize,
-  }
-}
 
 function objectParts(value: unknown): ExportPart[] {
   if (!Array.isArray(value)) return []
