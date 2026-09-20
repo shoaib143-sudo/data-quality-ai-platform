@@ -75,6 +75,12 @@ requireText('lib/orchestration/queue.ts', [
 ])
 
 requireText('app/api/jobs/worker/route.ts', [
+  'processClaimedDurableJob',
+  'runAdaptiveWorkerCycle',
+  'governanceAgentResults',
+])
+
+requireText('lib/orchestration/worker-service.ts', [
   'processGovernanceAgentJobs',
   "job.job_type === 'GOVERNANCE_AGENT'",
   'governanceAgentResults',
