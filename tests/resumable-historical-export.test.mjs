@@ -115,20 +115,20 @@ test('durable worker and recovery contracts register EXPORT without a second que
   assert.match(routing, /'EXPORT'/)
   assert.match(runtime, /enqueueDurableJob\(\{/)
   assert.match(runtime, /jobType: 'EXPORT'/)
-  assert.match(runtime, /idempotencyKey: \`export:\$\{exportJob\.id\}:part:\$\{nextPart\}\`/)
+  assert.match(runtime, /idempotencyKey: `export:\$\{exportJob\.id\}:part:\$\{nextPart\}`/)
 })
 
 test('export snapshot, deterministic parts, manifest, retention and audit evidence are preserved', () => {
   for (const invariant of [
     ".lte('created_at', job.snapshot_at)",
-    "exports/\${exportId}/part-\${String(part).padStart(6, '0')}.ndjson",
-    "exports/\${exportId}/manifest.json",
+    "exports/${exportId}/part-${String(part).padStart(6, '0')}.ndjson",
+    "exports/${exportId}/manifest.json",
     "retentionUntil: job.expires_at",
     "eventType: 'HISTORICAL_EXPORT_REQUESTED'",
     "eventType: 'HISTORICAL_EXPORT_COMPLETED'",
     "contentType: 'application/x-ndjson'",
   ]) {
-    assert.ok(runtime.includes(invariant), \`missing export runtime invariant: \${invariant}\`)
+    assert.ok(runtime.includes(invariant), `missing export runtime invariant: ${invariant}`)
   }
 })
 
@@ -152,7 +152,7 @@ test('migration is service-only, project-scoped, bounded and preserves existing 
     'GOVERNANCE_AGENT',
     'EXPORT',
   ]) {
-    assert.ok(migration.includes(\`'\${type}'::text\`), \`missing durable job type: \${type}\`)
+    assert.ok(migration.includes(`'${type}'::text`), `missing durable job type: ${type}`)
   }
   for (const invariant of [
     'project_id uuid not null references app.projects(id) on delete cascade',
@@ -161,6 +161,6 @@ test('migration is service-only, project-scoped, bounded and preserves existing 
     'revoke all on orchestration.export_jobs from public, anon, authenticated',
     'grant select, insert, update on orchestration.export_jobs to service_role',
   ]) {
-    assert.ok(migration.includes(invariant), \`missing export persistence invariant: \${invariant}\`)
+    assert.ok(migration.includes(invariant), `missing export persistence invariant: ${invariant}`)
   }
 })
