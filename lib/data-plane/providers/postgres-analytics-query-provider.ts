@@ -6,6 +6,7 @@ import type {
 import { createAdminClient } from '@/lib/supabase/admin'
 
 type AnalyticsEventRow = {
+  id: string
   event_type: string
   occurred_at: string
   aggregate_id: string
@@ -20,6 +21,8 @@ const metricEvents: Record<string, string[]> = {
   'observability.alert_history': ['OBSERVABILITY.ALERT_CREATED', 'OBSERVABILITY.ALERT_UPDATED', 'OBSERVABILITY.ALERT_DELETED'],
   'observability.incident_history': ['OBSERVABILITY.INCIDENT_CREATED', 'OBSERVABILITY.INCIDENT_UPDATED', 'OBSERVABILITY.INCIDENT_DELETED'],
 }
+
+const COMPLETE_RANGE_PAGE_SIZE = 500
 
 function boundedLimit(value: number | undefined) {
   if (!Number.isFinite(value)) return 100
@@ -180,27 +183,53 @@ export class PostgresAnalyticsQueryProvider implements AnalyticsQueryProvider {
 
     const limit = boundedLimit(request.limit)
     const admin = createAdminClient()
-    let query = admin
-      .schema('orchestration')
-      .from('analytics_events')
-      .select('event_type,occurred_at,aggregate_id,payload')
-      .eq('project_id', request.projectId)
-      .in('event_type', events)
-      .order('occurred_at', { ascending: false })
-      .limit(request.metric === 'profiling.metric_history' ? Math.min(100, limit) : limit)
+    const buildQuery = () => {
+      let query = admin
+        .schema('orchestration')
+        .from('analytics_events')
+        .select('id,event_type,occurred_at,aggregate_id,payload')
+        .eq('project_id', request.projectId)
+        .in('event_type', events)
 
-    if (request.from) query = query.gte('occurred_at', request.from)
-    if (request.to) query = query.lte('occurred_at', request.to)
-
-    const { data, error } = await query
-    if (error) throw new Error(`Unable to query PostgreSQL analytics fallback: ${error.message}`)
-
-    const rows = (data ?? []) as AnalyticsEventRow[]
-    if (request.metric === 'profiling.metric_history') {
-      return rows.flatMap((row) => metricRows(row, request)).slice(0, limit)
+      if (request.from) query = query.gte('occurred_at', request.from)
+      if (request.to) query = query.lte('occurred_at', request.to)
+      return query
     }
 
-    return rows
+    let rows: AnalyticsEventRow[]
+    if (request.completeRange) {
+      const allRows: AnalyticsEventRow[] = []
+      let offset = 0
+
+      while (true) {
+        const { data, error } = await buildQuery()
+          .order('occurred_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(offset, offset + COMPLETE_RANGE_PAGE_SIZE - 1)
+
+        if (error) throw new Error(`Unable to query complete PostgreSQL analytics range: ${error.message}`)
+        const page = (data ?? []) as AnalyticsEventRow[]
+        allRows.push(...page)
+        if (page.length < COMPLETE_RANGE_PAGE_SIZE) break
+        offset += page.length
+      }
+      rows = allRows
+    } else {
+      const { data, error } = await buildQuery()
+        .order('occurred_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(request.metric === 'profiling.metric_history' ? Math.min(100, limit) : limit)
+
+      if (error) throw new Error(`Unable to query PostgreSQL analytics fallback: ${error.message}`)
+      rows = (data ?? []) as AnalyticsEventRow[]
+    }
+
+    if (request.metric === 'profiling.metric_history') {
+      const projected = rows.flatMap((row) => metricRows(row, request))
+      return request.completeRange ? projected : projected.slice(0, limit)
+    }
+
+    const projected = rows
       .filter((row) => matchesFilters(row.payload ?? {}, request.filters))
       .map((row) => {
         if (request.metric === 'profiling.run_history') return toRunRow(row)
@@ -209,6 +238,7 @@ export class PostgresAnalyticsQueryProvider implements AnalyticsQueryProvider {
         if (request.metric === 'observability.alert_history') return toAlertRow(row)
         return toIncidentRow(row)
       })
-      .slice(0, limit)
+
+    return request.completeRange ? projected : projected.slice(0, limit)
   }
 }

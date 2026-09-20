@@ -79,9 +79,12 @@ export class ClickHouseAnalyticsQueryProvider implements AnalyticsQueryProvider 
     const password = requireEnv('CLICKHOUSE_PASSWORD')
     const limit = boundedLimit(request.limit)
     const maxExecutionSeconds = boundedInt('CLICKHOUSE_QUERY_MAX_EXECUTION_SECONDS', 10, 1, 120)
-    const maxResultRows = boundedInt('CLICKHOUSE_QUERY_MAX_RESULT_ROWS', 1000, 500, 10000)
+    const maxResultRows = request.completeRange
+      ? boundedInt('CLICKHOUSE_COMPLETE_RANGE_MAX_RESULT_ROWS', 100000, 1000, 500000)
+      : boundedInt('CLICKHOUSE_QUERY_MAX_RESULT_ROWS', 1000, 500, 10000)
     const clauses = ['project_id = {projectId:UUID}']
-    const parameters = new Map<string, string>([['projectId', request.projectId], ['limit', String(limit)]])
+    const parameters = new Map<string, string>([['projectId', request.projectId]])
+    if (!request.completeRange) parameters.set('limit', String(limit))
 
     if (request.from) { clauses.push("occurred_at >= parseDateTime64BestEffort({from:String}, 3, 'UTC')"); parameters.set('from', request.from) }
     if (request.to) { clauses.push("occurred_at <= parseDateTime64BestEffort({to:String}, 3, 'UTC')"); parameters.set('to', request.to) }
@@ -96,7 +99,8 @@ export class ClickHouseAnalyticsQueryProvider implements AnalyticsQueryProvider 
       parameters.set(parameter, String(value))
     }
 
-    const sql = `SELECT ${spec.select} FROM ${spec.table} WHERE ${clauses.join(' AND ')} ORDER BY occurred_at DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`
+    const rowLimit = request.completeRange ? '' : ' LIMIT {limit:UInt32}'
+    const sql = `SELECT ${spec.select} FROM ${spec.table} WHERE ${clauses.join(' AND ')} ORDER BY occurred_at DESC${rowLimit} FORMAT JSONEachRow`
     const url = new URL(endpoint)
     url.searchParams.set('database', database)
     url.searchParams.set('query', sql)

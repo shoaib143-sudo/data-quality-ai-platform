@@ -140,6 +140,7 @@ export async function loadProfilingHistoryTrends(
       to: request.to ?? null,
       filters: metricFilters,
       limit,
+      completeRange: true,
     }),
     provider.query({
       projectId: request.projectId,
@@ -148,14 +149,17 @@ export async function loadProfilingHistoryTrends(
       to: request.to ?? null,
       filters: { datasetId: request.datasetId },
       limit,
+      completeRange: true,
     }),
   ])
 
+  const aggregated = aggregateProfilingHistoryTrends(metricRows, scoreRows)
   return {
     provider: provider.providerKey,
     projectId: request.projectId,
     datasetId: request.datasetId,
     metricKey: request.metricKey?.trim() || null,
-    ...aggregateProfilingHistoryTrends(metricRows, scoreRows),
+    metrics: aggregated.metrics.slice(-limit),
+    qualityScores: aggregated.qualityScores.slice(-limit),
   }
 }

@@ -126,12 +126,21 @@ export async function loadDataQualityHistory(
     to: request.to ?? null,
     filters,
     limit,
+    completeRange: true,
   })
+
+  const aggregated = aggregateDataQualityHistory(rows, request.changeThreshold)
+  const buckets = aggregated.buckets.slice(-limit)
+  const returnedBuckets = new Set(buckets.map((bucket) => bucket.bucketStart))
+  const comparisons = aggregated.comparisons.filter((comparison) => returnedBuckets.has(comparison.bucketStart))
 
   return {
     provider: provider.providerKey,
     projectId: request.projectId,
     datasetId: request.datasetId?.trim() || null,
-    ...aggregateDataQualityHistory(rows, request.changeThreshold),
+    threshold: aggregated.threshold,
+    buckets,
+    comparisons,
+    materialChangeCount: comparisons.filter((item) => item.materialChange).length,
   }
 }
