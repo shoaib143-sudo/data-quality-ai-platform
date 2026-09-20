@@ -749,7 +749,7 @@ language sql
 stable
 security definer
 set search_path = pg_catalog, agent
-as $
+as $$
   select
     lc.id,
     lc.evidence->>'pgcl_candidate_id' as candidate_id,
@@ -770,7 +770,7 @@ as $
     and nullif(btrim(lc.recommendation->>'reusable_lesson'),'') is not null
   order by lc.updated_at desc
   limit greatest(1, least(coalesce(p_limit, 50), 100));
-$;
+$$;
 
 revoke all on function agent.list_approved_positive_learning_cases(uuid,uuid,integer)
   from public, anon, authenticated;
