@@ -125,3 +125,52 @@ export async function recordPositiveLearningCaseOutcome(input: {
   if (!data) throw new Error('PGCL case usage was not found for outcome recording')
   return String(data.id)
 }
+
+
+export async function reconcilePositiveLearningCaseUsagesFromGovernedOutcome(input: {
+  projectId: string
+  consumerAgentRunId: string
+  governedOutcomeId: string
+  verificationState: 'VERIFIED' | 'FAILED' | 'INCONCLUSIVE'
+  outcomeType: 'EFFECTIVE' | 'INEFFECTIVE' | 'PARTIAL' | 'ROLLED_BACK' | 'REJECTED' | 'POLICY_BLOCKED' | 'FAILED' | 'UNKNOWN'
+  effectiveness?: number | null
+}) {
+  if (input.verificationState !== 'VERIFIED') return 0
+
+  const admin = createAdminClient()
+  const { data: usages, error } = await admin
+    .schema('agent')
+    .from('positive_learning_case_usages')
+    .select('candidate_id')
+    .eq('project_id', input.projectId)
+    .eq('consumer_agent_run_id', input.consumerAgentRunId)
+    .eq('usage_status', 'APPLIED')
+
+  if (error) throw new Error(`Unable to resolve applied PGCL usages: ${error.message}`)
+  if (!usages?.length) return 0
+
+  const terminalStatus =
+    input.outcomeType === 'EFFECTIVE'
+      ? 'SUCCEEDED' as const
+      : ['INEFFECTIVE', 'ROLLED_BACK', 'REJECTED', 'POLICY_BLOCKED', 'FAILED'].includes(input.outcomeType)
+        ? 'FAILED' as const
+        : 'APPLIED' as const
+
+  for (const usage of usages) {
+    await recordPositiveLearningCaseOutcome({
+      projectId: input.projectId,
+      candidateId: String(usage.candidate_id),
+      consumerAgentRunId: input.consumerAgentRunId,
+      status: terminalStatus,
+      outcome: {
+        governed_outcome_id: input.governedOutcomeId,
+        verification_state: input.verificationState,
+        outcome_type: input.outcomeType,
+        effectiveness: input.effectiveness ?? null,
+        attribution: 'AUTHORITATIVE_GOVERNED_OUTCOME',
+      },
+    })
+  }
+
+  return usages.length
+}
