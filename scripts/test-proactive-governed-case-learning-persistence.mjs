@@ -101,7 +101,21 @@ assert.ok(forwardMigration.includes('create or replace function agent.list_appro
 for (const invariant of [
   "file === '20260920014000_proactive_governed_case_learning.sql'",
   "Historical PGCL dollar-quote defect no longer matches the audited replay repair contract",
-  "replace(malformedOpen, '\\nas $$\\n  select\\n')",
+  "const validDelimiter = '  "production uses the forward-only reconciliation migration",
+]) {
+  assert.ok(replayPreparation.includes(invariant), `missing immutable PGCL replay repair invariant: ${invariant}`)
+}
+
+console.log('PGCL durable persistence remains project-scoped, canonically verified, admin-reviewed, and non-self-promoting.')
+ + '  "production uses the forward-only reconciliation migration",
+]) {
+  assert.ok(replayPreparation.includes(invariant), `missing immutable PGCL replay repair invariant: ${invariant}`)
+}
+
+console.log('PGCL durable persistence remains project-scoped, canonically verified, admin-reviewed, and non-self-promoting.')
+",
+  "replace(malformedOpen, validOpen)",
+  "replace(malformedClose, validClose)",
   "production uses the forward-only reconciliation migration",
 ]) {
   assert.ok(replayPreparation.includes(invariant), `missing immutable PGCL replay repair invariant: ${invariant}`)
