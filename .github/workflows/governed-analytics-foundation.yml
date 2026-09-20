@@ -3,6 +3,12 @@ name: Governed Analytics Foundation
 on:
   pull_request:
     paths:
+      - 'lib/analytics/profiling-history-trends.ts'
+      - 'app/api/analytics/profiling-trends/route.ts'
+      - 'tests/profiling-history-trends.test.mjs'
+      - 'lib/analytics/data-quality-history.ts'
+      - 'app/api/analytics/data-quality-trends/route.ts'
+      - 'tests/data-quality-history.test.mjs'
       - 'lib/data-quality/governed-analysis-foundation.ts'
       - 'supabase/migrations/20260915102000_governed_analytics_foundation.sql'
       - 'scripts/test-governed-analysis-foundation.mjs'
@@ -10,6 +16,12 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/analytics/profiling-history-trends.ts'
+      - 'app/api/analytics/profiling-trends/route.ts'
+      - 'tests/profiling-history-trends.test.mjs'
+      - 'lib/analytics/data-quality-history.ts'
+      - 'app/api/analytics/data-quality-trends/route.ts'
+      - 'tests/data-quality-history.test.mjs'
       - 'lib/data-quality/governed-analysis-foundation.ts'
       - 'supabase/migrations/20260915102000_governed_analytics_foundation.sql'
       - 'scripts/test-governed-analysis-foundation.mjs'
@@ -30,3 +42,7 @@ jobs:
           node-version: 24
       - name: Verify governed analytics foundation
         run: node --experimental-strip-types scripts/test-governed-analysis-foundation.mjs
+      - name: Verify profiling history trends
+        run: node --experimental-strip-types --test tests/profiling-history-trends.test.mjs
+      - name: Verify Data Quality history analysis
+        run: node --experimental-strip-types --test tests/data-quality-history.test.mjs
