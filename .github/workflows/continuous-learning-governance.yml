@@ -3,6 +3,9 @@ name: Continuous Learning Governance
 on:
   pull_request:
     paths:
+      - 'lib/agents/governed-learning-context.ts'
+      - 'lib/agents/agent-memory-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-retrieval.mjs'
       - 'app/admin/learning-cases/**'
       - 'app/api/admin/learning-cases/**'
       - 'lib/agents/proactive-governed-case-learning-admin.ts'
@@ -27,6 +30,9 @@ on:
   push:
     branches: [main]
     paths:
+      - 'lib/agents/governed-learning-context.ts'
+      - 'lib/agents/agent-memory-learning.ts'
+      - 'scripts/test-proactive-governed-case-learning-retrieval.mjs'
       - 'app/admin/learning-cases/**'
       - 'app/api/admin/learning-cases/**'
       - 'lib/agents/proactive-governed-case-learning-admin.ts'
@@ -68,6 +74,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-persistence.mjs
       - name: Run PGCL admin review UI tests
         run: node scripts/test-proactive-governed-case-learning-ui.mjs
+      - name: Run PGCL approved-case retrieval tests
+        run: node scripts/test-proactive-governed-case-learning-retrieval.mjs
       - name: Run governed learning candidate tests
         run: node --experimental-strip-types scripts/test-governed-learning-candidates.mjs
       - name: Run governed learning benchmark tests
