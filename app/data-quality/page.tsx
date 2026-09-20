@@ -6,6 +6,7 @@ import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { QualityRunButton } from './quality-run-button'
+import { GoldenPathNavigator } from '@/components/golden-path-navigator'
 
 type ProfileRun = {
   id: string
@@ -24,6 +25,8 @@ type Score = { profile_run_id: string; completeness_score: number | null; unique
 type Finding = { id: string; profile_run_id: string; finding_type: string; severity: string; title: string; description: string; confidence: number | null; recommendation: Record<string, unknown> | null }
 type QualityRule = { id: string; dataset_id: string; dataset_version_id: string | null; column_name: string | null; rule_key: string; name: string; dimension: string; severity: string; metric_key: string; operator: string; threshold: number | null; enabled: boolean }
 type QualityRuleRun = { id: string; rule_definition_id: string; profile_run_id: string | null; status: string; passed: boolean | null; observed_value: number | null; threshold: number | null; completed_at: string | null }
+
+type SearchParams = Promise<{ projectId?: string; datasetId?: string; runId?: string; findingId?: string }>
 
 type RecommendationPresentation = {
   title: string
@@ -65,7 +68,12 @@ function presentRecommendation(value: unknown): RecommendationPresentation {
   }
 }
 
-export default async function DataQualityPage() {
+export default async function DataQualityPage({ searchParams }: { searchParams: SearchParams }) {
+  const requested = await searchParams
+  const requestedProjectId = requested.projectId?.trim() || null
+  const requestedDatasetId = requested.datasetId?.trim() || null
+  const requestedRunId = requested.runId?.trim() || null
+  const requestedFindingId = requested.findingId?.trim() || null
   const user = await requireUser()
   const landing = await resolveLandingAccess(user.id)
   const supabase = await createClient()
@@ -130,6 +138,19 @@ export default async function DataQualityPage() {
   const findingsByRunId = new Map<string, Finding[]>()
   for (const finding of findings) findingsByRunId.set(finding.profile_run_id, [...(findingsByRunId.get(finding.profile_run_id) ?? []), finding])
 
+  const explicitlyRequestedRun = requestedRunId ? runs.find(run => run.id === requestedRunId) ?? null : null
+  const requestedDatasetRun = requestedDatasetId
+    ? runs.find(run => {
+        const version = versionsById.get(run.dataset_version_id)
+        return version?.dataset_id === requestedDatasetId
+      }) ?? null
+    : null
+  const contextRun = explicitlyRequestedRun ?? requestedDatasetRun
+  const contextVersion = contextRun ? versionsById.get(contextRun.dataset_version_id) ?? null : null
+  const contextDataset = contextVersion ? datasetsById.get(contextVersion.dataset_id) ?? null : null
+  const contextProjectId = contextDataset?.project_id ?? requestedProjectId
+  const contextDatasetId = contextDataset?.id ?? requestedDatasetId
+
   const completedRuns = runs.filter(run => String(run.status).toUpperCase() === 'COMPLETED')
   const scoredRuns = completedRuns.filter(run => typeof scoresByRunId.get(run.id)?.overall_score === 'number')
   const averageScore = scoredRuns.length ? scoredRuns.reduce((sum, run) => sum + Number(scoresByRunId.get(run.id)?.overall_score ?? 0), 0) / scoredRuns.length : null
@@ -153,12 +174,20 @@ export default async function DataQualityPage() {
 
   return <main className="min-h-screen bg-[#061426] text-slate-100">
     <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-      <nav className={`${surface} mb-6 flex flex-wrap items-center justify-between gap-4 px-5 py-3`}>
+      <GoldenPathNavigator
+        current="SCORE"
+        projectId={contextProjectId}
+        datasetId={contextDatasetId}
+        runId={contextRun?.id ?? requestedRunId}
+        findingId={requestedFindingId}
+        theme="dark"
+      />
+      <nav className={`${surface} mb-6 mt-5 flex flex-wrap items-center justify-between gap-4 px-5 py-3`}>
         <Link href="/home" className={`flex items-center gap-3 text-sm font-bold text-white ${focus}`}><span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600"><Layers3 className="h-5 w-5" /></span>DataNexus AI</Link>
         <div className="flex flex-wrap gap-2">{canProfiling ? <Link href="/profiling/explorer" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Profiling Explorer</Link> : null}<Link href="/data-quality/rules" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Quality Rules</Link>{canObservability ? <Link href="/observability" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Observability</Link> : null}</div>
       </nav>
 
-      <header className={`${surface} p-6 sm:p-7`}><div className="flex flex-wrap items-start justify-between gap-5"><div><div className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-300"><Sparkles className="h-3.5 w-3.5" />Evidence-backed data quality</div><h1 className="mt-4 text-3xl font-black tracking-tight text-white">Data Quality</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Understand current quality, open the evidence behind a score, investigate findings, and review governed controls. Business impact is shown only when persisted governance evidence provides it.</p></div>{canProfiling ? <Link href="/profiling/explorer" className={`rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-500 ${focus}`}>Open profiling evidence <ArrowRight className="ml-1 inline h-4 w-4" /></Link> : null}</div></header>
+      <header className={`${surface} p-6 sm:p-7`}><div className="flex flex-wrap items-start justify-between gap-5"><div><div className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-300"><Sparkles className="h-3.5 w-3.5" />Evidence-backed data quality</div><h1 className="mt-4 text-3xl font-black tracking-tight text-white">Data Quality</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Understand current quality, open the evidence behind a score, investigate findings, and review governed controls. Business impact is shown only when persisted governance evidence provides it.</p></div>{canProfiling ? <Link href={contextRun ? `/profiling/explorer?runId=${encodeURIComponent(contextRun.id)}` : '/profiling/explorer'} className={`rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-500 ${focus}`}>Open profiling evidence <ArrowRight className="ml-1 inline h-4 w-4" /></Link> : null}</div></header>
 
       <section className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Link href="/profiling/explorer" className={`${surface} ${interactive} p-5`}><Gauge className={`h-5 w-5 ${scoreTone(averageScore)}`} /><p className="mt-3 text-3xl font-black text-white">{formatScore(averageScore)}</p><p className="mt-1 text-sm font-bold text-slate-200">Average quality</p><p className="mt-1 text-xs text-slate-500">Across scored completed runs</p></Link>
