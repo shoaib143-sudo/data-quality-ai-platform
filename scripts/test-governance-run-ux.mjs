@@ -20,6 +20,8 @@ for (const stage of [
 ]) assert.ok(page.includes(stage), `Governance Run missing stage: ${stage}`)
 
 assert.ok(page.includes("const user = await requireUser()"), 'Governance Run must authenticate')
+assert.ok(page.includes("canAccessWorkspace(landing.persona, 'datasets'"), 'source and registration CTAs must respect persona workspace access')
+assert.ok(page.includes("canAccessWorkspace(landing.persona, 'data-quality'"), 'quality CTA must respect persona workspace access')
 assert.ok(page.includes("canAccessWorkspace(landing.persona, 'workflows'"), 'workflow CTA must respect persona workspace access')
 assert.ok(page.includes("canAccessWorkspace(landing.persona, 'monitoring'"), 'monitor CTA must respect persona workspace access')
 assert.ok(page.includes("canAccessWorkspace(landing.persona, 'reports'"), 'reports CTA must respect persona workspace access')
@@ -52,6 +54,9 @@ assert.ok(page.includes("'BLOCKED'"), 'Governance Run must expose blocked stage 
 assert.ok(page.includes("'IN_PROGRESS'"), 'Governance Run must expose in-progress stage state')
 assert.ok(page.includes("'NOT_STARTED'"), 'Governance Run must expose not-started stage state')
 assert.ok(page.includes("'OPTIONAL'"), 'Governance Run must distinguish optional learning from required lifecycle stages')
+assert.ok(page.includes("href: canDatasets ? canonicalRoutes.datasets : '/catalog'"), 'source stage must fall back safely when Dataset workspace is unavailable')
+assert.ok(page.includes("action: canDatasets ? (sources.length ? 'Review sources' : 'Connect source') : 'Review governed data'"), 'source CTA label must match persona access')
+assert.ok(page.includes("href: canQuality ? '/data-quality' : profileHref"), 'quality stage must fall back to profiling evidence when Data Quality workspace is unavailable')
 assert.ok(page.includes("String(version.id) === String(latestCompletedRun.dataset_version_id)"), 'Governance Run must correlate Dataset 360 context from the actual latest completed profile run')
 assert.ok(page.includes("String(outcome.verification_profile_run_id ?? '') === String(latestCompletedRun.id)"), 'Governance Run must preserve remediation outcome context when the latest profile is a verification run')
 assert.ok(page.includes('outcomeIssueIds.has(String(issue.id))'), 'Governance Run must use persisted remediation issue identities after verification')
