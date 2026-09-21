@@ -33,6 +33,18 @@ assert.ok(overview.includes('canonicalRoutes.governanceRun(project.id)'), 'journ
 assert.ok(overview.includes('const latestCompletedRun = completedRuns[0] ?? null'), 'journey overview must derive findings from the latest completed profile only')
 assert.ok(overview.includes('findings.filter(finding => finding.profile_run_id === latestCompletedRun.id)'), 'historical findings must not contaminate the current remediation stage')
 assert.ok(overview.includes('Boolean(latestCompletedRun) && highFindings.length === 0'), 'guided remediation completion must fail closed while high-priority findings remain')
+for (const routeFile of [
+  'app/datasets/page.tsx',
+  'app/profiling/explorer/page.tsx',
+  'app/data-quality/page.tsx',
+  'app/issues/page.tsx',
+  'app/workflows/page.tsx',
+  'app/monitoring/page.tsx',
+  'app/approvals/page.tsx',
+  'app/reports/page.tsx',
+  'app/ai-capabilities/page.tsx',
+]) assert.ok(fs.existsSync(routeFile), `Governance Run target does not exist: ${routeFile}`)
+
 for (const cta of ['Open Governance Run', 'Job Monitor', 'Approvals', 'Reports', 'Recommended next action']) {
   assert.ok(page.includes(cta) || overview.includes(cta), `Governance Run CTA missing: ${cta}`)
 }
