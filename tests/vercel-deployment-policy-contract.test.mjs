@@ -39,3 +39,12 @@ test("Vercel certification verifies live identity, readiness, and protected R2 b
   assert.match(certification, /\/api\/internal\/storage\/certify-r2/);
   assert.match(certification, /test "\$code" = "401"/);
 });
+
+
+test("Vercel production certification remains a protected manual operation", () => {
+  const start = releaseWorkflow.indexOf("  certify-vercel-production:");
+  const certification = releaseWorkflow.slice(start);
+  assert.match(releaseWorkflow, /workflow_dispatch:/);
+  assert.match(certification, /environment: production/);
+  assert.doesNotMatch(certification, /schedule:/);
+});
