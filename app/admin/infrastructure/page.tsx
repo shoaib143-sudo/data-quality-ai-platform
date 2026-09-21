@@ -7,6 +7,22 @@ import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
+type CanaryStatus = {
+  enabled: boolean
+  worker_url_configured: boolean
+  worker_secret_configured: boolean
+  runtime_configured: boolean
+  cron_active: boolean
+  cron_schedule: string | null
+  queued: number
+  running: number
+  succeeded: number
+  failed: number
+  single_flight_limit: number
+  allowed_job_type: string
+  scheduler_authority: string
+}
+
 type StorageRow = {
   provider: 'supabase' | 'r2'
   state: string
@@ -55,6 +71,26 @@ export default async function InfrastructurePage() {
     ? await admin.schema('catalog').from('storage_objects').select('provider,state,size_bytes').in('project_id', projectIds).limit(10000)
     : { data: [] as StorageRow[], error: null }
   if (storageResult.error) throw new Error(`Unable to load infrastructure storage inventory: ${storageResult.error.message}`)
+
+  const { data: canaryStatusRaw, error: canaryStatusError } = await admin
+    .schema('orchestration')
+    .rpc('get_cloudflare_observability_canary_status')
+  if (canaryStatusError) throw new Error(`Unable to load Cloudflare canary status: ${canaryStatusError.message}`)
+  const canaryStatus = (canaryStatusRaw ?? {
+    enabled: false,
+    worker_url_configured: false,
+    worker_secret_configured: false,
+    runtime_configured: false,
+    cron_active: false,
+    cron_schedule: null,
+    queued: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    single_flight_limit: 1,
+    allowed_job_type: 'OBSERVABILITY',
+    scheduler_authority: 'Supabase',
+  }) as CanaryStatus
 
   const rows = (storageResult.data ?? []) as StorageRow[]
   const storage = rows.reduce((summary, row) => {
@@ -105,13 +141,25 @@ export default async function InfrastructurePage() {
       </section>
 
       <section aria-labelledby="cloudflare-worker-canary-heading" className="rounded-3xl border bg-white p-6 shadow-sm">
-        <h2 id="cloudflare-worker-canary-heading" className="text-xl font-black">Cloudflare worker canary</h2>
-        <p className="mt-1 text-sm text-slate-500">Execution remains narrowly scoped and reversible while Supabase retains scheduler and transactional authority.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 id="cloudflare-worker-canary-heading" className="text-xl font-black">Cloudflare worker canary</h2>
+            <p className="mt-1 text-sm text-slate-500">Execution remains narrowly scoped and reversible while Supabase retains scheduler and transactional authority.</p>
+          </div>
+          <StatusPill ready={canaryStatus.enabled}>{canaryStatus.enabled ? 'enabled' : 'standby'}</StatusPill>
+        </div>
         <div className="mt-5 grid gap-4 md:grid-cols-4">
-          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Allowed workload</p><p className="mt-2 text-lg font-black">OBSERVABILITY</p></article>
-          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Claim limit</p><p className="mt-2 text-lg font-black">1 job / cycle</p></article>
-          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Scheduler authority</p><p className="mt-2 text-lg font-black">Supabase</p></article>
-          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Kill switch</p><p className="mt-2 text-lg font-black">Execution flag</p><p className="mt-1 text-xs text-slate-500">Default off; owner-approved activation only.</p></article>
+          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Allowed workload</p><p className="mt-2 text-lg font-black">{canaryStatus.allowed_job_type}</p></article>
+          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Claim limit</p><p className="mt-2 text-lg font-black">{canaryStatus.single_flight_limit} job / cycle</p><p className="mt-1 text-xs text-slate-500">Policy ceiling: 1 job / cycle.</p></article>
+          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Scheduler authority</p><p className="mt-2 text-lg font-black">{canaryStatus.scheduler_authority}</p><p className="mt-1 text-xs text-slate-500">{canaryStatus.cron_active ? `Active · ${canaryStatus.cron_schedule ?? 'cadence unavailable'}` : 'Scheduler inactive'}</p></article>
+          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Runtime configuration</p><div className="mt-2"><StatusPill ready={canaryStatus.runtime_configured}>{canaryStatus.runtime_configured ? 'configured' : 'not configured'}</StatusPill></div><p className="mt-1 text-xs text-slate-500">Credential values remain hidden.</p></article>
+          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Kill switch</p><p className="mt-2 text-lg font-black">{canaryStatus.enabled ? 'Execution flag active' : 'Execution flag standby'}</p><p className="mt-1 text-xs text-slate-500">Default off; owner-approved activation only.</p></article>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <p className="rounded-xl bg-slate-50 p-3 text-sm"><span className="block text-xs font-bold uppercase text-slate-500">Queued</span><strong className="text-lg">{canaryStatus.queued}</strong></p>
+          <p className="rounded-xl bg-slate-50 p-3 text-sm"><span className="block text-xs font-bold uppercase text-slate-500">Running</span><strong className="text-lg">{canaryStatus.running}</strong></p>
+          <p className="rounded-xl bg-slate-50 p-3 text-sm"><span className="block text-xs font-bold uppercase text-slate-500">Succeeded</span><strong className="text-lg">{canaryStatus.succeeded}</strong></p>
+          <p className="rounded-xl bg-slate-50 p-3 text-sm"><span className="block text-xs font-bold uppercase text-slate-500">Failed / dead</span><strong className="text-lg">{canaryStatus.failed}</strong></p>
         </div>
       </section>
 

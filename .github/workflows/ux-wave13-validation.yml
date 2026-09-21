@@ -51,6 +51,13 @@ jobs:
           node scripts/test-ux-shell-residual-inventory.mjs
           node scripts/test-skip-link-bypass-contract.mjs
           node --test tests/ux-wave13-security-contract.test.mjs
+      - name: Revalidate concurrent Cloudflare canary integration
+        run: |
+          node --test tests/cloudflare-canary-claim-isolation.test.mjs
+          node --test tests/cloudflare-canary-single-flight.test.mjs
+          node --test tests/cloudflare-canary-status-rpc.test.mjs
+          node --test tests/cloudflare-observability-canary-scheduler.test.mjs
+          node --test tests/infrastructure-admin-ui.test.mjs
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
           version: 10
