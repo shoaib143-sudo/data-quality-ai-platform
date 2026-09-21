@@ -147,7 +147,7 @@ export function ApprovalInbox({ items }: { items: ApprovalInboxItem[] }) {
                   <button
                     type="button"
                     onClick={() => executeRequestedAction(requestId)}
-                    disabled={busy === `${requestId}:EXECUTE`}
+                    disabled={busy !== null}
                     className="mt-3 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-50"
                   >
                     {busy === `${requestId}:EXECUTE` ? 'Executing…' : 'Execute requested action'}
@@ -169,11 +169,11 @@ export function ApprovalInbox({ items }: { items: ApprovalInboxItem[] }) {
                         value={comments[key] ?? ''}
                         onChange={event => setComments(current => ({ ...current, [key]: event.target.value.slice(0, 2000) }))}
                         placeholder="Reason/comment is mandatory"
-                        disabled={busy === key}
+                        disabled={busy !== null}
                       />
                       <div className="mt-3 flex gap-2">
-                        <button type="button" onClick={() => decide(requestId, axis, 'APPROVED')} disabled={busy === key} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Approve</button>
-                        <button type="button" onClick={() => decide(requestId, axis, 'REJECTED')} disabled={busy === key} className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50">Reject</button>
+                        <button type="button" onClick={() => decide(requestId, axis, 'APPROVED')} disabled={busy !== null || !(comments[key] ?? '').trim()} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Approve</button>
+                        <button type="button" onClick={() => decide(requestId, axis, 'REJECTED')} disabled={busy !== null || !(comments[key] ?? '').trim()} className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50">Reject</button>
                       </div>
                     </div>
                   )
