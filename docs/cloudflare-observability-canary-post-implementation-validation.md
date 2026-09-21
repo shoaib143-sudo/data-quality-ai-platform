@@ -120,3 +120,23 @@ Immediate rollback requires no code rollback:
 5. Confirm the primary Vercel durable-worker scheduler remains unchanged and healthy.
 
 Only after rollback evidence is clean should any code-level reversal be considered.
+
+
+## Post-activation fail-closed behavior
+
+The protected canary-enable workflow must verify the live Supabase canary status immediately after enabling scheduling. Certification requires all of the following:
+
+- enabled = true
+- runtime configuration present
+- canary cron active at five-minute cadence
+- allowed job type = OBSERVABILITY
+- scheduler authority = Supabase
+- single-flight limit = 1
+
+If any later activation step fails, the workflow performs best-effort fail-closed cleanup:
+
+1. disable the Supabase Cloudflare canary scheduler flag;
+2. redeploy the Cloudflare worker with `DATANEXUS_WORKER_EXECUTION_ENABLED=false`;
+3. leave the primary Vercel durable-worker scheduler unchanged.
+
+The original workflow failure remains the release outcome. Cleanup warnings must not be interpreted as successful activation.
