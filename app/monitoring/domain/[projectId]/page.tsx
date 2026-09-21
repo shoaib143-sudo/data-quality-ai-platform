@@ -334,7 +334,7 @@ export default async function DomainDetailPage({
               <p className="mt-2 text-[11px] font-black leading-tight text-white">{item.feature.label}</p>
               <p className="mt-1 text-[8px] leading-tight text-slate-400">{item.feature.activities.slice(0, 2).join(' · ')}</p>
             </div>
-            return item.run
+            return item.run && canAgents
               ? <Link key={item.agent.id} href={`/agents/runs/${encodeURIComponent(item.run.id)}`} aria-label={`Open ${item.feature.label} results`}>{body}</Link>
               : <div key={item.agent.id}>{body}</div>
           })}
@@ -361,7 +361,7 @@ export default async function DomainDetailPage({
           <div className="mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200/55">Execution context</p>
             <p className="mt-2 text-xs leading-5 text-slate-500">This view is derived from authorized persisted execution, catalog, governance, lineage, and evidence state for this Data Domain.</p>
-            {latestRun ? <Link href={`/agents/runs/${encodeURIComponent(latestRun.id)}`} className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/8 px-3 py-2.5 text-xs font-black text-cyan-100 hover:bg-cyan-300/12">View latest execution details</Link> : null}
+            {canAgents && latestRun ? <Link href={`/agents/runs/${encodeURIComponent(latestRun.id)}`} className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/8 px-3 py-2.5 text-xs font-black text-cyan-100 hover:bg-cyan-300/12">View latest execution details</Link> : null}
           </div>
         </aside>
       </section>
@@ -384,7 +384,7 @@ export default async function DomainDetailPage({
               {dataset ? <p className="mt-3 truncate text-[10px] opacity-60">Dataset: {dataset.name}</p> : null}
               {run ? <p className="mt-3 text-right text-[10px] font-bold text-cyan-100/75">View results →</p> : null}
             </div>
-            return run ? <Link key={agent.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block min-h-[220px]">{body}</Link> : <div key={agent.id} className="min-h-[220px]">{body}</div>
+            return run && canAgents ? <Link key={agent.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block min-h-[220px]">{body}</Link> : <div key={agent.id} className="min-h-[220px]">{body}</div>
           })}
         </div>
       </section>
