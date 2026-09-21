@@ -86,7 +86,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
     supabase.schema('catalog').from('datasets').select('id,name,status,data_source_id').eq('project_id', projectId).order('created_at', { ascending: false }),
     supabase.schema('governance').from('issues').select('id,title,severity,status,dataset_id,profile_run_id,finding_id,updated_at').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(200),
     supabase.schema('governance').from('workflow_instances').select('id,status,current_step,entity_type,entity_id,started_at').eq('project_id', projectId).order('started_at', { ascending: false }).limit(100),
-    supabase.schema('governance').from('profiling_remediation_outcomes').select('id,workflow_instance_id,status,source_profile_run_id,verification_profile_run_id,quality_score_delta,high_severity_findings_delta,updated_at').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(100),
+    supabase.schema('governance').from('profiling_remediation_outcomes').select('id,workflow_instance_id,status,source_profile_run_id,verification_profile_run_id,remediation_issue_ids,quality_score_delta,high_severity_findings_delta,updated_at').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('profiling_recommendation_learning').select('id,workflow_instance_id,recommendation_action,status,effective,quality_score_delta,high_severity_findings_delta,observed_at').eq('project_id', projectId).order('observed_at', { ascending: false, nullsFirst: false }).limit(100),
   ])
   for (const [name, result] of [
@@ -155,12 +155,29 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const latestScore = latestCompletedRun ? scores.find(score => score.profile_run_id === latestCompletedRun.id) ?? null : null
   const latestFindings = latestCompletedRun ? findings.filter(finding => finding.profile_run_id === latestCompletedRun.id) : []
   const highFindings = latestFindings.filter(finding => ['CRITICAL', 'HIGH'].includes(normalized(finding.severity)))
-  const latestIssues = latestCompletedRun ? issues.filter(issue => issue.profile_run_id === latestCompletedRun.id) : []
-  const openIssues = latestIssues.filter(issue => unresolved(issue.status))
-  const latestWorkflow = latestCompletedRun
-    ? workflows.find(workflow => normalized(workflow.entity_type) === 'PROFILE_RUN' && String(workflow.entity_id) === String(latestCompletedRun.id)) ?? null
+  const runLinkedOutcome = latestCompletedRun
+    ? outcomes.find(outcome =>
+        String(outcome.source_profile_run_id ?? '') === String(latestCompletedRun.id)
+        || String(outcome.verification_profile_run_id ?? '') === String(latestCompletedRun.id)
+      ) ?? null
     : null
-  const latestOutcome = latestWorkflow ? outcomes.find(outcome => outcome.workflow_instance_id === latestWorkflow.id) ?? null : null
+  const latestWorkflow = runLinkedOutcome
+    ? workflows.find(workflow => String(workflow.id) === String(runLinkedOutcome.workflow_instance_id)) ?? null
+    : latestCompletedRun
+      ? workflows.find(workflow => normalized(workflow.entity_type) === 'PROFILE_RUN' && String(workflow.entity_id) === String(latestCompletedRun.id)) ?? null
+      : null
+  const latestOutcome = runLinkedOutcome ?? (latestWorkflow ? outcomes.find(outcome => outcome.workflow_instance_id === latestWorkflow.id) ?? null : null)
+  const outcomeIssueIds = new Set(
+    Array.isArray(latestOutcome?.remediation_issue_ids)
+      ? latestOutcome.remediation_issue_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+      : [],
+  )
+  const latestIssues = outcomeIssueIds.size
+    ? issues.filter(issue => outcomeIssueIds.has(String(issue.id)))
+    : latestCompletedRun
+      ? issues.filter(issue => issue.profile_run_id === latestCompletedRun.id)
+      : []
+  const openIssues = latestIssues.filter(issue => unresolved(issue.status))
   const latestLearning = latestWorkflow ? learning.find(item => item.workflow_instance_id === latestWorkflow.id) ?? null : null
 
   const observedReady = readiness.filter(row => normalized(row.operational_state) === 'OBSERVED_READY')
