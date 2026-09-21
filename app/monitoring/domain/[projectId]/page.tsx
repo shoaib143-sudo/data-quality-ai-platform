@@ -382,7 +382,7 @@ export default async function DomainDetailPage({
               <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide"><span>{run ? status : 'Not executed'}</span><span>{run ? `${progress}% steps` : 'No run'}</span></div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/30"><div className="h-full rounded-full bg-current transition-[width]" style={{ width: `${run ? progress : 0}%` }} /></div>
               {dataset ? <p className="mt-3 truncate text-[10px] opacity-60">Dataset: {dataset.name}</p> : null}
-              {run ? <p className="mt-3 text-right text-[10px] font-bold text-cyan-100/75">View results →</p> : null}
+              {run && canAgents ? <p className="mt-3 text-right text-[10px] font-bold text-cyan-100/75">View results →</p> : run ? <p className="mt-3 text-right text-[10px] font-bold text-slate-500">Read-only execution evidence</p> : null}
             </div>
             return run && canAgents ? <Link key={agent.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block min-h-[220px]">{body}</Link> : <div key={agent.id} className="min-h-[220px]">{body}</div>
           })}
