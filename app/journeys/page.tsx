@@ -6,6 +6,7 @@ import { JourneyViewTelemetry, TrackedJourneyLink } from '@/components/app-shell
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { personas } from '@/lib/governance/personas'
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -110,14 +111,15 @@ export default async function JourneysPage() {
     const projectDatasets = datasets.filter(dataset => dataset.project_id === project.id)
     const projectRuns = runs.filter(run => runProject.get(run.id) === project.id)
     const completedRuns = projectRuns.filter(run => normalized(run.status) === 'COMPLETED')
-    const projectFindings = findings.filter(finding => runProject.get(finding.profile_run_id) === project.id)
+    const latestCompletedRun = completedRuns[0] ?? null
+    const projectFindings = latestCompletedRun ? findings.filter(finding => finding.profile_run_id === latestCompletedRun.id) : []
     const highFindings = projectFindings.filter(finding => ['HIGH', 'CRITICAL'].includes(normalized(finding.severity)))
     const openIssues = issues.filter(issue => issue.project_id === project.id && unresolved(issue.status))
     const projectRules = rules.filter(rule => ruleProject.get(rule.id) === project.id)
     const latestRuleRuns = projectRules.map(rule => latestRuleRunByRule.get(rule.id)).filter(Boolean) as RuleRun[]
     const observedSources = projectSources.filter(source => readinessBySource.get(source.id) === 'OBSERVED_READY')
     const qualityVerified = projectRules.length > 0 && latestRuleRuns.length === projectRules.length && latestRuleRuns.every(run => run.passed === true || normalized(run.status) === 'PASSED')
-    const remediationComplete = highFindings.length === 0 || openIssues.length > 0
+    const remediationComplete = Boolean(latestCompletedRun) && highFindings.length === 0
 
     const steps: Step[] = [
       {
@@ -198,15 +200,20 @@ export default async function JourneysPage() {
                   <h3 className="mt-1 text-2xl font-black">{project.name}</h3>
                   <p className="mt-2 text-sm text-slate-500">{completed} of {steps.length} evidence stages currently satisfied.</p>
                 </div>
-                {nextStep ? (
-                  <TrackedJourneyLink projectId={project.id} stage={telemetryStage} completedStages={completed} href={nextStep.href} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
-                    {nextStep.action} <ArrowRight className="h-4 w-4" />
-                  </TrackedJourneyLink>
-                ) : (
-                  <Link href={safeHref('/scorecards', '/reports')} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
-                    Review governance evidence <ArrowRight className="h-4 w-4" />
+                <div className="flex flex-wrap gap-2">
+                  <Link href={canonicalRoutes.governanceRun(project.id)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                    Open Governance Run <ArrowRight className="h-4 w-4" />
                   </Link>
-                )}
+                  {nextStep ? (
+                    <TrackedJourneyLink projectId={project.id} stage={telemetryStage} completedStages={completed} href={nextStep.href} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                      {nextStep.action} <ArrowRight className="h-4 w-4" />
+                    </TrackedJourneyLink>
+                  ) : (
+                    <Link href={safeHref('/scorecards', '/reports')} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
+                      Review governance evidence <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  )}
+                </div>
               </div>
 
               <div className="mt-6 grid gap-3 md:grid-cols-5">

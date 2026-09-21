@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { isVerifiedRemediationClosure } from '@/lib/governance/remediation-closure-state'
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 
 type InvestigationRecommendation = {
   action: string
@@ -33,7 +35,11 @@ type OutcomeView = {
   verificationProfileRunId: string | null
   verificationJobId: string | null
   verificationRetryable: boolean
+  sourceQualityScore: number | null
+  verificationQualityScore: number | null
   qualityScoreDelta: number | null
+  sourceHighSeverityFindings: number | null
+  verificationHighSeverityFindings: number | null
   highSeverityFindingsDelta: number | null
 } | null
 
@@ -166,6 +172,10 @@ export default function ProfilingGovernancePanel({
   const canRetryVerification = canManageRemediation && workflow?.status === 'APPROVED'
     && (outcome?.verificationRetryable === true || verificationCancelled)
     && allTrackedIssuesResolved
+  const verifiedClosure = isVerifiedRemediationClosure({
+    outcomeStatus: outcome?.status,
+    issueStatuses: issues.map(issue => issue.status),
+  })
 
   return (
     <section className="rounded-xl border p-6">
@@ -282,6 +292,22 @@ export default function ProfilingGovernancePanel({
         <p className="mt-3 text-sm text-muted-foreground">Resolve all {openIssues.length} tracked remediation issue{openIssues.length === 1 ? '' : 's'} with evidence before verification is evaluated.</p>
       ) : null}
 
+      {verifiedClosure ? (
+        <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <strong>Verified closure</strong>
+            <span className="rounded-full border border-emerald-300 bg-white px-2 py-0.5 text-xs font-semibold text-emerald-800">Evidence backed</span>
+          </div>
+          <p className="mt-2 text-emerald-800">All tracked remediation issues are resolved and the persisted remediation outcome is verified.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-md border border-emerald-200 bg-white/80 p-3"><span className="text-emerald-700">Quality before → after:</span> <strong>{percent(outcome?.sourceQualityScore ?? null)} → {percent(outcome?.verificationQualityScore ?? null)}</strong></div>
+            <div className="rounded-md border border-emerald-200 bg-white/80 p-3"><span className="text-emerald-700">Quality score delta:</span> <strong>{outcome?.qualityScoreDelta ?? 'N/A'}</strong></div>
+            <div className="rounded-md border border-emerald-200 bg-white/80 p-3"><span className="text-emerald-700">High severity before → after:</span> <strong>{outcome?.sourceHighSeverityFindings ?? 'N/A'} → {outcome?.verificationHighSeverityFindings ?? 'N/A'}</strong></div>
+            <div className="rounded-md border border-emerald-200 bg-white/80 p-3"><span className="text-emerald-700">High severity delta:</span> <strong>{outcome?.highSeverityFindingsDelta ?? 'N/A'}</strong></div>
+          </div>
+        </div>
+      ) : null}
+
       {outcome ? (
         <div className="mt-5 rounded-lg border p-4 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -294,8 +320,8 @@ export default function ProfilingGovernancePanel({
             <div><span className="text-muted-foreground">Quality delta:</span> {outcome.qualityScoreDelta ?? 'Pending'}</div>
             <div><span className="text-muted-foreground">High severity delta:</span> {outcome.highSeverityFindingsDelta ?? 'Pending'}</div>
           </div>
-          {outcome.verificationProfileRunId ? <div className="mt-2 break-all text-xs text-muted-foreground">Verification profile: {outcome.verificationProfileRunId}</div> : null}
-          {outcome.verificationJobId ? <div className="mt-1 break-all text-xs text-muted-foreground">Verification job: {outcome.verificationJobId}</div> : null}
+          {outcome.verificationProfileRunId ? <div className="mt-2 break-all text-xs text-muted-foreground">Verification profile: <Link href={`/profiling/explorer?runId=${encodeURIComponent(outcome.verificationProfileRunId)}`} className="font-semibold text-blue-600 underline">{outcome.verificationProfileRunId}</Link></div> : null}
+          {outcome.verificationJobId ? <div className="mt-1 break-all text-xs text-muted-foreground">Verification job: <Link href={`/monitoring?run=${encodeURIComponent(outcome.verificationJobId)}`} className="font-semibold text-blue-600 underline">{outcome.verificationJobId}</Link></div> : null}
           {outcome.verificationRetryable ? <p className="mt-3 text-amber-700">Automatic verification needs retry after a technical failure.</p> : null}
           {verificationCancelled ? <p className="mt-3 text-amber-700">Automatic verification was cancelled. Restarting creates a fresh governed verification generation.</p> : null}
         </div>
@@ -312,7 +338,7 @@ export default function ProfilingGovernancePanel({
               return (
                 <div key={issue.id} className="rounded-md border p-3 text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <strong>{issue.title}</strong>
+                    <Link href={canonicalRoutes.governedIncident(issue.id)} className="font-semibold text-blue-600 underline">{issue.title}</Link>
                     <span className="rounded-full border px-2 py-0.5 text-xs">{badge(issue.status)} · {badge(issue.severity)}</span>
                   </div>
                   {issue.resolutionSummary ? <p className="mt-2 text-muted-foreground">Resolution: {issue.resolutionSummary}</p> : null}

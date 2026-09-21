@@ -1,7 +1,10 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
+import { resolveProfilingRunHandoff } from '@/lib/profiling/profiling-run-handoff'
 import { createClient } from '@/lib/supabase/client'
 
 export type ProjectOption = { id: string; name: string }
@@ -32,6 +35,8 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
   const [uploadingFile, setUploadingFile] = useState(false)
   const [profiling, setProfiling] = useState(false)
   const [profilingTarget, setProfilingTarget] = useState<{ projectId: string; datasetVersionId: string; agentDefinitionId: string } | null>(null)
+  const [registeredDatasetId, setRegisteredDatasetId] = useState<string | null>(null)
+  const [registeredProjectId, setRegisteredProjectId] = useState<string | null>(null)
 
   const projectSources = useMemo(() => availableSources.filter((source) => projectMode === 'existing' && source.projectId === projectId && ['ACTIVE', 'CONFIGURED'].includes(String(source.status).toUpperCase())), [availableSources, projectId, projectMode])
   const canCreateProject = organizations.length > 0
@@ -264,7 +269,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setStatus(null); setProfilingTarget(null)
+    event.preventDefault(); setStatus(null); setProfilingTarget(null); setRegisteredDatasetId(null); setRegisteredProjectId(null)
     const form = new FormData(event.currentTarget)
     const submittedProjectId = String(form.get('projectId') ?? '').trim() || projectId
     const submittedSourceId = String(form.get('sourceId') ?? '').trim() || sourceId
@@ -278,6 +283,8 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       const response = await fetch('/api/datasets/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: submittedProjectId, sourceId: submittedSourceId, name: submittedName, sourceIdentifier: submittedSourceIdentifier, storageObjectId: sourceStorageObjectId, description: submittedDescription, businessDomain: submittedBusinessDomain }) })
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? payload.source_validation?.errors?.join(' ') ?? 'Dataset registration failed.')
       const profilingReady = payload.profiling_ready === true
+      setRegisteredDatasetId(String(payload.dataset.id))
+      setRegisteredProjectId(submittedProjectId)
       setStatus(profilingReady
         ? `Registered ${payload.dataset.name} v${payload.version.version_number}. Profiling source is ready.`
         : `Registered ${payload.dataset.name} v${payload.version.version_number}. Dataset is saved, but profiling is not ready yet: ${payload.source_validation?.warnings?.at(-1) ?? 'validate the source before profiling.'}`)
@@ -289,14 +296,25 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
 
   async function runProfiling() {
     if (!profilingTarget) return
-    setProfiling(true); setStatus('Profiling dataset. Running schema/profile metrics and quality scoring…')
+    setProfiling(true); setStatus('Queueing governed profiling. DataNexus will continue the run in the durable worker and open live execution monitoring.')
     try {
-      const response = await fetch('/api/agents/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profilingTarget) })
+      const idempotencyKey = crypto.randomUUID()
+      const response = await fetch('/api/agents/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ ...profilingTarget, idempotencyKey }),
+      })
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? 'Profiling execution failed.')
-      const score = payload.result?.metrics?.score?.overall_score
-      setStatus(`Profiling completed. ${payload.result?.metrics?.metrics_persisted ?? 0} metrics, ${payload.result?.metrics?.findings_persisted ?? 0} findings persisted${typeof score === 'number' ? ` · quality score ${(score * 100).toFixed(1)}%` : ''}.`)
-      setProfilingTarget(null); router.refresh()
-    } catch (error) { setStatus(error instanceof Error ? error.message : 'Profiling execution failed.'); router.refresh() } finally { setProfiling(false) }
+      const handoff = resolveProfilingRunHandoff(payload)
+      setStatus(handoff.reused ? 'Existing governed profiling request found. Opening live monitor…' : 'Profiling queued. Opening live monitor…')
+      setProfilingTarget(null)
+      router.push(handoff.monitorUrl)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Profiling execution failed.')
+      router.refresh()
+    } finally {
+      setProfiling(false)
+    }
   }
 
   const busy = running || profiling || creatingProject || uploadingFile
@@ -323,7 +341,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
         <label className="space-y-2 text-sm"><span className="font-medium">Description</span><input name="description" value={description} onChange={e => setDescription(e.target.value)} disabled={busy} placeholder="Purpose and business context" /></label>
         <div className="md:col-span-2"><button type="submit" disabled={busy} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{running ? 'Registering…' : 'Register dataset'}</button></div>
       </form>}
-    {profilingTarget && <div className="mt-5 rounded-lg border p-4"><p className="text-sm font-medium">Dataset is profiling-ready</p><p className="mt-1 text-sm text-muted-foreground">Start the production Profiling Agent 2.0 to execute schema discovery, metrics, findings, and quality scoring.</p><button type="button" onClick={runProfiling} disabled={profiling} className="mt-3 rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{profiling ? 'Profiling…' : 'Run profiling'}</button></div>}
-    {status && <p className="mt-4 rounded-md border p-3 text-sm" role="status">{status}</p>}
+    {profilingTarget && <div className="mt-5 rounded-lg border p-4"><p className="text-sm font-medium">Dataset is profiling-ready</p><p className="mt-1 text-sm text-muted-foreground">Start the production Profiling Agent 2.0. Execution is queued through the governed durable worker and continues in Job Monitor.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={runProfiling} disabled={profiling} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{profiling ? 'Queueing…' : 'Run profiling'}</button>{registeredDatasetId ? <Link href={canonicalRoutes.governedDataset(registeredDatasetId)} className="rounded-md border px-4 py-2 text-sm font-medium">Open Dataset 360</Link> : null}{registeredProjectId ? <Link href={canonicalRoutes.governanceRun(registeredProjectId)} className="rounded-md border px-4 py-2 text-sm font-medium">Open Governance Run</Link> : null}</div></div>}
+    {status && <div className="mt-4 rounded-md border p-3 text-sm" role="status"><p>{status}</p>{registeredDatasetId && !profilingTarget ? <div className="mt-2 flex flex-wrap gap-3"><Link href={canonicalRoutes.governedDataset(registeredDatasetId)} className="inline-flex font-semibold text-blue-600 underline">Open Dataset 360</Link>{registeredProjectId ? <Link href={canonicalRoutes.governanceRun(registeredProjectId)} className="inline-flex font-semibold text-violet-600 underline">Open Governance Run</Link> : null}</div> : null}</div>}
   </section>
 }

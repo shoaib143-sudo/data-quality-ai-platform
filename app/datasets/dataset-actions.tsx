@@ -1,12 +1,13 @@
 'use client'
 
-import { AlertCircle, Bot, CheckCircle2, Pencil, Play, RefreshCw } from 'lucide-react'
+import { AlertCircle, Bot, CheckCircle2, LayoutDashboard, Pencil, Play, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { getReadinessManualRemediationDescriptor } from '@/lib/profiling/readiness-manual-remediation'
+import { resolveProfilingRunHandoff } from '@/lib/profiling/profiling-run-handoff'
 
 type Remediation = {
   root_cause?: string
@@ -129,10 +130,10 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error ?? 'Profiling execution failed.')
-      if (!payload.agentRunId) throw new Error('Profiling job was accepted without a run identifier.')
+      const handoff = resolveProfilingRunHandoff(payload)
       setHasError(false)
-      setMessage('Profiling job queued. Opening live monitor…')
-      router.push(payload.monitorUrl ?? `/monitoring?run=${encodeURIComponent(payload.agentRunId)}`)
+      setMessage(handoff.reused ? 'Existing governed profiling request found. Opening live monitor…' : 'Profiling job queued. Opening live monitor…')
+      router.push(handoff.monitorUrl)
     } catch (error) {
       setHasError(true)
       setMessage(error instanceof Error ? error.message : 'Profiling execution failed.')
@@ -185,6 +186,9 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
 
   return <div className="mt-0 flex w-full flex-col items-end gap-2">
     <div className="flex flex-wrap items-center justify-end gap-3">
+      <Link href={canonicalRoutes.governedDataset(datasetId)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700">
+        <LayoutDashboard className="h-3.5 w-3.5" /> Dataset 360
+      </Link>
       {manualTarget?.href ? <Link href={manualTarget.href} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
         <Pencil className="h-3.5 w-3.5" /> Fix manually
       </Link> : null}
