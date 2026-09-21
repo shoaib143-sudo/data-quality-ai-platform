@@ -5,7 +5,7 @@ const expected={
   'app/data-quality/autonomous/page.tsx':['← Data Quality','Approvals','Remediation issues','Run evidence'],
   'app/classification-privacy/page.tsx':['Catalog'],
   'app/lineage/ingest/page.tsx':['Lineage graph','Discovery'],
-  'app/monitoring/domain/[projectId]/page.tsx':['Back to Job Monitor','Run governed feature','Latest output/results','Latest result'],
+  'app/monitoring/domain/[projectId]/page.tsx':['Back to Job Monitor','Run governed feature','Latest output/results','View latest execution details','View results','Latest result'],
   'app/observability/incidents/page.tsx':['← Observability','Impact analysis','Response approvals','Open workflow'],
   'app/observability/settings/page.tsx':['Observability'],
 }
