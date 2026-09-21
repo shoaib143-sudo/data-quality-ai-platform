@@ -95,7 +95,7 @@ export default async function GovernedIncidentPage({ params }: { params: Promise
   const canManage = await hasProjectCapability(user.id, projectId, 'issues.manage')
 
   const slaState=classifyRemediationSla({status:incident.truth.issueStatus,dueAt:incident.truth.dueAt})
-  const dueLabel=incident.truth.dueAt?new Date(incident.truth.dueAt).toLocaleString():'Not set'
+  const dueLabel=!incident.truth.dueAt?'Not set':slaState==='INVALID'?'Invalid due date':new Date(incident.truth.dueAt).toLocaleString()
 
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Governed incident" contextLabel={projectResult.data.name} homeHref="/home" />
