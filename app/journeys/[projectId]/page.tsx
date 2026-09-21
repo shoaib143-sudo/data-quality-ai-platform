@@ -75,6 +75,8 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   if (projectResult.error) throw new Error(`Unable to load Governance Run project: ${projectResult.error.message}`)
   if (!projectResult.data) notFound()
   const project = projectResult.data
+  const canDatasets = canAccessWorkspace(landing.persona, 'datasets', landing.organizationRole)
+  const canQuality = canAccessWorkspace(landing.persona, 'data-quality', landing.organizationRole)
   const canWorkflows = canAccessWorkspace(landing.persona, 'workflows', landing.organizationRole)
   const canMonitoring = canAccessWorkspace(landing.persona, 'monitoring', landing.organizationRole)
   const canApprovals = canAccessWorkspace(landing.persona, 'approvals', landing.organizationRole)
@@ -211,8 +213,8 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
         ? `${sources.length} source${sources.length === 1 ? '' : 's'} registered; ${observedReady.length} observed ready.`
         : 'No governed source is registered.',
       state: sources.length === 0 ? 'NOT_STARTED' : observedReady.length > 0 ? 'COMPLETE' : 'IN_PROGRESS',
-      href: canonicalRoutes.datasets,
-      action: sources.length ? 'Review sources' : 'Connect source',
+      href: canDatasets ? canonicalRoutes.datasets : '/catalog',
+      action: canDatasets ? (sources.length ? 'Review sources' : 'Connect source') : 'Review governed data',
       icon: Database,
     },
     {
@@ -222,8 +224,8 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
         ? `${datasets.length} dataset${datasets.length === 1 ? '' : 's'} registered with ${versions.length} version record${versions.length === 1 ? '' : 's'}.`
         : 'No governed dataset has been registered from source evidence.',
       state: discoveryComplete ? 'COMPLETE' : sources.length ? 'IN_PROGRESS' : 'NOT_STARTED',
-      href: datasetHref,
-      action: datasets.length ? 'Open Dataset 360' : 'Register dataset',
+      href: datasets.length ? datasetHref : canDatasets ? canonicalRoutes.datasets : '/catalog',
+      action: datasets.length ? 'Open Dataset 360' : canDatasets ? 'Register dataset' : 'Review catalog',
       icon: Compass,
     },
     {
@@ -244,8 +246,8 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
       label: 'Quality assessment',
       detail: latestScore ? `Current quality score: ${formatScore(latestScore.overall_score)}.` : 'No persisted quality score is available for the latest completed profile.',
       state: latestScore ? 'COMPLETE' : latestCompletedRun ? 'IN_PROGRESS' : 'NOT_STARTED',
-      href: '/data-quality',
-      action: 'Review quality',
+      href: canQuality ? '/data-quality' : profileHref,
+      action: canQuality ? 'Review quality' : 'Review profiling evidence',
       icon: ShieldCheck,
     },
     {
