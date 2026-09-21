@@ -56,3 +56,18 @@ test('release workflow keeps scheduler disabled until live canary verification s
   assert.match(release, /Content-Profile: orchestration/)
   assert.match(release, /Accept-Profile: orchestration/)
 })
+
+
+test('rollback disables scheduler before worker redeploy and verifies 503', () => {
+  const start = release.indexOf('  disable-cloudflare-worker-canary:')
+  const end = release.indexOf('  certify-vercel-production:', start)
+  assert.ok(start >= 0 && end > start)
+  const rollback = release.slice(start, end)
+  const disableIndex = rollback.indexOf('p_enabled:false')
+  const redeployIndex = rollback.indexOf('Redeploy worker with execution disabled')
+  assert.ok(disableIndex >= 0)
+  assert.ok(redeployIndex > disableIndex)
+  assert.match(rollback, /DATANEXUS_WORKER_EXECUTION_ENABLED:false/)
+  assert.match(rollback, /test "\$disabled_code" = "503"/)
+  assert.match(rollback, /cloudflare-worker-canary-disable/)
+})
