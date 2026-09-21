@@ -187,6 +187,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
       : []
   const openIssues = latestIssues.filter(issue => unresolved(issue.status))
   const overdueIssues = openIssues.filter(issue => classifyRemediationSla({ status: issue.status, dueAt: issue.due_at }) === 'OVERDUE')
+  const invalidSlaIssues = openIssues.filter(issue => classifyRemediationSla({ status: issue.status, dueAt: issue.due_at }) === 'INVALID')
   const unassignedIssues = openIssues.filter(issue => !issue.owner_user_id)
   const latestLearning = latestWorkflow ? learning.find(item => item.workflow_instance_id === latestWorkflow.id) ?? null : null
 
@@ -208,7 +209,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
     : datasets[0] ?? null
   const datasetHref = latestDataset ? canonicalRoutes.governedDataset(String(latestDataset.id)) : canonicalRoutes.datasets
   const latestExecution = latestVersion
-    ? agentRuns.find(run => String(run.dataset_version_id ?? '') === String(latestVersion.id)) ?? agentRuns[0] ?? null
+    ? agentRuns.find(run => String(run.dataset_version_id ?? '') === String(latestVersion.id)) ?? null
     : agentRuns[0] ?? null
   const executionHref = canMonitoring && latestExecution ? `/monitoring?run=${encodeURIComponent(String(latestExecution.id))}` : canMonitoring ? '/monitoring' : '/journeys'
   const profileHref = latestCompletedRun ? `/profiling/explorer?runId=${encodeURIComponent(String(latestCompletedRun.id))}` : '/profiling/explorer'
@@ -420,7 +421,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
           <Link href={profileHref} className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4 hover:border-cyan-300/20"><p className="text-xs font-bold text-slate-500">Latest quality</p><p className="mt-2 text-2xl font-black text-cyan-200">{formatScore(latestScore?.overall_score)}</p></Link>
           <Link href={latestIssues[0] ? incidentHref : '/issues'} className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4 hover:border-cyan-300/20"><p className="text-xs font-bold text-slate-500">Open remediation issues</p><p className="mt-2 text-2xl font-black text-white">{openIssues.length}</p></Link>
           <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Unassigned remediation</p><p className="mt-2 text-2xl font-black text-amber-200">{unassignedIssues.length}</p></div>
-          <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Overdue remediation</p><p className="mt-2 text-2xl font-black text-rose-200">{overdueIssues.length}</p></div>
+          <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">SLA attention</p><p className="mt-2 text-2xl font-black text-rose-200">{overdueIssues.length + invalidSlaIssues.length}</p><p className="mt-1 text-[11px] text-slate-500">{overdueIssues.length} overdue · {invalidSlaIssues.length} invalid due date{invalidSlaIssues.length===1?'':'s'}</p></div>
         </section>
 
         <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
