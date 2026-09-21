@@ -22,6 +22,7 @@ function stableTruthFingerprint(incident: GovernedIncident) {
     severity: truth.severity,
     issueStatus: truth.issueStatus,
     ownerUserId: truth.ownerUserId,
+    dueAt: truth.dueAt ?? null,
     lifecycleState: truth.lifecycleState,
     verificationStatus: truth.verificationStatus,
     resolvedAt: truth.resolvedAt,
