@@ -5,6 +5,9 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { canViewExecutionRun } from '@/lib/governance/resource-authorization'
 import { authorizeAgentAction } from '@/lib/governance/agent-authorization'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 type AgentRun = {
   id: string
@@ -148,6 +151,8 @@ function formatDate(value: string | null) {
 
 export default async function AgentRunPage({ params }: { params: Promise<{ runId: string }> }) {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canAgents = canAccessWorkspaceHref(landing.persona, '/agents', landing.organizationRole)
   const { runId } = await params
   const supabase = await createClient()
 
@@ -215,10 +220,11 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
   const agent = agentResult.data
 
   return (
-    <main className="min-h-screen p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-8">
       <div className="mx-auto max-w-6xl space-y-8">
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Agent Run" contextLabel="Governed execution evidence" homeHref="/home" />
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/agents" className="text-sm underline">← Back to AI Agents</Link>
+          {canAgents ? <Link href="/agents" className="text-sm underline">← Back to AI Agents</Link> : <span />}
           <span className="rounded-full border px-3 py-1 text-xs font-medium">{typedRun.status}</span>
         </div>
 

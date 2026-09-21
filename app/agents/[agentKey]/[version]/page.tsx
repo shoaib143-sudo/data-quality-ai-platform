@@ -4,6 +4,9 @@ import { notFound } from 'next/navigation'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 type AgentDefinition = {
   id: string
@@ -37,7 +40,10 @@ export default async function AgentDetailPage({
 }: {
   params: Promise<{ agentKey: string; version: string }>
 }) {
-  await requireUser()
+  const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canAgents = canAccessWorkspaceHref(landing.persona, '/agents', landing.organizationRole)
+  const canMonitoring = canAccessWorkspaceHref(landing.persona, '/monitoring', landing.organizationRole)
   const { agentKey, version } = await params
   const supabase = await createClient()
 
@@ -74,15 +80,16 @@ export default async function AgentDetailPage({
   const failedRuns = runs.filter((run) => run.status === 'FAILED').length
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={canonicalRoutes.agents} className="text-sm font-medium underline underline-offset-4">← Back to AI Agents</Link>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Agent Detail" contextLabel={`${agent.name} v${agent.version}`} homeHref="/home" />
+        {(canAgents || canMonitoring) ? <div className="flex flex-wrap items-center justify-between gap-3">
+          {canAgents ? <Link href={canonicalRoutes.agents} className="text-sm font-medium underline underline-offset-4">← Back to AI Agents</Link> : <span />}
           <div className="flex flex-wrap gap-2">
-            <Link href={canonicalRoutes.agents} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100">Run an agent</Link>
-            <Link href={canonicalRoutes.monitoring} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100">Open Job Monitor</Link>
+            {canAgents ? <Link href={canonicalRoutes.agents} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100">Run an agent</Link> : null}
+            {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100">Open Job Monitor</Link> : null}
           </div>
-        </div>
+        </div> : null}
 
         <section className="rounded-2xl border bg-white p-6 shadow-sm sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
