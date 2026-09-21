@@ -30,9 +30,11 @@ assert.ok(orchestrator.includes("if (goal.length > 2000)"),'negative: orchestrat
 assert.ok(orchestrator.includes("if (!['OFF','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS'].includes(mode))"),'negative: autonomy mode must be allow-listed')
 assert.ok(orchestrator.includes("if (mode === 'OFF' && enabled)"),'negative: invalid enabled OFF policy must be rejected')
 
-const authIndex=discover.indexOf("await authorizeProject(user.id, projectId, 'catalog.read')")
+const authIndex=discover.indexOf("await authorizeProject(user.id, projectId, 'source.manage')")
+const bindingIndex=discover.indexOf('credentialRefBelongsToProject(credentialRef, projectId)')
 const discoveryIndex=discover.indexOf('await discoverNativeHierarchy')
-assert.ok(authIndex>=0 && discoveryIndex>authIndex,'negative: external hierarchy discovery must authorize the project before initiating remote discovery')
+assert.ok(authIndex>=0 && bindingIndex>authIndex && discoveryIndex>bindingIndex,'negative: external hierarchy discovery must require source.manage and project-bound credentials before initiating remote discovery')
 assert.ok(discover.includes('validCredentialRef(credentialRef)'),'negative: discovery must validate credential references before use')
+assert.ok(discover.includes("code: 'CREDENTIAL_PROJECT_MISMATCH'"),'negative: cross-project credential references must fail closed')
 
 console.log('Post-implementation negative and failure-path audit passed.')

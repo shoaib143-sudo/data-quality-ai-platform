@@ -5,6 +5,10 @@ import { discoverNativeHierarchy } from '@/lib/connectors/native-hierarchy-disco
 
 function text(value: unknown) { return typeof value === 'string' ? value.trim() : '' }
 function validCredentialRef(value: string) { return /^DGP_[A-Za-z0-9_]+$/.test(value) }
+function refPart(value: string) { return value.replace(/[^A-Za-z0-9]/g, '_') }
+function credentialRefBelongsToProject(credentialRef: string, projectId: string) {
+  return credentialRef.startsWith(`DGP_${refPart(projectId)}_`)
+}
 function record(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 
 export async function POST(request: Request) {
@@ -23,7 +27,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'The connection credentials are invalid or expired.', code: 'INVALID_CREDENTIAL_REF' }, { status: 400 })
     }
 
-    await authorizeProject(user.id, projectId, 'catalog.read')
+    await authorizeProject(user.id, projectId, 'source.manage')
+    if (!credentialRefBelongsToProject(credentialRef, projectId)) {
+      return NextResponse.json({ error: 'The connection credentials do not belong to this project.', code: 'CREDENTIAL_PROJECT_MISMATCH' }, { status: 403 })
+    }
 
     try {
       const hierarchy = await discoverNativeHierarchy({ jdbcUrl, credentialRef })

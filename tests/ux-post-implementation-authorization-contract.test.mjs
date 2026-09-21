@@ -18,13 +18,17 @@ test('source credential and registration writes require source.manage',()=>{
   assert.ok(!register.includes("authorizeProject(user.id, projectId, 'catalog.read')"))
 })
 
-test('read-only discovery authorizes before external connection',()=>{
+test('source discovery requires source.manage, project-bound credentials, and authorization before external connection',()=>{
   const source=read('app/api/datasets/source/discover/route.ts')
-  const auth=source.indexOf("authorizeProject(user.id, projectId, 'catalog.read')")
+  const authorization=source.indexOf("authorizeProject(user.id, projectId, 'source.manage')")
+  const binding=source.indexOf('credentialRefBelongsToProject(credentialRef, projectId)')
   const discover=source.indexOf('await discoverNativeHierarchy')
-  assert.ok(auth>=0)
-  assert.ok(discover>auth)
+  assert.ok(authorization>=0)
+  assert.ok(binding>authorization)
+  assert.ok(discover>binding)
   assert.ok(source.includes('validCredentialRef(credentialRef)'))
+  assert.ok(source.includes("code: 'CREDENTIAL_PROJECT_MISMATCH'"))
+  assert.ok(!source.includes("authorizeProject(user.id, projectId, 'catalog.read')"))
 })
 
 test('organization member mutations reauthorize and protect the last owner',()=>{
