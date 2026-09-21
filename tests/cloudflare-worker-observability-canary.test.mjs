@@ -44,12 +44,13 @@ test('database claim authority only allows OBSERVABILITY and preserves fencing',
 })
 
 test('canary activation is separately owner-approved and remains reversible', () => {
-  assert.match(release, /Cloudflare Worker Observability Canary/)
+  assert.match(release, /cloudflare-worker-canary-enable/)
   assert.match(release, /confirm_worker_execution/)
   assert.match(release, /inputs\.confirm_worker_execution == true/)
   assert.match(release, /DATANEXUS_WORKER_EXECUTION_ENABLED:true/)
   assert.match(release, /DATANEXUS_WORKER_CANARY_JOB_TYPE:OBSERVABILITY/)
   assert.match(release, /DATANEXUS_WORKER_EXECUTION_ENABLED:false/)
+  assert.doesNotMatch(release, /DGP_DURABLE_WORKER_URL/)
 })
 
 test('enabled canary requires privileged secrets and verifies unauthorized and over-broad modes fail closed', () => {
