@@ -66,6 +66,10 @@ on:
       - 'scripts/test-ux-shell-residual-inventory.mjs'
       - 'scripts/test-skip-link-bypass-contract.mjs'
       - 'tests/ux-wave13-security-contract.test.mjs'
+      - 'scripts/audit-ux-post-implementation-best-practices.mjs'
+      - 'scripts/test-ux-post-implementation-negative-failure-cases.mjs'
+      - 'scripts/test-ux-post-implementation-regression-gates.mjs'
+      - 'tests/ux-post-implementation-authorization-contract.test.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -150,6 +154,10 @@ on:
       - 'scripts/test-ux-shell-residual-inventory.mjs'
       - 'scripts/test-skip-link-bypass-contract.mjs'
       - 'tests/ux-wave13-security-contract.test.mjs'
+      - 'scripts/audit-ux-post-implementation-best-practices.mjs'
+      - 'scripts/test-ux-post-implementation-negative-failure-cases.mjs'
+      - 'scripts/test-ux-post-implementation-regression-gates.mjs'
+      - 'tests/ux-post-implementation-authorization-contract.test.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -311,6 +319,14 @@ jobs:
         run: node scripts/test-skip-link-bypass-contract.mjs
       - name: Run Wave 13 Node unit contracts
         run: node --test tests/ux-wave13-security-contract.test.mjs
+      - name: Run post-implementation UX best-practice audit
+        run: node scripts/audit-ux-post-implementation-best-practices.mjs
+      - name: Test post-implementation negative and failure paths
+        run: node scripts/test-ux-post-implementation-negative-failure-cases.mjs
+      - name: Verify post-implementation regression gates
+        run: node scripts/test-ux-post-implementation-regression-gates.mjs
+      - name: Run post-implementation authorization unit contracts
+        run: node --test tests/ux-post-implementation-authorization-contract.test.mjs
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
