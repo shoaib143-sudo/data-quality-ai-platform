@@ -35,7 +35,11 @@ type OutcomeView = {
   verificationProfileRunId: string | null
   verificationJobId: string | null
   verificationRetryable: boolean
+  sourceQualityScore: number | null
+  verificationQualityScore: number | null
   qualityScoreDelta: number | null
+  sourceHighSeverityFindings: number | null
+  verificationHighSeverityFindings: number | null
   highSeverityFindingsDelta: number | null
 } | null
 
@@ -295,9 +299,11 @@ export default function ProfilingGovernancePanel({
             <span className="rounded-full border border-emerald-300 bg-white px-2 py-0.5 text-xs font-semibold text-emerald-800">Evidence backed</span>
           </div>
           <p className="mt-2 text-emerald-800">All tracked remediation issues are resolved and the persisted remediation outcome is verified.</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-md border border-emerald-200 bg-white/80 p-3"><span className="text-emerald-700">Quality before → after:</span> <strong>{percent(outcome?.sourceQualityScore ?? null)} → {percent(outcome?.verificationQualityScore ?? null)}</strong></div>
             <div className="rounded-md border border-emerald-200 bg-white/80 p-3"><span className="text-emerald-700">Quality score delta:</span> <strong>{outcome?.qualityScoreDelta ?? 'N/A'}</strong></div>
-            <div className="rounded-md border border-emerald-200 bg-white/80 p-3"><span className="text-emerald-700">High severity finding delta:</span> <strong>{outcome?.highSeverityFindingsDelta ?? 'N/A'}</strong></div>
+            <div className="rounded-md border border-emerald-200 bg-white/80 p-3"><span className="text-emerald-700">High severity before → after:</span> <strong>{outcome?.sourceHighSeverityFindings ?? 'N/A'} → {outcome?.verificationHighSeverityFindings ?? 'N/A'}</strong></div>
+            <div className="rounded-md border border-emerald-200 bg-white/80 p-3"><span className="text-emerald-700">High severity delta:</span> <strong>{outcome?.highSeverityFindingsDelta ?? 'N/A'}</strong></div>
           </div>
         </div>
       ) : null}
