@@ -24,3 +24,10 @@ test('status RPC reports only canary-tagged OBSERVABILITY queue state', () => {
   assert.match(migration, /executionLane/)
   assert.match(migration, /CLOUDFLARE_CANARY/)
 })
+
+
+test('status RPC is null-safe before runtime Vault configuration', () => {
+  assert.match(migration, /coalesce\(bool_or\(name = 'DGP_CLOUDFLARE_WORKER_URL'/)
+  assert.match(migration, /coalesce\(bool_or\(name = 'DGP_CLOUDFLARE_WORKER_SECRET'/)
+  assert.match(migration, /runtime_configured/)
+})
