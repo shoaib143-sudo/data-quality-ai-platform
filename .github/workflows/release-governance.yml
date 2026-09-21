@@ -616,12 +616,14 @@ jobs:
           pnpm exec tsc --noEmit
           pnpm build
 
-      - name: Configure privileged worker secrets
+      - name: Configure privileged worker secrets and disabled Supabase canary state
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
         run: |
           set -euo pipefail
           node scripts/prepare-cloudflare-tooling.mjs
@@ -629,8 +631,18 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$DATANEXUS_WORKER_SECRET"
           test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           printf '%s' "$DATANEXUS_WORKER_SECRET" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put DATANEXUS_WORKER_SECRET --config infra/cloudflare/worker-runtime/wrangler.jsonc
           printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put SUPABASE_SERVICE_ROLE_KEY --config infra/cloudflare/worker-runtime/wrangler.jsonc
+          curl --fail-with-body --silent --show-error \
+            -X POST "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:false}))' "$DATANEXUS_CLOUDFLARE_WORKER_URL" "$DATANEXUS_WORKER_SECRET")"
 
       - name: Deploy observability-only worker canary
         env:
@@ -685,6 +697,27 @@ jobs:
           canary_code="$(curl --silent --show-error --output /tmp/worker-canary.json --write-out '%{http_code}' -X POST -H "Authorization: Bearer $DATANEXUS_WORKER_SECRET" -H 'Content-Type: application/json' --data '{"mode":"CLOUDFLARE_OBSERVABILITY_CANARY"}' "$BASE_URL/api/jobs/worker")"
           test "$canary_code" = "200"
           node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(body.accepted!==true||body.mode!=='CLOUDFLARE_OBSERVABILITY_CANARY'||body.jobType!=='OBSERVABILITY'||!Number.isInteger(body.claimed)||body.claimed<0||body.claimed>1) process.exit(1)" /tmp/worker-canary.json
+
+      - name: Enable Supabase canary scheduler only after live verification
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
+          test -n "$DATANEXUS_WORKER_SECRET"
+          curl --fail-with-body --silent --show-error \
+            -X POST "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:true}))' "$DATANEXUS_CLOUDFLARE_WORKER_URL" "$DATANEXUS_WORKER_SECRET")"
 
 
   certify-vercel-production:
