@@ -71,3 +71,10 @@ test('canary activation remains manual-only inside the release workflow', () => 
   assert.doesNotMatch(canary, /schedule:/)
   assert.doesNotMatch(canary, /push:/)
 })
+
+
+test('canary API mode is unavailable on non-Cloudflare runtimes', () => {
+  assert.match(route, /process\.env\.DATANEXUS_PLATFORM !== 'cloudflare'/)
+  assert.match(route, /process\.env\.DATANEXUS_WORKER_CANARY_JOB_TYPE !== 'OBSERVABILITY'/)
+  assert.match(route, /Cloudflare observability canary mode is not available on this runtime/)
+})
