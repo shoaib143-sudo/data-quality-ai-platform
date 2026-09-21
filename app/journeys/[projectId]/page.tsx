@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
@@ -74,6 +75,11 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   if (projectResult.error) throw new Error(`Unable to load Governance Run project: ${projectResult.error.message}`)
   if (!projectResult.data) notFound()
   const project = projectResult.data
+  const canWorkflows = canAccessWorkspace(landing.persona, 'workflows', landing.organizationRole)
+  const canMonitoring = canAccessWorkspace(landing.persona, 'monitoring', landing.organizationRole)
+  const canApprovals = canAccessWorkspace(landing.persona, 'approvals', landing.organizationRole)
+  const canReports = canAccessWorkspace(landing.persona, 'reports', landing.organizationRole)
+  const canAiCapabilities = canAccessWorkspace(landing.persona, 'ai-capabilities', landing.organizationRole)
 
   const [sourcesResult, datasetsResult, issuesResult, workflowsResult, outcomesResult, learningResult] = await Promise.all([
     supabase.schema('catalog').from('data_sources').select('id,name,status').eq('project_id', projectId).order('name'),
@@ -169,7 +175,9 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const latestDataset = latestVersion ? datasets.find(dataset => dataset.id === latestVersion.dataset_id) ?? datasets[0] ?? null : datasets[0] ?? null
   const datasetHref = latestDataset ? canonicalRoutes.governedDataset(String(latestDataset.id)) : canonicalRoutes.datasets
   const profileHref = latestCompletedRun ? `/profiling/explorer?runId=${encodeURIComponent(String(latestCompletedRun.id))}` : '/profiling/explorer'
-  const workflowHref = latestWorkflow ? `/workflows?instanceId=${encodeURIComponent(String(latestWorkflow.id))}` : '/workflows'
+  const workflowHref = canWorkflows
+    ? latestWorkflow ? `/workflows?instanceId=${encodeURIComponent(String(latestWorkflow.id))}` : '/workflows'
+    : latestIssues[0] ? incidentHref : profileHref
   const incidentHref = latestIssues[0] ? canonicalRoutes.governedIncident(String(latestIssues[0].id)) : '/issues'
 
   const stages: Stage[] = [
@@ -309,8 +317,8 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
         ? `Learning record is ${normalized(latestLearning.status) || 'RECORDED'}${latestLearning.effective === true ? ' and marked effective' : ''}.`
         : 'No governed learning record is linked to the current workflow.',
       state: latestLearning ? latestLearning.effective === true ? 'COMPLETE' : 'IN_PROGRESS' : 'OPTIONAL',
-      href: '/ai-capabilities',
-      action: 'Review learning',
+      href: canAiCapabilities ? '/ai-capabilities' : canReports ? '/reports' : '/journeys',
+      action: canAiCapabilities ? 'Review learning' : canReports ? 'Review learning evidence' : 'Return to journeys',
       icon: Lightbulb,
     },
   ]
@@ -415,9 +423,9 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Learning</p><p className="mt-2 font-black text-white">{latestLearning ? normalized(latestLearning.status) || 'RECORDED' : 'Not linked'}</p></div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link href="/monitoring" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Job Monitor</Link>
-              <Link href="/approvals" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Approvals</Link>
-              <Link href="/reports" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Reports</Link>
+              {canMonitoring ? <Link href="/monitoring" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Job Monitor</Link> : null}
+              {canApprovals ? <Link href="/approvals" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Approvals</Link> : null}
+              {canReports ? <Link href="/reports" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Reports</Link> : null}
             </div>
           </article>
         </section>
