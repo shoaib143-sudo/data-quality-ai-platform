@@ -11,7 +11,7 @@ const files = {
 }
 
 const expected = {
-  shell: ['Dashboard', 'Data', 'Quality', 'Governance', 'Automation', 'Monitor', 'Approvals', 'Search', 'Inbox'],
+  shell: ['Dashboard', 'Data', 'Quality', 'Governance', 'Automation', 'Monitor', 'Approvals', 'Admin', 'Search', 'Inbox'],
   datasetActions: ['Dataset 360', 'Fix manually', 'Ask AI to repair', 'Run profiling'],
   registration: ['Create project', 'Cancel', 'Register dataset', 'Run profiling', 'Open Dataset 360'],
   journeyOverview: ['Open Governance Run'],
