@@ -99,7 +99,7 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
   const workflow = workflowResult.data
   const outcomeResult = workflow
     ? await supabase.schema('governance').from('profiling_remediation_outcomes')
-        .select('status,execution_mode,production_mutation_performed,remediation_issue_ids,verification_profile_run_id,verification_job_id,quality_score_delta,high_severity_findings_delta,outcome')
+        .select('status,execution_mode,production_mutation_performed,remediation_issue_ids,verification_profile_run_id,verification_job_id,source_quality_score,verification_quality_score,quality_score_delta,source_high_severity_findings,verification_high_severity_findings,high_severity_findings_delta,outcome')
         .eq('workflow_instance_id', workflow.id)
         .maybeSingle()
     : { data: null, error: null }
@@ -156,7 +156,11 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
     verificationProfileRunId: remediationOutcome.verification_profile_run_id,
     verificationJobId: remediationOutcome.verification_job_id,
     verificationRetryable: outcomeEvidence.verification_retryable === true,
+    sourceQualityScore: remediationOutcome.source_quality_score === null ? null : Number(remediationOutcome.source_quality_score),
+    verificationQualityScore: remediationOutcome.verification_quality_score === null ? null : Number(remediationOutcome.verification_quality_score),
     qualityScoreDelta: remediationOutcome.quality_score_delta === null ? null : Number(remediationOutcome.quality_score_delta),
+    sourceHighSeverityFindings: remediationOutcome.source_high_severity_findings === null ? null : Number(remediationOutcome.source_high_severity_findings),
+    verificationHighSeverityFindings: remediationOutcome.verification_high_severity_findings === null ? null : Number(remediationOutcome.verification_high_severity_findings),
     highSeverityFindingsDelta: remediationOutcome.high_severity_findings_delta === null ? null : Number(remediationOutcome.high_severity_findings_delta),
   } : null
 
