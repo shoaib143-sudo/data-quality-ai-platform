@@ -22,6 +22,9 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
   const user = await requireUser()
   const [supabase, requested, landing] = await Promise.all([createClient(), searchParams, resolveLandingAccess(user.id)])
   const canDatasets = canAccessWorkspaceHref(landing.persona, '/datasets', landing.organizationRole)
+  const canMonitoring = canAccessWorkspaceHref(landing.persona, '/monitoring', landing.organizationRole)
+  const canQuality = canAccessWorkspaceHref(landing.persona, '/data-quality', landing.organizationRole)
+  const canExplorer = canAccessWorkspaceHref(landing.persona, '/profiling/explorer', landing.organizationRole)
   const requestedRunId = requested.runId?.trim() || null
 
   const runQuery = supabase
@@ -180,5 +183,8 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
     samples={canonicalPreview.samples}
     persona={landing.persona}
     organizationRole={landing.organizationRole}
+    canMonitoring={canMonitoring}
+    canQuality={canQuality}
+    canExplorer={canExplorer}
   />
 }
