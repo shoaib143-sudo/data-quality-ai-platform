@@ -21,7 +21,7 @@ test('infrastructure page requires administrator membership and scopes storage t
 })
 
 test('all infrastructure status modules expose clear operator-facing state', () => {
-  for (const id of ['runtime-status-heading', 'storage-cutover-heading', 'architecture-boundary-heading']) assert.match(page, new RegExp(`aria-labelledby=\\"${id}\\"`))
+  for (const id of ['runtime-status-heading', 'storage-cutover-heading', 'cloudflare-worker-canary-heading', 'architecture-boundary-heading']) assert.match(page, new RegExp(`aria-labelledby=\\"${id}\\"`))
   for (const label of [
     'Primary runtime',
     'Supabase objects',
@@ -30,6 +30,13 @@ test('all infrastructure status modules expose clear operator-facing state', () 
     'Default provider',
     'Bulk provider',
     'Production R2 cutover',
+    '1 job / cycle',
+    'OBSERVABILITY',
+    'Kill switch',
+    'Scheduler authority',
+    'Claim limit',
+    'Allowed workload',
+    'Cloudflare worker canary',
     'Architecture boundary',
   ]) assert.ok(page.includes(label), `missing infrastructure UX label: ${label}`)
 })
@@ -45,4 +52,15 @@ test('read-only infrastructure page does not expose destructive CTAs', () => {
   assert.doesNotMatch(page, /<button/)
   assert.doesNotMatch(page, /fetch\(/)
   assert.doesNotMatch(page, /deleteObject|migrate-to-r2|reference-cutover/)
+})
+
+
+test('Cloudflare canary policy remains read-only and communicates bounded authority', () => {
+  assert.match(page, /Cloudflare worker canary/)
+  assert.match(page, /OBSERVABILITY/)
+  assert.match(page, /1 job \/ cycle/)
+  assert.match(page, /Scheduler authority/)
+  assert.match(page, /Supabase/)
+  assert.match(page, /Default off; owner-approved activation only/)
+  assert.doesNotMatch(page, /Enable worker|Activate canary|Disable worker/)
 })
