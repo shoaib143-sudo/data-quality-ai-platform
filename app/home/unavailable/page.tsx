@@ -10,7 +10,7 @@ export default async function LandingUnavailablePage() {
   const persona = personas[access.persona]
 
   if (access.enabled) {
-    return <main className="min-h-screen bg-[#eef2f7] px-4 py-10 text-slate-900 sm:px-6">
+    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#eef2f7] px-4 py-10 text-slate-900 sm:px-6">
       <div className="mx-auto max-w-3xl rounded-[2rem] bg-[#eef2f7] p-8 text-center shadow-[12px_12px_30px_#cbd2dc,-12px_-12px_30px_#ffffff]">
         <ShieldCheck className="mx-auto h-9 w-9 text-blue-600" />
         <h1 className="mt-5 text-3xl font-black">Your landing page is available</h1>
@@ -20,7 +20,7 @@ export default async function LandingUnavailablePage() {
     </main>
   }
 
-  return <main className="min-h-screen bg-[#eef2f7] px-4 py-10 text-slate-900 sm:px-6">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#eef2f7] px-4 py-10 text-slate-900 sm:px-6">
     <div className="mx-auto max-w-3xl rounded-[2rem] bg-[#eef2f7] p-8 text-center shadow-[12px_12px_30px_#cbd2dc,-12px_-12px_30px_#ffffff]">
       <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#eef2f7] text-slate-500 shadow-[inset_3px_3px_8px_#cbd2dc,inset_-3px_-3px_8px_#ffffff]"><EyeOff className="h-6 w-6" /></span>
       <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Role experience unavailable</p>
