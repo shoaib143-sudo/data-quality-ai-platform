@@ -36,6 +36,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
   const [profiling, setProfiling] = useState(false)
   const [profilingTarget, setProfilingTarget] = useState<{ projectId: string; datasetVersionId: string; agentDefinitionId: string } | null>(null)
   const [registeredDatasetId, setRegisteredDatasetId] = useState<string | null>(null)
+  const [registeredProjectId, setRegisteredProjectId] = useState<string | null>(null)
 
   const projectSources = useMemo(() => availableSources.filter((source) => projectMode === 'existing' && source.projectId === projectId && ['ACTIVE', 'CONFIGURED'].includes(String(source.status).toUpperCase())), [availableSources, projectId, projectMode])
   const canCreateProject = organizations.length > 0
@@ -268,7 +269,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setStatus(null); setProfilingTarget(null); setRegisteredDatasetId(null)
+    event.preventDefault(); setStatus(null); setProfilingTarget(null); setRegisteredDatasetId(null); setRegisteredProjectId(null)
     const form = new FormData(event.currentTarget)
     const submittedProjectId = String(form.get('projectId') ?? '').trim() || projectId
     const submittedSourceId = String(form.get('sourceId') ?? '').trim() || sourceId
@@ -283,6 +284,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? payload.source_validation?.errors?.join(' ') ?? 'Dataset registration failed.')
       const profilingReady = payload.profiling_ready === true
       setRegisteredDatasetId(String(payload.dataset.id))
+      setRegisteredProjectId(submittedProjectId)
       setStatus(profilingReady
         ? `Registered ${payload.dataset.name} v${payload.version.version_number}. Profiling source is ready.`
         : `Registered ${payload.dataset.name} v${payload.version.version_number}. Dataset is saved, but profiling is not ready yet: ${payload.source_validation?.warnings?.at(-1) ?? 'validate the source before profiling.'}`)
@@ -339,7 +341,7 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
         <label className="space-y-2 text-sm"><span className="font-medium">Description</span><input name="description" value={description} onChange={e => setDescription(e.target.value)} disabled={busy} placeholder="Purpose and business context" /></label>
         <div className="md:col-span-2"><button type="submit" disabled={busy} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{running ? 'Registering…' : 'Register dataset'}</button></div>
       </form>}
-    {profilingTarget && <div className="mt-5 rounded-lg border p-4"><p className="text-sm font-medium">Dataset is profiling-ready</p><p className="mt-1 text-sm text-muted-foreground">Start the production Profiling Agent 2.0. Execution is queued through the governed durable worker and continues in Job Monitor.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={runProfiling} disabled={profiling} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{profiling ? 'Queueing…' : 'Run profiling'}</button>{registeredDatasetId ? <Link href={canonicalRoutes.governedDataset(registeredDatasetId)} className="rounded-md border px-4 py-2 text-sm font-medium">Open Dataset 360</Link> : null}</div></div>}
-    {status && <div className="mt-4 rounded-md border p-3 text-sm" role="status"><p>{status}</p>{registeredDatasetId && !profilingTarget ? <Link href={canonicalRoutes.governedDataset(registeredDatasetId)} className="mt-2 inline-flex font-semibold text-blue-600 underline">Open Dataset 360</Link> : null}</div>}
+    {profilingTarget && <div className="mt-5 rounded-lg border p-4"><p className="text-sm font-medium">Dataset is profiling-ready</p><p className="mt-1 text-sm text-muted-foreground">Start the production Profiling Agent 2.0. Execution is queued through the governed durable worker and continues in Job Monitor.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={runProfiling} disabled={profiling} className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50">{profiling ? 'Queueing…' : 'Run profiling'}</button>{registeredDatasetId ? <Link href={canonicalRoutes.governedDataset(registeredDatasetId)} className="rounded-md border px-4 py-2 text-sm font-medium">Open Dataset 360</Link> : null}{registeredProjectId ? <Link href={canonicalRoutes.governanceRun(registeredProjectId)} className="rounded-md border px-4 py-2 text-sm font-medium">Open Governance Run</Link> : null}</div></div>}
+    {status && <div className="mt-4 rounded-md border p-3 text-sm" role="status"><p>{status}</p>{registeredDatasetId && !profilingTarget ? <div className="mt-2 flex flex-wrap gap-3"><Link href={canonicalRoutes.governedDataset(registeredDatasetId)} className="inline-flex font-semibold text-blue-600 underline">Open Dataset 360</Link>{registeredProjectId ? <Link href={canonicalRoutes.governanceRun(registeredProjectId)} className="inline-flex font-semibold text-violet-600 underline">Open Governance Run</Link> : null}</div> : null}</div>}
   </section>
 }
