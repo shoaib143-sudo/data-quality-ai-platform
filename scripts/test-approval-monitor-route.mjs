@@ -6,6 +6,8 @@ assert.equal(resolveMonitorRoute({ runId: 'run 1', monitorUrl: '/monitoring?run=
 assert.equal(resolveMonitorRoute({ runId: 'abc', monitorUrl: null }), '/monitoring?run=abc')
 assert.equal(resolveMonitorRoute({ runId: 'abc', monitorUrl: 'https://evil.example/run' }), '/monitoring?run=abc')
 assert.equal(resolveMonitorRoute({ runId: 'abc', monitorUrl: '//evil.example/monitoring' }), '/monitoring?run=abc')
+assert.equal(resolveMonitorRoute({ runId: 'abc', monitorUrl: '/monitoring?run=other' }), '/monitoring?run=abc')
+assert.equal(resolveMonitorRoute({ runId: 'abc', monitorUrl: '/monitoring' }), '/monitoring?run=abc')
 assert.equal(resolveMonitorRoute({ runId: null, monitorUrl: 'javascript:alert(1)' }), '/monitoring')
 assert.equal(resolveMonitorRoute({ runId: null, monitorUrl: '/monitoring' }), '/monitoring')
 
