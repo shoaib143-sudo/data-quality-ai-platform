@@ -48,7 +48,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
   const typedProjects = (projectsResult.data ?? []) as MonitoringProject[]
   const typedSteps = (stepsResult.data ?? []) as MonitoringStep[]
 
-  return <main className="min-h-screen bg-[#020b17] text-slate-100">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#020b17] text-slate-100">
     <div className="mx-auto max-w-[1760px] px-4 py-5 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Job Monitor" contextLabel="Governed execution observability" homeHref="/home" />
       <header className="mb-5 mt-4 flex flex-col gap-4 border-b border-cyan-400/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
