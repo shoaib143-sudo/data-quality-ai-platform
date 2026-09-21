@@ -10,6 +10,7 @@ const dataset=fs.readFileSync('app/datasets/dataset/[datasetId]/edit/page.tsx','
 const source=fs.readFileSync('app/datasets/edit/[sourceId]/page.tsx','utf8')
 const admin=fs.readFileSync('app/admin/page.tsx','utf8')
 const insights=fs.readFileSync('app/ai-insights/page.tsx','utf8')
+const sourceRegister=fs.readFileSync('app/api/datasets/source/register/route.ts','utf8')
 
 assert.ok(traces.includes("authorizeProject(user.id, selectedProjectId, 'admin.manage')"), 'negative: trace evidence must reject projects without admin.manage')
 assert.ok(retrieval.includes("authorizeProject(user.id, selectedProjectId, 'admin.manage')"), 'negative: retrieval evidence must reject projects without admin.manage')
@@ -27,6 +28,9 @@ assert.ok(dataset.includes('if (!dataset) notFound()') && dataset.includes('if (
 assert.ok(source.includes('if (!source) notFound()') && source.includes('if (!project) notFound()'), 'negative: source edit must reject missing source/project')
 assert.ok(source.includes("if (String(source.source_type).toUpperCase() !== 'JDBC')"), 'negative: non-JDBC edit must take the safe connector-specific fallback')
 assert.ok(source.includes('This source is not a database/JDBC connection.'), 'negative: non-JDBC fallback must explain the unsupported edit path')
+
+assert.ok(sourceRegister.includes("authorizeProject(user.id, projectId, 'source.manage')"), 'negative: source registration mutations must require source.manage')
+assert.ok(!sourceRegister.includes("authorizeProject(user.id, projectId, 'catalog.read')"), 'negative: catalog.read must never authorize source registration mutations')
 
 assert.ok(admin.includes(".in('role',['OWNER','ADMIN'])"), 'negative: Administration must preserve OWNER/ADMIN access requirement')
 assert.ok(admin.includes('if(!organizationIds.length)'), 'negative: Administration must preserve no-admin fallback')
