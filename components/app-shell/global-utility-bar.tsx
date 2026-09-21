@@ -37,7 +37,7 @@ export function GlobalUtilityBar({
 
   return (
     <>
-      <SkipToContent />
+      <SkipToContent targetId="workspace-content-start" />
       <header className="dn-topbar mb-3 px-3 py-2 sm:px-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link href={resolvedHomeHref} className={`flex min-w-0 items-center gap-2 rounded-lg ${focus}`} aria-label="DataNexus home">
@@ -78,6 +78,7 @@ export function GlobalUtilityBar({
           </div>
         </div>
       </header>
+      <div id="workspace-content-start" tabIndex={-1} className="scroll-mt-4" />
     </>
   )
 }
