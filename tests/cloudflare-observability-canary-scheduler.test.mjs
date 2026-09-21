@@ -21,7 +21,8 @@ test('canary scheduler requires governed secret and exact HTTPS worker endpoint'
   assert.match(migration, /DGP_CLOUDFLARE_WORKER_SECRET/)
   assert.doesNotMatch(migration, /DGP_DURABLE_WORKER_SECRET/)
   assert.match(migration, /DGP_CLOUDFLARE_WORKER_URL/)
-  assert.match(migration, /\^https:\/\/[A-Za-z0-9.-]+\(\?:\:\[0-9\]\+\)\?\/api\/jobs\/worker\$/)
+  assert.match(migration, /Cloudflare canary worker URL must be an exact HTTPS \/api\/jobs\/worker endpoint/)
+  assert.match(migration, /DGP_CLOUDFLARE_WORKER_URL must be an exact HTTPS \/api\/jobs\/worker endpoint/)
   assert.doesNotMatch(migration, /data-quality-ai-platform\.vercel\.app/)
 })
 
