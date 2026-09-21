@@ -2,16 +2,12 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
-
-function safeNext(value: string | null) {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard'
-  return value
-}
+import { safeAuthReturnPath } from '@/lib/auth/safe-auth-return-path'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const code = url.searchParams.get('code')
-  const next = safeNext(url.searchParams.get('next'))
+  const next = safeAuthReturnPath(url.searchParams.get('next'))
   if (!code) return NextResponse.redirect(new URL(`/login?error=missing_code&next=${encodeURIComponent(next)}`, url.origin))
 
   const supabase = await createClient()

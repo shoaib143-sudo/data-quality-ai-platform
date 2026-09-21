@@ -12,6 +12,8 @@ const requiredWorkflowPaths=[
   "'scripts/test-ux-wave13-cta-inventory.mjs'",
   "'scripts/test-ux-wave13-authorization-negative-cases.mjs'",
   "'scripts/audit-ux-wave13-adversarial.mjs'",
+  "'lib/auth/safe-auth-return-path.ts'",
+  "'tests/safe-auth-return-path.test.mjs'",
 ]
 
 for(const requiredPath of requiredWorkflowPaths){
@@ -35,6 +37,7 @@ const requiredSteps=[
   'Test Wave 13 local navigation policy',
   'Test Wave 13 CTA inventory and destinations',
   'Test Wave 13 authorization negative and failure cases',
+  'Test safe auth return-path unit and negative cases',
   'Run independent Wave 13 adversarial audit',
   'Verify post-implementation UX gate matrix',
   'Revalidate profiling lifecycle',
@@ -54,6 +57,7 @@ for(const command of [
   'test-ux-wave13-local-navigation-policy.mjs',
   'test-ux-wave13-cta-inventory.mjs',
   'test-ux-wave13-authorization-negative-cases.mjs',
+  'safe-auth-return-path.test.mjs',
   'audit-ux-wave13-adversarial.mjs',
   'verify-profiling-lifecycle-contracts.mjs',
   'verify-profiling-remediation.mjs',
