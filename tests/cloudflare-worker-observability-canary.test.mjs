@@ -61,3 +61,10 @@ test('enabled canary requires privileged secrets and verifies unauthorized and o
   assert.match(rollout, /body\.jobType!=='OBSERVABILITY'/)
   assert.match(rollout, /body\.claimed<0\|\|body\.claimed>1/)
 })
+
+
+test('dedicated canary workflow cannot run on push or schedule', () => {
+  assert.match(rollout, /workflow_dispatch:/)
+  assert.doesNotMatch(rollout, /\npush:/)
+  assert.doesNotMatch(rollout, /\nschedule:/)
+})
