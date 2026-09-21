@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ApprovalInboxItem } from '@/lib/governance/approval-inbox'
+import { resolveMonitorRoute } from '@/lib/monitoring/monitor-route'
 
 function value(record: Record<string, unknown>, key: string) {
   const raw = record[key]
@@ -24,7 +25,10 @@ export function ApprovalInbox({ items }: { items: ApprovalInboxItem[] }) {
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error ?? 'Unable to execute requested action.')
       const runId = payload.runId ?? payload.agentRunId ?? payload.agent_run_id
-      router.push(payload.monitorUrl ?? (typeof runId === 'string' ? `/monitoring?run=${encodeURIComponent(runId)}` : '/monitoring'))
+      router.push(resolveMonitorRoute({
+        runId: typeof runId === 'string' ? runId : null,
+        monitorUrl: typeof payload.monitorUrl === 'string' ? payload.monitorUrl : null,
+      }))
       router.refresh()
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to execute requested action.')
