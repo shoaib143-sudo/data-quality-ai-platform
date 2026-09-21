@@ -6,7 +6,7 @@ const incident = fs.readFileSync('app/issues/[issueId]/page.tsx', 'utf8')
 const reader = fs.readFileSync('lib/governance/governed-incident-reader.ts', 'utf8')
 const truth = fs.readFileSync('lib/governance/governed-incident.ts', 'utf8')
 
-assert.ok(run.includes("from('agent_runs').select('id,status,dataset_id,dataset_version_id"), 'Governance Run must load execution evidence')
+assert.ok(run.includes("canMonitoring\n      ? supabase.schema('agent').from('agent_runs').select('id,status,dataset_id,dataset_version_id"), 'Governance Run must load execution evidence only for personas with monitoring access')
 assert.ok(run.includes(".eq('project_id', projectId).order('created_at'"), 'execution evidence must remain project scoped')
 assert.ok(run.includes("agentRuns.find(run => String(run.dataset_version_id ?? '') === String(latestVersion.id))"), 'latest execution must prefer the current dataset version')
 assert.ok(run.includes("const executionHref = canMonitoring && latestExecution"), 'Job Monitor deep-link must remain persona gated')
