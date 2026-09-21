@@ -8,6 +8,9 @@ import {
 } from '@/lib/profiling/canonical-document-preview'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 type SearchParams = Promise<{ runId?: string }>
 
@@ -16,9 +19,12 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 export default async function ProfilingPage({ searchParams }: { searchParams: SearchParams }) {
-  await requireUser()
-  const supabase = await createClient()
-  const requested = await searchParams
+  const user = await requireUser()
+  const [supabase, requested, landing] = await Promise.all([createClient(), searchParams, resolveLandingAccess(user.id)])
+  const canDatasets = canAccessWorkspaceHref(landing.persona, '/datasets', landing.organizationRole)
+  const canMonitoring = canAccessWorkspaceHref(landing.persona, '/monitoring', landing.organizationRole)
+  const canQuality = canAccessWorkspaceHref(landing.persona, '/data-quality', landing.organizationRole)
+  const canExplorer = canAccessWorkspaceHref(landing.persona, '/profiling/explorer', landing.organizationRole)
   const requestedRunId = requested.runId?.trim() || null
 
   const runQuery = supabase
@@ -34,13 +40,13 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
   const run = runResult.data
 
   if (!run) {
-    return <main className="min-h-screen bg-slate-50 p-8 text-slate-950">
-      <div className="mx-auto max-w-5xl rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-8 text-slate-950">
+      <div className="mx-auto max-w-5xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling" contextLabel="Governed profiling evidence" homeHref="/home" /><div className="mt-6 rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Activity className="h-7 w-7" /></div>
         <h1 className="mt-5 text-2xl font-black">No profiling evidence yet</h1>
         <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Run profiling on a governed dataset. Once the run persists evidence, this page will consolidate its summary, statistics, distributions, sensitive-data signals, outliers, duplicates and sample preview.</p>
-        <Link href="/datasets" className="mt-6 inline-flex rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Open datasets</Link>
-      </div>
+        {canDatasets ? <Link href="/datasets" className="mt-6 inline-flex rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Open datasets</Link> : null}
+      </div></div>
     </main>
   }
 
@@ -175,5 +181,10 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
     distributions={(distributionsResult.data ?? []) as any}
     findings={(findingsResult.data ?? []) as any}
     samples={canonicalPreview.samples}
+    persona={landing.persona}
+    organizationRole={landing.organizationRole}
+    canMonitoring={canMonitoring}
+    canQuality={canQuality}
+    canExplorer={canExplorer}
   />
 }
