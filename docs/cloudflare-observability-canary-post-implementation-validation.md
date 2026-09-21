@@ -140,3 +140,22 @@ If any later activation step fails, the workflow performs best-effort fail-close
 3. leave the primary Vercel durable-worker scheduler unchanged.
 
 The original workflow failure remains the release outcome. Cleanup warnings must not be interpreted as successful activation.
+
+
+## Readiness operation
+
+Before live activation, run the protected `cloudflare-worker-canary-readiness` operation against the exact protected-main SHA. It performs no deployment and no scheduler enablement. It verifies:
+
+- exact SHA is reachable from protected `main`;
+- Cloudflare account/token, worker bearer secret and Supabase service-role credentials are available in the protected `cloudflare-worker` environment;
+- the configured Cloudflare worker URL is an exact HTTPS `/api/jobs/worker` endpoint;
+- the Supabase canary scheduler remains disabled before activation;
+- scheduler cadence, OBSERVABILITY allowlist, Supabase authority and single-flight limit match the governed contract.
+
+## Post-activation certification
+
+After the enable workflow succeeds, execute `supabase/verify_cloudflare_observability_canary_postactivation.sql`.
+
+It fails closed unless the canary is enabled, runtime configuration is present, the five-minute Supabase scheduler is active, the workload remains OBSERVABILITY-only, the single-flight invariant holds and every live canary lease belongs to the dedicated Cloudflare worker identity.
+
+The rollback operation additionally verifies the worker returns the disabled-execution boundary and that Supabase reports the canary scheduler flag disabled.

@@ -14,6 +14,7 @@ on:
           - verify
           - cloudflare-canary-preflight
           - cloudflare-worker-preflight
+          - cloudflare-worker-canary-readiness
           - cloudflare-canary-deploy
           - cloudflare-worker-deploy
           - cloudflare-worker-canary-enable
@@ -562,6 +563,63 @@ jobs:
           disabled_code="$(curl --silent --show-error --output /tmp/worker-disabled.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"mode":"ADAPTIVE_DISPATCH"}' "$BASE_URL/api/jobs/worker")"
           test "$disabled_code" = "503"
 
+  verify-cloudflare-worker-canary-readiness:
+    name: cloudflare-worker-canary-readiness
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'cloudflare-worker-canary-readiness'
+    needs: release-governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: cloudflare-worker
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 1
+
+      - name: Verify immutable candidate identity
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REQUESTED_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          test "$(git rev-parse HEAD)" = "$REQUESTED_SHA"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$REQUESTED_SHA" origin/main || {
+            echo "::error::Cloudflare worker canary readiness SHA is not reachable from protected main"
+            exit 1
+          }
+
+      - name: Verify activation prerequisites without exposing values
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$DATANEXUS_WORKER_SECRET"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
+          printf '%s' "$DATANEXUS_CLOUDFLARE_WORKER_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/api/jobs/worker$'
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data '{}' \
+            --output /tmp/canary-readiness-status.json
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/canary-readiness-status.json','utf8')); if(body.enabled!==false||body.cron_active!==true||body.cron_schedule!=='*/5 * * * *'||body.allowed_job_type!=='OBSERVABILITY'||body.scheduler_authority!=='Supabase'||body.single_flight_limit!==1) process.exit(1)"
+
   enable-cloudflare-worker-canary:
     name: cloudflare-worker-canary-enable
     if: github.event_name == 'workflow_dispatch' && inputs.operation == 'cloudflare-worker-canary-enable' && inputs.confirm_paid_activation == true && inputs.confirm_worker_execution == true
@@ -893,6 +951,23 @@ jobs:
           test "$ready" = "1"
           disabled_code="$(curl --silent --show-error --output /tmp/worker-disabled.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"mode":"CLOUDFLARE_OBSERVABILITY_CANARY"}' "$BASE_URL/api/jobs/worker")"
           test "$disabled_code" = "503"
+
+      - name: Verify Supabase canary scheduler disabled
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data '{}' \
+            --output /tmp/canary-disabled-status.json
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/canary-disabled-status.json','utf8')); if(body.enabled!==false||body.cron_active!==true||body.allowed_job_type!=='OBSERVABILITY'||body.scheduler_authority!=='Supabase'||body.single_flight_limit!==1) process.exit(1)"
 
 
   certify-vercel-production:
