@@ -12,6 +12,8 @@ assert.ok(page.includes("eq('version','2.0')"), 'Dataset 360 must bind profiling
 assert.ok(page.includes("hasProjectCapability(user.id,dataset.project_id,'profiling.execute')"), 'profiling CTA must remain capability gated')
 assert.ok(page.includes('agentDefinitionId={agentDefinition?.id??null}'), 'Dataset 360 must pass the governed agent definition to readiness actions')
 assert.ok(page.includes('Persona-aware presentation only. Governed evidence, policy and authorization are unchanged.'), 'Dataset 360 must disclose the truth and authorization boundary')
+assert.ok(page.includes('<GlobalUtilityBar'), 'Dataset 360 must use the shared Product Shell')
+assert.ok(page.includes('roleLabel="Dataset 360"'), 'Dataset 360 Product Shell must preserve page context')
 assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(page), 'Dataset 360 projection must remain read only')
 assert.ok(registration.includes('canonicalRoutes.governedDataset(registeredDatasetId)'), 'registration success must carry context into Dataset 360')
 assert.ok(registration.includes('Open Dataset 360'), 'registration must expose a Dataset 360 CTA')
