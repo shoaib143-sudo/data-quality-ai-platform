@@ -2,7 +2,7 @@ import { evaluateIncidentSlaEscalations } from '@/lib/observability/incident-sla
 import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
 import { claimOutboxEvents, processOutboxEvents } from '@/lib/orchestration/outbox'
 import { runOutboxLane, skippedOutboxLane, type OutboxLaneResult } from '@/lib/orchestration/outbox-lane'
-import { runDurableQueueMaintenance, type DurableJob } from '@/lib/orchestration/queue'
+import { claimDurableJobsByType, runDurableQueueMaintenance, type DurableJob } from '@/lib/orchestration/queue'
 import { processDurableJobs } from '@/lib/orchestration/worker'
 import { dispatchAdaptiveRounds } from '@/lib/orchestration/adaptive-dispatch'
 import { runProjectionWorker } from '@/lib/data-plane/run-projection-worker'
@@ -84,6 +84,18 @@ export async function runAdaptiveWorkerCycle(workerId: string) {
     eventResults,
     eventLaneDegraded,
     eventLaneDispositions,
+  }
+}
+
+export async function runCloudflareObservabilityCanaryCycle(workerId: string) {
+  const jobs = await claimDurableJobsByType(`${workerId}:observability`, 'OBSERVABILITY', 1)
+  const results = await processDurableJobs(jobs)
+  return {
+    workerId,
+    mode: 'CLOUDFLARE_OBSERVABILITY_CANARY' as const,
+    jobType: 'OBSERVABILITY' as const,
+    claimed: jobs.length,
+    results,
   }
 }
 
