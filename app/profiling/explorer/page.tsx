@@ -81,12 +81,20 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
     { data: metrics, error: metricsError },
     { data: distributions, error: distributionsError },
     workflowResult,
+    verificationOutcomeResult,
   ] = await Promise.all([
     supabase.schema('profiling').from('profile_findings').select('id,profile_column_id,finding_type,severity,title,description,confidence').eq('profile_run_id', latestRun.id).order('created_at', { ascending: false }).limit(500),
     supabase.schema('profiling').from('profile_columns').select('id,column_name,source_type,inferred_type,semantic_type,nullable,confidence,is_candidate_key,key_confidence,total_count,non_null_count,null_count,blank_count,zero_count,distinct_count,distinct_percentage').eq('profile_run_id', latestRun.id).order('ordinal_position'),
     supabase.schema('profiling').from('profile_metrics').select('profile_column_id,metric_key,numeric_value,text_value,boolean_value,json_value').eq('profile_run_id', latestRun.id).order('metric_key').limit(2000),
     supabase.schema('profiling').from('profile_distributions').select('profile_column_id,distribution_type,distribution').eq('profile_run_id', latestRun.id).order('distribution_type').limit(1000),
     supabase.schema('governance').from('workflow_instances').select('id,status,current_step').eq('entity_type', 'PROFILE_RUN').eq('entity_id', latestRun.id).order('started_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.schema('governance').from('profiling_remediation_outcomes')
+      .select('workflow_instance_id,status,execution_mode,production_mutation_performed,remediation_issue_ids,verification_profile_run_id,verification_job_id,source_quality_score,verification_quality_score,quality_score_delta,source_high_severity_findings,verification_high_severity_findings,high_severity_findings_delta,outcome')
+      .eq('project_id', projectId)
+      .eq('verification_profile_run_id', latestRun.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ])
 
   if (findingsError) throw new Error(`Unable to load profiling findings: ${findingsError.message}`)
@@ -94,15 +102,28 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
   if (metricsError) throw new Error(`Unable to load profiling metrics: ${metricsError.message}`)
   if (distributionsError) throw new Error(`Unable to load profiling distributions: ${distributionsError.message}`)
   if (workflowResult.error) throw new Error(`Unable to load profiling governance workflow: ${workflowResult.error.message}`)
+  if (verificationOutcomeResult.error) throw new Error(`Unable to load verification remediation context: ${verificationOutcomeResult.error.message}`)
 
   const safeMetrics = (metrics ?? []).map(sanitizePersistedMetricForPresentation)
-  const workflow = workflowResult.data
-  const outcomeResult = workflow
-    ? await supabase.schema('governance').from('profiling_remediation_outcomes')
-        .select('status,execution_mode,production_mutation_performed,remediation_issue_ids,verification_profile_run_id,verification_job_id,source_quality_score,verification_quality_score,quality_score_delta,source_high_severity_findings,verification_high_severity_findings,high_severity_findings_delta,outcome')
-        .eq('workflow_instance_id', workflow.id)
-        .maybeSingle()
-    : { data: null, error: null }
+  let workflow = workflowResult.data
+  if (!workflow && verificationOutcomeResult.data?.workflow_instance_id) {
+    const originWorkflowResult = await supabase.schema('governance').from('workflow_instances')
+      .select('id,status,current_step')
+      .eq('id', verificationOutcomeResult.data.workflow_instance_id)
+      .eq('project_id', projectId)
+      .maybeSingle()
+    if (originWorkflowResult.error) throw new Error(`Unable to load originating governance workflow: ${originWorkflowResult.error.message}`)
+    workflow = originWorkflowResult.data
+  }
+
+  const outcomeResult = verificationOutcomeResult.data
+    ? verificationOutcomeResult
+    : workflow
+      ? await supabase.schema('governance').from('profiling_remediation_outcomes')
+          .select('workflow_instance_id,status,execution_mode,production_mutation_performed,remediation_issue_ids,verification_profile_run_id,verification_job_id,source_quality_score,verification_quality_score,quality_score_delta,source_high_severity_findings,verification_high_severity_findings,high_severity_findings_delta,outcome')
+          .eq('workflow_instance_id', workflow.id)
+          .maybeSingle()
+      : { data: null, error: null }
 
   if (outcomeResult.error) throw new Error(`Unable to load profiling remediation outcome: ${outcomeResult.error.message}`)
   const remediationOutcome = outcomeResult.data
