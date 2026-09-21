@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { isVerifiedRemediationClosure } from '@/lib/governance/remediation-closure-state'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 
 type InvestigationRecommendation = {
@@ -167,11 +168,10 @@ export default function ProfilingGovernancePanel({
   const canRetryVerification = canManageRemediation && workflow?.status === 'APPROVED'
     && (outcome?.verificationRetryable === true || verificationCancelled)
     && allTrackedIssuesResolved
-  const verifiedClosure = Boolean(
-    outcome
-    && ['VERIFIED', 'VERIFIED_RESOLVED'].includes(outcome.status)
-    && (issues.length === 0 || allTrackedIssuesResolved)
-  )
+  const verifiedClosure = isVerifiedRemediationClosure({
+    outcomeStatus: outcome?.status,
+    issueStatuses: issues.map(issue => issue.status),
+  })
 
   return (
     <section className="rounded-xl border p-6">
