@@ -61,6 +61,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-golden-path-handoff.mjs
       - name: Test remediation verified-closure UX
         run: node --experimental-strip-types scripts/test-remediation-closure-ux.mjs
+      - name: Test UX closure CTA inventory and accessibility
+        run: node scripts/test-ux-closure-cta-inventory.mjs
       - name: Run independent UX closure adversarial audit
         run: node --experimental-strip-types scripts/audit-ux-closure-wave-adversarial.mjs
       - name: Setup pnpm
