@@ -720,6 +720,61 @@ jobs:
             -H "Accept-Profile: orchestration" \
             --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:true}))' "$DATANEXUS_CLOUDFLARE_WORKER_URL" "$DATANEXUS_WORKER_SECRET")"
 
+      - name: Verify enabled Supabase canary state
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data '{}' \
+            --output /tmp/canary-enabled-status.json
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/canary-enabled-status.json','utf8')); if(body.enabled!==true||body.runtime_configured!==true||body.cron_active!==true||body.cron_schedule!=='*/5 * * * *'||body.allowed_job_type!=='OBSERVABILITY'||body.scheduler_authority!=='Supabase'||body.single_flight_limit!==1) process.exit(1)"
+
+      - name: Fail closed after activation error
+        if: ${{ failure() }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: |
+          set +e
+          if [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && [ -n "${DATANEXUS_CLOUDFLARE_WORKER_URL:-}" ] && [ -n "${DATANEXUS_WORKER_SECRET:-}" ]; then
+            curl --fail-with-body --silent --show-error \
+              -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Content-Profile: orchestration" \
+              -H "Accept-Profile: orchestration" \
+              --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:false}))' "$DATANEXUS_CLOUDFLARE_WORKER_URL" "$DATANEXUS_WORKER_SECRET")" \
+              || echo "::warning::Unable to disable Supabase Cloudflare canary scheduler during failure cleanup"
+          fi
+          if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] && [ -n "${EXACT_SHA:-}" ]; then
+            node scripts/prepare-cloudflare-tooling.mjs
+            BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            RELEASE_ID="github-worker-canary-failclosed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+              --var "DATANEXUS_ENV:canary" \
+              --var "DATANEXUS_PLATFORM:cloudflare" \
+              --var "DATANEXUS_WORKER_EXECUTION_ENABLED:false" \
+              --var "DATANEXUS_WORKER_CANARY_JOB_TYPE:OBSERVABILITY" \
+              --var "DATANEXUS_COMMIT_SHA:$EXACT_SHA" \
+              --var "DATANEXUS_RELEASE_ID:$RELEASE_ID" \
+              --var "DATANEXUS_BUILD_TIMESTAMP:$BUILD_TIMESTAMP" \
+              || echo "::warning::Unable to redeploy Cloudflare worker with execution disabled during failure cleanup"
+          fi
+
 
   disable-cloudflare-worker-canary:
     name: cloudflare-worker-canary-disable
