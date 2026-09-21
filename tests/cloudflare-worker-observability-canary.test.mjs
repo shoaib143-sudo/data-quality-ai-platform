@@ -8,7 +8,6 @@ const route = fs.readFileSync('app/api/jobs/worker/route.ts', 'utf8')
 const router = fs.readFileSync('infra/cloudflare/worker-runtime/src/router.ts', 'utf8')
 const config = JSON.parse(fs.readFileSync('infra/cloudflare/worker-runtime/wrangler.jsonc', 'utf8'))
 const migration = fs.readFileSync('supabase/migrations/20260921124500_cloudflare_observability_canary_claim.sql', 'utf8')
-const rollout = fs.readFileSync('.github/workflows/cloudflare-worker-observability-canary.yml', 'utf8')
 const release = fs.readFileSync('.github/workflows/release-governance.yml', 'utf8')
 
 test('Cloudflare execution remains disabled by default with an explicit OBSERVABILITY canary allowlist', () => {
@@ -45,26 +44,30 @@ test('database claim authority only allows OBSERVABILITY and preserves fencing',
 })
 
 test('canary activation is separately owner-approved and remains reversible', () => {
-  assert.match(rollout, /Cloudflare Worker Observability Canary/)
-  assert.match(rollout, /confirm_worker_execution/)
-  assert.match(rollout, /inputs\.confirm_worker_execution == true/)
-  assert.match(rollout, /DATANEXUS_WORKER_EXECUTION_ENABLED:true/)
-  assert.match(rollout, /DATANEXUS_WORKER_CANARY_JOB_TYPE:OBSERVABILITY/)
+  assert.match(release, /Cloudflare Worker Observability Canary/)
+  assert.match(release, /confirm_worker_execution/)
+  assert.match(release, /inputs\.confirm_worker_execution == true/)
+  assert.match(release, /DATANEXUS_WORKER_EXECUTION_ENABLED:true/)
+  assert.match(release, /DATANEXUS_WORKER_CANARY_JOB_TYPE:OBSERVABILITY/)
   assert.match(release, /DATANEXUS_WORKER_EXECUTION_ENABLED:false/)
 })
 
 test('enabled canary requires privileged secrets and verifies unauthorized and over-broad modes fail closed', () => {
-  assert.match(rollout, /secrets\.DATANEXUS_WORKER_SECRET/)
-  assert.match(rollout, /secrets\.SUPABASE_SERVICE_ROLE_KEY/)
-  assert.match(rollout, /test "\$unauthorized_code" = "403"/)
-  assert.match(rollout, /test "\$forbidden_code" = "403"/)
-  assert.match(rollout, /body\.jobType!=='OBSERVABILITY'/)
-  assert.match(rollout, /body\.claimed<0\|\|body\.claimed>1/)
+  assert.match(release, /secrets\.DATANEXUS_WORKER_SECRET/)
+  assert.match(release, /secrets\.SUPABASE_SERVICE_ROLE_KEY/)
+  assert.match(release, /test "\$unauthorized_code" = "403"/)
+  assert.match(release, /test "\$forbidden_code" = "403"/)
+  assert.match(release, /body\.jobType!=='OBSERVABILITY'/)
+  assert.match(release, /body\.claimed<0\|\|body\.claimed>1/)
 })
 
 
-test('dedicated canary workflow cannot run on push or schedule', () => {
-  assert.match(rollout, /workflow_dispatch:/)
-  assert.doesNotMatch(rollout, /\npush:/)
-  assert.doesNotMatch(rollout, /\nschedule:/)
+test('canary activation remains manual-only inside the release workflow', () => {
+  assert.match(release, /workflow_dispatch:/)
+  const start = release.indexOf('  enable-cloudflare-worker-canary:')
+  const end = release.indexOf('  certify-vercel-production:', start)
+  assert.ok(start >= 0 && end > start)
+  const canary = release.slice(start, end)
+  assert.doesNotMatch(canary, /schedule:/)
+  assert.doesNotMatch(canary, /push:/)
 })
