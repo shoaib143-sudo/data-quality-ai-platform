@@ -198,10 +198,10 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
     : datasets[0] ?? null
   const datasetHref = latestDataset ? canonicalRoutes.governedDataset(String(latestDataset.id)) : canonicalRoutes.datasets
   const profileHref = latestCompletedRun ? `/profiling/explorer?runId=${encodeURIComponent(String(latestCompletedRun.id))}` : '/profiling/explorer'
+  const incidentHref = latestIssues[0] ? canonicalRoutes.governedIncident(String(latestIssues[0].id)) : '/issues'
   const workflowHref = canWorkflows
     ? latestWorkflow ? `/workflows?instanceId=${encodeURIComponent(String(latestWorkflow.id))}` : '/workflows'
     : latestIssues[0] ? incidentHref : profileHref
-  const incidentHref = latestIssues[0] ? canonicalRoutes.governedIncident(String(latestIssues[0].id)) : '/issues'
 
   const stages: Stage[] = [
     {
