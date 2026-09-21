@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { getReadinessManualRemediationDescriptor } from '@/lib/profiling/readiness-manual-remediation'
+import { resolveProfilingRunHandoff } from '@/lib/profiling/profiling-run-handoff'
 
 type Remediation = {
   root_cause?: string
@@ -129,10 +130,10 @@ export function DatasetActions({ projectId, datasetId, datasetVersionId, agentDe
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error ?? 'Profiling execution failed.')
-      if (!payload.agentRunId) throw new Error('Profiling job was accepted without a run identifier.')
+      const handoff = resolveProfilingRunHandoff(payload)
       setHasError(false)
-      setMessage('Profiling job queued. Opening live monitor…')
-      router.push(payload.monitorUrl ?? `/monitoring?run=${encodeURIComponent(payload.agentRunId)}`)
+      setMessage(handoff.reused ? 'Existing governed profiling request found. Opening live monitor…' : 'Profiling job queued. Opening live monitor…')
+      router.push(handoff.monitorUrl)
     } catch (error) {
       setHasError(true)
       setMessage(error instanceof Error ? error.message : 'Profiling execution failed.')
