@@ -20,6 +20,10 @@ for (const stage of [
 ]) assert.ok(page.includes(stage), `Governance Run missing stage: ${stage}`)
 
 assert.ok(page.includes("const user = await requireUser()"), 'Governance Run must authenticate')
+assert.ok(page.includes("canAccessWorkspace(landing.persona, 'workflows'"), 'workflow CTA must respect persona workspace access')
+assert.ok(page.includes("canAccessWorkspace(landing.persona, 'monitoring'"), 'monitor CTA must respect persona workspace access')
+assert.ok(page.includes("canAccessWorkspace(landing.persona, 'reports'"), 'reports CTA must respect persona workspace access')
+assert.ok(page.includes("canAccessWorkspace(landing.persona, 'ai-capabilities'"), 'learning CTA must respect persona workspace access')
 assert.ok(page.includes(".eq('organization_id', landing.organizationId)"), 'Governance Run must enforce organization scope')
 assert.ok(page.includes('if (!projectResult.data) notFound()'), 'Governance Run must fail closed for inaccessible projects')
 assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(page), 'Governance Run must remain a read-only projection')
