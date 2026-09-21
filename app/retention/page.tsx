@@ -3,10 +3,16 @@ import { ArchiveRestore } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { RetentionManager, type RetentionProject } from './retention-manager'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 export default async function RetentionPage(){
   const user=await requireUser()
-  const admin=createAdminClient()
+  const [landing,admin]=await Promise.all([resolveLandingAccess(user.id),Promise.resolve(createAdminClient())])
+  const canAdmin=canAccessWorkspaceHref(landing.persona,'/admin',landing.organizationRole)
+  const canAudit=canAccessWorkspaceHref(landing.persona,'/audit',landing.organizationRole)
+  const canReports=canAccessWorkspaceHref(landing.persona,'/reports',landing.organizationRole)
   const {data:memberships,error:membershipError}=await admin.schema('app').from('organization_members').select('organization_id,role').eq('user_id',user.id).in('role',['OWNER','ADMIN'])
   if(membershipError)throw new Error(`Unable to load administrator memberships: ${membershipError.message}`)
   const organizationIds=(memberships??[]).map((membership)=>membership.organization_id)
@@ -39,8 +45,8 @@ export default async function RetentionPage(){
     }
   })
 
-  return <main className="min-h-screen bg-[radial-gradient(circle_at_5%_0%,_rgba(237,233,254,0.9),_transparent_30%),linear-gradient(180deg,_#faf9ff_0%,_#ffffff_55%,_#f8fafc_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl">
-    <nav className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white bg-white/90 px-5 py-3 shadow-sm"><Link href="/dashboard" className="font-black">Data Governance PowerHouse</Link><div className="flex flex-wrap gap-2 text-sm"><Link href="/admin" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-violet-50">Admin</Link><Link href="/audit" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-violet-50">Audit</Link><Link href="/reports" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-violet-50">Reports</Link></div></nav>
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[radial-gradient(circle_at_5%_0%,_rgba(237,233,254,0.9),_transparent_30%),linear-gradient(180deg,_#faf9ff_0%,_#ffffff_55%,_#f8fafc_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl">
+    <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Retention" contextLabel="Lifecycle governance" homeHref="/home" /><div className="mb-6 mt-4 flex flex-wrap justify-end gap-2 text-sm">{canAdmin?<Link href="/admin" className="rounded-xl border border-white bg-white/90 px-3 py-2 font-semibold text-slate-600 hover:bg-violet-50">Admin</Link>:null}{canAudit?<Link href="/audit" className="rounded-xl border border-white bg-white/90 px-3 py-2 font-semibold text-slate-600 hover:bg-violet-50">Audit</Link>:null}{canReports?<Link href="/reports" className="rounded-xl border border-white bg-white/90 px-3 py-2 font-semibold text-slate-600 hover:bg-violet-50">Reports</Link>:null}</div>
     <header className="mb-6 rounded-3xl border border-violet-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white"><ArchiveRestore className="h-6 w-6"/></span><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">Lifecycle governance</p><h1 className="text-3xl font-black">Retention and archival</h1></div></div><p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">Define safe evidence retention with legal-hold protection. Eligible run history is compactly archived before deletion, while minimum recent baselines are always retained.</p></header>
     {rows.length?<RetentionManager projects={rows}/>:<section className="rounded-3xl border border-amber-200 bg-white p-8 text-sm text-slate-600 shadow-sm">OWNER or ADMIN access is required to configure project retention.</section>}
   </div></main>
