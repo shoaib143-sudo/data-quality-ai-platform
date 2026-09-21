@@ -33,6 +33,10 @@ on:
       - 'scripts/test-ux-wave5-local-navigation-policy.mjs'
       - 'scripts/test-ux-wave5-cta-inventory.mjs'
       - 'scripts/audit-ux-wave5-adversarial.mjs'
+      - 'scripts/test-ux-wave6-shell-utility-surfaces.mjs'
+      - 'scripts/test-ux-wave6-local-navigation-policy.mjs'
+      - 'scripts/test-ux-wave6-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave6-adversarial.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -84,6 +88,10 @@ on:
       - 'scripts/test-ux-wave5-local-navigation-policy.mjs'
       - 'scripts/test-ux-wave5-cta-inventory.mjs'
       - 'scripts/audit-ux-wave5-adversarial.mjs'
+      - 'scripts/test-ux-wave6-shell-utility-surfaces.mjs'
+      - 'scripts/test-ux-wave6-local-navigation-policy.mjs'
+      - 'scripts/test-ux-wave6-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave6-adversarial.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -181,6 +189,14 @@ jobs:
         run: node scripts/test-ux-wave5-cta-inventory.mjs
       - name: Run independent Wave 5 adversarial audit
         run: node scripts/audit-ux-wave5-adversarial.mjs
+      - name: Test Wave 6 utility Product Shell surfaces
+        run: node scripts/test-ux-wave6-shell-utility-surfaces.mjs
+      - name: Test Wave 6 local navigation policy
+        run: node scripts/test-ux-wave6-local-navigation-policy.mjs
+      - name: Test Wave 6 CTA inventory and destinations
+        run: node scripts/test-ux-wave6-cta-inventory.mjs
+      - name: Run independent Wave 6 adversarial audit
+        run: node scripts/audit-ux-wave6-adversarial.mjs
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
