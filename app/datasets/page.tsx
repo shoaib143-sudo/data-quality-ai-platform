@@ -9,6 +9,7 @@ import { DatasetActions } from './dataset-actions'
 import { dataGovernanceSuperAdminOrganizationIds } from '@/lib/auth/data-governance-super-admin'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 
 type DatasetRow = { id: string; project_id: string; data_source_id: string | null; name: string; description: string | null; source_identifier: string | null; business_domain: string | null; status: string; created_at: string }
 type VersionRow = { id: string; dataset_id: string; version_number: number; source_uri: string | null; status: string; created_at: string }
@@ -93,6 +94,7 @@ export default async function DatasetsPage() {
     : { data: [], error: null }
   if (organizationsResult.error) throw new Error(`Unable to load organizations: ${organizationsResult.error.message}`)
   const organizations = (organizationsResult.data ?? []) as OrganizationOption[]
+  const canDiscovery = canAccessWorkspace(landing.persona, 'discovery', landing.organizationRole)
 
   const sourceById = new Map(sources.map(source => [source.id, source]))
   const readinessBySource = new Map(readiness.map(row => [row.source_id, row]))
@@ -118,7 +120,7 @@ export default async function DatasetsPage() {
   }).length
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(219,234,254,0.9),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(243,232,255,0.8),_transparent_32%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_45%,_#f8fafc_100%)] text-slate-950">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(219,234,254,0.9),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(243,232,255,0.8),_transparent_32%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_45%,_#f8fafc_100%)] text-slate-950">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Sources & Datasets" contextLabel="Onboarding and profiling readiness" homeHref="/home" />
         <nav className="mb-6 mt-4 flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-white/80 bg-white/85 px-5 py-3 shadow-sm backdrop-blur">
@@ -147,7 +149,7 @@ export default async function DatasetsPage() {
         </section>
 
         <section className="mt-7 grid gap-5 lg:grid-cols-2">
-          <div className="rounded-2xl border border-blue-100 bg-white p-1 shadow-sm"><div className="rounded-xl bg-gradient-to-br from-blue-50 to-white p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><Database className="h-5 w-5" /></span><div><h2 className="font-semibold">1. Connect a source</h2><p className="text-xs text-slate-500">Save or validate a reusable connection. Discovery evidence is established separately.</p></div></div><JdbcSourceForm projects={projects} organizations={organizations} /></div></div>
+          <div className="rounded-2xl border border-blue-100 bg-white p-1 shadow-sm"><div className="rounded-xl bg-gradient-to-br from-blue-50 to-white p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><Database className="h-5 w-5" /></span><div><h2 className="font-semibold">1. Connect a source</h2><p className="text-xs text-slate-500">Save or validate a reusable connection. Discovery evidence is established separately.</p></div></div><JdbcSourceForm projects={projects} organizations={organizations} canOpenDiscovery={canDiscovery} /></div></div>
           <div id="register-dataset" className="scroll-mt-24 rounded-2xl border border-purple-100 bg-white p-1 shadow-sm"><div className="rounded-xl bg-gradient-to-br from-purple-50 to-white p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-purple-600 text-white shadow-sm"><Layers3 className="h-5 w-5" /></span><div><h2 className="font-semibold">2. Register a dataset</h2><p className="text-xs text-slate-500">Bind a dataset to a configured source. Execution readiness is validated separately.</p></div></div><RegisterDatasetForm projects={projects} organizations={organizations} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} /></div></div>
         </section>
 
