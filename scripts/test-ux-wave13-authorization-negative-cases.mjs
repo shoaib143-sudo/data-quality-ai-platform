@@ -7,6 +7,7 @@ const sourceRegister=fs.readFileSync('app/api/datasets/source/register/route.ts'
 const datasetRoute=fs.readFileSync('app/api/datasets/[datasetId]/route.ts','utf8')
 const credentialRoute=fs.readFileSync('app/api/datasets/source/credentials/route.ts','utf8')
 const discoverRoute=fs.readFileSync('app/api/datasets/source/discover/route.ts','utf8')
+const agentDetail=fs.readFileSync('app/agents/[agentKey]/[version]/page.tsx','utf8')
 const runPage=fs.readFileSync('app/agents/runs/[runId]/page.tsx','utf8')
 
 assert.ok(datasetPage.includes("authorizeDataset(user.id, datasetId, 'catalog.update')"), 'negative: dataset editor must require catalog.update before rendering mutation controls')
@@ -32,6 +33,10 @@ assert.ok(credentialRoute.includes("authorizeProject(user.id, projectId, 'source
 assert.ok(credentialRoute.includes("code: 'CONNECTOR_UNAVAILABLE'"), 'negative: unavailable JDBC bridge must surface explicit failure code')
 assert.ok(discoverRoute.includes("code: 'INVALID_CREDENTIAL_REF'"), 'negative: malformed credential refs must fail before discovery')
 assert.ok(discoverRoute.includes("code: 'PROJECT_ACCESS_DENIED'"), 'negative: unauthorized source discovery must return a governed access failure')
+
+assert.ok(agentDetail.includes("filterAuthorizedExecutionRuns(user.id"), 'negative: Agent Detail run evidence must be filtered through the canonical run-visibility helper')
+assert.ok(agentDetail.includes(".select('id, project_id, dataset_id, status, created_at, completed_at, error_code')"), 'negative: Agent Detail must retain the resource scope required for authorization decisions')
+assert.ok(!agentDetail.includes("const runs = (runsResult.data ?? []) as AgentRun[]"), 'negative: Agent Detail must never expose the raw run query result directly')
 
 assert.ok(runPage.includes('if (!await canViewExecutionRun(user.id, run as AgentRun)) notFound()'), 'negative: unauthorized run evidence must fail closed')
 assert.ok(runPage.includes("authorizeAgentAction("), 'negative: run evidence must retain agent action authorization')
