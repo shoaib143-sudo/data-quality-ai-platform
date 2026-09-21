@@ -5,6 +5,9 @@ import { authorizeProject } from '@/lib/auth/authorize'
 import { requireUser } from '@/lib/supabase/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 type Project = { id: string; name: string }
 type Capability = {
@@ -34,8 +37,12 @@ function statusTone(status: string) {
 
 export default async function AICapabilitiesPage({ searchParams }: { searchParams: Promise<{ projectId?: string; status?: string }> }) {
   const user = await requireUser()
-  const params = await searchParams
-  const supabase = await createClient()
+  const [params, landing, supabase] = await Promise.all([
+    searchParams,
+    resolveLandingAccess(user.id),
+    createClient(),
+  ])
+  const canAiInsights = canAccessWorkspaceHref(landing.persona, '/ai-insights', landing.organizationRole)
   const projectsResult = await supabase.schema('app').from('projects').select('id,name').order('name')
   if (projectsResult.error) throw new Error(`Unable to load projects: ${projectsResult.error.message}`)
   const projects = (projectsResult.data ?? []) as Project[]
@@ -77,13 +84,14 @@ export default async function AICapabilitiesPage({ searchParams }: { searchParam
   const evidenceRate = matrix.length ? Math.round(((counts.EVIDENCED ?? 0) / matrix.length) * 100) : 0
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/50 p-5 sm:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/50 p-5 sm:p-8">
       <div className="mx-auto max-w-7xl space-y-7">
-        <div className="flex flex-wrap items-center justify-between gap-3"><Link href="/dashboard" className="text-sm font-medium text-slate-600 hover:text-slate-950">← Dashboard</Link><Link href="/ai-insights" className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50">Open AI Insights</Link></div>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="AI Capabilities" contextLabel="Evidence-backed capability control" homeHref="/home" />
+        <div className="flex flex-wrap items-center justify-end gap-3">{canAiInsights ? <Link href="/ai-insights" className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50">Open AI Insights</Link> : null}</div>
 
         <header className="rounded-3xl border border-blue-100 bg-white p-7 shadow-sm"><div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-600 text-white"><BrainCircuit className="h-6 w-6" /></span><div><h1 className="text-3xl font-black tracking-tight">AI Capability Control Center</h1><p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">Operational status for all 75 strategic DataNexus AI capabilities. A green capability means qualifying project evidence exists. It does not mean the capability executes on every dataset or that AI has governance authority.</p></div></div></header>
 
-        <form method="get" className="grid gap-3 rounded-2xl border bg-white p-5 sm:grid-cols-[1fr_240px_auto]"><label className="text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 w-full rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="text-sm font-semibold">Evidence state<select name="status" defaultValue={selectedStatus} className="mt-2 w-full rounded-xl border bg-white px-3 py-2 font-normal"><option value="ALL">All</option>{statusOrder.map((status) => <option key={status} value={status}>{status}</option>)}</select></label><button className="self-end rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Apply</button></form>
+        <form method="get" className="grid gap-3 rounded-2xl border bg-white p-5 sm:grid-cols-[1fr_240px_auto]"><label className="text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 w-full rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><label className="text-sm font-semibold">Evidence state<select name="status" defaultValue={selectedStatus} className="mt-2 w-full rounded-xl border bg-white px-3 py-2 font-normal"><option value="ALL">All</option>{statusOrder.map((status) => <option key={status} value={status}>{status}</option>)}</select></label><button type="submit" className="self-end rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Apply</button></form>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"><div className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5 text-blue-600"/><p className="mt-3 text-3xl font-black">{matrix.length}</p><p className="text-xs font-bold uppercase text-slate-500">Tracked capabilities</p></div><div className="rounded-2xl border bg-white p-5"><CheckCircle2 className="h-5 w-5 text-emerald-600"/><p className="mt-3 text-3xl font-black">{counts.EVIDENCED ?? 0}</p><p className="text-xs font-bold uppercase text-slate-500">Evidenced</p></div><div className="rounded-2xl border bg-white p-5"><DatabaseZap className="h-5 w-5 text-amber-600"/><p className="mt-3 text-3xl font-black">{counts.DATA_PENDING ?? 0}</p><p className="text-xs font-bold uppercase text-slate-500">Data pending</p></div><div className="rounded-2xl border bg-white p-5"><CircleDashed className="h-5 w-5 text-blue-600"/><p className="mt-3 text-3xl font-black">{counts.BOOTSTRAP_ONLY ?? 0}</p><p className="text-xs font-bold uppercase text-slate-500">Bootstrap only</p></div><div className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5 text-violet-600"/><p className="mt-3 text-3xl font-black">{evidenceRate}%</p><p className="text-xs font-bold uppercase text-slate-500">Evidence coverage</p></div></section>
 

@@ -9,6 +9,8 @@ import { loadPositiveLearningCaseAdminInbox } from '@/lib/agents/proactive-gover
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { resolveConversationPolicy } from '@/lib/governance/conversation-policy'
 import { canViewDatasetResource, filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { createClient } from '@/lib/supabase/server'
 
 type AgentDefinition = AgentOption & {
@@ -62,6 +64,7 @@ export default async function AgentsPage() {
   })
   const supabase = await createClient()
   const governanceSuperAdmin = await isDataGovernanceSuperAdmin(user.id)
+  const canMonitoring = canAccessWorkspace(accessContext.persona, 'monitoring', accessContext.organizationRole)
   const pendingLearningCases = governanceSuperAdmin
     ? (await loadPositiveLearningCaseAdminInbox(user.id)).length
     : 0
@@ -163,17 +166,17 @@ export default async function AgentsPage() {
   }
 
   return (
-    <main className="min-h-screen p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-8">
       <div className="mx-auto max-w-6xl space-y-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={canonicalRoutes.dashboard} className="text-sm underline">← Back to dashboard</Link>
+        <GlobalUtilityBar persona={accessContext.persona} organizationRole={accessContext.organizationRole} roleLabel="AI Agents" contextLabel="Governed automation and execution" homeHref="/home" />
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="flex flex-wrap gap-2">
             {governanceSuperAdmin ? (
               <Link href="/admin/learning-cases" className="rounded-lg border border-violet-200 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50">
                 Review learning cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}
               </Link>
             ) : null}
-            <Link href={canonicalRoutes.monitoring} className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link>
+            {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link> : null}
           </div>
         </div>
 
