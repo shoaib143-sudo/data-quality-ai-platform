@@ -21,7 +21,7 @@ assert.match(catalogPage,/canAccessWorkspace\(landing\.persona,'discovery',landi
 assert.doesNotMatch(catalogPage,/const canDiscover=capabilityRows\.some/,'Catalog must not advertise Discovery from capability alone.')
 assert.match(physicalAssetsPage,/canAccessWorkspace\(landing\.persona, 'dashboard', landing\.organizationRole\)/,'Physical Assets dashboard navigation must use deterministic persona policy.')
 assert.match(physicalAssetsPage,/canAccessWorkspace\(landing\.persona, 'discovery', landing\.organizationRole\)/,'Physical Assets Discovery visibility must use deterministic persona policy.')
-assert.doesNotMatch(physicalAssetsPage,/<Link href="\/dashboard"[^>]*>[^<]*Data Governance PowerHouse/s,'Physical Assets must not hard-code a Dashboard branding route for every persona.')
+assert.match(physicalAssetsPage,/homeHref=\{canDashboard \? '\/dashboard' : '\/home'\}/,'Physical Assets shared shell must fail closed to Role Home when Dashboard is unavailable.')
 assert.doesNotMatch(physicalAssetsPage,/<Link href="\/catalog\/discovery"[^>]*>Discovery<\/Link><\/div><\/nav>/,'Physical Assets Discovery must not be unconditionally advertised.')
 
 console.log('persona workspace link composition adversarial audit: PASS', {
