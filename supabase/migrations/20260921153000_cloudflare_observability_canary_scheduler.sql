@@ -69,7 +69,7 @@ begin
 end;
 $function$;
 
-revoke all on function orchestration.kick_cloudflare_observability_canary() from public;
+revoke all on function orchestration.kick_cloudflare_observability_canary() from public,anon,authenticated;
 grant execute on function orchestration.kick_cloudflare_observability_canary() to service_role;
 
 select cron.unschedule(jobid)
