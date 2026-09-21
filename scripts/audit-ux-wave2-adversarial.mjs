@@ -10,6 +10,7 @@ const monitor = fs.readFileSync('app/monitoring/page.tsx', 'utf8')
 
 assert.ok(onboarding.includes('!error && createdSourceProjectId'), 'adversarial: failed registration must not expose success continuation')
 assert.ok(onboarding.includes('setCreatedSourceProjectId(null)'), 'adversarial: changed connection context must invalidate stale success continuation')
+assert.ok(onboarding.includes('!isFile && canOpenDiscovery ? <Link href="/catalog/discovery"'), 'adversarial: source-system personas without discovery access must not receive an inaccessible CTA')
 assert.ok(dataset360.includes('.limit(6)'), 'adversarial: Dataset 360 history must remain bounded')
 assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(governanceRun), 'adversarial: Governance Run observability must remain read-only')
 assert.ok(governanceRun.includes("const executionHref = canMonitoring && latestExecution"), 'adversarial: monitoring navigation must fail closed on workspace access')
