@@ -98,9 +98,9 @@ The Infrastructure Admin view remains read-only. Validate:
 
 1. Merge all implementation changes to protected `main`.
 2. Apply forward-only Supabase migrations.
-3. Configure dedicated Cloudflare worker URL and bearer secret in Supabase Vault.
-4. Keep `DGP_CLOUDFLARE_OBSERVABILITY_CANARY_ENABLED=false`.
-5. Run the protected Cloudflare worker canary-enable release workflow against the exact current-main SHA.
+3. Use the protected canary-enable workflow to synchronize the dedicated Cloudflare worker URL and bearer secret into Supabase Vault with the scheduler still disabled.
+4. Confirm `DGP_CLOUDFLARE_OBSERVABILITY_CANARY_ENABLED=false` before worker deployment.
+5. Continue the protected Cloudflare worker canary-enable release workflow against the exact current-main SHA.
 6. Verify health, exact build identity, unauthorized rejection, and broad-dispatch rejection.
 7. Enable the Supabase canary scheduler flag.
 8. Execute one synthetic canary-tagged OBSERVABILITY job.
@@ -111,8 +111,8 @@ The Infrastructure Admin view remains read-only. Validate:
 
 Immediate rollback requires no code rollback:
 
-1. Set `DGP_CLOUDFLARE_OBSERVABILITY_CANARY_ENABLED=false`.
-2. Redeploy the worker with `DATANEXUS_WORKER_EXECUTION_ENABLED=false` if stronger isolation is required.
+1. Run the governed `cloudflare-worker-canary-disable` release operation, which disables the Supabase canary scheduler first.
+2. The same rollback operation redeploys the worker with `DATANEXUS_WORKER_EXECUTION_ENABLED=false` and verifies the 503 execution boundary.
 3. Do not retag canary jobs into the CORE lane automatically.
 4. Inspect any RUNNING canary leases and allow lease expiry or use the established stale-job recovery path.
 5. Confirm the primary Vercel durable-worker scheduler remains unchanged and healthy.
