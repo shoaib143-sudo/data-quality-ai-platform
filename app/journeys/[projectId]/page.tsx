@@ -171,8 +171,14 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const verified = outcomeStatus === 'VERIFIED' || outcomeStatus === 'VERIFIED_RESOLVED'
   const remediationRequired = highFindings.length > 0
 
-  const latestVersion = versions[0] ?? null
-  const latestDataset = latestVersion ? datasets.find(dataset => dataset.id === latestVersion.dataset_id) ?? datasets[0] ?? null : datasets[0] ?? null
+  const latestVersion = latestCompletedRun
+    ? versions.find(version => String(version.id) === String(latestCompletedRun.dataset_version_id)) ?? null
+    : latestRun
+      ? versions.find(version => String(version.id) === String(latestRun.dataset_version_id)) ?? null
+      : versions[0] ?? null
+  const latestDataset = latestVersion
+    ? datasets.find(dataset => String(dataset.id) === String(latestVersion.dataset_id)) ?? null
+    : datasets[0] ?? null
   const datasetHref = latestDataset ? canonicalRoutes.governedDataset(String(latestDataset.id)) : canonicalRoutes.datasets
   const profileHref = latestCompletedRun ? `/profiling/explorer?runId=${encodeURIComponent(String(latestCompletedRun.id))}` : '/profiling/explorer'
   const workflowHref = canWorkflows
