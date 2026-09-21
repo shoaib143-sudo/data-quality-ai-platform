@@ -79,6 +79,7 @@ export function JdbcSourceForm({ projects, organizations, initialSource }: { pro
     setCapabilities(null)
     setSelectionMode('ALL')
     setSelectedNodeIds([])
+    setCreatedSourceProjectId(null)
   }
 
   function resetConnection(kind: ConnectionKind) {
@@ -94,7 +95,7 @@ export function JdbcSourceForm({ projects, organizations, initialSource }: { pro
       if (!response.ok) throw new Error(payload.error ?? 'Project creation failed.')
       const project = { id: payload.project.id, name: payload.project.name }
       setAvailableProjects(current => [...current.filter(item => item.id !== project.id), project].sort((a,b) => a.name.localeCompare(b.name)))
-      setProjectId(project.id); setCreateProjectOpen(false); setNewProjectName(''); setNewProjectDescription(''); setStatus(`Project ${project.name} created and selected.`)
+      setProjectId(project.id); setCreatedSourceProjectId(null); setCreateProjectOpen(false); setNewProjectName(''); setNewProjectDescription(''); setStatus(`Project ${project.name} created and selected.`)
     } catch (e) { setError(true); setStatus(e instanceof Error ? e.message : 'Project creation failed.') } finally { setBusy(false) }
   }
 
