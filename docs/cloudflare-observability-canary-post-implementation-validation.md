@@ -45,6 +45,7 @@ Required coverage:
 - Untagged OBSERVABILITY jobs remain on the CORE lane.
 - Tagged OBSERVABILITY jobs are excluded from CORE claims.
 - Tagged OBSERVABILITY jobs are claimable only through the dedicated canary RPC.
+- The initial canary remains globally single-flight: no second canary job can be claimed while a live canary lease exists.
 - Claim replay with the same worker identity returns the same live lease.
 - Claim batch size remains bounded.
 - Dependency gates and project concurrency limits remain enforced.
@@ -79,8 +80,9 @@ After activation, verify:
 5. Missing required privileged runtime configuration returns 503.
 6. No canary-tagged jobs returns 200 with `claimed=0`.
 7. A synthetic canary-tagged OBSERVABILITY job can be claimed once and cannot be claimed by the CORE lane.
-8. Replaying the same claim identity does not create a second lease.
-9. Cloudflare unavailability leaves canary-tagged jobs queued/retryable rather than making them eligible to the CORE lane.
+8. A second worker cannot claim another canary-tagged job while the first live canary lease exists.
+9. Replaying the same claim identity does not create a second lease.
+10. Cloudflare unavailability leaves canary-tagged jobs queued/retryable rather than making them eligible to the CORE lane.
 
 ## UI/UX validation
 
