@@ -48,6 +48,12 @@ function formatScore(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : 'N/A'
 }
 
+function formatTimestamp(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return 'N/A'
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : 'Invalid timestamp'
+}
+
 function stageClasses(state: StageState) {
   if (state === 'COMPLETE') return 'border-emerald-300/20 bg-emerald-400/[0.06] text-emerald-200'
   if (state === 'IN_PROGRESS') return 'border-blue-300/20 bg-blue-400/[0.06] text-blue-200'
@@ -474,7 +480,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Learning</p><p className="mt-2 font-black text-white">{latestLearning ? normalized(latestLearning.status) || 'RECORDED' : 'Not linked'}</p></div>
               {canApprovals ? <Link href="/approvals" className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4 hover:border-cyan-300/20"><p className="text-xs font-bold text-slate-500">Approval requests</p><p className="mt-2 font-black text-white">{pendingApprovals.length} pending</p><p className="mt-1 text-xs text-slate-500">{readyToExecuteApprovals.length} ready to execute</p></Link> : null}
             </div>
-            {canApprovals && projectApprovals.length ? <div className="mt-4 rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-[.12em] text-slate-500">Visible governed decisions</p><Link href="/approvals" className="text-xs font-bold text-cyan-300">Open approval inbox</Link></div><div className="mt-3 grid gap-2 md:grid-cols-2">{projectApprovals.slice(0,4).map(item=><div key={String(item.request.id)} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-slate-200">{String(item.request.action_key??'Governed action')}</span><span className="rounded-lg bg-white/[0.05] px-2 py-1 text-[10px] font-black text-slate-400">{normalized(item.request.status)||'UNKNOWN'}</span></div><p className="mt-2 text-[11px] text-slate-500">Risk {String(item.request.risk_level??'N/A')} · SLA {item.request.sla_due_at?new Date(String(item.request.sla_due_at)).toLocaleString():'N/A'}</p></div>)}</div></div> : null}
+            {canApprovals && projectApprovals.length ? <div className="mt-4 rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-[.12em] text-slate-500">Visible governed decisions</p><Link href="/approvals" className="text-xs font-bold text-cyan-300">Open approval inbox</Link></div><div className="mt-3 grid gap-2 md:grid-cols-2">{projectApprovals.slice(0,4).map(item=><div key={String(item.request.id)} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-slate-200">{String(item.request.action_key??'Governed action')}</span><span className="rounded-lg bg-white/[0.05] px-2 py-1 text-[10px] font-black text-slate-400">{normalized(item.request.status)||'UNKNOWN'}</span></div><p className="mt-2 text-[11px] text-slate-500">Risk {String(item.request.risk_level??'N/A')} · SLA {formatTimestamp(item.request.sla_due_at)}</p></div>)}</div></div> : null}
             <div className="mt-4 flex flex-wrap gap-2">
               {canMonitoring ? <Link href={executionHref} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Job Monitor</Link> : null}
               {canApprovals ? <Link href="/approvals" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Approvals</Link> : null}
