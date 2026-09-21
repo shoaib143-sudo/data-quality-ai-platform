@@ -63,6 +63,7 @@ on:
       - 'scripts/test-ux-wave13-cta-inventory.mjs'
       - 'scripts/test-ux-wave13-authorization-negative-cases.mjs'
       - 'scripts/audit-ux-wave13-adversarial.mjs'
+      - 'scripts/verify-ux-post-implementation-gates.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -144,6 +145,7 @@ on:
       - 'scripts/test-ux-wave13-cta-inventory.mjs'
       - 'scripts/test-ux-wave13-authorization-negative-cases.mjs'
       - 'scripts/audit-ux-wave13-adversarial.mjs'
+      - 'scripts/verify-ux-post-implementation-gates.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -299,6 +301,8 @@ jobs:
         run: node scripts/test-ux-wave13-authorization-negative-cases.mjs
       - name: Run independent Wave 13 adversarial audit
         run: node scripts/audit-ux-wave13-adversarial.mjs
+      - name: Verify post-implementation UX gate matrix
+        run: node scripts/verify-ux-post-implementation-gates.mjs
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
