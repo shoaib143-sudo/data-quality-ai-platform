@@ -10,6 +10,7 @@ assert.equal(isVerifiedRemediationClosure({ outcomeStatus: 'VERIFIED', issueStat
 assert.equal(isVerifiedRemediationClosure({ outcomeStatus: null, issueStatuses: [] }), false)
 
 const panel = fs.readFileSync('app/profiling/profiling-governance-panel.tsx', 'utf8')
+const incident = fs.readFileSync('app/issues/[issueId]/page.tsx', 'utf8')
 for (const cta of [
   'Start governed approval',
   'Track remediation',
@@ -25,4 +26,6 @@ assert.ok(panel.includes('canonicalRoutes.governedIncident(issue.id)'), 'tracked
 assert.ok(panel.includes('/profiling/explorer?runId='), 'verification profile must deep link to evidence')
 assert.ok(panel.includes('/monitoring?run='), 'verification job must deep link to Job Monitor')
 assert.ok(panel.includes('Resolution evidence is required'), 'issue resolution must fail closed without evidence')
+assert.ok(incident.includes('canonicalRoutes.governanceRun(projectId)'), 'governed incident must return users to its project Governance Run')
+assert.ok(incident.includes('Governance Run'), 'governed incident must expose a Governance Run CTA')
 console.log('Remediation verified-closure unit and CTA tests passed.')
