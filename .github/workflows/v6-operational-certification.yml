@@ -21,10 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Fast-path certification sentinel
         run: |
           echo 'PR fast path active.'
           echo 'Full V6 operational certification runs automatically after merge on the exact main SHA.'
+      - name: Verify clean reconstruction port isolation contract
+        run: node --test tests/v6-clean-reconstruction-port-isolation.test.mjs
 
   certify-full:
     if: github.event_name != 'pull_request'
@@ -167,6 +171,17 @@ jobs:
           mkdir -p "$WORK"
           cd "$WORK"
           pnpm dlx supabase@2.117.0 init
+          node - "$GITHUB_RUN_ID" "$WORK/supabase/config.toml" <<'NODE'
+          const fs = require('node:fs')
+          const runId = BigInt(process.argv[2])
+          const configPath = process.argv[3]
+          const slot = Number(runId % 900n)
+          const base = 56000 + slot * 10
+          let config = fs.readFileSync(configPath, 'utf8')
+          config = config.replace(/\b5432([0-9])\b/g, (_, digit) => String(base + Number(digit)))
+          fs.writeFileSync(configPath, config)
+          console.log(JSON.stringify({ isolatedSupabasePortBase: base }))
+          NODE
           SOURCE_MIGRATION_DIR="$ROOT/supabase/migrations" TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-migration-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-agent-status-replay.mjs"
           TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-audit-replay.mjs"
