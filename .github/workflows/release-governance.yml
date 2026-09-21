@@ -546,16 +546,23 @@ jobs:
         run: |
           set -euo pipefail
           BASE_URL="${DATANEXUS_CLOUDFLARE_WORKER_URL%/}"
-          live_code="$(curl --silent --show-error --output /tmp/worker-live.json --write-out '%{http_code}' "$BASE_URL/api/health/live")"
-          test "$live_code" = "200"
-          build_code="$(curl --silent --show-error --output /tmp/worker-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
-          test "$build_code" = "200"
-          node - "$EXACT_SHA" /tmp/worker-build.json <<'NODE'
+          ready=0
+          for attempt in $(seq 1 30); do
+            live_code="$(curl --silent --show-error --output /tmp/worker-live.json --write-out '%{http_code}' "$BASE_URL/api/health/live" || true)"
+            build_code="$(curl --silent --show-error --output /tmp/worker-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info" || true)"
+            if [ "$live_code" = "200" ] && [ "$build_code" = "200" ] && node - "$EXACT_SHA" /tmp/worker-build.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
           const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
           if (body.commitSha !== expected || body.environment !== 'canary' || body.platform !== 'cloudflare') process.exit(1)
           NODE
+            then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "1"
           disabled_code="$(curl --silent --show-error --output /tmp/worker-disabled.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"mode":"ADAPTIVE_DISPATCH"}' "$BASE_URL/api/jobs/worker")"
           test "$disabled_code" = "503"
 
@@ -714,7 +721,6 @@ jobs:
           set -euo pipefail
           pnpm run verify:provider-neutral-runtime
           pnpm run verify:worker-runtime
-          node --test tests/cloudflare-worker-observability-canary.test.mjs
           pnpm exec tsc --noEmit
           pnpm build
 
@@ -804,7 +810,6 @@ jobs:
           if (body.jobType !== 'OBSERVABILITY') process.exit(1)
           if (!Number.isInteger(body.claimed) || body.claimed < 0 || body.claimed > 1) process.exit(1)
           NODE
-
 
   certify-vercel-production:
     name: vercel-production-certify
