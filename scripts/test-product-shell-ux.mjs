@@ -16,6 +16,17 @@ for (const [href, label] of required) {
   assert.ok(source.includes(`href: ${href}`), `missing global nav href ${href}`)
   assert.ok(source.includes(label), `missing global nav label ${label}`)
 }
+
+for (const routeFile of [
+  'app/dashboard/page.tsx',
+  'app/catalog/page.tsx',
+  'app/data-quality/page.tsx',
+  'app/journeys/page.tsx',
+  'app/agents/page.tsx',
+  'app/monitoring/page.tsx',
+  'app/approvals/page.tsx',
+  'app/admin/page.tsx',
+]) assert.ok(fs.existsSync(routeFile), `global navigation target does not exist: ${routeFile}`)
 assert.ok(source.includes('canAccessWorkspaceHref(persona, item.href, organizationRole)'), 'persona authorization must filter global navigation')
 assert.ok(source.indexOf("label: 'Data'") < source.indexOf("label: 'Quality'"), 'Data must precede Quality in the primary journey')
 assert.ok(source.indexOf("label: 'Quality'") < source.indexOf("label: 'Governance'"), 'Quality must precede Governance in the primary journey')
