@@ -86,7 +86,7 @@ export default async function InfrastructurePage() {
         <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-600">Read-only operational view of the Vercel, Supabase and Cloudflare R2 integration boundary. Secrets are never rendered. Cloudflare deployment activation remains governed through protected release workflows.</p>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section aria-labelledby="runtime-status-heading" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">\n        <h2 id="runtime-status-heading" className="sr-only">Runtime and storage status</h2>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><Server className="h-5 w-5"/><p className="mt-3 text-xs font-bold uppercase text-slate-500">Primary runtime</p><p className="mt-1 text-xl font-black">{platform}</p><StatusPill ready={platform === 'Vercel'}>{platform === 'Vercel' ? 'active' : 'verify runtime'}</StatusPill></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><Database className="h-5 w-5"/><p className="mt-3 text-xs font-bold uppercase text-slate-500">Supabase objects</p><p className="mt-1 text-xl font-black">{storage.supabase.objects}</p><p className="mt-1 text-sm text-slate-500">{bytesLabel(storage.supabase.bytes)} · {storage.supabase.ready} ready</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><HardDrive className="h-5 w-5"/><p className="mt-3 text-xs font-bold uppercase text-slate-500">R2 objects</p><p className="mt-1 text-xl font-black">{storage.r2.objects}</p><p className="mt-1 text-sm text-slate-500">{bytesLabel(storage.r2.bytes)} · {storage.r2.ready} ready</p></article>
