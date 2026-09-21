@@ -54,7 +54,7 @@ function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-16">
+    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-16">
       <form onSubmit={onSubmit} className="w-full max-w-md space-y-6 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <div>
           <h1 className="text-2xl font-semibold">Sign in</h1>
@@ -80,7 +80,7 @@ function LoginPage() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<main className="flex min-h-screen items-center justify-center">Loading…</main>}>
+    <Suspense fallback={<main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center">Loading…</main>}>
       <LoginPage />
     </Suspense>
   )

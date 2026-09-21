@@ -4,9 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { AutonomyConsole } from './autonomy-console'
 import { OrchestratorApprovalInbox } from './orchestrator-approval-inbox'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 export default async function AutonomousGovernancePage() {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canAgents = canAccessWorkspaceHref(landing.persona, '/agents', landing.organizationRole)
+  const canMonitoring = canAccessWorkspaceHref(landing.persona, '/monitoring', landing.organizationRole)
   const supabase = await createClient()
   const { data, error } = await supabase.schema('app').from('projects').select('id,name').order('name')
   if (error) throw new Error(`Unable to load projects: ${error.message}`)
@@ -20,12 +26,13 @@ export default async function AutonomousGovernancePage() {
   const viewableIds = new Set(viewable.filter((id): id is string => Boolean(id)))
   const visibleProjects = projects.filter(project => viewableIds.has(project.id))
   return (
-    <main className="min-h-screen p-6 md:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-6 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/agents" className="text-sm underline underline-offset-4">← Back to AI Agents</Link>
-          <Link href="/monitoring" className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link>
-        </div>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Autonomous Governance" contextLabel="Governed orchestrator controls" homeHref="/home" />
+        {(canAgents || canMonitoring) ? <div className="flex flex-wrap items-center justify-between gap-3">
+          {canAgents ? <Link href="/agents" className="text-sm underline underline-offset-4">← Back to AI Agents</Link> : <span />}
+          {canMonitoring ? <Link href="/monitoring" className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link> : null}
+        </div> : null}
         <header className="dn-workspace-panel rounded-xl border p-5">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">DataNexus Governance Orchestrator</p>
           <h1 className="mt-2 text-2xl font-semibold">Autonomous Governance</h1>
