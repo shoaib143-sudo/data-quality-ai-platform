@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
+import { resolveProfilingRunHandoff } from '@/lib/profiling/profiling-run-handoff'
 import { createClient } from '@/lib/supabase/client'
 
 export type ProjectOption = { id: string; name: string }
@@ -302,10 +303,10 @@ export function RegisterDatasetForm({ projects, organizations, sources }: { proj
         body: JSON.stringify({ ...profilingTarget, idempotencyKey }),
       })
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? 'Profiling execution failed.')
-      if (!payload.agentRunId) throw new Error('Profiling job was accepted without an agent run identifier.')
-      setStatus(payload.reused ? 'Existing governed profiling request found. Opening live monitor…' : 'Profiling queued. Opening live monitor…')
+      const handoff = resolveProfilingRunHandoff(payload)
+      setStatus(handoff.reused ? 'Existing governed profiling request found. Opening live monitor…' : 'Profiling queued. Opening live monitor…')
       setProfilingTarget(null)
-      router.push(payload.monitorUrl ?? `/monitoring?run=${encodeURIComponent(payload.agentRunId)}`)
+      router.push(handoff.monitorUrl)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Profiling execution failed.')
       router.refresh()
