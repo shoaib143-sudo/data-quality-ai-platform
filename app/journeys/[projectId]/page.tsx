@@ -20,6 +20,7 @@ import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { classifyRemediationSla } from '@/lib/governance/remediation-sla'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
+import { loadApprovalInbox } from '@/lib/governance/approval-inbox'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -84,7 +85,8 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const canReports = canAccessWorkspace(landing.persona, 'reports', landing.organizationRole)
   const canAiCapabilities = canAccessWorkspace(landing.persona, 'ai-capabilities', landing.organizationRole)
 
-  const [sourcesResult, datasetsResult, issuesResult, workflowsResult, outcomesResult, learningResult, agentRunsResult] = await Promise.all([
+  const approvalInboxPromise = canApprovals ? loadApprovalInbox(user.id) : Promise.resolve([])
+  const [sourcesResult, datasetsResult, issuesResult, workflowsResult, outcomesResult, learningResult, agentRunsResult, approvalItems] = await Promise.all([
     supabase.schema('catalog').from('data_sources').select('id,name,status').eq('project_id', projectId).order('name'),
     supabase.schema('catalog').from('datasets').select('id,name,status,data_source_id').eq('project_id', projectId).order('created_at', { ascending: false }),
     supabase.schema('governance').from('issues').select('id,title,severity,status,dataset_id,profile_run_id,finding_id,owner_user_id,due_at,updated_at').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(200),
@@ -94,6 +96,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
     canMonitoring
       ? supabase.schema('agent').from('agent_runs').select('id,status,dataset_id,dataset_version_id,created_at,started_at,completed_at,error_code').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100)
       : Promise.resolve({ data: [], error: null }),
+    approvalInboxPromise,
   ])
   for (const [name, result] of [
     ['sources', sourcesResult],
@@ -159,6 +162,9 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const outcomes = outcomesResult.data ?? []
   const learning = learningResult.data ?? []
   const agentRuns = agentRunsResult.data ?? []
+  const projectApprovals = approvalItems.filter(item => String(item.request.project_id ?? '') === projectId)
+  const pendingApprovals = projectApprovals.filter(item => !['EXECUTED', 'REJECTED', 'CANCELLED', 'INVALIDATED'].includes(normalized(item.request.status)))
+  const readyToExecuteApprovals = projectApprovals.filter(item => normalized(item.request.status) === 'READY_TO_EXECUTE')
 
   const latestScore = latestCompletedRun ? scores.find(score => score.profile_run_id === latestCompletedRun.id) ?? null : null
   const latestFindings = latestCompletedRun ? findings.filter(finding => finding.profile_run_id === latestCompletedRun.id) : []
@@ -249,9 +255,11 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
         : profileFailed
           ? `Latest profile failed${latestRun?.error_code ? `: ${latestRun.error_code}` : '.'}`
           : 'No completed profile run is available.',
-      state: latestCompletedRun ? 'COMPLETE' : profileFailed ? 'BLOCKED' : discoveryComplete ? 'IN_PROGRESS' : 'NOT_STARTED',
-      href: profileHref,
-      action: latestCompletedRun ? 'Open profiling evidence' : 'Open profiling',
+      state: profileFailed ? 'BLOCKED' : latestCompletedRun ? 'COMPLETE' : discoveryComplete ? 'IN_PROGRESS' : 'NOT_STARTED',
+      href: profileFailed && canMonitoring ? executionHref : profileHref,
+      action: profileFailed
+        ? canMonitoring ? 'Open failed execution' : 'Review profiling evidence'
+        : latestCompletedRun ? 'Open profiling evidence' : 'Open profiling',
       icon: Gauge,
     },
     {
@@ -464,7 +472,9 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Remediation outcome</p><p className="mt-2 font-black text-white">{latestOutcome ? outcomeStatus || 'UNKNOWN' : 'Not linked'}</p></div>
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Verification run</p><p className="mt-2 break-all font-mono text-xs text-slate-300">{latestOutcome?.verification_profile_run_id ?? 'Not linked'}</p></div>
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Learning</p><p className="mt-2 font-black text-white">{latestLearning ? normalized(latestLearning.status) || 'RECORDED' : 'Not linked'}</p></div>
+              {canApprovals ? <Link href="/approvals" className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4 hover:border-cyan-300/20"><p className="text-xs font-bold text-slate-500">Approval requests</p><p className="mt-2 font-black text-white">{pendingApprovals.length} pending</p><p className="mt-1 text-xs text-slate-500">{readyToExecuteApprovals.length} ready to execute</p></Link> : null}
             </div>
+            {canApprovals && projectApprovals.length ? <div className="mt-4 rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-[.12em] text-slate-500">Visible governed decisions</p><Link href="/approvals" className="text-xs font-bold text-cyan-300">Open approval inbox</Link></div><div className="mt-3 grid gap-2 md:grid-cols-2">{projectApprovals.slice(0,4).map(item=><div key={String(item.request.id)} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-slate-200">{String(item.request.action_key??'Governed action')}</span><span className="rounded-lg bg-white/[0.05] px-2 py-1 text-[10px] font-black text-slate-400">{normalized(item.request.status)||'UNKNOWN'}</span></div><p className="mt-2 text-[11px] text-slate-500">Risk {String(item.request.risk_level??'N/A')} · SLA {item.request.sla_due_at?new Date(String(item.request.sla_due_at)).toLocaleString():'N/A'}</p></div>)}</div></div> : null}
             <div className="mt-4 flex flex-wrap gap-2">
               {canMonitoring ? <Link href={executionHref} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Job Monitor</Link> : null}
               {canApprovals ? <Link href="/approvals" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Approvals</Link> : null}
