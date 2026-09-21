@@ -5,6 +5,8 @@ import { createGovernanceCommandCenterState } from '@/lib/ai/governance-command-
 import type { CommandCenterExplorerItem } from '@/lib/ai/command-center-explorer'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import CommandCenterExplorer from './command-center-explorer'
 
 type Project = { id: string; name: string }
@@ -18,6 +20,7 @@ function value(input: unknown) {
 
 export default async function AICommandCenterExplorerPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
   const params = await searchParams
   const supabase = await createClient()
   const projectsResult = await supabase.schema('app').from('projects').select('id,name').order('name')
@@ -146,8 +149,9 @@ export default async function AICommandCenterExplorerPage({ searchParams }: { se
     ]
   }
 
-  return <main className="min-h-screen bg-slate-50 p-5 sm:p-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-8">
     <div className="mx-auto max-w-7xl space-y-6">
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Command Center Explorer" contextLabel="Read-only AI governance evidence" homeHref="/home" />
       <header className="rounded-3xl border bg-white p-7 shadow-sm">
         <div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white"><ShieldCheck className="h-6 w-6"/></span><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">AI Governance Plane</p><h1 className="text-3xl font-black">Command Center Explorer</h1><p className="mt-2 max-w-4xl text-sm text-slate-600">Interactively filter and inspect canonical AI systems, safety findings, evaluations, telemetry, investigations, routing policies and autonomy actions. This surface is read-only and does not grant governance or execution authority.</p></div></div>
       </header>
