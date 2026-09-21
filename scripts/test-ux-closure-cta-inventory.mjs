@@ -5,6 +5,7 @@ const files = {
   shell: fs.readFileSync('components/app-shell/global-utility-bar.tsx', 'utf8'),
   datasetActions: fs.readFileSync('app/datasets/dataset-actions.tsx', 'utf8'),
   registration: fs.readFileSync('app/datasets/register-dataset-form.tsx', 'utf8'),
+  journeyOverview: fs.readFileSync('app/journeys/page.tsx', 'utf8'),
   governanceRun: fs.readFileSync('app/journeys/[projectId]/page.tsx', 'utf8'),
   remediation: fs.readFileSync('app/profiling/profiling-governance-panel.tsx', 'utf8'),
 }
@@ -13,8 +14,8 @@ const expected = {
   shell: ['Dashboard', 'Data', 'Quality', 'Governance', 'Automation', 'Monitor', 'Approvals', 'Search', 'Inbox'],
   datasetActions: ['Dataset 360', 'Fix manually', 'Ask AI to repair', 'Run profiling'],
   registration: ['Create project', 'Cancel', 'Register dataset', 'Run profiling', 'Open Dataset 360'],
+  journeyOverview: ['Open Governance Run'],
   governanceRun: [
-    'Open Governance Run',
     'Connect source',
     'Review sources',
     'Register dataset',
