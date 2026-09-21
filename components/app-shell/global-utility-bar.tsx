@@ -14,11 +14,11 @@ type Props = {
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Layers3 },
-  { href: '/journeys', label: 'Journey', icon: Compass },
-  { href: '/catalog', label: 'Catalog', icon: Database },
+  { href: '/journeys', label: 'Governance', icon: Compass },
+  { href: '/catalog', label: 'Data', icon: Database },
   { href: '/data-quality', label: 'Quality', icon: ShieldCheck },
-  { href: '/agents', label: 'Agents', icon: Sparkles },
-  { href: '/monitoring', label: 'Job Monitor', icon: Activity },
+  { href: '/agents', label: 'Automation', icon: Sparkles },
+  { href: '/monitoring', label: 'Monitor', icon: Activity },
   { href: '/approvals', label: 'Approvals', icon: ClipboardCheck },
 ]
 
