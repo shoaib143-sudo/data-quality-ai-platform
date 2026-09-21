@@ -96,6 +96,11 @@ export async function GET(request: Request) {
   const versionRows = versionsResult.rows
   const storageById = new Map(storageRows.map((row) => [row.id, row]))
   const referencedIds = new Set(versionRows.flatMap((row) => row.storage_object_id ? [row.storage_object_id] : []))
+  const referencedProviderCounts = [...referencedIds].reduce((counts, id) => {
+    const provider = storageById.get(id)?.provider
+    if (provider === 'supabase' || provider === 'r2') counts[provider] += 1
+    return counts
+  }, { supabase: 0, r2: 0 })
 
   const legacyAwaitingVerification = storageRows.filter(
     (row) => row.provider === 'supabase' && row.owner_type === 'LEGACY_UPLOAD' && row.state !== 'READY' && row.state !== 'DELETED',
@@ -173,6 +178,7 @@ export async function GET(request: Request) {
       r2NonReadyObjects,
       readyMigrationCopies: readyMigrationCopies.length,
       verifiedMigrationPairs,
+      referencedProviderCounts,
     },
     cors: {
       configured: corsConfigured,
