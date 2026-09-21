@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 type AgentDefinition = {
@@ -29,6 +30,8 @@ type ToolDefinition = {
 
 type AgentRun = {
   id: string
+  project_id: string
+  dataset_id: string | null
   status: string
   created_at: string
   completed_at: string | null
@@ -65,7 +68,7 @@ export default async function AgentDetailPage({
       .eq('enabled', true)
       .order('name'),
     supabase.schema('agent').from('agent_runs')
-      .select('id, status, created_at, completed_at, error_code')
+      .select('id, project_id, dataset_id, status, created_at, completed_at, error_code')
       .eq('agent_definition_id', agent.id)
       .order('created_at', { ascending: false })
       .limit(20),
@@ -75,7 +78,7 @@ export default async function AgentDetailPage({
   if (runsResult.error) throw new Error(`Unable to load agent runs: ${runsResult.error.message}`)
 
   const tools = (toolsResult.data ?? []) as ToolDefinition[]
-  const runs = (runsResult.data ?? []) as AgentRun[]
+  const runs = await filterAuthorizedExecutionRuns(user.id, (runsResult.data ?? []) as AgentRun[])
   const completedRuns = runs.filter((run) => run.status === 'COMPLETED').length
   const failedRuns = runs.filter((run) => run.status === 'FAILED').length
 
@@ -158,10 +161,10 @@ export default async function AgentDetailPage({
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-xl font-semibold">Recent runs</h2>
-            <p className="mt-1 text-sm text-slate-500">Persisted execution evidence for this exact registered agent version.</p>
+            <p className="mt-1 text-sm text-slate-500">Persisted execution evidence for this exact registered agent version, filtered to runs this user is authorized to view.</p>
           </div>
           {runs.length === 0 ? (
-            <p className="mt-4 rounded-xl border bg-slate-50 p-4 text-sm text-slate-500">No runs have been recorded for this agent version.</p>
+            <p className="mt-4 rounded-xl border bg-slate-50 p-4 text-sm text-slate-500">No authorized runs are available for this agent version.</p>
           ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -191,7 +194,7 @@ export default async function AgentDetailPage({
         </section>
 
         <p className="text-xs leading-5 text-slate-500">
-          This page is a read-only projection of the live agent registry, registered tools, and persisted run evidence. Agent execution remains server-side and authenticated.
+          This page is a read-only projection of the live agent registry, registered tools, and authorized persisted run evidence. Agent execution remains server-side and authenticated.
         </p>
       </div>
     </main>
