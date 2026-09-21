@@ -91,7 +91,9 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
     supabase.schema('governance').from('workflow_instances').select('id,status,current_step,entity_type,entity_id,started_at').eq('project_id', projectId).order('started_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('profiling_remediation_outcomes').select('id,workflow_instance_id,status,source_profile_run_id,verification_profile_run_id,remediation_issue_ids,quality_score_delta,high_severity_findings_delta,updated_at').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('profiling_recommendation_learning').select('id,workflow_instance_id,recommendation_action,status,effective,quality_score_delta,high_severity_findings_delta,observed_at').eq('project_id', projectId).order('observed_at', { ascending: false, nullsFirst: false }).limit(100),
-    supabase.schema('agent').from('agent_runs').select('id,status,dataset_id,dataset_version_id,created_at,started_at,completed_at,error_code').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
+    canMonitoring
+      ? supabase.schema('agent').from('agent_runs').select('id,status,dataset_id,dataset_version_id,created_at,started_at,completed_at,error_code').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100)
+      : Promise.resolve({ data: [], error: null }),
   ])
   for (const [name, result] of [
     ['sources', sourcesResult],
