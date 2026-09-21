@@ -5,23 +5,27 @@ import { authorizeDataGovernanceSuperAdminForOrganization } from '@/lib/auth/dat
 import { resolveInstanceOrganizationMembership } from '@/lib/governance/instance-organization'
 import { loadPositiveLearningCaseAdminInbox } from '@/lib/agents/proactive-governed-case-learning-admin'
 import { PositiveLearningCaseReviewManager } from './positive-learning-case-review-manager'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 export default async function LearningCasesPage() {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canAgents = canAccessWorkspaceHref(landing.persona, '/agents', landing.organizationRole)
+  const canApprovals = canAccessWorkspaceHref(landing.persona, '/approvals', landing.organizationRole)
   const membership = await resolveInstanceOrganizationMembership(user.id)
   await authorizeDataGovernanceSuperAdminForOrganization(user.id, membership.organizationId)
   const items = await loadPositiveLearningCaseAdminInbox(user.id)
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 text-slate-950">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-6 text-slate-950">
       <div className="mx-auto max-w-7xl space-y-6">
-        <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm">
-          <Link href="/home" className="font-black">DataNexus</Link>
-          <div className="flex gap-2 text-sm">
-            <Link href="/agents" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-blue-50">Agents</Link>
-            <Link href="/approvals" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-blue-50">Approvals</Link>
-          </div>
-        </nav>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Learning Governance" contextLabel="Positive case review" homeHref="/home" />
+        <div className="flex flex-wrap justify-end gap-2 text-sm">
+          {canAgents ? <Link href="/agents" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-blue-50">Agents</Link> : null}
+          {canApprovals ? <Link href="/approvals" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-blue-50">Approvals</Link> : null}
+        </div>
 
         <header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm">
           <div className="flex items-center gap-3">

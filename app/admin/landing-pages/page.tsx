@@ -4,9 +4,14 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { personas, personaSlugs } from '@/lib/governance/personas'
 import { setLandingPageEnabled } from './actions'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 export default async function LandingPageAdministrationPage() {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canAdminWorkspace = canAccessWorkspaceHref(landing.persona, '/admin', landing.organizationRole)
   const admin = createAdminClient()
 
   const membershipsResult = await admin.schema('app').from('organization_members')
@@ -18,7 +23,7 @@ export default async function LandingPageAdministrationPage() {
   const organizationIds = (membershipsResult.data ?? []).map(row => row.organization_id)
 
   if (!organizationIds.length) {
-    return <main className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-4xl rounded-3xl bg-[#eef2f7] p-8 shadow-[10px_10px_28px_#cbd2dc,-10px_-10px_28px_#ffffff]"><ShieldCheck className="h-8 w-8 text-amber-600"/><h1 className="mt-4 text-2xl font-black">Landing page administration</h1><p className="mt-2 text-slate-600">OWNER or ADMIN membership is required.</p><Link href="/home" className="mt-6 inline-block text-sm font-bold text-blue-600">Return home</Link></div></main>
+    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-4xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Landing Pages" contextLabel="Experience controls" homeHref="/home" /><div className="mt-6 rounded-3xl bg-[#eef2f7] p-8 shadow-[10px_10px_28px_#cbd2dc,-10px_-10px_28px_#ffffff]"><ShieldCheck className="h-8 w-8 text-amber-600"/><h1 className="mt-4 text-2xl font-black">Landing page administration</h1><p className="mt-2 text-slate-600">OWNER or ADMIN membership is required.</p><Link href="/home" className="mt-6 inline-block text-sm font-bold text-blue-600">Return home</Link></div></div></main>
   }
 
   const [organizationsResult, settingsResult] = await Promise.all([
@@ -31,9 +36,10 @@ export default async function LandingPageAdministrationPage() {
 
   const settings = new Map((settingsResult.data ?? []).map(row => [`${row.organization_id}:${row.persona_slug}`, Boolean(row.enabled)]))
 
-  return <main className="min-h-screen bg-[#eef2f7] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#eef2f7] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
     <div className="mx-auto max-w-7xl">
-      <nav className="mb-7 flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-[#eef2f7] px-5 py-4 shadow-[8px_8px_22px_#cbd2dc,-8px_-8px_22px_#ffffff]"><Link href="/admin" className="font-black">DataNexus Administration</Link><div className="flex gap-2 text-sm"><Link href="/admin/project-roles" className="rounded-2xl px-4 py-2 font-semibold text-slate-600 hover:text-blue-700">Project Roles</Link><Link href="/home" className="rounded-2xl px-4 py-2 font-semibold text-slate-600 hover:text-blue-700">Role Home</Link></div></nav>
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Landing Pages" contextLabel="Experience controls" homeHref="/home" />
+      <div className="mb-7 mt-4 flex flex-wrap justify-end gap-2 text-sm">{canAdminWorkspace ? <Link href="/admin/project-roles" className="rounded-2xl px-4 py-2 font-semibold text-slate-600 hover:text-blue-700">Project Roles</Link> : null}<Link href="/home" className="rounded-2xl px-4 py-2 font-semibold text-slate-600 hover:text-blue-700">Role Home</Link></div>
 
       <header className="rounded-[2rem] bg-[#eef2f7] p-8 shadow-[12px_12px_30px_#cbd2dc,-12px_-12px_30px_#ffffff]"><div className="flex items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#eef2f7] text-blue-600 shadow-[inset_3px_3px_8px_#cbd2dc,inset_-3px_-3px_8px_#ffffff]"><LayoutDashboard className="h-6 w-6"/></span><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Experience controls</p><h1 className="mt-1 text-3xl font-black">Role landing pages</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">Choose which role experiences are available in each organization. Disabling a landing page prevents users assigned to that persona from opening it. Role authorization is still enforced separately.</p></div></div></header>
 

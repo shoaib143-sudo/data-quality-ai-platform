@@ -4,9 +4,15 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { dataGovernanceSuperAdminOrganizationIds } from '@/lib/auth/data-governance-super-admin'
 import { CleanupConsole, type CleanupDataset, type CleanupProject, type CleanupSource } from './cleanup-console'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 export default async function SuperAdminCleanupPage() {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canDatasets = canAccessWorkspaceHref(landing.persona, '/datasets', landing.organizationRole)
+  const canMonitoring = canAccessWorkspaceHref(landing.persona, '/monitoring', landing.organizationRole)
   const organizationIds = await dataGovernanceSuperAdminOrganizationIds(user.id)
   if (!organizationIds.length) redirect('/home')
 
@@ -37,16 +43,14 @@ export default async function SuperAdminCleanupPage() {
   const sourceRows = (sourcesResult.data ?? []) as CleanupSource[]
   const datasetRows = (datasetsResult.data ?? []) as CleanupDataset[]
 
-  return <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
     <div className="mx-auto max-w-7xl">
-      <nav className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
-        <Link href="/home" className="font-black">DataNexus</Link>
-        <div className="flex flex-wrap gap-2 text-sm">
-          <Link href="/admin/cleanup" className="rounded-xl bg-slate-950 px-3 py-2 font-semibold text-white">Super Admin Cleanup</Link>
-          <Link href="/datasets" className="rounded-xl px-3 py-2 font-semibold text-blue-700 hover:bg-blue-50">Datasets & Sources</Link>
-          <Link href="/monitoring" className="rounded-xl px-3 py-2 font-semibold text-cyan-700 hover:bg-cyan-50">Job Monitor</Link>
-        </div>
-      </nav>
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Super Admin Cleanup" contextLabel="Governed cleanup controls" homeHref="/home" />
+      <div className="mb-6 mt-4 flex flex-wrap justify-end gap-2 text-sm">
+        <Link href="/admin/cleanup" aria-current="page" className="rounded-xl bg-slate-950 px-3 py-2 font-semibold text-white">Super Admin Cleanup</Link>
+        {canDatasets ? <Link href="/datasets" className="rounded-xl px-3 py-2 font-semibold text-blue-700 hover:bg-blue-50">Datasets & Sources</Link> : null}
+        {canMonitoring ? <Link href="/monitoring" className="rounded-xl px-3 py-2 font-semibold text-cyan-700 hover:bg-cyan-50">Job Monitor</Link> : null}
+      </div>
       <CleanupConsole projects={projectRows} sources={sourceRows} datasets={datasetRows} />
     </div>
   </main>
