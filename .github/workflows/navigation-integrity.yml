@@ -7,6 +7,14 @@ on:
       - 'components/governance/**'
       - 'components/app-shell/**'
       - 'lib/governance/remediation-closure-state.ts'
+      - 'lib/governance/remediation-sla.ts'
+      - 'scripts/test-ux-wave2-shell-contract.mjs'
+      - 'scripts/test-source-onboarding-continuation.mjs'
+      - 'scripts/test-dataset360-profile-history.mjs'
+      - 'scripts/test-remediation-sla-unit.mjs'
+      - 'scripts/test-governance-run-observability-sla.mjs'
+      - 'scripts/audit-ux-wave2-adversarial.mjs'
+      - 'scripts/test-ux-wave2-cta-inventory.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -32,6 +40,14 @@ on:
       - 'components/governance/**'
       - 'components/app-shell/**'
       - 'lib/governance/remediation-closure-state.ts'
+      - 'lib/governance/remediation-sla.ts'
+      - 'scripts/test-ux-wave2-shell-contract.mjs'
+      - 'scripts/test-source-onboarding-continuation.mjs'
+      - 'scripts/test-dataset360-profile-history.mjs'
+      - 'scripts/test-remediation-sla-unit.mjs'
+      - 'scripts/test-governance-run-observability-sla.mjs'
+      - 'scripts/audit-ux-wave2-adversarial.mjs'
+      - 'scripts/test-ux-wave2-cta-inventory.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -85,6 +101,20 @@ jobs:
         run: node scripts/test-ux-closure-cta-inventory.mjs
       - name: Run independent UX closure adversarial audit
         run: node --experimental-strip-types scripts/audit-ux-closure-wave-adversarial.mjs
+      - name: Test Wave 2 Product Shell journey surfaces
+        run: node scripts/test-ux-wave2-shell-contract.mjs
+      - name: Test source onboarding continuation
+        run: node scripts/test-source-onboarding-continuation.mjs
+      - name: Test Dataset 360 profile history
+        run: node scripts/test-dataset360-profile-history.mjs
+      - name: Test remediation SLA unit and negative cases
+        run: node --experimental-strip-types scripts/test-remediation-sla-unit.mjs
+      - name: Test Governance Run observability and SLA
+        run: node scripts/test-governance-run-observability-sla.mjs
+      - name: Test Wave 2 CTA inventory and interaction states
+        run: node scripts/test-ux-wave2-cta-inventory.mjs
+      - name: Run independent Wave 2 adversarial audit
+        run: node --experimental-strip-types scripts/audit-ux-wave2-adversarial.mjs
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:

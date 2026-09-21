@@ -6,11 +6,16 @@ import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authori
 import { MONITORING_RUN_WINDOW } from '@/lib/monitoring/run-window'
 import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type MonitoringProject, type MonitoringRun, type MonitoringStep } from './job-monitor'
 import { JobHealth } from './job-health'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import styles from './organic-domain-cells.module.css'
 
 export default async function MonitoringPage({ searchParams }: { searchParams: Promise<{ run?: string; agent?: string; domain?: string }> }) {
   const user = await requireUser()
-  const { run: requestedRunId, agent: requestedAgentId, domain: requestedDomainKey } = await searchParams
+  const [{ run: requestedRunId, agent: requestedAgentId, domain: requestedDomainKey }, landing] = await Promise.all([
+    searchParams,
+    resolveLandingAccess(user.id),
+  ])
   const admin = createAdminClient()
   const { data: runs, error: runsError } = await admin
     .schema('agent')
@@ -43,12 +48,12 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
   const typedProjects = (projectsResult.data ?? []) as MonitoringProject[]
   const typedSteps = (stepsResult.data ?? []) as MonitoringStep[]
 
-  return <main className="min-h-screen bg-[#020b17] text-slate-100">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#020b17] text-slate-100">
     <div className="mx-auto max-w-[1760px] px-4 py-5 sm:px-6 lg:px-8">
-      <header className="mb-5 flex flex-col gap-4 border-b border-cyan-400/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Job Monitor" contextLabel="Governed execution observability" homeHref="/home" />
+      <header className="mb-5 mt-4 flex flex-col gap-4 border-b border-cyan-400/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <Link href="/home" className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300/70 transition hover:text-cyan-200">DataNexus AI</Link>
-          <h1 className="mt-2 font-serif text-4xl tracking-[0.08em] text-white">JOB MONITOR</h1>
+          <h1 className="font-serif text-4xl tracking-[0.08em] text-white">JOB MONITOR</h1>
           <p className="mt-1 text-sm text-slate-400">Living Data Domains · governed DG/AI feature execution</p>
         </div>
         <div className="flex flex-wrap gap-2">

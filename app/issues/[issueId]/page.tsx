@@ -9,6 +9,7 @@ import type { GovernedIncident } from '@/lib/governance/governed-incident'
 import type { IncidentComponentDefinition } from '@/lib/governance/incident-component-registry'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
+import { classifyRemediationSla } from '@/lib/governance/remediation-sla'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -93,13 +94,16 @@ export default async function GovernedIncidentPage({ params }: { params: Promise
   const view = buildGovernedIncidentView(incident, landing.persona)
   const canManage = await hasProjectCapability(user.id, projectId, 'issues.manage')
 
+  const slaState=classifyRemediationSla({status:incident.truth.issueStatus,dueAt:incident.truth.dueAt})
+  const dueLabel=!incident.truth.dueAt?'Not set':slaState==='INVALID'?'Invalid due date':new Date(incident.truth.dueAt).toLocaleString()
+
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Governed incident" contextLabel={projectResult.data.name} homeHref="/home" />
     <nav className="mb-6 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0a1d33] px-5 py-3"><Link href="/issues" className="inline-flex items-center gap-2 text-sm font-bold text-slate-300 hover:text-white"><ArrowLeft className="h-4 w-4"/>Issues</Link><Link href={canonicalRoutes.governanceRun(projectId)} className="rounded-xl px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[0.05]">Governance Run</Link></nav>
 
     <header className="rounded-3xl border border-white/10 bg-[#0a1d33] p-7 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-5"><div className="max-w-3xl"><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-cyan-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] text-cyan-300">{view.plan.persona.replaceAll('-', ' ')}</span><span className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-400">{view.plan.abstraction}</span><span className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-400">policy v{view.presentationPolicyVersion}</span></div><h1 className="mt-4 text-3xl font-black text-white">{incident.title}</h1><p className="mt-3 text-base leading-7 text-slate-300">{view.plan.primaryQuestion}</p><p className="mt-3 text-sm leading-6 text-slate-500">{incident.description ?? 'No governed incident description recorded.'}</p></div><div className="rounded-2xl border border-emerald-400/10 bg-emerald-400/[0.04] p-4"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[.12em] text-emerald-300"><ShieldCheck className="h-4 w-4"/>Governed incident</div><p className="mt-2 text-xs text-slate-500">{incident.truthBoundary} · {incident.authorizationBoundary}</p><p className="mt-1 text-xs text-slate-600">{canManage ? 'Mutation authority independently verified' : 'Read-only evidence access'}</p></div></div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric title="Lifecycle" value={label(incident.truth.lifecycleState)}/><Metric title="Severity" value={incident.truth.severity}/><Metric title="Issue state" value={label(incident.truth.issueStatus)}/><Metric title="Verification" value={label(incident.verification.status)}/></div>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-6"><Metric title="Lifecycle" value={label(incident.truth.lifecycleState)}/><Metric title="Severity" value={incident.truth.severity}/><Metric title="Issue state" value={label(incident.truth.issueStatus)}/><Metric title="Verification" value={label(incident.verification.status)}/><Metric title="Ownership" value={incident.truth.ownerUserId?'Assigned':'Unassigned'} detail={incident.truth.ownerUserId??'No accountable owner recorded'}/><Metric title="Remediation SLA" value={label(slaState)} detail={dueLabel}/></div>
       <div className="mt-5 flex flex-wrap gap-2">{view.plan.actionEmphasis.map(item => <span key={item} className="rounded-lg border border-white/[0.07] bg-white/[0.04] px-2.5 py-1 text-xs font-semibold text-slate-300">{item.replaceAll('-', ' ')}</span>)}</div>
     </header>
 

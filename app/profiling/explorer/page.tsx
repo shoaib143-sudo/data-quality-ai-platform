@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
@@ -6,6 +7,8 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import ProfilingExplorer from '@/app/profiling/profiling-explorer'
 import ProfilingGovernancePanel from '@/app/profiling/profiling-governance-panel'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 
 type ExplorerSearchParams = Promise<{
   runId?: string
@@ -30,7 +33,7 @@ function numeric(value: unknown) {
 export default async function ProfilingExplorerPage({ searchParams }: { searchParams: ExplorerSearchParams }) {
   const user = await requireUser()
   const supabase = await createClient()
-  const requested = await searchParams
+  const [requested, landing] = await Promise.all([searchParams, resolveLandingAccess(user.id)])
   const requestedRunId = requested.runId?.trim() || null
 
   const requestedRun = requestedRunId
@@ -58,15 +61,12 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
   const latestRun = latestRunResult.data
 
   if (!latestRun) {
-    return <main className="min-h-screen p-8"><div className="mx-auto max-w-5xl rounded-xl border p-8"><h1 className="text-2xl font-semibold">Profiling Explorer</h1><p className="mt-2 text-sm text-muted-foreground">No profiling runs are available.</p></div></main>
+    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-5 text-slate-100"><div className="mx-auto max-w-7xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling Explorer" contextLabel="No profiling run selected" homeHref="/home" /><div className="mt-5 rounded-2xl border border-white/10 bg-[#0a1d33] p-8"><h1 className="text-2xl font-semibold">Profiling Explorer</h1><p className="mt-2 text-sm text-slate-400">No profiling runs are available.</p></div></div></main>
   }
 
-  const [landing, versionContext] = await Promise.all([
-    resolveLandingAccess(user.id),
-    supabase.schema('catalog').from('dataset_versions').select('dataset_id').eq('id', latestRun.dataset_version_id).maybeSingle(),
-  ])
+  const versionContext = await supabase.schema('catalog').from('dataset_versions').select('dataset_id').eq('id', latestRun.dataset_version_id).maybeSingle()
   if (versionContext.error || !versionContext.data) throw new Error(`Unable to resolve profiling project context: ${versionContext.error?.message ?? 'dataset version not found'}`)
-  const datasetContext = await supabase.schema('catalog').from('datasets').select('project_id').eq('id', versionContext.data.dataset_id).maybeSingle()
+  const datasetContext = await supabase.schema('catalog').from('datasets').select('id,project_id,name').eq('id', versionContext.data.dataset_id).maybeSingle()
   if (datasetContext.error || !datasetContext.data) throw new Error(`Unable to resolve profiling project context: ${datasetContext.error?.message ?? 'dataset not found'}`)
   const projectId = String(datasetContext.data.project_id)
   const [canManageWorkflow, canManageRemediation] = await Promise.all([
@@ -194,11 +194,18 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
   }))
 
   return (
-    <main className="min-h-screen p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-5 text-slate-100">
       <div className="mx-auto max-w-7xl space-y-6">
-        <div>
-          <h1 className="text-3xl font-semibold">Profiling Explorer</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Run {latestRun.id} · {latestRun.status}</p>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling Explorer" contextLabel={datasetContext.data.name ?? 'Profiling evidence'} homeHref="/home" />
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-white/10 bg-[#0a1d33] p-5">
+          <div>
+            <h1 className="text-3xl font-semibold">Profiling Explorer</h1>
+            <p className="mt-2 text-sm text-slate-400">Run {latestRun.id} · {latestRun.status}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href={canonicalRoutes.governedDataset(String(datasetContext.data.id))} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-white/[0.04]">Dataset 360</Link>
+            <Link href={canonicalRoutes.governanceRun(projectId)} className="rounded-xl border border-violet-300/20 px-3 py-2 text-xs font-bold text-violet-200 hover:bg-white/[0.04]">Governance Run</Link>
+          </div>
         </div>
         <ProfilingGovernancePanel
           profileRunId={latestRun.id}
