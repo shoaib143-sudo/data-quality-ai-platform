@@ -37,6 +37,11 @@ on:
       - 'scripts/test-ux-wave6-local-navigation-policy.mjs'
       - 'scripts/test-ux-wave6-cta-inventory.mjs'
       - 'scripts/audit-ux-wave6-adversarial.mjs'
+      - 'app/profiling/profiling-dashboard.tsx'
+      - 'scripts/test-ux-wave7-shell-control-surfaces.mjs'
+      - 'scripts/test-ux-wave7-local-navigation-policy.mjs'
+      - 'scripts/test-ux-wave7-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave7-adversarial.mjs'
       - 'scripts/test-ux-wave9-shell-residual-governance.mjs'
       - 'scripts/test-ux-wave9-local-navigation-policy.mjs'
       - 'scripts/test-ux-wave9-cta-inventory.mjs'
@@ -96,6 +101,11 @@ on:
       - 'scripts/test-ux-wave6-local-navigation-policy.mjs'
       - 'scripts/test-ux-wave6-cta-inventory.mjs'
       - 'scripts/audit-ux-wave6-adversarial.mjs'
+      - 'app/profiling/profiling-dashboard.tsx'
+      - 'scripts/test-ux-wave7-shell-control-surfaces.mjs'
+      - 'scripts/test-ux-wave7-local-navigation-policy.mjs'
+      - 'scripts/test-ux-wave7-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave7-adversarial.mjs'
       - 'scripts/test-ux-wave9-shell-residual-governance.mjs'
       - 'scripts/test-ux-wave9-local-navigation-policy.mjs'
       - 'scripts/test-ux-wave9-cta-inventory.mjs'
@@ -205,6 +215,14 @@ jobs:
         run: node scripts/test-ux-wave6-cta-inventory.mjs
       - name: Run independent Wave 6 adversarial audit
         run: node scripts/audit-ux-wave6-adversarial.mjs
+      - name: Test Wave 7 control Product Shell surfaces
+        run: node scripts/test-ux-wave7-shell-control-surfaces.mjs
+      - name: Test Wave 7 local navigation policy
+        run: node scripts/test-ux-wave7-local-navigation-policy.mjs
+      - name: Test Wave 7 CTA inventory and failure states
+        run: node scripts/test-ux-wave7-cta-inventory.mjs
+      - name: Run independent Wave 7 adversarial audit
+        run: node scripts/audit-ux-wave7-adversarial.mjs
       - name: Test Wave 9 residual governance Product Shell surfaces
         run: node scripts/test-ux-wave9-shell-residual-governance.mjs
       - name: Test Wave 9 local navigation policy
