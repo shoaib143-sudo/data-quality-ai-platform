@@ -6,7 +6,7 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
-import { canAccessWorkspace } from '@/lib/governance/workspace-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 type Project = { id: string; name: string }
@@ -42,7 +42,7 @@ export default async function AICapabilitiesPage({ searchParams }: { searchParam
     resolveLandingAccess(user.id),
     createClient(),
   ])
-  const canAiInsights = canAccessWorkspace(landing.persona, 'ai-insights', landing.organizationRole)
+  const canAiInsights = canAccessWorkspaceHref(landing.persona, '/ai-insights', landing.organizationRole)
   const projectsResult = await supabase.schema('app').from('projects').select('id,name').order('name')
   if (projectsResult.error) throw new Error(`Unable to load projects: ${projectsResult.error.message}`)
   const projects = (projectsResult.data ?? []) as Project[]
