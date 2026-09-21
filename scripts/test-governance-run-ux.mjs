@@ -30,6 +30,9 @@ assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(page),
 assert.ok(routes.includes('governanceRun(projectId: string)'), 'canonical Governance Run route must exist')
 assert.ok(contracts.includes("id: 'governance-run'"), 'Governance Run dynamic route must be registered with navigation integrity')
 assert.ok(overview.includes('canonicalRoutes.governanceRun(project.id)'), 'journey overview must link to Governance Run canonically')
+assert.ok(overview.includes('const latestCompletedRun = completedRuns[0] ?? null'), 'journey overview must derive findings from the latest completed profile only')
+assert.ok(overview.includes('findings.filter(finding => finding.profile_run_id === latestCompletedRun.id)'), 'historical findings must not contaminate the current remediation stage')
+assert.ok(overview.includes('Boolean(latestCompletedRun) && highFindings.length === 0'), 'guided remediation completion must fail closed while high-priority findings remain')
 for (const cta of ['Open Governance Run', 'Job Monitor', 'Approvals', 'Reports', 'Recommended next action']) {
   assert.ok(page.includes(cta) || overview.includes(cta), `Governance Run CTA missing: ${cta}`)
 }
