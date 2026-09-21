@@ -50,7 +50,7 @@ function ForgotPasswordPage() {
   const coolingDown = remaining > 0
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-16">
+    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-6 py-16">
       <form onSubmit={onSubmit} className="w-full max-w-md space-y-6 rounded-xl border p-8 shadow-sm">
         <div>
           <h1 className="text-2xl font-semibold">Reset your password</h1>
@@ -74,7 +74,7 @@ function ForgotPasswordPage() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<main className="flex min-h-screen items-center justify-center">Loading…</main>}>
+    <Suspense fallback={<main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center">Loading…</main>}>
       <ForgotPasswordPage />
     </Suspense>
   )

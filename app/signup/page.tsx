@@ -39,7 +39,7 @@ function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-16">
+    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-6 py-16">
       <form onSubmit={onSubmit} className="w-full max-w-md space-y-6 rounded-xl border p-8 shadow-sm">
         <div><h1 className="text-2xl font-semibold">Create account</h1><p className="mt-2 text-sm text-muted-foreground">Create your platform account.</p></div>
         <label className="block text-sm">Email<input required autoComplete="email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" /></label>
@@ -56,7 +56,7 @@ function SignupPage() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<main className="flex min-h-screen items-center justify-center">Loading…</main>}>
+    <Suspense fallback={<main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center">Loading…</main>}>
       <SignupPage />
     </Suspense>
   )
