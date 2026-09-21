@@ -81,7 +81,7 @@ export async function GET() {
     tableCheck(admin, 'governance', 'ai_provider_resilience_profile_versions', 'id'),
     tableCheck(admin, 'agent', 'learning_candidates', 'id'),
     tableCheck(admin, 'agent', 'learning_candidate_releases', 'id'),
-    tableCheck(admin, 'agent', 'positive_learning_cases', 'production_eligible'),
+    tableCheck(admin, 'agent', 'positive_learning_cases', 'review_status'),
     tableCheck(admin, 'agent', 'agent_run_learning_provenance', 'production_eligible'),
     operationalCapabilityCheck(admin),
     tableCheck(admin, 'orchestration', 'recovery_actions', 'execution_token'),
