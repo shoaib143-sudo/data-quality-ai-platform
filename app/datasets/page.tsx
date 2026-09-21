@@ -7,6 +7,8 @@ import { JdbcSourceForm } from './jdbc-source-form'
 import { SourceActions } from './source-actions'
 import { DatasetActions } from './dataset-actions'
 import { dataGovernanceSuperAdminOrganizationIds } from '@/lib/auth/data-governance-super-admin'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
 
 type DatasetRow = { id: string; project_id: string; data_source_id: string | null; name: string; description: string | null; source_identifier: string | null; business_domain: string | null; status: string; created_at: string }
 type VersionRow = { id: string; dataset_id: string; version_number: number; source_uri: string | null; status: string; created_at: string }
@@ -49,7 +51,10 @@ function sourceTypeLabel(type: string) {
 export default async function DatasetsPage() {
   const user = await requireUser()
   const supabase = await createClient()
-  const governanceSuperAdminOrganizationIds = await dataGovernanceSuperAdminOrganizationIds(user.id)
+  const [governanceSuperAdminOrganizationIds, landing] = await Promise.all([
+    dataGovernanceSuperAdminOrganizationIds(user.id),
+    resolveLandingAccess(user.id),
+  ])
 
   const [projectsResult, sourcesResult, readinessResult, datasetsResult, versionsResult, membershipsResult, executionSourcesResult, profileRunsResult, agentDefinitionResult] = await Promise.all([
     supabase.schema('app').from('projects').select('id, name').order('name'),
@@ -115,16 +120,10 @@ export default async function DatasetsPage() {
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(219,234,254,0.9),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(243,232,255,0.8),_transparent_32%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_45%,_#f8fafc_100%)] text-slate-950">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-        <nav className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/80 bg-white/85 px-5 py-3 shadow-sm backdrop-blur">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="flex items-center gap-2 text-sm font-semibold text-slate-700 transition hover:text-blue-600"><span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600"><Layers3 className="h-5 w-5" /></span>Data Governance PowerHouse</Link>
-            <span className="hidden text-slate-300 sm:inline">/</span>
-            <span className="text-sm text-slate-500">Datasets & Connections</span>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/profiling" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50">Profiling Workspace</Link>
-            <Link href="/agents" className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700">AI Agents</Link>
-          </div>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Sources & Datasets" contextLabel="Onboarding and profiling readiness" homeHref="/home" />
+        <nav className="mb-6 mt-4 flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-white/80 bg-white/85 px-5 py-3 shadow-sm backdrop-blur">
+          <Link href="/profiling" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50">Profiling Workspace</Link>
+          <Link href="/journeys" className="rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-medium text-violet-700 transition hover:bg-violet-50">Governance Runs</Link>
         </nav>
 
         <section className="relative overflow-hidden rounded-3xl border border-blue-100 bg-white/90 p-7 shadow-[0_20px_70px_rgba(37,99,235,0.10)] sm:p-9">
