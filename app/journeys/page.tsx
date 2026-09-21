@@ -111,14 +111,15 @@ export default async function JourneysPage() {
     const projectDatasets = datasets.filter(dataset => dataset.project_id === project.id)
     const projectRuns = runs.filter(run => runProject.get(run.id) === project.id)
     const completedRuns = projectRuns.filter(run => normalized(run.status) === 'COMPLETED')
-    const projectFindings = findings.filter(finding => runProject.get(finding.profile_run_id) === project.id)
+    const latestCompletedRun = completedRuns[0] ?? null
+    const projectFindings = latestCompletedRun ? findings.filter(finding => finding.profile_run_id === latestCompletedRun.id) : []
     const highFindings = projectFindings.filter(finding => ['HIGH', 'CRITICAL'].includes(normalized(finding.severity)))
     const openIssues = issues.filter(issue => issue.project_id === project.id && unresolved(issue.status))
     const projectRules = rules.filter(rule => ruleProject.get(rule.id) === project.id)
     const latestRuleRuns = projectRules.map(rule => latestRuleRunByRule.get(rule.id)).filter(Boolean) as RuleRun[]
     const observedSources = projectSources.filter(source => readinessBySource.get(source.id) === 'OBSERVED_READY')
     const qualityVerified = projectRules.length > 0 && latestRuleRuns.length === projectRules.length && latestRuleRuns.every(run => run.passed === true || normalized(run.status) === 'PASSED')
-    const remediationComplete = highFindings.length === 0 || openIssues.length > 0
+    const remediationComplete = Boolean(latestCompletedRun) && highFindings.length === 0
 
     const steps: Step[] = [
       {
