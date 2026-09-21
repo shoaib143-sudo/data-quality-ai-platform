@@ -22,6 +22,9 @@ export default async function EditDatasetPage({ params }: { params: Promise<{ da
   const { data: project } = await supabase.schema('app').from('projects').select('id, name, organization_id').eq('id', dataset.project_id).maybeSingle()
   if (!project) notFound()
 
+  const { data: membership } = await supabase.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
+  if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) notFound()
+
   const { data: sources } = await supabase.schema('catalog').from('data_sources').select('id, name, source_type, status').eq('project_id', dataset.project_id).in('status', ['ACTIVE', 'CONFIGURED']).order('name')
 
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6">
