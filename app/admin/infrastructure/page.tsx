@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { Cloud, Database, HardDrive, Server, ShieldCheck } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -16,7 +17,7 @@ function bytesLabel(value: number) {
   return `${(value / 1024 ** 3).toFixed(2)} GB`
 }
 
-function StatusPill({ ready, children }: { ready: boolean; children: React.ReactNode }) {
+function StatusPill({ ready, children }: { ready: boolean; children: ReactNode }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${ready ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{children}</span>
 }
 
