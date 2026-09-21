@@ -28,7 +28,7 @@ begin
   select decrypted_secret
     into worker_secret
     from vault.decrypted_secrets
-   where name = 'DGP_DURABLE_WORKER_SECRET'
+   where name = 'DGP_CLOUDFLARE_WORKER_SECRET'
    limit 1;
 
   select decrypted_secret
@@ -38,7 +38,7 @@ begin
    limit 1;
 
   if worker_secret is null or btrim(worker_secret) = '' then
-    raise exception 'DGP_DURABLE_WORKER_SECRET is required for Cloudflare canary dispatch';
+    raise exception 'DGP_CLOUDFLARE_WORKER_SECRET is required for Cloudflare canary dispatch';
   end if;
 
   if worker_url is null or btrim(worker_url) = '' then
