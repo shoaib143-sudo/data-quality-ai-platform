@@ -57,6 +57,7 @@ assert.ok(files.sourceForm.includes('disabled={busy || !projectId}'), 'source di
 assert.ok(files.sourceForm.includes('disabled={busy || !projectId || !name.trim() || (!isFile && !hierarchy)}'), 'source registration CTA must suppress invalid/busy submission')
 assert.ok(files.sourceForm.includes('role="status"'), 'source registration result must be announced accessibly')
 assert.ok(files.sourceForm.includes('!error && createdSourceProjectId'), 'success CTAs must be hidden after failure')
+assert.ok(files.sourceForm.includes('!isFile && canOpenDiscovery ? <Link href="/catalog/discovery"'), 'Catalog Discovery CTA must not render without workspace access')
 assert.ok(!files.explorer.includes('<a href={canonicalRoutes.'), 'Profiling Explorer internal context navigation must use framework Links')
 assert.ok(files.dataset360.includes('recentRuns.map(item=>canProfiling?'), 'Dataset 360 profile history CTAs must remain access-gated')
 assert.ok(files.governanceRun.includes('canMonitoring ? <Link href={executionHref}'), 'Job Monitor CTA must remain access-gated')
