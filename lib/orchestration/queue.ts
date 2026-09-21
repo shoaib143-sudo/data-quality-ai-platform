@@ -361,6 +361,23 @@ export function numericSetting(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+export async function claimDurableJobsByType(workerId: string, jobType: DurableJobType, limit = 1) {
+  if (jobType !== 'OBSERVABILITY') {
+    throw new Error(`Cloudflare canary job type is not allowlisted: ${jobType}`)
+  }
+  const admin = createAdminClient()
+  const boundedLimit = Math.max(1, Math.min(Math.floor(limit), 4))
+  const { data, error } = await admin.schema('orchestration').rpc('claim_jobs_by_type', {
+    p_worker: workerId,
+    p_job_type: jobType,
+    p_limit: boundedLimit,
+  })
+  if (error) throw new Error(`Unable to claim ${jobType} durable jobs: ${error.message}`)
+  const jobs = (data ?? []) as DurableJob[]
+  await recordClaimTelemetry(jobs)
+  return jobs
+}
+
 export async function claimDurableJobByAgentRun(workerId: string, agentRunId: string) {
   const admin = createAdminClient()
   const { data, error } = await admin.schema('orchestration').rpc('claim_job_by_agent_run', {

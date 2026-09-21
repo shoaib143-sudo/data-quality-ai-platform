@@ -7,6 +7,7 @@ import { isAuthorizedWorkerBearer } from '@/lib/orchestration/worker-auth'
 import {
   processClaimedDurableJob,
   runAdaptiveWorkerCycle,
+  runCloudflareObservabilityCanaryCycle,
   runScheduledWorkerCycle,
 } from '@/lib/orchestration/worker-service'
 
@@ -30,6 +31,24 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>
   const mode = text(body.mode)
+
+  if (mode === 'CLOUDFLARE_OBSERVABILITY_CANARY') {
+    if (process.env.DATANEXUS_PLATFORM !== 'cloudflare' || process.env.DATANEXUS_WORKER_CANARY_JOB_TYPE !== 'OBSERVABILITY') {
+      return NextResponse.json({ error: 'Cloudflare observability canary mode is not available on this runtime.' }, { status: 403 })
+    }
+    if (!isAuthorizedWorkerRequest(request)) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
+    const workerId = `cloudflare-observability-canary:${crypto.randomUUID()}`
+    try {
+      return NextResponse.json({
+        accepted: true,
+        ...await runCloudflareObservabilityCanaryCycle(workerId),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Cloudflare observability canary execution failed.'
+      console.error('[cloudflare-observability-canary]', message.slice(0, 2000))
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
 
   if (mode === 'ADAPTIVE_DISPATCH') {
     if (!isAuthorizedWorkerRequest(request)) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })

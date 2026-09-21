@@ -27,6 +27,7 @@ export class DataNexusWorkerContainer extends Container {
     DATANEXUS_COMMIT_SHA: env.DATANEXUS_COMMIT_SHA,
     DATANEXUS_RELEASE_ID: env.DATANEXUS_RELEASE_ID,
     DATANEXUS_BUILD_TIMESTAMP: env.DATANEXUS_BUILD_TIMESTAMP,
+    DATANEXUS_WORKER_CANARY_JOB_TYPE: env.DATANEXUS_WORKER_CANARY_JOB_TYPE,
     NEXT_PUBLIC_SUPABASE_URL: env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY,
@@ -68,6 +69,19 @@ export default {
           error: 'Worker execution is enabled but required runtime secrets are incomplete.',
           environment: 'canary',
         }, { status: 503 })
+      }
+      if (env.DATANEXUS_WORKER_CANARY_JOB_TYPE !== 'OBSERVABILITY') {
+        return Response.json({
+          error: 'Worker execution is enabled without the governed OBSERVABILITY canary allowlist.',
+          environment: 'canary',
+        }, { status: 503 })
+      }
+      const body = await request.clone().json().catch(() => ({})) as { mode?: unknown }
+      if (body.mode !== 'CLOUDFLARE_OBSERVABILITY_CANARY') {
+        return Response.json({
+          error: 'Cloudflare worker execution is restricted to the observability canary mode.',
+          environment: 'canary',
+        }, { status: 403 })
       }
     } else if (!READ_ONLY_METHODS.has(request.method.toUpperCase())) {
       return Response.json({ error: 'Worker health and build routes are read-only.' }, {

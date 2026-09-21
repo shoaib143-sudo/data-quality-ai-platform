@@ -8,6 +8,7 @@ const service = fs.readFileSync(new URL('../lib/orchestration/worker-service.ts'
 test('Next worker route is a thin provider adapter around the portable worker service', () => {
   assert.match(route, /runScheduledWorkerCycle/)
   assert.match(route, /runAdaptiveWorkerCycle/)
+  assert.match(route, /runCloudflareObservabilityCanaryCycle/)
   assert.match(route, /processClaimedDurableJob/)
   for (const implementation of [
     'dispatchAdaptiveRounds',
@@ -29,6 +30,7 @@ test('portable worker service has no Next.js request or response dependency', ()
   assert.doesNotMatch(service, /next\/server|NextRequest|NextResponse/)
   assert.match(service, /export async function runScheduledWorkerCycle/)
   assert.match(service, /export async function runAdaptiveWorkerCycle/)
+  assert.match(service, /export async function runCloudflareObservabilityCanaryCycle/)
   assert.match(service, /export async function processClaimedDurableJob/)
 })
 

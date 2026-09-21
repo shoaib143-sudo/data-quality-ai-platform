@@ -48,7 +48,7 @@
     "verify:profiling-lifecycle": "node scripts/verify-profiling-lifecycle-contracts.mjs",
     "verify:provider-neutral-runtime": "node --experimental-strip-types --test tests/provider-neutral-runtime.test.mjs && node --test tests/build-info-contract.test.mjs tests/durable-worker-provider-neutral-url.test.mjs && node scripts/test-durable-worker-scheduler-authority.mjs && node --test tests/storage-cutover-guard.test.mjs tests/storage-r2-production-precutover-workflow.test.mjs",
     "verify:container-runtime": "node --test tests/container-runtime-contract.test.mjs tests/cloudflare-canary-contract.test.mjs tests/cloudflare-canary-deployment-workflow.test.mjs",
-    "verify:worker-runtime": "node scripts/verify-worker-runtime.mjs && node --test tests/provider-neutral-worker-service.test.mjs tests/cloudflare-worker-runtime-contract.test.mjs tests/cloudflare-worker-deployment-workflow.test.mjs",
+    "verify:worker-runtime": "node scripts/verify-worker-runtime.mjs && node --test tests/provider-neutral-worker-service.test.mjs tests/cloudflare-worker-runtime-contract.test.mjs tests/cloudflare-worker-deployment-workflow.test.mjs tests/cloudflare-worker-observability-canary.test.mjs",
     "verify:profiling-explorer": "node scripts/verify-profiling-explorer.mjs",
     "verify:governance": "node scripts/verify-governance-architecture.mjs && node scripts/verify-single-organization-runtime.mjs",
     "verify:semantic": "node scripts/verify-semantic-governance.mjs",
