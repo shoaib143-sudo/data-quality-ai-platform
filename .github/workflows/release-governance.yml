@@ -613,6 +613,29 @@ jobs:
           if (body.status !== 'READY') process.exit(1)
           NODE
 
+      - name: Verify production Supabase and release-schema contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
+
+          supabase_code="$(curl --silent --show-error --output /tmp/vercel-supabase.json --write-out '%{http_code}' "$BASE_URL/api/health/supabase")"
+          test "$supabase_code" = "200"
+          node - /tmp/vercel-supabase.json <<'NODE'
+          const fs = require('node:fs')
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          if (body.status !== 'READY' || body.provider !== 'supabase' || body.boundary !== 'public-data-api') process.exit(1)
+          NODE
+
+          schema_code="$(curl --silent --show-error --output /tmp/vercel-release-schema.json --write-out '%{http_code}' "$BASE_URL/api/health/release-schema")"
+          test "$schema_code" = "200"
+          node - /tmp/vercel-release-schema.json <<'NODE'
+          const fs = require('node:fs')
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          if (body.status !== 'READY' || body.contract !== 'cloudflare-supabase-release-v1') process.exit(1)
+          if (!body.checks || Object.values(body.checks).some((check) => check?.status !== 'READY')) process.exit(1)
+          NODE
+
       - name: Verify OIDC-enabled R2 certification route is deployed
         shell: bash
         run: |
