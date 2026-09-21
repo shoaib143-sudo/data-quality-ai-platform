@@ -6,6 +6,7 @@ import { EditDatasetForm } from './edit-dataset-form'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
+import { authorizeDataset } from '@/lib/auth/authorize'
 
 export default async function EditDatasetPage({ params }: { params: Promise<{ datasetId: string }> }) {
   const user = await requireUser()
@@ -14,14 +15,12 @@ export default async function EditDatasetPage({ params }: { params: Promise<{ da
   const { datasetId } = await params
   const supabase = await createClient()
 
+  try { await authorizeDataset(user.id, datasetId, 'catalog.update') } catch { notFound() }
   const { data: dataset } = await supabase.schema('catalog').from('datasets').select('id, project_id, data_source_id, name, description, source_identifier, business_domain, status').eq('id', datasetId).maybeSingle()
   if (!dataset) notFound()
 
   const { data: project } = await supabase.schema('app').from('projects').select('id, name, organization_id').eq('id', dataset.project_id).maybeSingle()
   if (!project) notFound()
-
-  const { data: membership } = await supabase.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-  if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) notFound()
 
   const { data: sources } = await supabase.schema('catalog').from('data_sources').select('id, name, source_type, status').eq('project_id', dataset.project_id).in('status', ['ACTIVE', 'CONFIGURED']).order('name')
 

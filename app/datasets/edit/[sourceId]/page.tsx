@@ -7,6 +7,7 @@ import { hierarchySelection } from '@/lib/connectors/native-hierarchy'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
+import { authorizeProject } from '@/lib/auth/authorize'
 
 export default async function EditSourcePage({ params }: { params: Promise<{ sourceId: string }> }) {
   const user = await requireUser()
@@ -18,8 +19,7 @@ export default async function EditSourcePage({ params }: { params: Promise<{ sou
   if (!source) notFound()
   const { data: project } = await supabase.schema('app').from('projects').select('id, name, organization_id').eq('id', source.project_id).maybeSingle()
   if (!project) notFound()
-  const { data: membership } = await supabase.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-  if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) notFound()
+  try { await authorizeProject(user.id, source.project_id, 'source.manage') } catch { notFound() }
   const metadata = source.connection_metadata && typeof source.connection_metadata === 'object' ? source.connection_metadata as Record<string, unknown> : {}
 
   if (String(source.source_type).toUpperCase() !== 'JDBC') {
