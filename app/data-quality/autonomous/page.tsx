@@ -6,6 +6,7 @@ import { resolveHumanRemediationHandoff } from '@/lib/governance/remediation-han
 import { canAccessWorkspace } from '@/lib/governance/workspace-policy'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 type Investigation = {
   id: string
@@ -79,6 +80,8 @@ export default async function AutonomousDataQualityPage() {
   const outcomes = (outcomesResult.data ?? []) as Outcome[]
   const learning = (learningResult.data ?? []) as Learning[]
   const canAccessApprovalWorkspace = canAccessWorkspace(landingAccess.persona, 'workflows', landingAccess.organizationRole)
+  const canIssues = canAccessWorkspace(landingAccess.persona, 'issues', landingAccess.organizationRole)
+  const canAgents = canAccessWorkspace(landingAccess.persona, 'agents', landingAccess.organizationRole)
   const projectIds = [...new Set(investigations.map((row) => row.project_id))]
   const policyApprovalAccess = new Map(await Promise.all(projectIds.map(async (projectId) => [
     projectId,
@@ -104,11 +107,12 @@ export default async function AutonomousDataQualityPage() {
   const decidedLearning=effectiveLearning+ineffectiveLearning
   const overallEffectiveness=decidedLearning?effectiveLearning/decidedLearning:null
 
-  return <main className="min-h-screen bg-slate-50 text-slate-950">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm">
+      <GlobalUtilityBar persona={landingAccess.persona} organizationRole={landingAccess.organizationRole} roleLabel="Autonomous Data Quality" contextLabel="Investigate, remediate, verify and learn" homeHref="/home" />
+      <nav className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm">
         <Link href="/data-quality" className="font-bold text-blue-700">← Data Quality</Link>
-        <div className="flex gap-2">{hasAnyApprovalWorkflowAccess ? <Link href="/workflows" className="rounded-xl border px-3 py-2 text-sm font-semibold">Approvals</Link> : null}<Link href="/issues" className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white">Remediation issues</Link></div>
+        <div className="flex gap-2">{hasAnyApprovalWorkflowAccess ? <Link href="/workflows" className="rounded-xl border px-3 py-2 text-sm font-semibold">Approvals</Link> : null}{canIssues ? <Link href="/issues" className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white">Remediation issues</Link> : null}</div>
       </nav>
 
       <section className="mt-6 rounded-3xl border border-violet-100 bg-white p-7 shadow-sm">
@@ -153,7 +157,7 @@ export default async function AutonomousDataQualityPage() {
             <div className="mt-4 flex flex-wrap items-center gap-3 border-t pt-4 text-sm">
               {investigation.workflow_instance_id ? <div className="min-w-0"><Link href={handoff.href} className="inline-flex items-center gap-1 font-bold text-violet-700">{handoff.label} <ExternalLink className="h-3.5 w-3.5"/></Link><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{handoff.guidance}</p></div> : <span className="text-slate-500">No approval required</span>}
               {outcome ? <><span className={`rounded-full border px-2 py-1 text-xs font-bold ${tone(outcome.status)}`}>{outcome.status}</span><span className="text-xs text-slate-500">{outcome.production_mutation_performed ? 'production mutation recorded' : 'tracked governance action only'}</span></> : null}
-              <Link href={`/agents/runs/${investigation.agent_run_id}`} className="ml-auto font-semibold text-blue-700">Run evidence →</Link>
+              {canAgents ? <Link href={`/agents/runs/${investigation.agent_run_id}`} className="ml-auto font-semibold text-blue-700">Run evidence →</Link> : null}
             </div>
           </article>
         }) : <div className="rounded-3xl border border-dashed bg-white p-10 text-center text-slate-500">No autonomous Data Quality investigations yet. The next successful Data Quality run will populate this workspace automatically.</div>}
