@@ -86,15 +86,16 @@ export default async function InfrastructurePage() {
         <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-600">Read-only operational view of the Vercel, Supabase and Cloudflare R2 integration boundary. Secrets are never rendered. Cloudflare deployment activation remains governed through protected release workflows.</p>
       </header>
 
-      <section aria-labelledby="runtime-status-heading" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">\n        <h2 id="runtime-status-heading" className="sr-only">Runtime and storage status</h2>
+      <section aria-labelledby="runtime-status-heading" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <h2 id="runtime-status-heading" className="sr-only">Runtime and storage status</h2>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><Server className="h-5 w-5"/><p className="mt-3 text-xs font-bold uppercase text-slate-500">Primary runtime</p><p className="mt-1 text-xl font-black">{platform}</p><StatusPill ready={platform === 'Vercel'}>{platform === 'Vercel' ? 'active' : 'verify runtime'}</StatusPill></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><Database className="h-5 w-5"/><p className="mt-3 text-xs font-bold uppercase text-slate-500">Supabase objects</p><p className="mt-1 text-xl font-black">{storage.supabase.objects}</p><p className="mt-1 text-sm text-slate-500">{bytesLabel(storage.supabase.bytes)} · {storage.supabase.ready} ready</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><HardDrive className="h-5 w-5"/><p className="mt-3 text-xs font-bold uppercase text-slate-500">R2 objects</p><p className="mt-1 text-xl font-black">{storage.r2.objects}</p><p className="mt-1 text-sm text-slate-500">{bytesLabel(storage.r2.bytes)} · {storage.r2.ready} ready</p></article>
         <article className="rounded-2xl border bg-white p-5 shadow-sm"><Cloud className="h-5 w-5"/><p className="mt-3 text-xs font-bold uppercase text-slate-500">R2 runtime config</p><div className="mt-2"><StatusPill ready={r2RuntimeConfigured}>{r2RuntimeConfigured ? 'configured' : 'incomplete'}</StatusPill></div><p className="mt-2 text-sm text-slate-500">Configuration presence only. Credential values are intentionally hidden.</p></article>
       </section>
 
-      <section className="rounded-3xl border bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black">Storage cutover state</h2>
+      <section aria-labelledby="storage-cutover-heading" className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h2 id="storage-cutover-heading" className="text-xl font-black">Storage cutover state</h2>
         <p className="mt-1 text-sm text-slate-500">Production cutover remains explicit and fail-closed.</p>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Default provider</p><p className="mt-2 text-lg font-black">{r2Default ? 'Cloudflare R2' : 'Supabase Storage'}</p></article>
@@ -103,8 +104,8 @@ export default async function InfrastructurePage() {
         </div>
       </section>
 
-      <section className="rounded-3xl border bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black">Architecture boundary</h2>
+      <section aria-labelledby="architecture-boundary-heading" className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h2 id="architecture-boundary-heading" className="text-xl font-black">Architecture boundary</h2>
         <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
           <p className="rounded-xl bg-slate-50 p-4"><strong>Vercel</strong><br/>Primary interactive Next.js runtime and user-facing API surface.</p>
           <p className="rounded-xl bg-slate-50 p-4"><strong>Supabase</strong><br/>Transactional PostgreSQL, Auth, RLS, governance state and storage registry authority.</p>
