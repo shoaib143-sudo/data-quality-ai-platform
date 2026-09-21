@@ -18,6 +18,7 @@ import {
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
+import { classifyRemediationSla } from '@/lib/governance/remediation-sla'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
@@ -83,13 +84,14 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const canReports = canAccessWorkspace(landing.persona, 'reports', landing.organizationRole)
   const canAiCapabilities = canAccessWorkspace(landing.persona, 'ai-capabilities', landing.organizationRole)
 
-  const [sourcesResult, datasetsResult, issuesResult, workflowsResult, outcomesResult, learningResult] = await Promise.all([
+  const [sourcesResult, datasetsResult, issuesResult, workflowsResult, outcomesResult, learningResult, agentRunsResult] = await Promise.all([
     supabase.schema('catalog').from('data_sources').select('id,name,status').eq('project_id', projectId).order('name'),
     supabase.schema('catalog').from('datasets').select('id,name,status,data_source_id').eq('project_id', projectId).order('created_at', { ascending: false }),
-    supabase.schema('governance').from('issues').select('id,title,severity,status,dataset_id,profile_run_id,finding_id,updated_at').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(200),
+    supabase.schema('governance').from('issues').select('id,title,severity,status,dataset_id,profile_run_id,finding_id,owner_user_id,due_at,updated_at').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(200),
     supabase.schema('governance').from('workflow_instances').select('id,status,current_step,entity_type,entity_id,started_at').eq('project_id', projectId).order('started_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('profiling_remediation_outcomes').select('id,workflow_instance_id,status,source_profile_run_id,verification_profile_run_id,remediation_issue_ids,quality_score_delta,high_severity_findings_delta,updated_at').eq('project_id', projectId).order('updated_at', { ascending: false }).limit(100),
     supabase.schema('governance').from('profiling_recommendation_learning').select('id,workflow_instance_id,recommendation_action,status,effective,quality_score_delta,high_severity_findings_delta,observed_at').eq('project_id', projectId).order('observed_at', { ascending: false, nullsFirst: false }).limit(100),
+    supabase.schema('agent').from('agent_runs').select('id,status,dataset_id,dataset_version_id,created_at,started_at,completed_at,error_code').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100),
   ])
   for (const [name, result] of [
     ['sources', sourcesResult],
@@ -98,6 +100,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
     ['workflows', workflowsResult],
     ['remediation outcomes', outcomesResult],
     ['learning evidence', learningResult],
+    ['agent executions', agentRunsResult],
   ] as const) {
     if (result.error) throw new Error(`Unable to load Governance Run ${name}: ${result.error.message}`)
   }
@@ -153,6 +156,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const workflows = workflowsResult.data ?? []
   const outcomes = outcomesResult.data ?? []
   const learning = learningResult.data ?? []
+  const agentRuns = agentRunsResult.data ?? []
 
   const latestScore = latestCompletedRun ? scores.find(score => score.profile_run_id === latestCompletedRun.id) ?? null : null
   const latestFindings = latestCompletedRun ? findings.filter(finding => finding.profile_run_id === latestCompletedRun.id) : []
@@ -180,6 +184,8 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
       ? issues.filter(issue => issue.profile_run_id === latestCompletedRun.id)
       : []
   const openIssues = latestIssues.filter(issue => unresolved(issue.status))
+  const overdueIssues = openIssues.filter(issue => classifyRemediationSla({ status: issue.status, dueAt: issue.due_at }) === 'OVERDUE')
+  const unassignedIssues = openIssues.filter(issue => !issue.owner_user_id)
   const latestLearning = latestWorkflow ? learning.find(item => item.workflow_instance_id === latestWorkflow.id) ?? null : null
 
   const observedReady = readiness.filter(row => normalized(row.operational_state) === 'OBSERVED_READY')
@@ -199,6 +205,10 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
     ? datasets.find(dataset => String(dataset.id) === String(latestVersion.dataset_id)) ?? null
     : datasets[0] ?? null
   const datasetHref = latestDataset ? canonicalRoutes.governedDataset(String(latestDataset.id)) : canonicalRoutes.datasets
+  const latestExecution = latestVersion
+    ? agentRuns.find(run => String(run.dataset_version_id ?? '') === String(latestVersion.id)) ?? agentRuns[0] ?? null
+    : agentRuns[0] ?? null
+  const executionHref = canMonitoring && latestExecution ? `/monitoring?run=${encodeURIComponent(String(latestExecution.id))}` : canMonitoring ? '/monitoring' : '/journeys'
   const profileHref = latestCompletedRun ? `/profiling/explorer?runId=${encodeURIComponent(String(latestCompletedRun.id))}` : '/profiling/explorer'
   const incidentHref = latestIssues[0] ? canonicalRoutes.governedIncident(String(latestIssues[0].id)) : '/issues'
   const workflowHref = canWorkflows
@@ -402,11 +412,13 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
           ) : null}
         </header>
 
-        <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Sources ready</p><p className="mt-2 text-2xl font-black text-white">{observedReady.length}/{sources.length}</p></div>
           <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Datasets</p><p className="mt-2 text-2xl font-black text-white">{datasets.length}</p></div>
           <Link href={profileHref} className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4 hover:border-cyan-300/20"><p className="text-xs font-bold text-slate-500">Latest quality</p><p className="mt-2 text-2xl font-black text-cyan-200">{formatScore(latestScore?.overall_score)}</p></Link>
           <Link href={latestIssues[0] ? incidentHref : '/issues'} className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4 hover:border-cyan-300/20"><p className="text-xs font-bold text-slate-500">Open remediation issues</p><p className="mt-2 text-2xl font-black text-white">{openIssues.length}</p></Link>
+          <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Unassigned remediation</p><p className="mt-2 text-2xl font-black text-amber-200">{unassignedIssues.length}</p></div>
+          <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Overdue remediation</p><p className="mt-2 text-2xl font-black text-rose-200">{overdueIssues.length}</p></div>
         </section>
 
         <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -443,14 +455,15 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
 
           <article className="rounded-3xl border border-white/10 bg-[#0a1d33] p-5">
             <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-violet-300">Governance execution</p><h2 className="mt-1 text-xl font-black text-white">Workflow and verification</h2></div><Link href={workflowHref} className="text-xs font-bold text-cyan-300">{canWorkflows ? 'Open workflows' : latestIssues[0] ? 'Open governed incident' : 'Open profiling evidence'}</Link></div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Link href={executionHref} className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4 hover:border-cyan-300/20"><p className="text-xs font-bold text-slate-500">Latest execution</p><p className="mt-2 font-black text-white">{latestExecution ? normalized(latestExecution.status) || 'UNKNOWN' : 'Not observed'}</p>{latestExecution?.error_code ? <p className="mt-1 text-xs text-rose-300">Blocker: {latestExecution.error_code}</p> : null}</Link>
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Workflow</p><p className="mt-2 font-black text-white">{latestWorkflow ? workflowStatus || 'UNKNOWN' : 'Not linked'}</p></div>
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Remediation outcome</p><p className="mt-2 font-black text-white">{latestOutcome ? outcomeStatus || 'UNKNOWN' : 'Not linked'}</p></div>
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Verification run</p><p className="mt-2 break-all font-mono text-xs text-slate-300">{latestOutcome?.verification_profile_run_id ?? 'Not linked'}</p></div>
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Learning</p><p className="mt-2 font-black text-white">{latestLearning ? normalized(latestLearning.status) || 'RECORDED' : 'Not linked'}</p></div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              {canMonitoring ? <Link href="/monitoring" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Job Monitor</Link> : null}
+              {canMonitoring ? <Link href={executionHref} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Job Monitor</Link> : null}
               {canApprovals ? <Link href="/approvals" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Approvals</Link> : null}
               {canReports ? <Link href="/reports" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.04]">Reports</Link> : null}
             </div>
