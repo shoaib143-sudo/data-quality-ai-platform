@@ -60,13 +60,16 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
   const version=versionResult.data
   const catalog=catalogResult.data
   const agentDefinition=agentDefinitionResult.data
-  let run:null|{id:string;status:string;row_count:number|null;column_count:number|null;completed_at:string|null}=null
+  type RecentProfileRun={id:string;status:string;row_count:number|null;column_count:number|null;started_at:string|null;completed_at:string|null}
+  let recentRuns:RecentProfileRun[]=[]
+  let run:RecentProfileRun|null=null
   let score:null|{overall_score:number|null;completeness_score:number|null;uniqueness_score:number|null;validity_score:number|null;accuracy_score:number|null}=null
   let findings:{id:string;severity:string;title:string;description:string;confidence:number|null}[]=[]
   if(version){
-    const runResult=await supabase.schema('profiling').from('profile_runs').select('id,status,row_count,column_count,completed_at').eq('dataset_version_id',version.id).order('started_at',{ascending:false}).limit(1).maybeSingle()
-    if(runResult.error)throw new Error(`Unable to load latest profile: ${runResult.error.message}`)
-    run=runResult.data
+    const runResult=await supabase.schema('profiling').from('profile_runs').select('id,status,row_count,column_count,started_at,completed_at').eq('dataset_version_id',version.id).order('started_at',{ascending:false}).limit(6)
+    if(runResult.error)throw new Error(`Unable to load profile history: ${runResult.error.message}`)
+    recentRuns=(runResult.data??[]) as RecentProfileRun[]
+    run=recentRuns[0]??null
     if(run){
       const [scoreResult,findingResult]=await Promise.all([
         supabase.schema('profiling').from('data_quality_scores').select('overall_score,completeness_score,uniqueness_score,validity_score,accuracy_score').eq('profile_run_id',run.id).order('created_at',{ascending:false}).limit(1).maybeSingle(),
@@ -107,6 +110,11 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
       <GovernedEvidenceTile href={canProfiling?profilingHref:undefined} label="Latest version" value={version?`v${version.version_number}`:'N/A'} detail="Current catalog version"/>
       <GovernedEvidenceTile href={canProfiling?profilingHref:undefined} label="Rows / columns" value={run?`${run.row_count??'N/A'} / ${run.column_count??'N/A'}`:'N/A'} detail="Latest profile observation"/>
       <GovernedEvidenceTile href={canProfiling?profilingHref:undefined} label="Profile status" value={run?.status??'NOT_PROFILED'} detail={run?.completed_at?'Latest run completed with persisted evidence':'Current profiling lifecycle state'}/>
+    </div>
+    <div className="mt-4">
+      <div className="mb-2 flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-[.12em] text-slate-500">Recent profile history</p><span className="text-[11px] text-slate-600">{recentRuns.length} run{recentRuns.length===1?'':'s'} shown</span></div>
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">{recentRuns.map(item=>canProfiling?<Link key={item.id} href={`/profiling/explorer?runId=${encodeURIComponent(item.id)}`} className={`${inset} ${interactive} p-3`}><div className="flex items-center justify-between gap-2"><span className="font-mono text-[11px] text-slate-400">{item.id.slice(0,8)}</span><span className="rounded-lg bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-slate-300">{item.status}</span></div><p className="mt-2 text-xs text-slate-500">{item.row_count??'N/A'} rows · {item.column_count??'N/A'} columns</p><p className="mt-1 text-[11px] text-slate-600">{item.completed_at?'Completed evidence':'Execution not completed'}</p></Link>:<div key={item.id} className={`${inset} p-3`}><span className="font-mono text-[11px] text-slate-400">{item.id.slice(0,8)}</span><p className="mt-2 text-xs text-slate-500">{item.status}</p></div>)}</div>
+      {recentRuns.length===0?<GovernedEmptyState>No profiling history is available for the current dataset version.</GovernedEmptyState>:null}
     </div>
   </GovernedSection>
 
