@@ -33,4 +33,6 @@ assert.ok(panel.includes('/monitoring?run='), 'verification job must deep link t
 assert.ok(panel.includes('Resolution evidence is required'), 'issue resolution must fail closed without evidence')
 assert.ok(incident.includes('canonicalRoutes.governanceRun(projectId)'), 'governed incident must return users to its project Governance Run')
 assert.ok(incident.includes('Governance Run'), 'governed incident must expose a Governance Run CTA')
+assert.ok(incident.includes('<GlobalUtilityBar'), 'governed incident must use the shared Product Shell')
+assert.ok(incident.includes('roleLabel="Governed incident"'), 'incident Product Shell must preserve remediation context')
 console.log('Remediation verified-closure unit and CTA tests passed.')
