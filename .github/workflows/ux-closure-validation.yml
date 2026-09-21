@@ -1,0 +1,84 @@
+name: UX Closure Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/catalog/dataset/**'
+      - 'app/datasets/**'
+      - 'app/journeys/**'
+      - 'app/profiling/profiling-governance-panel.tsx'
+      - 'components/app-shell/**'
+      - 'lib/governance/remediation-closure-state.ts'
+      - 'lib/platform/canonical-routes.ts'
+      - 'lib/platform/resource-route-contracts.mjs'
+      - 'lib/profiling/profiling-run-handoff.ts'
+      - 'scripts/test-product-shell-ux.mjs'
+      - 'scripts/test-dataset-360-ux.mjs'
+      - 'scripts/test-governance-run-ux.mjs'
+      - 'scripts/test-golden-path-handoff.mjs'
+      - 'scripts/test-remediation-closure-ux.mjs'
+      - 'scripts/audit-ux-closure-wave-adversarial.mjs'
+      - '.github/workflows/ux-closure-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/catalog/dataset/**'
+      - 'app/datasets/**'
+      - 'app/journeys/**'
+      - 'app/profiling/profiling-governance-panel.tsx'
+      - 'components/app-shell/**'
+      - 'lib/governance/remediation-closure-state.ts'
+      - 'lib/platform/canonical-routes.ts'
+      - 'lib/platform/resource-route-contracts.mjs'
+      - 'lib/profiling/profiling-run-handoff.ts'
+      - 'scripts/test-product-shell-ux.mjs'
+      - 'scripts/test-dataset-360-ux.mjs'
+      - 'scripts/test-governance-run-ux.mjs'
+      - 'scripts/test-golden-path-handoff.mjs'
+      - 'scripts/test-remediation-closure-ux.mjs'
+      - 'scripts/audit-ux-closure-wave-adversarial.mjs'
+      - '.github/workflows/ux-closure-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Product shell UI and CTA contract
+        run: node scripts/test-product-shell-ux.mjs
+      - name: Dataset 360 UI and CTA contract
+        run: node scripts/test-dataset-360-ux.mjs
+      - name: Governance Run UI, route and failure-state contract
+        run: node scripts/test-governance-run-ux.mjs
+      - name: Golden Path handoff unit and failure tests
+        run: node --experimental-strip-types scripts/test-golden-path-handoff.mjs
+      - name: Remediation closure unit and CTA tests
+        run: node --experimental-strip-types scripts/test-remediation-closure-ux.mjs
+      - name: Revalidate canonical navigation
+        run: node scripts/verify-navigation-integrity.mjs
+      - name: Revalidate profiling lifecycle
+        run: node scripts/verify-profiling-lifecycle-contracts.mjs
+      - name: Revalidate remediation lifecycle
+        run: node scripts/verify-profiling-remediation.mjs
+      - name: Independent adversarial UX closure audit
+        run: node --experimental-strip-types scripts/audit-ux-closure-wave-adversarial.mjs
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Exact-head TypeScript revalidation
+        run: pnpm exec tsc --noEmit
+      - name: Exact-head production build
+        run: pnpm run build
