@@ -11,6 +11,7 @@ assert.equal(isVerifiedRemediationClosure({ outcomeStatus: null, issueStatuses: 
 
 const panel = fs.readFileSync('app/profiling/profiling-governance-panel.tsx', 'utf8')
 const incident = fs.readFileSync('app/issues/[issueId]/page.tsx', 'utf8')
+const explorer = fs.readFileSync('app/profiling/explorer/page.tsx', 'utf8')
 for (const cta of [
   'Start governed approval',
   'Track remediation',
@@ -22,6 +23,10 @@ for (const cta of [
 ]) assert.ok(panel.includes(cta), `remediation CTA missing: ${cta}`)
 assert.ok(panel.includes('Verified closure'), 'verified closure state must be visible')
 assert.ok(panel.includes('Evidence backed'), 'verified closure must be labelled evidence backed')
+assert.ok(panel.includes('Quality before → after'), 'verified closure must show before-after quality evidence')
+assert.ok(panel.includes('High severity before → after'), 'verified closure must show before-after finding evidence')
+assert.ok(explorer.includes('source_quality_score,verification_quality_score'), 'profiling explorer must load persisted quality baseline and verification values')
+assert.ok(explorer.includes('source_high_severity_findings,verification_high_severity_findings'), 'profiling explorer must load persisted finding baseline and verification values')
 assert.ok(panel.includes('canonicalRoutes.governedIncident(issue.id)'), 'tracked remediation issues must link to the governed incident')
 assert.ok(panel.includes('/profiling/explorer?runId='), 'verification profile must deep link to evidence')
 assert.ok(panel.includes('/monitoring?run='), 'verification job must deep link to Job Monitor')
