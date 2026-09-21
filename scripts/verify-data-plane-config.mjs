@@ -24,7 +24,7 @@ const selection = {
   knowledgeSearch: choice('KNOWLEDGE_SEARCH_PROVIDER', 'postgres', ['postgres', 'opensearch']),
   graph: choice('GRAPH_PROVIDER', 'postgres', ['postgres', 'age', 'distributed']),
   analytics: choice('ANALYTICS_PROVIDER', 'postgres', ['postgres', 'clickhouse']),
-  objectStore: choice('OBJECT_STORE_PROVIDER', 'supabase', ['supabase', 's3']),
+  objectStore: choice('OBJECT_STORE_PROVIDER', 'supabase', ['supabase', 'r2']),
 }
 
 boundedInt('PROVIDER_TIMEOUT_MS', 10000, 500, 120000)
@@ -65,8 +65,27 @@ if (selection.graph !== 'postgres') {
   throw new Error(`GRAPH_PROVIDER=${selection.graph} is not deployable yet; PostgreSQL is the only implemented graph provider`)
 }
 
-if (selection.objectStore !== 'supabase') {
-  throw new Error(`OBJECT_STORE_PROVIDER=${selection.objectStore} is not deployable yet; Supabase is the only implemented object store`)
+if (selection.objectStore === 'r2') {
+  for (const name of [
+    'R2_ACCOUNT_ID',
+    'R2_ACCESS_KEY_ID',
+    'R2_SECRET_ACCESS_KEY',
+    'R2_BUCKET',
+    'R2_ENDPOINT',
+    'R2_PREFIX',
+  ]) requireEnv(name)
+
+  const endpoint = new URL(requireEnv('R2_ENDPOINT'))
+  const accountId = requireEnv('R2_ACCOUNT_ID')
+  if (endpoint.protocol !== 'https:' || endpoint.hostname !== `${accountId}.r2.cloudflarestorage.com`) {
+    throw new Error('R2_ENDPOINT must match the configured Cloudflare R2 account endpoint')
+  }
+
+  const production = (process.env.DATANEXUS_ENV ?? '').trim().toLowerCase() === 'production'
+  const cutoverApproved = process.env.STORAGE_R2_PRODUCTION_CUTOVER_APPROVED?.trim().toLowerCase() === 'true'
+  if (production && !cutoverApproved) {
+    throw new Error('Production R2 object-store selection requires STORAGE_R2_PRODUCTION_CUTOVER_APPROVED=true')
+  }
 }
 
 console.log(JSON.stringify({
