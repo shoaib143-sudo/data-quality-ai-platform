@@ -1,11 +1,12 @@
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, CheckCircle2, Gauge, Layers3, ShieldCheck, Sparkles } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Gauge, ShieldCheck, Sparkles } from 'lucide-react'
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { QualityRunButton } from './quality-run-button'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 type ProfileRun = {
   id: string
@@ -151,10 +152,10 @@ export default async function DataQualityPage() {
   const impactHref = canLineage ? '/lineage' : canReports ? '/reports' : '/catalog'
   const prepareHref = canDatasets ? '/datasets' : '/catalog'
 
-  return <main className="min-h-screen bg-[#061426] text-slate-100">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100">
     <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-      <nav className={`${surface} mb-6 flex flex-wrap items-center justify-between gap-4 px-5 py-3`}>
-        <Link href="/home" className={`flex items-center gap-3 text-sm font-bold text-white ${focus}`}><span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600"><Layers3 className="h-5 w-5" /></span>DataNexus AI</Link>
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Data Quality" contextLabel="Evidence-backed quality decisions" homeHref="/home" />
+      <nav className={`${surface} mb-6 mt-4 flex flex-wrap items-center justify-end gap-4 px-5 py-3`}>
         <div className="flex flex-wrap gap-2">{canProfiling ? <Link href="/profiling/explorer" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Profiling Explorer</Link> : null}<Link href="/data-quality/rules" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Quality Rules</Link>{canObservability ? <Link href="/observability" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Observability</Link> : null}</div>
       </nav>
 
