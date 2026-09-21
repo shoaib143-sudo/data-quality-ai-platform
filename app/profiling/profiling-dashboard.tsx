@@ -1,6 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
+import type { PersonaSlug } from '@/lib/governance/personas'
 import { useMemo, useState } from 'react'
 import {
   Activity,
@@ -91,6 +94,8 @@ type Props = {
   distributions: ProfilingDashboardDistribution[]
   findings: ProfilingDashboardFinding[]
   samples: ProfilingDashboardSample[]
+  persona: PersonaSlug
+  organizationRole?: string | null
 }
 
 function number(value: unknown) {
@@ -150,7 +155,7 @@ function Card({ children, className = '', onClick }: { children: React.ReactNode
 
 const DOCUMENT_TECHNICAL_FIELDS = new Set(['chunk_index', 'file_name', 'content_type', 'text_extraction_method'])
 
-export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, columns, metrics, distributions, findings, samples }: Props) {
+export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, columns, metrics, distributions, findings, samples, persona, organizationRole }: Props) {
   const [drilldown, setDrilldown] = useState<Drilldown>(null)
 
   const metricsByColumn = useMemo(() => {
@@ -199,9 +204,13 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
   const extractionUnavailable = samples.some((sample) => /binary glyph streams are intentionally hidden|readable text is not available/i.test(sample.content))
 
   const runComplete = ['COMPLETED', 'SUCCEEDED'].includes(run.status.toUpperCase())
+  const canMonitoring = canAccessWorkspaceHref(persona, '/monitoring', organizationRole)
+  const canQuality = canAccessWorkspaceHref(persona, '/data-quality', organizationRole)
+  const canExplorer = canAccessWorkspaceHref(persona, '/profiling/explorer', organizationRole)
 
-  return <main className="min-h-screen bg-slate-50 text-slate-950">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8">
+      <GlobalUtilityBar persona={persona} organizationRole={organizationRole} roleLabel="Profiling" contextLabel={datasetName} homeHref="/home" />
       <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
@@ -216,7 +225,7 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
               <span>{run.started_at ? new Date(run.started_at).toLocaleString() : 'Start time unavailable'}</span>
             </div>
           </div>
-          <Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 transition hover:bg-blue-100">Full profiling report <ArrowRight className="h-4 w-4" /></Link>
+          {canExplorer ? <Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 transition hover:bg-blue-100">Full profiling report <ArrowRight className="h-4 w-4" /></Link> : null}
         </div>
       </header>
 
@@ -224,17 +233,17 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
         <div className="rounded-2xl border-2 border-blue-500 bg-blue-50 p-4 shadow-sm">
           <div className="flex items-center gap-3"><div className="rounded-xl bg-blue-100 p-2 text-blue-700"><BarChart3 className="h-5 w-5" /></div><div><div className="font-black text-blue-800">Data Profiling</div><div className="text-xs text-blue-600">Explore data structure, statistics and patterns</div></div></div>
         </div>
-        <Link href="/monitoring" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+        {canMonitoring ? <Link href="/monitoring" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md">
           <div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-2 text-blue-700"><Activity className="h-5 w-5" /></div><div><div className="font-black">Data Observability</div><div className="text-xs text-slate-500">Monitor data health and freshness</div></div></div>
-        </Link>
-        <Link href="/data-quality" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+        </Link> : null}
+        {canQuality ? <Link href="/data-quality" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md">
           <div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-2 text-blue-700"><ShieldCheck className="h-5 w-5" /></div><div><div className="font-black">Data Quality</div><div className="text-xs text-slate-500">Assess data quality and integrity</div></div></div>
-        </Link>
+        </Link> : null}
       </nav>
 
       <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
         <div><h2 className="text-2xl font-black">Data Profiling</h2><p className="text-sm text-slate-500">{documentMode ? 'Document-aware analysis of extracted content, structure and statistical evidence.' : 'Comprehensive analysis of structure, content and statistical properties.'} Select any card or chart to drill down.</p></div>
-        <Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="text-sm font-bold text-blue-700 hover:text-blue-900">View full profiling report →</Link>
+        {canExplorer ? <Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="text-sm font-bold text-blue-700 hover:text-blue-900">View full profiling report →</Link> : null}
       </div>
 
       <section className="mt-4 grid gap-4 xl:grid-cols-3">
@@ -265,7 +274,7 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
 
       <section className="mt-4 grid gap-4 xl:grid-cols-3">
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4"><div className="flex items-center gap-2 font-black"><Database className="h-5 w-5 text-blue-600" /> Schema Overview</div><Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="text-xs font-bold text-blue-700">View all {columns.length} fields →</Link></div>
+          <div className="flex items-center justify-between px-5 py-4"><div className="flex items-center gap-2 font-black"><Database className="h-5 w-5 text-blue-600" /> Schema Overview</div>{canExplorer ? <Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="text-xs font-bold text-blue-700">View all {columns.length} fields →</Link> : null}</div>
           <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-slate-100 text-slate-500"><tr><th className="px-4 py-2">Field Name</th><th className="px-4 py-2">Data Type</th><th className="px-4 py-2">Null %</th><th className="px-4 py-2">Unique %</th></tr></thead><tbody>{visibleColumns.slice(0, 5).map((row) => <tr key={row.column.id} className="cursor-pointer border-t border-slate-100 hover:bg-blue-50" onClick={() => setDrilldown({ kind: 'column', columnId: row.column.id })}><td className="px-4 py-2 font-semibold">{row.column.column_name}</td><td className="px-4 py-2">{row.column.inferred_type ?? row.column.source_type ?? 'unknown'}</td><td className="px-4 py-2">{percent(row.nullRate)}</td><td className="px-4 py-2">{percent(row.uniqueRate)}</td></tr>)}</tbody></table></div>
         </Card>
 
@@ -294,7 +303,7 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
         {selectedColumn ? <div className="mt-6 space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{[['Type', selectedColumn.column.inferred_type ?? selectedColumn.column.source_type ?? 'unknown'], ['Null', percent(selectedColumn.nullRate)], ['Unique', percent(selectedColumn.uniqueRate)], ['Rows', compact(selectedColumn.column.total_count)]].map(([name, value]) => <div key={name} className="rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="text-[11px] text-slate-500">{name}</div><div className="mt-1 font-black">{value}</div></div>)}</div>
           <div><h4 className="font-black">Persisted metrics</h4><div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">{selectedColumn.columnMetrics.map((metric) => <div key={metric.metric_key} className="flex items-start justify-between gap-5 px-4 py-3 text-sm"><span className="text-slate-500">{metric.metric_key.replaceAll('_', ' ')}</span><strong className="max-w-[55%] break-all text-right">{metric.numeric_value !== null ? compact(metric.numeric_value) : metric.text_value ?? (metric.boolean_value === null ? JSON.stringify(metric.json_value) : String(metric.boolean_value))}</strong></div>)}</div></div>
-          <Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}&columnId=${encodeURIComponent(selectedColumn.column.id)}`} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Open full field explorer <ArrowRight className="h-4 w-4" /></Link>
+          {canExplorer ? <Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}&columnId=${encodeURIComponent(selectedColumn.column.id)}`} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Open full field explorer <ArrowRight className="h-4 w-4" /></Link> : null}
         </div> : null}
 
         {drilldown.kind === 'duplicates' ? <div className="mt-6 space-y-4"><div className="grid grid-cols-3 gap-3">{[['Total', compact(run.row_count)], ['Duplicates', compact(duplicateCount)], ['Duplicate rate', percent(duplicateRate)]].map(([name, value]) => <div key={name} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="text-xs text-slate-500">{name}</div><div className="mt-1 text-xl font-black">{value}</div></div>)}</div><p className="text-sm leading-6 text-slate-600">This panel uses the persisted dataset-level duplicate metrics from this exact profiling run. It does not infer duplicate evidence from the UI.</p></div> : null}
