@@ -10,6 +10,7 @@ assert.ok(run.includes("String(item.request.project_id ?? '') === projectId"), '
 assert.ok(run.includes('const pendingApprovals = projectApprovals.filter'), 'Governance Run must summarize pending approvals')
 assert.ok(run.includes("normalized(item.request.status) === 'READY_TO_EXECUTE'"), 'Governance Run must surface ready-to-execute approval state')
 assert.ok(run.includes('Visible governed decisions'), 'Governance Run must expose visible project decisions')
+assert.ok(run.includes("return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : 'Invalid timestamp'"), 'malformed approval SLA timestamps must fail closed in presentation')
 assert.ok(run.includes('Open approval inbox'), 'Governance Run decisions must route to the canonical approval inbox')
 assert.ok(run.includes("state: profileFailed ? 'BLOCKED' : latestCompletedRun ? 'COMPLETE'"), 'latest failed profile must outrank older completed profiling evidence')
 assert.ok(run.includes("href: profileFailed && canMonitoring ? executionHref : profileHref"), 'failed profiling must route to execution evidence when authorized')
