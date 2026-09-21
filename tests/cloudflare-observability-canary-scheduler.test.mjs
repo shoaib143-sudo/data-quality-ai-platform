@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const migration = fs.readFileSync('supabase/migrations/20260921153000_cloudflare_observability_canary_scheduler.sql', 'utf8')
+const release = fs.readFileSync('.github/workflows/release-governance.yml', 'utf8')
 
 test('canary scheduler is fail-closed unless explicitly enabled', () => {
   assert.match(migration, /DGP_CLOUDFLARE_OBSERVABILITY_CANARY_ENABLED/)
@@ -29,4 +30,29 @@ test('canary scheduler remains service-role only and low cadence', () => {
   assert.match(migration, /grant execute on function orchestration\.kick_cloudflare_observability_canary\(\) to service_role/i)
   assert.match(migration, /dgp-cloudflare-observability-canary-kick/)
   assert.match(migration, /'\*\/5 \* \* \* \*'/)
+})
+
+
+test('configuration RPC is bounded to fixed canary Vault keys and service role', () => {
+  assert.match(migration, /configure_cloudflare_observability_canary/)
+  for (const name of [
+    'DGP_CLOUDFLARE_WORKER_URL',
+    'DGP_CLOUDFLARE_WORKER_SECRET',
+    'DGP_CLOUDFLARE_OBSERVABILITY_CANARY_ENABLED',
+  ]) assert.match(migration, new RegExp(name))
+  assert.match(migration, /length\(v_secret\) < 32/)
+  assert.match(migration, /revoke all on function orchestration\.configure_cloudflare_observability_canary\(text,text,boolean\) from public,anon,authenticated/i)
+  assert.match(migration, /grant execute on function orchestration\.configure_cloudflare_observability_canary\(text,text,boolean\) to service_role/i)
+})
+
+test('release workflow keeps scheduler disabled until live canary verification succeeds', () => {
+  const falseIndex = release.indexOf('p_enabled:false')
+  const verifyIndex = release.indexOf('Verify exact SHA and narrow execution boundary')
+  const trueIndex = release.indexOf('p_enabled:true')
+  assert.ok(falseIndex >= 0)
+  assert.ok(verifyIndex > falseIndex)
+  assert.ok(trueIndex > verifyIndex)
+  assert.match(release, /Enable Supabase canary scheduler only after live verification/)
+  assert.match(release, /Content-Profile: orchestration/)
+  assert.match(release, /Accept-Profile: orchestration/)
 })
