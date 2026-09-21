@@ -21,6 +21,7 @@ test('infrastructure page requires administrator membership and scopes storage t
 })
 
 test('all infrastructure status modules expose clear operator-facing state', () => {
+  for (const id of ['runtime-status-heading', 'storage-cutover-heading', 'architecture-boundary-heading']) assert.match(page, new RegExp(`aria-labelledby=\\"${id}\\"`))
   for (const label of [
     'Primary runtime',
     'Supabase objects',
