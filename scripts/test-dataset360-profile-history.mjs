@@ -11,5 +11,6 @@ assert.ok(page.includes("recentRuns.map(item=>canProfiling?"), 'profile history 
 assert.ok(page.includes("/profiling/explorer?runId="), 'profile history must deep-link into persisted profiling evidence')
 assert.ok(page.includes('No profiling history is available for the current dataset version.'), 'Dataset 360 must expose an explicit empty state for profile history')
 assert.ok(!page.includes('.limit(1).maybeSingle()\n    if(runResult.error)'), 'Dataset 360 must not regress to a latest-only profile query')
+assert.ok(page.includes('canIssues?canonicalRoutes.governedIncident(issue.id)'), 'Dataset 360 issue cards must prefer canonical governed incidents when available')
 
 console.log('Dataset 360 profile history UX contract passed.')
