@@ -65,6 +65,7 @@ on:
       - 'scripts/audit-ux-wave13-adversarial.mjs'
       - 'scripts/test-ux-shell-residual-inventory.mjs'
       - 'scripts/test-skip-link-bypass-contract.mjs'
+      - 'tests/ux-wave13-security-contract.test.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -148,6 +149,7 @@ on:
       - 'scripts/audit-ux-wave13-adversarial.mjs'
       - 'scripts/test-ux-shell-residual-inventory.mjs'
       - 'scripts/test-skip-link-bypass-contract.mjs'
+      - 'tests/ux-wave13-security-contract.test.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -307,6 +309,8 @@ jobs:
         run: node scripts/test-ux-shell-residual-inventory.mjs
       - name: Verify shared skip-link bypass contract
         run: node scripts/test-skip-link-bypass-contract.mjs
+      - name: Run Wave 13 Node unit contracts
+        run: node --test tests/ux-wave13-security-contract.test.mjs
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
