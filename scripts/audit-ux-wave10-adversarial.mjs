@@ -25,6 +25,9 @@ assert.ok(source['app/monitoring/domain/[projectId]/page.tsx'].includes('return 
 assert.ok(source['app/monitoring/domain/[projectId]/page.tsx'].includes('return run && canAgents ? <Link key={agent.id}'), 'adversarial: feature result links must fail closed without Agents access')
 assert.ok(source['app/observability/incidents/page.tsx'].includes('canWorkflows?<Link href="/workflows"'), 'adversarial: unauthorized workflow navigation must fail closed')
 assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(source['app/monitoring/domain/[projectId]/page.tsx']), 'adversarial: Domain Monitoring page must remain read-only')
+assert.ok(source['app/monitoring/domain/[projectId]/page.tsx'].includes('Read-only execution evidence'), 'adversarial: inaccessible run links must render as explicit read-only evidence')
+assert.ok(source['app/observability/incidents/page.tsx'].includes("if(!Number.isFinite(due))return{overdue:false,minutes:null,due:null,invalid:true}"), 'adversarial: malformed SLA timestamps must fail closed')
+assert.ok(source['app/observability/incidents/page.tsx'].includes("sla.invalid?'Invalid SLA due date'"), 'adversarial: malformed SLA must be visibly labelled')
 assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(source['app/observability/incidents/page.tsx']), 'adversarial: Observability Incidents page must remain read-only')
 
 console.log('Independent Wave 10 UX adversarial audit passed.')
