@@ -23,6 +23,7 @@ assert.ok(domain.includes('canAgents ? <Link href="/agents"'), 'Domain Monitorin
 assert.ok(domain.includes('canAgents && latestRun ? <Link href={`/agents/runs/'), 'Domain Monitoring latest output must be access gated')
 assert.ok(domain.includes('return item.run && canAgents'), 'Domain Monitoring topology result links must be access gated')
 assert.ok(domain.includes('return run && canAgents ? <Link key={agent.id}'), 'Domain Monitoring feature result links must be access gated')
+assert.ok(domain.includes("run && canAgents ? <p className=\"mt-3 text-right text-[10px] font-bold text-cyan-100/75\">View results →</p> : run ? <p"), 'read-only feature cards must not advertise a clickable result affordance')
 assert.ok(domain.includes('canAgents && latestRun ? <Link href={`/agents/runs/'), 'Domain Monitoring execution-context link must be access gated')
 
 assert.ok(incidents.includes("canAccessWorkspace(landing.persona,'lineage'"), 'Observability Incidents Impact CTA must derive from workspace policy')
