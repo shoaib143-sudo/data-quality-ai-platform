@@ -188,7 +188,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const workflowStatus = normalized(latestWorkflow?.status)
   const outcomeStatus = normalized(latestOutcome?.status)
   const verified = outcomeStatus === 'VERIFIED' || outcomeStatus === 'VERIFIED_RESOLVED'
-  const remediationRequired = highFindings.length > 0
+  const remediationRequired = highFindings.length > 0 || openIssues.length > 0
 
   const latestVersion = latestCompletedRun
     ? versions.find(version => String(version.id) === String(latestCompletedRun.dataset_version_id)) ?? null
@@ -275,7 +275,9 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
         ? ['APPROVED', 'COMPLETED', 'EXECUTED'].includes(workflowStatus) ? 'COMPLETE' : 'IN_PROGRESS'
         : remediationRequired ? 'IN_PROGRESS' : latestCompletedRun ? 'COMPLETE' : 'NOT_STARTED',
       href: workflowHref,
-      action: latestWorkflow ? 'Open workflow' : 'Review governance',
+      action: canWorkflows
+        ? latestWorkflow ? 'Open workflow' : 'Review governance'
+        : latestIssues[0] ? 'Open governed incident' : 'Review profiling evidence',
       icon: GitBranch,
     },
     {
@@ -331,8 +333,8 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
           ? 'Current profiling evidence does not require a high-priority remediation outcome.'
           : 'A final governed outcome has not yet been verified.',
       state: verified || (!remediationRequired && Boolean(latestCompletedRun)) ? 'COMPLETE' : latestOutcome ? 'IN_PROGRESS' : 'NOT_STARTED',
-      href: latestIssues[0] ? incidentHref : '/reports',
-      action: 'Review outcome',
+      href: latestIssues[0] ? incidentHref : canReports ? '/reports' : profileHref,
+      action: latestIssues[0] ? 'Review governed outcome' : canReports ? 'Review outcome report' : 'Review profiling evidence',
       icon: ShieldCheck,
     },
     {
@@ -440,7 +442,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
           </article>
 
           <article className="rounded-3xl border border-white/10 bg-[#0a1d33] p-5">
-            <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-violet-300">Governance execution</p><h2 className="mt-1 text-xl font-black text-white">Workflow and verification</h2></div><Link href={workflowHref} className="text-xs font-bold text-cyan-300">Open workflows</Link></div>
+            <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-violet-300">Governance execution</p><h2 className="mt-1 text-xl font-black text-white">Workflow and verification</h2></div><Link href={workflowHref} className="text-xs font-bold text-cyan-300">{canWorkflows ? 'Open workflows' : latestIssues[0] ? 'Open governed incident' : 'Open profiling evidence'}</Link></div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Workflow</p><p className="mt-2 font-black text-white">{latestWorkflow ? workflowStatus || 'UNKNOWN' : 'Not linked'}</p></div>
               <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Remediation outcome</p><p className="mt-2 font-black text-white">{latestOutcome ? outcomeStatus || 'UNKNOWN' : 'Not linked'}</p></div>
