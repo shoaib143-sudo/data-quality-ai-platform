@@ -97,7 +97,7 @@ export default async function GovernedIncidentPage({ params }: { params: Promise
   const slaState=classifyRemediationSla({status:incident.truth.issueStatus,dueAt:incident.truth.dueAt})
   const dueLabel=!incident.truth.dueAt?'Not set':slaState==='INVALID'?'Invalid due date':new Date(incident.truth.dueAt).toLocaleString()
   const evidenceTimeline=incident.evidence
-    .filter(item=>item.observedAt)
+    .filter(item=>item.observedAt&&Number.isFinite(Date.parse(String(item.observedAt))))
     .filter((item,index,items)=>items.findIndex(candidate=>candidate.sourceTable===item.sourceTable&&candidate.sourceId===item.sourceId&&candidate.kind===item.kind&&candidate.observedAt===item.observedAt)===index)
     .sort((left,right)=>new Date(String(left.observedAt)).getTime()-new Date(String(right.observedAt)).getTime())
 
