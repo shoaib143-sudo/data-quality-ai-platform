@@ -6,7 +6,8 @@
   "vars": {
     "DATANEXUS_ENV": "canary",
     "DATANEXUS_PLATFORM": "cloudflare",
-    "DATANEXUS_WORKER_EXECUTION_ENABLED": "false"
+    "DATANEXUS_WORKER_EXECUTION_ENABLED": "false",
+    "DATANEXUS_WORKER_CANARY_JOB_TYPE": "OBSERVABILITY"
   },
   "containers": [
     {
