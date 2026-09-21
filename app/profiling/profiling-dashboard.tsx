@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
-import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 import type { PersonaSlug } from '@/lib/governance/personas'
 import { useMemo, useState } from 'react'
 import {
@@ -96,6 +95,9 @@ type Props = {
   samples: ProfilingDashboardSample[]
   persona: PersonaSlug
   organizationRole?: string | null
+  canMonitoring: boolean
+  canQuality: boolean
+  canExplorer: boolean
 }
 
 function number(value: unknown) {
@@ -155,7 +157,7 @@ function Card({ children, className = '', onClick }: { children: React.ReactNode
 
 const DOCUMENT_TECHNICAL_FIELDS = new Set(['chunk_index', 'file_name', 'content_type', 'text_extraction_method'])
 
-export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, columns, metrics, distributions, findings, samples, persona, organizationRole }: Props) {
+export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, columns, metrics, distributions, findings, samples, persona, organizationRole, canMonitoring, canQuality, canExplorer }: Props) {
   const [drilldown, setDrilldown] = useState<Drilldown>(null)
 
   const metricsByColumn = useMemo(() => {
@@ -204,9 +206,6 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
   const extractionUnavailable = samples.some((sample) => /binary glyph streams are intentionally hidden|readable text is not available/i.test(sample.content))
 
   const runComplete = ['COMPLETED', 'SUCCEEDED'].includes(run.status.toUpperCase())
-  const canMonitoring = canAccessWorkspaceHref(persona, '/monitoring', organizationRole)
-  const canQuality = canAccessWorkspaceHref(persona, '/data-quality', organizationRole)
-  const canExplorer = canAccessWorkspaceHref(persona, '/profiling/explorer', organizationRole)
 
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8">
