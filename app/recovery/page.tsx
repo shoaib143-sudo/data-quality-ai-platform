@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { RecoveryActions } from './recovery-actions'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 type RecoveryCase = {
   id: string
@@ -43,8 +46,9 @@ function JsonBlock({ value }: { value: unknown }) {
 }
 
 export default async function RecoveryPage() {
-  await requireUser()
-  const supabase = await createClient()
+  const user = await requireUser()
+  const [supabase, landing] = await Promise.all([createClient(), resolveLandingAccess(user.id)])
+  const canAgents = canAccessWorkspaceHref(landing.persona, '/agents', landing.organizationRole)
   const { data, error } = await supabase
     .schema('orchestration')
     .from('recovery_cases')
@@ -76,14 +80,15 @@ export default async function RecoveryPage() {
   }
 
   return (
-    <main className="min-h-screen p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-8">
       <div className="mx-auto max-w-6xl space-y-8">
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Execution Recovery" contextLabel="Terminal failure recovery" homeHref="/home" />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-semibold">Execution Recovery</h1>
             <p className="mt-2 text-sm text-muted-foreground">Evidence-backed recovery cases created only after durable execution exhausts its retry budget.</p>
           </div>
-          <Link href="/agents" className="text-sm underline">AI Agents</Link>
+          {canAgents ? <Link href="/agents" className="text-sm underline">AI Agents</Link> : null}
         </div>
 
         <section className="rounded-xl border p-5 text-sm text-muted-foreground">
@@ -126,7 +131,7 @@ export default async function RecoveryPage() {
                       {item.agent_run_id && (
                         <>
                           <p className="mt-3 text-xs text-muted-foreground">Agent run</p>
-                          <Link href={`/agents/runs/${item.agent_run_id}`} className="mt-1 block break-all underline">{item.agent_run_id}</Link>
+                          {canAgents ? <Link href={`/agents/runs/${item.agent_run_id}`} className="mt-1 block break-all underline">{item.agent_run_id}</Link> : <span className="mt-1 block break-all">{item.agent_run_id}</span>}
                         </>
                       )}
                       <p className="mt-3 text-xs text-muted-foreground">Consent</p>
