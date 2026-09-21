@@ -21,6 +21,8 @@ assert.ok(source['app/data-quality/autonomous/page.tsx'].includes('canAgents ? <
 assert.ok(source['app/classification-privacy/page.tsx'].includes('canCatalog ? <Link href="/catalog"'), 'adversarial: unauthorized Catalog navigation must fail closed')
 assert.ok(source['app/lineage/ingest/page.tsx'].includes('canDiscovery ? <Link href="/catalog/discovery"'), 'adversarial: unauthorized Discovery navigation must fail closed')
 assert.ok(source['app/monitoring/domain/[projectId]/page.tsx'].includes('canAgents && latestRun ? <Link href={`/agents/runs/'), 'adversarial: unauthorized domain output navigation must fail closed')
+assert.ok(source['app/monitoring/domain/[projectId]/page.tsx'].includes('return item.run && canAgents'), 'adversarial: topology result links must fail closed without Agents access')
+assert.ok(source['app/monitoring/domain/[projectId]/page.tsx'].includes('return run && canAgents ? <Link key={agent.id}'), 'adversarial: feature result links must fail closed without Agents access')
 assert.ok(source['app/observability/incidents/page.tsx'].includes('canWorkflows?<Link href="/workflows"'), 'adversarial: unauthorized workflow navigation must fail closed')
 assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(source['app/monitoring/domain/[projectId]/page.tsx']), 'adversarial: Domain Monitoring page must remain read-only')
 assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(source['app/observability/incidents/page.tsx']), 'adversarial: Observability Incidents page must remain read-only')
