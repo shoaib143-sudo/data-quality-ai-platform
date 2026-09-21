@@ -190,7 +190,13 @@ const workerService = requireText('lib/orchestration/worker-service.ts', [
   'evaluateIncidentSlaEscalations',
   'incidentEscalations',
 ])
-if (workerService.indexOf('evaluateIncidentSlaEscalations(50)') > workerService.indexOf('incidentEscalations')) {
+const incidentSlaEvaluationIndex = workerService.indexOf('evaluateIncidentSlaEscalations(50)')
+const incidentEscalationProjectionIndex = workerService.indexOf('\n    incidentEscalations,', incidentSlaEvaluationIndex)
+if (
+  incidentSlaEvaluationIndex === -1
+  || incidentEscalationProjectionIndex === -1
+  || incidentSlaEvaluationIndex > incidentEscalationProjectionIndex
+) {
   throw new Error('Scheduled worker must evaluate incident SLA escalations before projecting incidentEscalations into the response.')
 }
 requireText('app/api/jobs/worker/route.ts', [
