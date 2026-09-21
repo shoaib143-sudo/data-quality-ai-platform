@@ -64,3 +64,17 @@ test('Cloudflare canary policy remains read-only and communicates bounded author
   assert.match(page, /Default off; owner-approved activation only/)
   assert.doesNotMatch(page, /Enable worker|Activate canary|Disable worker/)
 })
+
+
+test('infrastructure page loads live canary status without rendering secrets', () => {
+  assert.match(page, /get_cloudflare_observability_canary_status/)
+  assert.match(page, /canaryStatus\.enabled/)
+  assert.match(page, /canaryStatus\.runtime_configured/)
+  assert.match(page, /canaryStatus\.cron_active/)
+  assert.match(page, /canaryStatus\.queued/)
+  assert.match(page, /canaryStatus\.running/)
+  assert.match(page, /canaryStatus\.succeeded/)
+  assert.match(page, /canaryStatus\.failed/)
+  assert.doesNotMatch(page, /DGP_CLOUDFLARE_WORKER_SECRET/)
+  assert.match(page, /Credential values remain hidden/)
+})
