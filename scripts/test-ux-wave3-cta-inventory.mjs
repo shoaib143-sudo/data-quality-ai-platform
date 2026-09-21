@@ -24,7 +24,7 @@ for (const [key, labels] of Object.entries(expected)) {
 const inboxButtons = [...files.inbox.matchAll(/<button\b[\s\S]*?>/g)].map(match => match[0])
 assert.ok(inboxButtons.length >= 3, 'approval inbox must retain execution/approve/reject controls')
 for (const tag of inboxButtons) assert.ok(/\btype=/.test(tag), `approval inbox button missing explicit type: ${tag}`)
-assert.ok(files.inbox.includes('disabled={busy === key}'), 'approval decision CTAs must suppress double submission')
+assert.ok(files.inbox.includes("disabled={busy !== null || !(comments[key] ?? '').trim()}"), 'approval decision CTAs must be comment-gated and suppress concurrent mutations')
 assert.ok(files.inbox.includes('role="status"'), 'approval result/error messaging must be announced accessibly')
 assert.ok(files.approvals.includes('id="main-content"'), 'Approvals shared shell must have a skip-link target')
 assert.ok(files.workflows.includes('id="main-content"'), 'Workflows shared shell must have a skip-link target')
