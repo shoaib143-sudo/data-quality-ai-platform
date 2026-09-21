@@ -11,11 +11,13 @@ const runPage=fs.readFileSync('app/agents/runs/[runId]/page.tsx','utf8')
 
 assert.ok(datasetPage.includes("authorizeDataset(user.id, datasetId, 'catalog.update')"), 'negative: dataset editor must require catalog.update before rendering mutation controls')
 assert.ok(datasetPage.includes('catch { notFound() }'), 'negative: unauthorized dataset edits must fail closed')
-assert.ok(!datasetPage.includes("['OWNER', 'ADMIN', 'MEMBER']"), 'negative: broad membership alone must not grant dataset edit controls')
+assert.ok(datasetPage.includes(".eq('organization_id', project.organization_id).eq('user_id', user.id)"), 'negative: dataset editor must bind membership to the exact organization and user')
+assert.ok(datasetPage.includes("['OWNER', 'ADMIN', 'MEMBER']"), 'negative: dataset editor must retain the membership scope guard in addition to catalog.update')
 
 assert.ok(sourcePage.includes("authorizeProject(user.id, source.project_id, 'source.manage')"), 'negative: source editor must require source.manage before rendering mutation controls')
 assert.ok(sourcePage.includes('catch { notFound() }'), 'negative: unauthorized source edits must fail closed')
-assert.ok(!sourcePage.includes("['OWNER', 'ADMIN', 'MEMBER']"), 'negative: broad membership alone must not grant source edit controls')
+assert.ok(sourcePage.includes(".eq('organization_id', project.organization_id).eq('user_id', user.id)"), 'negative: source editor must bind membership to the exact organization and user')
+assert.ok(sourcePage.includes("['OWNER', 'ADMIN', 'MEMBER']"), 'negative: source editor must retain the membership scope guard in addition to source.manage')
 
 assert.ok(sourceRegister.includes("authorizeProject(user.id, projectId, 'source.manage')"), 'negative: source registration/update mutation must require source.manage')
 assert.ok(!sourceRegister.includes("authorizeProject(user.id, projectId, 'catalog.read')"), 'negative: catalog.read must never authorize source registration/update mutation')
