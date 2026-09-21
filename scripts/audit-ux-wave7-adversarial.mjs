@@ -22,6 +22,9 @@ for (const [name, source] of [
 }
 
 assert.ok(profilingDashboard.includes('canExplorer ? <Link href='), 'adversarial: Profiling Explorer deep links must fail closed')
+assert.ok(!profilingDashboard.includes("@/lib/governance/workspace-access"), 'adversarial: client Profiling Dashboard must not import server-linked workspace access helpers')
+assert.ok(!profilingDashboard.includes("@/lib/supabase/server"), 'adversarial: client Profiling Dashboard must not import server-only Supabase helpers')
+assert.ok(profilingPage.includes('canExplorer={canExplorer}'), 'adversarial: server-resolved explorer access must be passed to the client dashboard')
 assert.ok(profilingDashboard.includes('/profiling/explorer?runId='), 'adversarial: Profiling Explorer deep-link target must remain canonical')
 assert.ok(resource.includes('{canApprovals ? <Link href="/approvals"'), 'adversarial: Resource Access must not expose Approvals without policy access')
 assert.ok(retention.includes('canAdmin?<Link href="/admin"'), 'adversarial: Retention must not expose Admin without policy access')
