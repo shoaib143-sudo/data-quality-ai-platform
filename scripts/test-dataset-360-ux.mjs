@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const page = fs.readFileSync('app/catalog/dataset/[datasetId]/page.tsx', 'utf8')
+const actions = fs.readFileSync('app/datasets/dataset-actions.tsx', 'utf8')
+const registration = fs.readFileSync('app/datasets/register-dataset-form.tsx', 'utf8')
+
+assert.ok(actions.includes('canonicalRoutes.governedDataset(datasetId)'), 'dataset cards must expose the canonical Dataset 360 route')
+assert.ok(actions.includes('Dataset 360'), 'Dataset 360 CTA label must be visible')
+assert.ok(page.includes("eq('agent_key','profiling_agent')"), 'Dataset 360 must resolve the governed profiling agent')
+assert.ok(page.includes("eq('version','2.0')"), 'Dataset 360 must bind profiling to v2.0')
+assert.ok(page.includes("hasProjectCapability(user.id,dataset.project_id,'profiling.execute')"), 'profiling CTA must remain capability gated')
+assert.ok(page.includes('agentDefinitionId={agentDefinition?.id??null}'), 'Dataset 360 must pass the governed agent definition to readiness actions')
+assert.ok(page.includes('Persona-aware presentation only. Governed evidence, policy and authorization are unchanged.'), 'Dataset 360 must disclose the truth and authorization boundary')
+assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(page), 'Dataset 360 projection must remain read only')
+assert.ok(registration.includes('canonicalRoutes.governedDataset(registeredDatasetId)'), 'registration success must carry context into Dataset 360')
+assert.ok(registration.includes('Open Dataset 360'), 'registration must expose a Dataset 360 CTA')
+assert.ok(actions.includes('disabled={busy || readinessLoading}'), 'profiling and AI CTAs must disable while readiness or execution is busy')
+assert.ok(actions.includes("readiness?.state === 'READY' && readiness.profiling_ready === true"), 'run profiling must be controlled by deterministic readiness')
+console.log('Dataset 360 UX and CTA contract passed.')
