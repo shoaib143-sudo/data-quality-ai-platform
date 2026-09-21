@@ -1,11 +1,12 @@
 import Link from 'next/link'
-import { Activity, AlertTriangle, ArrowRight, BellRing, CheckCircle2, Database, Eye, Gauge, GitCompareArrows, Layers3, ShieldCheck, TimerReset } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowRight, BellRing, CheckCircle2, Database, Eye, Gauge, GitCompareArrows, ShieldCheck, TimerReset } from 'lucide-react'
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { AlertActions } from './alert-actions'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 type Dataset = { id: string; project_id: string; name: string; business_domain: string | null }
 type Version = { id: string; dataset_id: string; version_number: number }
@@ -45,6 +46,7 @@ export default async function ObservabilityPage() {
   const canDatasets=canAccessWorkspace(landing.persona,'datasets',landing.organizationRole)
   const canMonitoring=canAccessWorkspace(landing.persona,'monitoring',landing.organizationRole)
   const canDataQuality=canAccessWorkspace(landing.persona,'data-quality',landing.organizationRole)
+  const canProfiling=canAccessWorkspace(landing.persona,'profiling',landing.organizationRole)
   const canManageWorkspace=canAccessWorkspace(landing.persona,'observability-manage',landing.organizationRole)
 
   const [datasetsResult, versionsResult, runsResult, scoresResult, sourcesResult, agentRunsResult, agentsResult, qualityRunsResult, alertsResult] = await Promise.all([
@@ -129,11 +131,11 @@ export default async function ObservabilityPage() {
   ]
 
   return (
-    <main className="min-h-screen bg-[#061426] text-slate-100">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-        <nav className={`${surface} mb-6 flex flex-wrap items-center justify-between gap-4 px-5 py-3`}>
-          <Link href="/home" className={`flex items-center gap-3 ${focus}`}><span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-white"><Layers3 className="h-5 w-5" /></span><span><span className="block text-sm font-bold text-white">DataNexus AI</span><span className="block text-xs text-slate-500">Operational observability</span></span></Link>
-          <div className="flex flex-wrap gap-2 text-sm">{canDatasets?<Link href="/datasets" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Datasets</Link>:null}<Link href="/profiling/explorer" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Profiling evidence</Link>{canDataQuality?<Link href="/data-quality" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Data Quality</Link>:null}{canMonitoring?<Link href="/monitoring" className={`rounded-xl bg-white/[0.06] px-4 py-2 font-semibold text-white ${focus}`}>Job Monitor</Link>:null}{canManageWorkspace?<Link href="/observability/settings" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Settings</Link>:null}</div>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Observability" contextLabel="Operational governance health" homeHref="/home" />
+        <nav className={`${surface} mb-6 mt-4 flex flex-wrap items-center justify-end gap-4 px-5 py-3`}>
+          <div className="flex flex-wrap gap-2 text-sm">{canDatasets?<Link href="/datasets" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Datasets</Link>:null}{canProfiling?<Link href="/profiling/explorer" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Profiling evidence</Link>:null}{canDataQuality?<Link href="/data-quality" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Data Quality</Link>:null}{canMonitoring?<Link href="/monitoring" className={`rounded-xl bg-white/[0.06] px-4 py-2 font-semibold text-white ${focus}`}>Job Monitor</Link>:null}{canManageWorkspace?<Link href="/observability/settings" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Settings</Link>:null}</div>
         </nav>
 
         <header className={`${surface} p-7 sm:p-9`}>
