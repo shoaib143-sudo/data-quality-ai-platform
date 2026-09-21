@@ -48,3 +48,15 @@ test("Vercel production certification remains a protected manual operation", () 
   assert.match(certification, /environment: production/);
   assert.doesNotMatch(certification, /schedule:/);
 });
+
+
+test("Vercel certification workflow has a single syntactically complete validation path", () => {
+  const start = releaseWorkflow.indexOf("  certify-vercel-production:");
+  assert.notEqual(start, -1);
+  const certification = releaseWorkflow.slice(start);
+
+  assert.match(certification, /grep -Eq '\^\[0-9a-f\]\{40\}\$'/);
+  assert.equal((certification.match(/name: Verify production liveness and exact release identity/g) ?? []).length, 1);
+  assert.equal((certification.match(/name: Verify production readiness remains fail closed/g) ?? []).length, 1);
+  assert.equal((certification.match(/name: Verify OIDC-enabled R2 certification route is deployed/g) ?? []).length, 1);
+});
