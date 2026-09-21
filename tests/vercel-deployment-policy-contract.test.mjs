@@ -33,6 +33,9 @@ test("Vercel certification verifies live identity, readiness, and protected R2 b
   assert.match(certification, /\/api\/health\/live/);
   assert.match(certification, /\/api\/build-info/);
   assert.match(certification, /\/api\/health\/ready/);
+  assert.match(certification, /\/api\/health\/supabase/);
+  assert.match(certification, /\/api\/health\/release-schema/);
+  assert.match(certification, /cloudflare-supabase-release-v1/);
   assert.match(certification, /\/api\/internal\/storage\/certify-r2/);
   assert.match(certification, /test "\$code" = "401"/);
 });
