@@ -24,7 +24,7 @@ test('canary scheduler requires governed secret and exact HTTPS worker endpoint'
 })
 
 test('canary scheduler remains service-role only and low cadence', () => {
-  assert.match(migration, /revoke all on function orchestration\.kick_cloudflare_observability_canary\(\) from public/i)
+  assert.match(migration, /revoke all on function orchestration\.kick_cloudflare_observability_canary\(\) from public,anon,authenticated/i)
   assert.match(migration, /grant execute on function orchestration\.kick_cloudflare_observability_canary\(\) to service_role/i)
   assert.match(migration, /dgp-cloudflare-observability-canary-kick/)
   assert.match(migration, /'\*\/5 \* \* \* \*'/)
