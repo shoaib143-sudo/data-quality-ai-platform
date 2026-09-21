@@ -402,7 +402,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
           DATANEXUS_CLOUDFLARE_CANARY_URL: ${{ vars.DATANEXUS_CLOUDFLARE_CANARY_URL }}
           EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
@@ -411,7 +411,7 @@ jobs:
           node scripts/prepare-cloudflare-tooling.mjs
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
-          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$SUPABASE_URL"
           test -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
           test -n "$DATANEXUS_CLOUDFLARE_CANARY_URL"
           BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -623,7 +623,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
           DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
         run: |
           set -euo pipefail
@@ -632,12 +632,12 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$DATANEXUS_WORKER_SECRET"
           test -n "$SUPABASE_SERVICE_ROLE_KEY"
-          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$SUPABASE_URL"
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           printf '%s' "$DATANEXUS_WORKER_SECRET" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put DATANEXUS_WORKER_SECRET --config infra/cloudflare/worker-runtime/wrangler.jsonc
           printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put SUPABASE_SERVICE_ROLE_KEY --config infra/cloudflare/worker-runtime/wrangler.jsonc
           curl --fail-with-body --silent --show-error \
-            -X POST "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Content-Type: application/json" \
@@ -702,17 +702,17 @@ jobs:
       - name: Enable Supabase canary scheduler only after live verification
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
           DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
           DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
         run: |
           set -euo pipefail
           test -n "$SUPABASE_SERVICE_ROLE_KEY"
-          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$SUPABASE_URL"
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           test -n "$DATANEXUS_WORKER_SECRET"
           curl --fail-with-body --silent --show-error \
-            -X POST "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Content-Type: application/json" \
@@ -757,17 +757,17 @@ jobs:
       - name: Disable Supabase canary scheduler first
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
           DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
           DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
         run: |
           set -euo pipefail
           test -n "$SUPABASE_SERVICE_ROLE_KEY"
-          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$SUPABASE_URL"
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           test -n "$DATANEXUS_WORKER_SECRET"
           curl --fail-with-body --silent --show-error \
-            -X POST "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Content-Type: application/json" \
