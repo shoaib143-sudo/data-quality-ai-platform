@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import path from 'node:path'
 
 const surfaces=[
   ['Trace Timeline','app/admin/ai-command-center/traces/page.tsx'],
@@ -13,8 +14,8 @@ const surfaces=[
   ['Administration','app/admin/page.tsx'],
 ]
 
-for(const [label,path] of surfaces){
-  const source=fs.readFileSync(path,'utf8')
+for(const [label,file] of surfaces){
+  const source=fs.readFileSync(file,'utf8')
   assert.ok(source.includes('<GlobalUtilityBar'), `${label} must use the shared Product Shell`)
   assert.ok(source.includes('id="main-content"'), `${label} must expose the shared skip-link target`)
   assert.ok(source.includes('tabIndex={-1}'), `${label} main target must be programmatically focusable`)
@@ -30,6 +31,19 @@ assert.ok(roleLanding.includes('canAccessWorkspaceHref'), 'Persona home must ret
 assert.ok(roleLanding.includes('aria-label="Persona workspace"'), 'Persona home must retain its purpose-built persona navigation')
 assert.ok(!roleLanding.includes('<GlobalUtilityBar'), 'Persona home is an intentional custom-shell exception and must not receive a duplicate global shell')
 
+const intentionalExceptions=new Map([
+  ['app/page.tsx','root authentication redirect'],
+  ['app/access-denied/page.tsx','standalone authorization failure surface'],
+  ['app/approvals/external/[token]/page.tsx','token-scoped external approval surface'],
+  ['app/forgot-password/page.tsx','standalone authentication recovery surface'],
+  ['app/home/[persona]/page.tsx','specialized persona landing rendered by RoleLandingPage'],
+  ['app/home/page.tsx','authenticated persona redirect'],
+  ['app/home/unavailable/page.tsx','standalone unavailable-state surface'],
+  ['app/login/page.tsx','standalone authentication surface'],
+  ['app/reset-password/page.tsx','standalone authentication recovery surface'],
+  ['app/signup/page.tsx','standalone authentication surface'],
+])
+
 const boundaryScreens=[
   'app/login/page.tsx',
   'app/signup/page.tsx',
@@ -39,11 +53,31 @@ const boundaryScreens=[
   'app/access-denied/page.tsx',
   'app/approvals/external/[token]/page.tsx',
 ]
-for(const path of boundaryScreens){
-  const source=fs.readFileSync(path,'utf8')
-  assert.ok(source.includes('id="main-content"'), `Boundary screen ${path} must expose the shared skip target`)
-  assert.ok(source.includes('tabIndex={-1}'), `Boundary screen ${path} main target must be focusable`)
-  assert.ok(!source.includes('<GlobalUtilityBar'), `Boundary screen ${path} must not receive the authenticated Product Shell`)
+for(const file of boundaryScreens){
+  const source=fs.readFileSync(file,'utf8')
+  assert.ok(source.includes('id="main-content"'), `Boundary screen ${file} must expose the shared skip target`)
+  assert.ok(source.includes('tabIndex={-1}'), `Boundary screen ${file} main target must be focusable`)
+  assert.ok(!source.includes('<GlobalUtilityBar'), `Boundary screen ${file} must not receive the authenticated Product Shell`)
 }
 
-console.log('Wave 13 final residual Product Shell and persona-home exception contract passed.')
+function walk(dir){
+  return fs.readdirSync(dir,{withFileTypes:true}).flatMap(entry=>{
+    const full=path.join(dir,entry.name)
+    return entry.isDirectory()?walk(full):[full.replaceAll(path.sep,'/')]
+  })
+}
+
+const pages=walk('app').filter(file=>file.endsWith('/page.tsx')||file==='app/page.tsx').sort()
+const uncovered=[]
+for(const file of pages){
+  if(intentionalExceptions.has(file)) continue
+  const source=fs.readFileSync(file,'utf8')
+  if(!source.includes('<GlobalUtilityBar')||!source.includes('id="main-content"')||!source.includes('tabIndex={-1}')) uncovered.push(file)
+}
+assert.deepEqual(uncovered,[],`Authenticated product pages outside the shared shell: ${uncovered.join(', ')}`)
+assert.equal(intentionalExceptions.size,10,'Special-purpose exception inventory must remain explicit and reviewable')
+
+const personaLanding=fs.readFileSync('app/home/[persona]/page.tsx','utf8')
+assert.ok(personaLanding.includes('<RoleLandingPage'), 'Persona home exception must continue to use the specialized RoleLandingPage')
+
+console.log(`Wave 13 residual Product Shell inventory passed across ${pages.length} pages with ${intentionalExceptions.size} intentional special-purpose exceptions.`)
