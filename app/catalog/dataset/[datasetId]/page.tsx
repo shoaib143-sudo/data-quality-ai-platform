@@ -47,7 +47,7 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
   const canExecuteProfiling=canProfiling&&await hasProjectCapability(user.id,dataset.project_id,'profiling.execute')
 
   const [versionResult,catalogResult,classificationsResult,glossaryResult,cdeResult,issuesResult,agentDefinitionResult]=await Promise.all([
-    supabase.schema('catalog').from('dataset_versions').select('id,version_number,status,row_count,column_count,observed_at,created_at').eq('dataset_id',datasetId).order('version_number',{ascending:false}).limit(1).maybeSingle(),
+    supabase.schema('catalog').from('dataset_versions').select('id,version_number,status,row_count,column_count,observed_at,created_at').eq('dataset_id',datasetId).order('version_number',{ascending:false}).limit(8),
     supabase.schema('governance').from('dataset_catalog').select('certification_status,criticality,lifecycle_status,business_description,business_owner_user_id,steward_user_id,tags,retention_days').eq('dataset_id',datasetId).maybeSingle(),
     supabase.schema('governance').from('dataset_classifications').select('id,status,label_id,column_name,confidence,authority_state').eq('dataset_id',datasetId),
     supabase.schema('governance').from('glossary_mappings').select('id,approved,mapping_status,column_name,confidence').eq('dataset_id',datasetId),
@@ -57,7 +57,8 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
   ])
   for(const result of [versionResult,catalogResult,classificationsResult,glossaryResult,cdeResult,issuesResult,agentDefinitionResult])if(result.error)throw new Error(`Unable to load governed dataset evidence: ${result.error.message}`)
 
-  const version=versionResult.data
+  const recentVersions=versionResult.data??[]
+  const version=recentVersions[0]??null
   const catalog=catalogResult.data
   const agentDefinition=agentDefinitionResult.data
   type RecentProfileRun={id:string;status:string;row_count:number|null;column_count:number|null;started_at:string|null;completed_at:string|null}
@@ -132,6 +133,11 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
       <GovernedEvidenceTile href={canClassification?'/classification':undefined} label="Classifications" value={String(approvedClassifications)} detail="Approved classification evidence"/>
       <GovernedEvidenceTile href={canStewardship?'/stewardship':undefined} label="Accountability" value={hasAccountability?'Assigned':'Missing'} detail="Owner or steward assignment"/>
       <GovernedEvidenceTile href={canClassification?'/classification':undefined} label="Critical data mappings" value={String(cdeCount)} detail="Governed CDE evidence"/>
+    </div>
+    <div className="mt-4">
+      <div className="mb-2 flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-[.12em] text-slate-500">Dataset version history</p><span className="text-[11px] text-slate-600">{recentVersions.length} version{recentVersions.length===1?'':'s'} shown</span></div>
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">{recentVersions.map(item=><div key={item.id} className={`${inset} p-3`}><div className="flex items-center justify-between gap-2"><span className="text-sm font-black text-slate-200">v{item.version_number}</span><span className="rounded-lg bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-slate-400">{item.status}</span></div><p className="mt-2 text-xs text-slate-500">{item.row_count??'N/A'} rows · {item.column_count??'N/A'} columns</p><p className="mt-1 text-[11px] text-slate-600">{item.observed_at?`Observed ${new Date(item.observed_at).toLocaleString()}`:`Created ${new Date(item.created_at).toLocaleString()}`}</p></div>)}</div>
+      {recentVersions.length===0?<GovernedEmptyState>No dataset version history is available.</GovernedEmptyState>:null}
     </div>
   </GovernedSection>
 

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ApprovalInboxItem } from '@/lib/governance/approval-inbox'
+import { resolveMonitorRoute } from '@/lib/monitoring/monitor-route'
 
 function value(record: Record<string, unknown>, key: string) {
   const raw = record[key]
@@ -24,7 +25,10 @@ export function ApprovalInbox({ items }: { items: ApprovalInboxItem[] }) {
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error ?? 'Unable to execute requested action.')
       const runId = payload.runId ?? payload.agentRunId ?? payload.agent_run_id
-      router.push(payload.monitorUrl ?? (typeof runId === 'string' ? `/monitoring?run=${encodeURIComponent(runId)}` : '/monitoring'))
+      router.push(resolveMonitorRoute({
+        runId: typeof runId === 'string' ? runId : null,
+        monitorUrl: typeof payload.monitorUrl === 'string' ? payload.monitorUrl : null,
+      }))
       router.refresh()
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to execute requested action.')
@@ -143,7 +147,7 @@ export function ApprovalInbox({ items }: { items: ApprovalInboxItem[] }) {
                   <button
                     type="button"
                     onClick={() => executeRequestedAction(requestId)}
-                    disabled={busy === `${requestId}:EXECUTE`}
+                    disabled={busy !== null}
                     className="mt-3 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:opacity-50"
                   >
                     {busy === `${requestId}:EXECUTE` ? 'Executing…' : 'Execute requested action'}
@@ -165,11 +169,11 @@ export function ApprovalInbox({ items }: { items: ApprovalInboxItem[] }) {
                         value={comments[key] ?? ''}
                         onChange={event => setComments(current => ({ ...current, [key]: event.target.value.slice(0, 2000) }))}
                         placeholder="Reason/comment is mandatory"
-                        disabled={busy === key}
+                        disabled={busy !== null}
                       />
                       <div className="mt-3 flex gap-2">
-                        <button type="button" onClick={() => decide(requestId, axis, 'APPROVED')} disabled={busy === key} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Approve</button>
-                        <button type="button" onClick={() => decide(requestId, axis, 'REJECTED')} disabled={busy === key} className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50">Reject</button>
+                        <button type="button" onClick={() => decide(requestId, axis, 'APPROVED')} disabled={busy !== null || !(comments[key] ?? '').trim()} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Approve</button>
+                        <button type="button" onClick={() => decide(requestId, axis, 'REJECTED')} disabled={busy !== null || !(comments[key] ?? '').trim()} className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50">Reject</button>
                       </div>
                     </div>
                   )

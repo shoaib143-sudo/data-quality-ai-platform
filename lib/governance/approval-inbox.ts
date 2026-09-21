@@ -15,6 +15,7 @@ export type ApprovalInboxItem = {
 
 const clientRequestFields = [
   'id',
+  'project_id',
   'domain',
   'environment',
   'action_key',

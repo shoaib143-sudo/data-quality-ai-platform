@@ -96,6 +96,10 @@ export default async function GovernedIncidentPage({ params }: { params: Promise
 
   const slaState=classifyRemediationSla({status:incident.truth.issueStatus,dueAt:incident.truth.dueAt})
   const dueLabel=!incident.truth.dueAt?'Not set':slaState==='INVALID'?'Invalid due date':new Date(incident.truth.dueAt).toLocaleString()
+  const evidenceTimeline=incident.evidence
+    .filter(item=>item.observedAt&&Number.isFinite(Date.parse(String(item.observedAt))))
+    .filter((item,index,items)=>items.findIndex(candidate=>candidate.sourceTable===item.sourceTable&&candidate.sourceId===item.sourceId&&candidate.kind===item.kind&&candidate.observedAt===item.observedAt)===index)
+    .sort((left,right)=>new Date(String(left.observedAt)).getTime()-new Date(String(right.observedAt)).getTime())
 
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Governed incident" contextLabel={projectResult.data.name} homeHref="/home" />
@@ -106,6 +110,11 @@ export default async function GovernedIncidentPage({ params }: { params: Promise
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-6"><Metric title="Lifecycle" value={label(incident.truth.lifecycleState)}/><Metric title="Severity" value={incident.truth.severity}/><Metric title="Issue state" value={label(incident.truth.issueStatus)}/><Metric title="Verification" value={label(incident.verification.status)}/><Metric title="Ownership" value={incident.truth.ownerUserId?'Assigned':'Unassigned'} detail={incident.truth.ownerUserId??'No accountable owner recorded'}/><Metric title="Remediation SLA" value={label(slaState)} detail={dueLabel}/></div>
       <div className="mt-5 flex flex-wrap gap-2">{view.plan.actionEmphasis.map(item => <span key={item} className="rounded-lg border border-white/[0.07] bg-white/[0.04] px-2.5 py-1 text-xs font-semibold text-slate-300">{item.replaceAll('-', ' ')}</span>)}</div>
     </header>
+
+    <section className="mt-6 rounded-3xl border border-white/10 bg-[#0a1d33] p-6" aria-labelledby="incident-evidence-timeline">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-cyan-300">Persisted chronology</p><h2 id="incident-evidence-timeline" className="mt-1 text-xl font-black text-white">Remediation evidence timeline</h2><p className="mt-2 max-w-3xl text-sm text-slate-400">Chronological records are shown only when authoritative evidence contains an observation timestamp. Missing history is not inferred.</p></div><span className="rounded-lg border border-white/[0.07] bg-white/[0.04] px-2.5 py-1 text-[10px] font-black uppercase tracking-[.1em] text-slate-500">read only</span></div>
+      {evidenceTimeline.length?<ol className="mt-5 space-y-3">{evidenceTimeline.map((item,index)=><li key={`${item.sourceTable}:${item.sourceId}:${item.kind}:${item.observedAt}:${index}`} className="flex gap-3"><span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-cyan-300/20 bg-cyan-400/[0.06] text-[10px] font-black text-cyan-300">{index+1}</span><div className="min-w-0 flex-1 rounded-xl border border-white/[0.06] bg-[#08182b] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2"><span className="rounded-md bg-cyan-400/10 px-2 py-0.5 text-[10px] font-black uppercase text-cyan-300">{item.authority}</span><span className="text-xs font-bold text-slate-200">{item.kind.replaceAll('_',' ')}</span></div><time className="text-[11px] text-slate-500">{new Date(String(item.observedAt)).toLocaleString()}</time></div><p className="mt-2 break-all font-mono text-[11px] text-slate-600">{item.sourceTable} · {item.sourceId}</p></div></li>)}</ol>:<p className="mt-5 rounded-2xl border border-dashed border-white/10 p-5 text-sm text-slate-500">No timestamped governed evidence is linked. DataNexus will not manufacture a remediation history.</p>}
+    </section>
 
     <div className="mt-6 grid gap-5">{view.components.map(definition => <IncidentComponent key={definition.id} definition={definition} incident={incident} canManage={canManage}/>)}</div>
 

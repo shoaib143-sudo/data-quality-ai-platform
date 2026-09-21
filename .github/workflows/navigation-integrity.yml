@@ -15,6 +15,16 @@ on:
       - 'scripts/test-governance-run-observability-sla.mjs'
       - 'scripts/audit-ux-wave2-adversarial.mjs'
       - 'scripts/test-ux-wave2-cta-inventory.mjs'
+      - 'lib/monitoring/monitor-route.ts'
+      - 'lib/governance/approval-inbox.ts'
+      - 'lib/governance/governed-incident-view.ts'
+      - 'scripts/test-ux-wave3-shell-approvals-workflows.mjs'
+      - 'scripts/test-approval-monitor-route.mjs'
+      - 'scripts/test-governance-run-inline-decisions-recovery.mjs'
+      - 'scripts/test-dataset360-version-history.mjs'
+      - 'scripts/test-governed-incident-evidence-timeline.mjs'
+      - 'scripts/test-ux-wave3-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave3-adversarial.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -48,6 +58,16 @@ on:
       - 'scripts/test-governance-run-observability-sla.mjs'
       - 'scripts/audit-ux-wave2-adversarial.mjs'
       - 'scripts/test-ux-wave2-cta-inventory.mjs'
+      - 'lib/monitoring/monitor-route.ts'
+      - 'lib/governance/approval-inbox.ts'
+      - 'lib/governance/governed-incident-view.ts'
+      - 'scripts/test-ux-wave3-shell-approvals-workflows.mjs'
+      - 'scripts/test-approval-monitor-route.mjs'
+      - 'scripts/test-governance-run-inline-decisions-recovery.mjs'
+      - 'scripts/test-dataset360-version-history.mjs'
+      - 'scripts/test-governed-incident-evidence-timeline.mjs'
+      - 'scripts/test-ux-wave3-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave3-adversarial.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -115,6 +135,20 @@ jobs:
         run: node scripts/test-ux-wave2-cta-inventory.mjs
       - name: Run independent Wave 2 adversarial audit
         run: node --experimental-strip-types scripts/audit-ux-wave2-adversarial.mjs
+      - name: Test Wave 3 Approvals and Workflows Product Shell
+        run: node scripts/test-ux-wave3-shell-approvals-workflows.mjs
+      - name: Test approval monitor route and negative cases
+        run: node --experimental-strip-types scripts/test-approval-monitor-route.mjs
+      - name: Test Governance Run inline decisions and failure recovery
+        run: node scripts/test-governance-run-inline-decisions-recovery.mjs
+      - name: Test Dataset 360 version history
+        run: node scripts/test-dataset360-version-history.mjs
+      - name: Test governed incident evidence timeline
+        run: node scripts/test-governed-incident-evidence-timeline.mjs
+      - name: Test Wave 3 CTA inventory and interaction states
+        run: node scripts/test-ux-wave3-cta-inventory.mjs
+      - name: Run independent Wave 3 adversarial audit
+        run: node --experimental-strip-types scripts/audit-ux-wave3-adversarial.mjs
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
