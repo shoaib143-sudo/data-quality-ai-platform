@@ -37,4 +37,5 @@ assert.ok(page.includes("'BLOCKED'"), 'Governance Run must expose blocked stage 
 assert.ok(page.includes("'IN_PROGRESS'"), 'Governance Run must expose in-progress stage state')
 assert.ok(page.includes("'NOT_STARTED'"), 'Governance Run must expose not-started stage state')
 assert.ok(page.includes("'OPTIONAL'"), 'Governance Run must distinguish optional learning from required lifecycle stages')
+assert.ok(page.includes("String(version.id) === String(latestCompletedRun.dataset_version_id)"), 'Governance Run must correlate Dataset 360 context from the actual latest completed profile run')
 console.log('Governance Run UX, route and failure-state contract passed.')
