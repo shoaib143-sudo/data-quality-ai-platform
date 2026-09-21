@@ -12,6 +12,7 @@ const view = fs.readFileSync('lib/governance/governed-incident-view.ts', 'utf8')
 
 assert.equal(resolveMonitorRoute({ runId: 'x', monitorUrl: 'javascript:alert(1)' }), '/monitoring?run=x')
 assert.equal(resolveMonitorRoute({ runId: 'x', monitorUrl: 'https://attacker.invalid/monitoring' }), '/monitoring?run=x')
+assert.equal(resolveMonitorRoute({ runId: 'x', monitorUrl: '/monitoring?run=other' }), '/monitoring?run=x')
 assert.ok(inbox.includes('resolveMonitorRoute'), 'adversarial: approval execution redirects must be constrained to Job Monitor')
 assert.ok(approvals.includes("canAccessWorkspace(landing.persona, 'monitoring'"), 'adversarial: Approvals must not expose Job Monitor to unauthorized personas')
 assert.ok(workflows.includes("canAccessWorkspace(landing.persona,'issues'"), 'adversarial: Workflow local navigation must remain persona filtered')
