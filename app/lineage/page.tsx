@@ -1,8 +1,11 @@
 import Link from 'next/link'
-import { GitBranch, Layers3 } from 'lucide-react'
+import { GitBranch } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { LineageExplorer, type FieldMapping, type LineageField } from './lineage-explorer'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 const RECENT_MAPPING_LIMIT=200
 const RECENT_RUN_LIMIT=300
@@ -19,8 +22,12 @@ const findingPenalty=(severity:string)=>({CRITICAL:20,HIGH:12,MEDIUM:6,LOW:2}[se
 const uniqueStrings=(values:Array<string|null|undefined>)=>[...new Set(values.filter((value):value is string=>Boolean(value)))]
 
 export default async function LineagePage(){
-  await requireUser()
-  const supabase=await createClient()
+  const user=await requireUser()
+  const [supabase,landing]=await Promise.all([createClient(),resolveLandingAccess(user.id)])
+  const canCatalog=canAccessWorkspace(landing.persona,'catalog',landing.organizationRole)
+  const canGlossary=canAccessWorkspace(landing.persona,'glossary',landing.organizationRole)
+  const canDataQuality=canAccessWorkspace(landing.persona,'data-quality',landing.organizationRole)
+  const canLineageManage=canAccessWorkspace(landing.persona,'lineage-manage',landing.organizationRole)
 
   // Phase 1 is deliberately small: estate-wide counts plus recent explicit mappings and
   // recent successful profiling runs. Every enrichment query below is scoped from this
@@ -246,8 +253,9 @@ export default async function LineagePage(){
     if(!fieldMap.has(key))fieldMap.set(key,buildField(syntheticAssetId,columnName,datasetId,datasets.get(datasetId)?.name??'Profiled dataset'))
   }
 
-  return <main className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
-    <nav className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm"><Link href="/dashboard" className="flex items-center gap-3 font-bold"><span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5"/></span>Data Governance PowerHouse</Link><div className="flex flex-wrap gap-2 text-sm"><Link href="/catalog" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Catalog</Link><Link href="/glossary" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Glossary</Link><Link href="/data-quality" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Data Quality</Link><Link href="/lineage/impact" className="rounded-xl px-3 py-2 font-semibold text-violet-600 hover:bg-violet-50">Impact analysis</Link><Link href="/lineage/ingest" className="rounded-xl bg-violet-600 px-3 py-2 font-semibold text-white">Ingest lineage</Link></div></nav>
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+    <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Lineage" contextLabel="Governance intelligence lineage" homeHref="/home" />
+    <nav className="mb-6 mt-4 flex flex-wrap items-center justify-end gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm"><div className="flex flex-wrap gap-2 text-sm">{canCatalog?<Link href="/catalog" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Catalog</Link>:null}{canGlossary?<Link href="/glossary" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Glossary</Link>:null}{canDataQuality?<Link href="/data-quality" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Data Quality</Link>:null}<Link href="/lineage/impact" className="rounded-xl px-3 py-2 font-semibold text-violet-600 hover:bg-violet-50">Impact analysis</Link>{canLineageManage?<Link href="/lineage/ingest" className="rounded-xl bg-violet-600 px-3 py-2 font-semibold text-white">Ingest lineage</Link>:null}</div></nav>
     <header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600"><GitBranch className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Governance Intelligence Lineage Explorer</h1><p className="mt-1 max-w-4xl text-sm text-slate-500">Trace fields end to end and overlay Data Quality, business meaning, stakeholders, classifications, certifications, contracts, issues, observability and profiling evidence in one governed view. The overview is a bounded recent working set; complete dataset and field traversal is served through the anchor-driven GraphProvider navigators.</p></div></div></header>
     <LineageExplorer fields={[...fieldMap.values()]} mappings={fieldMappings} edges={[]} stats={{edges:edgeCountResult.count??0,datasets:datasetCountResult.count??0,assets:assetCountResult.count??0,transformations:transformationCountResult.count??0,mappedColumns:mappingCountResult.count??0}}/>
   </div></main>
