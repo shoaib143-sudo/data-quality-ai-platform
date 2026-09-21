@@ -1,0 +1,47 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const page = fs.readFileSync('app/admin/infrastructure/page.tsx', 'utf8')
+const admin = fs.readFileSync('app/admin/page.tsx', 'utf8')
+
+test('infrastructure observability is discoverable from administration', () => {
+  assert.match(admin, /href="\/admin\/infrastructure"/)
+  assert.match(admin, />Infrastructure<\/Link>/)
+  assert.match(page, /href="\/admin"/)
+  assert.match(page, /href="\/home"/)
+})
+
+test('infrastructure page requires administrator membership and scopes storage to authorized projects', () => {
+  assert.match(page, /requireUser\(\)/)
+  assert.match(page, /organization_members/)
+  assert.match(page, /\.in\('role', \['OWNER', 'ADMIN'\]\)/)
+  assert.match(page, /\.in\('project_id', projectIds\)/)
+  assert.match(page, /OWNER or ADMIN membership is required/)
+})
+
+test('all infrastructure status modules expose clear operator-facing state', () => {
+  for (const label of [
+    'Primary runtime',
+    'Supabase objects',
+    'R2 objects',
+    'R2 runtime config',
+    'Default provider',
+    'Bulk provider',
+    'Production R2 cutover',
+    'Architecture boundary',
+  ]) assert.ok(page.includes(label), `missing infrastructure UX label: ${label}`)
+})
+
+test('R2 secrets are checked server-side but never rendered', () => {
+  for (const secret of ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY']) assert.match(page, new RegExp(secret))
+  assert.match(page, /Credential values are intentionally hidden/)
+  assert.doesNotMatch(page, /process\.env\[name\][^\n]*\}/)
+  assert.doesNotMatch(page, /NEXT_PUBLIC_R2_/)
+})
+
+test('read-only infrastructure page does not expose destructive CTAs', () => {
+  assert.doesNotMatch(page, /<button/)
+  assert.doesNotMatch(page, /fetch\(/)
+  assert.doesNotMatch(page, /deleteObject|migrate-to-r2|reference-cutover/)
+})
