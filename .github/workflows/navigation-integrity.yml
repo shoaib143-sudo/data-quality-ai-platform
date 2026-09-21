@@ -25,6 +25,10 @@ on:
       - 'scripts/test-governed-incident-evidence-timeline.mjs'
       - 'scripts/test-ux-wave3-cta-inventory.mjs'
       - 'scripts/audit-ux-wave3-adversarial.mjs'
+      - 'scripts/test-ux-wave4-shell-core-surfaces.mjs'
+      - 'scripts/test-ux-wave4-local-navigation-policy.mjs'
+      - 'scripts/test-ux-wave4-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave4-adversarial.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -68,6 +72,10 @@ on:
       - 'scripts/test-governed-incident-evidence-timeline.mjs'
       - 'scripts/test-ux-wave3-cta-inventory.mjs'
       - 'scripts/audit-ux-wave3-adversarial.mjs'
+      - 'scripts/test-ux-wave4-shell-core-surfaces.mjs'
+      - 'scripts/test-ux-wave4-local-navigation-policy.mjs'
+      - 'scripts/test-ux-wave4-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave4-adversarial.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -149,6 +157,14 @@ jobs:
         run: node scripts/test-ux-wave3-cta-inventory.mjs
       - name: Run independent Wave 3 adversarial audit
         run: node --experimental-strip-types scripts/audit-ux-wave3-adversarial.mjs
+      - name: Test Wave 4 core Product Shell surfaces
+        run: node scripts/test-ux-wave4-shell-core-surfaces.mjs
+      - name: Test Wave 4 local navigation policy
+        run: node scripts/test-ux-wave4-local-navigation-policy.mjs
+      - name: Test Wave 4 CTA inventory and destinations
+        run: node scripts/test-ux-wave4-cta-inventory.mjs
+      - name: Run independent Wave 4 adversarial audit
+        run: node scripts/audit-ux-wave4-adversarial.mjs
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
