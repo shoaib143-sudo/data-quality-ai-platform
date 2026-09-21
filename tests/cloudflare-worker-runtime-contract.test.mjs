@@ -9,6 +9,7 @@ test('worker container is isolated from the web canary and disabled by default',
   assert.equal(config.name, 'datanexus-worker-canary')
   assert.equal(config.vars.DATANEXUS_ENV, 'canary')
   assert.equal(config.vars.DATANEXUS_WORKER_EXECUTION_ENABLED, 'false')
+  assert.equal(config.vars.DATANEXUS_WORKER_CANARY_JOB_TYPE, 'OBSERVABILITY')
   assert.equal(config.containers[0].max_instances, 1)
   assert.equal(config.containers[0].image, '../../../Dockerfile')
   assert.deepEqual(config.containers[0].constraints?.regions, ['APAC'])
@@ -45,4 +46,11 @@ test('worker ingress fails closed when execution is enabled without complete sec
   assert.match(router, /request\.method\.toUpperCase\(\) !== 'POST'/)
   assert.match(router, /status: 405/)
   assert.match(router, /Allow: 'POST'/)
+})
+
+
+test('enabled worker ingress remains restricted to the observability canary mode', () => {
+  assert.match(router, /DATANEXUS_WORKER_CANARY_JOB_TYPE !== 'OBSERVABILITY'/)
+  assert.match(router, /CLOUDFLARE_OBSERVABILITY_CANARY/)
+  assert.match(router, /Cloudflare worker execution is restricted to the observability canary mode/)
 })
