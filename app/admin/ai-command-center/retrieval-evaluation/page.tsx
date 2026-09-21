@@ -3,6 +3,9 @@ import { SearchCheck, ShieldCheck, TestTube2 } from 'lucide-react'
 import { authorizeProject } from '@/lib/auth/authorize'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 type Project = { id: string; name: string }
 
@@ -23,6 +26,8 @@ type EvaluationRow = { id: string; metric_name: string; score: number | null; ev
 
 export default async function RetrievalEvaluationPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canAdminWorkspace = canAccessWorkspaceHref(landing.persona, '/admin', landing.organizationRole)
   const params = await searchParams
   const supabase = await createClient()
   const projectsResult = await supabase.schema('app').from('projects').select('id,name').order('name')
@@ -53,8 +58,9 @@ export default async function RetrievalEvaluationPage({ searchParams }: { search
   const judgmentCounts = new Map<string, number>()
   for (const judgment of judgments) judgmentCounts.set(judgment.case_version_id, (judgmentCounts.get(judgment.case_version_id) ?? 0) + 1)
 
-  return <main className="min-h-screen bg-slate-50 p-5 sm:p-8"><div className="mx-auto max-w-7xl space-y-7">
-    <div className="flex flex-wrap items-center justify-between gap-3"><Link href={selectedProjectId ? `/admin/ai-command-center?projectId=${selectedProjectId}` : '/admin/ai-command-center'} className="text-sm font-semibold text-slate-600">← AI Command Center</Link><Link href="/admin" className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold">Administration</Link></div>
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-8"><div className="mx-auto max-w-7xl space-y-7">
+    <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Retrieval Evaluation" contextLabel="Relevance and benchmark evidence" homeHref="/home" />
+    {canAdminWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3"><Link href={selectedProjectId ? `/admin/ai-command-center?projectId=${selectedProjectId}` : '/admin/ai-command-center'} className="text-sm font-semibold text-slate-600">← AI Command Center</Link><Link href="/admin" className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold">Administration</Link></div> : null}
 
     <header className="rounded-3xl border bg-white p-7 shadow-sm"><div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white"><SearchCheck className="h-6 w-6"/></span><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">Retrieval evaluation evidence</p><h1 className="text-3xl font-black">Relevance Labels & Benchmark Readiness</h1><p className="mt-2 max-w-4xl text-sm text-slate-600">Read-only canonical evidence for human-reviewed or governed-import relevance labels and retrieval benchmark results. This page does not create labels, run benchmarks, promote rerankers, or change model lifecycle state.</p></div></div></header>
 

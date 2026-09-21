@@ -7,6 +7,7 @@ import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 type Project = { id: string; name: string }
 type Dataset = { id: string; name: string; project_id: string }
@@ -142,12 +143,10 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
   const profileHref = profile ? `/profiling/explorer?runId=${encodeURIComponent(profile.id)}` : '/profiling/explorer'
 
   return (
-    <main className="min-h-screen bg-[#061426] p-5 text-slate-100 sm:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-5 text-slate-100 sm:p-8">
       <div className="mx-auto max-w-7xl space-y-7">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/home" className={`text-sm font-medium text-slate-300 hover:text-white ${focus}`}>← Role home</Link>
-          {canAICapabilities ? <Link href="/ai-capabilities" className={`rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-400/30 ${focus}`}>AI capability coverage</Link> : null}
-        </div>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="AI Insights" contextLabel="Evidence-backed governance intelligence" homeHref="/home" />
+        {canAICapabilities ? <div className="flex justify-end"><Link href="/ai-capabilities" className={`rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-400/30 ${focus}`}>AI capability coverage</Link></div> : null}
 
         <header className={`${surface} p-7`}>
           <div className="flex items-start gap-4">

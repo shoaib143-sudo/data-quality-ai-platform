@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { Activity, AlertTriangle } from 'lucide-react'
 
 import { authorizeProject } from '@/lib/auth/authorize'
@@ -5,6 +6,9 @@ import { readGovernedTraceTimeline, type GovernedTrace } from '@/lib/ai/governan
 import { hasTraceInvocationEvidence } from '@/lib/ai/trace-invocation-evidence'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 type Project = { id: string; name: string }
 
@@ -14,6 +18,8 @@ function recorded(value: unknown) {
 
 export default async function AICommandCenterTracesPage({ searchParams }: { searchParams: Promise<{ projectId?: string; traceId?: string }> }) {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canAdminWorkspace = canAccessWorkspaceHref(landing.persona, '/admin', landing.organizationRole)
   const params = await searchParams
   const supabase = await createClient()
   const projectsResult = await supabase.schema('app').from('projects').select('id,name').order('name')
@@ -30,8 +36,10 @@ export default async function AICommandCenterTracesPage({ searchParams }: { sear
   const selectedTraceId = params.traceId?.trim() || null
   const visibleTraces = selectedTraceId ? traces.filter((trace) => trace.traceId === selectedTraceId) : traces
 
-  return <main className="min-h-screen bg-slate-50 p-5 sm:p-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-8">
     <div className="mx-auto max-w-7xl space-y-6">
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="AI Trace Timeline" contextLabel="Governed observability evidence" homeHref="/home" />
+      {canAdminWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3"><Link href={selectedProjectId ? `/admin/ai-command-center?projectId=${selectedProjectId}` : '/admin/ai-command-center'} className="text-sm font-semibold text-slate-600">← AI Command Center</Link><Link href="/admin" className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold">Administration</Link></div> : null}
       <header className="rounded-3xl border bg-white p-7 shadow-sm">
         <div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white"><Activity className="h-6 w-6"/></span><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">AI Observability Plane</p><h1 className="text-3xl font-black">Trace Timeline</h1><p className="mt-2 max-w-4xl text-sm text-slate-600">Read-only correlation of canonical AI telemetry carrying W3C trace IDs. Model invocation details are a whitelisted evidence projection only; admission evidence describes execution accounting against resource-budget controls, not governance approval. This surface does not grant governance authority and does not assert that every upstream or downstream span has been observed.</p></div></div>
       </header>
