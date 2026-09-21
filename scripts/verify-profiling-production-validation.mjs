@@ -8,6 +8,22 @@ const required = process.env.PROFILING_PRODUCTION_VALIDATION_REQUIRED === 'true'
 
 if (!url || !serviceRoleKey) {
   const message = 'NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for live profiling production validation.'
+  const missing = [
+    !url ? 'NEXT_PUBLIC_SUPABASE_URL' : null,
+    !serviceRoleKey ? 'SUPABASE_SERVICE_ROLE_KEY' : null,
+  ].filter(Boolean)
+  const evidencePath = process.env.PROFILING_PRODUCTION_VALIDATION_EVIDENCE_PATH
+  if (evidencePath) {
+    const evidence = {
+      schemaVersion: 1,
+      kind: 'PROFILING_PRODUCTION_VALIDATION',
+      generatedAt: new Date().toISOString(),
+      status: required ? 'BLOCKED_EXTERNAL' : 'SKIPPED',
+      failureClass: 'MISSING_RUNTIME_CREDENTIALS',
+      missing,
+    }
+    await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8')
+  }
   if (required) throw new Error(message)
   console.log(`SKIP ${message}`)
   process.exit(0)

@@ -24,3 +24,15 @@ test('retained profiling evidence excludes source credentials and connection det
     assert.equal(source.toLowerCase().includes(forbidden), false, `live evidence source must not select or emit ${forbidden}`)
   }
 })
+
+
+test('missing production credentials emit bounded failure evidence', () => {
+  assert.ok(source.includes("status: required ? 'BLOCKED_EXTERNAL' : 'SKIPPED'"))
+  assert.ok(source.includes("failureClass: 'MISSING_RUNTIME_CREDENTIALS'"))
+  assert.ok(source.includes("'NEXT_PUBLIC_SUPABASE_URL'"))
+  assert.ok(source.includes("'SUPABASE_SERVICE_ROLE_KEY'"))
+  assert.ok(source.includes('await writeFile(evidencePath'))
+  const missingCredentialBlock = source.slice(source.indexOf('if (!url || !serviceRoleKey)'), source.indexOf('const supabase = createClient'))
+  assert.equal(missingCredentialBlock.includes('serviceRoleKey:'), false)
+  assert.equal(missingCredentialBlock.includes('url:'), false)
+})
