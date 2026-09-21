@@ -79,3 +79,10 @@ test('profiling replay workflow cancels stale pull-request runs', () => {
   assert.ok(workflow.includes('group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}'))
   assert.ok(workflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"))
 })
+
+
+test('live validation uses the canonical public Supabase URL and keeps service role secret', () => {
+  const liveBlock = workflow.slice(workflow.indexOf('  live-production:'))
+  assert.match(liveBlock, /NEXT_PUBLIC_SUPABASE_URL: https:\/\/tvjnavjxuehpesxcfvrx\.supabase\.co/)
+  assert.match(liveBlock, /SUPABASE_SERVICE_ROLE_KEY: \$\{\{ secrets\.SUPABASE_SERVICE_ROLE_KEY \}\}/)
+})
