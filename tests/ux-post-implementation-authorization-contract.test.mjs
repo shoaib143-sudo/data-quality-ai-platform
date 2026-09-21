@@ -21,7 +21,7 @@ test('source credential and registration writes require source.manage',()=>{
 test('read-only discovery authorizes before external connection',()=>{
   const source=read('app/api/datasets/source/discover/route.ts')
   const auth=source.indexOf("authorizeProject(user.id, projectId, 'catalog.read')")
-  const discover=source.indexOf('discoverNativeHierarchy')
+  const discover=source.indexOf('await discoverNativeHierarchy')
   assert.ok(auth>=0)
   assert.ok(discover>auth)
   assert.ok(source.includes('validCredentialRef(credentialRef)'))
