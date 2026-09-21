@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const migration = fs.readFileSync('supabase/migrations/20260921154500_cloudflare_canary_status_rpc.sql', 'utf8')
+const migration = fs.readFileSync('supabase/migrations/20260921155500_cloudflare_canary_status_null_safe.sql', 'utf8')
 
 test('status RPC exposes only non-secret canary state', () => {
   assert.match(migration, /get_cloudflare_observability_canary_status/)
