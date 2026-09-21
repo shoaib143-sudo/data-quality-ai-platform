@@ -23,6 +23,9 @@ assert.ok(workflows.includes("canAccessWorkspace(landing.persona,'journeys'"), '
 assert.ok(workflows.includes('canIssues?<Link href="/issues"'), 'Workflow Issues link must honor access')
 assert.ok(workflows.includes('canProfiling?<Link href="/profiling/explorer"'), 'Workflow profiling link must honor access')
 assert.ok(workflows.includes('canJourneys?<Link href="/journeys"'), 'Workflow Governance Runs link must honor access')
+for (const routeFile of ['app/agents/page.tsx','app/monitoring/page.tsx','app/issues/page.tsx','app/profiling/explorer/page.tsx','app/journeys/page.tsx']) {
+  assert.ok(fs.existsSync(routeFile), `Wave 3 navigation target does not exist: ${routeFile}`)
+}
 assert.ok(!workflows.includes('DataNexus AI</Link>'), 'Workflow page must not retain a duplicate legacy brand shell')
 
 console.log('Wave 3 Approvals and Workflows Product Shell contract passed.')
