@@ -78,6 +78,7 @@ export type GovernedIncidentTruth = {
   severity: string
   issueStatus: string
   ownerUserId: string | null
+  dueAt?: string | null
   lifecycleState: GovernedIncidentLifecycleState
   verificationStatus: string | null
   openedAt: string
