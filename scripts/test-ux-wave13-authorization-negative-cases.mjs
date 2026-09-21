@@ -37,4 +37,16 @@ assert.ok(runPage.includes('if (!await canViewExecutionRun(user.id, run as Agent
 assert.ok(runPage.includes("authorizeAgentAction("), 'negative: run evidence must retain agent action authorization')
 assert.ok(runPage.includes('catch {\n    notFound()\n  }'), 'negative: agent authorization failure must not leak run existence')
 
+const login=fs.readFileSync('app/login/page.tsx','utf8')
+const signup=fs.readFileSync('app/signup/page.tsx','utf8')
+const forgot=fs.readFileSync('app/forgot-password/page.tsx','utf8')
+const reset=fs.readFileSync('app/reset-password/page.tsx','utf8')
+const externalApproval=fs.readFileSync('app/approvals/external/[token]/page.tsx','utf8')
+assert.ok(login.includes('role="alert"'), 'negative: login authentication errors must be announced accessibly')
+assert.ok(signup.includes('role="alert"'), 'negative: signup failures must be announced accessibly')
+assert.ok(forgot.includes('role="alert"') && forgot.includes('role="status"'), 'negative: password-reset request must distinguish failure and neutral success state')
+assert.ok(reset.includes('role="alert"'), 'negative: password update failures must be announced accessibly')
+assert.ok(externalApproval.includes('This signed approval link was issued to a different DataNexus user.'), 'negative: identity-mismatched approval links must fail closed')
+assert.ok(externalApproval.includes('<ExternalApprovalDecisionForm'), 'negative: valid signed approval links must retain the governed decision form')
+
 console.log('Wave 13 authorization, negative and failure-case contract passed.')

@@ -30,4 +30,20 @@ assert.ok(roleLanding.includes('canAccessWorkspaceHref'), 'Persona home must ret
 assert.ok(roleLanding.includes('aria-label="Persona workspace"'), 'Persona home must retain its purpose-built persona navigation')
 assert.ok(!roleLanding.includes('<GlobalUtilityBar'), 'Persona home is an intentional custom-shell exception and must not receive a duplicate global shell')
 
+const boundaryScreens=[
+  'app/login/page.tsx',
+  'app/signup/page.tsx',
+  'app/forgot-password/page.tsx',
+  'app/reset-password/page.tsx',
+  'app/home/unavailable/page.tsx',
+  'app/access-denied/page.tsx',
+  'app/approvals/external/[token]/page.tsx',
+]
+for(const path of boundaryScreens){
+  const source=fs.readFileSync(path,'utf8')
+  assert.ok(source.includes('id="main-content"'), `Boundary screen ${path} must expose the shared skip target`)
+  assert.ok(source.includes('tabIndex={-1}'), `Boundary screen ${path} main target must be focusable`)
+  assert.ok(!source.includes('<GlobalUtilityBar'), `Boundary screen ${path} must not receive the authenticated Product Shell`)
+}
+
 console.log('Wave 13 final residual Product Shell and persona-home exception contract passed.')
