@@ -7,7 +7,9 @@
     "DATANEXUS_ENV": "canary",
     "DATANEXUS_PLATFORM": "cloudflare",
     "DATANEXUS_WORKER_EXECUTION_ENABLED": "false",
-    "DATANEXUS_WORKER_CANARY_JOB_TYPE": "OBSERVABILITY"
+    "DATANEXUS_WORKER_CANARY_JOB_TYPE": "OBSERVABILITY",
+    "NEXT_PUBLIC_SUPABASE_URL": "https://tvjnavjxuehpesxcfvrx.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_ieDM8jckP5nlIORLW7gnVA_ZSHfwFZq"
   },
   "containers": [
     {
