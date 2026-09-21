@@ -41,4 +41,7 @@ assert.ok(page.includes("'IN_PROGRESS'"), 'Governance Run must expose in-progres
 assert.ok(page.includes("'NOT_STARTED'"), 'Governance Run must expose not-started stage state')
 assert.ok(page.includes("'OPTIONAL'"), 'Governance Run must distinguish optional learning from required lifecycle stages')
 assert.ok(page.includes("String(version.id) === String(latestCompletedRun.dataset_version_id)"), 'Governance Run must correlate Dataset 360 context from the actual latest completed profile run')
+assert.ok(page.includes("String(outcome.verification_profile_run_id ?? '') === String(latestCompletedRun.id)"), 'Governance Run must preserve remediation outcome context when the latest profile is a verification run')
+assert.ok(page.includes('outcomeIssueIds.has(String(issue.id))'), 'Governance Run must use persisted remediation issue identities after verification')
+assert.ok(page.includes("workflows.find(workflow => String(workflow.id) === String(runLinkedOutcome.workflow_instance_id))"), 'verification runs must resolve back to the originating governance workflow')
 console.log('Governance Run UX, route and failure-state contract passed.')
