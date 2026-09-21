@@ -13,6 +13,8 @@ assert.ok(onboarding.includes('setCreatedSourceProjectId(null)'), 'adversarial: 
 assert.ok(dataset360.includes('.limit(6)'), 'adversarial: Dataset 360 history must remain bounded')
 assert.ok(!/\.insert\s*\(|\.update\s*\(|\.delete\s*\(|\.upsert\s*\(/.test(governanceRun), 'adversarial: Governance Run observability must remain read-only')
 assert.ok(governanceRun.includes("const executionHref = canMonitoring && latestExecution"), 'adversarial: monitoring navigation must fail closed on workspace access')
+assert.ok(governanceRun.includes("agentRuns.find(run => String(run.dataset_version_id ?? '') === String(latestVersion.id)) ?? null"), 'adversarial: current dataset execution must never fall back to a different dataset run')
+assert.ok(governanceRun.includes("=== 'INVALID'"), 'adversarial: malformed remediation due dates must surface as attention')
 assert.ok(governanceRun.includes("const remediationRequired = highFindings.length > 0 || openIssues.length > 0"), 'adversarial: unresolved issues must keep remediation active')
 assert.equal(classifyRemediationSla({ status: 'OPEN', dueAt: 'invalid', nowMs: 0 }), 'INVALID', 'adversarial: malformed due date must not be treated as on-time')
 assert.equal(classifyRemediationSla({ status: 'RESOLVED', dueAt: '1970-01-01T00:00:00Z', nowMs: Date.now() }), 'RESOLVED', 'adversarial: terminal issues must not remain overdue')
