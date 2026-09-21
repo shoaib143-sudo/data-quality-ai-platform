@@ -104,6 +104,17 @@ export default async function InfrastructurePage() {
         </div>
       </section>
 
+      <section aria-labelledby="cloudflare-worker-canary-heading" className="rounded-3xl border bg-white p-6 shadow-sm">
+        <h2 id="cloudflare-worker-canary-heading" className="text-xl font-black">Cloudflare worker canary</h2>
+        <p className="mt-1 text-sm text-slate-500">Execution remains narrowly scoped and reversible while Supabase retains scheduler and transactional authority.</p>
+        <div className="mt-5 grid gap-4 md:grid-cols-4">
+          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Allowed workload</p><p className="mt-2 text-lg font-black">OBSERVABILITY</p></article>
+          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Claim limit</p><p className="mt-2 text-lg font-black">1 job / cycle</p></article>
+          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Scheduler authority</p><p className="mt-2 text-lg font-black">Supabase</p></article>
+          <article className="rounded-2xl border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Kill switch</p><p className="mt-2 text-lg font-black">Execution flag</p><p className="mt-1 text-xs text-slate-500">Default off; owner-approved activation only.</p></article>
+        </div>
+      </section>
+
       <section aria-labelledby="architecture-boundary-heading" className="rounded-3xl border bg-white p-6 shadow-sm">
         <h2 id="architecture-boundary-heading" className="text-xl font-black">Architecture boundary</h2>
         <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
