@@ -21,6 +21,9 @@ assert.ok(ingest.includes('canDiscovery ? <Link href="/catalog/discovery"'), 'Li
 assert.ok(domain.includes("canAccessWorkspace(landing.persona, 'agents'"), 'Domain Monitoring Agent CTAs must derive from workspace policy')
 assert.ok(domain.includes('canAgents ? <Link href="/agents"'), 'Domain Monitoring must hide run-feature CTA when Agents is inaccessible')
 assert.ok(domain.includes('canAgents && latestRun ? <Link href={`/agents/runs/'), 'Domain Monitoring latest output must be access gated')
+assert.ok(domain.includes('return item.run && canAgents'), 'Domain Monitoring topology result links must be access gated')
+assert.ok(domain.includes('return run && canAgents ? <Link key={agent.id}'), 'Domain Monitoring feature result links must be access gated')
+assert.ok(domain.includes('canAgents && latestRun ? <Link href={`/agents/runs/'), 'Domain Monitoring execution-context link must be access gated')
 
 assert.ok(incidents.includes("canAccessWorkspace(landing.persona,'lineage'"), 'Observability Incidents Impact CTA must derive from workspace policy')
 assert.ok(incidents.includes("canAccessWorkspace(landing.persona,'workflows'"), 'Observability Incidents workflow CTA must derive from workspace policy')
