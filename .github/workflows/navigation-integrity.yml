@@ -50,6 +50,10 @@ on:
       - 'scripts/test-ux-wave10-local-navigation-policy.mjs'
       - 'scripts/test-ux-wave10-cta-inventory.mjs'
       - 'scripts/audit-ux-wave10-adversarial.mjs'
+      - 'scripts/test-ux-wave11-shell-admin-control-plane.mjs'
+      - 'scripts/test-ux-wave11-local-navigation-policy.mjs'
+      - 'scripts/test-ux-wave11-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave11-adversarial.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -118,6 +122,10 @@ on:
       - 'scripts/test-ux-wave10-local-navigation-policy.mjs'
       - 'scripts/test-ux-wave10-cta-inventory.mjs'
       - 'scripts/audit-ux-wave10-adversarial.mjs'
+      - 'scripts/test-ux-wave11-shell-admin-control-plane.mjs'
+      - 'scripts/test-ux-wave11-local-navigation-policy.mjs'
+      - 'scripts/test-ux-wave11-cta-inventory.mjs'
+      - 'scripts/audit-ux-wave11-adversarial.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -247,6 +255,14 @@ jobs:
         run: node scripts/test-ux-wave10-cta-inventory.mjs
       - name: Run independent Wave 10 adversarial audit
         run: node scripts/audit-ux-wave10-adversarial.mjs
+      - name: Test Wave 11 admin control-plane Product Shell surfaces
+        run: node scripts/test-ux-wave11-shell-admin-control-plane.mjs
+      - name: Test Wave 11 local navigation policy
+        run: node scripts/test-ux-wave11-local-navigation-policy.mjs
+      - name: Test Wave 11 CTA inventory and destinations
+        run: node scripts/test-ux-wave11-cta-inventory.mjs
+      - name: Run independent Wave 11 adversarial audit
+        run: node scripts/audit-ux-wave11-adversarial.mjs
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with:
