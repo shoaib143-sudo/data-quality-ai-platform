@@ -1,0 +1,66 @@
+name: UX Wave 13 Branch Validation
+
+on:
+  push:
+    branches:
+      - feat/ux-closure-wave13-20260921
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Revalidate Product Shell contracts
+        run: |
+          node scripts/test-product-shell-ux.mjs
+          node scripts/test-ux-closure-cta-inventory.mjs
+          node --experimental-strip-types scripts/audit-ux-closure-wave-adversarial.mjs
+      - name: Revalidate Waves 9-12
+        run: |
+          node scripts/test-ux-wave9-shell-residual-governance.mjs
+          node scripts/test-ux-wave9-local-navigation-policy.mjs
+          node scripts/test-ux-wave9-cta-inventory.mjs
+          node scripts/audit-ux-wave9-adversarial.mjs
+          node scripts/test-ux-wave10-shell-operational-surfaces.mjs
+          node scripts/test-ux-wave10-local-navigation-policy.mjs
+          node scripts/test-ux-wave10-cta-inventory.mjs
+          node scripts/audit-ux-wave10-adversarial.mjs
+          node scripts/test-ux-wave11-shell-admin-control-plane.mjs
+          node scripts/test-ux-wave11-local-navigation-policy.mjs
+          node scripts/test-ux-wave11-cta-inventory.mjs
+          node scripts/audit-ux-wave11-adversarial.mjs
+          node scripts/test-ux-wave12-shell-ai-command-center.mjs
+          node scripts/test-ux-wave12-local-navigation-policy.mjs
+          node scripts/test-ux-wave12-cta-inventory.mjs
+          node scripts/audit-ux-wave12-adversarial.mjs
+      - name: Validate Wave 13
+        run: |
+          node scripts/test-ux-wave13-shell-residual-surfaces.mjs
+          node scripts/test-ux-wave13-local-navigation-policy.mjs
+          node scripts/test-ux-wave13-cta-inventory.mjs
+          node scripts/test-ux-wave13-negative-failure-cases.mjs
+          node scripts/audit-ux-wave13-adversarial.mjs
+          node scripts/test-ux-shell-residual-inventory.mjs
+          node scripts/test-skip-link-bypass-contract.mjs
+          node --test tests/ux-wave13-security-contract.test.mjs
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Revalidate profiling lifecycle
+        run: node scripts/verify-profiling-lifecycle-contracts.mjs
+      - name: Revalidate remediation lifecycle
+        run: node scripts/verify-profiling-remediation.mjs
+      - name: TypeScript exact-head validation
+        run: pnpm exec tsc --noEmit
+      - name: Production build exact-head validation
+        run: pnpm run build
