@@ -29,7 +29,7 @@ export async function loadGovernedIncident(input: { projectId: string; issueId: 
   const admin = createAdminClient()
 
   const { data: issue, error: issueError } = await admin.schema('governance').from('issues')
-    .select('id,project_id,dataset_id,dataset_version_id,profile_run_id,finding_id,quality_rule_run_id,control_finding_id,title,description,severity,status,owner_user_id,resolution_summary,resolution_evidence,created_at,updated_at,resolved_at')
+    .select('id,project_id,dataset_id,dataset_version_id,profile_run_id,finding_id,quality_rule_run_id,control_finding_id,title,description,severity,status,owner_user_id,due_at,resolution_summary,resolution_evidence,created_at,updated_at,resolved_at')
     .eq('id', input.issueId)
     .eq('project_id', input.projectId)
     .maybeSingle()
@@ -203,6 +203,7 @@ export async function loadGovernedIncident(input: { projectId: string; issueId: 
       severity: issue.severity,
       issueStatus: issue.status,
       ownerUserId: issue.owner_user_id,
+      dueAt: issue.due_at,
       lifecycleState,
       verificationStatus,
       openedAt: issue.created_at,
