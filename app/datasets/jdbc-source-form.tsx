@@ -37,7 +37,7 @@ function capabilityLabel(value: unknown) {
   return String(value).replaceAll('_', ' ').toLowerCase()
 }
 
-export function JdbcSourceForm({ projects, organizations, initialSource }: { projects: JdbcProjectOption[]; organizations: JdbcOrganizationOption[]; initialSource?: SavedDatabricksConnection }) {
+export function JdbcSourceForm({ projects, organizations, initialSource, canOpenDiscovery = false }: { projects: JdbcProjectOption[]; organizations: JdbcOrganizationOption[]; initialSource?: SavedDatabricksConnection; canOpenDiscovery?: boolean }) {
   const [availableProjects, setAvailableProjects] = useState(projects)
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [organizationId, setOrganizationId] = useState(organizations[0]?.id ?? '')
@@ -315,7 +315,7 @@ export function JdbcSourceForm({ projects, organizations, initialSource }: { pro
       {hierarchy && <NativeHierarchyPicker hierarchy={hierarchy} mode={selectionMode} selectedNodeIds={selectedNodeIds} disabled={busy} onModeChange={setSelectionMode} onSelectionChange={setSelectedNodeIds} />}
       {columns.length > 0 && <div className="md:col-span-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 text-xs text-slate-600"><strong className="text-slate-800">Validated source:</strong> {columns.length} profile fields{typeof rowCount === 'number' ? ` · ${rowCount} rows` : ''}</div>}
       <div className="md:col-span-2 flex flex-col gap-3 sm:flex-row"><button type="button" onClick={discover} disabled={busy || !projectId} className="flex-1 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 disabled:opacity-50">{busy ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Working…</span> : isCsv ? 'Validate CSV' : connectionKind === 'file' ? 'Scan file & metadata' : 'Connect & discover native hierarchy'}</button><button type="button" onClick={register} disabled={busy || !projectId || !name.trim() || (!isFile && !hierarchy)} className="flex-1 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{isFile ? 'Save & make ready' : 'Save connection & governed scope'}</button></div>
-      {!isFile && <Link href="/catalog/discovery" className="md:col-span-2 text-sm font-semibold text-blue-700">Open Catalog Discovery</Link>}
+      {!isFile && canOpenDiscovery ? <Link href="/catalog/discovery" className="md:col-span-2 text-sm font-semibold text-blue-700">Open Catalog Discovery</Link> : null}
       {status && <div className={`md:col-span-2 rounded-lg px-3 py-2.5 text-xs ${error ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`} role="status"><div className="flex items-start gap-2">{error ? <CircleAlert className="mt-0.5 h-4 w-4" /> : <CheckCircle2 className="mt-0.5 h-4 w-4" />}<span>{status}</span></div>{!error && createdSourceProjectId ? <div className="mt-3 flex flex-wrap gap-2"><Link href="#register-dataset" className="rounded-lg border border-emerald-200 bg-white px-3 py-2 font-semibold text-emerald-800">Continue to dataset registration</Link><Link href={canonicalRoutes.governanceRun(createdSourceProjectId)} className="rounded-lg border border-violet-200 bg-white px-3 py-2 font-semibold text-violet-800">Open Governance Run</Link></div> : null}</div>}
     </div>
   </section>
