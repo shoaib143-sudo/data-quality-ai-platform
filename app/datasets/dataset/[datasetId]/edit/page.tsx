@@ -3,27 +3,32 @@ import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { EditDatasetForm } from './edit-dataset-form'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
+import { authorizeDataset } from '@/lib/auth/authorize'
 
 export default async function EditDatasetPage({ params }: { params: Promise<{ datasetId: string }> }) {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canDatasets = canAccessWorkspaceHref(landing.persona, '/datasets', landing.organizationRole)
   const { datasetId } = await params
   const supabase = await createClient()
 
+  try { await authorizeDataset(user.id, datasetId, 'catalog.update') } catch { notFound() }
   const { data: dataset } = await supabase.schema('catalog').from('datasets').select('id, project_id, data_source_id, name, description, source_identifier, business_domain, status').eq('id', datasetId).maybeSingle()
   if (!dataset) notFound()
 
   const { data: project } = await supabase.schema('app').from('projects').select('id, name, organization_id').eq('id', dataset.project_id).maybeSingle()
   if (!project) notFound()
 
-  const { data: membership } = await supabase.schema('app').from('organization_members').select('role').eq('organization_id', project.organization_id).eq('user_id', user.id).maybeSingle()
-  if (!membership || !['OWNER', 'ADMIN', 'MEMBER'].includes(String(membership.role))) notFound()
-
   const { data: sources } = await supabase.schema('catalog').from('data_sources').select('id, name, source_type, status').eq('project_id', dataset.project_id).in('status', ['ACTIVE', 'CONFIGURED']).order('name')
 
-  return <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6">
     <div className="mx-auto max-w-4xl">
-      <div className="mb-6">
-        <Link href="/datasets" className="text-sm font-semibold text-blue-600 hover:text-blue-700">← Back to datasets</Link>
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Edit Dataset" contextLabel={dataset.name} homeHref="/home" />
+      <div className="mb-6 mt-5">
+        {canDatasets ? <Link href="/datasets" className="text-sm font-semibold text-blue-600 hover:text-blue-700">← Back to datasets</Link> : null}
         <h1 className="mt-3 text-3xl font-bold">Edit dataset</h1>
         <p className="mt-2 text-sm text-slate-600">Update business context, connection binding, and source object. The updated source is validated before it is saved.</p>
       </div>
