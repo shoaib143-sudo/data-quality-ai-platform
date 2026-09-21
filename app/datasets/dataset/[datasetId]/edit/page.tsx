@@ -3,9 +3,14 @@ import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { EditDatasetForm } from './edit-dataset-form'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 export default async function EditDatasetPage({ params }: { params: Promise<{ datasetId: string }> }) {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canDatasets = canAccessWorkspaceHref(landing.persona, '/datasets', landing.organizationRole)
   const { datasetId } = await params
   const supabase = await createClient()
 
@@ -20,10 +25,11 @@ export default async function EditDatasetPage({ params }: { params: Promise<{ da
 
   const { data: sources } = await supabase.schema('catalog').from('data_sources').select('id, name, source_type, status').eq('project_id', dataset.project_id).in('status', ['ACTIVE', 'CONFIGURED']).order('name')
 
-  return <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6">
     <div className="mx-auto max-w-4xl">
-      <div className="mb-6">
-        <Link href="/datasets" className="text-sm font-semibold text-blue-600 hover:text-blue-700">← Back to datasets</Link>
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Edit Dataset" contextLabel="Governed dataset configuration" homeHref="/home" />
+      <div className="mb-6 mt-4">
+        {canDatasets ? <Link href="/datasets" className="text-sm font-semibold text-blue-600 hover:text-blue-700">← Back to datasets</Link> : null}
         <h1 className="mt-3 text-3xl font-bold">Edit dataset</h1>
         <p className="mt-2 text-sm text-slate-600">Update business context, connection binding, and source object. The updated source is validated before it is saved.</p>
       </div>
