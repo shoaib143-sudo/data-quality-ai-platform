@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
@@ -202,8 +203,8 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
             <p className="mt-2 text-sm text-slate-400">Run {latestRun.id} · {latestRun.status}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <a href={canonicalRoutes.governedDataset(String(datasetContext.data.id))} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-white/[0.04]">Dataset 360</a>
-            <a href={canonicalRoutes.governanceRun(projectId)} className="rounded-xl border border-violet-300/20 px-3 py-2 text-xs font-bold text-violet-200 hover:bg-white/[0.04]">Governance Run</a>
+            <Link href={canonicalRoutes.governedDataset(String(datasetContext.data.id))} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-white/[0.04]">Dataset 360</Link>
+            <Link href={canonicalRoutes.governanceRun(projectId)} className="rounded-xl border border-violet-300/20 px-3 py-2 text-xs font-bold text-violet-200 hover:bg-white/[0.04]">Governance Run</Link>
           </div>
         </div>
         <ProfilingGovernancePanel
