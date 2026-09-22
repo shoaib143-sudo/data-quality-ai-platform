@@ -23,6 +23,8 @@ jobs:
         run: node scripts/verify-lineage-authority-integrity.mjs
       - name: Verify PostgreSQL direct field lineage
         run: node --experimental-strip-types --test scripts/test-postgres-view-column-lineage.mjs
+      - name: Verify lineage all-probe failure semantics
+        run: node --test tests/lineage-enrichment-fail-closed.test.mjs
       - name: Verify PostgreSQL connector authorization boundary
         run: node --test tests/postgres-connector-service-role-boundary.test.mjs
       - name: Verify cross-dataset relationship authority boundaries
