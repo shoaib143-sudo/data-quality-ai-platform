@@ -604,12 +604,20 @@ jobs:
           SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
         run: |
           set -euo pipefail
-          test -n "$CLOUDFLARE_API_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-          test -n "$DATANEXUS_WORKER_SECRET"
-          test -n "$SUPABASE_SERVICE_ROLE_KEY"
-          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
-          printf '%s' "$DATANEXUS_CLOUDFLARE_WORKER_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/api/jobs/worker$'
+          missing=()
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || missing+=("CLOUDFLARE_API_TOKEN")
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || missing+=("CLOUDFLARE_ACCOUNT_ID")
+          [ -n "${DATANEXUS_WORKER_SECRET:-}" ] || missing+=("DATANEXUS_WORKER_SECRET")
+          [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] || missing+=("SUPABASE_SERVICE_ROLE_KEY")
+          [ -n "${DATANEXUS_CLOUDFLARE_WORKER_URL:-}" ] || missing+=("DATANEXUS_CLOUDFLARE_WORKER_URL")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing protected cloudflare-worker environment input: %s\n' "${missing[@]}"
+            exit 1
+          fi
+          printf '%s' "$DATANEXUS_CLOUDFLARE_WORKER_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/api/jobs/worker$' || {
+            echo "::error::DATANEXUS_CLOUDFLARE_WORKER_URL must be an HTTPS /api/jobs/worker endpoint"
+            exit 1
+          }
           curl --fail-with-body --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
