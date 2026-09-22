@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import { resolve } from 'node:path'
 
-const dockerfile = fs.readFileSync('services/jdbc-bridge/Dockerfile.vercel', 'utf8')
-const config = JSON.parse(fs.readFileSync('services/jdbc-bridge/vercel.json', 'utf8'))
-const application = fs.readFileSync('services/jdbc-bridge/src/main/resources/application.properties', 'utf8')
-const controller = fs.readFileSync('services/jdbc-bridge/src/main/java/com/datanexus/jdbcbridge/JdbcBridgeController.java', 'utf8')
-const workflow = fs.readFileSync('.github/workflows/jdbc-bridge.yml', 'utf8')
-const docs = fs.readFileSync('docs/vercel-jdbc-bridge-poc.md', 'utf8')
+const repositoryRoot = resolve(import.meta.dirname, '..')
+const read = (path) => fs.readFileSync(resolve(repositoryRoot, path), 'utf8')
+
+const dockerfile = read('services/jdbc-bridge/Dockerfile.vercel')
+const config = JSON.parse(read('services/jdbc-bridge/vercel.json'))
+const application = read('services/jdbc-bridge/src/main/resources/application.properties')
+const controller = read('services/jdbc-bridge/src/main/java/com/datanexus/jdbcbridge/JdbcBridgeController.java')
+const workflow = read('.github/workflows/jdbc-bridge.yml')
+const docs = read('docs/vercel-jdbc-bridge-poc.md')
 
 assert.equal(config.fluid, true, 'Vercel JDBC PoC must use Fluid compute')
 assert.equal(config.git?.deploymentEnabled, false, 'Vercel JDBC PoC must not enable automatic Git deployments')
