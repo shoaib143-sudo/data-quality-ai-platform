@@ -148,7 +148,6 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: e2e-service-runner-not-used
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       GOVERNANCE_E2E_PROJECT_ID: 479813aa-72a4-4b12-b72a-74da8d2419ce
       GOVERNANCE_E2E_EVIDENCE_PATH: ${{ runner.temp }}/governance-orchestrator-off-live.json
     steps:
@@ -163,6 +162,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Execute live OFF-mode Governance Orchestrator baseline
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node --experimental-strip-types --experimental-loader ./scripts/node-ts-alias-loader.mjs scripts/run-governance-orchestrator-off-live.mjs
       - name: Upload OFF-mode baseline evidence
         if: always()
