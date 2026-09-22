@@ -38,3 +38,8 @@ test('live mutation is scoped by changed lineage files or explicit dispatch', ()
   assert.match(workflow, /if \[ \"\$EVENT_NAME\" = \"workflow_dispatch\" \]; then/)
   assert.match(workflow, /run_live=true/)
 })
+
+
+test('connector file changes trigger the live lineage proof scope', () => {
+  assert.match(workflow, /supabase\/functions\/dgp-postgres-connector\/\.\*/)
+})
