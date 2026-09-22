@@ -1,0 +1,86 @@
+name: Real Field Lineage Revalidation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/functions/_shared/postgres-view-column-lineage.ts'
+      - 'supabase/functions/dgp-postgres-connector/**'
+      - 'lib/catalog/lineage-enrichment.ts'
+      - 'lib/connectors/jdbc.ts'
+      - 'scripts/run-real-field-lineage-revalidation.mjs'
+      - 'scripts/test-postgres-view-column-lineage.mjs'
+      - 'tests/real-field-lineage-live-revalidation-contract.test.mjs'
+      - '.github/workflows/real-field-lineage-revalidation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/_shared/postgres-view-column-lineage.ts'
+      - 'supabase/functions/dgp-postgres-connector/**'
+      - 'lib/catalog/lineage-enrichment.ts'
+      - 'lib/connectors/jdbc.ts'
+      - 'scripts/run-real-field-lineage-revalidation.mjs'
+      - 'scripts/test-postgres-view-column-lineage.mjs'
+      - 'tests/real-field-lineage-live-revalidation-contract.test.mjs'
+      - '.github/workflows/real-field-lineage-revalidation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify real PostgreSQL field-lineage parser
+        run: node --experimental-strip-types --test scripts/test-postgres-view-column-lineage.mjs
+      - name: Verify live revalidation workflow boundary
+        run: node --test tests/real-field-lineage-live-revalidation-contract.test.mjs
+      - name: Syntax-check live evidence runner
+        run: node --check scripts/run-real-field-lineage-revalidation.mjs
+
+  live-development:
+    if: github.event_name != 'pull_request'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      LINEAGE_PROJECT_ID: 479813aa-72a4-4b12-b72a-74da8d2419ce
+      LINEAGE_SOURCE_ID: b5fe07cb-9f58-4e2c-8039-1fb7e5de78b1
+      LINEAGE_TARGET_SCHEMA: governance
+      LINEAGE_TARGET_VIEW: glossary_reference_concepts
+      LINEAGE_EVIDENCE_PATH: ${{ runner.temp }}/real-field-lineage-revalidation.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Execute governed real PostgreSQL field-lineage revalidation
+        run: node scripts/run-real-field-lineage-revalidation.mjs
+      - name: Upload field-lineage evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-field-lineage-${{ github.sha }}
+          path: ${{ runner.temp }}/real-field-lineage-revalidation.json
+          retention-days: 90
+          if-no-files-found: error
