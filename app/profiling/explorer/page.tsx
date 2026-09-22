@@ -61,7 +61,7 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
   const latestRun = latestRunResult.data
 
   if (!latestRun) {
-    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-5 text-slate-100"><div className="mx-auto max-w-7xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling Explorer" contextLabel="No profiling run selected" homeHref="/home" /><div className="mt-5 rounded-2xl border border-white/10 bg-[#0a1d33] p-8"><h1 className="text-2xl font-semibold">Profiling Explorer</h1><p className="mt-2 text-sm text-slate-400">No profiling runs are available.</p></div></div></main>
+    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-5 text-slate-100"><div className="mx-auto max-w-7xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling Explorer" contextLabel="No profiling run selected" homeHref="/home" /><div className="mt-5 rounded-2xl border border-white/10 bg-[#102036] p-8"><h1 className="text-2xl font-semibold">Profiling Explorer</h1><p className="mt-2 text-sm text-slate-400">No profiling runs are available.</p></div></div></main>
   }
 
   const versionContext = await supabase.schema('catalog').from('dataset_versions').select('dataset_id').eq('id', latestRun.dataset_version_id).maybeSingle()
@@ -197,7 +197,7 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
     <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-5 text-slate-100">
       <div className="mx-auto max-w-7xl space-y-6">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling Explorer" contextLabel={datasetContext.data.name ?? 'Profiling evidence'} homeHref="/home" />
-        <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-white/10 bg-[#0a1d33] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-white/10 bg-[#102036] p-5">
           <div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
               <Link href="/profiling" className="text-cyan-300 hover:text-cyan-200">Profiling</Link>
