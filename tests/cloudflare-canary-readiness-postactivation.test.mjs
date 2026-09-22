@@ -45,3 +45,13 @@ test('post-activation SQL requires enabled runtime, Supabase scheduler authority
   assert.match(postActivationSql, /cloudflare-observability-canary:%/)
   assert.match(postActivationSql, /status','PASS'/)
 })
+
+
+test('supports opaque Supabase secret keys without bearer misuse', () => {
+  const unconditionalBearer = workflow.match(/^\s+-H "Authorization: Bearer \$SUPABASE_SERVICE_ROLE_KEY" \\/gm) ?? []
+  assert.equal(unconditionalBearer.length, 0)
+  const authArrays = workflow.match(/SUPABASE_AUTH_ARGS=\(-H "apikey: \$SUPABASE_SERVICE_ROLE_KEY"\)/g) ?? []
+  assert.ok(authArrays.length >= 7)
+  assert.match(workflow, /if \[\[ "\$SUPABASE_SERVICE_ROLE_KEY" == \*\.\*\.\* \]\]; then/)
+  assert.match(workflow, /SUPABASE_AUTH_ARGS\+=\(-H "Authorization: Bearer \$SUPABASE_SERVICE_ROLE_KEY"\)/)
+})
