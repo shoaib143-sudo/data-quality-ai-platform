@@ -164,7 +164,7 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div className="flex items-start gap-4">
               <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 text-white"><BrainCircuit className="h-6 w-6" /></span>
-              <div><p className="text-xs font-black uppercase tracking-[.14em] text-violet-300">Contextual copilot</p><h1 className="mt-1 text-3xl font-black tracking-tight text-white">Ask DataNexus</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Ask about a governed dataset in context. Answers are grounded in persisted profiling, governance, risk and recommendation evidence. Suggestions remain advisory until the applicable approval is recorded.</p></div>
+              <div><p className="text-xs font-black uppercase tracking-[.14em] text-violet-300">Contextual copilot</p><h1 className="mt-1 text-3xl font-black tracking-tight text-white">Ask DataNexus</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Ask about a governed dataset in context. Answers are grounded in persisted profiling, governance, risk and recommendation evidence. Suggestions remain advisory until the applicable governance approval is recorded.</p></div>
             </div>
             {selectedDataset ? <Link href={`/catalog/dataset/${encodeURIComponent(selectedDataset.id)}`} className={`rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-cyan-200 hover:border-cyan-400/30 ${focus}`}>Open Dataset 360</Link> : null}
           </div>
