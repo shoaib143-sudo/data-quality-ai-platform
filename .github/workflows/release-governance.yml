@@ -701,6 +701,9 @@ jobs:
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           printf '%s' "$DATANEXUS_WORKER_SECRET" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put DATANEXUS_WORKER_SECRET --config infra/cloudflare/worker-runtime/wrangler.jsonc
           printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put SUPABASE_SERVICE_ROLE_KEY --config infra/cloudflare/worker-runtime/wrangler.jsonc
+          WORKER_ENDPOINT="${DATANEXUS_CLOUDFLARE_WORKER_URL%/}/api/jobs/worker"
+          WORKER_ENDPOINT="${DATANEXUS_CLOUDFLARE_WORKER_URL%/}/api/jobs/worker"
+          WORKER_ENDPOINT="${DATANEXUS_CLOUDFLARE_WORKER_URL%/}/api/jobs/worker"
           curl --fail-with-body --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
