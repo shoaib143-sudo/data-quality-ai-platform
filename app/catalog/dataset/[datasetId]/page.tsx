@@ -171,7 +171,7 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
   const connectedContextSection=<GovernedSection eyebrow="Data 360 context" title="Connected governance context">
     <p className="mb-4 max-w-4xl text-sm leading-6 text-slate-500">One dataset view across dependency, control, operational and automation evidence. Counts below are persisted records for this dataset and never inferred from visual proximity.</p>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <GovernedEvidenceTile href={canLineage?lineageHref:undefined} label="Lineage" value={`${lineageAssets.length} assets`} detail={`${lineageEdgeCount} edges · ${lineageMappingCount} field mappings`}/>
+      <GovernedEvidenceTile href={canLineage?lineageHref:undefined} label="Lineage footprint" value={`${lineageAssets.length} assets`} detail={`${lineageEdgeCount} relationships · ${lineageMappingCount} field mappings · open technical view`}/>
       <GovernedEvidenceTile href={canContracts?'/contracts':undefined} label="Data contracts" value={String(activeContracts.length)} detail={`${dataContracts.length} linked contract${dataContracts.length===1?'':'s'}`}/>
       <GovernedEvidenceTile href={canObservability?'/observability':undefined} label="Open observability alerts" value={String(openAlerts.length)} detail={`${observabilityAlerts.length} recent alert${observabilityAlerts.length===1?'':'s'}`}/>
       <GovernedEvidenceTile href={canAgents?'/agents':undefined} label="Agent activity" value={String(agentRuns.length)} detail={`${successfulAgentRuns.length} successful recent run${successfulAgentRuns.length===1?'':'s'}`}/>
@@ -184,17 +184,53 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
     </div>
   </GovernedSection>
 
-    const sectionRegistry:Record<DatasetSectionKey,ReactNode>={quality:qualitySection,issues:issuesSection,findings:findingsSection,governance:governanceSection}
+    const sectionRegistry:Record<DatasetSectionKey,ReactNode>={quality:<div id="quality" className="scroll-mt-28">{qualitySection}</div>,issues:<div id="issues" className="scroll-mt-28">{issuesSection}</div>,findings:<div id="findings" className="scroll-mt-28">{findingsSection}</div>,governance:<div id="responsibilities" className="scroll-mt-28">{governanceSection}</div>}
 
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Dataset 360" contextLabel={dataset.name} homeHref="/home" />
     <nav className={`${surface} mt-4 flex items-center justify-between gap-3 overflow-x-auto px-5 py-3`}><Link href="/catalog" className={`inline-flex shrink-0 items-center gap-2 text-sm font-bold text-slate-300 hover:text-white ${focus}`}><ArrowLeft className="h-4 w-4"/>Data Catalog</Link><div className="flex shrink-0 gap-2">{canProfiling&&run?<Link href={profilingHref} className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Profiling</Link>:null}{canLineage?<Link href={lineageHref} className={`rounded-xl px-3 py-2 text-sm font-semibold text-violet-300 hover:bg-white/[0.05] ${focus}`}>Lineage</Link>:null}{canContracts?<Link href="/contracts" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Contracts</Link>:null}{canObservability?<Link href="/observability" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Observability</Link>:null}{canAgents?<Link href="/agents" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Agents</Link>:null}{canIssues?<Link href="/issues" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Issues</Link>:null}{canJourneys?<Link href={canonicalRoutes.governanceRun(dataset.project_id)} className={`rounded-xl px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[0.05] ${focus}`}>Governance Run</Link>:null}</div></nav>
 
-    <header className={`${surface} mt-5 p-6 sm:p-7`}><div className="flex flex-wrap items-start justify-between gap-5"><div className="max-w-4xl"><div className="flex flex-wrap items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-400/10 text-blue-300"><Database className="h-5 w-5"/></span><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">{presentation.lensLabel}</p><h1 className="mt-1 text-3xl font-black text-white">{dataset.name}</h1></div></div><p className="mt-4 text-base font-bold text-slate-200">{presentation.primaryQuestion}</p><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{catalog?.business_description||dataset.description||'No governed business description is available yet.'}</p><div className="mt-4 flex flex-wrap gap-2 text-xs"><span className="rounded-lg bg-blue-400/10 px-2.5 py-1.5 font-bold text-blue-300">{catalog?.certification_status||'UNCERTIFIED'}</span><span className="rounded-lg bg-amber-400/10 px-2.5 py-1.5 font-bold text-amber-300">{catalog?.criticality||'UNSET'} criticality</span><span className="rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-slate-400">{dataset.business_domain||'Unassigned domain'}</span><span className="rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-slate-400">{dataset.status}</span></div><p className="mt-4 text-[11px] text-slate-600">Persona-aware presentation only. Governed evidence, policy and authorization are unchanged.</p></div><Link href={`/ai-insights?projectId=${encodeURIComponent(dataset.project_id)}&datasetId=${encodeURIComponent(dataset.id)}&prompt=${encodeURIComponent(`Explain the current trust, risks and governed evidence for ${dataset.name} for a ${presentation.lensLabel.toLowerCase()}`)}`} className={`rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-3 text-sm font-bold text-white ${focus}`}>Ask DataNexus AI <ArrowRight className="ml-1 inline h-4 w-4"/></Link></div></header>
+    <header id="summary" className={`${surface} mt-5 scroll-mt-28 p-6 sm:p-7`}>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div>
+          <div className="flex flex-wrap items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-400/10 text-blue-300"><Database className="h-5 w-5"/></span><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">{presentation.lensLabel}</p><h1 className="mt-1 text-3xl font-black text-white">{dataset.name}</h1></div></div>
+          <p className="mt-4 text-base font-bold text-slate-200">{presentation.primaryQuestion}</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{catalog?.business_description||dataset.description||'No governed business description is available yet.'}</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link href={`/ai-insights?projectId=${encodeURIComponent(dataset.project_id)}&datasetId=${encodeURIComponent(dataset.id)}&prompt=${encodeURIComponent(`Explain the current trust, risks and governed evidence for ${dataset.name} for a ${presentation.lensLabel.toLowerCase()}`)}`} className={`rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-3 text-sm font-bold text-white ${focus}`}>Ask DataNexus AI <ArrowRight className="ml-1 inline h-4 w-4"/></Link>
+            {canLineage?<Link href={lineageHref} className={`rounded-xl border border-violet-400/20 bg-violet-400/[0.06] px-4 py-3 text-sm font-bold text-violet-200 hover:bg-violet-400/10 ${focus}`}>Explore technical lineage <GitBranch className="ml-1 inline h-4 w-4"/></Link>:null}
+          </div>
+          <p className="mt-4 text-[11px] text-slate-600">Persona-aware presentation only. Governed evidence, policy and authorization are unchanged.</p>
+        </div>
+        <aside aria-label="Dataset at a glance" className={`${inset} p-4`}>
+          <p className="text-xs font-black uppercase tracking-[.14em] text-slate-500">At a glance</p>
+          <dl className="mt-3 space-y-3 text-xs">
+            <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Certification</dt><dd className="font-bold text-blue-300">{catalog?.certification_status||'UNCERTIFIED'}</dd></div>
+            <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Criticality</dt><dd className="font-bold text-amber-300">{catalog?.criticality||'UNSET'}</dd></div>
+            <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Domain</dt><dd className="max-w-[160px] truncate font-bold text-slate-300">{dataset.business_domain||'Unassigned'}</dd></div>
+            <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Accountability</dt><dd className={`font-bold ${hasAccountability?'text-emerald-300':'text-amber-300'}`}>{hasAccountability?'Assigned':'Missing'}</dd></div>
+            <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Quality</dt><dd className="font-bold text-cyan-300">{pct(score?.overall_score)}</dd></div>
+            <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Open issues</dt><dd className={`font-bold ${openIssues.length?'text-rose-300':'text-emerald-300'}`}>{openIssues.length}</dd></div>
+            <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Retention</dt><dd className="font-bold text-slate-300">{catalog?.retention_days? `${catalog.retention_days} days` : 'Not set'}</dd></div>
+            <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Last observed</dt><dd className="max-w-[160px] text-right font-bold text-slate-300">{run?.completed_at?new Date(run.completed_at).toLocaleString():version?.observed_at?new Date(version.observed_at).toLocaleString():'Not observed'}</dd></div>
+          </dl>
+        </aside>
+      </div>
+    </header>
+
+    <nav aria-label="Dataset 360 views" className={`${surface} sticky top-2 z-20 mt-4 flex gap-1 overflow-x-auto p-2 backdrop-blur`}>
+      <a href="#summary" aria-current="page" className={`shrink-0 rounded-xl bg-blue-600/20 px-3 py-2 text-sm font-bold text-blue-200 ring-1 ring-blue-400/20 ${focus}`}>Summary</a>
+      <a href="#relationships" className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Relationships</a>
+      {canLineage?<Link href={lineageHref} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-violet-300 hover:bg-white/[0.05] ${focus}`}>Technical Lineage</Link>:null}
+      {canProfiling&&run?<a href="#quality" className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Quality</a>:null}
+      <a href="#responsibilities" className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Responsibilities</a>
+      <a href="#issues" className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Issues</a>
+      {canAgents?<Link href="/agents" className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Activity</Link>:canObservability?<Link href="/observability" className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Activity</Link>:null}
+    </nav>
 
     <DatasetTrustSignals certification={catalog?.certification_status||'UNCERTIFIED'} quality={score?.overall_score} observedAt={run?.completed_at??version?.observed_at??version?.created_at??null} hasAccountability={hasAccountability} openIssues={openIssues.length}/>
 
-    <div className="mt-5">{connectedContextSection}</div>
+    <div id="relationships" className="mt-5 scroll-mt-28">{connectedContextSection}</div>
 
     {canExecuteProfiling&&version?<section className={`${surface} mt-5 p-5`} aria-label="Profiling readiness actions"><div className="mb-3"><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Profiling readiness</p><p className="mt-1 text-sm text-slate-400">Deterministic readiness is authoritative. Governed AI may diagnose blockers and only execute policy-authorized low-risk repair.</p></div><DatasetActions projectId={dataset.project_id} datasetId={dataset.id} datasetVersionId={version.id} agentDefinitionId={agentDefinition?.id??null} ready={false}/></section>:null}
 
