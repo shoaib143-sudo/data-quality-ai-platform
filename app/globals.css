@@ -315,6 +315,22 @@
       -4px -4px 14px rgba(var(--dn-shadow-light), 0.035);
   }
 
+  .dn-page :where(button,input,select,textarea) {
+    min-height: 2.25rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dn-page *,
+    .dn-page *::before,
+    .dn-page *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
+    }
+  }
+
   @media (max-width: 640px) {
     .dn-page-container {
       padding: 0.625rem;
