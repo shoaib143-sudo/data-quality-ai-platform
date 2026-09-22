@@ -20,8 +20,8 @@ type Prediction = { prediction_type: string; horizon_days: number; probability: 
 type Rule = { id: string; name: string; column_name: string | null; severity: string; approval_status: string; enabled: boolean; description: string | null }
 type Suggestion = { id: string; suggestion_type: string; suggestion: unknown; evidence: unknown; confidence: number | null; created_at: string }
 
-const surface='rounded-[22px] border border-white/10 bg-[#0a1d33] shadow-[10px_10px_28px_rgba(0,0,0,.24),-7px_-7px_22px_rgba(30,74,114,.08)]'
-const inset='rounded-2xl border border-white/[0.07] bg-[#08182b]'
+const surface='rounded-[22px] border border-white/10 bg-[#102036] shadow-[10px_10px_28px_rgba(0,0,0,.24),-7px_-7px_22px_rgba(30,74,114,.08)]'
+const inset='rounded-2xl border border-white/[0.07] bg-[#0d1c30]'
 const focus='focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#061426]'
 const interactive=`${focus} transition hover:-translate-y-0.5 hover:border-cyan-400/30 hover:bg-white/[0.04] active:translate-y-0`
 
@@ -180,14 +180,14 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
               'What changed in quality and what should I investigate first?',
               'What downstream risk is supported by current evidence?',
               'Which recommended actions require human approval?',
-            ].map(question => <Link key={question} href={`/ai-insights?projectId=${encodeURIComponent(selectedProjectId??'')}&datasetId=${encodeURIComponent(selectedDataset.id)}&prompt=${encodeURIComponent(question)}`} className={`rounded-xl border border-white/10 bg-[#08182b] px-3 py-2 text-xs font-semibold text-slate-300 hover:border-violet-400/30 hover:text-white ${focus}`}>{question}</Link>)}
+            ].map(question => <Link key={question} href={`/ai-insights?projectId=${encodeURIComponent(selectedProjectId??'')}&datasetId=${encodeURIComponent(selectedDataset.id)}&prompt=${encodeURIComponent(question)}`} className={`rounded-xl border border-white/10 bg-[#0d1c30] px-3 py-2 text-xs font-semibold text-slate-300 hover:border-violet-400/30 hover:text-white ${focus}`}>{question}</Link>)}
           </div>
         </section> : null}
 
         <form className={`${surface} grid gap-3 p-5 sm:grid-cols-2`} method="get">
           {landingPrompt ? <input type="hidden" name="prompt" value={landingPrompt}/> : null}
-          <label className="text-sm font-semibold text-slate-300">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 w-full rounded-xl border border-white/10 bg-[#08182b] px-3 py-2 font-normal text-slate-200">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
-          <label className="text-sm font-semibold text-slate-300">Dataset<select name="datasetId" defaultValue={selectedDatasetId} className="mt-2 w-full rounded-xl border border-white/10 bg-[#08182b] px-3 py-2 font-normal text-slate-200">{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name}</option>)}</select></label>
+          <label className="text-sm font-semibold text-slate-300">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0d1c30] px-3 py-2 font-normal text-slate-200">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+          <label className="text-sm font-semibold text-slate-300">Dataset<select name="datasetId" defaultValue={selectedDatasetId} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0d1c30] px-3 py-2 font-normal text-slate-200">{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name}</option>)}</select></label>
           <button type="submit" className={`rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-bold text-white sm:col-span-2 ${focus}`}>Load AI evidence</button>
         </form>
 
