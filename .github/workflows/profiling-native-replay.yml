@@ -30,6 +30,7 @@ on:
       - 'scripts/ci-full-quality-gate.sh'
       - 'tests/profiling-production-validation-workflow.test.mjs'
       - 'tests/profiling-production-validation-source.test.mjs'
+      - 'tests/profiling-production-validation-rpc-grant.test.mjs'
       - 'package.json'
       - '.github/workflows/profiling-native-replay.yml'
   pull_request:
@@ -99,7 +100,7 @@ jobs:
       - name: Verify profiling replay-safe dataset execution
         run: node scripts/verify-profiling-dataset-replay.mjs
       - name: Profiling production validation negative and failure cases
-        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs tests/profiling-production-validation-source.test.mjs
+        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs tests/profiling-production-validation-source.test.mjs tests/profiling-production-validation-rpc-grant.test.mjs
       - name: Existing profiling lifecycle contract
         run: pnpm run verify:profiling-lifecycle
       - name: Profiling governance insights contract
