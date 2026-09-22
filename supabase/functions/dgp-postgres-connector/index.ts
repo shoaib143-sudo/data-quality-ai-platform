@@ -55,23 +55,20 @@ async function serviceRoleApiKeyAuthorized(apiKey: string) {
 
   try {
     const response = await fetch(
-      supabaseUrl.replace(/\/$/, "") + "/rest/v1/rpc/has_project_capability",
+      supabaseUrl.replace(/\/$/, "") + "/rest/v1/rpc/verify_dgp_service_role_key",
       {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "accept-profile": "governance",
-          "content-profile": "governance",
           "apikey": apiKey,
+          "authorization": "Bearer " + apiKey,
         },
-        body: JSON.stringify({
-          p_project_id: "00000000-0000-0000-0000-000000000000",
-          p_user_id: "00000000-0000-0000-0000-000000000000",
-          p_capability: "__connector_service_role_probe__",
-        }),
+        body: "{}",
       },
     );
-    return response.ok;
+    if (!response.ok) return false;
+    const payload = await response.json().catch(() => false);
+    return payload === true;
   } catch {
     return false;
   }
