@@ -171,3 +171,15 @@ Protected release workflows support both legacy JWT-based `service_role` keys an
 - A readiness HTTP 401 should therefore be treated as an invalid, revoked, or mismatched protected environment key rather than as a workflow header-format failure.
 
 This applies consistently to readiness, enablement, live status verification, failure cleanup, disablement, and rollback-status verification.
+
+
+## Opaque Supabase secret-key release bridge
+
+GitHub's protected `SUPABASE_SERVICE_ROLE_KEY` may use Supabase's modern opaque secret-key format rather than a legacy JWT. The REST release path therefore uses two narrow functions in the public PostgREST schema:
+
+- `get_cloudflare_observability_canary_release_status()`
+- `configure_cloudflare_observability_canary_release(...)`
+
+Both are `SECURITY DEFINER`, delegate only to the existing bounded orchestration canary functions, and revoke execution from `public`, `anon`, and `authenticated`. Only `service_role` receives execute privilege. This avoids requiring an `Authorization: Bearer` header for an opaque secret key while preserving the service-role-only database boundary.
+
+The underlying orchestration RPCs remain unchanged and service-role-only.
