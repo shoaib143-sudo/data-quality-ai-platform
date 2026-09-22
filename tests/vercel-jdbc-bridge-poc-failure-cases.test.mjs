@@ -44,3 +44,13 @@ test('workflow cannot run live PoC probe on pull requests or ordinary pushes', (
 test('workflow contains no Vercel deployment command', () => {
   assert.doesNotMatch(workflow, /\bvercel\s+(deploy|--prod)\b/i)
 })
+
+
+test('live probe supports Vercel Deployment Protection automation bypass without logging the secret', () => {
+  const source = fs.readFileSync(probe, 'utf8')
+  assert.match(source, /VERCEL_AUTOMATION_BYPASS_SECRET/)
+  assert.match(source, /x-vercel-protection-bypass/)
+  assert.match(source, /x-vercel-set-bypass-cookie/)
+  assert.doesNotMatch(source, /console\.log\([^\n]*protectionBypass[^\n]*\)/)
+  assert.match(workflow, /VERCEL_AUTOMATION_BYPASS_SECRET:\s*\$\{\{ secrets\.VERCEL_AUTOMATION_BYPASS_SECRET \}\}/)
+})
