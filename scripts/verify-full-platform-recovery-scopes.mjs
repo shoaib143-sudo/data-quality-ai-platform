@@ -58,7 +58,7 @@ for (const functionName of edgeFunctions) {
   if (functionName === 'dgp-postgres-connector') {
     const source = await readFile(entrypoint, 'utf8')
     if (!/verify_jwt\s*=\s*false/.test(body)) throw new Error('dgp-postgres-connector must use its governed custom server-secret authorization boundary.')
-    for (const pattern of [/SUPABASE_SECRET_KEYS/, /SUPABASE_SERVICE_ROLE_KEY/, /headers\.get\(["']apikey["']\)/, /constantTimeEqual/, /serviceRoleAuthorized/, /\/rest\/v1\/rpc\/has_project_capability/, /__connector_service_role_probe__/]) {
+    for (const pattern of [/SUPABASE_SECRET_KEYS/, /SUPABASE_SERVICE_ROLE_KEY/, /headers\.get\(["']apikey["']\)/, /constantTimeEqual/, /serviceRoleAuthorized/, /\/rest\/v1\/rpc\/verify_dgp_service_role_key/, /return payload === true/]) {
       if (!pattern.test(source)) throw new Error('dgp-postgres-connector custom server-secret authorization contract is incomplete.')
     }
   } else if (!/verify_jwt\s*=\s*true/.test(body)) {

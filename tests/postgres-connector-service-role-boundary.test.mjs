@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync('supabase/functions/dgp-postgres-connector/index.ts', 'utf8')
 const config = readFileSync('supabase/config.toml', 'utf8')
+const probeMigration = readFileSync('supabase/migrations/20260922170000_postgres_connector_service_role_probe.sql', 'utf8')
 
 test('PostgreSQL connector keeps health non-sensitive and gates every privileged action', () => {
   const health = source.indexOf('if (body.action === "health")')
@@ -48,20 +49,29 @@ test('malformed secret-key registry fails closed and does not disable legacy ser
 })
 
 
-test('service-role fallback validates apikey authority through a read-only governance RPC', () => {
+test('service-role fallback validates apikey authority through a dedicated public RPC', () => {
   assert.match(source, /async function serviceRoleApiKeyAuthorized\(apiKey: string\)/)
-  assert.match(source, /\/rest\/v1\/rpc\/has_project_capability/)
-  assert.match(source, /"accept-profile": "governance"/)
-  assert.match(source, /"content-profile": "governance"/)
-  assert.match(source, /p_capability: "__connector_service_role_probe__"/)
-  assert.match(source, /return response\.ok/)
+  assert.match(source, /\/rest\/v1\/rpc\/verify_dgp_service_role_key/)
+  assert.match(source, /"apikey": apiKey/)
+  assert.match(source, /"authorization": "Bearer " \+ apiKey/)
+  assert.match(source, /if \(!response\.ok\) return false/)
+  assert.match(source, /return payload === true/)
 })
 
-test('service-role fallback never forwards bearer user identity and fails closed on probe errors', () => {
+test('service-role probe is read-only and executable only by service_role', () => {
+  assert.match(probeMigration, /create or replace function public\.verify_dgp_service_role_key\(\)/i)
+  assert.match(probeMigration, /select true;/i)
+  assert.match(probeMigration, /revoke all on function public\.verify_dgp_service_role_key\(\) from public;/i)
+  assert.match(probeMigration, /revoke all on function public\.verify_dgp_service_role_key\(\) from anon;/i)
+  assert.match(probeMigration, /revoke all on function public\.verify_dgp_service_role_key\(\) from authenticated;/i)
+  assert.match(probeMigration, /grant execute on function public\.verify_dgp_service_role_key\(\) to service_role;/i)
+})
+
+test('service-role fallback never forwards request bearer identity and fails closed on probe errors', () => {
   const start = source.indexOf('async function serviceRoleApiKeyAuthorized')
   const end = source.indexOf('async function serviceRoleAuthorized', start)
   const helper = source.slice(start, end)
   assert.match(helper, /"apikey": apiKey/)
-  assert.doesNotMatch(helper, /authorization/i)
+  assert.doesNotMatch(helper, /request\.headers/)
   assert.match(helper, /catch \{\s*return false/)
 })

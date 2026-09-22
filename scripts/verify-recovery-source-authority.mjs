@@ -41,8 +41,8 @@ for (const functionName of requiredFunctions) {
       [/headers\.get\(["']apikey["']\)/, 'apikey service credential channel'],
       [/constantTimeEqual/, 'constant-time secret comparison'],
       [/if \(!\(await serviceRoleAuthorized\(request\)\)\) return reply\(403/, 'fail-closed privileged action gate'],
-      [/\/rest\/v1\/rpc\/has_project_capability/, 'service-role authority fallback probe'],
-      [/p_capability:\s*"__connector_service_role_probe__"/, 'side-effect-free service-role probe capability'],
+      [/\/rest\/v1\/rpc\/verify_dgp_service_role_key/, 'dedicated service-role authority fallback probe'],
+      [/return payload === true/, 'positive service-role probe confirmation'],
     ]) {
       if (!pattern.test(functionSource)) throw new Error(`dgp-postgres-connector custom authorization is missing ${label}.`)
     }
