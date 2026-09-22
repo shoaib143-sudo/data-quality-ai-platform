@@ -35,6 +35,6 @@ test('controlled live target is the genuine PostgreSQL governance view', () => {
 
 test('live mutation is scoped by changed lineage files or explicit dispatch', () => {
   assert.match(workflow, /id: scope/)
-  assert.match(workflow, /github\.event_name == 'workflow_dispatch'/)
+  assert.match(workflow, /if \[ \"\$EVENT_NAME\" = \"workflow_dispatch\" \]; then/)
   assert.match(workflow, /run_live=true/)
 })
