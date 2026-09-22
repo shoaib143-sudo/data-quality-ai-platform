@@ -65,3 +65,13 @@ test('release workflow has one readiness, enable and disable job key', () => {
   assert.equal((workflow.match(/^  enable-cloudflare-worker-canary:/gm) ?? []).length, 1)
   assert.equal((workflow.match(/^  disable-cloudflare-worker-canary:/gm) ?? []).length, 1)
 })
+
+
+test('supports opaque Supabase secret keys without bearer misuse', () => {
+  const unconditionalBearer = workflow.match(/^\s+-H "Authorization: Bearer \$SUPABASE_SERVICE_ROLE_KEY" \\/gm) ?? []
+  assert.equal(unconditionalBearer.length, 0)
+  const authArrays = workflow.match(/SUPABASE_AUTH_ARGS=\(-H "apikey: \$SUPABASE_SERVICE_ROLE_KEY"\)/g) ?? []
+  assert.ok(authArrays.length >= 7)
+  assert.match(workflow, /if \[\[ "\$SUPABASE_SERVICE_ROLE_KEY" == \*\.\*\.\* \]\]; then/)
+  assert.match(workflow, /SUPABASE_AUTH_ARGS\+=\(-H "Authorization: Bearer \$SUPABASE_SERVICE_ROLE_KEY"\)/)
+})
