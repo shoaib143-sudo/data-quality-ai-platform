@@ -151,8 +151,8 @@ function MiniHistogram({ values }: { values: number[] }) {
 }
 
 function Card({ children, className = '', onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
-  if (!onClick) return <section className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>{children}</section>
-  return <button type="button" onClick={onClick} className={`rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md ${className}`}>{children}</button>
+  if (!onClick) return <section className={`rounded-2xl border border-white/[0.08] bg-[#0a1d33] shadow-[0_10px_28px_rgba(0,0,0,.18)] ${className}`}>{children}</section>
+  return <button type="button" onClick={onClick} className={`rounded-2xl border border-white/[0.08] bg-[#0a1d33] text-left shadow-[0_10px_28px_rgba(0,0,0,.18)] transition hover:-translate-y-0.5 hover:border-cyan-300/25 hover:bg-[#0b2038] ${className}`}>{children}</button>
 }
 
 const DOCUMENT_TECHNICAL_FIELDS = new Set(['chunk_index', 'file_name', 'content_type', 'text_extraction_method'])
@@ -207,41 +207,48 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
 
   const runComplete = ['COMPLETED', 'SUCCEEDED'].includes(run.status.toUpperCase())
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
-    <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] text-slate-100">
+    <div className="mx-auto max-w-[1540px] px-4 py-5 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={persona} organizationRole={organizationRole} roleLabel="Profiling" contextLabel={datasetName} homeHref="/home" />
-      <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-500">Datasets <ChevronRight className="inline h-4 w-4" /> Profiling run</div>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <h1 className="truncate text-3xl font-black tracking-tight">{datasetName}</h1>
-              <span className={`rounded-full px-3 py-1 text-xs font-bold ${runComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{run.status}</span>
+      <header className="relative mt-4 overflow-hidden rounded-[26px] border border-cyan-300/12 bg-[#09192d] p-5 shadow-[0_20px_60px_rgba(0,0,0,.24)] sm:p-6">
+        <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-blue-500/[0.07] blur-3xl" />
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0 max-w-4xl">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500">Datasets <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /> Profiling evidence</div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <h1 className="truncate text-3xl font-black tracking-[-0.03em] text-white sm:text-4xl">{datasetName}</h1>
+              <span className={`rounded-full border px-3 py-1 text-[11px] font-black ${runComplete ? 'border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200' : 'border-amber-300/20 bg-amber-300/[0.08] text-amber-200'}`}>{run.status}</span>
             </div>
-            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-500">
-              {datasetSubtitle ? <span>{datasetSubtitle}</span> : null}
-              <span>{run.engine_name ?? 'Profiling engine'}{run.engine_version ? ` ${run.engine_version}` : ''}</span>
-              <span>{run.started_at ? new Date(run.started_at).toLocaleString() : 'Start time unavailable'}</span>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{datasetSubtitle ?? 'Governed profiling evidence for the selected dataset version.'}</p>
+            <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-500">
+              <span className="rounded-lg border border-white/[0.07] bg-[#061321] px-2.5 py-1.5">{run.engine_name ?? 'Profiling engine'}{run.engine_version ? ` ${run.engine_version}` : ''}</span>
+              <span className="rounded-lg border border-white/[0.07] bg-[#061321] px-2.5 py-1.5">{run.started_at ? new Date(run.started_at).toLocaleString() : 'Start time unavailable'}</span>
+              <span className="rounded-lg border border-white/[0.07] bg-[#061321] px-2.5 py-1.5">Run {run.id.slice(0, 8)}</span>
             </div>
           </div>
-          {canExplorer ? <Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 transition hover:bg-blue-100">Full profiling report <ArrowRight className="h-4 w-4" /></Link> : null}
+          <div className="grid min-w-0 gap-2 sm:grid-cols-3 xl:min-w-[440px]">
+            <div className="rounded-2xl border border-white/[0.07] bg-[#061321] p-3"><p className="text-[9px] font-black uppercase tracking-wider text-slate-600">{documentMode ? 'Chunks' : 'Rows'}</p><p className="mt-1 text-xl font-black text-white">{compact(run.row_count)}</p></div>
+            <div className="rounded-2xl border border-white/[0.07] bg-[#061321] p-3"><p className="text-[9px] font-black uppercase tracking-wider text-slate-600">{documentMode ? 'Fields' : 'Columns'}</p><p className="mt-1 text-xl font-black text-white">{compact(run.column_count)}</p></div>
+            <div className="rounded-2xl border border-white/[0.07] bg-[#061321] p-3"><p className="text-[9px] font-black uppercase tracking-wider text-slate-600">Findings</p><p className="mt-1 text-xl font-black text-white">{findings.length}</p></div>
+          </div>
         </div>
+        {canExplorer ? <div className="relative mt-5 flex justify-end"><Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_0_18px_rgba(34,211,238,.10)]">Open full profiling report <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></div> : null}
       </header>
 
-      <nav className="mt-5 grid gap-3 md:grid-cols-3" aria-label="Data analysis workspaces">
-        <div className="rounded-2xl border-2 border-blue-500 bg-blue-50 p-4 shadow-sm">
-          <div className="flex items-center gap-3"><div className="rounded-xl bg-blue-100 p-2 text-blue-700"><BarChart3 className="h-5 w-5" /></div><div><div className="font-black text-blue-800">Data Profiling</div><div className="text-xs text-blue-600">Explore data structure, statistics and patterns</div></div></div>
+      <nav className="mt-4 grid gap-3 md:grid-cols-3" aria-label="Data analysis workspaces">
+        <div className="rounded-2xl border border-cyan-300/25 bg-cyan-300/[0.07] p-4 shadow-[0_0_20px_rgba(34,211,238,.04)]">
+          <div className="flex items-center gap-3"><div className="rounded-xl border border-cyan-300/15 bg-cyan-300/[0.08] p-2 text-cyan-300"><BarChart3 className="h-5 w-5" aria-hidden="true" /></div><div><div className="font-black text-cyan-100">Data Profiling</div><div className="text-xs text-cyan-200/60">Structure, statistics and patterns</div></div></div>
         </div>
-        {canMonitoring ? <Link href="/monitoring" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md">
-          <div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-2 text-blue-700"><Activity className="h-5 w-5" /></div><div><div className="font-black">Data Observability</div><div className="text-xs text-slate-500">Monitor data health and freshness</div></div></div>
+        {canMonitoring ? <Link href="/monitoring" className="rounded-2xl border border-white/[0.08] bg-[#09192d] p-4 transition hover:border-cyan-300/25 hover:bg-[#0b2038]">
+          <div className="flex items-center gap-3"><div className="rounded-xl border border-white/[0.07] bg-[#061321] p-2 text-cyan-300"><Activity className="h-5 w-5" aria-hidden="true" /></div><div><div className="font-black text-slate-100">Data Observability</div><div className="text-xs text-slate-500">Health, freshness and execution</div></div></div>
         </Link> : null}
-        {canQuality ? <Link href="/data-quality" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md">
-          <div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-2 text-blue-700"><ShieldCheck className="h-5 w-5" /></div><div><div className="font-black">Data Quality</div><div className="text-xs text-slate-500">Assess data quality and integrity</div></div></div>
+        {canQuality ? <Link href="/data-quality" className="rounded-2xl border border-white/[0.08] bg-[#09192d] p-4 transition hover:border-cyan-300/25 hover:bg-[#0b2038]">
+          <div className="flex items-center gap-3"><div className="rounded-xl border border-white/[0.07] bg-[#061321] p-2 text-cyan-300"><ShieldCheck className="h-5 w-5" aria-hidden="true" /></div><div><div className="font-black text-slate-100">Data Quality</div><div className="text-xs text-slate-500">Controls, findings and remediation</div></div></div>
         </Link> : null}
       </nav>
 
       <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
-        <div><h2 className="text-2xl font-black">Data Profiling</h2><p className="text-sm text-slate-500">{documentMode ? 'Document-aware analysis of extracted content, structure and statistical evidence.' : 'Comprehensive analysis of structure, content and statistical properties.'} Select any card or chart to drill down.</p></div>
+        <div><p className="text-[10px] font-black uppercase tracking-[0.15em] text-cyan-300">Profile evidence</p><h2 className="mt-1 text-2xl font-black text-white">Data Profiling</h2><p className="text-sm text-slate-500">{documentMode ? 'Document-aware analysis of extracted content, structure and statistical evidence.' : 'Comprehensive analysis of structure, content and statistical properties.'} Select any card or chart to drill down.</p></div>
         {canExplorer ? <Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="text-sm font-bold text-blue-700 hover:text-blue-900">View full profiling report →</Link> : null}
       </div>
 
