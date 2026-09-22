@@ -11,7 +11,7 @@ test('data quality summary cards stack before four-column density', () => {
 })
 
 test('data quality run metrics do not force five columns at laptop widths', () => {
-  assert.match(dq, /grid auto-rows-fr gap-2 sm:grid-cols-2 xl:grid-cols-5/)
+  assert.match(dq, /grid auto-rows-fr gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5/)
   assert.match(dq, /min-w-0 overflow-hidden p-3/)
 })
 
