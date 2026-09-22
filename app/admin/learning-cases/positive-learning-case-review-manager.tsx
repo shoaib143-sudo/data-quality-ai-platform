@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, Clock3, Loader2, PencilLine, XCircle } from 'lucide-react'
+import Link from 'next/link'
+import { CheckCircle2, Clock3, ExternalLink, Loader2, PencilLine, ShieldCheck, XCircle } from 'lucide-react'
 import type { PositiveLearningCaseAdminItem } from '@/lib/agents/proactive-governed-case-learning-admin'
 import {
   PGCL_ADMIN_DECISIONS,
@@ -126,9 +127,17 @@ export function PositiveLearningCaseReviewManager({
             <span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700">{selected.runMode}</span>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-800">
-            This pattern has been observed <strong>{selected.occurrenceCount}</strong> time{selected.occurrenceCount === 1 ? '' : 's'}.
-            {selected.lastObservedAt ? ' Latest verified occurrence: ' + new Date(selected.lastObservedAt).toLocaleString() + '.' : ''}
+          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <div className="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+              This pattern has been observed <strong>{selected.occurrenceCount}</strong> time{selected.occurrenceCount === 1 ? '' : 's'}.
+              {selected.lastObservedAt ? ' Latest verified occurrence: ' + new Date(selected.lastObservedAt).toLocaleString() + '.' : ''}
+            </div>
+            <Link href={`/agents/runs/${encodeURIComponent(selected.sourceAgentRunId)}`} className="inline-flex items-center justify-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold text-violet-700 hover:bg-violet-50">Source run <ExternalLink className="h-4 w-4"/></Link>
+          </div>
+
+          <div className="mt-4 flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600"/>
+            <div><p className="text-sm font-black text-emerald-900">Learning is a governed promotion, not automatic self-modification.</p><p className="mt-1 text-xs leading-5 text-emerald-800">Review the source run, verification evidence, applicability and exclusions before deciding whether this success should become reusable organizational knowledge.</p></div>
           </div>
 
           <div className="mt-5 grid gap-4">
