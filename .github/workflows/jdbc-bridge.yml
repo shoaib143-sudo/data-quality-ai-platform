@@ -89,4 +89,5 @@ jobs:
         env:
           VERCEL_JDBC_BRIDGE_URL: ${{ inputs.poc_url }}
           VERCEL_JDBC_BRIDGE_MAX_HEALTH_MS: ${{ inputs.max_health_ms }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node scripts/probe-vercel-jdbc-bridge-poc.mjs
