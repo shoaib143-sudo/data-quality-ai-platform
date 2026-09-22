@@ -21,7 +21,7 @@ The post-implementation gate is considered complete only when all of the followi
 9. Production build.
 10. Repository-level required workflows with no failed checks.
 
-The workflow wiring itself is protected by `scripts/verify-ux-post-implementation-gates.mjs` so these checks cannot be silently removed from Navigation Integrity without failing CI.
+The workflow wiring itself is protected by `scripts/verify-ux-post-implementation-gates.mjs`. It checks exact Wave 9 through Wave 13 workflow step names, trigger-path coverage for both pull requests and main pushes, and parity with the reusable local verifier so individual wave checks cannot be silently removed.
 
 ## Adversarial findings fixed
 
@@ -33,7 +33,7 @@ The post-implementation review identified and corrected the following concrete i
 - Agent run evidence retains both run visibility and governed action authorization.
 - Agent Detail now filters recent run evidence through `filterAuthorizedExecutionRuns`.
 - The shared skip link now bypasses repeated global navigation through a dedicated focusable content-start target.
-- Residual authenticated pages are explicitly classified, with special-purpose route exceptions kept reviewable.
+- Residual authenticated pages are explicitly classified, with special-purpose route exceptions kept reviewable.\n- Authentication return paths are constrained by a shared same-origin validator that rejects absolute, protocol-relative and backslash-normalized external redirect forms.\n- Login, signup and password-recovery/reset controls retain explicit password-manager metadata.
 
 ## Negative and failure-path matrix
 
@@ -45,7 +45,7 @@ A single local entry point is available:
 
 `pnpm run verify:ux-closure-post-implementation`
 
-It runs the post-implementation gate contract, Wave 13 residual shell, local-navigation, CTA, negative/failure and adversarial tests, profiling and remediation lifecycle regressions, TypeScript validation, and the production build.
+It runs the post-implementation gate contract plus the Product Shell, local-navigation, CTA and independent adversarial suites for Waves 9 through 13. It also runs the Wave 13 authorization and auth-redirect negative cases, profiling and remediation lifecycle regressions, TypeScript validation, and the production build.
 
 ## Rendered browser validation
 
