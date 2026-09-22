@@ -28,7 +28,23 @@ for (const functionName of requiredFunctions) {
 
   const nextSection = config.indexOf('\n[functions.', sectionIndex + section.length)
   const sectionBody = config.slice(sectionIndex, nextSection < 0 ? config.length : nextSection)
-  if (!/verify_jwt\s*=\s*true/.test(sectionBody)) {
+  const functionSource = await readFile(entrypoint, 'utf8')
+  const usesCustomServerSecretAuth = functionName === 'dgp-postgres-connector'
+
+  if (usesCustomServerSecretAuth) {
+    if (!/verify_jwt\s*=\s*false/.test(sectionBody)) {
+      throw new Error('dgp-postgres-connector must disable the platform JWT precheck so modern opaque server secret keys can reach its custom authorization boundary.')
+    }
+    for (const [pattern, label] of [
+      [/SUPABASE_SECRET_KEYS/, 'modern Supabase secret-key registry'],
+      [/SUPABASE_SERVICE_ROLE_KEY/, 'legacy service-role compatibility'],
+      [/headers\.get\(["']apikey["']\)/, 'apikey service credential channel'],
+      [/constantTimeEqual/, 'constant-time secret comparison'],
+      [/if \(!serviceRoleAuthorized\(request\)\) return reply\(403/, 'fail-closed privileged action gate'],
+    ]) {
+      if (!pattern.test(functionSource)) throw new Error(`dgp-postgres-connector custom authorization is missing ${label}.`)
+    }
+  } else if (!/verify_jwt\s*=\s*true/.test(sectionBody)) {
     throw new Error(`Required Edge Function ${functionName} must keep JWT verification enabled in source-controlled configuration.`)
   }
 

@@ -8,7 +8,9 @@ import_map = './functions/profiling-executor/deno.json'
 verify_jwt = true
 
 [functions.dgp-postgres-connector]
-verify_jwt = true
+# Service-to-service calls use modern opaque sb_secret_ keys on the apikey header.
+# The function performs its own constant-time server-secret authorization.
+verify_jwt = false
 
 [functions.governance-embed]
 verify_jwt = true

@@ -27,13 +27,37 @@ function constantTimeEqual(left: string, right: string) {
   return difference === 0;
 }
 
+function configuredServerSecrets() {
+  const expected = new Set<string>();
+  const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ?? "";
+  if (legacy) expected.add(legacy);
+
+  const encoded = Deno.env.get("SUPABASE_SECRET_KEYS")?.trim() ?? "";
+  if (encoded) {
+    try {
+      const parsed = JSON.parse(encoded);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        for (const value of Object.values(parsed as Record<string, unknown>)) {
+          if (typeof value === "string" && value.trim()) expected.add(value.trim());
+        }
+      }
+    } catch {
+      // Fail closed. A malformed secret-key registry must not authorize callers.
+    }
+  }
+  return [...expected];
+}
+
 function serviceRoleAuthorized(request: Request) {
-  const expected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ?? "";
   const authorization = request.headers.get("authorization")?.trim() ?? "";
-  const supplied = authorization.toLowerCase().startsWith("bearer ")
+  const bearer = authorization.toLowerCase().startsWith("bearer ")
     ? authorization.slice("Bearer ".length).trim()
     : "";
-  return Boolean(expected && supplied && constantTimeEqual(supplied, expected));
+  const apiKey = request.headers.get("apikey")?.trim() ?? "";
+  const supplied = [apiKey, bearer].filter(Boolean);
+  const expected = configuredServerSecrets();
+  return expected.length > 0
+    && supplied.some(candidate => expected.some(secret => constantTimeEqual(candidate, secret)));
 }
 const TECHNICAL_MAX_ROWS = technicalMaxRows();
 
