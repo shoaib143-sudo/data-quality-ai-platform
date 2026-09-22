@@ -21,5 +21,7 @@ jobs:
           node-version: 24
       - name: Verify lineage authority integrity
         run: node scripts/verify-lineage-authority-integrity.mjs
+      - name: Verify PostgreSQL direct field lineage
+        run: node --experimental-strip-types --test scripts/test-postgres-view-column-lineage.mjs
       - name: Verify cross-dataset relationship authority boundaries
         run: node --experimental-strip-types --test tests/dataset-relationship-intelligence.test.mjs
