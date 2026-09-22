@@ -48,7 +48,36 @@ function configuredServerSecrets() {
   return [...expected];
 }
 
-function serviceRoleAuthorized(request: Request) {
+async function serviceRoleApiKeyAuthorized(apiKey: string) {
+  if (!apiKey) return false;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim() ?? "";
+  if (!supabaseUrl) return false;
+
+  try {
+    const response = await fetch(
+      supabaseUrl.replace(/\/$/, "") + "/rest/v1/rpc/has_project_capability",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "accept-profile": "governance",
+          "content-profile": "governance",
+          "apikey": apiKey,
+        },
+        body: JSON.stringify({
+          p_project_id: "00000000-0000-0000-0000-000000000000",
+          p_user_id: "00000000-0000-0000-0000-000000000000",
+          p_capability: "__connector_service_role_probe__",
+        }),
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function serviceRoleAuthorized(request: Request) {
   const authorization = request.headers.get("authorization")?.trim() ?? "";
   const bearer = authorization.toLowerCase().startsWith("bearer ")
     ? authorization.slice("Bearer ".length).trim()
@@ -56,8 +85,11 @@ function serviceRoleAuthorized(request: Request) {
   const apiKey = request.headers.get("apikey")?.trim() ?? "";
   const supplied = [apiKey, bearer].filter(Boolean);
   const expected = configuredServerSecrets();
-  return expected.length > 0
+  const localMatch = expected.length > 0
     && supplied.some(candidate => expected.some(secret => constantTimeEqual(candidate, secret)));
+
+  if (localMatch) return true;
+  return await serviceRoleApiKeyAuthorized(apiKey);
 }
 const TECHNICAL_MAX_ROWS = technicalMaxRows();
 
@@ -282,7 +314,7 @@ Deno.serve(async (request: Request) => {
   try {
     const body = await request.json() as ConnectorRequest;
     if (body.action === "health") return reply(200, { ok: true, drivers: ["postgresql"], credential_store: "supabase-vault", technical_max_rows: TECHNICAL_MAX_ROWS });
-    if (!serviceRoleAuthorized(request)) return reply(403, { error: "Connector access denied." });
+    if (!(await serviceRoleAuthorized(request))) return reply(403, { error: "Connector access denied." });
     if (body.action === "credential") return reply(200, await storeCredential(body));
     if (body.action === "catalog") return reply(200, await catalog(body));
     if (body.action === "validate") return reply(200, await validate(body));
