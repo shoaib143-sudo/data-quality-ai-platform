@@ -614,8 +614,474 @@ jobs:
             printf '::error::Missing protected cloudflare-worker environment input: %s\n' "${missing[@]}"
             exit 1
           fi
-          printf '%s' "$DATANEXUS_CLOUDFLARE_WORKER_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/api/jobs/worker$' || {
-            echo "::error::DATANEXUS_CLOUDFLARE_WORKER_URL must be an HTTPS /api/jobs/worker endpoint"
+          printf '%s' "$DATANEXUS_CLOUDFLARE_WORKER_URL" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?/?            exit 1
+          }
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data '{}' \
+            --output /tmp/canary-readiness-status.json
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/canary-readiness-status.json','utf8')); if(body.enabled!==false||body.cron_active!==true||body.cron_schedule!=='*/5 * * * *'||body.allowed_job_type!=='OBSERVABILITY'||body.scheduler_authority!=='Supabase'||body.single_flight_limit!==1) process.exit(1)"
+
+  enable-cloudflare-worker-canary:
+    name: cloudflare-worker-canary-enable
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'cloudflare-worker-canary-enable' && inputs.confirm_paid_activation == true && inputs.confirm_worker_execution == true
+    needs: release-governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: cloudflare-worker
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact certified SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 1
+
+      - name: Verify immutable worker release identity
+        id: identity
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REQUESTED_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          HEAD_SHA="$(git rev-parse HEAD)"
+          test "$HEAD_SHA" = "$REQUESTED_SHA"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$REQUESTED_SHA" origin/main || {
+            echo "::error::Cloudflare worker canary SHA is not reachable from protected main"
+            exit 1
+          }
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Revalidate narrow worker execution contracts
+        run: |
+          set -euo pipefail
+          pnpm run verify:provider-neutral-runtime
+          pnpm run verify:worker-runtime
+          pnpm exec tsc --noEmit
+          pnpm build
+
+      - name: Configure privileged worker secrets and disabled Supabase canary state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+        run: |
+          set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$DATANEXUS_WORKER_SECRET"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$SUPABASE_URL"
+          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
+          printf '%s' "$DATANEXUS_WORKER_SECRET" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put DATANEXUS_WORKER_SECRET --config infra/cloudflare/worker-runtime/wrangler.jsonc
+          printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put SUPABASE_SERVICE_ROLE_KEY --config infra/cloudflare/worker-runtime/wrangler.jsonc
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:false}))' "$DATANEXUS_CLOUDFLARE_WORKER_URL" "$DATANEXUS_WORKER_SECRET")"
+
+      - name: Deploy observability-only worker canary
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
+          BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          RELEASE_ID="github-worker-canary-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --var "DATANEXUS_ENV:canary" \
+            --var "DATANEXUS_PLATFORM:cloudflare" \
+            --var "DATANEXUS_WORKER_EXECUTION_ENABLED:true" \
+            --var "DATANEXUS_WORKER_CANARY_JOB_TYPE:OBSERVABILITY" \
+            --var "DATANEXUS_COMMIT_SHA:$EXACT_SHA" \
+            --var "DATANEXUS_RELEASE_ID:$RELEASE_ID" \
+            --var "DATANEXUS_BUILD_TIMESTAMP:$BUILD_TIMESTAMP"
+
+      - name: Verify exact SHA and narrow execution boundary
+        env:
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          BASE_URL="${DATANEXUS_CLOUDFLARE_WORKER_URL%/}"
+          ready=0
+          for attempt in $(seq 1 30); do
+            live_code="$(curl --silent --show-error --output /tmp/worker-live.json --write-out '%{http_code}' "$BASE_URL/api/health/live" || true)"
+            build_code="$(curl --silent --show-error --output /tmp/worker-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info" || true)"
+            if [ "$live_code" = "200" ] && [ "$build_code" = "200" ] && node -e "const fs=require('node:fs'); const expected=process.argv[1]; const body=JSON.parse(fs.readFileSync(process.argv[2],'utf8')); if(body.commitSha!==expected||body.environment!=='canary'||body.platform!=='cloudflare') process.exit(1)" "$EXACT_SHA" /tmp/worker-build.json
+            then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "1"
+
+          unauthorized_code="$(curl --silent --show-error --output /tmp/worker-unauthorized.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"mode":"CLOUDFLARE_OBSERVABILITY_CANARY"}' "$BASE_URL/api/jobs/worker")"
+          test "$unauthorized_code" = "403"
+
+          forbidden_code="$(curl --silent --show-error --output /tmp/worker-forbidden.json --write-out '%{http_code}' -X POST -H "Authorization: Bearer $DATANEXUS_WORKER_SECRET" -H 'Content-Type: application/json' --data '{"mode":"ADAPTIVE_DISPATCH"}' "$BASE_URL/api/jobs/worker")"
+          test "$forbidden_code" = "403"
+
+          canary_code="$(curl --silent --show-error --output /tmp/worker-canary.json --write-out '%{http_code}' -X POST -H "Authorization: Bearer $DATANEXUS_WORKER_SECRET" -H 'Content-Type: application/json' --data '{"mode":"CLOUDFLARE_OBSERVABILITY_CANARY"}' "$BASE_URL/api/jobs/worker")"
+          test "$canary_code" = "200"
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(body.accepted!==true||body.mode!=='CLOUDFLARE_OBSERVABILITY_CANARY'||body.jobType!=='OBSERVABILITY'||!Number.isInteger(body.claimed)||body.claimed<0||body.claimed>1) process.exit(1)" /tmp/worker-canary.json
+
+      - name: Enable Supabase canary scheduler only after live verification
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$SUPABASE_URL"
+          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
+          test -n "$DATANEXUS_WORKER_SECRET"
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:true}))' "$DATANEXUS_CLOUDFLARE_WORKER_URL" "$DATANEXUS_WORKER_SECRET")"
+
+      - name: Verify enabled Supabase canary state
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data '{}' \
+            --output /tmp/canary-enabled-status.json
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/canary-enabled-status.json','utf8')); if(body.enabled!==true||body.runtime_configured!==true||body.cron_active!==true||body.cron_schedule!=='*/5 * * * *'||body.allowed_job_type!=='OBSERVABILITY'||body.scheduler_authority!=='Supabase'||body.single_flight_limit!==1) process.exit(1)"
+
+      - name: Fail closed after activation error
+        if: ${{ failure() }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: |
+          set +e
+          if [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && [ -n "${DATANEXUS_CLOUDFLARE_WORKER_URL:-}" ] && [ -n "${DATANEXUS_WORKER_SECRET:-}" ]; then
+            curl --fail-with-body --silent --show-error \
+              -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Content-Profile: orchestration" \
+              -H "Accept-Profile: orchestration" \
+              --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:false}))' "$DATANEXUS_CLOUDFLARE_WORKER_URL" "$DATANEXUS_WORKER_SECRET")" \
+              || echo "::warning::Unable to disable Supabase Cloudflare canary scheduler during failure cleanup"
+          fi
+          if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] && [ -n "${EXACT_SHA:-}" ]; then
+            node scripts/prepare-cloudflare-tooling.mjs
+            BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            RELEASE_ID="github-worker-canary-failclosed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+              --var "DATANEXUS_ENV:canary" \
+              --var "DATANEXUS_PLATFORM:cloudflare" \
+              --var "DATANEXUS_WORKER_EXECUTION_ENABLED:false" \
+              --var "DATANEXUS_WORKER_CANARY_JOB_TYPE:OBSERVABILITY" \
+              --var "DATANEXUS_COMMIT_SHA:$EXACT_SHA" \
+              --var "DATANEXUS_RELEASE_ID:$RELEASE_ID" \
+              --var "DATANEXUS_BUILD_TIMESTAMP:$BUILD_TIMESTAMP" \
+              || echo "::warning::Unable to redeploy Cloudflare worker with execution disabled during failure cleanup"
+          fi
+
+
+  disable-cloudflare-worker-canary:
+    name: cloudflare-worker-canary-disable
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'cloudflare-worker-canary-disable' && inputs.confirm_worker_execution == true
+    needs: release-governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: cloudflare-worker
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact certified SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 1
+
+      - name: Verify immutable worker release identity
+        id: identity
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REQUESTED_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          HEAD_SHA="$(git rev-parse HEAD)"
+          test "$HEAD_SHA" = "$REQUESTED_SHA"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$REQUESTED_SHA" origin/main || {
+            echo "::error::Cloudflare worker canary disable SHA is not reachable from protected main"
+            exit 1
+          }
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Disable Supabase canary scheduler first
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          DATANEXUS_WORKER_SECRET: ${{ secrets.DATANEXUS_WORKER_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$SUPABASE_URL"
+          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
+          test -n "$DATANEXUS_WORKER_SECRET"
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:false}))' "$DATANEXUS_CLOUDFLARE_WORKER_URL" "$DATANEXUS_WORKER_SECRET")"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Revalidate worker kill-switch contracts
+        run: |
+          set -euo pipefail
+          pnpm run verify:worker-runtime
+          pnpm exec tsc --noEmit
+
+      - name: Redeploy worker with execution disabled
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          node scripts/prepare-cloudflare-tooling.mjs
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
+          BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          RELEASE_ID="github-worker-canary-disable-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --config infra/cloudflare/worker-runtime/wrangler.jsonc \
+            --var "DATANEXUS_ENV:canary" \
+            --var "DATANEXUS_PLATFORM:cloudflare" \
+            --var "DATANEXUS_WORKER_EXECUTION_ENABLED:false" \
+            --var "DATANEXUS_WORKER_CANARY_JOB_TYPE:OBSERVABILITY" \
+            --var "DATANEXUS_COMMIT_SHA:$EXACT_SHA" \
+            --var "DATANEXUS_RELEASE_ID:$RELEASE_ID" \
+            --var "DATANEXUS_BUILD_TIMESTAMP:$BUILD_TIMESTAMP"
+
+      - name: Verify disabled execution boundary
+        env:
+          DATANEXUS_CLOUDFLARE_WORKER_URL: ${{ vars.DATANEXUS_CLOUDFLARE_WORKER_URL }}
+          EXACT_SHA: ${{ steps.identity.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          BASE_URL="${DATANEXUS_CLOUDFLARE_WORKER_URL%/}"
+          ready=0
+          for attempt in $(seq 1 30); do
+            build_code="$(curl --silent --show-error --output /tmp/worker-disable-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info" || true)"
+            if [ "$build_code" = "200" ] && node -e "const fs=require('node:fs'); const expected=process.argv[1]; const body=JSON.parse(fs.readFileSync(process.argv[2],'utf8')); if(body.commitSha!==expected||body.environment!=='canary'||body.platform!=='cloudflare') process.exit(1)" "$EXACT_SHA" /tmp/worker-disable-build.json
+            then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "1"
+          disabled_code="$(curl --silent --show-error --output /tmp/worker-disabled.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"mode":"CLOUDFLARE_OBSERVABILITY_CANARY"}' "$BASE_URL/api/jobs/worker")"
+          test "$disabled_code" = "503"
+
+      - name: Verify Supabase canary scheduler disabled
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Content-Profile: orchestration" \
+            -H "Accept-Profile: orchestration" \
+            --data '{}' \
+            --output /tmp/canary-disabled-status.json
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/canary-disabled-status.json','utf8')); if(body.enabled!==false||body.cron_active!==true||body.allowed_job_type!=='OBSERVABILITY'||body.scheduler_authority!=='Supabase'||body.single_flight_limit!==1) process.exit(1)"
+
+
+  certify-vercel-production:
+    name: vercel-production-certify
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'vercel-production-certify'
+    needs: release-governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+    env:
+      DATANEXUS_VERCEL_PRODUCTION_URL: https://data-quality-ai-platform.vercel.app
+      EXPECTED_SHA: ${{ inputs.commit_sha }}
+    steps:
+      - name: Checkout current protected main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Validate requested immutable SHA is current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$EXPECTED_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          CURRENT_MAIN_SHA="$(git rev-parse HEAD)"
+          test "$EXPECTED_SHA" = "$CURRENT_MAIN_SHA" || {
+            echo "::error::Requested Vercel certification SHA is stale. Expected current main $CURRENT_MAIN_SHA but received $EXPECTED_SHA"
+            exit 1
+          }
+
+      - name: Verify production liveness and exact release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
+
+          live_code="$(curl --silent --show-error --output /tmp/vercel-live.json --write-out '%{http_code}' "$BASE_URL/api/health/live")"
+          test "$live_code" = "200"
+          node - /tmp/vercel-live.json <<'NODE'
+          const fs = require('node:fs')
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          if (body.status !== 'ALIVE') process.exit(1)
+          NODE
+
+          build_code="$(curl --silent --show-error --output /tmp/vercel-build.json --write-out '%{http_code}' "$BASE_URL/api/build-info")"
+          test "$build_code" = "200"
+          node - "$EXPECTED_SHA" /tmp/vercel-build.json <<'NODE'
+          const fs = require('node:fs')
+          const expected = process.argv[2]
+          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
+          if (body.commitSha !== expected || body.environment !== 'production' || body.platform !== 'vercel') process.exit(1)
+          NODE
+
+      - name: Verify production readiness remains fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 60 \
+            "$BASE_URL/api/health/ready" \
+            --output /tmp/vercel-ready.json
+          node - /tmp/vercel-ready.json <<'NODE'
+          const fs = require('node:fs')
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          if (body.status !== 'READY') process.exit(1)
+          NODE
+
+      - name: Verify production Supabase and release-schema contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
+
+          supabase_code="$(curl --silent --show-error --output /tmp/vercel-supabase.json --write-out '%{http_code}' "$BASE_URL/api/health/supabase")"
+          test "$supabase_code" = "200"
+          node - /tmp/vercel-supabase.json <<'NODE'
+          const fs = require('node:fs')
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          if (body.status !== 'READY' || body.provider !== 'supabase' || body.boundary !== 'public-data-api') process.exit(1)
+          NODE
+
+          schema_code="$(curl --silent --show-error --output /tmp/vercel-release-schema.json --write-out '%{http_code}' "$BASE_URL/api/health/release-schema")"
+          test "$schema_code" = "200"
+          node - /tmp/vercel-release-schema.json <<'NODE'
+          const fs = require('node:fs')
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          if (body.status !== 'READY' || body.contract !== 'cloudflare-supabase-release-v1') process.exit(1)
+          if (!body.checks || Object.values(body.checks).some((check) => check?.status !== 'READY')) process.exit(1)
+          NODE
+
+      - name: Verify OIDC-enabled R2 certification route is deployed
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
+          code="$(curl --silent --show-error --output /tmp/r2-cert-auth.json --write-out '%{http_code}' "$BASE_URL/api/internal/storage/certify-r2")"
+          test "$code" = "401"
+          node - /tmp/r2-cert-auth.json <<'NODE'
+          const fs = require('node:fs')
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          if (body.error !== 'Unauthorized.') process.exit(1)
+          NODE
+ || {
+            echo "::error::DATANEXUS_CLOUDFLARE_WORKER_URL must be the HTTPS worker origin with no path"
             exit 1
           }
           curl --fail-with-body --silent --show-error \
