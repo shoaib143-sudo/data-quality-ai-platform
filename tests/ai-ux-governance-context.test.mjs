@@ -44,3 +44,31 @@ test('AI posture links capability evidence to operational controls', () => {
   assert.match(posture, /Agent registry/)
   assert.match(posture, /Execution activity/)
 })
+
+
+test('agent execution preflight exposes permission mode before action', () => {
+  const runForm = fs.readFileSync('app/agents/run-agent-form.tsx','utf8')
+  assert.match(runForm, /Execution preflight/)
+  assert.match(runForm, /READ_ONLY_CONVERSATION/)
+  assert.match(runForm, /AUTHORIZED_EXECUTION/)
+  assert.match(runForm, /APPROVAL_REQUIRED/)
+  assert.match(runForm, /NOT_AUTHORIZED/)
+})
+
+test('AI recommendations expose advisory provenance', () => {
+  assert.match(insights, /ADVISORY/)
+  assert.match(insights, /Evidence used/)
+  assert.match(insights, /suggestion\.evidence/)
+})
+
+test('AI posture includes evidence-domain coverage', () => {
+  assert.match(posture, /Coverage by evidence domain/)
+  assert.match(posture, /Where AI is actually evidenced/)
+  assert.match(posture, /domainCoverage/)
+})
+
+test('agent execution returns to governed asset context', () => {
+  assert.match(run, /Dataset 360/)
+  assert.match(run, /Live execution context/)
+  assert.match(run, /parent_run_id/)
+})
