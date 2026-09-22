@@ -15,7 +15,8 @@ test('readiness operation validates exact SHA and required protected environment
     'SUPABASE_SERVICE_ROLE_KEY',
     'DATANEXUS_CLOUDFLARE_WORKER_URL',
   ]) assert.match(workflow, new RegExp(marker))
-  assert.match(workflow, /get_cloudflare_observability_canary_status/)
+  assert.match(workflow, /get_cloudflare_observability_canary_release_status/)
+  assert.doesNotMatch(workflow, /rest\/v1\/rpc\/get_cloudflare_observability_canary_status/)
   assert.match(workflow, /body\.enabled!==false/)
   assert.match(workflow, /body\.cron_active!==true/)
   assert.match(workflow, /body\.allowed_job_type!=='OBSERVABILITY'/)
