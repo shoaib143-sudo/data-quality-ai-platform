@@ -167,6 +167,8 @@ export default async function AgentsPage() {
   }
   const enabledToolCount = tools.filter(tool => tool.enabled).length
   const successfulRuns = runs.filter(run => ['SUCCEEDED','COMPLETED'].includes(String(run.status).toUpperCase())).length
+  const runsByAgent = new Map<string,AgentRun[]>()
+  for (const run of runs) runsByAgent.set(run.agent_definition_id,[...(runsByAgent.get(run.agent_definition_id)??[]),run])
 
   return (
     <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-4 text-slate-100 sm:p-6 lg:p-8">
@@ -222,9 +224,11 @@ export default async function AgentsPage() {
           <div className="space-y-6">
             {enabledAgents.map((agent) => {
               const agentTools = toolsByAgent.get(agent.id) ?? []
+              const agentRuns = runsByAgent.get(agent.id) ?? []
+              const touchedDatasets = new Set(agentRuns.flatMap(run => run.dataset_id ? [run.dataset_id] : [])).size
               const detailHref = canonicalRoutes.agent(agent.agent_key, agent.version)
               return (
-                <section key={agent.id} className="space-y-5 rounded-xl border p-6">
+                <section key={agent.id} className="space-y-5 rounded-[22px] border border-white/10 bg-[#0a1d33] p-6">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -238,7 +242,7 @@ export default async function AgentsPage() {
                       <p className="mt-2 text-xs text-muted-foreground">Key: {agent.agent_key}</p>
                       <Link href={detailHref} className="mt-3 inline-block text-sm font-medium underline underline-offset-4">View agent details →</Link>
                     </div>
-                    <div className="text-sm text-muted-foreground">{agentTools.length} {agentTools.length === 1 ? 'tool' : 'tools'}</div>
+                    <div className="grid shrink-0 grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl border border-white/[0.07] bg-[#08182b] px-3 py-2"><p className="text-lg font-black text-white">{agentTools.length}</p><p className="text-slate-500">tools</p></div><div className="rounded-xl border border-white/[0.07] bg-[#08182b] px-3 py-2"><p className="text-lg font-black text-white">{agentRuns.length}</p><p className="text-slate-500">runs</p></div><div className="rounded-xl border border-white/[0.07] bg-[#08182b] px-3 py-2"><p className="text-lg font-black text-white">{touchedDatasets}</p><p className="text-slate-500">datasets</p></div></div>
                   </div>
 
                   <div>
@@ -248,7 +252,7 @@ export default async function AgentsPage() {
                     ) : (
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         {agentTools.map((tool) => (
-                          <div key={tool.id} className="rounded-lg border p-4">
+                          <div key={tool.id} className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4">
                             <div className="flex items-center justify-between gap-3">
                               <h4 className="font-medium">{tool.name}</h4>
                               <span className="text-xs text-muted-foreground">v{tool.version}</span>
