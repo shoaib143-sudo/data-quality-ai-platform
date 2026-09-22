@@ -179,7 +179,7 @@ export default async function AgentsPage() {
           <div className="flex shrink-0 gap-2">
             <Link href="/agents" aria-current="page" className="rounded-xl bg-violet-500/15 px-3 py-2 text-sm font-semibold text-violet-200 ring-1 ring-violet-400/20">Agents</Link>
             {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white">Job Monitor</Link> : null}
-            {governanceSuperAdmin ? <Link href="/admin/learning-cases" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white">Learning Cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}</Link> : null}
+            {governanceSuperAdmin ? <Link href="/admin/learning-cases" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white">Review learning cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}</Link> : null}
           </div>
         </nav>
 
