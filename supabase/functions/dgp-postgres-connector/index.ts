@@ -15,6 +15,26 @@ type ConnectorRequest = {
 };
 
 const jsonHeaders = { "content-type": "application/json" };
+
+function constantTimeEqual(left: string, right: string) {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  const length = Math.max(leftBytes.length, rightBytes.length);
+  let difference = leftBytes.length ^ rightBytes.length;
+  for (let index = 0; index < length; index += 1) {
+    difference |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
+  }
+  return difference === 0;
+}
+
+function serviceRoleAuthorized(request: Request) {
+  const expected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim() ?? "";
+  const authorization = request.headers.get("authorization")?.trim() ?? "";
+  const supplied = authorization.toLowerCase().startsWith("bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+  return Boolean(expected && supplied && constantTimeEqual(supplied, expected));
+}
 const TECHNICAL_MAX_ROWS = technicalMaxRows();
 
 function technicalMaxRows() {
@@ -238,6 +258,7 @@ Deno.serve(async (request: Request) => {
   try {
     const body = await request.json() as ConnectorRequest;
     if (body.action === "health") return reply(200, { ok: true, drivers: ["postgresql"], credential_store: "supabase-vault", technical_max_rows: TECHNICAL_MAX_ROWS });
+    if (!serviceRoleAuthorized(request)) return reply(403, { error: "Connector access denied." });
     if (body.action === "credential") return reply(200, await storeCredential(body));
     if (body.action === "catalog") return reply(200, await catalog(body));
     if (body.action === "validate") return reply(200, await validate(body));
