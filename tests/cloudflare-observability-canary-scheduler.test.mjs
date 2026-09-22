@@ -54,8 +54,9 @@ test('release workflow keeps scheduler disabled until live canary verification s
   assert.ok(verifyIndex > falseIndex)
   assert.ok(trueIndex > verifyIndex)
   assert.match(release, /Enable Supabase canary scheduler only after live verification/)
-  assert.match(release, /Content-Profile: orchestration/)
-  assert.match(release, /Accept-Profile: orchestration/)
+  assert.match(release, /rpc\/configure_cloudflare_observability_canary_release/)
+  assert.doesNotMatch(release, /Content-Profile: orchestration/)
+  assert.doesNotMatch(release, /Accept-Profile: orchestration/)
 })
 
 
@@ -80,7 +81,8 @@ test('post-activation verification proves live Supabase canary state', () => {
   assert.ok(start >= 0 && end > start)
   const enable = release.slice(start, end)
   assert.match(enable, /Verify enabled Supabase canary state/)
-  assert.match(enable, /get_cloudflare_observability_canary_status/)
+  assert.match(enable, /get_cloudflare_observability_canary_release_status/)
+  assert.doesNotMatch(enable, /rest\/v1\/rpc\/get_cloudflare_observability_canary_status/)
   assert.match(enable, /body\.enabled!==true/)
   assert.match(enable, /body\.runtime_configured!==true/)
   assert.match(enable, /body\.cron_active!==true/)
