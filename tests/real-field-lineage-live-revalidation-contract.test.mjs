@@ -43,3 +43,11 @@ test('live mutation is scoped by changed lineage files or explicit dispatch', ()
 test('connector file changes trigger the live lineage proof scope', () => {
   assert.match(workflow, /supabase\/functions\/dgp-postgres-connector\/\.\*/)
 })
+
+
+test('live runner retains sanitized Edge Function failure evidence', () => {
+  assert.match(runner, /connectorErrorMessage/)
+  assert.match(runner, /REDACTED_SECRET_KEY/)
+  assert.match(runner, /status: 'FAIL'/)
+  assert.match(runner, /LINEAGE_EVIDENCE_PATH/)
+})
