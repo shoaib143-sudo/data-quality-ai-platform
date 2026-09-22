@@ -143,7 +143,7 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
   const profileHref = profile ? `/profiling/explorer?runId=${encodeURIComponent(profile.id)}` : '/profiling/explorer'
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#0b1422] p-5 text-slate-100 sm:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#0b1422] p-4 text-slate-100 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-7">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="AI Insights" contextLabel="Evidence-backed governance intelligence" homeHref="/home" />
         <div className="flex flex-wrap items-center justify-between gap-3">
