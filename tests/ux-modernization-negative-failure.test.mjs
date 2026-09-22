@@ -54,3 +54,23 @@ test('coverage and design-system guards fail closed if key contracts disappear',
   assert.match(design,/keyboard focus remains explicit/)
   assert.match(design,/mild neomorphic semantic surfaces/)
 })
+
+
+test('partial-source and no-evidence states remain explicit instead of silently collapsing',()=>{
+  const inbox=read('app/inbox/page.tsx')
+  const dq=read('app/data-quality/page.tsx')
+  const agents=read('app/agents/page.tsx')
+  const catalog=read('app/catalog/catalog-manager.tsx')
+  const observability=read('app/observability/page.tsx')
+
+  assert.match(inbox,/Some inbox sources could not be loaded/)
+  assert.match(inbox,/Available evidence is still shown below/)
+  assert.match(dq,/No completed profiling evidence is available yet/)
+  assert.match(dq,/No persisted findings are available/)
+  assert.match(dq,/No quality evidence yet/)
+  assert.match(agents,/agent registry could not be loaded/)
+  assert.match(agents,/No enabled agents are currently registered/)
+  assert.match(catalog,/No governed data matches/)
+  assert.match(catalog,/Clear search/)
+  assert.match(observability,/No persisted observability alerts are currently available/)
+})
