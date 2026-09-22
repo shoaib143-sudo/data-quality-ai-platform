@@ -8,20 +8,20 @@
  */
 html.dark main.min-h-screen.bg-slate-50,
 html.dark main.min-h-screen.bg-gray-50 {
-  background-color: #061426;
+  background-color: #0b1422;
   color: rgb(241 245 249);
 }
 
 html.dark main.min-h-screen.bg-slate-50 .bg-white,
 html.dark main.min-h-screen.bg-gray-50 .bg-white {
-  background-color: #0a1d33;
+  background-color: #102036;
 }
 
 html.dark main.min-h-screen.bg-slate-50 .bg-slate-100,
 html.dark main.min-h-screen.bg-slate-50 .bg-gray-100,
 html.dark main.min-h-screen.bg-gray-50 .bg-slate-100,
 html.dark main.min-h-screen.bg-gray-50 .bg-gray-100 {
-  background-color: #10243b;
+  background-color: #14283f;
 }
 
 html.dark main.min-h-screen.bg-slate-50 :is(.text-slate-950,.text-slate-900,.text-gray-950,.text-gray-900),
@@ -52,4 +52,20 @@ html.dark main.min-h-screen.bg-gray-50 :is(.text-violet-600,.text-violet-700,.te
 html.dark main.min-h-screen.bg-slate-50 :is(.border-slate-200,.border-slate-300,.border-gray-200,.border-gray-300,.border-blue-100,.border-violet-100,.border-purple-100),
 html.dark main.min-h-screen.bg-gray-50 :is(.border-slate-200,.border-slate-300,.border-gray-200,.border-gray-300,.border-blue-100,.border-violet-100,.border-purple-100) {
   border-color: rgba(148, 163, 184, 0.16);
+}
+
+
+/* Modernized mild-neomorphic compatibility for legacy light utility screens. */
+html.dark main.min-h-screen.bg-slate-50 .bg-white,
+html.dark main.min-h-screen.bg-gray-50 .bg-white {
+  border-color: rgba(121, 145, 173, 0.13);
+  background: linear-gradient(145deg, rgba(18, 34, 54, 0.96), rgba(15, 29, 47, 0.96));
+  box-shadow:
+    9px 9px 22px rgba(2, 8, 18, 0.22),
+    -5px -5px 15px rgba(39, 64, 91, 0.045);
+}
+
+html.dark main.min-h-screen.bg-slate-50 :is(.rounded-3xl,.rounded-2xl),
+html.dark main.min-h-screen.bg-gray-50 :is(.rounded-3xl,.rounded-2xl) {
+  border-radius: 1rem;
 }
