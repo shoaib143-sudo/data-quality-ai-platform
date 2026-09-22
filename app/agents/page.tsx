@@ -171,7 +171,7 @@ export default async function AgentsPage() {
   for (const run of runs) runsByAgent.set(run.agent_definition_id,[...(runsByAgent.get(run.agent_definition_id)??[]),run])
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 text-slate-100 sm:p-6 lg:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 text-slate-100 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <GlobalUtilityBar persona={accessContext.persona} organizationRole={accessContext.organizationRole} roleLabel="AI Agents" contextLabel="Governed automation and execution" homeHref="/home" />
         <nav aria-label="Agent workspace" className="flex items-center justify-between gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-[#102036] px-4 py-3 shadow-sm">
