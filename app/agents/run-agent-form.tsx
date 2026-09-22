@@ -288,7 +288,7 @@ export function RunAgentForm({
   }
 
   return (
-    <section className="rounded-[22px] border border-white/10 bg-[#0a1d33] p-6">
+    <section className="rounded-[22px] border border-white/10 bg-[#102036] p-6">
       <div className="mb-5">
         <h2 className="text-lg font-semibold">Run an operational agent</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -300,7 +300,7 @@ export function RunAgentForm({
         <p className="text-sm text-muted-foreground">A runnable agent and project are required before execution can start.</p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#08182b] p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#0d1c30] p-4 sm:grid-cols-[1fr_auto] sm:items-center">
             <div>
               <p className="text-xs font-black uppercase tracking-[.14em] text-slate-500">Execution preflight</p>
               <p className="mt-1 text-sm font-bold text-slate-200">{operationSummary}</p>
