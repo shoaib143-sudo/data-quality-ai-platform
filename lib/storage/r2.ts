@@ -308,12 +308,14 @@ async function signedBucketFetch(method: 'GET', bucket: string, queryParams: Rec
 }
 
 function decodeR2XmlText(value: string) {
+  // Decode exactly one XML escaping layer. Ampersand is intentionally last so
+  // values such as &amp;lt; remain &lt; instead of being double-unescaped.
   return value
-    .replaceAll('&amp;', '&')
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
     .replaceAll('&quot;', '"')
     .replaceAll('&apos;', "'")
+    .replaceAll('&amp;', '&')
 }
 
 function scopedPrefix(prefix: string) {
