@@ -132,7 +132,10 @@ export function RoleLandingPage({ persona, data, userLabel, canAdmin=false }: { 
   const safeHref = (href: string, fallback='/catalog') => canAccessWorkspaceHref(persona.slug, href, orgRole) ? href : canAccessWorkspaceHref(persona.slug, fallback, orgRole) ? fallback : homeHref
   const plan = buildPersonaPresentationPlan(persona.slug)
   const view = buildRoleLandingPresentation(plan, data)
-  const visibleNav = persona.nav.filter(item => canAccessWorkspaceHref(persona.slug, item.href, orgRole))
+  const personaNav = persona.nav.filter(item => canAccessWorkspaceHref(persona.slug, item.href, orgRole))
+  const visibleNav = canAccessWorkspaceHref(persona.slug, '/agents', orgRole) && !personaNav.some(item => item.href === '/agents')
+    ? [...personaNav, { label: 'AI Agents', href: '/agents' }]
+    : personaNav
   const metrics = view.metrics.map(item => ({ ...item, href: safeHref(item.href) }))
   const findings = data.topFindings.slice(0,3).map(item => ({ ...item, href: safeHref(item.href, '/issues') }))
   const activity = data.activity.map(item => ({ ...item, href: safeHref(item.href, '/issues') }))
