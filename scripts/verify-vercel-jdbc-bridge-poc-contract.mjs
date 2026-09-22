@@ -14,7 +14,7 @@ const docs = read('docs/vercel-jdbc-bridge-poc.md')
 
 assert.equal(config.fluid, true, 'Vercel JDBC PoC must use Fluid compute')
 assert.equal(config.git?.deploymentEnabled, false, 'Vercel JDBC PoC must not enable automatic Git deployments')
-assert.match(dockerfile, /eclipse-temurin-21-jre/, 'Vercel JDBC PoC must remain on Java 21')
+assert.match(dockerfile, /eclipse-temurin:21-jre/, 'Vercel JDBC PoC must remain on Java 21')
 assert.match(dockerfile, /^USER 10001$/m, 'Vercel JDBC PoC container must run non-root')
 assert.match(dockerfile, /^CMD \["sh", "-c", "exec java \$JAVA_OPTS -jar \/app\/app\.jar"\]$/m, 'Vercel JDBC PoC must launch the existing Spring Boot app')
 assert.match(application, /server\.port=\$\{PORT:10000\}/, 'Bridge must bind Vercel-provided PORT')
