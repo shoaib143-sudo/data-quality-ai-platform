@@ -11,6 +11,9 @@ test('release bridge delegates only to bounded orchestration canary RPCs', () =>
   assert.match(migration, /configure_cloudflare_observability_canary_release/)
   assert.match(migration, /orchestration\.configure_cloudflare_observability_canary/)
   assert.doesNotMatch(migration, /execute\s+format|dynamic/i)
+  assert.equal((migration.match(/security definer/gi) ?? []).length, 2)
+  assert.equal((migration.match(/set search_path = pg_catalog, orchestration/gi) ?? []).length, 2)
+  assert.doesNotMatch(migration, /vault\.decrypted_secrets|return\s+p_worker_secret|select\s+p_worker_secret/i)
 })
 
 test('release bridge remains service-role-only', () => {
