@@ -34,6 +34,8 @@ test('motion and form-control targets degrade accessibly', () => {
   assert.match(css, /transition-duration: 0\.01ms !important/)
   assert.match(css, /:where\(button,input,select,textarea\)/)
   assert.match(css, /min-height: 2\.25rem/)
+  assert.match(css, /scroll-padding-top: 6rem/)
+  assert.doesNotMatch(css, /background: #050b17/)
 })
 
 test('global navigation names the AI workspace directly', () => {
