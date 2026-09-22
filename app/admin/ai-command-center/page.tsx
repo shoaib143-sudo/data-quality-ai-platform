@@ -161,7 +161,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
               <p className="mt-1 text-xs text-slate-500">{agent.usageCount} reuse · {agent.succeededCount} succeeded · {agent.failedCount} failed</p>
             </article>)}
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-7">
             {[
               ['Pending review', pgcl.counts.pendingReview],
               ['Approved', pgcl.counts.approved],
