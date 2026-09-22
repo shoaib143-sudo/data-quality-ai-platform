@@ -181,5 +181,7 @@ Architecture/health overview with restrained visual hierarchy, environment conte
 8. Context is preserved when drilling between 360 views and specialist workspaces.
 9. AI advice is labeled advisory and exposes evidence/provenance where available.
 10. Keyboard focus, semantics, contrast, narrow-screen overflow and touch targets are validated.
+11. Reduced motion and sticky-focus behavior are validated: nonessential transitions collapse under `prefers-reduced-motion`, and root scroll padding protects focused/anchored content from sticky navigation.
+12. Route shells avoid legacy near-black canvas tokens, premature 6+ column grids, and oversized 2rem page padding unless an explicit exception is documented.
 
 Total routes covered: **79**.
