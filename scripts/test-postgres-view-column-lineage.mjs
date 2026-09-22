@@ -95,3 +95,96 @@ test('does not invent mappings for DISTINCT ON view projections', () => {
   })
   assert.equal(result, null)
 })
+
+
+test('derives the full genuine glossary_reference_concepts view observed from PostgreSQL', () => {
+  const result = deriveDirectPostgresViewLineage({
+    logic: `
+      SELECT id,
+             project_id,
+             term,
+             definition,
+             domain,
+             synonyms,
+             provenance,
+             created_at,
+             updated_at
+        FROM governance.glossary_terms t
+       WHERE ((status = 'REFERENCE'::text)
+          AND (authority_type = 'REFERENCE_BOOTSTRAP'::text));
+    `,
+    targetSchema: 'governance',
+    targetView: 'glossary_reference_concepts',
+    targetColumns: [
+      'id',
+      'project_id',
+      'term',
+      'definition',
+      'domain',
+      'synonyms',
+      'provenance',
+      'created_at',
+      'updated_at',
+    ],
+  })
+
+  assert.ok(result)
+  assert.equal(result.sourceAsset, 'governance.glossary_terms')
+  assert.equal(result.targetAsset, 'governance.glossary_reference_concepts')
+  assert.equal(result.columnMappings.length, 9)
+  assert.equal(result.skippedProjectionCount, 0)
+  assert.ok(result.columnMappings.every(mapping => mapping.metadata.authoritative_source === 'pg_views.definition'))
+  assert.deepEqual(result.columnMappings.map(mapping => mapping.targetColumn), [
+    'id',
+    'project_id',
+    'term',
+    'definition',
+    'domain',
+    'synonyms',
+    'provenance',
+    'created_at',
+    'updated_at',
+  ])
+})
+
+test('derives the genuine authoritative_lineage_edges direct projection without guessing filtered semantics', () => {
+  const result = deriveDirectPostgresViewLineage({
+    logic: `
+      SELECT id,
+             project_id,
+             source_type,
+             source_id,
+             target_type,
+             target_id,
+             relationship,
+             metadata,
+             created_at,
+             transformation_id,
+             authority_state,
+             origin
+        FROM governance.lineage_edges
+       WHERE (authority_state = ANY (ARRAY['SOURCE_OBSERVED'::text, 'HUMAN_CONFIRMED'::text]));
+    `,
+    targetSchema: 'governance',
+    targetView: 'authoritative_lineage_edges',
+    targetColumns: [
+      'id',
+      'project_id',
+      'source_type',
+      'source_id',
+      'target_type',
+      'target_id',
+      'relationship',
+      'metadata',
+      'created_at',
+      'transformation_id',
+      'authority_state',
+      'origin',
+    ],
+  })
+
+  assert.ok(result)
+  assert.equal(result.sourceAsset, 'governance.lineage_edges')
+  assert.equal(result.columnMappings.length, 12)
+  assert.equal(result.skippedProjectionCount, 0)
+})
