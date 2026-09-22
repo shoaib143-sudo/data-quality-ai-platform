@@ -181,7 +181,7 @@ export default async function AgentsPage() {
               <h1 className="mt-4 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">AI Agents</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">Choose an approved capability, understand the registered tools behind it, and launch execution only within the projects and datasets you are authorized to use.</p>
               <div className="mt-5 flex flex-wrap gap-2">
-                {governanceSuperAdmin ? <Link href="/admin/learning-cases" className="rounded-xl border border-violet-300/15 bg-violet-300/[0.05] px-4 py-2.5 text-sm font-bold text-violet-200 hover:border-violet-300/30">Review learning cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}</Link> : null}
+                {governanceSuperAdmin ? (\n                  <Link href="/admin/learning-cases" className="rounded-xl border border-violet-300/15 bg-violet-300/[0.05] px-4 py-2.5 text-sm font-bold text-violet-200 hover:border-violet-300/30">Review learning cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}<\/Link>\n                ) : null}
                 {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-200 hover:border-cyan-300/25">Open Job Monitor</Link> : null}
               </div>
             </div>
