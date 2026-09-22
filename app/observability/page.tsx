@@ -20,7 +20,7 @@ type Alert = { id: string; project_id: string; dataset_id: string; profile_run_i
 
 const surface='rounded-[22px] border border-white/10 bg-[#0a1d33] shadow-[10px_10px_28px_rgba(0,0,0,.24),-7px_-7px_22px_rgba(30,74,114,.08)]'
 const inset='rounded-2xl border border-white/[0.07] bg-[#08182b]'
-const focus='focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#061426]'
+const focus='focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1422]'
 const interactive=`${focus} transition hover:-translate-y-0.5 hover:border-cyan-400/30 hover:bg-white/[0.04] active:translate-y-0`
 
 function percent(value: number | null | undefined) { return typeof value === 'number' ? `${Math.round(value * 100)}%` : 'N/A' }
@@ -131,7 +131,7 @@ export default async function ObservabilityPage() {
   ]
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#0b1422] text-slate-100">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Observability" contextLabel="Operational governance health" homeHref="/home" />
         <nav className={`${surface} mb-6 mt-4 flex flex-wrap items-center justify-end gap-4 px-5 py-3`}>
