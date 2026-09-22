@@ -58,7 +58,7 @@ export default async function RetrievalEvaluationPage({ searchParams }: { search
   const judgmentCounts = new Map<string, number>()
   for (const judgment of judgments) judgmentCounts.set(judgment.case_version_id, (judgmentCounts.get(judgment.case_version_id) ?? 0) + 1)
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-8"><div className="mx-auto max-w-7xl space-y-7">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-4 sm:p-6"><div className="mx-auto max-w-7xl space-y-7">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Retrieval Evaluation" contextLabel="Benchmark readiness evidence" homeHref="/home" />
     {canAdminWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3"><Link href={selectedProjectId ? `/admin/ai-command-center?projectId=${selectedProjectId}` : '/admin/ai-command-center'} className="text-sm font-semibold text-slate-600">← AI Command Center</Link><Link href="/admin" className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold">Administration</Link></div> : null}
 
