@@ -68,7 +68,7 @@ const checks = [
   ['advisor hardening never disables RLS', !advisorFirst.toLowerCase().includes('disable row level security') && !advisorRestrictive.toLowerCase().includes('disable row level security')],
   ['latest internal RLS-only tables are explicitly covered', latestInternalTables.every((table) => latestInternalDeny.includes(`on ${table}`))],
   ['latest internal deny policies are restrictive', (latestInternalDeny.match(/as restrictive/g) ?? []).length === latestInternalTables.length],
-  ['latest internal deny policies fail closed', (latestInternalDeny.match(/using \\(false\\)/g) ?? []).length === latestInternalTables.length && (latestInternalDeny.match(/with check \\(false\\)/g) ?? []).length === latestInternalTables.length],
+  ['latest internal deny policies fail closed', (latestInternalDeny.match(/using \(false\)/g) ?? []).length === latestInternalTables.length && (latestInternalDeny.match(/with check \(false\)/g) ?? []).length === latestInternalTables.length],
   ['latest internal deny policies target only browser roles', latestInternalDeny.includes('to anon, authenticated') && !latestInternalDeny.includes('to service_role')],
   ['latest internal hardening keeps RLS enabled', !latestInternalDeny.toLowerCase().includes('disable row level security')],
 ]
