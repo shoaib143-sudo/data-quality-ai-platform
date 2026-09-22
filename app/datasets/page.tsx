@@ -120,37 +120,50 @@ export default async function DatasetsPage() {
   }).length
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(219,234,254,0.9),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(243,232,255,0.8),_transparent_32%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_45%,_#f8fafc_100%)] text-slate-950">
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] text-slate-100">
+      <div className="mx-auto max-w-[1480px] px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Sources & Datasets" contextLabel="Onboarding and profiling readiness" homeHref="/home" />
-        <nav className="mb-6 mt-4 flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-white/80 bg-white/85 px-5 py-3 shadow-sm backdrop-blur">
-          <Link href="/profiling" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50">Profiling Workspace</Link>
-          <Link href="/journeys" className="rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-medium text-violet-700 transition hover:bg-violet-50">Governance Runs</Link>
+        <nav aria-label="Dataset workspaces" className="mb-4 mt-4 flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-white/[0.08] bg-[#09192d] px-5 py-3">
+          <Link href="/profiling" className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-slate-300 transition hover:border-cyan-300/25 hover:text-white">Profiling Workspace</Link>
+          <Link href="/journeys" className="rounded-xl border border-violet-300/15 bg-violet-300/[0.05] px-3 py-2 text-sm font-semibold text-violet-200 transition hover:border-violet-300/30">Governance Runs</Link>
         </nav>
 
-        <section className="relative overflow-hidden rounded-3xl border border-blue-100 bg-white/90 p-7 shadow-[0_20px_70px_rgba(37,99,235,0.10)] sm:p-9">
-          <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-blue-100/70 blur-3xl" />
-          <div className="absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-purple-100/70 blur-3xl" />
+        <section className="relative overflow-hidden rounded-[28px] border border-cyan-300/12 bg-[#09192d] p-7 shadow-[0_24px_70px_rgba(0,0,0,.26)] sm:p-8">
+          <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-blue-500/[0.08] blur-3xl" />
+          <div className="absolute -bottom-24 left-1/3 h-48 w-48 rounded-full bg-violet-500/[0.06] blur-3xl" />
           <div className="relative">
-            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700"><Sparkles className="h-3.5 w-3.5" /> Simple onboarding, evidence-backed operation</div>
-            <div className="mt-4 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-              <div className="max-w-3xl"><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Connect your data. Observe it. <span className="text-blue-600">Profile it.</span></h1><p className="mt-3 text-base leading-7 text-slate-600">Connection lifecycle records configuration state. Operational readiness is derived separately from completed discovery evidence and current physical catalog assets. Profiling readiness remains an execution concern.</p></div>
-              <div className="flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><ShieldCheck className="h-5 w-5" /><span><strong>{observedReadySources}</strong> observed ready source{observedReadySources === 1 ? '' : 's'}</span></div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-3 py-1.5 text-xs font-black text-cyan-200"><Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> Simple onboarding, evidence-backed operation</div>
+            <div className="mt-4 grid gap-6 xl:grid-cols-[minmax(0,1fr)_310px] xl:items-center">
+              <div className="max-w-4xl">
+                <h1 className="text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">Connect your data. Observe it. <span className="text-cyan-300">Profile it.</span></h1>
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">Connection lifecycle records configuration state. Operational readiness comes from governed discovery evidence. Profiling readiness is proven separately by an executable dataset version.</p>
+              </div>
+              <div className="rounded-3xl border border-emerald-300/15 bg-emerald-300/[0.055] p-5">
+                <ShieldCheck className="h-5 w-5 text-emerald-300" aria-hidden="true"/>
+                <p className="mt-3 text-[10px] font-black uppercase tracking-[0.14em] text-emerald-300/70">Observed ready now</p>
+                <p className="mt-1 text-4xl font-black text-white">{observedReadySources}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Source{observedReadySources === 1 ? '' : 's'} backed by current governed discovery evidence.</p>
+              </div>
             </div>
-            <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-blue-600 shadow-sm"><Database className="h-5 w-5" /></span><div><div className="text-2xl font-bold">{sources.length}</div><div className="text-xs font-medium text-slate-500">Configured sources</div></div></div></div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-slate-600 shadow-sm"><CheckCircle2 className="h-5 w-5" /></span><div><div className="text-2xl font-bold">{activeLifecycleSources}</div><div className="text-xs font-medium text-slate-500">Lifecycle active</div></div></div></div>
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-emerald-600 shadow-sm"><Activity className="h-5 w-5" /></span><div><div className="text-2xl font-bold">{observedReadySources}</div><div className="text-xs font-medium text-slate-500">Observed ready</div></div></div></div>
-              <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-amber-600 shadow-sm"><Clock3 className="h-5 w-5" /></span><div><div className="text-2xl font-bold">{unobservedSources}</div><div className="text-xs font-medium text-slate-500">Unobserved</div></div></div></div>
-              <div className="rounded-2xl border border-purple-100 bg-purple-50/70 p-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-purple-600 shadow-sm"><BarChart3 className="h-5 w-5" /></span><div><div className="text-2xl font-bold">{readyDatasets}/{datasets.length}</div><div className="text-xs font-medium text-slate-500">Profiling executable</div></div></div></div>
+
+            <div className="mt-7 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/[0.07] bg-[#061321] p-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl border border-blue-300/15 bg-blue-300/[0.06] text-blue-300"><Database className="h-5 w-5" aria-hidden="true"/></span><div><p className="text-[10px] font-black uppercase tracking-wider text-slate-600">1 · Configure</p><p className="text-sm font-bold text-slate-100">{sources.length} source{sources.length===1?'':'s'} registered</p></div></div><p className="mt-3 text-xs leading-5 text-slate-500">Save connection authority without pretending that configuration proves operational access.</p></div>
+              <div className="rounded-2xl border border-white/[0.07] bg-[#061321] p-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl border border-cyan-300/15 bg-cyan-300/[0.06] text-cyan-300"><Activity className="h-5 w-5" aria-hidden="true"/></span><div><p className="text-[10px] font-black uppercase tracking-wider text-slate-600">2 · Observe</p><p className="text-sm font-bold text-slate-100">{observedReadySources} observed ready</p></div></div><p className="mt-3 text-xs leading-5 text-slate-500">Discovery must produce current evidence and physical catalog assets before readiness is claimed.</p></div>
+              <div className="rounded-2xl border border-white/[0.07] bg-[#061321] p-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl border border-violet-300/15 bg-violet-300/[0.06] text-violet-300"><BarChart3 className="h-5 w-5" aria-hidden="true"/></span><div><p className="text-[10px] font-black uppercase tracking-wider text-slate-600">3 · Profile</p><p className="text-sm font-bold text-slate-100">{readyDatasets}/{datasets.length} executable</p></div></div><p className="mt-3 text-xs leading-5 text-slate-500">An available version plus an active execution binding proves profiling execution readiness.</p></div>
             </div>
-            <p className="mt-3 text-xs text-slate-500">Lifecycle configured: {configuredLifecycleSources}. `ACTIVE` is not treated as proof that discovery has observed the source.</p>
+
+            <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-500">
+              <span className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5">Lifecycle active: {activeLifecycleSources}</span>
+              <span className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5">Lifecycle configured: {configuredLifecycleSources}</span>
+              <span className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5">Unobserved: {unobservedSources}</span>
+              <span className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5">ACTIVE is not treated as proof of discovery observation.</span>
+            </div>
           </div>
         </section>
 
-        <section className="mt-7 grid gap-5 lg:grid-cols-2">
-          <div className="rounded-2xl border border-blue-100 bg-white p-1 shadow-sm"><div className="rounded-xl bg-gradient-to-br from-blue-50 to-white p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><Database className="h-5 w-5" /></span><div><h2 className="font-semibold">1. Connect a source</h2><p className="text-xs text-slate-500">Save or validate a reusable connection. Discovery evidence is established separately.</p></div></div><JdbcSourceForm projects={projects} organizations={organizations} canOpenDiscovery={canDiscovery} /></div></div>
-          <div id="register-dataset" className="scroll-mt-24 rounded-2xl border border-purple-100 bg-white p-1 shadow-sm"><div className="rounded-xl bg-gradient-to-br from-purple-50 to-white p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-purple-600 text-white shadow-sm"><Layers3 className="h-5 w-5" /></span><div><h2 className="font-semibold">2. Register a dataset</h2><p className="text-xs text-slate-500">Bind a dataset to a configured source. Execution readiness is validated separately.</p></div></div><RegisterDatasetForm projects={projects} organizations={organizations} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} /></div></div>
+        <section className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div className="rounded-2xl border border-blue-300/15 bg-[#09192d] p-1 shadow-[0_10px_28px_rgba(0,0,0,.18)]"><div className="rounded-xl bg-[#07182a] p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><Database className="h-5 w-5" /></span><div><h2 className="font-semibold">1. Connect a source</h2><p className="text-xs text-slate-500">Save or validate a reusable connection. Discovery evidence is established separately.</p></div></div><JdbcSourceForm projects={projects} organizations={organizations} canOpenDiscovery={canDiscovery} /></div></div>
+          <div id="register-dataset" className="scroll-mt-24 rounded-2xl border border-violet-300/15 bg-[#09192d] p-1 shadow-[0_10px_28px_rgba(0,0,0,.18)]"><div className="rounded-xl bg-[#07182a] p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-purple-600 text-white shadow-sm"><Layers3 className="h-5 w-5" /></span><div><h2 className="font-semibold">2. Register a dataset</h2><p className="text-xs text-slate-500">Bind a dataset to a configured source. Execution readiness is validated separately.</p></div></div><RegisterDatasetForm projects={projects} organizations={organizations} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} /></div></div>
         </section>
 
         <section className="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
