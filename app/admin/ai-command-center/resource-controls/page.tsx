@@ -38,7 +38,7 @@ export default async function ResourceControlsPage({ searchParams }: { searchPar
     return createGovernanceResourceControlState().read(selectedProjectId)
   })() : null
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-6">
     <div className="mx-auto max-w-7xl space-y-7">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Resource Controls" contextLabel="Governed AI execution evidence" homeHref="/home" />
       {canAdminWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3">
@@ -53,7 +53,7 @@ export default async function ResourceControlsPage({ searchParams }: { searchPar
       <form method="get" className="rounded-2xl border bg-white p-5"><label className="block text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 block w-full max-w-xl rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><button type="submit" className="mt-3 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load control evidence</button></form>
 
       {!state ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-7">
           <article className="rounded-2xl border bg-white p-5"><Gauge className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.effectiveBudgets}</p><p className="text-xs font-bold uppercase text-slate-500">Budget scopes</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.enabledBudgets}</p><p className="text-xs font-bold uppercase text-slate-500">Enabled budgets</p></article>
           <article className="rounded-2xl border bg-white p-5"><Gauge className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.recentBudgetAdmissions}</p><p className="text-xs font-bold uppercase text-slate-500">Recent admissions</p></article>
