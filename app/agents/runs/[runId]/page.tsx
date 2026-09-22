@@ -223,7 +223,7 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
   const maxRiskTier = supervisorEvents.reduce<number|null>((max,event) => typeof event.risk_tier === 'number' ? Math.max(max ?? event.risk_tier,event.risk_tier) : max,null)
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 text-slate-100 sm:p-6 lg:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 text-slate-100 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Agent Run" contextLabel="Execution evidence" homeHref="/home" />
         <div className="flex flex-wrap items-center justify-between gap-3">
