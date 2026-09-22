@@ -64,6 +64,9 @@ on:
       - 'scripts/test-ux-wave13-authorization-negative-cases.mjs'
       - 'scripts/audit-ux-wave13-adversarial.mjs'
       - 'scripts/verify-ux-post-implementation-gates.mjs'
+      - 'scripts/test-ux-experience-wave1-integration.mjs'
+      - 'scripts/test-ux-interaction-telemetry-v2.mjs'
+      - 'scripts/audit-ux-experience-wave1-adversarial.mjs'
       - 'lib/auth/safe-auth-return-path.ts'
       - 'tests/safe-auth-return-path.test.mjs'
       - 'scripts/test-ux-shared-form-interaction-contract.mjs'
@@ -149,6 +152,9 @@ on:
       - 'scripts/test-ux-wave13-authorization-negative-cases.mjs'
       - 'scripts/audit-ux-wave13-adversarial.mjs'
       - 'scripts/verify-ux-post-implementation-gates.mjs'
+      - 'scripts/test-ux-experience-wave1-integration.mjs'
+      - 'scripts/test-ux-interaction-telemetry-v2.mjs'
+      - 'scripts/audit-ux-experience-wave1-adversarial.mjs'
       - 'lib/auth/safe-auth-return-path.ts'
       - 'tests/safe-auth-return-path.test.mjs'
       - 'scripts/test-ux-shared-form-interaction-contract.mjs'
@@ -311,6 +317,12 @@ jobs:
         run: node scripts/test-ux-shared-form-interaction-contract.mjs
       - name: Run independent Wave 13 adversarial audit
         run: node scripts/audit-ux-wave13-adversarial.mjs
+      - name: Test UX Experience Wave 1 integration contract
+        run: node scripts/test-ux-experience-wave1-integration.mjs
+      - name: Test UX interaction telemetry v2 negative cases
+        run: node scripts/test-ux-interaction-telemetry-v2.mjs
+      - name: Run independent UX Experience Wave 1 adversarial audit
+        run: node scripts/audit-ux-experience-wave1-adversarial.mjs
       - name: Verify post-implementation UX gate matrix
         run: node scripts/verify-ux-post-implementation-gates.mjs
       - name: Setup pnpm

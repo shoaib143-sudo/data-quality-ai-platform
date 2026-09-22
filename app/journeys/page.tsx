@@ -216,6 +216,27 @@ export default async function JourneysPage() {
                 </div>
               </div>
 
+              <section className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4" aria-label="Next best action">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">Next best action</p>
+                {nextStep ? (
+                  <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-black text-slate-950">{nextStep.action}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">{nextStep.detail}</p>
+                      <p className="mt-1 text-xs text-slate-500">Recommended because this is the first lifecycle stage without sufficient governed evidence.</p>
+                    </div>
+                    <TrackedJourneyLink projectId={project.id} stage={telemetryStage} completedStages={completed} href={nextStep.href} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                      Continue <ArrowRight className="h-4 w-4" />
+                    </TrackedJourneyLink>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <p className="font-black text-emerald-900">All five lifecycle evidence stages are currently satisfied.</p>
+                    <p className="mt-1 text-sm text-slate-600">Review governed evidence before making any certification or risk decision.</p>
+                  </div>
+                )}
+              </section>
+
               <div className="mt-6 grid gap-3 md:grid-cols-5">
                 {steps.map((step, index) => {
                   const Icon = step.icon

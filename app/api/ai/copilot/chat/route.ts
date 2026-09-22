@@ -36,6 +36,19 @@ function safePath(value: unknown) {
 }
 
 
+function workspaceForPath(path: string) {
+  const pathname = new URL(path, 'https://datanexus.local').pathname
+  if (pathname.startsWith('/catalog')) return 'Data Catalog'
+  if (pathname.startsWith('/data-quality') || pathname.startsWith('/profiling')) return 'Data Quality'
+  if (pathname.startsWith('/lineage')) return 'Lineage'
+  if (pathname.startsWith('/monitoring') || pathname.startsWith('/observability')) return 'Operations'
+  if (pathname.startsWith('/approvals') || pathname.startsWith('/stewardship')) return 'Governance Decisions'
+  if (pathname.startsWith('/agents')) return 'Automation'
+  if (pathname.startsWith('/admin')) return 'Administration'
+  if (pathname.startsWith('/reports')) return 'Reports'
+  return 'Governance Home'
+}
+
 export async function GET() {
   try {
     const user = await requireApiUser()
@@ -69,6 +82,7 @@ export async function POST(request: Request) {
 
     const path = safePath(body.path)
     const prior = history(body.history)
+    const workspace = workspaceForPath(path)
     const access = await resolveLandingAccess(user.id)
     const persona = personas[access.persona]
     const tasks = personaAcceptanceTasks[access.persona]
@@ -170,6 +184,7 @@ export async function POST(request: Request) {
         question,
         conversation: prior,
         currentPath: path,
+        currentWorkspace: workspace,
         selectedScope: {
           dataDomain: selectedDomain ?? 'All Data Domains',
           dataset: selectedDataset ? { id: selectedDataset.id, name: selectedDataset.name } : null,
@@ -209,6 +224,7 @@ export async function POST(request: Request) {
       sourceRoutes,
       persona: persona.title,
       scope: selectedDataset?.name ?? selectedDomain ?? 'All Data Domains',
+      workspace,
       provider: result.provider,
       model: result.model,
     }, {

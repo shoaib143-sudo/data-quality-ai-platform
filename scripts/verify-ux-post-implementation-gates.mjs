@@ -7,6 +7,9 @@ const packageJson=JSON.parse(fs.readFileSync('package.json','utf8'))
 
 const requiredWorkflowPaths=[
   "'scripts/verify-ux-post-implementation-gates.mjs'",
+  "'scripts/test-ux-experience-wave1-integration.mjs'",
+  "'scripts/test-ux-interaction-telemetry-v2.mjs'",
+  "'scripts/audit-ux-experience-wave1-adversarial.mjs'",
   "'scripts/test-ux-wave9-shell-residual-governance.mjs'",
   "'scripts/test-ux-wave9-local-navigation-policy.mjs'",
   "'scripts/test-ux-wave9-cta-inventory.mjs'",
@@ -61,6 +64,9 @@ const requiredSteps=[
   "Test safe auth return-path unit and negative cases",
   "Test shared form interaction contract",
   "Run independent Wave 13 adversarial audit",
+  "Test UX Experience Wave 1 integration contract",
+  "Test UX interaction telemetry v2 negative cases",
+  "Run independent UX Experience Wave 1 adversarial audit",
   "Verify post-implementation UX gate matrix",
   "Revalidate profiling lifecycle",
   "Revalidate remediation lifecycle",
@@ -76,6 +82,9 @@ assert.equal(typeof verifyScript,'string','package.json must expose verify:ux-cl
 
 const requiredCommands=[
   "verify-ux-post-implementation-gates.mjs",
+  "test-ux-experience-wave1-integration.mjs",
+  "test-ux-interaction-telemetry-v2.mjs",
+  "audit-ux-experience-wave1-adversarial.mjs",
   "test-ux-wave9-shell-residual-governance.mjs",
   "test-ux-wave9-local-navigation-policy.mjs",
   "test-ux-wave9-cta-inventory.mjs",
@@ -108,4 +117,4 @@ for(const command of requiredCommands){
   assert.ok(verifyScript.includes(command), `local post-implementation verifier must retain: ${command}`)
 }
 
-console.log('UX post-implementation gate matrix contract passed for Waves 9-13.')
+console.log('UX post-implementation gate matrix contract passed for Waves 9-13 and Experience Wave 1.')

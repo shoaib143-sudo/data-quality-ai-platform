@@ -11,13 +11,14 @@ export function WorkspaceLoadingState({
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-12 text-slate-950">
       <section className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-7 shadow-sm sm:p-9" role="status" aria-live="polite">
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-4" aria-busy="true">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-700">
             <LoaderCircle className="h-6 w-6 animate-spin motion-reduce:animate-none" aria-hidden="true" />
           </span>
           <div>
             <h1 className="text-xl font-black">{title}</h1>
             <p className="mt-2 text-sm leading-6 text-slate-600">{detail}</p>
+            <div className="mt-4 grid grid-cols-3 gap-2" aria-hidden="true"><span className="h-2 animate-pulse rounded bg-slate-200 motion-reduce:animate-none"/><span className="h-2 animate-pulse rounded bg-slate-200 motion-reduce:animate-none"/><span className="h-2 animate-pulse rounded bg-slate-200 motion-reduce:animate-none"/></div>
           </div>
         </div>
       </section>
