@@ -3,5 +3,20 @@
   "fluid": true,
   "git": {
     "deploymentEnabled": false
-  }
+  },
+  "services": {
+    "jdbc": {
+      "runtime": "container",
+      "root": ".",
+      "entrypoint": "Dockerfile.vercel"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "jdbc"
+      }
+    }
+  ]
 }

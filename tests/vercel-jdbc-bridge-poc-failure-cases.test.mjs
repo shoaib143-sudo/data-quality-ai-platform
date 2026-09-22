@@ -13,6 +13,12 @@ test('automatic Git deployments remain disabled for the PoC', () => {
   assert.equal(config.git?.deploymentEnabled, false)
 })
 
+test('all public routes are explicitly bound to the container service', () => {
+  assert.equal(config.services?.jdbc?.runtime, 'container')
+  assert.equal(config.services?.jdbc?.entrypoint, 'Dockerfile.vercel')
+  assert.deepEqual(config.rewrites, [{ source: '/(.*)', destination: { service: 'jdbc' } }])
+})
+
 test('live probe fails closed when no PoC URL is supplied', () => {
   const env = { ...process.env }
   delete env.VERCEL_JDBC_BRIDGE_URL
