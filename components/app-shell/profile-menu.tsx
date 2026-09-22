@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 
 type SessionIdentity = { email: string }
 
-const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#061426]'
+const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1422]'
 
 export function ProfileMenu() {
   const [identity, setIdentity] = useState<SessionIdentity | null>(null)
