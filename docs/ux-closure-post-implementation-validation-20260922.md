@@ -14,12 +14,13 @@ The post-implementation gate is considered complete only when all of the followi
 2. Persona and workspace-policy navigation checks.
 3. CTA inventory and destination existence checks.
 4. Authorization negative and failure-path checks.
-5. Independent adversarial review.
-6. Profiling lifecycle regression.
-7. Remediation lifecycle regression.
-8. TypeScript validation.
-9. Production build.
-10. Repository-level required workflows with no failed checks.
+5. Shared form interaction semantics, including explicit button types and labelled controls.
+6. Independent adversarial review.
+7. Profiling lifecycle regression.
+8. Remediation lifecycle regression.
+9. TypeScript validation.
+10. Production build.
+11. Repository-level required workflows with no failed checks.
 
 The workflow wiring itself is protected by `scripts/verify-ux-post-implementation-gates.mjs`. It checks exact Wave 9 through Wave 13 workflow step names, trigger-path coverage for both pull requests and main pushes, and parity with the reusable local verifier so individual wave checks cannot be silently removed.
 
@@ -45,7 +46,7 @@ A single local entry point is available:
 
 `pnpm run verify:ux-closure-post-implementation`
 
-It runs the post-implementation gate contract plus the Product Shell, local-navigation, CTA and independent adversarial suites for Waves 9 through 13. It also runs the Wave 13 authorization and auth-redirect negative cases, profiling and remediation lifecycle regressions, TypeScript validation, and the production build.
+It runs the post-implementation gate contract plus the Product Shell, local-navigation, CTA, shared form-interaction and independent adversarial suites for Waves 9 through 13. It also runs the Wave 13 authorization and auth-redirect negative cases, profiling and remediation lifecycle regressions, TypeScript validation, and the production build.
 
 ## Rendered browser validation
 

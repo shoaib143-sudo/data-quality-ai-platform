@@ -66,6 +66,7 @@ on:
       - 'scripts/verify-ux-post-implementation-gates.mjs'
       - 'lib/auth/safe-auth-return-path.ts'
       - 'tests/safe-auth-return-path.test.mjs'
+      - 'scripts/test-ux-shared-form-interaction-contract.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -150,6 +151,7 @@ on:
       - 'scripts/verify-ux-post-implementation-gates.mjs'
       - 'lib/auth/safe-auth-return-path.ts'
       - 'tests/safe-auth-return-path.test.mjs'
+      - 'scripts/test-ux-shared-form-interaction-contract.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -305,6 +307,8 @@ jobs:
         run: node scripts/test-ux-wave13-authorization-negative-cases.mjs
       - name: Test safe auth return-path unit and negative cases
         run: node --experimental-strip-types --test tests/safe-auth-return-path.test.mjs
+      - name: Test shared form interaction contract
+        run: node scripts/test-ux-shared-form-interaction-contract.mjs
       - name: Run independent Wave 13 adversarial audit
         run: node scripts/audit-ux-wave13-adversarial.mjs
       - name: Verify post-implementation UX gate matrix

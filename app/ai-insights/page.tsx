@@ -164,7 +164,7 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
           {landingPrompt ? <input type="hidden" name="prompt" value={landingPrompt}/> : null}
           <label className="text-sm font-semibold text-slate-300">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 w-full rounded-xl border border-white/10 bg-[#08182b] px-3 py-2 font-normal text-slate-200">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
           <label className="text-sm font-semibold text-slate-300">Dataset<select name="datasetId" defaultValue={selectedDatasetId} className="mt-2 w-full rounded-xl border border-white/10 bg-[#08182b] px-3 py-2 font-normal text-slate-200">{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name}</option>)}</select></label>
-          <button className={`rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-bold text-white sm:col-span-2 ${focus}`}>Load AI evidence</button>
+          <button type="submit" className={`rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-bold text-white sm:col-span-2 ${focus}`}>Load AI evidence</button>
         </form>
 
         {!selectedDataset ? <section className={`${surface} p-8 text-sm text-slate-500`}>No governed datasets are available for this project.</section> : <>
