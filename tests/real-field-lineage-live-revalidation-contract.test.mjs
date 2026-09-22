@@ -43,3 +43,17 @@ test('live mutation is scoped by changed lineage files or explicit dispatch', ()
 test('connector file changes trigger the live lineage proof scope', () => {
   assert.match(workflow, /supabase\/functions\/dgp-postgres-connector\/\.\*/)
 })
+
+
+test('runner uses the modern secret-key service channel and avoids opaque bearer auth', () => {
+  assert.match(runner, /apikey: serviceRoleKey/)
+  assert.match(runner, /if \(jwtShaped\(serviceRoleKey\)\) headers\.authorization =/)
+  assert.match(runner, /functions\/v1\/dgp-postgres-connector/)
+  assert.doesNotMatch(runner, /admin\.functions\.invoke\('dgp-postgres-connector'/)
+})
+
+test('runner surfaces sanitized connector status and error evidence', () => {
+  assert.match(runner, /HTTP \$\{response\.status\}: \$\{safeError\}/)
+  assert.match(runner, /typeof payload\?\.error === 'string'/)
+  assert.doesNotMatch(runner, /console\.log\(serviceRoleKey\)/)
+})
