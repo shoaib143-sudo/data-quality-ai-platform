@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Activity, Bot, CheckCircle2, Sparkles, Wrench } from 'lucide-react'
 
 import { RunAgentForm, type AgentOption, type DatasetVersionOption, type ProjectOption } from './run-agent-form'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
@@ -165,26 +166,32 @@ export default async function AgentsPage() {
     toolsByAgent.set(tool.agent_definition_id, existing)
   }
 
-  return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-8">
-      <div className="mx-auto max-w-6xl space-y-8">
-        <GlobalUtilityBar persona={accessContext.persona} organizationRole={accessContext.organizationRole} roleLabel="AI Agents" contextLabel="Governed automation and execution" homeHref="/home" />
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <div className="flex flex-wrap gap-2">
-            {governanceSuperAdmin ? (
-              <Link href="/admin/learning-cases" className="rounded-lg border border-violet-200 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50">
-                Review learning cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}
-              </Link>
-            ) : null}
-            {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link> : null}
-          </div>
-        </div>
+  const activeRecentRuns = runs.filter(run => ['QUEUED','RUNNING','RETRYING','PAUSED'].includes(String(run.status).toUpperCase())).length
+  const failedRecentRuns = runs.filter(run => ['FAILED','DEAD','CANCELLED'].includes(String(run.status).toUpperCase())).length
 
-        <header>
-          <h1 className="text-3xl font-semibold">AI Agents</h1>
-          <p className="mt-2 text-muted-foreground">
-            Live agent registry, registered tools, authenticated execution, and recent run history.
-          </p>
+  return (
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] p-5 text-slate-100 sm:p-8">
+      <div className="mx-auto max-w-[1480px] space-y-6">
+        <GlobalUtilityBar persona={accessContext.persona} organizationRole={accessContext.organizationRole} roleLabel="AI Agents" contextLabel="Governed automation and execution" homeHref="/home" />
+        <header className="relative overflow-hidden rounded-[28px] border border-cyan-300/12 bg-[#09192d] p-6 shadow-[0_24px_70px_rgba(0,0,0,.26)] sm:p-7">
+          <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-violet-500/[0.08] blur-3xl"/>
+          <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_520px] xl:items-end">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-violet-300/15 bg-violet-300/[0.06] px-3 py-1.5 text-xs font-black text-violet-200"><Sparkles className="h-3.5 w-3.5" aria-hidden="true"/>Governed automation</div>
+              <h1 className="mt-4 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">AI Agents</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">Choose an approved capability, understand the registered tools behind it, and launch execution only within the projects and datasets you are authorized to use.</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {governanceSuperAdmin ? <Link href="/admin/learning-cases" className="rounded-xl border border-violet-300/15 bg-violet-300/[0.05] px-4 py-2.5 text-sm font-bold text-violet-200 hover:border-violet-300/30">Review learning cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}</Link> : null}
+                {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-200 hover:border-cyan-300/25">Open Job Monitor</Link> : null}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-2xl border border-violet-300/12 bg-[#061321] p-3"><Bot className="h-4 w-4 text-violet-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{enabledAgents.length}</p><p className="text-[10px] text-slate-500">Enabled agents</p></div>
+              <div className="rounded-2xl border border-cyan-300/12 bg-[#061321] p-3"><Wrench className="h-4 w-4 text-cyan-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{tools.length}</p><p className="text-[10px] text-slate-500">Registered tools</p></div>
+              <div className="rounded-2xl border border-blue-300/12 bg-[#061321] p-3"><Activity className="h-4 w-4 text-blue-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{activeRecentRuns}</p><p className="text-[10px] text-slate-500">Active recent runs</p></div>
+              <div className="rounded-2xl border border-rose-300/12 bg-[#061321] p-3"><CheckCircle2 className="h-4 w-4 text-rose-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{failedRecentRuns}</p><p className="text-[10px] text-slate-500">Failed / stopped</p></div>
+            </div>
+          </div>
         </header>
 
         <RunAgentForm
@@ -200,19 +207,19 @@ export default async function AgentsPage() {
         />
 
         {agentsError ? (
-          <section className="rounded-xl border border-red-200 p-6">
+          <section className="rounded-2xl border border-rose-300/20 bg-rose-300/[0.05] p-6">
             <h2 className="font-medium">Unable to load agents</h2>
             <p className="mt-2 text-sm text-muted-foreground">The agent registry could not be loaded.</p>
           </section>
         ) : enabledAgents.length === 0 ? (
-          <section className="rounded-xl border p-6 text-sm text-muted-foreground">No enabled agents are currently registered.</section>
+          <section className="rounded-2xl border border-white/[0.08] bg-[#09192d] p-6 text-sm text-slate-500">No enabled agents are currently registered.</section>
         ) : (
           <div className="space-y-6">
             {enabledAgents.map((agent) => {
               const agentTools = toolsByAgent.get(agent.id) ?? []
               const detailHref = canonicalRoutes.agent(agent.agent_key, agent.version)
               return (
-                <section key={agent.id} className="space-y-5 rounded-xl border p-6">
+                <section key={agent.id} className="space-y-5 rounded-2xl border border-white/[0.08] bg-[#09192d] p-6 shadow-[0_10px_28px_rgba(0,0,0,.18)]">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -236,7 +243,7 @@ export default async function AgentsPage() {
                     ) : (
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         {agentTools.map((tool) => (
-                          <div key={tool.id} className="rounded-lg border p-4">
+                          <div key={tool.id} className="rounded-xl border border-white/[0.07] bg-[#061321] p-4">
                             <div className="flex items-center justify-between gap-3">
                               <h4 className="font-medium">{tool.name}</h4>
                               <span className="text-xs text-muted-foreground">v{tool.version}</span>
@@ -254,8 +261,8 @@ export default async function AgentsPage() {
           </div>
         )}
 
-        <section className="rounded-xl border p-6">
-          <h2 className="text-lg font-semibold">Recent agent runs</h2>
+        <section className="rounded-2xl border border-white/[0.08] bg-[#09192d] p-6">
+          <h2 className="text-lg font-black text-white">Recent agent runs</h2>
           {runs.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">No agent runs have been recorded.</p>
           ) : (
