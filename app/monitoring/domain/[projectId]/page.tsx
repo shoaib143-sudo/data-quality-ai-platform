@@ -319,7 +319,7 @@ export default async function DomainDetailPage({
 
           <div className={styles.centerCell}>
             <div>
-              <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-cyan-200/35 bg-[#0b1422] shadow-[0_0_28px_rgba(34,211,238,.28)]"><BrainCircuit className="h-9 w-9 text-cyan-100" /></div>
+              <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-cyan-200/35 bg-[#0b1422] shadow-[6px_6px_16px_rgba(2,8,18,.24),-3px_-3px_10px_rgba(39,64,91,.045)]"><BrainCircuit className="h-9 w-9 text-cyan-100" /></div>
               <p className="mt-3 text-lg font-black text-white">Supervisor /<br />Orchestrator</p>
               <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[9px] font-black uppercase ${statusTone(domainState)}`}>{domainState}</span>
             </div>

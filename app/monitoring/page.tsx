@@ -58,7 +58,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/recovery" className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/30 hover:bg-cyan-400/5">Execution Recovery</Link>
-          <Link href="/agents" className="rounded-xl border border-cyan-300/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,.12)] transition hover:bg-cyan-400/15">Run governed feature</Link>
+          <Link href="/agents" className="rounded-xl border border-cyan-300/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-[6px_6px_16px_rgba(2,8,18,.20),-3px_-3px_10px_rgba(39,64,91,.04)] transition hover:bg-cyan-400/15">Run governed feature</Link>
         </div>
       </header>
 
