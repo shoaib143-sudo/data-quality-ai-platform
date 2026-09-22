@@ -31,6 +31,47 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
 }
 
+function jwtShaped(value) {
+  return value.split('.').length === 3
+}
+
+async function invokePostgresLineage({ url, serviceRoleKey, jdbcUrl, credentialRef, schema, table }) {
+  const headers = {
+    'content-type': 'application/json',
+    apikey: serviceRoleKey,
+  }
+  if (jwtShaped(serviceRoleKey)) headers.authorization = `Bearer ${serviceRoleKey}`
+
+  const response = await fetch(`${url.replace(/\/$/, '')}/functions/v1/dgp-postgres-connector`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      action: 'lineage',
+      jdbc_url: jdbcUrl,
+      credential_ref: credentialRef,
+      schema,
+      table,
+    }),
+  })
+
+  const raw = await response.text()
+  let payload = {}
+  try {
+    payload = raw ? JSON.parse(raw) : {}
+  } catch {
+    payload = {}
+  }
+
+  if (!response.ok) {
+    const safeError = typeof payload?.error === 'string' && payload.error.trim()
+      ? payload.error.trim()
+      : 'Connector request failed.'
+    throw new Error(`PostgreSQL lineage connector failed: HTTP ${response.status}: ${safeError}`)
+  }
+
+  return record(payload)
+}
+
 async function authorizedActor(admin, projectId) {
   const candidates = []
   const seen = new Set()
@@ -127,17 +168,14 @@ async function main() {
   }
   const discoveryRun = runRows[0]
 
-  const { data: connectorPayload, error: connectorError } = await admin.functions.invoke('dgp-postgres-connector', {
-    body: {
-      action: 'lineage',
-      jdbc_url: jdbcUrl,
-      credential_ref: credentialRef,
-      schema: targetSchema,
-      table: targetView,
-    },
+  const connector = await invokePostgresLineage({
+    url,
+    serviceRoleKey,
+    jdbcUrl,
+    credentialRef,
+    schema: targetSchema,
+    table: targetView,
   })
-  if (connectorError) throw new Error(`PostgreSQL lineage connector failed: ${connectorError.message}`)
-  const connector = record(connectorPayload)
   if (typeof connector.error === 'string' && connector.error.trim()) {
     throw new Error(`PostgreSQL lineage connector failed: ${connector.error.trim()}`)
   }
