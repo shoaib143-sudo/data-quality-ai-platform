@@ -623,11 +623,9 @@ jobs:
             SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
           fi
           curl --fail-with-body --silent --show-error \
-            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_release_status" \
             "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
-            -H "Content-Profile: orchestration" \
-            -H "Accept-Profile: orchestration" \
             --data '{}' \
             --output /tmp/canary-readiness-status.json
           node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/canary-readiness-status.json','utf8')); if(body.enabled!==false||body.cron_active!==true||body.cron_schedule!=='*/5 * * * *'||body.allowed_job_type!=='OBSERVABILITY'||body.scheduler_authority!=='Supabase'||body.single_flight_limit!==1) process.exit(1)"
@@ -711,11 +709,9 @@ jobs:
             SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
           fi
           curl --fail-with-body --silent --show-error \
-            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary_release" \
             "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
-            -H "Content-Profile: orchestration" \
-            -H "Accept-Profile: orchestration" \
             --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:false}))' "${DATANEXUS_CLOUDFLARE_WORKER_URL%/}/api/jobs/worker" "$DATANEXUS_WORKER_SECRET")"
 
       - name: Deploy observability-only worker canary
@@ -789,11 +785,9 @@ jobs:
             SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
           fi
           curl --fail-with-body --silent --show-error \
-            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary_release" \
             "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
-            -H "Content-Profile: orchestration" \
-            -H "Accept-Profile: orchestration" \
             --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:true}))' "${DATANEXUS_CLOUDFLARE_WORKER_URL%/}/api/jobs/worker" "$DATANEXUS_WORKER_SECRET")"
 
       - name: Verify enabled Supabase canary state
@@ -807,11 +801,9 @@ jobs:
             SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
           fi
           curl --fail-with-body --silent --show-error \
-            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_release_status" \
             "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
-            -H "Content-Profile: orchestration" \
-            -H "Accept-Profile: orchestration" \
             --data '{}' \
             --output /tmp/canary-enabled-status.json
           node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/canary-enabled-status.json','utf8')); if(body.enabled!==true||body.runtime_configured!==true||body.cron_active!==true||body.cron_schedule!=='*/5 * * * *'||body.allowed_job_type!=='OBSERVABILITY'||body.scheduler_authority!=='Supabase'||body.single_flight_limit!==1) process.exit(1)"
@@ -834,7 +826,7 @@ jobs:
               SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
             fi
             curl --fail-with-body --silent --show-error \
-              -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+              -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary_release" \
               "${SUPABASE_AUTH_ARGS[@]}" \
               -H "Content-Type: application/json" \
               -H "Content-Profile: orchestration" \
@@ -908,11 +900,9 @@ jobs:
             SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
           fi
           curl --fail-with-body --silent --show-error \
-            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary_release" \
             "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
-            -H "Content-Profile: orchestration" \
-            -H "Accept-Profile: orchestration" \
             --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:false}))' "${DATANEXUS_CLOUDFLARE_WORKER_URL%/}/api/jobs/worker" "$DATANEXUS_WORKER_SECRET")"
 
       - name: Setup pnpm
@@ -990,11 +980,9 @@ jobs:
             SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
           fi
           curl --fail-with-body --silent --show-error \
-            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_release_status" \
             "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
-            -H "Content-Profile: orchestration" \
-            -H "Accept-Profile: orchestration" \
             --data '{}' \
             --output /tmp/canary-disabled-status.json
           node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/canary-disabled-status.json','utf8')); if(body.enabled!==false||body.cron_active!==true||body.allowed_job_type!=='OBSERVABILITY'||body.scheduler_authority!=='Supabase'||body.single_flight_limit!==1) process.exit(1)"
