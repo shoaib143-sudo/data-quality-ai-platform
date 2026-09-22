@@ -47,13 +47,23 @@ if (contract.timingTruth?.databaseRestoreDurationIsPlatformRto !== false) throw 
 const edgeFunctions = platform.supabase?.requiredEdgeFunctions ?? []
 if (edgeFunctions.length < 6) throw new Error('Platform manifest must retain all required Edge Functions.')
 for (const functionName of edgeFunctions) {
-  await access(`supabase/functions/${functionName}/index.ts`, constants.R_OK)
+  const entrypoint = `supabase/functions/${functionName}/index.ts`
+  await access(entrypoint, constants.R_OK)
   const section = `[functions.${functionName}]`
   const start = supabaseConfig.indexOf(section)
   if (start < 0) throw new Error(`Missing source-controlled Supabase config for ${functionName}`)
   const next = supabaseConfig.indexOf('\n[functions.', start + section.length)
   const body = supabaseConfig.slice(start, next < 0 ? supabaseConfig.length : next)
-  if (!/verify_jwt\s*=\s*true/.test(body)) throw new Error(`${functionName} must keep JWT verification enabled`)
+
+  if (functionName === 'dgp-postgres-connector') {
+    const source = await readFile(entrypoint, 'utf8')
+    if (!/verify_jwt\s*=\s*false/.test(body)) throw new Error('dgp-postgres-connector must use its governed custom server-secret authorization boundary.')
+    for (const pattern of [/SUPABASE_SECRET_KEYS/, /SUPABASE_SERVICE_ROLE_KEY/, /headers\.get\(["']apikey["']\)/, /constantTimeEqual/, /serviceRoleAuthorized/]) {
+      if (!pattern.test(source)) throw new Error('dgp-postgres-connector custom server-secret authorization contract is incomplete.')
+    }
+  } else if (!/verify_jwt\s*=\s*true/.test(body)) {
+    throw new Error(`${functionName} must keep JWT verification enabled`)
+  }
 }
 console.log('PASS EDGE_RUNTIME source authority')
 
