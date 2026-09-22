@@ -131,17 +131,27 @@ export default async function ObservabilityPage() {
   ]
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100">
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] text-slate-100">
+      <div className="mx-auto max-w-[1480px] px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Observability" contextLabel="Operational governance health" homeHref="/home" />
-        <nav className={`${surface} mb-6 mt-4 flex flex-wrap items-center justify-end gap-4 px-5 py-3`}>
+        <nav aria-label="Observability workspaces" className="mb-4 mt-4 flex flex-wrap items-center justify-end gap-4 rounded-2xl border border-white/[0.08] bg-[#09192d] px-5 py-3">
           <div className="flex flex-wrap gap-2 text-sm">{canDatasets?<Link href="/datasets" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Datasets</Link>:null}{canProfiling?<Link href="/profiling/explorer" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Profiling evidence</Link>:null}{canDataQuality?<Link href="/data-quality" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Data Quality</Link>:null}{canMonitoring?<Link href="/monitoring" className={`rounded-xl bg-white/[0.06] px-4 py-2 font-semibold text-white ${focus}`}>Job Monitor</Link>:null}{canManageWorkspace?<Link href="/observability/settings" className={`rounded-xl px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Settings</Link>:null}</div>
         </nav>
 
-        <header className={`${surface} p-7 sm:p-9`}>
-          <div className="grid gap-7 lg:grid-cols-[1fr_280px] lg:items-center">
-            <div><div className="inline-flex items-center gap-2 rounded-full bg-violet-400/10 px-3 py-1.5 text-xs font-bold text-violet-300"><Activity className="h-3.5 w-3.5" /> Live governance observability</div><h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-5xl">Is governed data staying healthy after onboarding?</h1><p className="mt-4 max-w-3xl text-base leading-7 text-slate-400">This workspace uses persisted connection, profiling, quality-control and job evidence to identify material changes. Freshness breaches are taken from persisted observability policy evaluation, not a frontend threshold.</p></div>
-            <Link href="#alerts" className={`${inset} ${interactive} p-6 text-center`}><Eye className="mx-auto h-9 w-9 text-emerald-300" /><p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500">Open governance alerts</p><p className="mt-1 text-5xl font-black text-white">{openAlerts.length}</p><p className="mt-2 text-sm text-slate-500">{highAlerts.length} high or critical</p></Link>
+        <header className="relative overflow-hidden rounded-[28px] border border-cyan-300/12 bg-[#09192d] p-7 shadow-[0_24px_70px_rgba(0,0,0,.26)] sm:p-8">
+          <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-violet-500/[0.07] blur-3xl"/>
+          <div className="relative grid gap-7 xl:grid-cols-[minmax(0,1fr)_430px] xl:items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-violet-300/15 bg-violet-300/[0.06] px-3 py-1.5 text-xs font-bold text-violet-300"><Activity className="h-3.5 w-3.5" aria-hidden="true"/>Live governance observability</div>
+              <h1 className="mt-4 max-w-4xl text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">Is governed data staying healthy after onboarding?</h1>
+              <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400">This workspace uses persisted connection, profiling, quality-control and job evidence to identify material changes. Freshness breaches are taken from persisted observability policy evaluation, not a frontend threshold.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Link href="#alerts" className={`rounded-2xl border border-rose-300/12 bg-[#061321] p-4 ${interactive}`}><Eye className="h-5 w-5 text-rose-300" aria-hidden="true"/><p className="mt-2 text-3xl font-black text-white">{openAlerts.length}</p><p className="text-[10px] text-slate-500">Open alerts</p></Link>
+              <Link href="#alerts" className={`rounded-2xl border border-amber-300/12 bg-[#061321] p-4 ${interactive}`}><AlertTriangle className="h-5 w-5 text-amber-300" aria-hidden="true"/><p className="mt-2 text-3xl font-black text-white">{highAlerts.length}</p><p className="text-[10px] text-slate-500">High / critical</p></Link>
+              <Link href="#alerts" className={`rounded-2xl border border-cyan-300/12 bg-[#061321] p-4 ${interactive}`}><TimerReset className="h-5 w-5 text-cyan-300" aria-hidden="true"/><p className="mt-2 text-3xl font-black text-white">{freshnessAlerts.length}</p><p className="text-[10px] text-slate-500">Freshness alerts</p></Link>
+              <Link href={jobsHref} className={`rounded-2xl border border-violet-300/12 bg-[#061321] p-4 ${interactive}`}><Activity className="h-5 w-5 text-violet-300" aria-hidden="true"/><p className="mt-2 text-3xl font-black text-white">{failedJobs}</p><p className="text-[10px] text-slate-500">Failed jobs</p></Link>
+            </div>
           </div>
         </header>
 
