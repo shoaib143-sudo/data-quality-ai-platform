@@ -77,7 +77,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
         />
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#061426] px-5 py-4 text-xs text-slate-500">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#0b1422] px-5 py-4 text-xs text-slate-500">
         <span>Job Monitor is the domain-level execution surface. Select a domain to drill into feature results, datasets, lineage, impact and governed evidence.</span>
         <Link href="/recovery" className="font-bold text-cyan-200/75 hover:text-cyan-100">Open execution recovery →</Link>
       </div>
