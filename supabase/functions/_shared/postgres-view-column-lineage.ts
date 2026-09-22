@@ -130,7 +130,7 @@ export function deriveDirectPostgresViewLineage(input: {
   const relationTable = relationParts.at(-1)!
 
   const afterRelation = logic.slice(fromMatch.index + fromMatch[0].length).trimStart()
-  const aliasRegex = new RegExp('^(?:as\\s+)?(' + identifier + ')\\b', 'i')
+  const aliasRegex = new RegExp('^(?:as\\s+)?(' + identifier + ')(?=\\s|$)', 'i')
   const aliasMatch = aliasRegex.exec(afterRelation)
   const aliasCandidate = aliasMatch ? unquoteIdentifier(aliasMatch[1]) : null
   const relationAlias = aliasCandidate && !SQL_KEYWORDS.has(aliasCandidate.toLowerCase()) ? aliasCandidate : null
