@@ -7,7 +7,7 @@ const page=fs.readFileSync('app/profiling/page.tsx','utf8')
 for(const marker of [
   'Profiling evidence',
   'Profile evidence',
-  'Open full profiling report',
+  'Full profiling report',
   'Data Observability',
   'Data Quality',
   'Run {run.id.slice(0, 8)}',
