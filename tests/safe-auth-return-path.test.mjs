@@ -18,11 +18,24 @@ test('safeAuthReturnPath rejects external and ambiguous redirect forms', () => {
     '///evil.example',
     '/\\evil.example',
     '/catalog\\..\\evil.example',
+    '/\n//evil.example',
+    '/\r//evil.example',
   ]) {
     assert.equal(safeAuthReturnPath(value), '/dashboard', String(value))
   }
 })
 
-test('safeAuthReturnPath honors a caller-provided safe fallback', () => {
+test('safeAuthReturnPath accepts a safe caller-provided fallback', () => {
   assert.equal(safeAuthReturnPath('//evil.example', '/home'), '/home')
+})
+
+test('safeAuthReturnPath fails closed when the fallback is also unsafe', () => {
+  for (const fallback of [
+    'https://evil.example',
+    '//evil.example',
+    '/\\evil.example',
+    '/\n//evil.example',
+  ]) {
+    assert.equal(safeAuthReturnPath('//evil.example', fallback), '/dashboard', fallback)
+  }
 })
