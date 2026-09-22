@@ -71,7 +71,6 @@ on:
       - 'tests/safe-auth-return-path.test.mjs'
       - 'scripts/test-ux-shared-form-interaction-contract.mjs'
       - 'scripts/test-ux-login-experience.mjs'
-      - 'scripts/test-ux-login-experience.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
