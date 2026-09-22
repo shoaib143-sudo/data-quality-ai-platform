@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, BookOpen, Database, Gauge, Tag, Users } from 'lucide-react'
+import { Activity, ArrowLeft, ArrowRight, BookOpen, Bot, Braces, Database, Gauge, GitBranch, Tag, Users } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { hasProjectCapability } from '@/lib/auth/authorize'
@@ -40,6 +40,9 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
   const canStewardship=canAccessWorkspace(landing.persona,'stewardship',landing.organizationRole)
   const canProfiling=canAccessWorkspace(landing.persona,'profiling',landing.organizationRole)
   const canJourneys=canAccessWorkspace(landing.persona,'journeys',landing.organizationRole)
+  const canContracts=canAccessWorkspace(landing.persona,'contracts',landing.organizationRole)
+  const canObservability=canAccessWorkspace(landing.persona,'observability',landing.organizationRole)
+  const canAgents=canAccessWorkspace(landing.persona,'agents',landing.organizationRole)
 
   const datasetResult=await supabase.schema('catalog').from('datasets').select('id,project_id,name,description,source_identifier,business_domain,status,created_at,updated_at').eq('id',datasetId).maybeSingle()
   if(datasetResult.error)throw new Error(`Unable to load dataset: ${datasetResult.error.message}`)
@@ -47,7 +50,8 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
   const dataset=datasetResult.data
   const canExecuteProfiling=canProfiling&&await hasProjectCapability(user.id,dataset.project_id,'profiling.execute')
 
-  const [versionResult,catalogResult,classificationsResult,glossaryResult,cdeResult,issuesResult,agentDefinitionResult]=await Promise.all([
+  const empty={data:[],error:null}
+  const [versionResult,catalogResult,classificationsResult,glossaryResult,cdeResult,issuesResult,agentDefinitionResult,lineageAssetsResult,contractsResult,alertsResult,agentRunsResult]=await Promise.all([
     supabase.schema('catalog').from('dataset_versions').select('id,version_number,status,row_count,column_count,observed_at,created_at').eq('dataset_id',datasetId).order('version_number',{ascending:false}).limit(8),
     supabase.schema('governance').from('dataset_catalog').select('certification_status,criticality,lifecycle_status,business_description,business_owner_user_id,steward_user_id,tags,retention_days').eq('dataset_id',datasetId).maybeSingle(),
     supabase.schema('governance').from('dataset_classifications').select('id,status,label_id,column_name,confidence,authority_state').eq('dataset_id',datasetId),
@@ -55,8 +59,12 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
     supabase.schema('governance').from('cde_mappings').select('id,status,column_name,confidence').eq('dataset_id',datasetId),
     supabase.schema('governance').from('issues').select('id,title,severity,status,description,profile_run_id,finding_id,updated_at').eq('dataset_id',datasetId).order('updated_at',{ascending:false}).limit(12),
     supabase.schema('agent').from('agent_definitions').select('id').eq('agent_key','profiling_agent').eq('version','2.0').eq('enabled',true).maybeSingle(),
+    canLineage?supabase.schema('governance').from('lineage_assets').select('id,name,asset_type').eq('dataset_id',datasetId):Promise.resolve(empty),
+    canContracts?supabase.schema('governance').from('data_contracts').select('id,name,status,current_version').eq('dataset_id',datasetId).order('updated_at',{ascending:false}).limit(20):Promise.resolve(empty),
+    canObservability?supabase.schema('profiling').from('observability_alerts').select('id,category,severity,status,title').eq('dataset_id',datasetId).order('last_observed_at',{ascending:false}).limit(20):Promise.resolve(empty),
+    canAgents?supabase.schema('agent').from('agent_runs').select('id,status,agent_definition_id,created_at,completed_at,error_code').eq('dataset_id',datasetId).order('created_at',{ascending:false}).limit(12):Promise.resolve(empty),
   ])
-  for(const result of [versionResult,catalogResult,classificationsResult,glossaryResult,cdeResult,issuesResult,agentDefinitionResult])if(result.error)throw new Error(`Unable to load governed dataset evidence: ${result.error.message}`)
+  for(const result of [versionResult,catalogResult,classificationsResult,glossaryResult,cdeResult,issuesResult,agentDefinitionResult,lineageAssetsResult,contractsResult,alertsResult,agentRunsResult])if(result.error)throw new Error(`Unable to load governed dataset evidence: ${result.error.message}`)
 
   const recentVersions=versionResult.data??[]
   const version=recentVersions[0]??null
@@ -91,6 +99,24 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
   const profilingHref=run?`/profiling/explorer?runId=${encodeURIComponent(run.id)}`:'/profiling/explorer'
   const datasetHref=canonicalRoutes.governedDataset(dataset.id)
   const hasAccountability=Boolean(catalog?.business_owner_user_id||catalog?.steward_user_id)
+  const lineageAssets=lineageAssetsResult.data??[]
+  const lineageAssetIds=lineageAssets.map(row=>String(row.id))
+  const [sourceEdgesResult,targetEdgesResult,sourceMappingsResult,targetMappingsResult]=lineageAssetIds.length?await Promise.all([
+    supabase.schema('governance').from('lineage_edges').select('id').in('source_asset_id',lineageAssetIds),
+    supabase.schema('governance').from('lineage_edges').select('id').in('target_asset_id',lineageAssetIds),
+    supabase.schema('governance').from('lineage_column_mappings').select('id').in('source_asset_id',lineageAssetIds),
+    supabase.schema('governance').from('lineage_column_mappings').select('id').in('target_asset_id',lineageAssetIds),
+  ]):[empty,empty,empty,empty]
+  for(const result of [sourceEdgesResult,targetEdgesResult,sourceMappingsResult,targetMappingsResult])if(result.error)throw new Error(`Unable to load dataset lineage context: ${result.error.message}`)
+  const lineageEdgeCount=new Set([...(sourceEdgesResult.data??[]),...(targetEdgesResult.data??[])].map(row=>String(row.id))).size
+  const lineageMappingCount=new Set([...(sourceMappingsResult.data??[]),...(targetMappingsResult.data??[])].map(row=>String(row.id))).size
+  const dataContracts=contractsResult.data??[]
+  const activeContracts=dataContracts.filter(row=>!['RETIRED','CANCELLED'].includes(String(row.status).toUpperCase()))
+  const observabilityAlerts=alertsResult.data??[]
+  const openAlerts=observabilityAlerts.filter(row=>!['RESOLVED','CLOSED'].includes(String(row.status).toUpperCase()))
+  const agentRuns=agentRunsResult.data??[]
+  const successfulAgentRuns=agentRuns.filter(row=>['SUCCEEDED','COMPLETED'].includes(String(row.status).toUpperCase()))
+  const lineageHref=`/lineage?q=${encodeURIComponent(dataset.name)}`
 
   const metricRegistry:Record<DatasetMetricKey,ReactNode>={
     quality:<GovernedMetricCard href={canProfiling?profilingHref:undefined} icon={<Gauge className="h-5 w-5"/>} value={pct(score?.overall_score)} label="Data quality" detail="Latest scored profiling evidence"/>,
@@ -142,15 +168,33 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
     </div>
   </GovernedSection>
 
-  const sectionRegistry:Record<DatasetSectionKey,ReactNode>={quality:qualitySection,issues:issuesSection,findings:findingsSection,governance:governanceSection}
+  const connectedContextSection=<GovernedSection eyebrow="Data 360 context" title="Connected governance context">
+    <p className="mb-4 max-w-4xl text-sm leading-6 text-slate-500">One dataset view across dependency, control, operational and automation evidence. Counts below are persisted records for this dataset and never inferred from visual proximity.</p>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <GovernedEvidenceTile href={canLineage?lineageHref:undefined} label="Lineage" value={`${lineageAssets.length} assets`} detail={`${lineageEdgeCount} edges · ${lineageMappingCount} field mappings`}/>
+      <GovernedEvidenceTile href={canContracts?'/contracts':undefined} label="Data contracts" value={String(activeContracts.length)} detail={`${dataContracts.length} linked contract${dataContracts.length===1?'':'s'}`}/>
+      <GovernedEvidenceTile href={canObservability?'/observability':undefined} label="Open observability alerts" value={String(openAlerts.length)} detail={`${observabilityAlerts.length} recent alert${observabilityAlerts.length===1?'':'s'}`}/>
+      <GovernedEvidenceTile href={canAgents?'/agents':undefined} label="Agent activity" value={String(agentRuns.length)} detail={`${successfulAgentRuns.length} successful recent run${successfulAgentRuns.length===1?'':'s'}`}/>
+    </div>
+    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <GovernedEvidenceTile href={canStewardship?'/stewardship':undefined} label="Ownership" value={hasAccountability?'Assigned':'Missing'} detail="Business owner or steward"/>
+      <GovernedEvidenceTile href={canGlossary?'/glossary':undefined} label="Business meaning" value={String(approvedGlossary)} detail="Approved glossary mappings"/>
+      <GovernedEvidenceTile href={canClassification?'/classification':undefined} label="Classification & CDE" value={`${approvedClassifications} / ${cdeCount}`} detail="Approved classifications / critical data mappings"/>
+      <GovernedEvidenceTile href={canIssues?'/issues':undefined} label="Remediation" value={String(openIssues.length)} detail="Open governed issues"/>
+    </div>
+  </GovernedSection>
+
+    const sectionRegistry:Record<DatasetSectionKey,ReactNode>={quality:qualitySection,issues:issuesSection,findings:findingsSection,governance:governanceSection}
 
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Dataset 360" contextLabel={dataset.name} homeHref="/home" />
-    <nav className={`${surface} mt-4 flex flex-wrap items-center justify-between gap-3 px-5 py-3`}><Link href="/catalog" className={`inline-flex items-center gap-2 text-sm font-bold text-slate-300 hover:text-white ${focus}`}><ArrowLeft className="h-4 w-4"/>Data Catalog</Link><div className="flex flex-wrap gap-2">{canProfiling&&run?<Link href={profilingHref} className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Profiling evidence</Link>:null}{canLineage?<Link href="/lineage" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Lineage</Link>:null}{canIssues?<Link href="/issues" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Issues</Link>:null}{canJourneys?<Link href={canonicalRoutes.governanceRun(dataset.project_id)} className={`rounded-xl px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[0.05] ${focus}`}>Governance Run</Link>:null}</div></nav>
+    <nav className={`${surface} mt-4 flex items-center justify-between gap-3 overflow-x-auto px-5 py-3`}><Link href="/catalog" className={`inline-flex shrink-0 items-center gap-2 text-sm font-bold text-slate-300 hover:text-white ${focus}`}><ArrowLeft className="h-4 w-4"/>Data Catalog</Link><div className="flex shrink-0 gap-2">{canProfiling&&run?<Link href={profilingHref} className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Profiling</Link>:null}{canLineage?<Link href={lineageHref} className={`rounded-xl px-3 py-2 text-sm font-semibold text-violet-300 hover:bg-white/[0.05] ${focus}`}>Lineage</Link>:null}{canContracts?<Link href="/contracts" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Contracts</Link>:null}{canObservability?<Link href="/observability" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Observability</Link>:null}{canAgents?<Link href="/agents" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Agents</Link>:null}{canIssues?<Link href="/issues" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Issues</Link>:null}{canJourneys?<Link href={canonicalRoutes.governanceRun(dataset.project_id)} className={`rounded-xl px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[0.05] ${focus}`}>Governance Run</Link>:null}</div></nav>
 
     <header className={`${surface} mt-5 p-6 sm:p-7`}><div className="flex flex-wrap items-start justify-between gap-5"><div className="max-w-4xl"><div className="flex flex-wrap items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-400/10 text-blue-300"><Database className="h-5 w-5"/></span><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">{presentation.lensLabel}</p><h1 className="mt-1 text-3xl font-black text-white">{dataset.name}</h1></div></div><p className="mt-4 text-base font-bold text-slate-200">{presentation.primaryQuestion}</p><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{catalog?.business_description||dataset.description||'No governed business description is available yet.'}</p><div className="mt-4 flex flex-wrap gap-2 text-xs"><span className="rounded-lg bg-blue-400/10 px-2.5 py-1.5 font-bold text-blue-300">{catalog?.certification_status||'UNCERTIFIED'}</span><span className="rounded-lg bg-amber-400/10 px-2.5 py-1.5 font-bold text-amber-300">{catalog?.criticality||'UNSET'} criticality</span><span className="rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-slate-400">{dataset.business_domain||'Unassigned domain'}</span><span className="rounded-lg bg-white/[0.05] px-2.5 py-1.5 text-slate-400">{dataset.status}</span></div><p className="mt-4 text-[11px] text-slate-600">Persona-aware presentation only. Governed evidence, policy and authorization are unchanged.</p></div><Link href={`/ai-insights?projectId=${encodeURIComponent(dataset.project_id)}&datasetId=${encodeURIComponent(dataset.id)}&prompt=${encodeURIComponent(`Explain the current trust, risks and governed evidence for ${dataset.name} for a ${presentation.lensLabel.toLowerCase()}`)}`} className={`rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-3 text-sm font-bold text-white ${focus}`}>Ask DataNexus AI <ArrowRight className="ml-1 inline h-4 w-4"/></Link></div></header>
 
     <DatasetTrustSignals certification={catalog?.certification_status||'UNCERTIFIED'} quality={score?.overall_score} observedAt={run?.completed_at??version?.observed_at??version?.created_at??null} hasAccountability={hasAccountability} openIssues={openIssues.length}/>
+
+    <div className="mt-5">{connectedContextSection}</div>
 
     {canExecuteProfiling&&version?<section className={`${surface} mt-5 p-5`} aria-label="Profiling readiness actions"><div className="mb-3"><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Profiling readiness</p><p className="mt-1 text-sm text-slate-400">Deterministic readiness is authoritative. Governed AI may diagnose blockers and only execute policy-authorized low-risk repair.</p></div><DatasetActions projectId={dataset.project_id} datasetId={dataset.id} datasetVersionId={version.id} agentDefinitionId={agentDefinition?.id??null} ready={false}/></section>:null}
 
