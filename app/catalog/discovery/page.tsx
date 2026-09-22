@@ -1,9 +1,11 @@
 import Link from 'next/link'
-import { AlertTriangle, Layers3, Radar } from 'lucide-react'
+import { AlertTriangle, Radar } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { DiscoveryManager } from './discovery-manager'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
 
 type DiscoveryJobRow = {
   id: string
@@ -46,8 +48,8 @@ function jdbcEvidenceTone(state: string) {
 }
 
 export default async function DiscoveryPage() {
-  await requireUser()
-  const supabase = await createClient()
+  const user = await requireUser()
+  const [supabase, landing] = await Promise.all([createClient(), resolveLandingAccess(user.id)])
   const [sources, runs, currentAssets, readiness, jdbcEvidence] = await Promise.all([
     supabase
       .schema('catalog')
@@ -126,13 +128,10 @@ export default async function DiscoveryPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <nav className="mb-6 flex items-center justify-between rounded-2xl border bg-white px-5 py-3 shadow-sm">
-          <Link href="/dashboard" className="flex items-center gap-3 font-bold">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5" /></span>
-            Data Governance PowerHouse
-          </Link>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Metadata Discovery" contextLabel="Source reconciliation and readiness" homeHref="/home" />
+        <nav className="mb-6 mt-4 flex items-center justify-end rounded-2xl border bg-white px-5 py-3 shadow-sm">
           <Link href="/catalog" className="text-sm font-semibold text-blue-600">Catalog</Link>
         </nav>
         <header className="rounded-3xl border border-blue-100 bg-white p-7 shadow-sm">

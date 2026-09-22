@@ -7,6 +7,7 @@ import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 type Project = { id: string; name: string }
 type Dataset = { id: string; name: string; project_id: string }
@@ -142,8 +143,9 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
   const profileHref = profile ? `/profiling/explorer?runId=${encodeURIComponent(profile.id)}` : '/profiling/explorer'
 
   return (
-    <main className="min-h-screen bg-[#061426] p-5 text-slate-100 sm:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-5 text-slate-100 sm:p-8">
       <div className="mx-auto max-w-7xl space-y-7">
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="AI Insights" contextLabel="Evidence-backed governance intelligence" homeHref="/home" />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/home" className={`text-sm font-medium text-slate-300 hover:text-white ${focus}`}>← Role home</Link>
           {canAICapabilities ? <Link href="/ai-capabilities" className={`rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-200 hover:border-cyan-400/30 ${focus}`}>AI capability coverage</Link> : null}
@@ -162,7 +164,7 @@ export default async function AIInsightsPage({ searchParams }: { searchParams: P
           {landingPrompt ? <input type="hidden" name="prompt" value={landingPrompt}/> : null}
           <label className="text-sm font-semibold text-slate-300">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 w-full rounded-xl border border-white/10 bg-[#08182b] px-3 py-2 font-normal text-slate-200">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
           <label className="text-sm font-semibold text-slate-300">Dataset<select name="datasetId" defaultValue={selectedDatasetId} className="mt-2 w-full rounded-xl border border-white/10 bg-[#08182b] px-3 py-2 font-normal text-slate-200">{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name}</option>)}</select></label>
-          <button className={`rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-bold text-white sm:col-span-2 ${focus}`}>Load AI evidence</button>
+          <button type="submit" className={`rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-bold text-white sm:col-span-2 ${focus}`}>Load AI evidence</button>
         </form>
 
         {!selectedDataset ? <section className={`${surface} p-8 text-sm text-slate-500`}>No governed datasets are available for this project.</section> : <>

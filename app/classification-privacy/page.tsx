@@ -1,11 +1,12 @@
 import Link from 'next/link'
-import { ShieldCheck, Layers3 } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { resolvePreferredGovernanceProject } from '@/lib/governance/preferred-project'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { requireUser } from '@/lib/auth/require-user'
 import { createClient } from '@/lib/supabase/server'
 import { ClassificationPrivacyManager } from './classification-privacy-manager'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 export default async function ClassificationPrivacyPage() {
   const user = await requireUser()
@@ -29,16 +30,14 @@ export default async function ClassificationPrivacyPage() {
     if (result.error) throw new Error(result.error.message)
   }
   const homeHref = canAccessWorkspace(landing.persona, 'dashboard', landing.organizationRole) ? '/dashboard' : '/home'
+  const canCatalog = canAccessWorkspace(landing.persona, 'catalog', landing.organizationRole)
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <nav className="mb-6 flex items-center justify-between rounded-2xl border bg-white px-5 py-3 shadow-sm">
-          <Link href={homeHref} className="flex items-center gap-3 font-bold">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5" /></span>
-            DataNexus AI
-          </Link>
-          <Link href="/catalog" className="text-sm font-semibold text-blue-600">Catalog</Link>
+        <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Classification & Privacy" contextLabel="Governed classification and privacy controls" homeHref={homeHref} />
+        <nav className="mb-6 mt-4 flex items-center justify-end rounded-2xl border bg-white px-5 py-3 shadow-sm">
+          {canCatalog ? <Link href="/catalog" className="text-sm font-semibold text-blue-600">Catalog</Link> : null}
         </nav>
         <header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm">
           <div className="flex items-center gap-3">

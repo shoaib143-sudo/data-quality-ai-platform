@@ -1,10 +1,11 @@
 import Link from 'next/link'
-import { Database, Layers3 } from 'lucide-react'
+import { Database } from 'lucide-react'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { PhysicalAssetManager } from './physical-asset-manager'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
 export default async function PhysicalAssetsPage() {
   const user = await requireUser()
@@ -30,8 +31,9 @@ export default async function PhysicalAssetsPage() {
   const canDashboard = canAccessWorkspace(landing.persona, 'dashboard', landing.organizationRole)
   const canDiscovery = canAccessWorkspace(landing.persona, 'discovery', landing.organizationRole)
 
-  return <main className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-    <nav className="mb-6 flex items-center justify-between rounded-2xl border bg-white px-5 py-3 shadow-sm"><Link href={canDashboard ? '/dashboard' : '/home'} className="flex items-center gap-3 font-bold"><span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white"><Layers3 className="h-5 w-5"/></span>DataNexus AI</Link><div className="flex gap-2 text-sm"><Link href="/catalog" className="rounded-xl px-3 py-2 font-semibold hover:bg-slate-100">Catalog</Link>{canDiscovery ? <Link href="/catalog/discovery" className="rounded-xl px-3 py-2 font-semibold hover:bg-slate-100">Discovery</Link> : null}</div></nav>
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Physical Metadata Assets" contextLabel="Published source facts and trust evidence" homeHref={canDashboard ? '/dashboard' : '/home'} />
+    <nav className="mb-6 mt-4 flex items-center justify-end rounded-2xl border bg-white px-5 py-3 shadow-sm"><div className="flex gap-2 text-sm"><Link href="/catalog" className="rounded-xl px-3 py-2 font-semibold hover:bg-slate-100">Catalog</Link>{canDiscovery ? <Link href="/catalog/discovery" className="rounded-xl px-3 py-2 font-semibold hover:bg-slate-100">Discovery</Link> : null}</div></nav>
     <header className="rounded-3xl border border-blue-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Database className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Physical Metadata Assets</h1><p className="mt-1 text-sm text-slate-500">Published source facts, explainable trust evidence, and human-governed promotion into the business catalog.</p></div></div></header>
     <PhysicalAssetManager assets={assets} trust={trustRows} requests={requestsResult.data ?? []} sources={sourcesResult.data ?? []}/>
   </div></main>

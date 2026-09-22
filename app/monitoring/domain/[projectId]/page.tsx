@@ -18,6 +18,9 @@ import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { GovernedDomainContext } from '../../governed-domain-context'
 import type { MonitoringAgent, MonitoringDataset, MonitoringProject, MonitoringRun, MonitoringStep } from '../../job-monitor'
 import styles from './domain-neural-topology.module.css'
@@ -175,6 +178,8 @@ export default async function DomainDetailPage({
   searchParams: Promise<{ domain?: string; feature?: string }>
 }) {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
+  const canAgents = canAccessWorkspace(landing.persona, 'agents', landing.organizationRole)
   const { projectId } = await params
   const { domain: requestedDomain, feature: requestedFeatureId } = await searchParams
   const domainName = requestedDomain?.trim() || 'Unassigned Data Domain'
@@ -261,9 +266,10 @@ export default async function DomainDetailPage({
     '--neural-glow': palette.glow,
   } as CSSProperties
 
-  return <main className="min-h-screen bg-[#020b17] text-slate-100">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#020b17] text-slate-100">
     <div className="mx-auto max-w-[1760px] px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Domain Monitoring" contextLabel={domainName} homeHref="/home" />
+      <div className="mb-5 mt-4 flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Link href="/monitoring" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-cyan-200/70 hover:text-cyan-100"><ArrowLeft className="h-4 w-4" />Back to Job Monitor</Link>
           <p className="mt-4 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300/55">Data Domain drilldown</p>
@@ -271,8 +277,8 @@ export default async function DomainDetailPage({
           <p className="mt-1 text-sm text-slate-500">{project.name} · governed feature execution, datasets, lineage and evidence</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/agents" className="rounded-xl border border-cyan-300/35 bg-cyan-300/8 px-4 py-2.5 text-sm font-bold text-cyan-100 hover:bg-cyan-300/12">Run governed feature</Link>
-          {latestRun ? <Link href={`/agents/runs/${encodeURIComponent(latestRun.id)}`} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-200 hover:bg-white/[0.06]">Latest output/results</Link> : null}
+          {canAgents ? <Link href="/agents" className="rounded-xl border border-cyan-300/35 bg-cyan-300/8 px-4 py-2.5 text-sm font-bold text-cyan-100 hover:bg-cyan-300/12">Run governed feature</Link> : null}
+          {canAgents && latestRun ? <Link href={`/agents/runs/${encodeURIComponent(latestRun.id)}`} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-200 hover:bg-white/[0.06]">Latest output/results</Link> : null}
         </div>
       </div>
 
@@ -328,7 +334,7 @@ export default async function DomainDetailPage({
               <p className="mt-2 text-[11px] font-black leading-tight text-white">{item.feature.label}</p>
               <p className="mt-1 text-[8px] leading-tight text-slate-400">{item.feature.activities.slice(0, 2).join(' · ')}</p>
             </div>
-            return item.run
+            return item.run && canAgents
               ? <Link key={item.agent.id} href={`/agents/runs/${encodeURIComponent(item.run.id)}`} aria-label={`Open ${item.feature.label} results`}>{body}</Link>
               : <div key={item.agent.id}>{body}</div>
           })}
@@ -355,7 +361,7 @@ export default async function DomainDetailPage({
           <div className="mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200/55">Execution context</p>
             <p className="mt-2 text-xs leading-5 text-slate-500">This view is derived from authorized persisted execution, catalog, governance, lineage, and evidence state for this Data Domain.</p>
-            {latestRun ? <Link href={`/agents/runs/${encodeURIComponent(latestRun.id)}`} className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/8 px-3 py-2.5 text-xs font-black text-cyan-100 hover:bg-cyan-300/12">View latest execution details</Link> : null}
+            {canAgents && latestRun ? <Link href={`/agents/runs/${encodeURIComponent(latestRun.id)}`} className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/8 px-3 py-2.5 text-xs font-black text-cyan-100 hover:bg-cyan-300/12">View latest execution details</Link> : null}
           </div>
         </aside>
       </section>
@@ -376,9 +382,9 @@ export default async function DomainDetailPage({
               <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide"><span>{run ? status : 'Not executed'}</span><span>{run ? `${progress}% steps` : 'No run'}</span></div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/30"><div className="h-full rounded-full bg-current transition-[width]" style={{ width: `${run ? progress : 0}%` }} /></div>
               {dataset ? <p className="mt-3 truncate text-[10px] opacity-60">Dataset: {dataset.name}</p> : null}
-              {run ? <p className="mt-3 text-right text-[10px] font-bold text-cyan-100/75">View results →</p> : null}
+              {run && canAgents ? <p className="mt-3 text-right text-[10px] font-bold text-cyan-100/75">View results →</p> : run ? <p className="mt-3 text-right text-[10px] font-bold text-slate-500">Read-only execution evidence</p> : null}
             </div>
-            return run ? <Link key={agent.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block min-h-[220px]">{body}</Link> : <div key={agent.id} className="min-h-[220px]">{body}</div>
+            return run && canAgents ? <Link key={agent.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block min-h-[220px]">{body}</Link> : <div key={agent.id} className="min-h-[220px]">{body}</div>
           })}
         </div>
       </section>
@@ -392,9 +398,9 @@ export default async function DomainDetailPage({
               const feature = agent ? featureFor(agent) : null
               const dataset = run.dataset_id ? datasetMap.get(run.dataset_id) : null
               const state = normalizedStatus(run.status)
-              return <Link key={run.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 transition hover:border-cyan-300/25 hover:bg-cyan-300/[0.04]">
+              return canAgents ? <Link key={run.id} href={`/agents/runs/${encodeURIComponent(run.id)}`} className="block rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 transition hover:border-cyan-300/25 hover:bg-cyan-300/[0.04]">
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-200">{feature?.label ?? 'Governed execution'}</p><p className="mt-1 truncate text-[11px] text-slate-500">{dataset?.name ?? 'No dataset'} · {new Date(run.created_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}</p></div><span className={`rounded-full border px-2 py-1 text-[9px] font-black uppercase ${statusTone(state)}`}>{state}</span></div>
-              </Link>
+              </Link> : <div key={run.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-200">{feature?.label ?? 'Governed execution'}</p><p className="mt-1 truncate text-[11px] text-slate-500">{dataset?.name ?? 'No dataset'} · {new Date(run.created_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}</p></div><span className={`rounded-full border px-2 py-1 text-[9px] font-black uppercase ${statusTone(state)}`}>{state}</span></div></div>
             })}
           </div>
         </section>
@@ -405,7 +411,7 @@ export default async function DomainDetailPage({
             {domainDatasets.length ? domainDatasets.map((dataset) => {
               const runs = domainRuns.filter((run) => run.dataset_id === dataset.id)
               const latest = runs[0] ?? null
-              return <div key={dataset.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-200">{dataset.name}</p><p className="mt-1 text-[11px] text-slate-500">{runs.length} recorded execution(s) · {dataset.business_domain || 'Unassigned Data Domain'}</p></div>{latest ? <Link href={`/agents/runs/${encodeURIComponent(latest.id)}`} className="text-xs font-bold text-cyan-200 hover:text-cyan-100">Latest result →</Link> : null}</div></div>
+              return <div key={dataset.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-200">{dataset.name}</p><p className="mt-1 text-[11px] text-slate-500">{runs.length} recorded execution(s) · {dataset.business_domain || 'Unassigned Data Domain'}</p></div>{canAgents && latest ? <Link href={`/agents/runs/${encodeURIComponent(latest.id)}`} className="text-xs font-bold text-cyan-200 hover:text-cyan-100">Latest result →</Link> : null}</div></div>
             }) : <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-slate-500">No dataset has a recorded execution in this domain yet.</div>}
           </div>
         </section>

@@ -229,7 +229,7 @@ export async function POST(request: Request) {
     if (!['JDBC', 'CSV', 'FILE'].includes(sourceType)) return NextResponse.json({ error: 'Unsupported source type.' }, { status: 400 })
     if (sourceType === 'JDBC' && !jdbcUrl) return NextResponse.json({ error: 'JDBC connection string is required.' }, { status: 400 })
 
-    await authorizeProject(user.id, projectId, 'catalog.read')
+    await authorizeProject(user.id, projectId, 'source.manage')
     const admin = createAdminClient()
 
     const credentialRef = sourceType === 'JDBC'

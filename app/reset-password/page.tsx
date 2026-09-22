@@ -37,16 +37,16 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-16">
+    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-6 py-16">
       <form onSubmit={onSubmit} className="w-full max-w-md space-y-6 rounded-xl border p-8 shadow-sm">
         <div>
           <h1 className="text-2xl font-semibold">Choose a new password</h1>
           <p className="mt-2 text-sm text-muted-foreground">Set a new password for your account.</p>
         </div>
-        <label className="block text-sm">New password<input required minLength={8} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" /></label>
-        <label className="block text-sm">Confirm password<input required minLength={8} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" /></label>
+        <label className="block text-sm">New password<input required name="new-password" autoComplete="new-password" minLength={8} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" /></label>
+        <label className="block text-sm">Confirm password<input required name="confirm-password" autoComplete="new-password" minLength={8} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" /></label>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        <button disabled={loading} className="w-full rounded-md bg-black px-4 py-2 text-white disabled:opacity-50">{loading ? 'Updating…' : 'Update password'}</button>
+        <button type="submit" disabled={loading} className="w-full rounded-md bg-black px-4 py-2 text-white disabled:opacity-50">{loading ? 'Updating…' : 'Update password'}</button>
       </form>
     </main>
   )

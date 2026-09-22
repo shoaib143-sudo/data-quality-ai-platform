@@ -5,6 +5,8 @@ import { createGovernanceCommandCenterState } from '@/lib/ai/governance-command-
 import type { CommandCenterExplorerItem } from '@/lib/ai/command-center-explorer'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import CommandCenterExplorer from './command-center-explorer'
 
 type Project = { id: string; name: string }
@@ -18,6 +20,7 @@ function value(input: unknown) {
 
 export default async function AICommandCenterExplorerPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const user = await requireUser()
+  const landing = await resolveLandingAccess(user.id)
   const params = await searchParams
   const supabase = await createClient()
   const projectsResult = await supabase.schema('app').from('projects').select('id,name').order('name')
@@ -146,13 +149,14 @@ export default async function AICommandCenterExplorerPage({ searchParams }: { se
     ]
   }
 
-  return <main className="min-h-screen bg-slate-50 p-5 sm:p-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-8">
     <div className="mx-auto max-w-7xl space-y-6">
+      <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Command Center Explorer" contextLabel="Read-only AI governance evidence" homeHref="/home" />
       <header className="rounded-3xl border bg-white p-7 shadow-sm">
         <div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white"><ShieldCheck className="h-6 w-6"/></span><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">AI Governance Plane</p><h1 className="text-3xl font-black">Command Center Explorer</h1><p className="mt-2 max-w-4xl text-sm text-slate-600">Interactively filter and inspect canonical AI systems, safety findings, evaluations, telemetry, investigations, routing policies and autonomy actions. This surface is read-only and does not grant governance or execution authority.</p></div></div>
       </header>
 
-      <form method="get" className="rounded-2xl border bg-white p-5"><label className="block text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 block w-full max-w-xl rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><button className="mt-3 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load evidence</button></form>
+      <form method="get" className="rounded-2xl border bg-white p-5"><label className="block text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 block w-full max-w-xl rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><button type="submit" className="mt-3 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load evidence</button></form>
 
       {!selectedProjectId ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <CommandCenterExplorer items={items}/>} 
     </div>
