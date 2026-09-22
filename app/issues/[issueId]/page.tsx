@@ -101,7 +101,7 @@ export default async function GovernedIncidentPage({ params }: { params: Promise
     .filter((item,index,items)=>items.findIndex(candidate=>candidate.sourceTable===item.sourceTable&&candidate.sourceId===item.sourceId&&candidate.kind===item.kind&&candidate.observedAt===item.observedAt)===index)
     .sort((left,right)=>new Date(String(left.observedAt)).getTime()-new Date(String(right.observedAt)).getTime())
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#0b1422] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Governed incident" contextLabel={projectResult.data.name} homeHref="/home" />
     <nav className="mb-6 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0a1d33] px-5 py-3"><Link href="/issues" className="inline-flex items-center gap-2 text-sm font-bold text-slate-300 hover:text-white"><ArrowLeft className="h-4 w-4"/>Issues</Link><Link href={canonicalRoutes.governanceRun(projectId)} className="rounded-xl px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[0.05]">Governance Run</Link></nav>
 
