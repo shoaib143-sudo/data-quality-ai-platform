@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Activity, ArrowLeft, ArrowRight, BookOpen, Bot, Braces, Database, Gauge, GitBranch, Tag, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Database, Gauge, GitBranch, Tag, Users } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { hasProjectCapability } from '@/lib/auth/authorize'
