@@ -25,7 +25,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Do
   if (chunks.error) throw new Error(`Unable to load governed document chunks: ${chunks.error.message}`)
   const focusedChunkId = requested.chunk?.trim() || null
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#0b1422] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Governed Documents" contextLabel="Persisted evidence and extracted content" homeHref="/home" /><div className="mb-6 mt-4 flex justify-end gap-2">{canCatalog?<Link href="/catalog" className="rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[.05]">Catalog</Link>:null}{canSearch?<Link href="/search" className="rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[.05]">Search</Link>:null}</div>
     <header className={`${surface} p-6`}><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-400/10 text-violet-300"><FileText className="h-5 w-5"/></span><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Governed evidence</p><h1 className="mt-1 text-3xl font-black text-white">Governed Documents</h1><p className="mt-1 text-sm text-slate-400">Persisted extracted content used by profiling evidence and semantic governance search.</p></div></div></header>
 
