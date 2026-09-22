@@ -34,6 +34,7 @@ const requiredWorkflowPaths=[
   "'lib/auth/safe-auth-return-path.ts'",
   "'tests/safe-auth-return-path.test.mjs'",
   "'components/auth/**'",
+  "'components/ai/**'",
   "'docs/ux/DATANEXUS-UX-ALL-PAGES-REVALIDATION.md'",
   "'tests/ux-all-pages-coverage.test.mjs'",
   "'tests/ux-modern-design-system.test.mjs'",
