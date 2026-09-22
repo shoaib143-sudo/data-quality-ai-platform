@@ -13,6 +13,7 @@ type CopilotResponse = {
   sourceRoutes?: string[]
   persona?: string
   scope?: string
+  workspace?: string
   error?: string
 }
 
@@ -35,6 +36,7 @@ export function FloatingDataNexusAgent() {
   const [sources, setSources] = useState<string[]>([])
   const [persona, setPersona] = useState('')
   const [scope, setScope] = useState('')
+  const [workspace, setWorkspace] = useState('')
   const transcriptRef = useRef<HTMLDivElement | null>(null)
 
   const currentPath = useMemo(() => {
@@ -83,6 +85,7 @@ export function FloatingDataNexusAgent() {
   useEffect(() => {
     setSources([])
     setScope('')
+    setWorkspace('')
   }, [currentPath])
 
   if (!authenticated || pathname === '/login') return null
@@ -114,6 +117,7 @@ export function FloatingDataNexusAgent() {
       setSources(payload.sourceRoutes?.filter(route => route.startsWith('/')).slice(0, 4) ?? [])
       setPersona(payload.persona || '')
       setScope(payload.scope || '')
+      setWorkspace(payload.workspace || '')
     } catch (error) {
       setMessages(current => [...current, {
         role: 'assistant',
@@ -154,7 +158,7 @@ export function FloatingDataNexusAgent() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white">DataNexus AI Agent</p>
                 <p className="truncate text-[10px] text-slate-500">
-                  {persona ? `${persona} copilot` : 'Persona-aware governed copilot'}{scope ? ` · ${scope}` : ''}
+                  {persona ? `${persona} copilot` : 'Persona-aware governed copilot'}{workspace ? ` · ${workspace}` : ''}{scope ? ` · ${scope}` : ''}
                 </p>
               </div>
             </div>
@@ -171,7 +175,7 @@ export function FloatingDataNexusAgent() {
           <div ref={transcriptRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4" aria-live="polite">
             {!messages.length ? (
               <div className="rounded-2xl border border-white/[0.07] bg-[#0a1d33] p-4">
-                <p className="text-sm font-bold text-white">Ask about the page you are on.</p>
+                <p className="text-sm font-bold text-white">Ask about this governed workspace.</p>
                 <p className="mt-2 text-xs leading-5 text-slate-400">I use your resolved persona, current page scope and governed evidence available to your account. I will not treat an AI suggestion as governance authority.</p>
               </div>
             ) : null}
