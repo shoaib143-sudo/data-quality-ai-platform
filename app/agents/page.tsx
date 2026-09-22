@@ -171,10 +171,10 @@ export default async function AgentsPage() {
   for (const run of runs) runsByAgent.set(run.agent_definition_id,[...(runsByAgent.get(run.agent_definition_id)??[]),run])
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-4 text-slate-100 sm:p-6 lg:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 text-slate-100 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <GlobalUtilityBar persona={accessContext.persona} organizationRole={accessContext.organizationRole} roleLabel="AI Agents" contextLabel="Governed automation and execution" homeHref="/home" />
-        <nav aria-label="Agent workspace" className="flex items-center justify-between gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-[#0a1d33] px-4 py-3 shadow-sm">
+        <nav aria-label="Agent workspace" className="flex items-center justify-between gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-[#102036] px-4 py-3 shadow-sm">
           <span className="shrink-0 text-xs font-black uppercase tracking-[0.14em] text-slate-500">Agent workspace</span>
           <div className="flex shrink-0 gap-2">
             <Link href="/agents" aria-current="page" className="rounded-xl bg-violet-500/15 px-3 py-2 text-sm font-semibold text-violet-200 ring-1 ring-violet-400/20">Agents</Link>
@@ -183,7 +183,7 @@ export default async function AgentsPage() {
           </div>
         </nav>
 
-        <header className="rounded-[22px] border border-white/10 bg-[#0a1d33] p-6 shadow-[10px_10px_28px_rgba(0,0,0,.24)] sm:p-7">
+        <header className="rounded-[22px] border border-white/10 bg-[#102036] p-6 shadow-[10px_10px_28px_rgba(0,0,0,.24)] sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-violet-400/10 px-3 py-1.5 text-xs font-bold text-violet-300"><Sparkles className="h-3.5 w-3.5" />Governed AI operations</div>
@@ -195,10 +195,10 @@ export default async function AgentsPage() {
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-[22px] border border-white/10 bg-[#0a1d33] p-5"><Bot className="h-5 w-5 text-violet-300" /><p className="mt-3 text-3xl font-black text-white">{enabledAgents.length}</p><p className="mt-1 text-sm font-bold text-slate-200">Enabled agents</p><p className="mt-1 text-xs text-slate-500">Governed capabilities available in this workspace</p></div>
-          <div className="rounded-[22px] border border-white/10 bg-[#0a1d33] p-5"><Wrench className="h-5 w-5 text-cyan-300" /><p className="mt-3 text-3xl font-black text-white">{enabledToolCount}</p><p className="mt-1 text-sm font-bold text-slate-200">Registered tools</p><p className="mt-1 text-xs text-slate-500">Enabled tools bound to active agents</p></div>
-          <div className="rounded-[22px] border border-white/10 bg-[#0a1d33] p-5"><Activity className="h-5 w-5 text-blue-300" /><p className="mt-3 text-3xl font-black text-white">{runs.length}</p><p className="mt-1 text-sm font-bold text-slate-200">Recent runs</p><p className="mt-1 text-xs text-slate-500">Authorized execution history in view</p></div>
-          <div className="rounded-[22px] border border-white/10 bg-[#0a1d33] p-5"><CheckCircle2 className="h-5 w-5 text-emerald-300" /><p className="mt-3 text-3xl font-black text-white">{successfulRuns}</p><p className="mt-1 text-sm font-bold text-slate-200">Successful recent runs</p><p className="mt-1 text-xs text-slate-500">Completed or succeeded visible executions</p></div>
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-5"><Bot className="h-5 w-5 text-violet-300" /><p className="mt-3 text-3xl font-black text-white">{enabledAgents.length}</p><p className="mt-1 text-sm font-bold text-slate-200">Enabled agents</p><p className="mt-1 text-xs text-slate-500">Governed capabilities available in this workspace</p></div>
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-5"><Wrench className="h-5 w-5 text-cyan-300" /><p className="mt-3 text-3xl font-black text-white">{enabledToolCount}</p><p className="mt-1 text-sm font-bold text-slate-200">Registered tools</p><p className="mt-1 text-xs text-slate-500">Enabled tools bound to active agents</p></div>
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-5"><Activity className="h-5 w-5 text-blue-300" /><p className="mt-3 text-3xl font-black text-white">{runs.length}</p><p className="mt-1 text-sm font-bold text-slate-200">Recent runs</p><p className="mt-1 text-xs text-slate-500">Authorized execution history in view</p></div>
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-5"><CheckCircle2 className="h-5 w-5 text-emerald-300" /><p className="mt-3 text-3xl font-black text-white">{successfulRuns}</p><p className="mt-1 text-sm font-bold text-slate-200">Successful recent runs</p><p className="mt-1 text-xs text-slate-500">Completed or succeeded visible executions</p></div>
         </section>
 
         <RunAgentForm
@@ -228,7 +228,7 @@ export default async function AgentsPage() {
               const touchedDatasets = new Set(agentRuns.flatMap(run => run.dataset_id ? [run.dataset_id] : [])).size
               const detailHref = canonicalRoutes.agent(agent.agent_key, agent.version)
               return (
-                <section key={agent.id} className="space-y-5 rounded-[22px] border border-white/10 bg-[#0a1d33] p-6">
+                <section key={agent.id} className="space-y-5 rounded-[22px] border border-white/10 bg-[#102036] p-6">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -242,7 +242,7 @@ export default async function AgentsPage() {
                       <p className="mt-2 text-xs text-muted-foreground">Key: {agent.agent_key}</p>
                       <Link href={detailHref} className="mt-3 inline-block text-sm font-medium underline underline-offset-4">View agent details →</Link>
                     </div>
-                    <div className="grid shrink-0 grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl border border-white/[0.07] bg-[#08182b] px-3 py-2"><p className="text-lg font-black text-white">{agentTools.length}</p><p className="text-slate-500">tools</p></div><div className="rounded-xl border border-white/[0.07] bg-[#08182b] px-3 py-2"><p className="text-lg font-black text-white">{agentRuns.length}</p><p className="text-slate-500">runs</p></div><div className="rounded-xl border border-white/[0.07] bg-[#08182b] px-3 py-2"><p className="text-lg font-black text-white">{touchedDatasets}</p><p className="text-slate-500">datasets</p></div></div>
+                    <div className="grid shrink-0 grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl border border-white/[0.07] bg-[#0d1c30] px-3 py-2"><p className="text-lg font-black text-white">{agentTools.length}</p><p className="text-slate-500">tools</p></div><div className="rounded-xl border border-white/[0.07] bg-[#0d1c30] px-3 py-2"><p className="text-lg font-black text-white">{agentRuns.length}</p><p className="text-slate-500">runs</p></div><div className="rounded-xl border border-white/[0.07] bg-[#0d1c30] px-3 py-2"><p className="text-lg font-black text-white">{touchedDatasets}</p><p className="text-slate-500">datasets</p></div></div>
                   </div>
 
                   <div>
@@ -252,7 +252,7 @@ export default async function AgentsPage() {
                     ) : (
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         {agentTools.map((tool) => (
-                          <div key={tool.id} className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4">
+                          <div key={tool.id} className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4">
                             <div className="flex items-center justify-between gap-3">
                               <h4 className="font-medium">{tool.name}</h4>
                               <span className="text-xs text-muted-foreground">v{tool.version}</span>
