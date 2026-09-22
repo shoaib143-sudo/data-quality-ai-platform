@@ -159,3 +159,15 @@ After the enable workflow succeeds, execute `supabase/verify_cloudflare_observab
 It fails closed unless the canary is enabled, runtime configuration is present, the five-minute Supabase scheduler is active, the workload remains OBSERVABILITY-only, the single-flight invariant holds and every live canary lease belongs to the dedicated Cloudflare worker identity.
 
 The rollback operation additionally verifies the worker returns the disabled-execution boundary and that Supabase reports the canary scheduler flag disabled.
+
+
+## Supabase API key compatibility
+
+Protected release workflows support both legacy JWT-based `service_role` keys and modern opaque `sb_secret_...` keys.
+
+- The Supabase key is always sent in the `apikey` header.
+- `Authorization: Bearer ...` is added only when the configured key has JWT shape.
+- Opaque secret keys are never sent as bearer tokens.
+- A readiness HTTP 401 should therefore be treated as an invalid, revoked, or mismatched protected environment key rather than as a workflow header-format failure.
+
+This applies consistently to readiness, enablement, live status verification, failure cleanup, disablement, and rollback-status verification.
