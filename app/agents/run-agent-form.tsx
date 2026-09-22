@@ -103,6 +103,20 @@ export function RunAgentForm({
   const requestableOperationalAgent = Boolean(selectedAgent && ['profiling_agent', 'data_quality_agent', 'native_supervisor_agent'].includes(selectedAgent.agentKey))
   const canRequestSelectedAgent = !governedReadAgent && requestableOperationalAgent && canRequestProject && !canExecuteSelectedAgent
   const canSubmitSelectedAgent = governedReadAgent ? canConverseProject : (canExecuteSelectedAgent || canRequestSelectedAgent)
+  const operationMode = governedReadAgent
+    ? 'READ_ONLY_CONVERSATION'
+    : canExecuteSelectedAgent
+      ? 'AUTHORIZED_EXECUTION'
+      : canRequestSelectedAgent
+        ? 'APPROVAL_REQUIRED'
+        : 'NOT_AUTHORIZED'
+  const operationSummary = operationMode === 'READ_ONLY_CONVERSATION'
+    ? 'Read-only governed conversation. No operational side effects.'
+    : operationMode === 'AUTHORIZED_EXECUTION'
+      ? 'Policy-authorized operational execution is available for this selection.'
+      : operationMode === 'APPROVAL_REQUIRED'
+        ? 'Execution cannot start directly. A governed approval request will be created.'
+        : 'This selection can be inspected, but operational execution is not authorized.'
   const projectVersions = useMemo(
     () => datasetVersions.filter((version) => version.projectId === projectId),
     [datasetVersions, projectId],
@@ -274,7 +288,7 @@ export function RunAgentForm({
   }
 
   return (
-    <section className="rounded-xl border p-6">
+    <section className="rounded-[22px] border border-white/10 bg-[#0a1d33] p-6">
       <div className="mb-5">
         <h2 className="text-lg font-semibold">Run an operational agent</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -286,6 +300,15 @@ export function RunAgentForm({
         <p className="text-sm text-muted-foreground">A runnable agent and project are required before execution can start.</p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#08182b] p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[.14em] text-slate-500">Execution preflight</p>
+              <p className="mt-1 text-sm font-bold text-slate-200">{operationSummary}</p>
+              <p className="mt-1 text-xs text-slate-500">Agent: {selectedAgent?.name ?? 'Not selected'} · Project scope: {projectId ? 'selected' : 'missing'}{!governedReadAgent && !nativeSupervisorAgent ? ` · Dataset version: ${datasetVersionId ? 'selected' : 'required'}` : ''}</p>
+            </div>
+            <span className={`rounded-full border px-3 py-1.5 text-[11px] font-black ${operationMode === 'AUTHORIZED_EXECUTION' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : operationMode === 'APPROVAL_REQUIRED' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : operationMode === 'READ_ONLY_CONVERSATION' ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300' : 'border-rose-400/20 bg-rose-400/10 text-rose-300'}`}>{operationMode.replaceAll('_',' ')}</span>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-4">
             <label className="space-y-2 text-sm">
               <span className="font-medium">Agent</span>
@@ -350,7 +373,7 @@ export function RunAgentForm({
           </div>
 
           {governedReadAgent && (effectiveConversationDefaults.suggestedPrompts.length > 0 || availableDomains.length > 0) ? (
-            <div className="rounded-xl border bg-muted/20 p-3">
+            <div className="rounded-xl border bg-white/[0.03] p-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground">Effective conversation defaults</span>
                 <span>· {effectiveConversationDefaults.responseDepth.toLowerCase()} responses</span>
@@ -369,7 +392,7 @@ export function RunAgentForm({
                     <option value="">Project-wide</option>
                     {availableDomains.map(domain => <option key={domain} value={domain}>{domain}</option>)}
                   </select>
-                  <span className="text-muted-foreground">Only domains from datasets you are currently authorized to view are available.</span>
+                  <span className="text-slate-400">Only domains from datasets you are currently authorized to view are available.</span>
                 </label>
               ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
@@ -389,7 +412,7 @@ export function RunAgentForm({
           ) : null}
 
           {nativeSupervisorAgent ? (
-            <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
+            <div className="space-y-4 rounded-xl border bg-white/[0.03] p-4">
               <label className="block space-y-2 text-sm">
                 <span className="font-medium">Supervisor goal</span>
                 <textarea
