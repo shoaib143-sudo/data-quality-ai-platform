@@ -56,8 +56,12 @@ test('canary activation is separately owner-approved and remains reversible', ()
 test('enabled canary requires privileged secrets and verifies unauthorized and over-broad modes fail closed', () => {
   assert.match(release, /secrets\.DATANEXUS_WORKER_SECRET/)
   assert.match(release, /secrets\.SUPABASE_SERVICE_ROLE_KEY/)
-  assert.match(release, /test "\$unauthorized_code" = "403"/)
-  assert.match(release, /test "\$forbidden_code" = "403"/)
+  assert.match(release, /\[ "\$unauthorized_code" != "403" \]/)
+  assert.match(release, /Unauthorized canary boundary returned HTTP/)
+  assert.match(release, /\[ "\$forbidden_code" != "403" \]/)
+  assert.match(release, /Broad adaptive-dispatch boundary returned HTTP/)
+  assert.match(release, /\[ "\$canary_code" != "200" \]/)
+  assert.match(release, /Authenticated canary boundary returned HTTP/)
   assert.match(release, /body\.jobType!=='OBSERVABILITY'/)
   assert.match(release, /body\.claimed<0\|\|body\.claimed>1/)
 })
@@ -73,6 +77,16 @@ test('canary activation remains manual-only inside the release workflow', () => 
   assert.doesNotMatch(canary, /push:/)
 })
 
+
+test('application worker route independently blocks adaptive dispatch on Cloudflare runtimes', () => {
+  const adaptiveStart = route.indexOf("if (mode === 'ADAPTIVE_DISPATCH')")
+  const adaptiveRun = route.indexOf('runAdaptiveWorkerCycle', adaptiveStart)
+  assert.ok(adaptiveStart >= 0 && adaptiveRun > adaptiveStart)
+  const adaptive = route.slice(adaptiveStart, adaptiveRun)
+  assert.match(adaptive, /process\.env\.DATANEXUS_PLATFORM === 'cloudflare'/)
+  assert.match(adaptive, /Adaptive dispatch is not available on the Cloudflare canary runtime/)
+  assert.match(adaptive, /status: 403/)
+})
 
 test('canary API mode is unavailable on non-Cloudflare runtimes', () => {
   assert.match(route, /process\.env\.DATANEXUS_PLATFORM !== 'cloudflare'/)

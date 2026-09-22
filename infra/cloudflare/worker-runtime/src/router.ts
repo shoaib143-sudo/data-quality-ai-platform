@@ -70,6 +70,20 @@ export default {
           environment: 'canary',
         }, { status: 503 })
       }
+      const workerSecret = env.DATANEXUS_WORKER_SECRET?.trim()
+      if (!workerSecret) {
+        return Response.json({
+          error: 'Worker execution is enabled but required runtime secrets are incomplete.',
+          environment: 'canary',
+        }, { status: 503 })
+      }
+      const expectedAuthorization = 'Bearer ' + workerSecret
+      if (request.headers.get('authorization')?.trim() !== expectedAuthorization) {
+        return Response.json({
+          error: 'Worker access denied.',
+          environment: 'canary',
+        }, { status: 403 })
+      }
       if (env.DATANEXUS_WORKER_CANARY_JOB_TYPE !== 'OBSERVABILITY') {
         return Response.json({
           error: 'Worker execution is enabled without the governed OBSERVABILITY canary allowlist.',

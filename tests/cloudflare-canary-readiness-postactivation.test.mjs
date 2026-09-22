@@ -61,6 +61,15 @@ test('readiness reports missing protected inputs by name and keeps URL semantics
   assert.match(workflow, /DATANEXUS_CLOUDFLARE_WORKER_URL%\/}\/api\/jobs\/worker/)
 })
 
+test('live canary boundary diagnostics report only sanitized status fields', () => {
+  assert.match(workflow, /Unauthorized canary boundary returned HTTP/)
+  assert.match(workflow, /Broad adaptive-dispatch boundary returned HTTP/)
+  assert.match(workflow, /Authenticated canary boundary returned HTTP/)
+  assert.match(workflow, /Canary boundary status: unauth=/)
+  assert.match(workflow, /'error','status','environment','accepted','mode','jobType','claimed'/)
+  assert.doesNotMatch(workflow, /cat \/tmp\/worker-(?:unauthorized|forbidden|canary)\.json/)
+})
+
 test('release workflow has one readiness, enable and disable job key', () => {
   assert.equal((workflow.match(/^  verify-cloudflare-worker-canary-readiness:/gm) ?? []).length, 1)
   assert.equal((workflow.match(/^  enable-cloudflare-worker-canary:/gm) ?? []).length, 1)
