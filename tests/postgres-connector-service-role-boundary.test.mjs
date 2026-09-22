@@ -43,7 +43,8 @@ test('modern secret-key service calls bypass platform JWT parsing only for this 
 test('malformed secret-key registry fails closed and does not disable legacy service-role support', () => {
   assert.match(source, /catch \{\s*\/\/ Fail closed\./)
   assert.match(source, /if \(legacy\) expected\.add\(legacy\)/)
-  assert.match(source, /return expected\.length > 0/)
+  assert.match(source, /if \(localMatch\) return true/)
+  assert.match(source, /return await serviceRoleApiKeyAuthorized\(apiKey\)/)
 })
 
 
