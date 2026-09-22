@@ -14,6 +14,9 @@ on:
       - 'scripts/verify-vercel-jdbc-bridge-poc-contract.mjs'
       - 'scripts/probe-vercel-jdbc-bridge-poc.mjs'
       - 'docs/vercel-jdbc-bridge-poc.md'
+      - 'docs/vercel-jdbc-bridge-poc-post-implementation-validation.md'
+      - 'tests/vercel-jdbc-bridge-poc-failure-cases.test.mjs'
+      - 'scripts/audit-vercel-jdbc-bridge-poc-adversarial.mjs'
       - '.github/workflows/jdbc-bridge.yml'
   workflow_dispatch:
     inputs:
@@ -43,6 +46,10 @@ jobs:
         run: node ../../scripts/verify-jdbc-bridge-deployment-contract.mjs
       - name: Verify Vercel JDBC PoC contract
         run: node ../../scripts/verify-vercel-jdbc-bridge-poc-contract.mjs
+      - name: Test Vercel JDBC PoC negative and failure cases
+        run: node --test ../../tests/vercel-jdbc-bridge-poc-failure-cases.test.mjs
+      - name: Independent adversarial Vercel JDBC PoC audit
+        run: node ../../scripts/audit-vercel-jdbc-bridge-poc-adversarial.mjs
       - name: Set up Java 21
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
