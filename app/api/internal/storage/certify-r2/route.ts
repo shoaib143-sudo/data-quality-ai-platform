@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireInternalAutomation } from '@/lib/security/internal-bearer'
 import { readR2CorsPolicy, r2CorsHasWildcardOrigin, r2CorsPolicyMatchesDesired } from '@/lib/storage/r2-cors'
+import { listR2ObjectKeysByPrefix } from '@/lib/storage/r2'
 
 export const dynamic = 'force-dynamic'
 
@@ -140,6 +141,11 @@ export async function GET(request: Request) {
   let corsConfigured = false
   let corsMatchesDesiredPolicy = false
   let corsWildcardOriginDetected = false
+  let assuranceResidueChecked = false
+  let assuranceResidueCount = 0
+  let assuranceResidueSample: string[] = []
+  let assuranceResidueTruncated = false
+  let assuranceResidueCheckError: string | undefined
   let corsCheckError: string | undefined
   if (r2RuntimeConfigured) {
     try {
@@ -152,6 +158,18 @@ export async function GET(request: Request) {
     }
   }
 
+  if (r2RuntimeConfigured) {
+    try {
+      const residue = await listR2ObjectKeysByPrefix({ prefix: '_assurance', maxKeys: 100 })
+      assuranceResidueChecked = true
+      assuranceResidueCount = residue.keys.length
+      assuranceResidueSample = residue.keys.slice(0, 10)
+      assuranceResidueTruncated = residue.truncated
+    } catch (error) {
+      assuranceResidueCheckError = error instanceof Error ? error.message : 'R2 assurance residue inspection failed.'
+    }
+  }
+
   const blockers: string[] = []
   if (!r2RuntimeConfigured) blockers.push('R2_RUNTIME_CONFIGURATION_INCOMPLETE')
   if (legacyAwaitingVerification > 0) blockers.push('LEGACY_OBJECTS_AWAITING_VERIFICATION')
@@ -161,6 +179,8 @@ export async function GET(request: Request) {
   if (readyMigrationCopies.length === 0) blockers.push('NO_READY_R2_MIGRATION_COPY')
   if (readyMigrationCopies.length !== verifiedMigrationPairs) blockers.push('R2_MIGRATION_PAIR_INTEGRITY_INCOMPLETE')
   if (!corsConfigured || !corsMatchesDesiredPolicy || corsWildcardOriginDetected) blockers.push('R2_CORS_NOT_CERTIFIED')
+  if (!assuranceResidueChecked || assuranceResidueCheckError) blockers.push('R2_ASSURANCE_RESIDUE_CHECK_FAILED')
+  if (assuranceResidueCount > 0 || assuranceResidueTruncated) blockers.push('R2_ASSURANCE_OBJECTS_PRESENT')
 
   const defaultProvider = selectedProvider()
   const cutoverApproved = productionCutoverApproved()
@@ -185,6 +205,13 @@ export async function GET(request: Request) {
       matchesDesiredPolicy: corsMatchesDesiredPolicy,
       wildcardOriginDetected: corsWildcardOriginDetected,
       checkError: corsCheckError,
+    },
+    assuranceResidue: {
+      checked: assuranceResidueChecked,
+      objectCount: assuranceResidueCount,
+      sampleKeys: assuranceResidueSample,
+      truncated: assuranceResidueTruncated,
+      checkError: assuranceResidueCheckError,
     },
     runtime: {
       r2RuntimeConfigured,
