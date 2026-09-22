@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks'
 
 const baseUrl = process.env.VERCEL_JDBC_BRIDGE_URL?.replace(/\/$/, '')
 const maxHealthMs = Number(process.env.VERCEL_JDBC_BRIDGE_MAX_HEALTH_MS ?? 5000)
+const protectionBypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim() ?? ''
 if (!baseUrl) throw new Error('VERCEL_JDBC_BRIDGE_URL is required for live PoC probing.')
 if (!Number.isFinite(maxHealthMs) || maxHealthMs < 100) throw new Error('VERCEL_JDBC_BRIDGE_MAX_HEALTH_MS must be a number >= 100.')
 
@@ -11,7 +12,12 @@ async function timedFetch(url, init = {}) {
   const timeout = setTimeout(() => controller.abort(), Math.max(maxHealthMs + 1000, 2000))
   const started = performance.now()
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' })
+    const headers = new Headers(init.headers)
+    if (protectionBypass) {
+      headers.set('x-vercel-protection-bypass', protectionBypass)
+      headers.set('x-vercel-set-bypass-cookie', 'true')
+    }
+    const response = await fetch(url, { ...init, headers, signal: controller.signal, cache: 'no-store' })
     return { response, elapsedMs: Math.round(performance.now() - started) }
   } finally {
     clearTimeout(timeout)
@@ -43,4 +49,5 @@ console.log(JSON.stringify({
   maxHealthMs,
   engines: healthBody.supported_engines.length,
   unauthenticatedQueryStatus: unauth.response.status,
+  deploymentProtectionBypassConfigured: Boolean(protectionBypass),
 }, null, 2))
