@@ -45,3 +45,23 @@ test('post-activation SQL requires enabled runtime, Supabase scheduler authority
   assert.match(postActivationSql, /cloudflare-observability-canary:%/)
   assert.match(postActivationSql, /status','PASS'/)
 })
+
+
+test('readiness reports missing protected inputs by name and keeps URL semantics consistent', () => {
+  assert.match(workflow, /Missing protected cloudflare-worker environment input/)
+  for (const marker of [
+    'CLOUDFLARE_API_TOKEN',
+    'CLOUDFLARE_ACCOUNT_ID',
+    'DATANEXUS_WORKER_SECRET',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'DATANEXUS_CLOUDFLARE_WORKER_URL',
+  ]) assert.match(workflow, new RegExp(`missing\\+=\\("${marker}"\\)`))
+  assert.match(workflow, /DATANEXUS_CLOUDFLARE_WORKER_URL must be the HTTPS worker origin with no path/)
+  assert.match(workflow, /DATANEXUS_CLOUDFLARE_WORKER_URL%\/}\/api\/jobs\/worker/)
+})
+
+test('release workflow has one readiness, enable and disable job key', () => {
+  assert.equal((workflow.match(/^  verify-cloudflare-worker-canary-readiness:/gm) ?? []).length, 1)
+  assert.equal((workflow.match(/^  enable-cloudflare-worker-canary:/gm) ?? []).length, 1)
+  assert.equal((workflow.match(/^  disable-cloudflare-worker-canary:/gm) ?? []).length, 1)
+})
