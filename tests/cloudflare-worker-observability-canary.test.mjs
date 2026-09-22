@@ -74,6 +74,16 @@ test('canary activation remains manual-only inside the release workflow', () => 
 })
 
 
+test('application worker route independently blocks adaptive dispatch on Cloudflare runtimes', () => {
+  const adaptiveStart = route.indexOf("if (mode === 'ADAPTIVE_DISPATCH')")
+  const adaptiveRun = route.indexOf('runAdaptiveWorkerCycle', adaptiveStart)
+  assert.ok(adaptiveStart >= 0 && adaptiveRun > adaptiveStart)
+  const adaptive = route.slice(adaptiveStart, adaptiveRun)
+  assert.match(adaptive, /process\.env\.DATANEXUS_PLATFORM === 'cloudflare'/)
+  assert.match(adaptive, /Adaptive dispatch is not available on the Cloudflare canary runtime/)
+  assert.match(adaptive, /status: 403/)
+})
+
 test('canary API mode is unavailable on non-Cloudflare runtimes', () => {
   assert.match(route, /process\.env\.DATANEXUS_PLATFORM !== 'cloudflare'/)
   assert.match(route, /process\.env\.DATANEXUS_WORKER_CANARY_JOB_TYPE !== 'OBSERVABILITY'/)
