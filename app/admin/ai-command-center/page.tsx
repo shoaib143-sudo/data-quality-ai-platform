@@ -69,7 +69,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
       <form method="get" className="dn-surface p-4"><label className="block text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 block w-full max-w-xl rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><button type="submit" className="mt-3 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load control state</button></form>
 
       {!state || !learning || !learningLifecycle || !pgcl ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
-        <section className="grid auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid auto-rows-fr gap-3 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-5">
           <article className="dn-kpi min-w-0 p-4"><Bot className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.aiSystems}</p><p className="text-xs font-bold uppercase text-slate-500">AI systems</p></article>
           <article className="dn-kpi min-w-0 p-4"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.aiSystemDecisions}</p><p className="text-xs font-bold uppercase text-slate-500">Human decisions</p></article>
           <article className="dn-kpi min-w-0 p-4"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.aiSystemAssessments}</p><p className="text-xs font-bold uppercase text-slate-500">Assessments</p></article>
