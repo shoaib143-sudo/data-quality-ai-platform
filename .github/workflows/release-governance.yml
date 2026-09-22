@@ -758,15 +758,34 @@ jobs:
           done
           test "$ready" = "1"
 
+          summarize_boundary_response() {
+            local label="$1"
+            local file="$2"
+            node -e "const fs=require('node:fs'); const label=process.argv[1]; const file=process.argv[2]; let body={}; try { body=JSON.parse(fs.readFileSync(file,'utf8')) } catch {} const allowed={}; for (const key of ['error','status','environment','accepted','mode','jobType','claimed']) if (Object.prototype.hasOwnProperty.call(body,key)) allowed[key]=body[key]; console.error(label + ': ' + JSON.stringify(allowed))" "$label" "$file"
+          }
+
           unauthorized_code="$(curl --silent --show-error --output /tmp/worker-unauthorized.json --write-out '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"mode":"CLOUDFLARE_OBSERVABILITY_CANARY"}' "$BASE_URL/api/jobs/worker")"
-          test "$unauthorized_code" = "403"
+          if [ "$unauthorized_code" != "403" ]; then
+            echo "::error::Unauthorized canary boundary returned HTTP $unauthorized_code, expected 403"
+            summarize_boundary_response "unauthorized canary response" /tmp/worker-unauthorized.json
+            exit 1
+          fi
 
           forbidden_code="$(curl --silent --show-error --output /tmp/worker-forbidden.json --write-out '%{http_code}' -X POST -H "Authorization: Bearer $DATANEXUS_WORKER_SECRET" -H 'Content-Type: application/json' --data '{"mode":"ADAPTIVE_DISPATCH"}' "$BASE_URL/api/jobs/worker")"
-          test "$forbidden_code" = "403"
+          if [ "$forbidden_code" != "403" ]; then
+            echo "::error::Broad adaptive-dispatch boundary returned HTTP $forbidden_code, expected 403"
+            summarize_boundary_response "broad adaptive-dispatch response" /tmp/worker-forbidden.json
+            exit 1
+          fi
 
           canary_code="$(curl --silent --show-error --output /tmp/worker-canary.json --write-out '%{http_code}' -X POST -H "Authorization: Bearer $DATANEXUS_WORKER_SECRET" -H 'Content-Type: application/json' --data '{"mode":"CLOUDFLARE_OBSERVABILITY_CANARY"}' "$BASE_URL/api/jobs/worker")"
-          test "$canary_code" = "200"
-          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); if(body.accepted!==true||body.mode!=='CLOUDFLARE_OBSERVABILITY_CANARY'||body.jobType!=='OBSERVABILITY'||!Number.isInteger(body.claimed)||body.claimed<0||body.claimed>1) process.exit(1)" /tmp/worker-canary.json
+          if [ "$canary_code" != "200" ]; then
+            echo "::error::Authenticated canary boundary returned HTTP $canary_code, expected 200"
+            summarize_boundary_response "authenticated canary response" /tmp/worker-canary.json
+            exit 1
+          fi
+          echo "Canary boundary status: unauth=$unauthorized_code broad=$forbidden_code canary=$canary_code"
+          node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); const invalid=body.accepted!==true||body.mode!=='CLOUDFLARE_OBSERVABILITY_CANARY'||body.jobType!=='OBSERVABILITY'||!Number.isInteger(body.claimed)||body.claimed<0||body.claimed>1; if(invalid){const safe={}; for(const key of ['error','status','environment','accepted','mode','jobType','claimed']) if(Object.prototype.hasOwnProperty.call(body,key)) safe[key]=body[key]; console.error('::error::Authenticated canary response contract mismatch ' + JSON.stringify(safe)); process.exit(1)}" /tmp/worker-canary.json
 
       - name: Enable Supabase canary scheduler only after live verification
         env:
