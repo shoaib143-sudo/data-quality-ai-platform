@@ -19,6 +19,11 @@ test('Dataset 360 keeps connected governance dimensions visible', () => {
     'Business meaning',
     'Classification & CDE',
     'Remediation',
+    'At a glance',
+    'Dataset 360 views',
+    'Technical Lineage',
+    'Relationships',
+    'Responsibilities',
   ]) assert.match(dataset360, new RegExp(required.replace(/[.*+?^$\\{}()|[\]\\]/g, '\\$&')))
 })
 
@@ -40,4 +45,15 @@ test('lineage accepts preserved dataset search context', () => {
 test('AI Agents remains discoverable from persona navigation', () => {
   assert.match(roleLanding, /label: 'AI Agents', href: '\/agents'/)
   assert.match(roleLanding, /canAccessWorkspaceHref\(persona\.slug, '\/agents'/)
+})
+
+
+test('Dataset 360 follows an asset-centered navigation spine', () => {
+  assert.match(dataset360, /aria-label="Dataset 360 views"/)
+  assert.match(dataset360, /id="summary"/)
+  assert.match(dataset360, /id="relationships"/)
+  assert.match(dataset360, /id="quality"/)
+  assert.match(dataset360, /id="responsibilities"/)
+  assert.match(dataset360, /id="issues"/)
+  assert.match(dataset360, /aria-label="Dataset at a glance"/)
 })
