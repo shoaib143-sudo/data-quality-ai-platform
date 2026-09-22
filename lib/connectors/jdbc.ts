@@ -236,11 +236,11 @@ async function databricksEdgeRequest<T>(path: string, body: Record<string, unkno
 
 async function connectorRequest<T>(path: string, body: Record<string, unknown>) {
   if (isPostgresJdbcUrl(body.jdbc_url)) {
-    try { return await postgresEdgeRequest<T>(path, body) }
-    catch (error) {
-      if (!bridgeConfigured() || path !== '/v1/lineage') throw error
-      return bridgeRequest<T>(path, body)
-    }
+    // PostgreSQL credentials are governed in Supabase Vault and resolved by the
+    // built-in Edge connector. Falling back to the generic bridge can silently
+    // switch credential authorities (for example to JDBC_CREDENTIAL_MODE=environment)
+    // and mask the real Edge connector failure with an unrelated credentialRef error.
+    return postgresEdgeRequest<T>(path, body)
   }
   if (isDatabricksJdbcUrl(body.jdbc_url)) {
     try { return await databricksEdgeRequest<T>(path, body) }
