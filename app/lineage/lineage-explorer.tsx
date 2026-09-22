@@ -77,6 +77,7 @@ type Props = {
   /** @deprecated Dataset traversal is served by the bounded GraphProvider navigator. */
   edges?: unknown[]
   stats:{ edges:number; datasets:number; assets:number; transformations:number; mappedColumns:number }
+  initialQuery?:string
 }
 
 const overlayOptions:Array<{key:OverlayKey;label:string;icon:typeof Sparkles}> = [
@@ -111,10 +112,10 @@ function statusClass(status:string){
   return 'bg-amber-50 text-amber-700'
 }
 
-export function LineageExplorer({fields,mappings,stats}:Props){
+export function LineageExplorer({fields,mappings,stats,initialQuery=''}:Props){
   const [activeOverlays,setActiveOverlays]=useState<OverlayKey[]>(['dq','terms','stakeholders'])
   const [selectedKey,setSelectedKey]=useState<string|null>(null)
-  const [search,setSearch]=useState('')
+  const [search,setSearch]=useState(initialQuery)
   const [lowQualityOnly,setLowQualityOnly]=useState(false)
   const [governedOnly,setGovernedOnly]=useState(false)
   const fieldByKey=useMemo(()=>new Map(fields.map(field=>[field.key,field])),[fields])
