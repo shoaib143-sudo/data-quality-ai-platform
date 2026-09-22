@@ -21,35 +21,26 @@ assert.equal(pages.length,79,'Expected the current UX coverage boundary to conta
 const missing=pages.filter(page=>!manifest.includes('`'+page+'`'))
 assert.deepEqual(missing,[],'Every page route must remain represented in the UX revalidation manifest')
 
-const modernizationFiles=[
-  'app/dashboard/page.tsx',
-  'app/inbox/page.tsx',
-  'app/search/page.tsx',
-  'app/data-quality/page.tsx',
-  'app/observability/page.tsx',
-  'app/catalog/page.tsx',
-  'app/catalog/catalog-manager.tsx',
-  'app/profiling/explorer/page.tsx',
-  'app/agents/page.tsx',
-  'app/agents/run-agent-form.tsx',
-  'app/agents/runs/[runId]/page.tsx',
-  'app/ai-insights/page.tsx',
-  'app/admin/ai-command-center/page.tsx',
-]
-
 const violations=[]
-for(const file of modernizationFiles){
+for(const file of pages){
   const source=fs.readFileSync(path.join(root,file),'utf8')
   if(/#061426|#050b17/.test(source)) violations.push(file+': stale pre-modernization canvas token')
-  if(/shadow-\[0_0_(?:2[4-9]|[3-9]\d|\d{3,})px/.test(source)) violations.push(file+': heavy glow shadow')
-  const aggressive=[...source.matchAll(/(?:sm|md|lg|xl):grid-cols-(6|7|8|9|10|11|12)/g)]
-  for(const match of aggressive){
-    const line=source.slice(0,match.index).split('\n').length
-    const nearby=source.slice(Math.max(0,(match.index??0)-140),(match.index??0)+180)
-    if(!/2xl:grid-cols-/.test(nearby)) violations.push(file+': aggressive pre-2xl grid at line '+line)
+
+  const mainMatch=source.match(/<main[^>]*className="([^"]*)"/s)
+  if(mainMatch && /(?:^|\\s)(?:sm:|md:|lg:|xl:)?p-8(?:\\s|$)/.test(mainMatch[1])) {
+    violations.push(file+': oversized page-shell padding')
+  }
+
+  for(const [index,line] of source.split('\\n').entries()){
+    if(/(?:sm|md|lg|xl):grid-cols-(?:6|7|8|9|10|11|12)\\b/.test(line) && !/2xl:grid-cols-/.test(line)) {
+      violations.push(file+': aggressive pre-2xl grid at line '+(index+1))
+    }
+    if(/shadow-\\[0_0_(?:2[4-9]|[3-9]\\d|\\d{3,})px/.test(line)) {
+      violations.push(file+': heavy glow shadow at line '+(index+1))
+    }
   }
 }
-assert.deepEqual(violations,[], 'Independent modernization audit found layout/palette violations:\n'+violations.join('\n'))
+assert.deepEqual(violations,[], 'Independent all-page modernization audit found violations:\\n'+violations.join('\\n'))
 
 const css=fs.readFileSync(path.join(root,'app/globals.css'),'utf8')
 assert.match(css,/:focus-visible/)
