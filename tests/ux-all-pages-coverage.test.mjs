@@ -11,7 +11,7 @@ function collectPages(dir) {
   for (const entry of fs.readdirSync(dir,{withFileTypes:true})) {
     const full = path.join(dir,entry.name)
     if (entry.isDirectory()) result.push(...collectPages(full))
-    else if (entry.name === 'page.tsx') result.push(path.relative(process.cwd(),full).replaceAll('\\\\','/'))
+    else if (entry.name === 'page.tsx') result.push(path.relative(process.cwd(),full).split(path.sep).join('/'))
   }
   return result
 }
