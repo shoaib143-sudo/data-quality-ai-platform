@@ -13,6 +13,9 @@ test('R2 adapter exposes bounded read-only assurance residue inspection', () => 
   assert.match(r2, /xml\.matchAll/)
   assert.match(r2, /<Key>/)
   assert.match(r2, /IsTruncated/)
+  assert.match(r2, /replaceAll\('&amp;', '&'\)/)
+  const decoder = r2.slice(r2.indexOf('function decodeR2XmlText'), r2.indexOf('function scopedPrefix'))
+  assert.ok(decoder.indexOf("replaceAll('&lt;', '<')") < decoder.indexOf("replaceAll('&amp;', '&')"))
   assert.doesNotMatch(r2.slice(r2.indexOf('export async function listR2ObjectKeysByPrefix'), r2.indexOf('export class R2StorageAdapter')), /DELETE/)
 })
 
