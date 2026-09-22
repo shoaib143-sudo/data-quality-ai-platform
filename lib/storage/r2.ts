@@ -270,6 +270,83 @@ async function sizeFromRange(bucket: string, key: string) {
   }
 }
 
+
+function bucketUrl(bucket: string) {
+  assertBucket(bucket)
+  const endpoint = endpointUrl()
+  endpoint.pathname = canonicalPath(bucket)
+  return endpoint
+}
+
+async function signedBucketFetch(method: 'GET', bucket: string, queryParams: Record<string, string>) {
+  const { accessKeyId, secretAccessKey } = config()
+  const now = new Date()
+  const amz = amzDate(now)
+  const date = dateStamp(amz)
+  const scope = `${date}/${REGION}/${SERVICE}/aws4_request`
+  const url = bucketUrl(bucket)
+  const hash = sha256('')
+  const headers: Record<string, string> = {
+    host: url.host,
+    'x-amz-content-sha256': hash,
+    'x-amz-date': amz,
+  }
+
+  const signedHeaderNames = Object.keys(headers).sort()
+  const canonicalHeaders = signedHeaderNames.map((name) => `${name}:${headers[name].trim()}\n`).join('')
+  const query = canonicalQuery(queryParams)
+  const canonicalRequest = [method, url.pathname, query, canonicalHeaders, signedHeaderNames.join(';'), hash].join('\n')
+  const stringToSign = [ALGORITHM, amz, scope, sha256(canonicalRequest)].join('\n')
+  const signature = createHmac('sha256', signingKey(secretAccessKey, date)).update(stringToSign).digest('hex')
+  const authorization = `${ALGORITHM} Credential=${accessKeyId}/${scope}, SignedHeaders=${signedHeaderNames.join(';')}, Signature=${signature}`
+
+  if (query) url.search = query
+  const requestHeaders = new Headers(headers)
+  requestHeaders.set('authorization', authorization)
+  requestHeaders.delete('host')
+  return fetch(url, { method, headers: requestHeaders })
+}
+
+function decodeR2XmlText(value: string) {
+  return value
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+}
+
+function scopedPrefix(prefix: string) {
+  const trimmed = prefix.trim().replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+  const normalized = normalizeKey(trimmed)
+  const configuredPrefix = config().prefix
+  const scoped = configuredPrefix && normalized !== configuredPrefix && !normalized.startsWith(`${configuredPrefix}/`)
+    ? `${configuredPrefix}/${normalized}`
+    : normalized
+  return `${scoped}/`
+}
+
+export async function listR2ObjectKeysByPrefix(input: { prefix: string; maxKeys?: number }) {
+  const maxKeys = input.maxKeys ?? 100
+  if (!Number.isInteger(maxKeys) || maxKeys < 1 || maxKeys > 1000) {
+    throw new Error('R2 list maxKeys must be between 1 and 1000.')
+  }
+
+  const bucket = config().bucket
+  const prefix = scopedPrefix(input.prefix)
+  const response = await signedBucketFetch('GET', bucket, {
+    'list-type': '2',
+    prefix,
+    'max-keys': String(maxKeys),
+  })
+  const xml = await response.text()
+  if (!response.ok) throw new Error(`R2 LIST failed with status ${response.status}.`)
+
+  const keys = [...xml.matchAll(/<Key>([\s\S]*?)<\/Key>/gi)].map((match) => decodeR2XmlText(match[1]))
+  const truncated = /<IsTruncated>\s*true\s*<\/IsTruncated>/i.test(xml)
+  return { bucket, prefix, keys, truncated }
+}
+
 export class R2StorageAdapter implements ObjectStorage, MultipartObjectStorage {
   readonly provider = 'r2' as const
 
