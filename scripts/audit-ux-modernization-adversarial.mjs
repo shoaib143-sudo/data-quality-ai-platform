@@ -27,15 +27,15 @@ for(const file of pages){
   if(/#061426|#050b17/.test(source)) violations.push(file+': stale pre-modernization canvas token')
 
   const mainMatch=source.match(/<main[^>]*className="([^"]*)"/s)
-  if(mainMatch && /(?:^|\\s)(?:sm:|md:|lg:|xl:)?p-8(?:\\s|$)/.test(mainMatch[1])) {
+  if(mainMatch && /(?:^|\s)(?:sm:|md:|lg:|xl:)?p-8(?:\s|$)/.test(mainMatch[1])) {
     violations.push(file+': oversized page-shell padding')
   }
 
-  for(const [index,line] of source.split('\\n').entries()){
-    if(/(?:sm|md|lg|xl):grid-cols-(?:6|7|8|9|10|11|12)\\b/.test(line) && !/2xl:grid-cols-/.test(line)) {
+  for(const [index,line] of source.split('\n').entries()){
+    if(/(?:sm|md|lg|xl):grid-cols-(?:6|7|8|9|10|11|12)\b/.test(line) && !/2xl:grid-cols-/.test(line)) {
       violations.push(file+': aggressive pre-2xl grid at line '+(index+1))
     }
-    if(/shadow-\\[0_0_(?:2[4-9]|[3-9]\\d|\\d{3,})px/.test(line)) {
+    if(/shadow-\[0_0_(?:2[4-9]|[3-9]\d|\d{3,})px/.test(line)) {
       violations.push(file+': heavy glow shadow at line '+(index+1))
     }
   }
