@@ -93,7 +93,7 @@ export default async function AICapabilitiesPage({ searchParams }: { searchParam
     .slice(0,8)
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/50 p-5 sm:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/50 p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-7">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="AI Capabilities" contextLabel="Evidence-backed capability control" homeHref="/home" />
         <nav aria-label="AI governance workspace" className="flex items-center justify-between gap-3 overflow-x-auto rounded-2xl border bg-white p-2 shadow-sm">
