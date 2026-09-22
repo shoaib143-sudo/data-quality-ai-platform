@@ -618,10 +618,13 @@ jobs:
             echo "::error::DATANEXUS_CLOUDFLARE_WORKER_URL must be the HTTPS worker origin with no path"
             exit 1
           }
+          SUPABASE_AUTH_ARGS=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
+          if [[ "$SUPABASE_SERVICE_ROLE_KEY" == *.*.* ]]; then
+            SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+          fi
           curl --fail-with-body --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
             -H "Content-Profile: orchestration" \
             -H "Accept-Profile: orchestration" \
@@ -703,10 +706,13 @@ jobs:
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           printf '%s' "$DATANEXUS_WORKER_SECRET" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put DATANEXUS_WORKER_SECRET --config infra/cloudflare/worker-runtime/wrangler.jsonc
           printf '%s' "$SUPABASE_SERVICE_ROLE_KEY" | "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" secret put SUPABASE_SERVICE_ROLE_KEY --config infra/cloudflare/worker-runtime/wrangler.jsonc
+          SUPABASE_AUTH_ARGS=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
+          if [[ "$SUPABASE_SERVICE_ROLE_KEY" == *.*.* ]]; then
+            SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+          fi
           curl --fail-with-body --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
             -H "Content-Profile: orchestration" \
             -H "Accept-Profile: orchestration" \
@@ -778,10 +784,13 @@ jobs:
           test -n "$SUPABASE_URL"
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           test -n "$DATANEXUS_WORKER_SECRET"
+          SUPABASE_AUTH_ARGS=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
+          if [[ "$SUPABASE_SERVICE_ROLE_KEY" == *.*.* ]]; then
+            SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+          fi
           curl --fail-with-body --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
             -H "Content-Profile: orchestration" \
             -H "Accept-Profile: orchestration" \
@@ -793,10 +802,13 @@ jobs:
           SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
         run: |
           set -euo pipefail
+          SUPABASE_AUTH_ARGS=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
+          if [[ "$SUPABASE_SERVICE_ROLE_KEY" == *.*.* ]]; then
+            SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+          fi
           curl --fail-with-body --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
             -H "Content-Profile: orchestration" \
             -H "Accept-Profile: orchestration" \
@@ -817,10 +829,13 @@ jobs:
         run: |
           set +e
           if [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && [ -n "${DATANEXUS_CLOUDFLARE_WORKER_URL:-}" ] && [ -n "${DATANEXUS_WORKER_SECRET:-}" ]; then
+            SUPABASE_AUTH_ARGS=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
+            if [[ "$SUPABASE_SERVICE_ROLE_KEY" == *.*.* ]]; then
+              SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+            fi
             curl --fail-with-body --silent --show-error \
               -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
-              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              "${SUPABASE_AUTH_ARGS[@]}" \
               -H "Content-Type: application/json" \
               -H "Content-Profile: orchestration" \
               -H "Accept-Profile: orchestration" \
@@ -888,10 +903,13 @@ jobs:
           test -n "$SUPABASE_URL"
           test -n "$DATANEXUS_CLOUDFLARE_WORKER_URL"
           test -n "$DATANEXUS_WORKER_SECRET"
+          SUPABASE_AUTH_ARGS=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
+          if [[ "$SUPABASE_SERVICE_ROLE_KEY" == *.*.* ]]; then
+            SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+          fi
           curl --fail-with-body --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
             -H "Content-Profile: orchestration" \
             -H "Accept-Profile: orchestration" \
@@ -967,10 +985,13 @@ jobs:
           SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
         run: |
           set -euo pipefail
+          SUPABASE_AUTH_ARGS=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
+          if [[ "$SUPABASE_SERVICE_ROLE_KEY" == *.*.* ]]; then
+            SUPABASE_AUTH_ARGS+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+          fi
           curl --fail-with-body --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/get_cloudflare_observability_canary_status" \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            "${SUPABASE_AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
             -H "Content-Profile: orchestration" \
             -H "Accept-Profile: orchestration" \
