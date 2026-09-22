@@ -100,7 +100,7 @@ function splitTopLevelCsv(value: string) {
 }
 
 function identifierPattern() {
-  return '(?:"(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)'
+  return '(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)'
 }
 
 function normalizedTargetColumn(targetColumns: string[], candidate: string) {
