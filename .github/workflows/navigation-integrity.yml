@@ -5,6 +5,7 @@ on:
     paths:
       - 'app/**'
       - 'components/auth/**'
+      - 'components/ai/**'
       - 'docs/ux/DATANEXUS-UX-ALL-PAGES-REVALIDATION.md'
       - 'tests/ux-all-pages-coverage.test.mjs'
       - 'tests/ux-modern-design-system.test.mjs'
@@ -104,6 +105,7 @@ on:
     paths:
       - 'app/**'
       - 'components/auth/**'
+      - 'components/ai/**'
       - 'docs/ux/DATANEXUS-UX-ALL-PAGES-REVALIDATION.md'
       - 'tests/ux-all-pages-coverage.test.mjs'
       - 'tests/ux-modern-design-system.test.mjs'
