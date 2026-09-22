@@ -53,13 +53,13 @@ export default async function StewardshipPage() {
   const canCatalog = canAccessWorkspace(landing.persona, 'catalog', landing.organizationRole)
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50">
+    <main id="main-content" tabIndex={-1} className="min-h-screen text-slate-100">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Stewardship" contextLabel="Ownership and accountability" homeHref="/home" />
-        <nav className="mb-6 mt-4 flex items-center justify-end rounded-2xl border bg-white px-5 py-3 shadow-sm">
+        <nav className="dn-glass-rail sticky top-[4.5rem] z-30 mb-3 mt-3 flex items-center justify-end rounded-2xl px-3 py-2">
           {canCatalog ? <Link href="/catalog" className="text-sm font-semibold text-blue-600">Catalog</Link> : null}
         </nav>
-        <header className="rounded-3xl border border-emerald-100 bg-white p-7 shadow-sm">
+        <header className="dn-surface p-5 sm:p-6">
           <div className="flex items-center gap-3">
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-600"><Handshake className="h-6 w-6" /></span>
             <div>
