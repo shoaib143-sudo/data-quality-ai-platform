@@ -48,7 +48,33 @@ function configuredServerSecrets() {
   return [...expected];
 }
 
-function serviceRoleAuthorized(request: Request) {
+async function serviceRoleApiKeyAuthorized(apiKey: string) {
+  if (!apiKey) return false;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim() ?? "";
+  if (!supabaseUrl) return false;
+
+  try {
+    const response = await fetch(
+      supabaseUrl.replace(/\/$/, "") + "/rest/v1/rpc/verify_dgp_service_role_key",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "apikey": apiKey,
+          "authorization": "Bearer " + apiKey,
+        },
+        body: "{}",
+      },
+    );
+    if (!response.ok) return false;
+    const payload = await response.json().catch(() => false);
+    return payload === true;
+  } catch {
+    return false;
+  }
+}
+
+async function serviceRoleAuthorized(request: Request) {
   const authorization = request.headers.get("authorization")?.trim() ?? "";
   const bearer = authorization.toLowerCase().startsWith("bearer ")
     ? authorization.slice("Bearer ".length).trim()
@@ -56,8 +82,11 @@ function serviceRoleAuthorized(request: Request) {
   const apiKey = request.headers.get("apikey")?.trim() ?? "";
   const supplied = [apiKey, bearer].filter(Boolean);
   const expected = configuredServerSecrets();
-  return expected.length > 0
+  const localMatch = expected.length > 0
     && supplied.some(candidate => expected.some(secret => constantTimeEqual(candidate, secret)));
+
+  if (localMatch) return true;
+  return await serviceRoleApiKeyAuthorized(apiKey);
 }
 const TECHNICAL_MAX_ROWS = technicalMaxRows();
 
@@ -282,7 +311,7 @@ Deno.serve(async (request: Request) => {
   try {
     const body = await request.json() as ConnectorRequest;
     if (body.action === "health") return reply(200, { ok: true, drivers: ["postgresql"], credential_store: "supabase-vault", technical_max_rows: TECHNICAL_MAX_ROWS });
-    if (!serviceRoleAuthorized(request)) return reply(403, { error: "Connector access denied." });
+    if (!(await serviceRoleAuthorized(request))) return reply(403, { error: "Connector access denied." });
     if (body.action === "credential") return reply(200, await storeCredential(body));
     if (body.action === "catalog") return reply(200, await catalog(body));
     if (body.action === "validate") return reply(200, await validate(body));
