@@ -1,0 +1,56 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const read=p=>fs.readFileSync(p,'utf8')
+
+test('authentication failure states remain explicit and non-silent',()=>{
+  const login=read('app/login/page.tsx')
+  const signup=read('app/signup/page.tsx')
+  const forgot=read('app/forgot-password/page.tsx')
+  const reset=read('app/reset-password/page.tsx')
+  assert.match(login,/role="alert"/)
+  assert.match(signup,/role="alert"/)
+  assert.match(forgot,/role="alert"/)
+  assert.match(reset,/role="alert"/)
+  assert.match(forgot,/COOLDOWN_MS = 60_000/)
+  assert.match(forgot,/coolingDown/)
+  assert.match(reset,/Password must be at least 8 characters/)
+  assert.match(reset,/Passwords do not match/)
+})
+
+test('access-denied and unavailable states do not imply permission mutation',()=>{
+  const denied=read('app/access-denied/page.tsx')
+  const unavailable=read('app/home/unavailable/page.tsx')
+  assert.match(denied,/has not changed any data or permissions/)
+  assert.match(denied,/does not disclose the internal capability or policy rule/)
+  assert.match(unavailable,/underlying permissions are unchanged/)
+})
+
+test('data-quality and observability grids degrade before dense desktop layouts',()=>{
+  const dq=read('app/data-quality/page.tsx')
+  const obs=read('app/observability/page.tsx')
+  assert.match(dq,/sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5/)
+  assert.match(dq,/md:grid-cols-2 2xl:grid-cols-4/)
+  assert.match(obs,/sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6/)
+})
+
+test('AI recommendations remain advisory and approval boundaries stay visible',()=>{
+  const insights=read('app/ai-insights/page.tsx')
+  const runForm=read('app/agents/run-agent-form.tsx')
+  const run=read('app/agents/runs/[runId]/page.tsx')
+  assert.match(insights,/ADVISORY/)
+  assert.match(insights,/Evidence used/)
+  assert.match(runForm,/APPROVAL_REQUIRED/)
+  assert.match(runForm,/NOT_AUTHORIZED/)
+  assert.match(run,/Approval gates/)
+  assert.match(run,/sideEffectingTools/)
+})
+
+test('coverage and design-system guards fail closed if key contracts disappear',()=>{
+  const coverage=read('tests/ux-all-pages-coverage.test.mjs')
+  const design=read('tests/ux-modern-design-system.test.mjs')
+  assert.match(coverage,/missing page routes/)
+  assert.match(design,/keyboard focus remains explicit/)
+  assert.match(design,/mild neomorphic semantic surfaces/)
+})
