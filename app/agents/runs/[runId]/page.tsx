@@ -234,6 +234,11 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
         <header id="summary" className="scroll-mt-28 rounded-[22px] border border-white/10 bg-[#0a1d33] p-6">
           <p className="text-xs font-black uppercase tracking-[.14em] text-violet-300">Execution evidence</p>
           <div className="mt-2 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-black text-white">{agent ? agent.name : 'Agent run'}</h1><p className="mt-2 font-mono text-xs text-slate-500">{typedRun.id}</p></div><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-slate-200">{typedRun.status}</span></div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {typedRun.dataset_id ? <Link href={`/catalog/dataset/${encodeURIComponent(typedRun.dataset_id)}`} className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-400/10">Dataset 360</Link> : null}
+            <Link href={`/monitoring?run=${encodeURIComponent(typedRun.id)}`} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.07]">Live execution context</Link>
+            {typedRun.parent_run_id ? <Link href={`/agents/runs/${encodeURIComponent(typedRun.parent_run_id)}`} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.07]">Parent run</Link> : null}
+          </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Steps</p><p className="mt-1 text-2xl font-black text-white">{steps.length}</p></div>
             <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Tool invocations</p><p className="mt-1 text-2xl font-black text-white">{tools.length}</p><p className="mt-1 text-[11px] text-slate-600">{sideEffectingTools} side-effecting</p></div>
