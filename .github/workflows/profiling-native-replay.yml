@@ -100,7 +100,7 @@ jobs:
       - name: Verify profiling replay-safe dataset execution
         run: node scripts/verify-profiling-dataset-replay.mjs
       - name: Profiling production validation negative and failure cases
-        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs tests/profiling-production-validation-source.test.mjs tests/profiling-production-validation-rpc-grant.test.mjs
+        run: node --test scripts/test-profiling-production-validation.mjs tests/profiling-production-validation-workflow.test.mjs tests/profiling-production-validation-source.test.mjs tests/profiling-production-validation-rpc-grant.test.mjs tests/profiling-legacy-run-profile-boundary.test.mjs
       - name: Existing profiling lifecycle contract
         run: pnpm run verify:profiling-lifecycle
       - name: Profiling governance insights contract
