@@ -190,7 +190,7 @@ export default async function AgentsPage() {
               <h1 className="mt-4 text-3xl font-black tracking-tight text-white">AI Agents</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Choose a governed agent, run approved automation, inspect registered tools, and follow execution evidence without leaving the control plane.</p>
             </div>
-            {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold text-white hover:bg-violet-500">Open live execution <Activity className="ml-1 inline h-4 w-4" /></Link> : null}
+            {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold text-white hover:bg-violet-500">Open Job Monitor <Activity className="ml-1 inline h-4 w-4" /></Link> : null}
           </div>
         </header>
 
