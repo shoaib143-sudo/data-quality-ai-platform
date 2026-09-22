@@ -72,6 +72,15 @@ export default async function DashboardPage() {
   const failedJobs = agentRuns.filter(run => run.status === 'FAILED').length
   const coverageGap = Math.max(0, datasets.length - readyDatasets)
 
+  const primaryWorkspaces = [
+    { href: '/catalog', title: 'Data Catalog', description: 'Find governed assets and metadata.', icon: Database },
+    { href: '/data-quality', title: 'Data Quality', description: 'Review quality evidence and controls.', icon: ShieldCheck },
+    { href: '/lineage', title: 'Data Lineage', description: 'Understand impact and dependencies.', icon: Layers3 },
+    { href: '/monitoring', title: 'Job Monitor', description: 'Track execution health and failures.', icon: Activity },
+    { href: '/profiling/explorer', title: 'Profiling Explorer', description: 'Inspect metrics, distributions and findings.', icon: Gauge },
+    { href: '/agents', title: 'AI Agents', description: 'Investigate and recommend governed next actions.', icon: Sparkles },
+  ] as const
+
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] text-slate-100">
     <div className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">
       <GlobalUtilityBar contextLabel="Executive governance" />
@@ -217,20 +226,12 @@ export default async function DashboardPage() {
           <span className="rounded-full border border-violet-300/15 bg-violet-300/[0.06] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-violet-200">Production capabilities</span>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {[
-            ['/catalog','Data Catalog','Find governed assets and metadata.',Database],
-            ['/data-quality','Data Quality','Review quality evidence and controls.',ShieldCheck],
-            ['/lineage','Data Lineage','Understand impact and dependencies.',Layers3],
-            ['/monitoring','Job Monitor','Track execution health and failures.',Activity],
-            ['/profiling/explorer','Profiling Explorer','Inspect metrics, distributions and findings.',Gauge],
-            ['/agents','AI Agents','Investigate and recommend governed next actions.',Sparkles],
-          ].map(([href, title, description, Icon]) => {
-            const WorkspaceIcon = Icon as typeof Database
-            return <Link key={String(href)} href={String(href)} className="group rounded-2xl border border-white/[0.07] bg-[#061321] p-4 hover:-translate-y-0.5 hover:border-cyan-300/25 hover:bg-[#08182b]">
+          {primaryWorkspaces.map(({ href, title, description, icon: WorkspaceIcon }) => (
+            <Link key={href} href={href} className="group rounded-2xl border border-white/[0.07] bg-[#061321] p-4 hover:-translate-y-0.5 hover:border-cyan-300/25 hover:bg-[#08182b]">
               <div className="flex items-start justify-between gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl border border-cyan-300/12 bg-cyan-300/[0.05] text-cyan-300"><WorkspaceIcon className="h-5 w-5" aria-hidden="true" /></span><ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-cyan-300" aria-hidden="true" /></div>
               <p className="mt-4 font-black text-slate-100">{title}</p><p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
             </Link>
-          })}
+          ))}
         </div>
 
         <details className="mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.02]">
