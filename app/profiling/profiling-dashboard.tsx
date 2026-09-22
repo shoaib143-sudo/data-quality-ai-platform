@@ -232,7 +232,7 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
             <div className="rounded-2xl border border-white/[0.07] bg-[#061321] p-3"><p className="text-[9px] font-black uppercase tracking-wider text-slate-600">Findings</p><p className="mt-1 text-xl font-black text-white">{findings.length}</p></div>
           </div>
         </div>
-        {canExplorer ? <div className="relative mt-5 flex justify-end"><Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_0_18px_rgba(34,211,238,.10)]">Open full profiling report <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></div> : null}
+        {canExplorer ? <div className="relative mt-5 flex justify-end"><Link href={`/profiling/explorer?runId=${encodeURIComponent(run.id)}`} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_0_18px_rgba(34,211,238,.10)]">Full profiling report <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></div> : null}
       </header>
 
       <nav className="mt-4 grid gap-3 md:grid-cols-3" aria-label="Data analysis workspaces">
