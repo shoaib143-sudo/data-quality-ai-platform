@@ -381,7 +381,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const activeStage = stages.find(stage => ['BLOCKED', 'IN_PROGRESS', 'NOT_STARTED'].includes(stage.state)) ?? null
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#0b1422] text-slate-100">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar
           persona={landing.persona}
