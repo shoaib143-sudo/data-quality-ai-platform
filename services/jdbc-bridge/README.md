@@ -1,6 +1,6 @@
 # DataNexus JDBC Bridge
 
-A small Dockerized Java 21/Spring Boot service that gives the DataNexus application a governed JDBC runtime outside Vercel.
+A small Dockerized Java 21/Spring Boot service that gives the DataNexus application a governed JDBC runtime. The production bridge currently runs independently from the main Vercel application; a non-production Vercel container proof-of-fit is maintained alongside the existing runtime.
 
 ## Supported drivers
 
@@ -23,6 +23,7 @@ The bridge contract is intentionally database-neutral so additional JDBC drivers
 - Database connections are opened read-only by the bridge.
 - Schema and table identifiers are restricted to safe identifier characters.
 - Query requests are bounded by a technical row ceiling.
+- Query responses are additionally bounded by `JDBC_BRIDGE_TECHNICAL_MAX_RESPONSE_BYTES` (3.5 MB by default) so container/function transports fail safely below Vercel's 4.5 MB response ceiling.
 - The bridge container runs as a non-root user.
 
 The preferred production credential mode is Infisical. A constrained `environment` mode is also supported for development/demo infrastructure that cannot run a secret manager yet. Environment mode supports one credential reference and keeps the username/password in server-side deployment environment variables only. It never accepts credentials in the JDBC URL and disables the credential-write endpoint.
@@ -91,6 +92,19 @@ curl -X POST http://localhost:10000/v1/validate \
   -d '{"jdbc_url":"jdbc:postgresql://host:5432/db","credential_ref":"primary-jdbc","schema":"public","table":"customers"}'
 ```
 
+## Vercel container proof-of-fit
+
+The bridge can be assessed on Vercel without changing the production `JDBC_BRIDGE_URL`.
+
+PoC files:
+
+- `Dockerfile.vercel` — Java 21 non-root container entrypoint for Vercel.
+- `vercel.json` — enables Fluid compute and explicitly disables automatic Git deployments.
+- `../../scripts/verify-vercel-jdbc-bridge-poc-contract.mjs` — static packaging/security contract.
+- `../../scripts/probe-vercel-jdbc-bridge-poc.mjs` — live health/auth latency probe for an explicitly supplied PoC URL.
+- `../../docs/vercel-jdbc-bridge-poc.md` — acceptance gates and cutover boundaries.
+
+The PoC is intentionally limited to publicly reachable JDBC targets. Private, VPN-only, VPC-only, or source-IP-allowlisted database connectivity is not certified by this PoC. Production remains on the existing bridge until all documented acceptance gates pass.
 ## Render deployment
 
 This directory includes two blueprints:
