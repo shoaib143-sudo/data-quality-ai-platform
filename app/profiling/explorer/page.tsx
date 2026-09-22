@@ -197,10 +197,19 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
     <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] p-5 text-slate-100">
       <div className="mx-auto max-w-7xl space-y-6">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling Explorer" contextLabel={datasetContext.data.name ?? 'Profiling evidence'} homeHref="/home" />
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-white/10 bg-[#0a1d33] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-white/10 bg-[#0a1d33] p-5">
           <div>
-            <h1 className="text-3xl font-semibold">Profiling Explorer</h1>
-            <p className="mt-2 text-sm text-slate-400">Run {latestRun.id} · {latestRun.status}</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+              <Link href="/profiling" className="text-cyan-300 hover:text-cyan-200">Profiling</Link>
+              <span className="text-slate-600">/</span>
+              <span className="text-slate-400">{datasetContext.data.name ?? 'Dataset evidence'}</span>
+            </div>
+            <h1 className="mt-2 text-3xl font-semibold">Profiling Explorer</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span>Run {latestRun.id.slice(0,8)}…</span>
+              <span className="text-slate-600">·</span>
+              <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 font-bold text-emerald-300">{latestRun.status}</span>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href={canonicalRoutes.governedDataset(String(datasetContext.data.id))} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-white/[0.04]">Dataset 360</Link>
