@@ -6,11 +6,21 @@ on:
     paths:
       - 'services/jdbc-bridge/**'
       - 'scripts/verify-jdbc-bridge-deployment-contract.mjs'
+      - 'infra/cloudflare/jdbc-bridge-poc/**'
+      - 'scripts/verify-cloudflare-jdbc-bridge-poc-contract.mjs'
+      - 'scripts/audit-cloudflare-jdbc-bridge-poc-adversarial.mjs'
+      - 'tests/cloudflare-jdbc-bridge-poc-failure-cases.test.mjs'
+      - 'docs/cloudflare-jdbc-bridge-poc-post-implementation-validation.md'
       - '.github/workflows/jdbc-bridge.yml'
   pull_request:
     paths:
       - 'services/jdbc-bridge/**'
       - 'scripts/verify-jdbc-bridge-deployment-contract.mjs'
+      - 'infra/cloudflare/jdbc-bridge-poc/**'
+      - 'scripts/verify-cloudflare-jdbc-bridge-poc-contract.mjs'
+      - 'scripts/audit-cloudflare-jdbc-bridge-poc-adversarial.mjs'
+      - 'tests/cloudflare-jdbc-bridge-poc-failure-cases.test.mjs'
+      - 'docs/cloudflare-jdbc-bridge-poc-post-implementation-validation.md'
       - '.github/workflows/jdbc-bridge.yml'
 
 permissions:
@@ -27,6 +37,12 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Verify deployment availability contract
         run: node ../../scripts/verify-jdbc-bridge-deployment-contract.mjs
+      - name: Verify Cloudflare JDBC PoC contract
+        run: node ../../scripts/verify-cloudflare-jdbc-bridge-poc-contract.mjs
+      - name: Test Cloudflare JDBC PoC negative and failure cases
+        run: node --test ../../tests/cloudflare-jdbc-bridge-poc-failure-cases.test.mjs
+      - name: Independent adversarial Cloudflare JDBC PoC audit
+        run: node ../../scripts/audit-cloudflare-jdbc-bridge-poc-adversarial.mjs
       - name: Set up Java 21
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "datanexus-jdbc-bridge-poc",
+  "main": "src/router.ts",
+  "compatibility_date": "2026-09-22",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "DATANEXUS_ENV": "canary",
+    "DATANEXUS_PLATFORM": "cloudflare",
+    "DATANEXUS_JDBC_EXECUTION_ENABLED": "false"
+  },
+  "containers": [
+    {
+      "class_name": "DataNexusJdbcBridgeContainer",
+      "image": "../../../services/jdbc-bridge/Dockerfile",
+      "max_instances": 1,
+      "constraints": {
+        "regions": [
+          "APAC"
+        ]
+      },
+      "instance_type": "standard-1",
+      "ssh": {
+        "enabled": false
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DATANEXUS_JDBC_BRIDGE",
+        "class_name": "DataNexusJdbcBridgeContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "DataNexusJdbcBridgeContainer"
+      ]
+    }
+  ]
+}

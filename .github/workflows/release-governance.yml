@@ -112,6 +112,7 @@ jobs:
           pnpm run verify:provider-neutral-runtime
           pnpm run verify:container-runtime
           pnpm run verify:worker-runtime
+          pnpm run verify:cloudflare-jdbc-bridge-poc
           pnpm exec tsc --noEmit
           pnpm build
 
@@ -182,6 +183,9 @@ jobs:
           "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
             --config infra/cloudflare/worker-runtime/wrangler.jsonc \
             --outdir /tmp/datanexus-worker-dry-run
+          "$RUNNER_TEMP/datanexus-cloudflare-tools/node_modules/.bin/wrangler" deploy --dry-run \
+            --config infra/cloudflare/jdbc-bridge-poc/wrangler.jsonc \
+            --outdir /tmp/datanexus-jdbc-bridge-poc-dry-run
 
 
 
