@@ -1,3 +1,4 @@
+// Combined-head contract for DataNexus UX Experience Wave 1.
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
