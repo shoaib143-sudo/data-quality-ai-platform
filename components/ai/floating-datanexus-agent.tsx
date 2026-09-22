@@ -17,7 +17,7 @@ type CopilotResponse = {
   error?: string
 }
 
-const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#061426]'
+const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1422]'
 
 export function FloatingDataNexusAgent() {
   const pathname = usePathname()
