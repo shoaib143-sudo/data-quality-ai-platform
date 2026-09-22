@@ -34,7 +34,8 @@ assert.ok(!admin.includes('<nav className='), 'adversarial: Administration must 
 
 const roleLanding=fs.readFileSync('components/governance/role-landing-page.tsx','utf8')
 assert.ok(roleLanding.includes("const safeHref = (href: string, fallback='/catalog') => canAccessWorkspaceHref"), 'adversarial: persona-home route generation must remain fail-closed')
-assert.ok(roleLanding.includes('const visibleNav = persona.nav.filter(item => canAccessWorkspaceHref'), 'adversarial: persona-home navigation must remain policy filtered')
+assert.ok(roleLanding.includes('const personaNav = persona.nav.filter(item => canAccessWorkspaceHref'), 'adversarial: persona-home base navigation must remain policy filtered')
+assert.ok(roleLanding.includes("const visibleNav = canAccessWorkspaceHref(persona.slug, '/agents', orgRole)"), 'adversarial: AI Agents augmentation must remain policy filtered')
 
 const policy=fs.readFileSync('lib/governance/workspace-policy.ts','utf8')
 const lineageLayout=fs.readFileSync('app/lineage/layout.tsx','utf8')
