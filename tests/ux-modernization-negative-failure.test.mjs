@@ -74,3 +74,12 @@ test('partial-source and no-evidence states remain explicit instead of silently 
   assert.match(catalog,/Clear search/)
   assert.match(observability,/No persisted observability alerts are currently available/)
 })
+
+
+test('async governance feedback is announced to assistive technology',()=>{
+  const catalog=read('app/catalog/catalog-manager.tsx')
+  const learning=read('app/admin/learning-cases/positive-learning-case-review-manager.tsx')
+  assert.match(catalog,/role="status" aria-live="polite"/)
+  assert.match(learning,/role="status" aria-live="polite"/)
+  assert.match(learning,/role="alert"/)
+})
