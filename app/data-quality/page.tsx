@@ -152,14 +152,38 @@ export default async function DataQualityPage() {
   const impactHref = canLineage ? '/lineage' : canReports ? '/reports' : '/catalog'
   const prepareHref = canDatasets ? '/datasets' : '/catalog'
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100">
-    <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] text-slate-100">
+    <div className="mx-auto max-w-[1480px] px-4 py-5 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Data Quality" contextLabel="Evidence-backed quality decisions" homeHref="/home" />
-      <nav className={`${surface} mb-6 mt-4 flex flex-wrap items-center justify-end gap-4 px-5 py-3`}>
+      <nav aria-label="Data quality workspaces" className="mb-4 mt-4 flex flex-wrap items-center justify-end gap-4 rounded-2xl border border-white/[0.08] bg-[#09192d] px-5 py-3">
         <div className="flex flex-wrap gap-2">{canProfiling ? <Link href="/profiling/explorer" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Profiling Explorer</Link> : null}<Link href="/data-quality/rules" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Quality Rules</Link>{canObservability ? <Link href="/observability" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white ${focus}`}>Observability</Link> : null}</div>
       </nav>
 
-      <header className={`${surface} p-6 sm:p-7`}><div className="flex flex-wrap items-start justify-between gap-5"><div><div className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-300"><Sparkles className="h-3.5 w-3.5" />Evidence-backed data quality</div><h1 className="mt-4 text-3xl font-black tracking-tight text-white">Data Quality</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Understand current quality, open the evidence behind a score, investigate findings, and review governed controls. Business impact is shown only when persisted governance evidence provides it.</p></div>{canProfiling ? <Link href="/profiling/explorer" className={`rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-500 ${focus}`}>Open profiling evidence <ArrowRight className="ml-1 inline h-4 w-4" /></Link> : null}</div></header>
+      <header className="relative overflow-hidden rounded-[26px] border border-cyan-300/12 bg-[#09192d] p-6 shadow-[0_20px_60px_rgba(0,0,0,.24)] sm:p-7">
+        <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-500/[0.07] blur-3xl"/>
+        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-3 py-1.5 text-xs font-black text-cyan-200"><Sparkles className="h-3.5 w-3.5" aria-hidden="true"/>Evidence-backed data quality</div>
+            <h1 className="mt-4 max-w-4xl text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">Can this data be trusted for its intended use?</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Understand current quality, open the evidence behind a score, investigate findings, and review governed controls. Business impact is shown only when persisted governance evidence provides it.</p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {canProfiling ? <Link href="/profiling/explorer" className={'inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_0_18px_rgba(34,211,238,.10)] '+focus}>Open profiling evidence <ArrowRight className="h-4 w-4" aria-hidden="true"/></Link> : null}
+              <Link href="/data-quality/rules" className={'inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-200 hover:border-cyan-300/25 '+focus}>Review quality controls</Link>
+            </div>
+          </div>
+          <div className="rounded-3xl border border-white/[0.08] bg-[#061321] p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-600">Current quality posture</p>
+            <div className="mt-3 flex items-end justify-between gap-4">
+              <div><p className={'text-4xl font-black '+scoreTone(averageScore)}>{formatScore(averageScore)}</p><p className="mt-1 text-xs text-slate-500">Average across scored completed runs</p></div>
+              <Gauge className={'h-8 w-8 '+scoreTone(averageScore)} aria-hidden="true"/>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <Link href="/issues" className="rounded-xl border border-rose-300/10 bg-rose-300/[0.05] p-3 hover:border-rose-300/20"><p className="text-[9px] font-black uppercase tracking-wider text-rose-300/70">Priority findings</p><p className="mt-1 text-2xl font-black text-white">{criticalFindings.length}</p></Link>
+              <Link href={controlRunHref} className="rounded-xl border border-amber-300/10 bg-amber-300/[0.05] p-3 hover:border-amber-300/20"><p className="text-[9px] font-black uppercase tracking-wider text-amber-300/70">Control failures</p><p className="mt-1 text-2xl font-black text-white">{failedQualityRules.length}</p></Link>
+            </div>
+          </div>
+        </div>
+      </header>
 
       <section className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Link href="/profiling/explorer" className={`${surface} ${interactive} p-5`}><Gauge className={`h-5 w-5 ${scoreTone(averageScore)}`} /><p className="mt-3 text-3xl font-black text-white">{formatScore(averageScore)}</p><p className="mt-1 text-sm font-bold text-slate-200">Average quality</p><p className="mt-1 text-xs text-slate-500">Across scored completed runs</p></Link>
