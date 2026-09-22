@@ -4,6 +4,7 @@ const first = fs.readFileSync('supabase/migrations/20260910210359_explicit_inter
 const restrictive = fs.readFileSync('supabase/migrations/20260910210450_make_internal_service_rls_denies_restrictive.sql', 'utf8')
 const advisorFirst = fs.readFileSync('supabase/migrations/20260915072214_explicit_deny_rls_no_policy_tables.sql', 'utf8')
 const advisorRestrictive = fs.readFileSync('supabase/migrations/20260915072330_make_explicit_deny_rls_no_policy_tables_restrictive.sql', 'utf8')
+const latestInternalDeny = fs.readFileSync('supabase/migrations/20260922124500_explicit_deny_new_internal_rls_tables.sql', 'utf8')
 
 const internalTables = [
   'governance.ai_model_cost_events',
@@ -34,6 +35,22 @@ const advisorTables = [
   'governance.resource_access_grants',
 ]
 
+const latestInternalTables = [
+  'agent.agent_version_lifecycle',
+  'agent.agent_version_lifecycle_events',
+  'agent.governed_handoffs',
+  'agent.governed_run_gates',
+  'agent.positive_learning_case_occurrences',
+  'agent.positive_learning_case_reviews',
+  'agent.positive_learning_case_usages',
+  'agent.positive_learning_cases',
+  'governance.agent_approval_authority_audit',
+  'governance.governance_orchestrator_runs',
+  'governance.governance_outcome_reports',
+  'governance.orchestrator_autonomy_policies',
+  'orchestration.governance_recovery_events',
+]
+
 const checks = [
   ['all seven internal/service tables are explicitly covered', internalTables.every((table) => first.includes(`on ${table}`) && restrictive.includes(`on ${table}`))],
   ['client deny policy targets only anon/authenticated', first.includes('to anon, authenticated') && restrictive.includes('to anon, authenticated')],
@@ -49,6 +66,11 @@ const checks = [
   ['advisor final policies remain fail closed', (advisorRestrictive.match(/using \(false\)/g) ?? []).length === advisorTables.length && (advisorRestrictive.match(/with check \(false\)/g) ?? []).length === advisorTables.length],
   ['advisor deny policies never target service_role', !advisorFirst.includes('to service_role') && !advisorRestrictive.includes('to service_role')],
   ['advisor hardening never disables RLS', !advisorFirst.toLowerCase().includes('disable row level security') && !advisorRestrictive.toLowerCase().includes('disable row level security')],
+  ['latest internal RLS-only tables are explicitly covered', latestInternalTables.every((table) => latestInternalDeny.includes(`on ${table}`))],
+  ['latest internal deny policies are restrictive', (latestInternalDeny.match(/as restrictive/g) ?? []).length === latestInternalTables.length],
+  ['latest internal deny policies fail closed', (latestInternalDeny.match(/using \(false\)/g) ?? []).length === latestInternalTables.length && (latestInternalDeny.match(/with check \(false\)/g) ?? []).length === latestInternalTables.length],
+  ['latest internal deny policies target only browser roles', latestInternalDeny.includes('to anon, authenticated') && !latestInternalDeny.includes('to service_role')],
+  ['latest internal hardening keeps RLS enabled', !latestInternalDeny.toLowerCase().includes('disable row level security')],
 ]
 
 const failures = checks.filter(([, passed]) => !passed)
