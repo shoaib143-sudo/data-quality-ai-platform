@@ -10,7 +10,9 @@ test('R2 adapter exposes bounded read-only assurance residue inspection', () => 
   assert.match(r2, /'list-type': '2'/)
   assert.match(r2, /'max-keys': String\(maxKeys\)/)
   assert.match(r2, /maxKeys > 1000/)
-  assert.match(r2, /<Key>\(\[\\s\\S\]\*\?\)<\\\/Key>/)
+  assert.match(r2, /xml\.matchAll/)
+  assert.match(r2, /<Key>/)
+  assert.match(r2, /IsTruncated/)
   assert.doesNotMatch(r2.slice(r2.indexOf('export async function listR2ObjectKeysByPrefix'), r2.indexOf('export class R2StorageAdapter')), /DELETE/)
 })
 
