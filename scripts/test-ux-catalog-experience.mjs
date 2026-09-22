@@ -8,8 +8,8 @@ for(const marker of [
   'Observed versions',
   'Projects editable',
   'Discovery',
-  'Browse physical assets',
-  'Connect business meaning',
+  'Physical Assets',
+  'Glossary',
   'CatalogManager',
 ]) assert.ok(source.includes(marker), `catalog UX marker missing: ${marker}`)
 
