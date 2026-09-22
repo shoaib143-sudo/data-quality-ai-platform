@@ -70,6 +70,7 @@ on:
       - 'lib/auth/safe-auth-return-path.ts'
       - 'tests/safe-auth-return-path.test.mjs'
       - 'scripts/test-ux-shared-form-interaction-contract.mjs'
+      - 'scripts/test-ux-login-experience.mjs'
       - 'lib/profiling/profiling-run-handoff.ts'
       - 'scripts/test-product-shell-ux.mjs'
       - 'scripts/test-dataset-360-ux.mjs'
@@ -317,6 +318,8 @@ jobs:
         run: node scripts/test-ux-shared-form-interaction-contract.mjs
       - name: Run independent Wave 13 adversarial audit
         run: node scripts/audit-ux-wave13-adversarial.mjs
+      - name: Test sign-in UX experience
+        run: node scripts/test-ux-login-experience.mjs
       - name: Test UX Experience Wave 1 integration contract
         run: node scripts/test-ux-experience-wave1-integration.mjs
       - name: Test UX interaction telemetry v2 negative cases
