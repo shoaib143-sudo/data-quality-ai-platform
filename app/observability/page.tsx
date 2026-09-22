@@ -145,7 +145,7 @@ export default async function ObservabilityPage() {
           </div>
         </header>
 
-        <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        <section className="mt-6 grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           {kpis.map(({label,value,href,Icon,tone})=><Link key={label} href={href} className={`${surface} ${interactive} p-5`}><Icon className={`h-5 w-5 ${tone}`}/><p className="mt-4 text-2xl font-black text-white">{String(value)}</p><p className="text-xs font-semibold text-slate-500">{label}</p></Link>)}
         </section>
 
