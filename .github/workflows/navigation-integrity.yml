@@ -4,6 +4,17 @@ on:
   pull_request:
     paths:
       - 'app/**'
+      - 'components/auth/**'
+      - 'docs/ux/DATANEXUS-UX-ALL-PAGES-REVALIDATION.md'
+      - 'tests/ux-all-pages-coverage.test.mjs'
+      - 'tests/ux-modern-design-system.test.mjs'
+      - 'tests/ux-modernization-family-wave.test.mjs'
+      - 'tests/ux-responsive-metric-grid.test.mjs'
+      - 'tests/ux-modernization-negative-failure.test.mjs'
+      - 'tests/data-360-connected-context.test.mjs'
+      - 'tests/ai-ux-governance-context.test.mjs'
+      - 'tests/ai-learning-governance-ux.test.mjs'
+      - 'scripts/audit-ux-modernization-adversarial.mjs'
       - 'components/governance/**'
       - 'components/app-shell/**'
       - 'lib/governance/remediation-closure-state.ts'
@@ -92,6 +103,17 @@ on:
     branches: [main]
     paths:
       - 'app/**'
+      - 'components/auth/**'
+      - 'docs/ux/DATANEXUS-UX-ALL-PAGES-REVALIDATION.md'
+      - 'tests/ux-all-pages-coverage.test.mjs'
+      - 'tests/ux-modern-design-system.test.mjs'
+      - 'tests/ux-modernization-family-wave.test.mjs'
+      - 'tests/ux-responsive-metric-grid.test.mjs'
+      - 'tests/ux-modernization-negative-failure.test.mjs'
+      - 'tests/data-360-connected-context.test.mjs'
+      - 'tests/ai-ux-governance-context.test.mjs'
+      - 'tests/ai-learning-governance-ux.test.mjs'
+      - 'scripts/audit-ux-modernization-adversarial.mjs'
       - 'components/governance/**'
       - 'components/app-shell/**'
       - 'lib/governance/remediation-closure-state.ts'
@@ -323,6 +345,14 @@ jobs:
         run: node scripts/test-ux-interaction-telemetry-v2.mjs
       - name: Run independent UX Experience Wave 1 adversarial audit
         run: node scripts/audit-ux-experience-wave1-adversarial.mjs
+      - name: Test all-page UX modernization coverage
+        run: node --test tests/ux-all-pages-coverage.test.mjs tests/ux-modern-design-system.test.mjs tests/ux-modernization-family-wave.test.mjs tests/ux-responsive-metric-grid.test.mjs
+      - name: Test governed AI and Data 360 UX contracts
+        run: node --test tests/data-360-connected-context.test.mjs tests/ai-ux-governance-context.test.mjs tests/ai-learning-governance-ux.test.mjs
+      - name: Test modernization negative and failure cases
+        run: node --test tests/ux-modernization-negative-failure.test.mjs
+      - name: Run independent modernization adversarial audit
+        run: node scripts/audit-ux-modernization-adversarial.mjs
       - name: Verify post-implementation UX gate matrix
         run: node scripts/verify-ux-post-implementation-gates.mjs
       - name: Setup pnpm
