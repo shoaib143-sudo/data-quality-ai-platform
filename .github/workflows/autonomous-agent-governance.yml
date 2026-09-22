@@ -40,6 +40,9 @@ on:
       - 'scripts/audit-execution-modes-adversarial.mjs'
       - 'scripts/test-execution-mode-ui-ux.mjs'
       - 'scripts/test-execution-mode-ui-accessibility.mjs'
+      - 'scripts/node-ts-alias-loader.mjs'
+      - 'scripts/run-governance-orchestrator-off-live.mjs'
+      - 'tests/governance-orchestrator-live-off-contract.test.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
   pull_request:
@@ -80,6 +83,9 @@ on:
       - 'scripts/audit-execution-modes-adversarial.mjs'
       - 'scripts/test-execution-mode-ui-ux.mjs'
       - 'scripts/test-execution-mode-ui-accessibility.mjs'
+      - 'scripts/node-ts-alias-loader.mjs'
+      - 'scripts/run-governance-orchestrator-off-live.mjs'
+      - 'tests/governance-orchestrator-live-off-contract.test.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
 
@@ -125,3 +131,44 @@ jobs:
         run: node --test scripts/test-execution-mode-ui-ux.mjs
       - name: Execution-mode accessibility contract tests
         run: node --test scripts/test-execution-mode-ui-accessibility.mjs
+      - name: Verify live OFF-mode baseline contract
+        run: node --test tests/governance-orchestrator-live-off-contract.test.mjs
+      - name: Syntax-check live OFF-mode runner
+        run: |
+          node --check scripts/node-ts-alias-loader.mjs
+          node --check scripts/run-governance-orchestrator-off-live.mjs
+
+  live-off-baseline:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: module14-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: e2e-service-runner-not-used
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GOVERNANCE_E2E_PROJECT_ID: 479813aa-72a4-4b12-b72a-74da8d2419ce
+      GOVERNANCE_E2E_EVIDENCE_PATH: ${{ runner.temp }}/governance-orchestrator-off-live.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Execute live OFF-mode Governance Orchestrator baseline
+        run: node --experimental-strip-types --experimental-loader ./scripts/node-ts-alias-loader.mjs scripts/run-governance-orchestrator-off-live.mjs
+      - name: Upload OFF-mode baseline evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: governance-orchestrator-off-${{ github.sha }}
+          path: ${{ runner.temp }}/governance-orchestrator-off-live.json
+          retention-days: 90
+          if-no-files-found: error
