@@ -17,6 +17,9 @@ export default async function LearningCasesPage() {
   const membership = await resolveInstanceOrganizationMembership(user.id)
   await authorizeDataGovernanceSuperAdminForOrganization(user.id, membership.organizationId)
   const items = await loadPositiveLearningCaseAdminInbox(user.id)
+  const supervisedCases = items.filter(item => String(item.runMode).toUpperCase().includes('SUPERVISED')).length
+  const handsfreeCases = items.filter(item => String(item.runMode).toUpperCase().includes('HANDSFREE')).length
+  const repeatedCases = items.filter(item => item.occurrenceCount > 1).length
 
   return (
     <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-6 text-slate-950">
@@ -45,6 +48,13 @@ export default async function LearningCasesPage() {
             </p>
           </div>
         </header>
+
+        <section className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Learning review posture">
+          <div className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-3xl font-black">{items.length}</p><p className="mt-1 text-sm font-bold">Pending candidates</p><p className="mt-1 text-xs text-slate-500">Require explicit governance review</p></div>
+          <div className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-3xl font-black">{supervisedCases}</p><p className="mt-1 text-sm font-bold">Supervised successes</p><p className="mt-1 text-xs text-slate-500">Proposed from verified supervised runs</p></div>
+          <div className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-3xl font-black">{handsfreeCases}</p><p className="mt-1 text-sm font-bold">Handsfree successes</p><p className="mt-1 text-xs text-slate-500">Autonomous outcomes awaiting human learning approval</p></div>
+          <div className="rounded-2xl border bg-white p-5 shadow-sm"><p className="text-3xl font-black">{repeatedCases}</p><p className="mt-1 text-sm font-bold">Repeated patterns</p><p className="mt-1 text-xs text-slate-500">Observed successfully more than once</p></div>
+        </section>
 
         <PositiveLearningCaseReviewManager items={items} />
       </div>
