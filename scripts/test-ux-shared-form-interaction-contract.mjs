@@ -4,6 +4,14 @@ import fs from 'node:fs'
 const files=[
   'components/governance/role-landing-page.tsx',
   'app/ai-insights/page.tsx',
+  'app/admin/ai-command-center/audit/page.tsx',
+  'app/admin/ai-command-center/explorer/page.tsx',
+  'app/admin/ai-command-center/learning-governance/page.tsx',
+  'app/admin/ai-command-center/page.tsx',
+  'app/admin/ai-command-center/pricing-authority/page.tsx',
+  'app/admin/ai-command-center/resource-controls/page.tsx',
+  'app/admin/ai-command-center/retrieval-evaluation/page.tsx',
+  'app/admin/ai-command-center/traces/page.tsx',
   'app/datasets/dataset/[datasetId]/edit/page.tsx',
   'app/datasets/edit/[sourceId]/page.tsx',
   'app/login/page.tsx',
@@ -34,5 +42,22 @@ assert.ok(aiInsights.includes('method="get"'), 'AI Insights scope selector must 
 assert.ok(aiInsights.includes('<select name="projectId"'), 'AI Insights project selector must remain named')
 assert.ok(aiInsights.includes('<select name="datasetId"'), 'AI Insights dataset selector must remain named')
 assert.ok(aiInsights.includes('<button type="submit"') && aiInsights.includes('Load AI evidence'), 'AI Insights evidence loader must remain an explicit submit CTA')
+
+const commandCenterPages=[
+  'app/admin/ai-command-center/audit/page.tsx',
+  'app/admin/ai-command-center/explorer/page.tsx',
+  'app/admin/ai-command-center/learning-governance/page.tsx',
+  'app/admin/ai-command-center/page.tsx',
+  'app/admin/ai-command-center/pricing-authority/page.tsx',
+  'app/admin/ai-command-center/resource-controls/page.tsx',
+  'app/admin/ai-command-center/retrieval-evaluation/page.tsx',
+  'app/admin/ai-command-center/traces/page.tsx',
+]
+for(const file of commandCenterPages){
+  const source=fs.readFileSync(file,'utf8')
+  assert.ok(source.includes('<form method="get"'), `${file} project filter must remain a GET form`)
+  assert.ok(source.includes('name="projectId"'), `${file} project selector must remain named`)
+  assert.ok(source.includes('<button type="submit"'), `${file} load CTA must remain an explicit submit button`)
+}
 
 console.log('Shared UX form interaction contract passed.')

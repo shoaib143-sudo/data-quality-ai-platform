@@ -43,7 +43,7 @@ export default async function AICommandCenterTracesPage({ searchParams }: { sear
       <form method="get" className="grid gap-4 rounded-2xl border bg-white p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
         <label className="block text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 block w-full rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
         <label className="block text-sm font-semibold">Trace ID<input name="traceId" defaultValue={selectedTraceId ?? ''} placeholder="Optional exact W3C trace ID" className="mt-2 block w-full rounded-xl border bg-white px-3 py-2 font-mono text-sm font-normal"/></label>
-        <button className="rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load traces</button>
+        <button type="submit" className="rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load traces</button>
       </form>
 
       {!selectedProjectId ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : null}
