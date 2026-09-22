@@ -31,6 +31,29 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
 }
 
+function safeErrorText(value) {
+  return String(value ?? 'unknown error')
+    .replace(/sb_secret_[A-Za-z0-9_-]+/g, '[REDACTED_SECRET_KEY]')
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]')
+    .slice(0, 1000)
+}
+
+async function connectorErrorMessage(error) {
+  const fallback = error instanceof Error ? error.message : 'Edge Function request failed.'
+  const context = error && typeof error === 'object' ? error.context : null
+  if (context instanceof Response) {
+    const status = context.status
+    try {
+      const payload = await context.clone().json()
+      const message = payload && typeof payload.error === 'string' ? payload.error : fallback
+      return `HTTP ${status}: ${safeErrorText(message)}`
+    } catch {
+      return `HTTP ${status}: ${safeErrorText(fallback)}`
+    }
+  }
+  return safeErrorText(fallback)
+}
+
 async function authorizedActor(admin, projectId) {
   const candidates = []
   const seen = new Set()
@@ -136,7 +159,7 @@ async function main() {
       table: targetView,
     },
   })
-  if (connectorError) throw new Error(`PostgreSQL lineage connector failed: ${connectorError.message}`)
+  if (connectorError) throw new Error(`PostgreSQL lineage connector failed: ${await connectorErrorMessage(connectorError)}`)
   const connector = record(connectorPayload)
   if (typeof connector.error === 'string' && connector.error.trim()) {
     throw new Error(`PostgreSQL lineage connector failed: ${connector.error.trim()}`)
@@ -328,6 +351,16 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error(error instanceof Error ? error.message : String(error))
+  const message = safeErrorText(error instanceof Error ? error.message : String(error))
+  const evidencePath = process.env.LINEAGE_EVIDENCE_PATH?.trim() || ''
+  if (evidencePath) {
+    mkdirSync(dirname(evidencePath), { recursive: true })
+    writeFileSync(evidencePath, JSON.stringify({
+      status: 'FAIL',
+      error: message,
+      generatedAt: new Date().toISOString(),
+    }, null, 2) + '\n', 'utf8')
+  }
+  console.error(message)
   process.exitCode = 1
 })
