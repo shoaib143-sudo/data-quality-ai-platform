@@ -28,6 +28,14 @@ test('keyboard focus remains explicit instead of relying on shadow depth', () =>
   assert.match(css, /outline-offset: 2px/)
 })
 
+test('motion and form-control targets degrade accessibly', () => {
+  assert.match(css, /prefers-reduced-motion: reduce/)
+  assert.match(css, /animation-duration: 0\.01ms !important/)
+  assert.match(css, /transition-duration: 0\.01ms !important/)
+  assert.match(css, /:where\(button,input,select,textarea\)/)
+  assert.match(css, /min-height: 2\.25rem/)
+})
+
 test('global navigation names the AI workspace directly', () => {
   assert.match(utility, /label: 'AI Agents'/)
   assert.doesNotMatch(utility, /label: 'Automation'/)
