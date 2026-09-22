@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import postgres from "npm:postgres@3.4.7";
+import { deriveDirectPostgresViewLineage } from "../_shared/postgres-view-column-lineage.ts";
 
 type ConnectorAction = "health" | "credential" | "catalog" | "validate" | "query" | "lineage";
 type ConnectorRequest = {
@@ -184,15 +185,43 @@ async function lineage(body: ConnectorRequest) {
       "select schemaname as schema, viewname as name, 'VIEW'::text as operation, definition as logic from pg_views where schemaname=$1 and ($2::text is null or viewname=$2) union all select schemaname as schema, matviewname as name, 'MATERIALIZED_VIEW'::text as operation, definition as logic from pg_matviews where schemaname=$1 and ($2::text is null or matviewname=$2) order by name",
       [schema, table],
     ) as Array<{ schema: string; name: string; operation: string; logic: string }>;
-    const transformations = await Promise.all(viewRows.map(async (row) => ({
-      catalog: databaseRows[0]?.database ?? null,
-      schema: row.schema,
-      name: row.name,
-      operation: row.operation,
-      transformationLogic: row.logic,
-      logicHash: await sha256(row.logic),
-      engine: "PostgreSQL",
-    })));
+    const columnRows = await db.unsafe(
+      "select table_name, column_name from information_schema.columns where table_schema=$1 and ($2::text is null or table_name=$2) order by table_name, ordinal_position",
+      [schema, table],
+    ) as Array<{ table_name: string; column_name: string }>;
+    const columnsByView = new Map<string, string[]>();
+    for (const row of columnRows) {
+      const key = row.table_name.toLowerCase();
+      const current = columnsByView.get(key) ?? [];
+      current.push(row.column_name);
+      columnsByView.set(key, current);
+    }
+    const transformations = await Promise.all(viewRows.map(async (row) => {
+      const derived = deriveDirectPostgresViewLineage({
+        logic: row.logic,
+        targetSchema: row.schema,
+        targetView: row.name,
+        targetColumns: columnsByView.get(row.name.toLowerCase()) ?? [],
+      });
+      return {
+        catalog: databaseRows[0]?.database ?? null,
+        schema: row.schema,
+        name: row.name,
+        operation: row.operation,
+        transformationLogic: row.logic,
+        logicHash: await sha256(row.logic),
+        engine: "PostgreSQL",
+        sourceAsset: derived?.sourceAsset ?? null,
+        targetAsset: derived?.targetAsset ?? [row.schema, row.name].filter(Boolean).join("."),
+        columnMappings: derived?.columnMappings ?? [],
+        metadata: {
+          authoritative_source: "pg_views.definition",
+          field_lineage_derivation: derived ? "DIRECT_PROJECTION_ONLY" : "TABLE_LEVEL_ONLY",
+          direct_projection_mappings: derived?.columnMappings.length ?? 0,
+          skipped_projection_count: derived?.skippedProjectionCount ?? 0,
+        },
+      };
+    }));
     return {
       databaseProduct: "PostgreSQL",
       databaseVersion: databaseRows[0]?.version ?? null,
