@@ -45,3 +45,16 @@ test('post-activation SQL requires enabled runtime, Supabase scheduler authority
   assert.match(postActivationSql, /cloudflare-observability-canary:%/)
   assert.match(postActivationSql, /status','PASS'/)
 })
+
+
+test('readiness failure names missing protected inputs without exposing values', () => {
+  assert.match(workflow, /Missing protected cloudflare-worker environment input/)
+  for (const marker of [
+    'CLOUDFLARE_API_TOKEN',
+    'CLOUDFLARE_ACCOUNT_ID',
+    'DATANEXUS_WORKER_SECRET',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'DATANEXUS_CLOUDFLARE_WORKER_URL',
+  ]) assert.match(workflow, new RegExp(`missing\+=\\["${marker}"\\]`))
+  assert.match(workflow, /DATANEXUS_CLOUDFLARE_WORKER_URL must be an HTTPS \/api\/jobs\/worker endpoint/)
+})
