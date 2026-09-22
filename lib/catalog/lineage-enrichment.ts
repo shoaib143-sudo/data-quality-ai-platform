@@ -635,14 +635,22 @@ export async function executeLineageEnrichment(input: {
         const schema = stringField(assetMetadata, ['schema'])
         try {
           const lineage = await discoverJdbcTransformations({ jdbcUrl, credentialRef, catalog, schema, table: asset.name })
-          return { transformations: lineage.transformations, warnings: lineage.warnings }
+          return { transformations: lineage.transformations, warnings: lineage.warnings, failed: false }
         } catch (error) {
-          return { transformations: [] as JdbcTransformation[], warnings: [`Transformation discovery failed for ${qualified(asset.namespace, asset.name)}: ${error instanceof Error ? error.message : 'unknown error'}`] }
+          return {
+            transformations: [] as JdbcTransformation[],
+            warnings: [`Transformation discovery failed for ${qualified(asset.namespace, asset.name)}: ${error instanceof Error ? error.message : 'unknown error'}`],
+            failed: true,
+          }
         }
       })
+      const failedTargets = results.filter(result => result.failed).length
       transformations = results.flatMap(result => result.transformations)
       warnings = [...new Set(results.flatMap(result => result.warnings))]
-      discoveryDetails = { mode: 'OBJECT_VIEW_SCAN', query_count: lineageTargets.length }
+      discoveryDetails = { mode: 'OBJECT_VIEW_SCAN', query_count: lineageTargets.length, failed_query_count: failedTargets }
+      if (lineageTargets.length > 0 && failedTargets === lineageTargets.length) {
+        throw new Error(`Lineage transformation discovery failed for all ${lineageTargets.length} candidate views.`)
+      }
     }
 
     transformations = [...new Map(transformations.map(item => [`${item.sourceAsset ?? ''}->${item.targetAsset ?? ''}:${item.logicHash}`, item])).values()]
