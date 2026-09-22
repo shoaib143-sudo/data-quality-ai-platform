@@ -50,7 +50,9 @@ test('worker ingress fails closed when execution is enabled without complete sec
 
 
 test('enabled worker ingress authenticates before forwarding execution to the container', () => {
-  assert.match(router, /expectedAuthorization = 'Bearer ' \+ env\.DATANEXUS_WORKER_SECRET\.trim\(\)/)
+  assert.match(router, /const workerSecret = env\.DATANEXUS_WORKER_SECRET\?\.trim\(\)/)
+  assert.match(router, /if \(!workerSecret\)/)
+  assert.match(router, /expectedAuthorization = 'Bearer ' \+ workerSecret/)
   assert.match(router, /request\.headers\.get\('authorization'\)\?\.trim\(\) !== expectedAuthorization/)
   assert.match(router, /Worker access denied\./)
   assert.match(router, /status: 403/)
