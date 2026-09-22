@@ -7,7 +7,7 @@ for(const marker of [
   'Governed datasets',
   'Observed versions',
   'Projects editable',
-  'Discover metadata',
+  'Discovery',
   'Browse physical assets',
   'Connect business meaning',
   'CatalogManager',
