@@ -51,6 +51,9 @@ export async function POST(request: Request) {
   }
 
   if (mode === 'ADAPTIVE_DISPATCH') {
+    if (process.env.DATANEXUS_PLATFORM === 'cloudflare') {
+      return NextResponse.json({ error: 'Adaptive dispatch is not available on the Cloudflare canary runtime.' }, { status: 403 })
+    }
     if (!isAuthorizedWorkerRequest(request)) return NextResponse.json({ error: 'Worker access denied.' }, { status: 403 })
     try {
       const workerId = `event-worker:${crypto.randomUUID()}`
