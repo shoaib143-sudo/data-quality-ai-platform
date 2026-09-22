@@ -37,5 +37,5 @@ test('personal and admin surfaces share the modernized design foundation', () =>
   assert.match(read('app/profile/page.tsx'),/dn-surface/)
   assert.match(read('app/settings/page.tsx'),/dn-surface/)
   assert.match(read('app/admin/page.tsx'),/dn-glass-rail/)
-  assert.match(read('app/admin/ai-command-center/page.tsx'),/grid auto-rows-fr gap-3 sm:grid-cols-2 lg:grid-cols-5/)
+  assert.match(read('app/admin/ai-command-center/page.tsx'),/grid auto-rows-fr gap-3 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-5/)
 })
