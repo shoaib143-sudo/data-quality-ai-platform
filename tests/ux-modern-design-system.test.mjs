@@ -40,3 +40,33 @@ test('global navigation names the AI workspace directly', () => {
   assert.match(utility, /label: 'AI Agents'/)
   assert.doesNotMatch(utility, /label: 'Automation'/)
 })
+
+
+function relativeLuminance([r,g,b]) {
+  const convert = value => {
+    const channel=value/255
+    return channel <= 0.04045 ? channel/12.92 : ((channel+0.055)/1.055)**2.4
+  }
+  const [R,G,B]=[r,g,b].map(convert)
+  return 0.2126*R + 0.7152*G + 0.0722*B
+}
+
+function contrastRatio(a,b) {
+  const [high,low]=[relativeLuminance(a),relativeLuminance(b)].sort((x,y)=>y-x)
+  return (high+0.05)/(low+0.05)
+}
+
+test('modernized palette preserves readable text and focus contrast', () => {
+  const canvas=[11,20,34]
+  const panel=[16,30,48]
+  const primaryText=[241,245,249]
+  const mutedText=[148,163,184]
+  const focus=[34,211,238]
+
+  assert.ok(contrastRatio(primaryText,canvas) >= 4.5)
+  assert.ok(contrastRatio(mutedText,panel) >= 4.5)
+  assert.ok(contrastRatio(focus,canvas) >= 3)
+  assert.match(css, /--dn-canvas: 11 20 34/)
+  assert.match(css, /--dn-panel: 16 30 48/)
+  assert.match(css, /color: rgb\(241 245 249\)/)
+})
