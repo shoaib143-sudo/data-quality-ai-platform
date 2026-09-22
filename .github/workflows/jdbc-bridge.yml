@@ -11,7 +11,21 @@ on:
     paths:
       - 'services/jdbc-bridge/**'
       - 'scripts/verify-jdbc-bridge-deployment-contract.mjs'
+      - 'scripts/verify-vercel-jdbc-bridge-poc-contract.mjs'
+      - 'scripts/probe-vercel-jdbc-bridge-poc.mjs'
+      - 'docs/vercel-jdbc-bridge-poc.md'
       - '.github/workflows/jdbc-bridge.yml'
+  workflow_dispatch:
+    inputs:
+      poc_url:
+        description: 'Optional deployed Vercel JDBC PoC URL to probe; no production cutover is performed.'
+        required: false
+        type: string
+      max_health_ms:
+        description: 'Maximum acceptable live /health latency in milliseconds.'
+        required: false
+        default: '5000'
+        type: string
 
 permissions:
   contents: read
@@ -27,6 +41,8 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Verify deployment availability contract
         run: node ../../scripts/verify-jdbc-bridge-deployment-contract.mjs
+      - name: Verify Vercel JDBC PoC contract
+        run: node ../../scripts/verify-vercel-jdbc-bridge-poc-contract.mjs
       - name: Set up Java 21
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
@@ -37,6 +53,8 @@ jobs:
         run: mvn -B test
       - name: Build bridge container
         run: docker build --pull --tag datanexus-jdbc-bridge:ci .
+      - name: Build Vercel JDBC PoC container
+        run: docker build --pull --file Dockerfile.vercel --tag datanexus-jdbc-bridge:vercel-poc .
       - name: Export bridge container
         if: github.event_name == 'push'
         run: docker save datanexus-jdbc-bridge:ci | gzip -9 > jdbc-bridge-image.tar.gz
@@ -48,3 +66,20 @@ jobs:
           path: services/jdbc-bridge/jdbc-bridge-image.tar.gz
           if-no-files-found: error
           retention-days: 7
+
+  live-vercel-poc:
+    if: github.event_name == 'workflow_dispatch' && inputs.poc_url != ''
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Probe deployed Vercel JDBC PoC
+        env:
+          VERCEL_JDBC_BRIDGE_URL: ${{ inputs.poc_url }}
+          VERCEL_JDBC_BRIDGE_MAX_HEALTH_MS: ${{ inputs.max_health_ms }}
+        run: node scripts/probe-vercel-jdbc-bridge-poc.mjs

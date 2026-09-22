@@ -7,6 +7,7 @@ import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,7 +40,7 @@ class JdbcBridgeControllerTest {
         statement.execute("CREATE VIEW active_customers AS SELECT id, name FROM customers WHERE id > 10");
       }
     }
-    mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(credentials))
+    mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(credentials, new com.fasterxml.jackson.databind.ObjectMapper()))
         .setControllerAdvice(new JdbcUrlCredentialGuard())
         .build();
   }
@@ -131,6 +132,42 @@ class JdbcBridgeControllerTest {
     var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
     assertEquals(10001, json.path("rows").size());
     assertEquals(2, json.path("columns").size());
+  }
+
+  @Test
+  void capsQueryResponseBeforeVercelPayloadLimit() throws Exception {
+    try (var connection = DriverManager.getConnection(JDBC_URL, "sa", "")) {
+      try (var statement = connection.createStatement()) {
+        statement.execute("DROP TABLE IF EXISTS large_payload");
+        statement.execute("CREATE TABLE large_payload (id INT PRIMARY KEY, payload VARCHAR(10000))");
+      }
+      try (var insert = connection.prepareStatement("INSERT INTO large_payload VALUES (?, ?)")) {
+        String payload = "x".repeat(5000);
+        for (int i = 1; i <= 1200; i++) {
+          insert.setInt(1, i);
+          insert.setString(2, payload);
+          insert.addBatch();
+        }
+        insert.executeBatch();
+      }
+    }
+
+    try {
+      String body = mvc.perform(post("/v1/query")
+              .contentType("application/json")
+              .content("{\"jdbcUrl\":\"" + JDBC_URL + "\",\"credentialRef\":\"test-ref\",\"schema\":\"PUBLIC\",\"table\":\"LARGE_PAYLOAD\",\"limit\":1200}"))
+          .andExpect(status().isOk())
+          .andReturn().getResponse().getContentAsString();
+
+      var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
+      assertTrue(json.path("rows").size() < 1200);
+      assertTrue(json.path("warnings").toString().contains("Response payload safety ceiling reached"));
+      assertTrue(body.getBytes(StandardCharsets.UTF_8).length < 4_500_000);
+    } finally {
+      try (var connection = DriverManager.getConnection(JDBC_URL, "sa", "")) {
+        connection.createStatement().execute("DROP TABLE IF EXISTS large_payload");
+      }
+    }
   }
 
   @Test

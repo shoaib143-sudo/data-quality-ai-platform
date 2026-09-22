@@ -38,7 +38,7 @@ class JdbcBridgeSqliteQueryTest {
 
       CredentialStore credentials = Mockito.mock(CredentialStore.class);
       Mockito.when(credentials.resolve("sqlite-test-ref")).thenReturn(new Credentials("", ""));
-      MockMvc mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(credentials))
+      MockMvc mvc = MockMvcBuilders.standaloneSetup(new JdbcBridgeController(credentials, new ObjectMapper()))
           .setControllerAdvice(new JdbcUrlCredentialGuard())
           .build();
 

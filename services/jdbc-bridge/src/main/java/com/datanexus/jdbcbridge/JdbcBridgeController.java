@@ -1,5 +1,6 @@
 package com.datanexus.jdbcbridge;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -14,12 +15,17 @@ import java.util.*;
 @RestController
 public class JdbcBridgeController {
   private static final int TECHNICAL_MAX_ROWS = environmentInt("JDBC_BRIDGE_TECHNICAL_MAX_ROWS", 250_000, 1_000, 1_000_000);
+  private static final int TECHNICAL_MAX_RESPONSE_BYTES = environmentInt("JDBC_BRIDGE_TECHNICAL_MAX_RESPONSE_BYTES", 3_500_000, 256_000, 4_000_000);
   private static final List<String> SUPPORTED_ENGINES = List.of(
       "PostgreSQL", "Microsoft SQL Server", "MySQL", "MariaDB", "Databricks", "Snowflake", "Amazon Redshift", "Oracle", "SQLite", "Generic JDBC"
   );
   private final CredentialStore credentials;
+  private final ObjectMapper responseMapper;
 
-  public JdbcBridgeController(CredentialStore credentials) { this.credentials = credentials; }
+  public JdbcBridgeController(CredentialStore credentials, ObjectMapper responseMapper) {
+    this.credentials = credentials;
+    this.responseMapper = responseMapper;
+  }
 
   @GetMapping("/health")
   public Map<String, Object> health() {
@@ -27,7 +33,8 @@ public class JdbcBridgeController {
         "status", "ok",
         "service", "datanexus-jdbc-bridge",
         "supported_engines", SUPPORTED_ENGINES,
-        "technical_max_rows", TECHNICAL_MAX_ROWS
+        "technical_max_rows", TECHNICAL_MAX_ROWS,
+        "technical_max_response_bytes", TECHNICAL_MAX_RESPONSE_BYTES
     );
   }
 
@@ -99,16 +106,28 @@ public class JdbcBridgeController {
         try (ResultSet rs = statement.executeQuery()) {
           ResultSetMetaData meta = rs.getMetaData();
           List<Map<String, Object>> rows = new ArrayList<>();
+          int serializedRowBytes = 0;
+          boolean responsePayloadTruncated = false;
           while (rs.next() && rows.size() < limit) {
             Map<String, Object> row = new LinkedHashMap<>();
             for (int i = 1; i <= meta.getColumnCount(); i++) row.put(meta.getColumnLabel(i), rs.getObject(i));
+            int nextRowBytes = responseMapper.writeValueAsBytes(row).length + 1;
+            if (serializedRowBytes + nextRowBytes > TECHNICAL_MAX_RESPONSE_BYTES) {
+              responsePayloadTruncated = true;
+              break;
+            }
+            serializedRowBytes += nextRowBytes;
             rows.add(row);
           }
           List<ColumnInfo> columns = resultColumns(meta);
-          List<String> warnings = requestedLimit > TECHNICAL_MAX_ROWS
-              ? List.of("Requested row count exceeded the bridge technical safety ceiling; returned " + TECHNICAL_MAX_ROWS + " rows at most.")
-              : List.of();
-          return new QueryResponse(rows, null, columns, warnings);
+          List<String> warnings = new ArrayList<>();
+          if (requestedLimit > TECHNICAL_MAX_ROWS) {
+            warnings.add("Requested row count exceeded the bridge technical safety ceiling; returned " + TECHNICAL_MAX_ROWS + " rows at most.");
+          }
+          if (responsePayloadTruncated) {
+            warnings.add("Response payload safety ceiling reached; returned " + rows.size() + " rows. Request a smaller sample or a narrower projection.");
+          }
+          return new QueryResponse(rows, null, columns, List.copyOf(warnings));
         }
       }
     }
