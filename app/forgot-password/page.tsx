@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { AuthShell, authFieldClass, authPrimaryButtonClass } from '@/components/auth/auth-shell'
 
 const COOLDOWN_MS = 60_000
 
@@ -50,25 +51,21 @@ function ForgotPasswordPage() {
   const coolingDown = remaining > 0
 
   return (
-    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-6 py-16">
-      <form onSubmit={onSubmit} className="w-full max-w-md space-y-6 rounded-xl border p-8 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-semibold">Reset your password</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Enter your email and we&apos;ll send one reset link. To protect email delivery, wait before requesting another.</p>
-        </div>
+    <AuthShell eyebrow="Account recovery" title="Reset your password" description="Request one secure reset link. To protect email delivery, DataNexus applies a short cooldown between requests.">
+      <form onSubmit={onSubmit} className="space-y-5">
         <label className="block text-sm">
           Email
-          <input required name="email" autoComplete="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" />
+          <input required name="email" autoComplete="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={authFieldClass} />
         </label>
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
-        <button type="submit" disabled={loading || coolingDown} className="w-full rounded-md bg-black px-4 py-2 text-white disabled:opacity-50">
+        {error && <p role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">{error}</p>}
+        {message && <p role="status" className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200">{message}</p>}
+        <button type="submit" disabled={loading || coolingDown} className={authPrimaryButtonClass}>
           {loading ? 'Sending…' : coolingDown ? `Try again in ${remaining}s` : 'Send reset link'}
         </button>
-        <p className="text-sm text-muted-foreground">If you were just invited, use the invitation email first. It will take you directly to password setup.</p>
-        <p className="text-sm text-muted-foreground"><a className="underline" href="/login">Back to sign in</a></p>
+        <p className="text-sm leading-6 text-slate-500">If you were just invited, use the invitation email first. It will take you directly to password setup.</p>
+        <p className="text-sm leading-6 text-slate-500"><a className="font-semibold text-sky-300 hover:text-sky-200" href="/login">Back to sign in</a></p>
       </form>
-    </main>
+    </AuthShell>
   )
 }
 
