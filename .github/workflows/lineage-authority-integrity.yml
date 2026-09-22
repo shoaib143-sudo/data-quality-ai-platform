@@ -67,7 +67,7 @@ jobs:
           fi
 
           changed="$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")"
-          if printf '%s\n' "$changed" | grep -Eq '^(supabase/functions/_shared/postgres-view-column-lineage\.ts|supabase/functions/dgp-postgres-connector/|lib/catalog/lineage-enrichment\.ts|lib/connectors/jdbc\.ts|scripts/run-real-field-lineage-revalidation\.mjs|scripts/test-postgres-view-column-lineage\.mjs|tests/real-field-lineage-live-revalidation-contract\.test\.mjs|\.github/workflows/lineage-authority-integrity\.yml)$'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(supabase/functions/_shared/postgres-view-column-lineage\.ts|supabase/functions/dgp-postgres-connector/.*|lib/catalog/lineage-enrichment\.ts|lib/connectors/jdbc\.ts|scripts/run-real-field-lineage-revalidation\.mjs|scripts/test-postgres-view-column-lineage\.mjs|tests/real-field-lineage-live-revalidation-contract\.test\.mjs|\.github/workflows/lineage-authority-integrity\.yml)$'; then
             echo "run_live=true" >> "$GITHUB_OUTPUT"
           else
             echo "run_live=false" >> "$GITHUB_OUTPUT"
