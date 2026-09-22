@@ -829,8 +829,6 @@ jobs:
               -X POST "$SUPABASE_URL/rest/v1/rpc/configure_cloudflare_observability_canary_release" \
               "${SUPABASE_AUTH_ARGS[@]}" \
               -H "Content-Type: application/json" \
-              -H "Content-Profile: orchestration" \
-              -H "Accept-Profile: orchestration" \
               --data "$(node -e 'process.stdout.write(JSON.stringify({p_worker_url:process.argv[1],p_worker_secret:process.argv[2],p_enabled:false}))' "${DATANEXUS_CLOUDFLARE_WORKER_URL%/}/api/jobs/worker" "$DATANEXUS_WORKER_SECRET")" \
               || echo "::warning::Unable to disable Supabase Cloudflare canary scheduler during failure cleanup"
           fi
