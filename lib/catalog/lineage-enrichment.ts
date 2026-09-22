@@ -390,7 +390,8 @@ async function persistJdbcLineage(
 
   for (const transformation of transformations) {
     const structured = Boolean(transformation.sourceAsset && transformation.targetAsset)
-    const externalId = structured ? `databricks-lineage:${transformation.logicHash}` : [transformation.catalog, transformation.schema, transformation.name].filter(Boolean).join('.')
+    const structuredSource = String(transformation.engine || engine || 'JDBC').toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    const externalId = structured ? `${structuredSource}-lineage:${transformation.logicHash}` : [transformation.catalog, transformation.schema, transformation.name].filter(Boolean).join('.')
     const { data: persisted, error: transformationError } = await admin.schema('governance').from('lineage_transformations').upsert({
       project_id: source.project_id,
       integration_id: integration.id,
