@@ -137,7 +137,7 @@ export async function GET(request: Request) {
       approvals: (data ?? []).map(row => {
         const axis = currentAxis(String(row.status))
         const canDecide = axis
-          ? authorityMatches({
+          ? String(row.requested_by) !== user.id && authorityMatches({
               workspace,
               userId: user.id,
               projectId,
@@ -198,6 +198,7 @@ export async function POST(request: Request) {
         riskLevel: String(approval.risk_level),
         axis,
       })
+      if (String(approval.requested_by) === user.id) return NextResponse.json({ error: 'The execution requester cannot approve their own governance run.' }, { status: 403 })
       if (!canDecide) return NextResponse.json({ error: `You do not hold current ${axis.toLowerCase()} approval authority for this request.` }, { status: 403 })
       await recordAgentApprovalDecision({
         requestId: approvalRequestId,
