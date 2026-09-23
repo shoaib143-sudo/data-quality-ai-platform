@@ -72,9 +72,10 @@ async function loadApproval(requestId: string) {
   return data as Record<string, unknown>
 }
 
-function approvalView(row: Record<string, unknown>, canDecide: boolean, requester: string | null) {
+function approvalView(row: Record<string, unknown>, canDecide: boolean, requester: string | null, canViewGoal = false) {
   const parameters = approvalParameters(row)
-  const payload = safeObject(row.fingerprint_payload)
+  // The fingerprint may contain the original goal or other request parameters.
+  // Never echo those parameters to a project viewer who lacks decision authority.
   return {
     id: String(row.id),
     projectId: String(row.project_id),
@@ -88,7 +89,7 @@ function approvalView(row: Record<string, unknown>, canDecide: boolean, requeste
     autonomyMode: text(parameters.autonomyMode),
     executionFingerprint: String(row.execution_fingerprint ?? ''),
     goalHash: text(parameters.goalHash),
-    originalGoal: text(parameters.goal),
+    originalGoal: canViewGoal ? text(parameters.goal) : '',
     requestedBy: String(row.requested_by),
     requester,
     domain: String(row.domain ?? ''),
@@ -99,7 +100,7 @@ function approvalView(row: Record<string, unknown>, canDecide: boolean, requeste
     createdAt: row.created_at ?? null,
     slaDueAt: row.sla_due_at ?? null,
     approvalExpiresAt: row.approval_expires_at ?? null,
-    context: payload,
+    context: { actionKey: String(row.action_key), riskLevel: String(row.risk_level) },
     canDecide,
   }
 }
@@ -146,7 +147,8 @@ export async function GET(request: Request) {
               axis,
             })
           : String(row.status) === 'READY_TO_EXECUTE' && canExecute
-        return approvalView(row as Record<string, unknown>, canDecide, requesterLabels.get(String(row.requested_by)) ?? null)
+        return approvalView(row as Record<string, unknown>, canDecide, requesterLabels.get(String(row.requested_by)) ?? null,
+          canDecide || String(row.requested_by) === user.id)
       }),
     })
   } catch (error) {
