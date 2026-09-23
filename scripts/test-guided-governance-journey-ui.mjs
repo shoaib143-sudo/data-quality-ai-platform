@@ -54,7 +54,7 @@ test('unsaved policy and emergency-stop state block the run, and paused approval
   assert.match(page, /initialProjectId/)
 })
 test('reviewer sees exact user-submitted goal and must confirm; execution authority checked on ready requests', () => {
-  assert.match(approvalApi, /originalGoal: text\(parameters\.goal\)/)
+  assert.match(approvalApi, /originalGoal: canViewGoal \? text\(parameters\.goal\) : ''/)
   assert.match(approvalApi, /authorizeProject\(user\.id, projectId, 'agent\.execute'\)/)
   assert.match(approvalUi, /approval\.originalGoal/)
   assert.match(approvalUi, /confirmedByApproval/)
@@ -63,6 +63,22 @@ test('reviewer sees exact user-submitted goal and must confirm; execution author
   assert.match(approvalUi, /Approval resumes only the exact paused run, never certifies it/)
   assert.doesNotMatch(approvalUi, /DEFAULT_GOAL/)
 })
+
+test('GUIDED actor separation and goal privacy fail closed in the approval API', () => {
+  assert.match(approvalApi, /String\(row\.requested_by\) !== user\.id && authorityMatches/)
+  assert.match(approvalApi, /String\(approval\.requested_by\) === user\.id/)
+  assert.match(approvalApi, /The execution requester cannot approve their own governance run/)
+  assert.match(approvalApi, /canDecide \|\| String\(row\.requested_by\) === user\.id/)
+  assert.doesNotMatch(approvalApi, /context: payload/)
+})
+
+test('GUIDED source dispatch checks authoritative current-scope profiling evidence', () => {
+  assert.match(readinessApi, /verify_dataset_version_profile_readiness/)
+  assert.match(scope, /verify_dataset_version_profile_readiness/)
+  assert.match(coach, /PROFILE_READINESS_BLOCKED/)
+  assert.match(coach, /table\.blockerCodes/)
+})
+
 test('independent certification is not represented as complete on execution success alone', () => {
   assert.match(consoleUi, /certificationReady/)
   assert.match(consoleUi, /summaryRow\.certificationEligible === true/)
