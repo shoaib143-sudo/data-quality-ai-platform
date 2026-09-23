@@ -79,7 +79,7 @@ test('unknown, duplicate or unbounded source selections are never asserted ready
 })
 
 const journeyBase = {
-  projectId: 'project-1', readinessLoaded: true, readinessReady: true,
+  projectId: 'project-1', sourceSelected: true, readinessLoaded: true, readinessReady: true,
   persistedMode: 'GUIDED', persistedEnabled: true, persistedEmergencyStop: false,
   hasUnsavedPolicyEdits: false, canExecute: true, goal: 'Run E2E governance for the five selected PUB Gold tables.',
   runId: null, runMode: null, runStatus: null,
@@ -112,4 +112,12 @@ test('a request to execute is not misrepresented as approval, verified evidence 
 })
 test('an old FULL_AUTONOMOUS run is not a GUIDED test', () => {
   assert.equal(nextGuidedInstruction({ ...journeyBase, runId: 'old-run', runMode: 'FULL_AUTONOMOUS', runStatus: 'FAILED' }).step, 'SUBMIT_RUN')
+})
+
+test('dataset-independent governance goals skip source preflight but preserve policy and authorization gates', () => {
+  const withoutSource = { ...journeyBase, sourceSelected: false, readinessLoaded: false, readinessReady: false, goal: 'Review governance approval policy.' }
+  assert.equal(nextGuidedInstruction(withoutSource).step, 'SUBMIT_RUN')
+  assert.equal(nextGuidedInstruction({ ...withoutSource, persistedEmergencyStop: true }).step, 'SAVE_GUIDED_POLICY')
+  assert.equal(nextGuidedInstruction({ ...withoutSource, canExecute: false }).step, 'OBTAIN_EXECUTION_ACCESS')
+  assert.equal(nextGuidedInstruction({ ...withoutSource, sourceSelected: true }).step, 'VERIFY_SOURCES')
 })
