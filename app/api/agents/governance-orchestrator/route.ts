@@ -119,7 +119,8 @@ export async function POST(request: Request) {
       depth: text(reportingInput.depth) as never,
     } : null)
 
-    const result = await runGovernanceOrchestrator({ projectId, actorUserId: user.id, goal })
+    const sourceScopeVersionId = text(body?.sourceScopeVersionId)
+    const result = await runGovernanceOrchestrator({ projectId, actorUserId: user.id, goal, sourceScopeVersionId })
     await persistRunReportingPreference({ projectId, orchestratorRunId: result.orchestratorRunId, preference: reporting })
 
     let approvalRequestId: string | null = null
@@ -135,6 +136,11 @@ export async function POST(request: Request) {
           autonomyMode: result.policy.mode,
           goalHash: createHash('sha256').update(goal).digest('hex'),
           goal,
+          ...(result.guidedScope ? {
+            sourceScopeVersionId: result.guidedScope.scopeVersionId,
+            sourceScopeHash: result.guidedScope.scopeHash,
+            selectedDatasetVersionIds: result.guidedScope.datasetVersionIds,
+          } : {}),
         },
       })
       approvalRequestId = String(approval.id)
