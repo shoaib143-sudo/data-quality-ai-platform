@@ -62,5 +62,5 @@ test('independent certification is not represented as complete on execution succ
   assert.match(consoleUi, /summaryRow\.certificationEligible === true/)
   assert.match(consoleUi, /assessment_state/)
   assert.match(consoleUi, /!certificationReady/)
-  assert.match(coach, /never certifies a run/)
+  assert.match(coach, /cannot grant approvals or certify a run/)
 })
