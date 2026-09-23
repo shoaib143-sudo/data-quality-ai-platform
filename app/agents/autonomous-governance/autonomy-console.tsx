@@ -1,6 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { GuidedRunCoach } from './guided-run-coach'
+import type { GuidedReadiness } from '@/lib/orchestration/governance-guided-readiness'
+import { nextGuidedInstruction } from '@/lib/orchestration/governance-guided-journey'
 
 type ProjectOption = { id: string; name: string }
 type Policy = {
@@ -58,14 +61,20 @@ const modeGuidance: Record<Policy['mode'], { label: string; category: string; de
   FULL_AUTONOMOUS: { label: 'Full autonomous', category: 'Autonomous goal-driven', description: 'The orchestrator may pursue the submitted goal within deterministic policy, risk, budget, tool, and approval boundaries.' },
 }
 
-export function AutonomyConsole({ projects, executableProjectIds, manageableProjectIds, certifiableProjectIds }: {
+export function AutonomyConsole({ projects, executableProjectIds, manageableProjectIds, certifiableProjectIds, initialProjectId }: {
   projects: ProjectOption[]
   executableProjectIds: string[]
   manageableProjectIds: string[]
   certifiableProjectIds: string[]
+  initialProjectId?: string
 }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
+  const [projectId, setProjectId] = useState(projects.some(row => row.id === initialProjectId) ? initialProjectId! : projects[0]?.id ?? '')
   const [policy, setPolicy] = useState<Policy>(defaultPolicy)
+  const [persistedPolicy, setPersistedPolicy] = useState<Policy | null>(null)
+  const [readiness, setReadiness] = useState<GuidedReadiness | null>(null)
+  const [readinessBusy, setReadinessBusy] = useState(false)
+  const [readinessError, setReadinessError] = useState('')
+  const readinessRequest = useRef(0)
   const [coverage, setCoverage] = useState<Record<string, unknown> | null>(null)
   const [latestReport, setLatestReport] = useState<Record<string, unknown> | null>(null)
   const [reporting, setReporting] = useState<ReportingPreference>(defaultReporting)
@@ -76,17 +85,70 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const canManage = manageableProjectIds.includes(projectId)
   const canCertify = certifiableProjectIds.includes(projectId)
   const project = useMemo(() => projects.find(row => row.id === projectId), [projects, projectId])
+  const hasUnsavedPolicyEdits = !persistedPolicy || JSON.stringify(policy) !== JSON.stringify(persistedPolicy)
+  const persistedGuidedReady = persistedPolicy?.mode === 'GUIDED' && persistedPolicy.enabled
+    && !persistedPolicy.emergencyStop && !hasUnsavedPolicyEdits
+
+  const refreshReadiness = useCallback(async () => {
+    const requestId = ++readinessRequest.current
+    setReadiness(null)
+    setReadinessError('')
+    if (!projectId) return
+    setReadinessBusy(true)
+    try {
+      const response = await fetch(`/api/agents/governance-orchestrator/guided-readiness?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || 'Could not check selected source tables.')
+      if (requestId === readinessRequest.current) setReadiness(body as GuidedReadiness)
+    } catch (error) {
+      if (requestId === readinessRequest.current) {
+        setReadiness(null)
+        setReadinessError(error instanceof Error ? error.message : 'Could not verify sources.')
+      }
+    } finally {
+      if (requestId === readinessRequest.current) setReadinessBusy(false)
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    void refreshReadiness()
+    return () => { readinessRequest.current += 1 }
+  }, [refreshReadiness])
+
+  const refreshRunState = useCallback(async () => {
+    if (!projectId) return
+    try {
+      const response = await fetch(`/api/agents/governance-orchestrator?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || 'Unable to refresh the run.')
+      setCoverage(body.latestCoverageRun ?? null)
+      setLatestReport(body.latestReport ?? null)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to refresh the run.')
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    const status = String(coverage?.status ?? '')
+    if (!['WAITING_APPROVAL', 'RUNNING'].includes(status)) return
+    const timer = window.setInterval(() => { void refreshRunState() }, 10000)
+    return () => window.clearInterval(timer)
+  }, [coverage?.status, refreshRunState])
 
   useEffect(() => {
     if (!projectId) return
     let cancelled = false
     setBusy(true)
-    fetch(`/api/agents/governance-orchestrator?projectId=${encodeURIComponent(projectId)}`)
+    setPersistedPolicy(null)
+    setReadiness(null)
+    setCoverage(null)
+    fetch(`/api/agents/governance-orchestrator?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
       .then(async response => {
         const body = await response.json()
         if (!response.ok) throw new Error(body.error || 'Unable to load orchestrator state.')
         if (!cancelled) {
           setPolicy(body.policy ?? defaultPolicy)
+          setPersistedPolicy(body.policy ?? defaultPolicy)
           setCoverage(body.latestCoverageRun ?? null)
           setLatestReport(body.latestReport ?? null)
           setMessage('')
@@ -118,13 +180,22 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || 'Unable to update autonomy policy.')
       setPolicy(body.policy)
-      setMessage('Autonomy policy saved.')
+      setPersistedPolicy(body.policy)
+      setMessage('Autonomy policy saved. This does not submit or approve a governance run.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to update autonomy policy.') }
     finally { setBusy(false) }
   }
 
   async function runOrchestrator() {
     if (!projectId || !canExecute || !goal.trim()) return
+    if (policy.mode === 'GUIDED' && (!persistedGuidedReady || !readiness?.ready)) {
+      setMessage('GUIDED execution is blocked until every selected table is registration-ready and the safe GUIDED policy is saved.')
+      return
+    }
+    if (!persistedPolicy || hasUnsavedPolicyEdits || !persistedPolicy.enabled || persistedPolicy.emergencyStop) {
+      setMessage('Execution blocked. Load and save an enabled policy without an active emergency stop.')
+      return
+    }
     setBusy(true); setMessage('')
     try {
       const response = await fetch('/api/agents/governance-orchestrator', {
@@ -132,7 +203,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       })
       const body = await response.json()
       if (!response.ok && response.status !== 202 && response.status !== 409) throw new Error(body.error || 'Orchestrator execution failed.')
-      setCoverage(body)
+      setCoverage({ ...body, mode: body.policy?.mode ?? persistedPolicy.mode })
       setMessage(body.status === 'SUCCEEDED'
         ? reporting.enabled
           ? 'Orchestrator execution completed. Reporting is opted in and will use canonical persisted evidence only.'
@@ -156,6 +227,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       setCoverage(current => ({ ...(current ?? {}), ...body, summary: body.summary ?? current?.summary }))
       if (!response.ok) throw new Error(body.error || `Certification result: ${body.assessmentState ?? 'NOT_ASSESSED'}.`)
       setMessage('Independent canonical certification passed.')
+      await refreshRunState()
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Independent certification failed.') }
     finally { setBusy(false) }
   }
@@ -171,17 +243,62 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const orchestratorRunId = typeof coverage?.orchestratorRunId === 'string'
     ? coverage.orchestratorRunId
     : typeof coverage?.id === 'string' ? coverage.id : ''
+  const summaryRow = summary ?? {}
+  const guidedInstruction = nextGuidedInstruction({
+    projectId,
+    readinessLoaded: readiness !== null,
+    readinessReady: readiness?.ready === true,
+    persistedMode: persistedPolicy?.mode ?? 'OFF',
+    persistedEnabled: persistedPolicy?.enabled === true,
+    persistedEmergencyStop: persistedPolicy?.emergencyStop !== false,
+    hasUnsavedPolicyEdits,
+    canExecute,
+    goal,
+    runId: orchestratorRunId,
+    runMode: typeof coverage?.mode === 'string' ? coverage.mode : null,
+    runStatus: typeof coverage?.status === 'string' ? coverage.status : null,
+    executedCount: Number(summaryRow.executed ?? 0),
+    verifiedCount: Number(summaryRow.verified ?? 0),
+    certificationEligible: summaryRow.certificationEligible === true,
+    assessmentState: typeof (coverage?.decision_trace as Record<string, unknown> | undefined)?.assessment_state === 'string'
+      ? String((coverage?.decision_trace as Record<string, unknown>).assessment_state)
+      : null,
+  })
+  const executionBlocked = !persistedPolicy || hasUnsavedPolicyEdits || !persistedPolicy.enabled
+    || persistedPolicy.emergencyStop || policy.mode === 'OFF'
+    || (policy.mode === 'GUIDED' && !readiness?.ready)
+    || !goal.trim() || ['WAITING_APPROVAL', 'RUNNING', 'SUCCEEDED'].includes(String(coverage?.status ?? ''))
+  const certificationReady = summaryRow.certificationEligible === true && coverage?.status === 'SUCCEEDED'
+    && (coverage?.decision_trace as Record<string, unknown> | undefined)?.assessment_state !== 'PASS'
   return (
     <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+      {(policy.mode === 'GUIDED' || persistedPolicy?.mode === 'GUIDED' || persistedPolicy?.mode === 'OFF' || !persistedPolicy)
+        && <GuidedRunCoach
+          instruction={guidedInstruction}
+          projectName={project?.name ?? ''}
+          readiness={readiness}
+          readinessBusy={readinessBusy}
+          readinessError={readinessError}
+          onRefreshReadiness={() => { void refreshReadiness() }}
+          onChooseGuided={() => chooseMode('GUIDED')}
+          canManage={canManage}
+          emergencyStop={persistedPolicy?.emergencyStop === true}
+        />}
       <section className="dn-workspace-panel rounded-xl border p-5 space-y-5">
         <div>
           <label className="text-sm font-medium" htmlFor="autonomy-project">Project</label>
-          <select id="autonomy-project" value={projectId} onChange={event => setProjectId(event.target.value)} className="mt-2 w-full rounded-lg border bg-background px-3 py-2">
+          <select id="autonomy-project" value={projectId} onChange={event => {
+            const nextId = event.target.value
+            setProjectId(nextId)
+            const url = new URL(window.location.href)
+            url.searchParams.set('projectId', nextId)
+            window.history.replaceState(null, '', url.pathname + url.search)
+          }} className="mt-2 w-full rounded-lg border bg-background px-3 py-2">
             {projects.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
           </select>
         </div>
 
-        <div>
+        <div id="autonomy-mode" className="scroll-mt-24">
           <p className="text-sm font-medium" id="operating-mode-label">Operating mode</p>
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-labelledby="operating-mode-label">
             {(['OFF','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS'] as const).map(mode => (
@@ -222,13 +339,14 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={savePolicy} disabled={!canManage || busy} className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">Save policy</button>
           <span className="self-center text-xs text-muted-foreground">{canManage ? 'Admin policy authority available' : 'Read-only policy access'}</span>
+          {hasUnsavedPolicyEdits && <span className="self-center text-xs text-amber-700 dark:text-amber-300">Unsaved policy changes. Execution stays blocked.</span>}
         </div>
       </section>
 
       <section className="dn-workspace-panel rounded-xl border p-5 space-y-5">
-        <div>
-          <p className="text-sm font-medium">Execution goal</p>
-          <textarea value={goal} onChange={event => setGoal(event.target.value)} rows={5} maxLength={2000} className="mt-2 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
+        <div id="guided-execution-goal" className="scroll-mt-24">
+          <label htmlFor="governance-execution-goal" className="text-sm font-medium">Execution goal</label>
+          <textarea id="governance-execution-goal" value={goal} onChange={event => setGoal(event.target.value)} rows={5} maxLength={2000} className="mt-2 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
         </div>
 
         <div className="rounded-lg border p-4 space-y-3">
@@ -256,17 +374,19 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
           </div>}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={runOrchestrator} disabled={!canExecute || busy || policy.mode === 'OFF'} className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">
+        <div id="guided-run-action" className="scroll-mt-24 flex flex-wrap gap-2">
+          <button type="button" onClick={runOrchestrator} disabled={!canExecute || busy || executionBlocked} className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">
             {busy ? 'Working…' : 'Run DataNexus Governance Orchestrator'}
           </button>
-          <button type="button" onClick={certify} disabled={!canCertify || busy || !orchestratorRunId} className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">
+          <button id="guided-certification-action" type="button" onClick={certify} disabled={!canCertify || busy || !orchestratorRunId || !certificationReady} className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">
             Independent certification
           </button>
         </div>
         {!canExecute && <p className="text-xs text-muted-foreground">You do not have agent execution permission for {project?.name ?? 'this project'}.</p>}
         {!canCertify && <p className="text-xs text-muted-foreground">Certification requires separate certification.review authority.</p>}
-        {message && <p className="rounded-lg border p-3 text-sm" role="status" aria-live="polite">{message}</p>}
+        <button type="button" onClick={() => { void refreshRunState(); void refreshReadiness() }} disabled={busy} className="min-h-10 rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-50">Refresh run and source status</button>
+        {message && <p id="guided-runtime" className="scroll-mt-24 rounded-lg border p-3 text-sm" role="status" aria-live="polite">{message}</p>}
+        {!message && <div id="guided-runtime" className="scroll-mt-24 rounded-lg border p-3 text-xs text-muted-foreground" role="status" aria-live="polite">Latest server-reported run: {String(coverage?.status ?? 'None')}. Submitting a request never counts as approval or independent certification.</div>}
       </section>
 
       {reportPayload && <section className="dn-workspace-panel rounded-xl border p-5 lg:col-span-2">
@@ -281,7 +401,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
         <p className="mt-2 text-sm text-muted-foreground">{String(reportPayload.assuranceStatement ?? '')}</p>
       </section>}
 
-      <section className="dn-workspace-panel rounded-xl border p-5 lg:col-span-2">
+      <section id="guided-capability-coverage" className="dn-workspace-panel scroll-mt-24 rounded-xl border p-5 lg:col-span-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="font-semibold">Canonical capability coverage</h2><p className="text-xs text-muted-foreground">PASS requires exactly 75 executed capabilities and 75 independently verified capabilities with canonical run-scoped evidence.</p></div>
           <span className="rounded-full border px-3 py-1 text-xs">Mode: {policy.mode.replaceAll('_',' ')}</span>
