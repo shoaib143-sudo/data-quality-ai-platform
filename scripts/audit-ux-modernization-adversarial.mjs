@@ -10,9 +10,13 @@ const accessibilitySource=fs.readFileSync(path.join(root,'lib/accessibility/pers
 const wcag=JSON.parse(fs.readFileSync(path.join(root,'infra/accessibility/wcag22-aa-persona-contract.json'),'utf8'))
 
 function quotedArray(source,declaration){
-  const match=source.match(new RegExp('export const '+declaration+' = \\\\[([\\\\s\\\\S]*?)\\\\] as const'))
-  assert.ok(match,'Unable to locate '+declaration)
-  return [...match[1].matchAll(/'([^']+)'/g)].map(row=>row[1])
+  const marker='export const '+declaration+' = ['
+  const start=source.indexOf(marker)
+  assert.ok(start>=0,'Unable to locate '+declaration)
+  const tail=source.slice(start+marker.length)
+  const end=tail.indexOf('] as const')
+  assert.ok(end>=0,'Unable to locate end of '+declaration)
+  return [...tail.slice(0,end).matchAll(/'([^']+)'/g)].map(row=>row[1])
 }
 
 const governancePersonas=quotedArray(personasSource,'personaSlugs')
@@ -22,9 +26,9 @@ assert.deepEqual(accessibilityPersonas,governancePersonas,'Accessibility persona
 assert.deepEqual(wcag.personas,governancePersonas,'WCAG acceptance personas must exactly match the governed persona registry')
 assert.match(acceptance,/real application experiences, not simulated personas/i)
 assert.doesNotMatch(acceptance,/synthetic persona/i)
-for(const persona of governancePersonas) assert.match(acceptance,new RegExp('/home/'+persona.replace(/[.*+?^$\\{}()|[\\]\\\\]/g,'\\\\const manifest=fs.readFileSync(path.join(root,'docs/ux/DATANEXUS-UX-ALL-PAGES-REVALIDATION.md'),'utf8')
-')+'(?:\\\\`|\\\\|)'),'Acceptance matrix missing real persona '+persona)
-
+for(const persona of governancePersonas){
+  assert.ok(acceptance.includes('/home/'+persona),'Acceptance matrix missing real persona '+persona)
+}
 function collectPages(dir){
   const out=[]
   for(const entry of fs.readdirSync(dir,{withFileTypes:true})){
