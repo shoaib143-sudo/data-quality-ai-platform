@@ -161,8 +161,8 @@ export async function runGovernanceOrchestrator(input: { projectId: string; acto
     const orchestratorRunId = await insertRun({ ...input, policy, status: 'BLOCKED_POLICY', trace: { decision, policy_failures: failures } })
     return { status: 'BLOCKED_POLICY' as const, orchestratorRunId, policy, decision, policyFailures: failures, summary: summarizeCanonicalCapabilityLedger([]) }
   }
-  const guidedScope = policy.mode === 'GUIDED'
-    ? await resolveBoundGuidedScope({ projectId: input.projectId, scopeVersionId: input.sourceScopeVersionId ?? '' })
+  const guidedScope = policy.mode === 'GUIDED' && input.sourceScopeVersionId
+    ? await resolveBoundGuidedScope({ projectId: input.projectId, scopeVersionId: input.sourceScopeVersionId })
     : null
   const guidedTrace = guidedScope ? { guided_scope: {
     scope_version_id: guidedScope.scopeVersionId, source_id: guidedScope.sourceId, scope_hash: guidedScope.scopeHash,
@@ -177,8 +177,10 @@ export async function runGovernanceOrchestrator(input: { projectId: string; acto
   try {
     const capabilityRunId = await createCapabilityRun(input.projectId, orchestratorRunId, policy)
     await updateRun(orchestratorRunId, { ai_capability_e2e_run_id: capabilityRunId })
-    const datasetVersionIds = await attachLatestDatasetVersions(input.projectId, capabilityRunId, guidedScope)
-    if (!datasetVersionIds.length) {
+    const datasetVersionIds = policy.mode === 'GUIDED' && !guidedScope
+      ? [] // Governance objectives without data dependencies must not inherit project datasets.
+      : await attachLatestDatasetVersions(input.projectId, capabilityRunId, guidedScope)
+    if (!datasetVersionIds.length && !(policy.mode === 'GUIDED' && !guidedScope)) {
       await updateRun(orchestratorRunId, { status: 'BLOCKED_EXTERNAL', completed_at: new Date().toISOString(), decision_trace: { decision, ...guidedTrace, blocker: 'No AVAILABLE dataset version exists. Canonical certification requires at least one dataset version.' } })
       return { status: 'BLOCKED_EXTERNAL' as const, orchestratorRunId, capabilityRunId, policy, decision, summary: await loadCoverage(capabilityRunId) }
     }
