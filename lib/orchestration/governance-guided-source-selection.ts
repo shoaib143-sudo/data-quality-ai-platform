@@ -88,6 +88,22 @@ export async function resolveBoundGuidedScope(input: {
   for (let index = 0; index < names.length; index++) {
     if (!bound.has(selectedVersions[index])) throw new Error('Selected table has no active profiling execution binding: ' + names[index])
   }
+  // Check the same canonical readiness gate used by the profiling lifecycle.
+  // An old discovered asset cannot substitute for successful current-scope discovery.
+  const readinessChecks = await Promise.all(selectedVersions.map(async datasetVersionId => {
+    const { data, error } = await admin.schema('catalog').rpc('verify_dataset_version_profile_readiness', {
+      p_project_id: input.projectId, p_dataset_version_id: datasetVersionId,
+    })
+    if (error) throw new Error('Unable to verify current profiling readiness.')
+    const evidence = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {}
+    if (evidence.profiling_ready !== true) {
+      const blockers = evidence.blockers && typeof evidence.blockers === 'object' && !Array.isArray(evidence.blockers)
+        ? Object.entries(evidence.blockers as Record<string, unknown>).filter(([, active]) => active === true).map(([key]) => key) : []
+      throw new Error('Selected table lacks authoritative profiling readiness: ' + datasetVersionId + (blockers.length ? ' (' + blockers.join(', ') + ')' : ''))
+    }
+    return datasetVersionId
+  }))
+  if (readinessChecks.length !== names.length) throw new Error('Incomplete selected-table profile readiness evidence.')
   return { scopeVersionId: input.scopeVersionId, sourceId, scopeHash, qualifiedNames: names, datasetVersionIds: selectedVersions }
 }
 
