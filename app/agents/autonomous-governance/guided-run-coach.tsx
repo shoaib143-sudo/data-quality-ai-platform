@@ -107,12 +107,13 @@ export function GuidedRunCoach({
           {readinessBusy ? 'Checking…' : 'Recheck'}
         </button>
       </div>
-      {readiness && (readiness.sourceOptions?.length ?? 0) > 0 && <label htmlFor="guided-source-select" className="block text-sm font-semibold">Select source for this E2E test
+      {readiness && (readiness.sourceOptions?.length ?? 0) > 0 && <label htmlFor="guided-source-select" className="block text-sm font-semibold">Choose your source for this E2E test
         <select id="guided-source-select" value={readiness.selectedSourceId ?? ''} onChange={event => onChooseSource(event.target.value)} disabled={sourceSelectionDisabled || readinessBusy}
           className="mt-2 min-h-10 w-full rounded-lg border bg-background px-3 py-2 text-sm disabled:opacity-50">
+          <option value="">Select a source…</option>
           {(readiness.sourceOptions ?? []).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
         </select>
-        <span className="mt-1 block text-xs font-normal text-muted-foreground">Only this source's current selected tables are checked and included in the GUIDED capability evidence ledger.</span>
+        <span className="mt-1 block text-xs font-normal text-muted-foreground">You choose the source. PUB Gold is an optional test example, not a prerequisite. Only the datasets you select should be included in this run.</span>
       </label>}
       {readinessError && <p role="alert" className="rounded-lg border border-red-400/50 p-3 text-sm">{readinessError}. No E2E execution may start until preflight succeeds.</p>}
       {!readiness && !readinessError && <p role="status" className="text-sm text-muted-foreground">{readinessBusy ? 'Checking server-side source readiness…' : 'Readiness has not been measured.'}</p>}
