@@ -107,7 +107,7 @@ test('server binds current scoped datasets and fences changed pending approvals'
   assert.match(endpoint, /selectedDatasetVersionIds/)
   assert.match(resume, /sameBoundGuidedScope\(expected, observed\)/)
   assert.match(resume, /attachLatestDatasetVersions\(input\.projectId, capabilityRunId, guidedScope\)/)
-  assert.match(coach, /Only this source's current selected tables/)
+  assert.match(coach, /Only the datasets you select should be included in this run/)
   assert.match(consoleUi, /sourceScopeVersionId: readiness\?\.scopes\[0\]\?\.scopeVersionId/)
   assert.match(approvalApi, /sourceScopeVersionId|originalGoal/)
 })
