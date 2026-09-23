@@ -29,6 +29,8 @@ export function GuidedRunCoach({
   readinessBusy,
   readinessError,
   onRefreshReadiness,
+  onChooseSource,
+  sourceSelectionDisabled,
   onChooseGuided,
   canManage,
   emergencyStop,
@@ -39,6 +41,8 @@ export function GuidedRunCoach({
   readinessBusy: boolean
   readinessError: string
   onRefreshReadiness: () => void
+  onChooseSource: (sourceId: string) => void
+  sourceSelectionDisabled: boolean
   onChooseGuided: () => void
   canManage: boolean
   emergencyStop: boolean
@@ -102,6 +106,13 @@ export function GuidedRunCoach({
           {readinessBusy ? 'Checking…' : 'Recheck'}
         </button>
       </div>
+      {readiness && (readiness.sourceOptions?.length ?? 0) > 0 && <label htmlFor="guided-source-select" className="block text-sm font-semibold">Select source for this E2E test
+        <select id="guided-source-select" value={readiness.selectedSourceId ?? ''} onChange={event => onChooseSource(event.target.value)} disabled={sourceSelectionDisabled || readinessBusy}
+          className="mt-2 min-h-10 w-full rounded-lg border bg-background px-3 py-2 text-sm disabled:opacity-50">
+          {(readiness.sourceOptions ?? []).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
+        </select>
+        <span className="mt-1 block text-xs font-normal text-muted-foreground">Only this source's current selected tables are checked and included in the GUIDED capability evidence ledger.</span>
+      </label>}
       {readinessError && <p role="alert" className="rounded-lg border border-red-400/50 p-3 text-sm">{readinessError}. No E2E execution may start until preflight succeeds.</p>}
       {!readiness && !readinessError && <p role="status" className="text-sm text-muted-foreground">{readinessBusy ? 'Checking server-side source readiness…' : 'Readiness has not been measured.'}</p>}
       {readiness && <>
@@ -109,7 +120,7 @@ export function GuidedRunCoach({
           <span className="font-semibold">{readiness.ready ? 'Registration preflight ready' : 'Registration preflight incomplete'}</span>
           {' · '}{readiness.readyCount} of {readiness.expectedCount} selected tables have current discovery evidence, an AVAILABLE dataset version and an active execution binding. Live connector read and profiling still need to be tested.
         </div>
-        {readiness.scopes.some(scope => scope.mode !== 'SELECTED') && <p className="text-xs" role="alert">At least one source has an unbounded selection. Narrow or separately verify its scope before this enumerated-table E2E test.</p>}
+        {readiness.scopes.some(scope => scope.mode !== 'SELECTED') && <p className="text-xs" role="alert">This source has an unbounded selection. Choose a different, explicitly enumerated scope or narrow this one before the GUIDED test.</p>}
         {readiness.tables.length > 0 && <div className="overflow-x-auto rounded-lg border">
           <table className="w-full min-w-[540px] text-left text-xs">
             <caption className="sr-only">Server-verified selected tables for the GUIDED execution</caption>
@@ -128,6 +139,7 @@ export function GuidedRunCoach({
       <div className="flex flex-wrap gap-2 text-xs">
         <Link href="/catalog/discovery" className="rounded-lg border px-3 py-2 font-medium hover:bg-muted">Open Discovery</Link>
         <Link href="/catalog" className="rounded-lg border px-3 py-2 font-medium hover:bg-muted">Open Data Catalog</Link>
+        <Link href="/catalog/physical-assets" className="rounded-lg border px-3 py-2 font-medium hover:bg-muted">Review and request asset promotions</Link>
         <Link href="/monitoring" className="rounded-lg border px-3 py-2 font-medium hover:bg-muted">Open Job Monitor</Link>
       </div>
       <p className="text-xs text-muted-foreground">These checks cannot grant approvals or certify a run. Any missing table, failed job or unavailable external connector remains a visible blocker.</p>
