@@ -72,13 +72,14 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const [policy, setPolicy] = useState<Policy>(defaultPolicy)
   const [persistedPolicy, setPersistedPolicy] = useState<Policy | null>(null)
   const [readiness, setReadiness] = useState<GuidedReadiness | null>(null)
+  const [guidedSourceId, setGuidedSourceId] = useState('')
   const [readinessBusy, setReadinessBusy] = useState(false)
   const [readinessError, setReadinessError] = useState('')
   const readinessRequest = useRef(0)
   const [coverage, setCoverage] = useState<Record<string, unknown> | null>(null)
   const [latestReport, setLatestReport] = useState<Record<string, unknown> | null>(null)
   const [reporting, setReporting] = useState<ReportingPreference>(defaultReporting)
-  const [goal, setGoal] = useState('Run governed end-to-end Data Governance and AI assurance for this project.')
+  const [goal, setGoal] = useState('Run governed end-to-end Data Governance and AI assurance for exactly the selected source scope. Do not include other project datasets.')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const canExecute = executableProjectIds.includes(projectId)
@@ -96,10 +97,14 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
     if (!projectId) return
     setReadinessBusy(true)
     try {
-      const response = await fetch(`/api/agents/governance-orchestrator/guided-readiness?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
+      const sourceQuery = guidedSourceId ? `&sourceId=${encodeURIComponent(guidedSourceId)}` : ''
+      const response = await fetch(`/api/agents/governance-orchestrator/guided-readiness?projectId=${encodeURIComponent(projectId)}${sourceQuery}`, { cache: 'no-store' })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || 'Could not check selected source tables.')
-      if (requestId === readinessRequest.current) setReadiness(body as GuidedReadiness)
+      if (requestId === readinessRequest.current) {
+        setReadiness(body as GuidedReadiness)
+        if (!guidedSourceId && body.selectedSourceId) setGuidedSourceId(String(body.selectedSourceId))
+      }
     } catch (error) {
       if (requestId === readinessRequest.current) {
         setReadiness(null)
@@ -108,7 +113,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
     } finally {
       if (requestId === readinessRequest.current) setReadinessBusy(false)
     }
-  }, [projectId])
+  }, [projectId, guidedSourceId])
 
   useEffect(() => {
     void refreshReadiness()
@@ -140,6 +145,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
     let cancelled = false
     setBusy(true)
     setPersistedPolicy(null)
+    setGuidedSourceId('')
     setReadiness(null)
     setCoverage(null)
     fetch(`/api/agents/governance-orchestrator?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
@@ -188,7 +194,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
 
   async function runOrchestrator() {
     if (!projectId || !canExecute || !goal.trim()) return
-    if (policy.mode === 'GUIDED' && (!persistedGuidedReady || !readiness?.ready)) {
+    if (policy.mode === 'GUIDED' && (!persistedGuidedReady || !readiness?.ready || !readiness.scopes[0]?.scopeVersionId)) {
       setMessage('GUIDED execution is blocked until every selected table is registration-ready and the safe GUIDED policy is saved.')
       return
     }
@@ -199,7 +205,10 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
     setBusy(true); setMessage('')
     try {
       const response = await fetch('/api/agents/governance-orchestrator', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, goal, reporting }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+          projectId, goal, reporting,
+          ...(persistedPolicy.mode === 'GUIDED' ? { sourceScopeVersionId: readiness?.scopes[0]?.scopeVersionId } : {}),
+        }),
       })
       const body = await response.json()
       if (!response.ok && response.status !== 202 && response.status !== 409) throw new Error(body.error || 'Orchestrator execution failed.')
@@ -266,7 +275,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   })
   const executionBlocked = !persistedPolicy || hasUnsavedPolicyEdits || !persistedPolicy.enabled
     || persistedPolicy.emergencyStop || policy.mode === 'OFF'
-    || (policy.mode === 'GUIDED' && !readiness?.ready)
+    || (policy.mode === 'GUIDED' && (!readiness?.ready || !readiness.scopes[0]?.scopeVersionId))
     || !goal.trim() || ['WAITING_APPROVAL', 'RUNNING', 'SUCCEEDED'].includes(String(coverage?.status ?? ''))
   const certificationReady = summaryRow.certificationEligible === true && coverage?.status === 'SUCCEEDED'
     && (coverage?.decision_trace as Record<string, unknown> | undefined)?.assessment_state !== 'PASS'
@@ -280,6 +289,8 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
           readinessBusy={readinessBusy}
           readinessError={readinessError}
           onRefreshReadiness={() => { void refreshReadiness() }}
+          onChooseSource={sourceId => setGuidedSourceId(sourceId)}
+          sourceSelectionDisabled={['WAITING_APPROVAL', 'RUNNING'].includes(String(coverage?.status ?? ''))}
           onChooseGuided={() => chooseMode('GUIDED')}
           canManage={canManage}
           emergencyStop={persistedPolicy?.emergencyStop === true}
