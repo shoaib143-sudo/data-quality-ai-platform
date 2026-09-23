@@ -1,6 +1,6 @@
-# GUIDED E2E: real-user launch preflight — PUB Gold
+# GUIDED E2E: optional PUB Gold scenario preflight
 
-**Status:** Staged, NOT AUTHORIZED TO START. This is a live-evidence checklist, not an assertion of completed testing.
+**Status:** Optional PUB Gold scenario only, NOT a platform-wide GUIDED prerequisite. The Governance Admin may choose any authorized dataset or set of datasets; only their actual selection determines applicable readiness checks. This is a live-evidence checklist, not an assertion of completed testing.
 
 **Target:** DataNexus project `479813aa-72a4-4b12-b72a-74da8d2419ce`, Databricks PUB source `f0e5a063-7d0e-4ffe-bc81-80404fcf4b5b`, current source scope v4 `dd2f6378-6067-4a4b-8145-fac5ff047164`. Exactly these five tables are selected:
 
@@ -21,7 +21,7 @@
 - Existing Business and Governance approval-authority assignments: three per axis, but zero active project-role bindings; verify each intended participant's actual signed-in access and project binding.
 - Draft #1037 resolves step-local pinned contract mismatch; #1039 adds the exact on-screen GUIDED journey, snapshot-based five-table attachment, resumed scope revalidation and current profiling readiness checks. Require passing exact-head CI, review, deployed-code parity before the real-user test.
 
-## Preparation sequence (no governance execution yet)
+## Preparation sequence for the OPTIONAL PUB Gold scenario (no governance execution yet)
 
 1. **Source owner or Data Custodian:** perform a fresh authenticated discovery for the ACTIVE v4 PUB Gold scope and verify successful, complete, non-truncated, zero-failure evidence; run the authoritative readiness RPC again. A historic discovered-asset row is not sufficient.
 2. **Data Steward and authorized human approver:** use DataNexus Discovery / Catalog to request and decide the three pre-existing promotion recommendations as genuine user actions. Promote approved assets through the existing `catalog.promote_approved_asset` workflow; verify each resulting ACTIVE dataset, latest AVAILABLE version and active JDBC profiling execution binding. No direct SQL bypass of promotion.
