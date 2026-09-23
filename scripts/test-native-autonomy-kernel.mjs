@@ -1,12 +1,13 @@
+import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
-import {
+const {
   NativePlanValidationError,
   certifyNativePinnedToolContract,
   executeNativeClosedLoop,
   getNativeDeterministicExecutionOrder,
   prepareNativeAutonomousExecution,
   validateNativeBoundedPlan,
-} from '../lib/agents/runtime/native-autonomy-kernel.ts'
+} = await import('../lib/agents/runtime/native-autonomy-kernel.ts')
 
 function certification(toolKey, overrides = {}) {
   return {
@@ -107,6 +108,66 @@ const pinnedRead = certifyNativePinnedToolContract({
 assert.equal(pinnedRead.readOnly, true)
 assert.equal(pinnedRead.executorKey, 'governance-read-executor')
 assert.equal(pinnedRead.contractHash, contractHash)
+
+
+// Regression: the same governed tool is pinned independently for each specialist.
+// Distinct hashes must not be collapsed to the first or last specialist's contract.
+const specialistTool = 'governance_specialist_investigate'
+const specialistPlan = {
+  version: '1.0',
+  goal: 'Independently investigate and verify governance evidence',
+  projectId,
+  steps: [
+    { id: 'steward', agentKey: 'steward_agent', toolKey: specialistTool, projectId, input: { projectId } },
+    { id: 'analyst', agentKey: 'governance_analyst_agent', toolKey: specialistTool, projectId, input: { projectId }, dependsOn: ['steward'] },
+  ],
+}
+const stewardContract = certifyNativePinnedToolContract({
+  tool_key: specialistTool,
+  contract_hash: `sha256:${'a'.repeat(64)}`,
+  execution_config: { executor: 'governance-specialist-agent', read_only: true, idempotent: true, replay_certified: true },
+})
+const analystContract = certifyNativePinnedToolContract({
+  tool_key: specialistTool,
+  contract_hash: `sha256:${'b'.repeat(64)}`,
+  execution_config: { executor: 'governance-specialist-agent', read_only: true, approval_required: true },
+})
+const stepCertifications = new Map([['steward', stewardContract], ['analyst', analystContract]])
+const specialistResult = validateNativeBoundedPlan({
+  plan: specialistPlan,
+  certifications: new Map(),
+  certificationsByStepId: stepCertifications,
+})
+assert.deepEqual(specialistResult.steps.map(step => step.contractHash), [
+  stewardContract.contractHash,
+  analystContract.contractHash,
+])
+assert.deepEqual(specialistResult.steps.map(step => step.decision), ['AUTO_TIER_0', 'APPROVAL_REQUIRED'])
+assert.deepEqual(specialistResult.steps.map(step => step.requiresHumanApproval), [false, true])
+
+// Negative: missing step pin must fail closed even if a matching tool-key
+// certification is available from a different specialist.
+assert.throws(() => validateNativeBoundedPlan({
+  plan: specialistPlan,
+  certifications: new Map([[specialistTool, stewardContract]]),
+  certificationsByStepId: new Map([['steward', stewardContract]]),
+}), /analyst: tool governance_specialist_investigate has no safety certification for its pinned step/)
+
+// Adversarial: a pin for a different tool cannot be supplied under this step ID.
+assert.throws(() => validateNativeBoundedPlan({
+  plan: specialistPlan,
+  certifications: new Map(),
+  certificationsByStepId: new Map([
+    ['steward', stewardContract],
+    ['analyst', { ...analystContract, toolKey: 'quality.rules.execute' }],
+  ]),
+}), /analyst: certification key mismatch/)
+
+// Legacy callers with tool-key certifications remain supported.
+assert.equal(validateNativeBoundedPlan({
+  plan: { ...specialistPlan, steps: [specialistPlan.steps[0]] },
+  certifications: new Map([[specialistTool, stewardContract]]),
+}).steps[0].contractHash, stewardContract.contractHash)
 
 const pinnedApproval = certifyNativePinnedToolContract({
   tool_key: 'quality.remediation.propose',
