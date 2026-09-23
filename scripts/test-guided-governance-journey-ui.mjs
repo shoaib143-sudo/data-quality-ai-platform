@@ -123,3 +123,13 @@ test('an actual GUIDED user can open each missing asset in the real governed pro
   assert.match(physicalAssetManager, /Accept AI recommendation for review/)
   assert.match(physicalAssetManager, /Promote to governed catalog/)
 })
+
+
+test('governance-only GUIDED goals do not require or implicitly attach any dataset, including on approval resume', () => {
+  assert.match(runtime, /policy\.mode === 'GUIDED' && input\.sourceScopeVersionId/)
+  assert.match(runtime, /policy\.mode === 'GUIDED' && !guidedScope/)
+  assert.match(resume, /policy\.mode === 'GUIDED' && trace\.guided_scope/)
+  assert.match(resume, /policy\.mode === 'GUIDED' && !guidedScope/)
+  assert.match(runtime, /if \(!datasetVersionIds\.length && !\(policy\.mode === 'GUIDED' && !guidedScope\)\)/)
+  assert.match(resume, /if \(!datasetVersionIds\.length && !\(policy\.mode === 'GUIDED' && !guidedScope\)\)/)
+})
