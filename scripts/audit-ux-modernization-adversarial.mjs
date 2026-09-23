@@ -4,6 +4,26 @@ import path from 'node:path'
 
 const root=process.cwd()
 const manifest=fs.readFileSync(path.join(root,'docs/ux/DATANEXUS-UX-ALL-PAGES-REVALIDATION.md'),'utf8')
+const acceptance=fs.readFileSync(path.join(root,'docs/ux/DUAL-ENVIRONMENT-ACCEPTANCE-MATRIX.md'),'utf8')
+const personasSource=fs.readFileSync(path.join(root,'lib/governance/personas.ts'),'utf8')
+const accessibilitySource=fs.readFileSync(path.join(root,'lib/accessibility/persona-accessibility.ts'),'utf8')
+const wcag=JSON.parse(fs.readFileSync(path.join(root,'infra/accessibility/wcag22-aa-persona-contract.json'),'utf8'))
+
+function quotedArray(source,declaration){
+  const match=source.match(new RegExp('export const '+declaration+' = \\\\[([\\\\s\\\\S]*?)\\\\] as const'))
+  assert.ok(match,'Unable to locate '+declaration)
+  return [...match[1].matchAll(/'([^']+)'/g)].map(row=>row[1])
+}
+
+const governancePersonas=quotedArray(personasSource,'personaSlugs')
+const accessibilityPersonas=quotedArray(accessibilitySource,'ACCESSIBILITY_PERSONAS')
+assert.equal(governancePersonas.length,13,'Controlled acceptance must cover all 13 real DataNexus personas')
+assert.deepEqual(accessibilityPersonas,governancePersonas,'Accessibility personas must exactly match the governed persona registry')
+assert.deepEqual(wcag.personas,governancePersonas,'WCAG acceptance personas must exactly match the governed persona registry')
+assert.match(acceptance,/real application experiences, not simulated personas/i)
+assert.doesNotMatch(acceptance,/synthetic persona/i)
+for(const persona of governancePersonas) assert.match(acceptance,new RegExp('/home/'+persona.replace(/[.*+?^$\\{}()|[\\]\\\\]/g,'\\\\const manifest=fs.readFileSync(path.join(root,'docs/ux/DATANEXUS-UX-ALL-PAGES-REVALIDATION.md'),'utf8')
+')+'(?:\\\\`|\\\\|)'),'Acceptance matrix missing real persona '+persona)
 
 function collectPages(dir){
   const out=[]
@@ -52,4 +72,4 @@ const authShell=fs.readFileSync(path.join(root,'components/auth/auth-shell.tsx')
 assert.match(authShell,/var\(--font-inter\)|Inter|DataNexus AI/)
 assert.match(authShell,/Governed intelligence workspace/)
 
-console.log('Independent UX modernization adversarial audit passed for 79-page coverage, responsive density, palette consistency, neomorphic restraint, and explicit focus visibility.')
+console.log('Independent UX modernization adversarial audit passed for 79-page coverage, all 13 real DataNexus personas, responsive density, palette consistency, neomorphic restraint, and explicit focus visibility.')
