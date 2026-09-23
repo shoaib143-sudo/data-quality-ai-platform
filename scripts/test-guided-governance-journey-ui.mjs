@@ -128,8 +128,18 @@ test('an actual GUIDED user can open each missing asset in the real governed pro
 test('governance-only GUIDED goals do not require or implicitly attach any dataset, including on approval resume', () => {
   assert.match(runtime, /policy\.mode === 'GUIDED' && input\.sourceScopeVersionId/)
   assert.match(runtime, /policy\.mode === 'GUIDED' && !guidedScope/)
-  assert.match(resume, /policy\.mode === 'GUIDED' && trace\.guided_scope/)
+  assert.match(resume, /trace\.guided_scope_mode === 'EXPLICIT'/)
   assert.match(resume, /policy\.mode === 'GUIDED' && !guidedScope/)
   assert.match(runtime, /if \(!datasetVersionIds\.length && !\(policy\.mode === 'GUIDED' && !guidedScope\)\)/)
   assert.match(resume, /if \(!datasetVersionIds\.length && !\(policy\.mode === 'GUIDED' && !guidedScope\)\)/)
+})
+
+test('approved GUIDED scope cannot silently degrade into an unscoped run', () => {
+  assert.match(runtime, /guided_scope_mode: guidedScope \? 'EXPLICIT' : 'NONE'/)
+  assert.match(resume, /trace\.guided_scope_mode === 'EXPLICIT'/)
+  assert.match(resume, /trace\.guided_scope_mode === 'NONE'/)
+  assert.match(resume, /Object\.prototype\.hasOwnProperty\.call\(trace, 'guided_scope'\)/)
+  assert.match(resume, /missing its immutable source-scope marker/)
+  assert.match(resume, /contains contradictory source-scope data/)
+  assert.match(resume, /missing its exact approved scope snapshot/)
 })

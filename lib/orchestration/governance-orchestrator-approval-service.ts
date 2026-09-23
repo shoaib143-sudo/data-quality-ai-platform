@@ -124,8 +124,12 @@ export async function resumeGovernanceOrchestratorAfterApproval(input: {
 
   const trace = safeObject(run.decision_trace)
   let guidedScope: BoundGuidedScope | null = null
-  if (policy.mode === 'GUIDED' && trace.guided_scope) {
-    const snapshot = safeObject(trace.guided_scope)
+  if (policy.mode === 'GUIDED') {
+    if (trace.guided_scope_mode === 'EXPLICIT') {
+      if (!trace.guided_scope || typeof trace.guided_scope !== 'object' || Array.isArray(trace.guided_scope)) {
+        throw new Error('GUIDED approval is missing its exact approved scope snapshot. Resume denied.')
+      }
+      const snapshot = safeObject(trace.guided_scope)
     const scopeVersionId = String(snapshot.scope_version_id ?? '')
     if (!scopeVersionId || !Array.isArray(snapshot.qualified_names) || !Array.isArray(snapshot.dataset_version_ids)) {
       throw new Error('GUIDED request is missing its exact approved source snapshot. Resume denied.')
@@ -136,7 +140,16 @@ export async function resumeGovernanceOrchestratorAfterApproval(input: {
     }
     const observed = await resolveBoundGuidedScope({ projectId: input.projectId, scopeVersionId })
     if (!sameBoundGuidedScope(expected, observed)) throw new Error('Source scope or dataset versions changed while approval was pending. Resume denied; submit a new GUIDED request.')
-    guidedScope = observed
+      guidedScope = observed
+    } else if (trace.guided_scope_mode === 'NONE') {
+      if (Object.prototype.hasOwnProperty.call(trace, 'guided_scope')) {
+        throw new Error('GUIDED approval contains contradictory source-scope data. Resume denied.')
+      }
+    } else {
+      // Legacy or altered approval rows without a signed-in request marker
+      // must be resubmitted rather than silently widening or dropping scope.
+      throw new Error('GUIDED approval is missing its immutable source-scope marker. Submit a new governed request.')
+    }
   }
   const startedAt = new Date().toISOString()
   const { data: claimed, error: claimError } = await admin.schema('governance').from('governance_orchestrator_runs').update({

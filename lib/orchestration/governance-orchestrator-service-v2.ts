@@ -164,10 +164,13 @@ export async function runGovernanceOrchestrator(input: { projectId: string; acto
   const guidedScope = policy.mode === 'GUIDED' && input.sourceScopeVersionId
     ? await resolveBoundGuidedScope({ projectId: input.projectId, scopeVersionId: input.sourceScopeVersionId })
     : null
-  const guidedTrace = guidedScope ? { guided_scope: {
-    scope_version_id: guidedScope.scopeVersionId, source_id: guidedScope.sourceId, scope_hash: guidedScope.scopeHash,
-    qualified_names: guidedScope.qualifiedNames, dataset_version_ids: guidedScope.datasetVersionIds,
-  } } : {}
+  const guidedTrace = policy.mode === 'GUIDED' ? {
+    guided_scope_mode: guidedScope ? 'EXPLICIT' : 'NONE',
+    ...(guidedScope ? { guided_scope: {
+      scope_version_id: guidedScope.scopeVersionId, source_id: guidedScope.sourceId, scope_hash: guidedScope.scopeHash,
+      qualified_names: guidedScope.qualifiedNames, dataset_version_ids: guidedScope.datasetVersionIds,
+    } } : {}),
+  } : {}
   if (decision.requiresApproval) {
     const orchestratorRunId = await insertRun({ ...input, policy, status: 'WAITING_APPROVAL', trace: { decision, ...guidedTrace, reason: 'Approval is required before orchestrator dispatch.' } })
     return { status: 'WAITING_APPROVAL' as const, orchestratorRunId, guidedScope, policy, decision, summary: summarizeCanonicalCapabilityLedger([]) }
