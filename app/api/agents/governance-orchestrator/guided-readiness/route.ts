@@ -98,6 +98,21 @@ export async function GET(request: Request) {
           .select('dataset_version_id,active').in('dataset_version_id', versions.map(row => row.id))
       : { data: [], error: null }
     if (bindingsError) throw new Error('Unable to verify profiling execution bindings.')
+    // Catalog registrations and bindings are insufficient: current scope discovery
+    // must also have genuine successful, complete evidence before a guided run.
+    const selectedVersions = versions.filter(version => datasets.some(dataset => dataset.id === version.datasetId)
+      && selectedScopes.some(scope => scope.qualifiedNames.some(name => datasets.some(dataset =>
+        dataset.id === version.datasetId && dataset.sourceIdentifier === name))))
+    const profileReadiness = await Promise.all(selectedVersions.map(async version => {
+      const { data, error } = await admin.schema('catalog').rpc('verify_dataset_version_profile_readiness', {
+        p_project_id: projectId, p_dataset_version_id: version.id,
+      })
+      if (error) throw new Error('Unable to verify authoritative profile readiness.')
+      const report = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {}
+      const blockers = report.blockers && typeof report.blockers === 'object' && !Array.isArray(report.blockers)
+        ? Object.entries(report.blockers as Record<string, unknown>).filter(([, active]) => active === true).map(([key]) => key) : []
+      return { datasetVersionId: version.id, ready: report.profiling_ready === true, blockerCodes: blockers }
+    }))
     const result = assessGuidedReadiness({
       scopes: selectedScopes,
       datasets,
@@ -105,6 +120,7 @@ export async function GET(request: Request) {
       executionSources: (bindings ?? []).map(row => ({
         datasetVersionId: String(row.dataset_version_id), active: row.active === true,
       })) as GuidedExecutionSource[],
+      profileReadiness,
       discoveredAssets: (discovered ?? []).map(row => ({
         sourceId: String(row.source_id), assetKey: String(row.asset_key), isCurrent: row.is_current === true,
       })) as GuidedDiscoveredAsset[],
