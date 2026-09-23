@@ -19,6 +19,7 @@ export type GuidedJourneyStep =
 
 export type GuidedJourneyInput = {
   projectId: string
+  sourceSelected: boolean
   readinessLoaded: boolean
   readinessReady: boolean
   persistedMode: string
@@ -54,7 +55,7 @@ export function nextGuidedInstruction(input: GuidedJourneyInput): GuidedJourneyI
     return result('SELECT_PROJECT', 1, 'Choose your project',
       'Select the project you are authorized to run. Confirm that it is the intended governance and data-source scope.', '#autonomy-project')
   }
-  if (!input.readinessLoaded || !input.readinessReady) {
+  if (input.sourceSelected && (!input.readinessLoaded || !input.readinessReady)) {
     return result('VERIFY_SOURCES', 2, 'Verify source readiness',
       'Inspect every selected source table below. Open Discovery and Data Catalog to resolve missing registration, AVAILABLE versions, or execution bindings; then refresh this preflight. A selected scope alone is not proof of profiling readiness.', '#guided-source-preflight')
   }
@@ -73,7 +74,7 @@ export function nextGuidedInstruction(input: GuidedJourneyInput): GuidedJourneyI
   const hasCurrentRun = Boolean(input.runId) && input.runMode === 'GUIDED'
   if (!hasCurrentRun) {
     return result('SUBMIT_RUN', 4, 'Submit the GUIDED run',
-      'Review the selected source table list and goal, then choose Run DataNexus Governance Orchestrator. Submission requests approval; it is not proof of successful execution.', '#guided-run-action')
+      'Review the goal and any explicitly selected source, then choose Run DataNexus Governance Orchestrator. Submission requests approval; it is not proof of successful execution.', '#guided-run-action')
   }
   if (input.runStatus === 'WAITING_APPROVAL') {
     return result('REVIEW_APPROVAL', 5, 'Review the human approval',
