@@ -181,7 +181,7 @@ const pinnedApproval = certifyNativePinnedToolContract({
   },
 })
 const approvalPlan = validateNativeBoundedPlan({
-  plan: { ...plan, steps: [plan.steps[2]] },
+  plan: { ...plan, steps: [{ ...plan.steps[2], dependsOn: [] }] },
   certifications: new Map([['quality.remediation.propose', pinnedApproval]]),
 })
 assert.equal(approvalPlan.steps[0].decision, 'APPROVAL_REQUIRED')
@@ -360,7 +360,7 @@ assert.ok(events.includes('RECOVERY_DECIDED'))
 assert.ok(events.includes('PLAN_SUCCEEDED'))
 
 const boundedTier2Plan = validateNativeBoundedPlan({
-  plan: { ...plan, steps: [plan.steps[2]] },
+  plan: { ...plan, steps: [{ ...plan.steps[2], dependsOn: [] }] },
   certifications,
   policy: {
     allowTier2AutomaticExecution: true,
