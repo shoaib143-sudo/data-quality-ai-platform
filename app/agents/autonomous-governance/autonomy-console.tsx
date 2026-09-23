@@ -255,6 +255,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const summaryRow = summary ?? {}
   const guidedInstruction = nextGuidedInstruction({
     projectId,
+    sourceSelected: guidedSourceId !== '',
     readinessLoaded: readiness !== null,
     readinessReady: readiness?.ready === true,
     persistedMode: persistedPolicy?.mode ?? 'OFF',
