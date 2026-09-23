@@ -107,6 +107,8 @@ jobs:
         run: node scripts/verify-native-runtime-contract-pinning.mjs
       - name: Verify native autonomous execution kernel
         run: node scripts/verify-native-autonomy-kernel.mjs
+      - name: Exercise native supervisor per-step contract regressions
+        run: node --experimental-strip-types scripts/test-native-autonomy-kernel.mjs
       - name: Verify native Recovery V2
         run: node scripts/verify-native-recovery-v2.mjs
       - name: Verify shared native runtime adoption
