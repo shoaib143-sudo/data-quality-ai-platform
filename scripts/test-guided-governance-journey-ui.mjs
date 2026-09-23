@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const coach = readFileSync('app/agents/autonomous-governance/guided-run-coach.tsx', 'utf8')
+const physicalAssets = readFileSync('app/catalog/physical-assets/page.tsx', 'utf8')
+const physicalAssetManager = readFileSync('app/catalog/physical-assets/physical-asset-manager.tsx', 'utf8')
 const consoleUi = readFileSync('app/agents/autonomous-governance/autonomy-console.tsx', 'utf8')
 const approvalUi = readFileSync('app/agents/autonomous-governance/orchestrator-approval-inbox.tsx', 'utf8')
 const approvalApi = readFileSync('app/api/agents/governance-orchestrator/approvals/route.ts', 'utf8')
@@ -92,4 +94,16 @@ test('server binds current scoped datasets and fences changed pending approvals'
   assert.match(coach, /Only this source's current selected tables/)
   assert.match(consoleUi, /sourceScopeVersionId: readiness\?\.scopes\[0\]\?\.scopeVersionId/)
   assert.match(approvalApi, /sourceScopeVersionId|originalGoal/)
+})
+
+test('an actual GUIDED user can open each missing asset in the real governed promotion workflow', () => {
+  assert.match(coach, /table\.status === 'NOT_REGISTERED'/)
+  assert.match(coach, /\/catalog\/physical-assets\?sourceId=/)
+  assert.match(coach, /encodeURIComponent\(table\.qualifiedName\)/)
+  assert.match(physicalAssets, /initialSourceId=/)
+  assert.match(physicalAssets, /initialQuery=/)
+  assert.match(physicalAssetManager, /setQuery\]=useState\(initialQuery\)/)
+  assert.match(physicalAssetManager, /setSourceFilter\]=useState\(initialSourceId\)/)
+  assert.match(physicalAssetManager, /Accept AI recommendation for review/)
+  assert.match(physicalAssetManager, /Promote to governed catalog/)
 })
