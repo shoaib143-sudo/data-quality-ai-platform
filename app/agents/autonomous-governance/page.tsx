@@ -8,8 +8,9 @@ import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
-export default async function AutonomousGovernancePage() {
+export default async function AutonomousGovernancePage({ searchParams }: { searchParams?: Promise<{ projectId?: string }> }) {
   const user = await requireUser()
+  const initialProjectId = (await searchParams)?.projectId ?? ''
   const landing = await resolveLandingAccess(user.id)
   const canAgents = canAccessWorkspaceHref(landing.persona, '/agents', landing.organizationRole)
   const canMonitoring = canAccessWorkspaceHref(landing.persona, '/monitoring', landing.organizationRole)
@@ -45,6 +46,7 @@ export default async function AutonomousGovernancePage() {
           executableProjectIds={executable.filter((id): id is string => Boolean(id))}
           manageableProjectIds={manageable.filter((id): id is string => Boolean(id))}
           certifiableProjectIds={certifiable.filter((id): id is string => Boolean(id))}
+          initialProjectId={initialProjectId}
         />
         <OrchestratorApprovalInbox projects={visibleProjects} />
       </div>
