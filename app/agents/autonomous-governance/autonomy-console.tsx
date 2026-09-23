@@ -103,7 +103,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       if (!response.ok) throw new Error(body.error || 'Could not check selected source tables.')
       if (requestId === readinessRequest.current) {
         setReadiness(body as GuidedReadiness)
-        if (!guidedSourceId && body.selectedSourceId) setGuidedSourceId(String(body.selectedSourceId))
+        // Source selection is always a deliberate user action, not an implicit test fixture.
       }
     } catch (error) {
       if (requestId === readinessRequest.current) {
