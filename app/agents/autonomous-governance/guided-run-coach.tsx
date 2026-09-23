@@ -129,7 +129,18 @@ export function GuidedRunCoach({
               {readiness.tables.map(table => <tr key={table.sourceId + ':' + table.qualifiedName}>
                 <td className="max-w-[340px] break-all p-3 font-medium">{table.qualifiedName}</td>
                 <td className="p-3">{table.status.replaceAll('_', ' ')}</td>
-                <td className="p-3 text-muted-foreground">{tableInstructions[table.status]}</td>
+                <td className="p-3 text-muted-foreground">
+                  <span>{tableInstructions[table.status]}</span>
+                  {table.status === 'NOT_REGISTERED' && <Link
+                    href={`/catalog/physical-assets?sourceId=${encodeURIComponent(table.sourceId)}&q=${encodeURIComponent(table.qualifiedName)}`}
+                    className="mt-2 block w-fit rounded-lg border border-sky-400/50 px-3 py-2 text-xs font-semibold text-sky-700 underline underline-offset-2 dark:text-sky-300"
+                    aria-label={`Request human-governed promotion for ${table.qualifiedName}`}>
+                    Request governed promotion
+                  </Link>}
+                  {table.status === 'NOT_DISCOVERED' && <Link href="/catalog/discovery" className="mt-2 block w-fit underline underline-offset-2">Open Discovery</Link>}
+                  {(table.status === 'VERSION_NOT_AVAILABLE' || table.status === 'EXECUTION_SOURCE_MISSING')
+                    && <Link href={`/catalog?q=${encodeURIComponent(table.qualifiedName)}`} className="mt-2 block w-fit underline underline-offset-2">Open governed dataset</Link>}
+                </td>
               </tr>)}
             </tbody>
           </table>
