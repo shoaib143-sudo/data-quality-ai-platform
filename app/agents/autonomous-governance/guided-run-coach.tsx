@@ -19,6 +19,7 @@ const tableInstructions: Record<GuidedTableStatus, string> = {
   NOT_REGISTERED: 'Register this discovered table as a dataset.',
   VERSION_NOT_AVAILABLE: 'Create or finish an AVAILABLE dataset version.',
   EXECUTION_SOURCE_MISSING: 'Bind and activate its profiling execution source.',
+  PROFILE_READINESS_BLOCKED: 'Complete current-scope discovery and resolve the indicated profiling readiness blockers.',
   REGISTERED_READY: 'Registered and bound; live connectivity is not yet proven.',
 }
 
@@ -118,7 +119,7 @@ export function GuidedRunCoach({
       {readiness && <>
         <div className={'rounded-lg border p-3 text-sm ' + (readiness.ready ? 'border-emerald-400/50 bg-emerald-500/[0.04]' : 'border-amber-400/50 bg-amber-500/[0.05]')}>
           <span className="font-semibold">{readiness.ready ? 'Registration preflight ready' : 'Registration preflight incomplete'}</span>
-          {' · '}{readiness.readyCount} of {readiness.expectedCount} selected tables have current discovery evidence, an AVAILABLE dataset version and an active execution binding. Live connector read and profiling still need to be tested.
+          {' · '}{readiness.readyCount} of {readiness.expectedCount} selected tables have current discovery evidence, an AVAILABLE dataset version, an active execution binding and authoritative profiling readiness. Live connector read and profiling still need to be tested.
         </div>
         {readiness.scopes.some(scope => scope.mode !== 'SELECTED') && <p className="text-xs" role="alert">This source has an unbounded selection. Choose a different, explicitly enumerated scope or narrow this one before the GUIDED test.</p>}
         {readiness.tables.length > 0 && <div className="overflow-x-auto rounded-lg border">
