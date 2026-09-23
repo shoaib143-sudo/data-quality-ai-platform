@@ -194,8 +194,8 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
 
   async function runOrchestrator() {
     if (!projectId || !canExecute || !goal.trim()) return
-    if (policy.mode === 'GUIDED' && (!persistedGuidedReady || !readiness?.ready || !readiness.scopes[0]?.scopeVersionId)) {
-      setMessage('GUIDED execution is blocked until every selected table is registration-ready and the safe GUIDED policy is saved.')
+    if (policy.mode === 'GUIDED' && (!persistedGuidedReady || (guidedSourceId !== '' && (!readiness?.ready || !readiness.scopes[0]?.scopeVersionId)))) {
+      setMessage('GUIDED execution requires a saved safe policy. If you explicitly selected a source, its readiness must also pass.')
       return
     }
     if (!persistedPolicy || hasUnsavedPolicyEdits || !persistedPolicy.enabled || persistedPolicy.emergencyStop) {
@@ -207,7 +207,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       const response = await fetch('/api/agents/governance-orchestrator', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
           projectId, goal, reporting,
-          ...(persistedPolicy.mode === 'GUIDED' ? { sourceScopeVersionId: readiness?.scopes[0]?.scopeVersionId } : {}),
+          ...(persistedPolicy.mode === 'GUIDED' && guidedSourceId ? { sourceScopeVersionId: readiness?.scopes[0]?.scopeVersionId } : {}),
         }),
       })
       const body = await response.json()
@@ -275,7 +275,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   })
   const executionBlocked = !persistedPolicy || hasUnsavedPolicyEdits || !persistedPolicy.enabled
     || persistedPolicy.emergencyStop || policy.mode === 'OFF'
-    || (policy.mode === 'GUIDED' && (!readiness?.ready || !readiness.scopes[0]?.scopeVersionId))
+    || (policy.mode === 'GUIDED' && guidedSourceId !== '' && (!readiness?.ready || !readiness.scopes[0]?.scopeVersionId))
     || !goal.trim() || ['WAITING_APPROVAL', 'RUNNING', 'SUCCEEDED'].includes(String(coverage?.status ?? ''))
   const certificationReady = summaryRow.certificationEligible === true && coverage?.status === 'SUCCEEDED'
     && (coverage?.decision_trace as Record<string, unknown> | undefined)?.assessment_state !== 'PASS'
