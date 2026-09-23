@@ -124,7 +124,7 @@ export async function resumeGovernanceOrchestratorAfterApproval(input: {
 
   const trace = safeObject(run.decision_trace)
   let guidedScope: BoundGuidedScope | null = null
-  if (policy.mode === 'GUIDED') {
+  if (policy.mode === 'GUIDED' && trace.guided_scope) {
     const snapshot = safeObject(trace.guided_scope)
     const scopeVersionId = String(snapshot.scope_version_id ?? '')
     if (!scopeVersionId || !Array.isArray(snapshot.qualified_names) || !Array.isArray(snapshot.dataset_version_ids)) {
@@ -163,8 +163,10 @@ export async function resumeGovernanceOrchestratorAfterApproval(input: {
       if (error) throw new Error(`Unable to bind canonical capability run: ${error.message}`)
     }
 
-    const datasetVersionIds = await attachLatestDatasetVersions(input.projectId, capabilityRunId, guidedScope)
-    if (!datasetVersionIds.length) {
+    const datasetVersionIds = policy.mode === 'GUIDED' && !guidedScope
+      ? [] // No implicit dataset attachment for a data-independent GUIDED objective.
+      : await attachLatestDatasetVersions(input.projectId, capabilityRunId, guidedScope)
+    if (!datasetVersionIds.length && !(policy.mode === 'GUIDED' && !guidedScope)) {
       await admin.schema('governance').from('governance_orchestrator_runs').update({
         status: 'BLOCKED_EXTERNAL', completed_at: new Date().toISOString(),
         decision_trace: { ...trace, approval_request_id: input.approvalRequestId, approval_decision: 'APPROVED', blocker: 'No AVAILABLE dataset version exists. Canonical certification requires at least one dataset version.' },
