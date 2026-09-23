@@ -40,6 +40,20 @@ test('all five independently registered tables are required for an enumerated-ta
   assert.equal(readiness.ready, true)
   assert.equal(readiness.readyCount, 5)
 })
+test('current-scope profiling authority blocks stale discovery even if registered and bound', () => {
+  const checks = versions.map(row => ({ datasetVersionId: row.id, ready: false,
+    blockerCodes: ['DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE'] }))
+  const blocked = assessGuidedReadiness({ ...base, profileReadiness: checks })
+  assert.equal(blocked.ready, false)
+  assert.equal(blocked.readyCount, 0)
+  assert.equal(blocked.tables.find(row => row.qualifiedName === qualifiedNames[1])?.status, 'PROFILE_READINESS_BLOCKED')
+  assert.deepEqual(blocked.tables.find(row => row.qualifiedName === qualifiedNames[2])?.blockerCodes,
+    ['DISCOVERY_SUCCESS_EVIDENCE_NOT_AVAILABLE'])
+  const passed = assessGuidedReadiness({ ...base,
+    profileReadiness: checks.map(row => ({ ...row, ready: true, blockerCodes: [] })) })
+  assert.equal(passed.readyCount, 2)
+})
+
 test('missing or non-current discovery evidence never counts as ready', () => {
   const readiness = assessGuidedReadiness({ ...base, discoveredAssets: base.discoveredAssets.map(row =>
     row.assetKey === qualifiedNames[1] ? { ...row, isCurrent: false } : row) })
