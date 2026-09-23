@@ -149,7 +149,7 @@ export function OrchestratorApprovalInbox({ projects }: { projects: ProjectOptio
                     aria-label={`Confirm the original execution goal for request ${approval.id}`} />
                   I inspected the original goal, requested action, risk, policy and fingerprint.
                 </span>
-                {!approval.originalGoal && <span role="alert" className="mt-1 block text-xs text-amber-700 dark:text-amber-300">Original goal is unavailable. Do not approve until the source request is investigated.</span>
+                {!approval.originalGoal && <span role="alert" className="mt-1 block text-xs text-amber-700 dark:text-amber-300">Original goal is unavailable. Do not approve until the source request is investigated.</span>}
               </label>
               <label className="text-sm">Approval comment
                 <textarea rows={3} value={commentByApproval[approval.id] ?? ''} onChange={event => setCommentByApproval(current => ({ ...current, [approval.id]: event.target.value }))}
