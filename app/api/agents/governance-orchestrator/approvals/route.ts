@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireApiUser } from '@/lib/auth/require-api-user'
-import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizeProject, authorizationErrorResponse, hasProjectCapability } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   currentExecutionFingerprint,
@@ -88,6 +88,7 @@ function approvalView(row: Record<string, unknown>, canDecide: boolean, requeste
     autonomyMode: text(parameters.autonomyMode),
     executionFingerprint: String(row.execution_fingerprint ?? ''),
     goalHash: text(parameters.goalHash),
+    originalGoal: text(parameters.goal),
     requestedBy: String(row.requested_by),
     requester,
     domain: String(row.domain ?? ''),
@@ -120,7 +121,10 @@ export async function GET(request: Request) {
       .limit(20)
     if (error) throw new Error(`Unable to load orchestrator approvals: ${error.message}`)
 
-    const workspace = await loadApprovalDelegationWorkspace(user.id)
+    const [workspace, canExecute] = await Promise.all([
+      loadApprovalDelegationWorkspace(user.id),
+      hasProjectCapability(user.id, projectId, 'agent.execute'),
+    ])
     const requesterIds = [...new Set((data ?? []).map(row => String(row.requested_by)).filter(Boolean))]
     const requesterLabels = new Map<string,string>()
     if (requesterIds.length) {
@@ -131,15 +135,17 @@ export async function GET(request: Request) {
     return NextResponse.json({
       approvals: (data ?? []).map(row => {
         const axis = currentAxis(String(row.status))
-        const canDecide = authorityMatches({
-          workspace,
-          userId: user.id,
-          projectId,
-          domain: String(row.domain ?? ''),
-          actionKey: String(row.action_key),
-          riskLevel: String(row.risk_level),
-          axis,
-        })
+        const canDecide = axis
+          ? authorityMatches({
+              workspace,
+              userId: user.id,
+              projectId,
+              domain: String(row.domain ?? ''),
+              actionKey: String(row.action_key),
+              riskLevel: String(row.risk_level),
+              axis,
+            })
+          : String(row.status) === 'READY_TO_EXECUTE' && canExecute
         return approvalView(row as Record<string, unknown>, canDecide, requesterLabels.get(String(row.requested_by)) ?? null)
       }),
     })
@@ -177,6 +183,8 @@ export async function POST(request: Request) {
       if (String(approval.status) !== 'READY_TO_EXECUTE' || decision !== 'APPROVED') {
         return NextResponse.json({ error: `Approval request is not awaiting a decision. Current status: ${String(approval.status)}.` }, { status: 409 })
       }
+      // A viewer must never resume a fully approved run without execution authority.
+      await authorizeProject(user.id, projectId, 'agent.execute')
     } else {
       const workspace = await loadApprovalDelegationWorkspace(user.id)
       const canDecide = authorityMatches({
