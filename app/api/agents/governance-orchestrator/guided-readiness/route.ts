@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     })
     // Select ONE source. Other active project sources (many are unbounded ALL) must never
     // contribute datasets to this GUIDED test or make an unrelated scope fail preflight.
-    const selectedSourceId = requestedSourceId || scopes.find(scope => scope.mode === 'SELECTED' && scope.qualifiedNames.length)?.sourceId || sourceOptions[0]?.id || ''
+    const selectedSourceId = requestedSourceId // Never default to PUB Gold or any other source.
     const selectedScopes = scopes.filter(scope => scope.sourceId === selectedSourceId)
     const qualifiedNames = [...new Set(selectedScopes.flatMap(scope => scope.mode === 'SELECTED' ? scope.qualifiedNames : []))]
     const selectedSourceIds = selectedScopes.map(scope => scope.sourceId)
