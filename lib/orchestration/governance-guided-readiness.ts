@@ -19,12 +19,14 @@ export type GuidedDataset = {
 }
 export type GuidedDatasetVersion = { id: string; datasetId: string; versionNumber: number; status: string }
 export type GuidedExecutionSource = { datasetVersionId: string; active: boolean }
+export type GuidedProfileReadiness = { datasetVersionId: string; ready: boolean; blockerCodes: string[] }
 export type GuidedDiscoveredAsset = { sourceId: string; assetKey: string; isCurrent: boolean }
 export type GuidedTableStatus =
   | 'NOT_DISCOVERED'
   | 'NOT_REGISTERED'
   | 'VERSION_NOT_AVAILABLE'
   | 'EXECUTION_SOURCE_MISSING'
+  | 'PROFILE_READINESS_BLOCKED'
   | 'REGISTERED_READY'
 export type GuidedTable = {
   sourceId: string
@@ -32,6 +34,7 @@ export type GuidedTable = {
   qualifiedName: string
   status: GuidedTableStatus
   datasetVersionId: string | null
+  blockerCodes?: string[]
 }
 export type GuidedReadiness = {
   ready: boolean
@@ -49,6 +52,7 @@ export function assessGuidedReadiness(input: {
   versions: GuidedDatasetVersion[]
   executionSources: GuidedExecutionSource[]
   discoveredAssets: GuidedDiscoveredAsset[]
+  profileReadiness?: GuidedProfileReadiness[]
 }): GuidedReadiness {
   const datasets = new Map<string, GuidedDataset>()
   for (const row of input.datasets) {
@@ -60,6 +64,8 @@ export function assessGuidedReadiness(input: {
   }
   for (const rows of versions.values()) rows.sort((a, b) => b.versionNumber - a.versionNumber)
   const activeBindings = new Set(input.executionSources.filter(row => row.active).map(row => row.datasetVersionId))
+  const profileReadiness = new Map((input.profileReadiness ?? []).map(row => [row.datasetVersionId, row]))
+  const requireProfileEvidence = input.profileReadiness !== undefined
   const discovered = new Set(input.discoveredAssets.filter(row => row.isCurrent).map(row => JSON.stringify([row.sourceId, row.assetKey])))
   const tables: GuidedTable[] = []
   const scopes: GuidedReadiness['scopes'] = []
@@ -86,10 +92,12 @@ export function assessGuidedReadiness(input: {
       else if (!dataset || dataset.status !== 'ACTIVE') status = 'NOT_REGISTERED'
       else if (!version || version.status !== 'AVAILABLE') status = 'VERSION_NOT_AVAILABLE'
       else if (!activeBindings.has(version.id)) status = 'EXECUTION_SOURCE_MISSING'
+      else if (requireProfileEvidence && profileReadiness.get(version.id)?.ready !== true) status = 'PROFILE_READINESS_BLOCKED'
       else status = 'REGISTERED_READY'
       tables.push({
         sourceId: scope.sourceId, sourceName: scope.sourceName, qualifiedName,
         status, datasetVersionId: version?.id ?? null,
+        blockerCodes: version ? profileReadiness.get(version.id)?.blockerCodes ?? [] : [],
       })
     }
   }
