@@ -12,10 +12,13 @@ const acceptance = fs.readFileSync('docs/ux/DUAL-ENVIRONMENT-ACCEPTANCE-MATRIX.m
 const wcag = JSON.parse(fs.readFileSync('infra/accessibility/wcag22-aa-persona-contract.json', 'utf8'))
 
 function extractQuotedArray(source, declaration) {
-  const pattern = new RegExp(`export const ${declaration} = \\\\[([\\\\s\\\\S]*?)\\\\] as const`)
-  const match = source.match(pattern)
-  assert.ok(match, `Unable to locate ${declaration}`)
-  return [...match[1].matchAll(/'([^']+)'/g)].map(row => row[1])
+  const marker = 'export const ' + declaration + ' = ['
+  const start = source.indexOf(marker)
+  assert.ok(start >= 0, 'Unable to locate ' + declaration)
+  const tail = source.slice(start + marker.length)
+  const end = tail.indexOf('] as const')
+  assert.ok(end >= 0, 'Unable to locate end of ' + declaration)
+  return [...tail.slice(0, end).matchAll(/'([^']+)'/g)].map(row => row[1])
 }
 
 test('controlled E2E uses the real DataNexus persona registry as its authority', () => {
@@ -28,7 +31,7 @@ test('controlled E2E uses the real DataNexus persona registry as its authority',
   assert.equal(new Set(governancePersonas).size, governancePersonas.length)
 
   for (const persona of governancePersonas) {
-    assert.match(workspacePolicy, new RegExp(`'${persona.replace(/[.*+?^$\\{}()|[\\]\\\\]/g, '\\\\$&')}': \\\\[`))
+    assert.ok(workspacePolicy.includes("'" + persona + "': ["), 'Workspace policy missing persona ' + persona)
   }
 })
 
@@ -43,7 +46,7 @@ test('persona browser journeys remain bound to authenticated real-persona routin
 
 test('all-page scope includes the dynamic real-persona home and controlled evidence wording', () => {
   assert.match(manifest, /app\/home\/\[persona\]\/page\.tsx/)
-  assert.match(acceptance, /persona/i)
+  assert.match(acceptance, /real application experiences, not simulated personas/i)
   assert.match(acceptance, /synthetic datasets/i)
   assert.doesNotMatch(acceptance, /synthetic persona/i)
 })
