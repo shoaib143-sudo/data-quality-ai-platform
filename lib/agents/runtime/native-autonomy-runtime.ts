@@ -104,7 +104,9 @@ export async function bindNativePlanToPinnedRuntime(input: {
   stepAgentRunIds: ReadonlyMap<string, string>
   policy?: Partial<NativeAutonomyPolicy>
 }): Promise<NativeBoundRuntimePlan> {
-  const certifications = new Map<string, NativeToolSafetyCertification>()
+  // Agent-specific tool definitions can share a tool key but have distinct
+  // immutable contract hashes. Preserve the complete certification per step.
+  const certificationsByStepId = new Map<string, NativeToolSafetyCertification>()
   const bindings = new Map<string, NativeStepRuntimeBinding>()
   const policy: NativeAutonomyPolicy = {
     allowTier2AutomaticExecution: input.policy?.allowTier2AutomaticExecution ?? false,
@@ -122,15 +124,16 @@ export async function bindNativePlanToPinnedRuntime(input: {
       agentRunId,
     })
 
-    const existing = certifications.get(step.toolKey)
-    if (existing?.contractHash && existing.contractHash !== loaded.certification.contractHash) {
-      throw new Error(`${step.toolKey}: multiple pinned contract hashes in one supervisor plan are not supported`)
-    }
-    certifications.set(step.toolKey, loaded.certification)
+    certificationsByStepId.set(step.id, loaded.certification)
     bindings.set(step.id, loaded.binding)
   }
 
-  const plan = validateNativeBoundedPlan({ plan: input.plan, certifications, policy })
+  const plan = validateNativeBoundedPlan({
+    plan: input.plan,
+    certifications: new Map(),
+    certificationsByStepId,
+    policy,
+  })
   return {
     plan,
     planHash: hashNativeRuntimeValue(plan),
