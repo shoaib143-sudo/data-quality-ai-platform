@@ -8,6 +8,10 @@ const approvalUi = readFileSync('app/agents/autonomous-governance/orchestrator-a
 const approvalApi = readFileSync('app/api/agents/governance-orchestrator/approvals/route.ts', 'utf8')
 const readinessApi = readFileSync('app/api/agents/governance-orchestrator/guided-readiness/route.ts', 'utf8')
 const page = readFileSync('app/agents/autonomous-governance/page.tsx', 'utf8')
+const scope = readFileSync('lib/orchestration/governance-guided-source-selection.ts', 'utf8')
+const runtime = readFileSync('lib/orchestration/governance-orchestrator-service-v2.ts', 'utf8')
+const resume = readFileSync('lib/orchestration/governance-orchestrator-approval-service.ts', 'utf8')
+const endpoint = readFileSync('app/api/agents/governance-orchestrator/route.ts', 'utf8')
 
 test('the actual GUIDED journey is visible with seven numbered steps and an actionable on-screen instruction', () => {
   for (const label of ['GUIDED governance E2E','Do this now','Select project','Verify tables',
@@ -63,4 +67,29 @@ test('independent certification is not represented as complete on execution succ
   assert.match(consoleUi, /assessment_state/)
   assert.match(consoleUi, /!certificationReady/)
   assert.match(coach, /cannot grant approvals or certify a run/)
+})
+
+test('one enumerated source alone gates the test, not unrelated ALL-mode project sources', () => {
+  assert.match(readinessApi, /requestedSourceId/)
+  assert.match(readinessApi, /sourceOptions/)
+  assert.match(readinessApi, /selectedScopes = scopes\.filter/)
+  assert.match(readinessApi, /selectedSourceIds = selectedScopes\.map/)
+  assert.match(coach, /guided-source-select/)
+  assert.match(coach, /Review and request asset promotions/)
+})
+test('server binds current scoped datasets and fences changed pending approvals', () => {
+  assert.match(scope, /current_version_id/)
+  assert.match(scope, /\.eq\('project_id', input\.projectId\)/)
+  assert.match(scope, /\.eq\('is_current', true\)/)
+  assert.match(scope, /scopeHash/)
+  assert.match(scope, /datasetVersionIds: selectedVersions/)
+  assert.match(runtime, /guidedScope = policy\.mode === 'GUIDED'/)
+  assert.match(runtime, /attachLatestDatasetVersions\(input\.projectId, capabilityRunId, guidedScope\)/)
+  assert.match(runtime, /sourceScopeVersionId/)
+  assert.match(endpoint, /selectedDatasetVersionIds/)
+  assert.match(resume, /sameBoundGuidedScope\(expected, observed\)/)
+  assert.match(resume, /attachLatestDatasetVersions\(input\.projectId, capabilityRunId, guidedScope\)/)
+  assert.match(coach, /Only this source's current selected tables/)
+  assert.match(consoleUi, /sourceScopeVersionId: readiness\?\.scopes\[0\]\?\.scopeVersionId/)
+  assert.match(approvalApi, /sourceScopeVersionId|originalGoal/)
 })
