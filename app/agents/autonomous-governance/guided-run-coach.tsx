@@ -133,6 +133,7 @@ export function GuidedRunCoach({
                 <td className="p-3">{table.status.replaceAll('_', ' ')}</td>
                 <td className="p-3 text-muted-foreground">
                   <span>{tableInstructions[table.status]}</span>
+                  {table.blockerCodes.length > 0 && <span className="mt-1 block break-words text-amber-700 dark:text-amber-300">Readiness blockers: {table.blockerCodes.join(', ')}</span>}
                   {table.status === 'NOT_REGISTERED' && <Link
                     href={`/catalog/physical-assets?sourceId=${encodeURIComponent(table.sourceId)}&q=${encodeURIComponent(table.qualifiedName)}`}
                     className="mt-2 block w-fit rounded-lg border border-sky-400/50 px-3 py-2 text-xs font-semibold text-sky-700 underline underline-offset-2 dark:text-sky-300"
