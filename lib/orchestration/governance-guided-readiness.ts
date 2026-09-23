@@ -6,6 +6,7 @@
 export type GuidedSourceScope = {
   sourceId: string
   sourceName: string
+  scopeVersionId?: string
   versionNumber: number
   mode: string
   qualifiedNames: string[]
@@ -36,7 +37,9 @@ export type GuidedReadiness = {
   ready: boolean
   expectedCount: number
   readyCount: number
-  scopes: { sourceId: string; sourceName: string; versionNumber: number; mode: string; count: number }[]
+  selectedSourceId?: string | null
+  sourceOptions?: { id: string; name: string }[]
+  scopes: { sourceId: string; sourceName: string; scopeVersionId?: string; versionNumber: number; mode: string; count: number }[]
   tables: GuidedTable[]
 }
 
@@ -67,6 +70,7 @@ export function assessGuidedReadiness(input: {
     scopes.push({
       sourceId: scope.sourceId,
       sourceName: scope.sourceName,
+      scopeVersionId: scope.scopeVersionId,
       versionNumber: scope.versionNumber,
       mode: scope.mode,
       count: names.length,
