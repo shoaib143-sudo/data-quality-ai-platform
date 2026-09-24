@@ -1091,20 +1091,54 @@ jobs:
 
       - name: Snapshot current production identity
         shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           BASE_URL="${DATANEXUS_VERCEL_PRODUCTION_URL%/}"
-          code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
+          PRODUCTION_HOST="${BASE_URL#https://}"
+
+          build_code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
             --output /tmp/vercel-previous-production-build.json \
             --write-out '%{http_code}' \
             "$BASE_URL/api/build-info" || true)"
-          if [ "$code" != "200" ]; then
-            node - "$code" <<'NODE' >/tmp/vercel-previous-production-build.json
+          if [ "$build_code" != "200" ]; then
+            node - "$build_code" <<'NODE' >/tmp/vercel-previous-production-build.json
           const code = process.argv[2]
           process.stdout.write(JSON.stringify({
             status: 'UNAVAILABLE',
             httpCode: code,
-            note: 'Previous production identity could not be captured before promotion.',
+            note: 'Previous production build identity could not be captured before promotion.',
+          }))
+          NODE
+          fi
+
+          deployment_code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --output /tmp/vercel-previous-production-deployment.json \
+            --write-out '%{http_code}' \
+            "https://api.vercel.com/v13/deployments/$PRODUCTION_HOST?teamId=$VERCEL_ORG_ID&withGitRepoInfo=true" || true)"
+          if [ "$deployment_code" = "200" ]; then
+            node <<'NODE'
+          const fs = require('node:fs')
+          const path = '/tmp/vercel-previous-production-deployment.json'
+          const body = JSON.parse(fs.readFileSync(path, 'utf8'))
+          fs.writeFileSync(path, JSON.stringify({
+            status: 'AVAILABLE',
+            id: body.id ?? null,
+            url: body.url ? `https://${body.url}` : null,
+            readyState: body.readyState ?? null,
+            target: body.target ?? null,
+            sourceCommitSha: body.meta?.githubCommitSha ?? null,
+          }))
+          NODE
+          else
+            node - "$deployment_code" <<'NODE' >/tmp/vercel-previous-production-deployment.json
+          const code = process.argv[2]
+          process.stdout.write(JSON.stringify({
+            status: 'UNAVAILABLE',
+            httpCode: code,
+            note: 'Previous production deployment record could not be captured before promotion.',
           }))
           NODE
           fi
@@ -1347,7 +1381,10 @@ jobs:
               runAttempt: process.env.GITHUB_RUN_ATTEMPT,
               workflowSha: process.env.GITHUB_SHA,
             },
-            previousProduction: readJson('/tmp/vercel-previous-production-build.json'),
+            previousProduction: {
+              buildInfo: readJson('/tmp/vercel-previous-production-build.json'),
+              deployment: readJson('/tmp/vercel-previous-production-deployment.json'),
+            },
             staged: {
               buildInfo: readJson('/tmp/vercel-deployed-build.json'),
               provenance: readJson('/tmp/vercel-staged-provenance.json'),
