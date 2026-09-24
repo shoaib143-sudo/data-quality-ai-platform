@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GuidedRunCoach } from './guided-run-coach'
 import type { GuidedReadiness } from '@/lib/orchestration/governance-guided-readiness'
 import { nextGuidedInstruction } from '@/lib/orchestration/governance-guided-journey'
+import { matchesGovernanceRunIdentity } from '@/lib/orchestration/governance-journey-run-identity'
 
 type ProjectOption = { id: string; name: string }
 type Policy = {
@@ -76,10 +77,12 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const [readinessBusy, setReadinessBusy] = useState(false)
   const [readinessError, setReadinessError] = useState('')
   const readinessRequest = useRef(0)
+  const runRequest = useRef(0)
   const [coverage, setCoverage] = useState<Record<string, unknown> | null>(null)
   const [latestReport, setLatestReport] = useState<Record<string, unknown> | null>(null)
   const [reporting, setReporting] = useState<ReportingPreference>(defaultReporting)
-  const [goal, setGoal] = useState('Run governed end-to-end Data Governance and AI assurance for exactly the selected source scope. Do not include other project datasets.')
+  const [goal, setGoal] = useState('')
+  const [goalFingerprint, setGoalFingerprint] = useState<{ goal: string; hash: string } | null>(null)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const canExecute = executableProjectIds.includes(projectId)
@@ -87,8 +90,33 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const canCertify = certifiableProjectIds.includes(projectId)
   const project = useMemo(() => projects.find(row => row.id === projectId), [projects, projectId])
   const hasUnsavedPolicyEdits = !persistedPolicy || JSON.stringify(policy) !== JSON.stringify(persistedPolicy)
+  const matchesCurrentRun = matchesGovernanceRunIdentity({
+    projectId,
+    mode: policy.mode,
+    policyVersion: persistedPolicy?.policyVersion,
+    goalHash: goalFingerprint?.goal === goal ? goalFingerprint.hash : null,
+    hasUnsavedPolicyEdits,
+    guidedScope: policy.mode === 'GUIDED' ? {
+      selected: guidedSourceId !== '',
+      scopeVersionId: guidedSourceId !== '' ? readiness?.scopes[0]?.scopeVersionId ?? null : null,
+    } : undefined,
+    run: coverage,
+  })
   const persistedGuidedReady = persistedPolicy?.mode === 'GUIDED' && persistedPolicy.enabled
     && !persistedPolicy.emergencyStop && !hasUnsavedPolicyEdits
+
+  useEffect(() => {
+    let active = true
+    setGoalFingerprint(null)
+    if (goal.trim() && globalThis.crypto?.subtle) {
+      void globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(goal))
+        .then(digest => {
+          if (active) setGoalFingerprint({ goal, hash: Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('') })
+        })
+        .catch(() => { if (active) setGoalFingerprint(null) })
+    }
+    return () => { active = false }
+  }, [goal])
 
   const refreshReadiness = useCallback(async () => {
     const requestId = ++readinessRequest.current
@@ -122,14 +150,16 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
 
   const refreshRunState = useCallback(async () => {
     if (!projectId) return
+    const requestId = ++runRequest.current
     try {
       const response = await fetch(`/api/agents/governance-orchestrator?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
       const body = await response.json()
+      if (requestId !== runRequest.current) return
       if (!response.ok) throw new Error(body.error || 'Unable to refresh the run.')
       setCoverage(body.latestCoverageRun ?? null)
       setLatestReport(body.latestReport ?? null)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to refresh the run.')
+      if (requestId === runRequest.current) setMessage(error instanceof Error ? error.message : 'Unable to refresh the run.')
     }
   }, [projectId])
 
@@ -144,8 +174,10 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
     if (!projectId) return
     let cancelled = false
     setBusy(true)
+    runRequest.current += 1
     setPersistedPolicy(null)
     setGuidedSourceId('')
+    setGoal('')
     setReadiness(null)
     setCoverage(null)
     fetch(`/api/agents/governance-orchestrator?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
@@ -166,6 +198,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   }, [projectId])
 
   function chooseMode(mode: Policy['mode']) {
+    setGoal('')
     setPolicy(current => ({
       ...current,
       mode,
@@ -212,7 +245,8 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       })
       const body = await response.json()
       if (!response.ok && response.status !== 202 && response.status !== 409) throw new Error(body.error || 'Orchestrator execution failed.')
-      setCoverage({ ...body, mode: body.policy?.mode ?? persistedPolicy.mode })
+      // Only persisted server state can advance a walkthrough checkpoint.
+      await refreshRunState()
       setMessage(body.status === 'SUCCEEDED'
         ? reporting.enabled
           ? 'Orchestrator execution completed. Reporting is opted in and will use canonical persisted evidence only.'
@@ -226,14 +260,13 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
     const orchestratorRunId = typeof coverage?.orchestratorRunId === 'string'
       ? coverage.orchestratorRunId
       : typeof coverage?.id === 'string' ? coverage.id : ''
-    if (!projectId || !canCertify || !orchestratorRunId) return
+    if (!projectId || !canCertify || !orchestratorRunId || !matchesCurrentRun) return
     setBusy(true); setMessage('')
     try {
       const response = await fetch('/api/agents/governance-orchestrator/certify', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, orchestratorRunId }),
       })
       const body = await response.json()
-      setCoverage(current => ({ ...(current ?? {}), ...body, summary: body.summary ?? current?.summary }))
       if (!response.ok) throw new Error(body.error || `Certification result: ${body.assessmentState ?? 'NOT_ASSESSED'}.`)
       setMessage('Independent canonical certification passed.')
       await refreshRunState()
@@ -264,21 +297,24 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
     hasUnsavedPolicyEdits,
     canExecute,
     goal,
-    runId: orchestratorRunId,
-    runMode: typeof coverage?.mode === 'string' ? coverage.mode : null,
-    runStatus: typeof coverage?.status === 'string' ? coverage.status : null,
-    executedCount: Number(summaryRow.executed ?? 0),
-    verifiedCount: Number(summaryRow.verified ?? 0),
-    certificationEligible: summaryRow.certificationEligible === true,
-    assessmentState: typeof (coverage?.decision_trace as Record<string, unknown> | undefined)?.assessment_state === 'string'
+    runId: matchesCurrentRun ? orchestratorRunId : null,
+    runMode: matchesCurrentRun && typeof coverage?.mode === 'string' ? coverage.mode : null,
+    runStatus: matchesCurrentRun && typeof coverage?.status === 'string' ? coverage.status : null,
+    executedCount: matchesCurrentRun ? Number(summaryRow.executed ?? 0) : 0,
+    verifiedCount: matchesCurrentRun ? Number(summaryRow.verified ?? 0) : 0,
+    certificationEligible: matchesCurrentRun && summaryRow.certificationEligible === true,
+    assessmentState: matchesCurrentRun && typeof (coverage?.decision_trace as Record<string, unknown> | undefined)?.assessment_state === 'string'
       ? String((coverage?.decision_trace as Record<string, unknown>).assessment_state)
       : null,
   })
   const executionBlocked = !persistedPolicy || hasUnsavedPolicyEdits || !persistedPolicy.enabled
     || persistedPolicy.emergencyStop || policy.mode === 'OFF'
     || (policy.mode === 'GUIDED' && guidedSourceId !== '' && (!readiness?.ready || !readiness.scopes[0]?.scopeVersionId))
-    || !goal.trim() || ['WAITING_APPROVAL', 'RUNNING', 'SUCCEEDED'].includes(String(coverage?.status ?? ''))
-  const certificationReady = summaryRow.certificationEligible === true && coverage?.status === 'SUCCEEDED'
+    || !goal.trim() || !goalFingerprint || goalFingerprint.goal !== goal
+    || ['WAITING_APPROVAL', 'RUNNING'].includes(String(coverage?.status ?? ''))
+    || (matchesCurrentRun && coverage?.status === 'SUCCEEDED')
+  const certificationReady = matchesCurrentRun && persistedPolicy?.mode === policy.mode && !hasUnsavedPolicyEdits
+    && summaryRow.certificationEligible === true && coverage?.status === 'SUCCEEDED'
     && (coverage?.decision_trace as Record<string, unknown> | undefined)?.assessment_state !== 'PASS'
   return (
     <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -290,7 +326,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
           readinessBusy={readinessBusy}
           readinessError={readinessError}
           onRefreshReadiness={() => { void refreshReadiness() }}
-          onChooseSource={sourceId => setGuidedSourceId(sourceId)}
+          onChooseSource={sourceId => { setGuidedSourceId(sourceId); setMessage('') }}
           sourceSelectionDisabled={['WAITING_APPROVAL', 'RUNNING'].includes(String(coverage?.status ?? ''))}
           onChooseGuided={() => chooseMode('GUIDED')}
           canManage={canManage}
@@ -299,8 +335,13 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       <section className="dn-workspace-panel rounded-xl border p-5 space-y-5">
         <div>
           <label className="text-sm font-medium" htmlFor="autonomy-project">Project</label>
-          <select id="autonomy-project" value={projectId} onChange={event => {
+          <select id="autonomy-project" value={projectId} disabled={busy} onChange={event => {
             const nextId = event.target.value
+            runRequest.current += 1
+            readinessRequest.current += 1
+            setGoal('')
+            setPersistedPolicy(null)
+            setCoverage(null)
             setProjectId(nextId)
             const url = new URL(window.location.href)
             url.searchParams.set('projectId', nextId)
@@ -358,7 +399,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       <section className="dn-workspace-panel rounded-xl border p-5 space-y-5">
         <div id="guided-execution-goal" className="scroll-mt-24">
           <label htmlFor="governance-execution-goal" className="text-sm font-medium">Execution goal</label>
-          <textarea id="governance-execution-goal" value={goal} onChange={event => setGoal(event.target.value)} rows={5} maxLength={2000} className="mt-2 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
+          <textarea id="governance-execution-goal" value={goal} onChange={event => setGoal(event.target.value)} rows={5} placeholder="Describe the exact governance objective and intended data scope, if any." maxLength={2000} className="mt-2 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
         </div>
 
         <div className="rounded-lg border p-4 space-y-3">
