@@ -1174,8 +1174,9 @@ jobs:
           BASE_URL="${DEPLOYMENT_URL%/}"
           ok=0
           for attempt in $(seq 1 12); do
-            if vercel --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" curl /api/build-info \
+            if vercel curl /api/build-info \
               --deployment "$BASE_URL" \
+              --scope "$VERCEL_SCOPE" \
               --output /tmp/vercel-deployed-build.json >/tmp/vercel-curl.log 2>&1
             then
               code="200"
@@ -1216,7 +1217,7 @@ jobs:
           set -euo pipefail
           BASE_URL="${DEPLOYMENT_URL%/}"
 
-          vercel --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" curl /.well-known/deployed-artifact-provenance.json \
+          vercel curl /.well-known/deployed-artifact-provenance.json \
             --deployment "$BASE_URL" \
             --output /tmp/vercel-staged-provenance.json >/tmp/vercel-provenance.log 2>&1
 
@@ -1244,8 +1245,9 @@ jobs:
             local output="$2"
             local attempts="${3:-12}"
             for attempt in $(seq 1 "$attempts"); do
-              if vercel --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" curl "$path" \
+              if vercel curl "$path" \
                 --deployment "$BASE_URL" \
+                --scope "$VERCEL_SCOPE" \
                 --output "$output" >/tmp/vercel-staged-health.log 2>&1
               then
                 return 0
