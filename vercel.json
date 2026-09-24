@@ -11,5 +11,9 @@
       "path": "/api/internal/governance/approval-automation",
       "schedule": "15 0 * * *"
     }
-  ]
+  ],
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://tvjnavjxuehpesxcfvrx.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_ieDM8jckP5nlIORLW7gnVA_ZSHfwFZq"
+  }
 }
