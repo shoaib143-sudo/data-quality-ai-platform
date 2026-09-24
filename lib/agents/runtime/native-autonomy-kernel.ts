@@ -297,6 +297,12 @@ export function getNativeDeterministicExecutionOrder<T extends NativePlanStep>(s
 export function validateNativeBoundedPlan(input: {
   plan: NativeBoundedPlan
   certifications: ReadonlyMap<string, NativeToolSafetyCertification>
+  /**
+   * Supervisor plans may reuse one tool across agent-specific pinned definitions.
+   * When supplied, every step must have its own immutable certification. Never
+   * fall back to a certification belonging to another step of the same tool.
+   */
+  certificationsByStepId?: ReadonlyMap<string, NativeToolSafetyCertification>
   policy?: Partial<NativeAutonomyPolicy>
 }): NativeValidatedPlan {
   const { plan, certifications } = input
@@ -329,9 +335,11 @@ export function validateNativeBoundedPlan(input: {
       continue
     }
 
-    const certification = certifications.get(step.toolKey)
+    const certification = input.certificationsByStepId
+      ? input.certificationsByStepId.get(step.id)
+      : certifications.get(step.toolKey)
     if (!certification) {
-      violations.push(`${step.id}: tool ${step.toolKey} has no safety certification`)
+      violations.push(`${step.id}: tool ${step.toolKey} has no safety certification for its pinned step`)
       continue
     }
     if (certification.toolKey !== step.toolKey) violations.push(`${step.id}: certification key mismatch`)

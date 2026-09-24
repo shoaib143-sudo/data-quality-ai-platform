@@ -5,6 +5,7 @@ import fs from 'node:fs'
 const workflow = fs.readFileSync(new URL('../.github/workflows/release-governance.yml', import.meta.url), 'utf8')
 const tooling = fs.readFileSync(new URL('../scripts/prepare-cloudflare-tooling.mjs', import.meta.url), 'utf8')
 const supabaseHealth = fs.readFileSync(new URL('../app/api/health/supabase/route.ts', import.meta.url), 'utf8')
+const supabasePublicProbe = fs.readFileSync(new URL('../lib/supabase/public-data-api-health.ts', import.meta.url), 'utf8')
 const releaseSchemaHealth = fs.readFileSync(new URL('../app/api/health/release-schema/route.ts', import.meta.url), 'utf8')
 
 test('Cloudflare canary deployment is manual-only and cost-gated', () => {
@@ -79,11 +80,16 @@ test('Cloudflare tooling runs from an isolated pinned workspace and exposes the 
 
 test('Cloudflare canary deployment proves live Supabase public Data API connectivity without service-role credentials', () => {
   assert.match(supabaseHealth, /getSupabaseEnv/)
-  assert.match(supabaseHealth, /\/rest\/v1\//)
-  assert.match(supabaseHealth, /apikey: publishableKey/)
+  assert.match(supabaseHealth, /probeSupabasePublicDataApi/)
   assert.match(supabaseHealth, /status: 'READY'/)
   assert.match(supabaseHealth, /provider: 'supabase'/)
   assert.doesNotMatch(supabaseHealth, /SUPABASE_SERVICE_ROLE_KEY/)
+
+  assert.match(supabasePublicProbe, /\/rest\/v1\/rpc\/public_data_api_health/)
+  assert.match(supabasePublicProbe, /apikey: options\.publishableKey/)
+  assert.match(supabasePublicProbe, /authorization: `Bearer \$\{options\.publishableKey\}`/)
+  assert.doesNotMatch(supabasePublicProbe, /SUPABASE_SERVICE_ROLE_KEY/)
+
   assert.match(workflow, /api\/health\/supabase/)
   assert.match(workflow, /body\.status !== 'READY'/)
   assert.match(workflow, /body\.provider !== 'supabase'/)

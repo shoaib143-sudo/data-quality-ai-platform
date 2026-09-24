@@ -117,9 +117,3 @@ test('external approval failures remain governed and accessible',()=>{
   assert.match(form,/role="alert"/)
 })
 
-
-test('Supabase health probe mirrors client authentication headers',()=>{
-  const health=read('app/api/health/supabase/route.ts')
-  assert.match(health,/apikey:\s*publishableKey/)
-  assert.ok(health.includes('Authorization: `Bearer ${publishableKey}`'))
-})

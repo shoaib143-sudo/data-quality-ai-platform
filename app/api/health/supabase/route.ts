@@ -1,60 +1,45 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseEnv } from '@/lib/supabase/env'
+import { probeSupabasePublicDataApi } from '@/lib/supabase/public-data-api-health'
 
 export const dynamic = 'force-dynamic'
-
-const SUPABASE_HEALTH_TIMEOUT_MS = 5_000
 
 export async function GET() {
   const startedAt = Date.now()
 
   try {
     const { url, publishableKey } = getSupabaseEnv()
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), SUPABASE_HEALTH_TIMEOUT_MS)
+    const result = await probeSupabasePublicDataApi({ url, publishableKey })
 
-    try {
-      const response = await fetch(`${url.replace(/\/$/, '')}/auth/v1/settings`, {
-        method: 'GET',
-        headers: {
-          apikey: publishableKey,
-          Authorization: `Bearer ${publishableKey}`,
-        },
-        cache: 'no-store',
-        signal: controller.signal,
-      })
-
-      if (!response.ok) {
-        return NextResponse.json({
-          status: 'UNAVAILABLE',
-          provider: 'supabase',
-          boundary: 'public-data-api',
-          httpStatus: response.status,
-          latencyMs: Date.now() - startedAt,
-          timestamp: new Date().toISOString(),
-        }, {
-          status: 503,
-          headers: { 'Cache-Control': 'no-store' },
-        })
-      }
-
+    if (!result.ok) {
       return NextResponse.json({
-        status: 'READY',
+        status: 'UNAVAILABLE',
         provider: 'supabase',
         boundary: 'public-data-api',
+        httpStatus: result.httpStatus,
         latencyMs: Date.now() - startedAt,
         timestamp: new Date().toISOString(),
       }, {
+        status: 503,
         headers: { 'Cache-Control': 'no-store' },
       })
-    } finally {
-      clearTimeout(timeout)
     }
+
+    return NextResponse.json({
+      status: 'READY',
+      provider: 'supabase',
+      boundary: 'public-data-api',
+      latencyMs: Date.now() - startedAt,
+      timestamp: new Date().toISOString(),
+    }, {
+      headers: { 'Cache-Control': 'no-store' },
+    })
   } catch {
     return NextResponse.json({
       status: 'UNAVAILABLE',
       provider: 'supabase',
       boundary: 'public-data-api',
+      httpStatus: null,
       latencyMs: Date.now() - startedAt,
       timestamp: new Date().toISOString(),
     }, {

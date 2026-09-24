@@ -133,5 +133,6 @@ jobs:
           node --experimental-strip-types scripts/test-release-assurance-evaluator.mjs
           node scripts/test-production-preview-change-classifier.mjs
           node scripts/test-production-verification-backbone-large-pr.mjs
+          node --experimental-strip-types --test tests/supabase-public-data-api-health.test.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
