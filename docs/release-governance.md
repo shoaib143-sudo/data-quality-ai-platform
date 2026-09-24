@@ -39,3 +39,29 @@ Emergency changes must still use a pull request and the same required checks. If
 ## Deployment policy
 
 A merge to `main` is eligible for production deployment only after the required release checks pass. Production readiness is then verified through the existing Vercel, Render, Supabase, OPA, OTLP, JDBC, queue, and governance health contracts.
+
+## Governed Vercel production deployment
+
+Vercel production deployment is a separate manual release operation implemented by
+`.github/workflows/vercel-production-deploy.yml`.
+
+The workflow:
+
+- accepts only an explicit 40-character commit SHA;
+- requires explicit `confirm_deploy=true`;
+- requires that SHA to equal the current protected `main` SHA;
+- serializes production deployments so a second release cannot overlap the first;
+- uses the GitHub `production` environment;
+- pins the Vercel team, project, and CLI version;
+- keeps `VERCEL_TOKEN` step-scoped;
+- injects immutable DataNexus release identity into the Vercel deployment;
+- verifies the deployed artifact SHA before accepting the release;
+- verifies the official production alias;
+- requires liveness, Supabase public Data API health, release-schema parity, and
+  full readiness to pass before the workflow reports success.
+
+Automatic Vercel Git deployments remain disabled in `vercel.json`. GitHub is the
+release authority; Vercel is the production deployment runtime.
+
+The production workflow must not be changed to deploy arbitrary branches, stale
+ancestors of `main`, or an unverified SHA.
