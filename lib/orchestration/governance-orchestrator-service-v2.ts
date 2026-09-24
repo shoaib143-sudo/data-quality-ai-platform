@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runNativeSpecialistSupervisor } from '@/lib/agents/runtime/native-supervisor-service'
+import { resolveBoundGuidedScope, type BoundGuidedScope } from '@/lib/orchestration/governance-guided-source-selection'
 import {
   evaluateAutonomyPolicy,
   summarizeCanonicalCapabilityLedger,
@@ -107,8 +108,22 @@ async function createCapabilityRun(projectId: string, orchestratorRunId: string,
   return String(data)
 }
 
-async function attachLatestDatasetVersions(projectId: string, capabilityRunId: string) {
+async function attachLatestDatasetVersions(projectId: string, capabilityRunId: string, guidedScope?: BoundGuidedScope | null) {
   const admin = createAdminClient()
+  if (guidedScope) {
+    // Re-read CURRENT source, registrations and active bindings before dispatch.
+    const actual = await resolveBoundGuidedScope({ projectId, scopeVersionId: guidedScope.scopeVersionId })
+    if (actual.scopeHash !== guidedScope.scopeHash
+      || JSON.stringify(actual.datasetVersionIds) !== JSON.stringify(guidedScope.datasetVersionIds)
+      || JSON.stringify(actual.qualifiedNames) !== JSON.stringify(guidedScope.qualifiedNames)) {
+      throw new Error('GUIDED scope changed after submission; execution denied. Create a new governed request.')
+    }
+    for (const datasetVersionId of actual.datasetVersionIds) {
+      const { error } = await admin.schema('governance').rpc('attach_ai_capability_e2e_dataset_version', { p_run_id: capabilityRunId, p_dataset_version_id: datasetVersionId })
+      if (error) throw new Error(`Unable to attach selected dataset version ${datasetVersionId}: ${error.message}`)
+    }
+    return actual.datasetVersionIds
+  }
   const { data: datasets, error: datasetError } = await admin.schema('catalog').from('datasets').select('id').eq('project_id', projectId).eq('status', 'ACTIVE')
   if (datasetError) throw new Error(`Unable to resolve project datasets: ${datasetError.message}`)
   const ids = (datasets ?? []).map(row => String(row.id))
@@ -134,7 +149,7 @@ async function loadCoverage(capabilityRunId: string) {
   return summarizeCanonicalCapabilityLedger((data ?? []) as CanonicalCapabilityResultRow[])
 }
 
-export async function runGovernanceOrchestrator(input: { projectId: string; actorUserId: string; goal: string }) {
+export async function runGovernanceOrchestrator(input: { projectId: string; actorUserId: string; goal: string; sourceScopeVersionId?: string }) {
   const policy = await getProjectAutonomyPolicy(input.projectId)
   const decision = evaluateAutonomyPolicy(policy, { riskTier: 'LOW', actionKey: 'RUN_GOVERNANCE_ORCHESTRATOR', agentKey: 'governance_orchestrator_agent' })
   const failures = [
@@ -146,18 +161,30 @@ export async function runGovernanceOrchestrator(input: { projectId: string; acto
     const orchestratorRunId = await insertRun({ ...input, policy, status: 'BLOCKED_POLICY', trace: { decision, policy_failures: failures } })
     return { status: 'BLOCKED_POLICY' as const, orchestratorRunId, policy, decision, policyFailures: failures, summary: summarizeCanonicalCapabilityLedger([]) }
   }
+  const guidedScope = policy.mode === 'GUIDED' && input.sourceScopeVersionId
+    ? await resolveBoundGuidedScope({ projectId: input.projectId, scopeVersionId: input.sourceScopeVersionId })
+    : null
+  const guidedTrace = policy.mode === 'GUIDED' ? {
+    guided_scope_mode: guidedScope ? 'EXPLICIT' : 'NONE',
+    ...(guidedScope ? { guided_scope: {
+      scope_version_id: guidedScope.scopeVersionId, source_id: guidedScope.sourceId, scope_hash: guidedScope.scopeHash,
+      qualified_names: guidedScope.qualifiedNames, dataset_version_ids: guidedScope.datasetVersionIds,
+    } } : {}),
+  } : {}
   if (decision.requiresApproval) {
-    const orchestratorRunId = await insertRun({ ...input, policy, status: 'WAITING_APPROVAL', trace: { decision, reason: 'Approval is required before orchestrator dispatch.' } })
-    return { status: 'WAITING_APPROVAL' as const, orchestratorRunId, policy, decision, summary: summarizeCanonicalCapabilityLedger([]) }
+    const orchestratorRunId = await insertRun({ ...input, policy, status: 'WAITING_APPROVAL', trace: { decision, ...guidedTrace, reason: 'Approval is required before orchestrator dispatch.' } })
+    return { status: 'WAITING_APPROVAL' as const, orchestratorRunId, guidedScope, policy, decision, summary: summarizeCanonicalCapabilityLedger([]) }
   }
 
-  const orchestratorRunId = await insertRun({ ...input, policy, status: 'RUNNING', trace: { decision, policy_version: policy.policyVersion, mode: policy.mode } })
+  const orchestratorRunId = await insertRun({ ...input, policy, status: 'RUNNING', trace: { decision, ...guidedTrace, policy_version: policy.policyVersion, mode: policy.mode } })
   try {
     const capabilityRunId = await createCapabilityRun(input.projectId, orchestratorRunId, policy)
     await updateRun(orchestratorRunId, { ai_capability_e2e_run_id: capabilityRunId })
-    const datasetVersionIds = await attachLatestDatasetVersions(input.projectId, capabilityRunId)
-    if (!datasetVersionIds.length) {
-      await updateRun(orchestratorRunId, { status: 'BLOCKED_EXTERNAL', completed_at: new Date().toISOString(), decision_trace: { decision, blocker: 'No AVAILABLE dataset version exists. Canonical certification requires at least one dataset version.' } })
+    const datasetVersionIds = policy.mode === 'GUIDED' && !guidedScope
+      ? [] // Governance objectives without data dependencies must not inherit project datasets.
+      : await attachLatestDatasetVersions(input.projectId, capabilityRunId, guidedScope)
+    if (!datasetVersionIds.length && !(policy.mode === 'GUIDED' && !guidedScope)) {
+      await updateRun(orchestratorRunId, { status: 'BLOCKED_EXTERNAL', completed_at: new Date().toISOString(), decision_trace: { decision, ...guidedTrace, blocker: 'No AVAILABLE dataset version exists. Canonical certification requires at least one dataset version.' } })
       return { status: 'BLOCKED_EXTERNAL' as const, orchestratorRunId, capabilityRunId, policy, decision, summary: await loadCoverage(capabilityRunId) }
     }
 
@@ -176,11 +203,11 @@ export async function runGovernanceOrchestrator(input: { projectId: string; acto
     const status = supervisor.status === 'SUCCEEDED' ? 'SUCCEEDED' : supervisor.status === 'WAITING_APPROVAL' ? 'WAITING_APPROVAL' : 'FAILED'
     await updateRun(orchestratorRunId, {
       supervisor_run_id: supervisor.supervisorRunId, status, completed_at: status === 'WAITING_APPROVAL' ? null : new Date().toISOString(),
-      decision_trace: { decision, capability_run_id: capabilityRunId, dataset_version_count: datasetVersionIds.length, supervisor_status: supervisor.status, plan_hash: supervisor.planHash, child_run_ids: supervisor.childRunIds, certification_authority: 'governance.ai_capability_e2e_runs', self_certification: false },
+      decision_trace: { decision, ...guidedTrace, capability_run_id: capabilityRunId, dataset_version_count: datasetVersionIds.length, supervisor_status: supervisor.status, plan_hash: supervisor.planHash, child_run_ids: supervisor.childRunIds, certification_authority: 'governance.ai_capability_e2e_runs', self_certification: false },
     })
     return { status: supervisor.status, orchestratorRunId, capabilityRunId, policy, decision, supervisorRunId: supervisor.supervisorRunId, childRunIds: supervisor.childRunIds, planHash: supervisor.planHash, summary: await loadCoverage(capabilityRunId) }
   } catch (error) {
-    await updateRun(orchestratorRunId, { status: 'FAILED', completed_at: new Date().toISOString(), decision_trace: { decision, error: error instanceof Error ? error.message.slice(0, 1000) : 'Unknown orchestrator failure.' } }).catch(() => undefined)
+    await updateRun(orchestratorRunId, { status: 'FAILED', completed_at: new Date().toISOString(), decision_trace: { decision, ...guidedTrace, error: error instanceof Error ? error.message.slice(0, 1000) : 'Unknown orchestrator failure.' } }).catch(() => undefined)
     throw error
   }
 }

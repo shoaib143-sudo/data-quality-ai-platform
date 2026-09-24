@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireApiUser } from '@/lib/auth/require-api-user'
-import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizeProject, authorizationErrorResponse, hasProjectCapability } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   currentExecutionFingerprint,
@@ -72,9 +72,10 @@ async function loadApproval(requestId: string) {
   return data as Record<string, unknown>
 }
 
-function approvalView(row: Record<string, unknown>, canDecide: boolean, requester: string | null) {
+function approvalView(row: Record<string, unknown>, canDecide: boolean, requester: string | null, canViewGoal = false) {
   const parameters = approvalParameters(row)
-  const payload = safeObject(row.fingerprint_payload)
+  // The fingerprint may contain the original goal or other request parameters.
+  // Never echo those parameters to a project viewer who lacks decision authority.
   return {
     id: String(row.id),
     projectId: String(row.project_id),
@@ -88,6 +89,7 @@ function approvalView(row: Record<string, unknown>, canDecide: boolean, requeste
     autonomyMode: text(parameters.autonomyMode),
     executionFingerprint: String(row.execution_fingerprint ?? ''),
     goalHash: text(parameters.goalHash),
+    originalGoal: canViewGoal ? text(parameters.goal) : '',
     requestedBy: String(row.requested_by),
     requester,
     domain: String(row.domain ?? ''),
@@ -98,7 +100,7 @@ function approvalView(row: Record<string, unknown>, canDecide: boolean, requeste
     createdAt: row.created_at ?? null,
     slaDueAt: row.sla_due_at ?? null,
     approvalExpiresAt: row.approval_expires_at ?? null,
-    context: payload,
+    context: { actionKey: String(row.action_key), riskLevel: String(row.risk_level) },
     canDecide,
   }
 }
@@ -120,7 +122,10 @@ export async function GET(request: Request) {
       .limit(20)
     if (error) throw new Error(`Unable to load orchestrator approvals: ${error.message}`)
 
-    const workspace = await loadApprovalDelegationWorkspace(user.id)
+    const [workspace, canExecute] = await Promise.all([
+      loadApprovalDelegationWorkspace(user.id),
+      hasProjectCapability(user.id, projectId, 'agent.execute'),
+    ])
     const requesterIds = [...new Set((data ?? []).map(row => String(row.requested_by)).filter(Boolean))]
     const requesterLabels = new Map<string,string>()
     if (requesterIds.length) {
@@ -131,16 +136,19 @@ export async function GET(request: Request) {
     return NextResponse.json({
       approvals: (data ?? []).map(row => {
         const axis = currentAxis(String(row.status))
-        const canDecide = authorityMatches({
-          workspace,
-          userId: user.id,
-          projectId,
-          domain: String(row.domain ?? ''),
-          actionKey: String(row.action_key),
-          riskLevel: String(row.risk_level),
-          axis,
-        })
-        return approvalView(row as Record<string, unknown>, canDecide, requesterLabels.get(String(row.requested_by)) ?? null)
+        const canDecide = axis
+          ? String(row.requested_by) !== user.id && authorityMatches({
+              workspace,
+              userId: user.id,
+              projectId,
+              domain: String(row.domain ?? ''),
+              actionKey: String(row.action_key),
+              riskLevel: String(row.risk_level),
+              axis,
+            })
+          : String(row.status) === 'READY_TO_EXECUTE' && canExecute
+        return approvalView(row as Record<string, unknown>, canDecide, requesterLabels.get(String(row.requested_by)) ?? null,
+          canDecide || String(row.requested_by) === user.id)
       }),
     })
   } catch (error) {
@@ -177,6 +185,8 @@ export async function POST(request: Request) {
       if (String(approval.status) !== 'READY_TO_EXECUTE' || decision !== 'APPROVED') {
         return NextResponse.json({ error: `Approval request is not awaiting a decision. Current status: ${String(approval.status)}.` }, { status: 409 })
       }
+      // A viewer must never resume a fully approved run without execution authority.
+      await authorizeProject(user.id, projectId, 'agent.execute')
     } else {
       const workspace = await loadApprovalDelegationWorkspace(user.id)
       const canDecide = authorityMatches({
@@ -188,6 +198,7 @@ export async function POST(request: Request) {
         riskLevel: String(approval.risk_level),
         axis,
       })
+      if (String(approval.requested_by) === user.id) return NextResponse.json({ error: 'The execution requester cannot approve their own governance run.' }, { status: 403 })
       if (!canDecide) return NextResponse.json({ error: `You do not hold current ${axis.toLowerCase()} approval authority for this request.` }, { status: 403 })
       await recordAgentApprovalDecision({
         requestId: approvalRequestId,

@@ -16,6 +16,7 @@ type Approval = {
   autonomyMode: string
   executionFingerprint: string
   goalHash: string
+  originalGoal: string
   requestedBy: string
   requester: string | null
   domain: string
@@ -25,15 +26,14 @@ type Approval = {
   canDecide: boolean
 }
 
-const DEFAULT_GOAL = 'Run governed end-to-end Data Governance and AI assurance for this project.'
-
-function short(value: string, length = 18) {
+ function short(value: string, length = 18) {
   return value.length > length ? `${value.slice(0, length)}…` : value
 }
 
 export function OrchestratorApprovalInbox({ projects }: { projects: ProjectOption[] }) {
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [goalByApproval, setGoalByApproval] = useState<Record<string,string>>({})
+  const [confirmedByApproval, setConfirmedByApproval] = useState<Record<string, boolean>>({})
   const [commentByApproval, setCommentByApproval] = useState<Record<string,string>>({})
   const [message, setMessage] = useState('')
   const [busyId, setBusyId] = useState('')
@@ -51,7 +51,9 @@ export function OrchestratorApprovalInbox({ projects }: { projects: ProjectOptio
       setApprovals(next)
       setGoalByApproval(current => {
         const copy = { ...current }
-        for (const approval of next) if (!copy[approval.id]) copy[approval.id] = DEFAULT_GOAL
+        for (const approval of next) {
+          if (!Object.prototype.hasOwnProperty.call(copy, approval.id)) copy[approval.id] = approval.originalGoal || ''
+        }
         return copy
       })
       setMessage('')
@@ -66,6 +68,9 @@ export function OrchestratorApprovalInbox({ projects }: { projects: ProjectOptio
     if (!approval.canDecide || busyId) return
     const comment = (commentByApproval[approval.id] ?? '').trim()
     if (!comment) { setMessage('Add an approval comment before approving or rejecting.'); return }
+    if (decision === 'APPROVED' && !confirmedByApproval[approval.id]) {
+      setMessage('Review the exact submitted goal and confirm it before approving.'); return
+    }
     setBusyId(approval.id); setMessage('')
     try {
       const response = await fetch('/api/agents/governance-orchestrator/approvals', {
@@ -98,18 +103,18 @@ export function OrchestratorApprovalInbox({ projects }: { projects: ProjectOptio
   }
 
   return (
-    <section className="dn-workspace-panel rounded-xl border p-5 space-y-4">
+    <section id="guided-approvals" className="dn-workspace-panel scroll-mt-24 rounded-xl border p-5 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Governed approvals</p>
           <h2 className="mt-1 text-lg font-semibold">Orchestrator approval inbox</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Pending approvals are persisted governance work items. Approval releases the exact paused run; it never marks the capability successful by itself.</p>
+          <p className="mt-1 text-sm text-muted-foreground">GUIDED step 5: An authorized reviewer checks the original goal and policy fingerprint, records a reason and approves or rejects. If two approval axes are required, both must be recorded. Approval resumes only the exact paused run, never certifies it.</p>
         </div>
         <button type="button" onClick={() => void refresh()} disabled={Boolean(busyId)} className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">Refresh approvals</button>
       </div>
 
       {message && <p className="rounded-lg border p-3 text-sm" role="status" aria-live="polite">{message}</p>}
-      {!approvals.length && <p className="rounded-lg border p-4 text-sm text-muted-foreground">No pending Governance Orchestrator approvals are visible to you.</p>}
+      {!approvals.length && <p className="rounded-lg border p-4 text-sm text-muted-foreground">No pending Governance Orchestrator approvals are visible to you. If you just submitted a GUIDED run, refresh and check the run status. Do not invent an approval to advance.</p>}
 
       <div className="grid gap-4">
         {approvals.map(approval => {
@@ -134,9 +139,17 @@ export function OrchestratorApprovalInbox({ projects }: { projects: ProjectOptio
 
             <div className="grid gap-3 lg:grid-cols-2">
               <label className="text-sm">Original execution goal confirmation
-                <textarea rows={3} value={goalByApproval[approval.id] ?? ''} onChange={event => setGoalByApproval(current => ({ ...current, [approval.id]: event.target.value }))}
-                  className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
-                <span className="mt-1 block text-xs text-muted-foreground">Fail-closed: the server SHA-256 checks this value against the exact paused run and approval fingerprint before resuming.</span>
+                <textarea rows={3} readOnly value={goalByApproval[approval.id] ?? ''}
+                  className="mt-1 w-full rounded-lg border bg-muted/30 px-3 py-2 text-sm" />
+                <span className="mt-1 block text-xs text-muted-foreground">This value comes from the persisted request, not a generic default. Server-side SHA-256 still checks it against the exact paused run before resuming.</span>
+                <span className="mt-2 flex items-start gap-2 text-xs">
+                  <input type="checkbox" checked={confirmedByApproval[approval.id] ?? false}
+                    onChange={event => setConfirmedByApproval(current => ({ ...current, [approval.id]: event.target.checked }))}
+                    disabled={!approval.canDecide || !approval.originalGoal}
+                    aria-label={`Confirm the original execution goal for request ${approval.id}`} />
+                  I inspected the original goal, requested action, risk, policy and fingerprint.
+                </span>
+                {!approval.originalGoal && <span role="alert" className="mt-1 block text-xs text-amber-700 dark:text-amber-300">Original goal is unavailable. Do not approve until the source request is investigated.</span>}
               </label>
               <label className="text-sm">Approval comment
                 <textarea rows={3} value={commentByApproval[approval.id] ?? ''} onChange={event => setCommentByApproval(current => ({ ...current, [approval.id]: event.target.value }))}
@@ -146,7 +159,7 @@ export function OrchestratorApprovalInbox({ projects }: { projects: ProjectOptio
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => void decide(approval, 'APPROVED')} disabled={!approval.canDecide || busyId === approval.id}
+              <button type="button" onClick={() => void decide(approval, 'APPROVED')} disabled={!approval.canDecide || !approval.originalGoal || !confirmedByApproval[approval.id] || busyId === approval.id}
                 className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">{busyId === approval.id ? 'Resolving…' : 'Approve and resume'}</button>
               <button type="button" onClick={() => void decide(approval, 'REJECTED')} disabled={!approval.canDecide || busyId === approval.id}
                 className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50">Reject</button>
