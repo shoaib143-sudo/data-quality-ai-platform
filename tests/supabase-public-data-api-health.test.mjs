@@ -21,13 +21,14 @@ test('publishable-key health probe targets a read-only Data API resource', async
   assert.deepEqual(result, { ok: true, httpStatus: 200 })
   assert.equal(
     seenUrl,
-    'https://example.supabase.co/rest/v1/agent_definitions?select=id&limit=0',
+    'https://example.supabase.co/rest/v1/rpc/public_data_api_health',
   )
-  assert.equal(seenInit.method, 'GET')
+  assert.equal(seenInit.method, 'POST')
   assert.equal(seenInit.cache, 'no-store')
   assert.equal(seenInit.headers.apikey, 'sb_publishable_example')
   assert.equal(seenInit.headers.authorization, 'Bearer sb_publishable_example')
-  assert.equal(seenInit.headers['accept-profile'], 'agent')
+  assert.equal(seenInit.headers['content-type'], 'application/json')
+  assert.equal(seenInit.body, '{}')
   assert.ok(seenInit.signal instanceof AbortSignal)
   assert.notEqual(seenUrl, 'https://example.supabase.co/rest/v1/')
 })
