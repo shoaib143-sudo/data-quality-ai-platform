@@ -83,3 +83,15 @@ test('async governance feedback is announced to assistive technology',()=>{
   assert.match(learning,/role="status" aria-live="polite"/)
   assert.match(learning,/role="alert"/)
 })
+
+
+test('admin membership controls and document evidence remain accessible at scale',()=>{
+  const admin=read('app/admin/admin-manager.tsx')
+  const documents=read('app/documents/page.tsx')
+  assert.match(admin,/aria-label=\{`Role for \$\{member\.email\|\|member\.userId\}`\}/)
+  assert.match(admin,/aria-label=\{`Remove \$\{member\.email\|\|member\.userId\}`\}/)
+  assert.match(documents,/const CHUNKS_PER_PAGE=25/)
+  assert.match(documents,/\.range\(rangeStart, rangeEnd\)/)
+  assert.match(documents,/aria-label="Document chunk pages"/)
+  assert.match(documents,/shown of \{totalChunks\} chunks/)
+})
