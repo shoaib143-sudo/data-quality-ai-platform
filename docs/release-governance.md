@@ -55,8 +55,10 @@ The workflow:
 - pins the Vercel team, project, and CLI version;
 - keeps `VERCEL_TOKEN` step-scoped;
 - injects immutable DataNexus release identity into the Vercel deployment;
-- verifies the deployed artifact SHA before accepting the release;
-- verifies the official production alias;
+- stages the production build without assigning production domains;
+- verifies exact deployed identity, immutable artifact provenance, and critical health before promotion;
+- promotes only the verified staged production deployment;
+- verifies the official production alias after promotion;
 - requires liveness, Supabase public Data API health, release-schema parity, and
   full readiness to pass before the workflow reports success.
 
