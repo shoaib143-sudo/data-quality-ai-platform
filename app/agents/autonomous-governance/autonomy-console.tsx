@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GuidedRunCoach } from './guided-run-coach'
+import { AutonomousRunCoach } from './autonomous-run-coach'
+import { nextAutonomousInstruction } from '@/lib/orchestration/governance-autonomous-journey'
+import { matchesGovernanceRunIdentity } from '@/lib/orchestration/governance-journey-run-identity'
 import type { GuidedReadiness } from '@/lib/orchestration/governance-guided-readiness'
 import { nextGuidedInstruction } from '@/lib/orchestration/governance-guided-journey'
-import { matchesGovernanceRunIdentity } from '@/lib/orchestration/governance-journey-run-identity'
 
 type ProjectOption = { id: string; name: string }
 type Policy = {
@@ -74,6 +76,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const [persistedPolicy, setPersistedPolicy] = useState<Policy | null>(null)
   const [readiness, setReadiness] = useState<GuidedReadiness | null>(null)
   const [guidedSourceId, setGuidedSourceId] = useState('')
+  const [autoProjectScopeAcknowledged, setAutoProjectScopeAcknowledged] = useState(false)
   const [readinessBusy, setReadinessBusy] = useState(false)
   const [readinessError, setReadinessError] = useState('')
   const readinessRequest = useRef(0)
@@ -174,10 +177,10 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
     if (!projectId) return
     let cancelled = false
     setBusy(true)
-    runRequest.current += 1
     setPersistedPolicy(null)
     setGuidedSourceId('')
     setGoal('')
+    setAutoProjectScopeAcknowledged(false)
     setReadiness(null)
     setCoverage(null)
     fetch(`/api/agents/governance-orchestrator?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
@@ -199,6 +202,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
 
   function chooseMode(mode: Policy['mode']) {
     setGoal('')
+    setAutoProjectScopeAcknowledged(false)
     setPolicy(current => ({
       ...current,
       mode,
@@ -220,6 +224,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       if (!response.ok) throw new Error(body.error || 'Unable to update autonomy policy.')
       setPolicy(body.policy)
       setPersistedPolicy(body.policy)
+      setAutoProjectScopeAcknowledged(false)
       setMessage('Autonomy policy saved. This does not submit or approve a governance run.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to update autonomy policy.') }
     finally { setBusy(false) }
@@ -235,6 +240,10 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       setMessage('Execution blocked. Load and save an enabled policy without an active emergency stop.')
       return
     }
+    if ((persistedPolicy.mode === 'GOVERNED_AUTO' || persistedPolicy.mode === 'FULL_AUTONOMOUS') && !autoProjectScopeAcknowledged) {
+      setMessage('Confirm the current project-wide dataset attachment behavior before starting an autonomous mode.')
+      return
+    }
     setBusy(true); setMessage('')
     try {
       const response = await fetch('/api/agents/governance-orchestrator', {
@@ -245,7 +254,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       })
       const body = await response.json()
       if (!response.ok && response.status !== 202 && response.status !== 409) throw new Error(body.error || 'Orchestrator execution failed.')
-      // Only persisted server state can advance a walkthrough checkpoint.
+      // Re-read the persisted row; a POST response is not a certified run checkpoint.
       await refreshRunState()
       setMessage(body.status === 'SUCCEEDED'
         ? reporting.enabled
@@ -307,18 +316,39 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       ? String((coverage?.decision_trace as Record<string, unknown>).assessment_state)
       : null,
   })
+  const autonomousMode = policy.mode === 'GOVERNED_AUTO' || policy.mode === 'FULL_AUTONOMOUS' ? policy.mode : null
+  const autonomousInstruction = autonomousMode ? nextAutonomousInstruction({
+    mode: autonomousMode,
+    projectId,
+    persistedMode: persistedPolicy?.mode ?? 'OFF',
+    persistedEnabled: persistedPolicy?.enabled === true,
+    persistedEmergencyStop: persistedPolicy?.emergencyStop !== false,
+    hasUnsavedPolicyEdits,
+    canExecute,
+    goal,
+    runId: matchesCurrentRun ? orchestratorRunId : null,
+    runMode: matchesCurrentRun && typeof coverage?.mode === 'string' ? coverage.mode : null,
+    runStatus: matchesCurrentRun && typeof coverage?.status === 'string' ? coverage.status : null,
+    executedCount: matchesCurrentRun ? Number(summaryRow.executed ?? 0) : 0,
+    verifiedCount: matchesCurrentRun ? Number(summaryRow.verified ?? 0) : 0,
+    certificationEligible: matchesCurrentRun && summaryRow.certificationEligible === true,
+    assessmentState: matchesCurrentRun && typeof (coverage?.decision_trace as Record<string, unknown> | undefined)?.assessment_state === 'string'
+      ? String((coverage?.decision_trace as Record<string, unknown>).assessment_state)
+      : null,
+  }) : null
   const executionBlocked = !persistedPolicy || hasUnsavedPolicyEdits || !persistedPolicy.enabled
     || persistedPolicy.emergencyStop || policy.mode === 'OFF'
     || (policy.mode === 'GUIDED' && guidedSourceId !== '' && (!readiness?.ready || !readiness.scopes[0]?.scopeVersionId))
+    || (autonomousMode !== null && !autoProjectScopeAcknowledged)
     || !goal.trim() || !goalFingerprint || goalFingerprint.goal !== goal
     || ['WAITING_APPROVAL', 'RUNNING'].includes(String(coverage?.status ?? ''))
     || (matchesCurrentRun && coverage?.status === 'SUCCEEDED')
   const certificationReady = matchesCurrentRun && persistedPolicy?.mode === policy.mode && !hasUnsavedPolicyEdits
-    && summaryRow.certificationEligible === true && coverage?.status === 'SUCCEEDED'
+    && coverage?.mode === persistedPolicy?.mode && summaryRow.certificationEligible === true && coverage?.status === 'SUCCEEDED'
     && (coverage?.decision_trace as Record<string, unknown> | undefined)?.assessment_state !== 'PASS'
   return (
     <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-      {(policy.mode === 'GUIDED' || persistedPolicy?.mode === 'GUIDED' || persistedPolicy?.mode === 'OFF' || !persistedPolicy)
+      {(policy.mode === 'GUIDED' || policy.mode === 'OFF')
         && <GuidedRunCoach
           instruction={guidedInstruction}
           projectName={project?.name ?? ''}
@@ -332,6 +362,20 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
           canManage={canManage}
           emergencyStop={persistedPolicy?.emergencyStop === true}
         />}
+      {autonomousMode && autonomousInstruction && <AutonomousRunCoach
+        mode={autonomousMode}
+        instruction={autonomousInstruction}
+        projectName={project?.name ?? ''}
+        policy={persistedPolicy?.mode === autonomousMode ? persistedPolicy : null}
+        canManage={canManage}
+        canExecute={canExecute}
+        runStatus={coverage?.mode === autonomousMode && matchesCurrentRun ? String(coverage?.status ?? '') : ''}
+        runId={coverage?.mode === autonomousMode && matchesCurrentRun ? orchestratorRunId : ''}
+        executedCount={coverage?.mode === autonomousMode && matchesCurrentRun ? Number(summaryRow.executed ?? 0) : 0}
+        verifiedCount={coverage?.mode === autonomousMode && matchesCurrentRun ? Number(summaryRow.verified ?? 0) : 0}
+        refreshBusy={busy}
+        onRefreshRun={() => { void refreshRunState() }}
+      />}
       <section className="dn-workspace-panel rounded-xl border p-5 space-y-5">
         <div>
           <label className="text-sm font-medium" htmlFor="autonomy-project">Project</label>
@@ -339,6 +383,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
             const nextId = event.target.value
             runRequest.current += 1
             readinessRequest.current += 1
+            setAutoProjectScopeAcknowledged(false)
             setGoal('')
             setPersistedPolicy(null)
             setCoverage(null)
@@ -399,9 +444,14 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       <section className="dn-workspace-panel rounded-xl border p-5 space-y-5">
         <div id="guided-execution-goal" className="scroll-mt-24">
           <label htmlFor="governance-execution-goal" className="text-sm font-medium">Execution goal</label>
-          <textarea id="governance-execution-goal" value={goal} onChange={event => setGoal(event.target.value)} rows={5} placeholder="Describe the exact governance objective and intended data scope, if any." maxLength={2000} className="mt-2 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
+          <textarea id="governance-execution-goal" value={goal} onChange={event => { setGoal(event.target.value); setAutoProjectScopeAcknowledged(false) }} rows={5} maxLength={2000} placeholder="Describe the exact governance objective and intended data scope, if any." className="mt-2 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
         </div>
 
+        {autonomousMode && <label className="flex items-start gap-3 rounded-lg border border-amber-400/50 p-3 text-sm">
+          <input type="checkbox" className="mt-1" checked={autoProjectScopeAcknowledged}
+            onChange={event => setAutoProjectScopeAcknowledged(event.target.checked)} />
+          <span>I understand that current {autonomousMode} dispatch attaches the latest project datasets when present, not a single selected source. I have verified the intended project-wide scope. This confirmation does not grant server-side data access or change policy limits.</span>
+        </label>}
         <div className="rounded-lg border p-4 space-y-3">
           <label className="flex items-center gap-2 text-sm font-medium">
             <input type="checkbox" checked={reporting.enabled} onChange={event => setReporting(current => ({ ...current, enabled: event.target.checked }))} />
