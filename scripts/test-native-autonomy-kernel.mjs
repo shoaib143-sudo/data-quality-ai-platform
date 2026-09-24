@@ -163,6 +163,20 @@ assert.throws(() => validateNativeBoundedPlan({
   ]),
 }), /analyst: certification key mismatch/)
 
+// Adversarial: duplicate step IDs must remain invalid even though a Map would
+// otherwise collapse both step-local certifications onto one key.
+assert.throws(() => validateNativeBoundedPlan({
+  plan: {
+    ...specialistPlan,
+    steps: [
+      specialistPlan.steps[0],
+      { ...specialistPlan.steps[1], id: 'steward', dependsOn: [] },
+    ],
+  },
+  certifications: new Map(),
+  certificationsByStepId: new Map([['steward', stewardContract]]),
+}), /duplicate step id: steward/)
+
 // Legacy callers with tool-key certifications remain supported.
 assert.equal(validateNativeBoundedPlan({
   plan: { ...specialistPlan, steps: [specialistPlan.steps[0]] },
