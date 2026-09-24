@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runNativeSpecialistSupervisor } from '@/lib/agents/runtime/native-supervisor-service'
+import { resolveBoundGuidedScope, sameBoundGuidedScope, type BoundGuidedScope } from '@/lib/orchestration/governance-guided-source-selection'
 import { getProjectAutonomyPolicy, getLatestCoverageRun } from '@/lib/orchestration/governance-orchestrator-service-v2'
 
 const SPECIALIST_KEYS = ['steward_agent','governance_analyst_agent','architect_agent','investigator_agent','executive_agent','support_agent'] as const
@@ -36,8 +37,17 @@ async function createCapabilityRun(projectId: string, orchestratorRunId: string,
   return String(data)
 }
 
-async function attachLatestDatasetVersions(projectId: string, capabilityRunId: string) {
+async function attachLatestDatasetVersions(projectId: string, capabilityRunId: string, guidedScope?: BoundGuidedScope | null) {
   const admin = createAdminClient()
+  if (guidedScope) {
+    const current = await resolveBoundGuidedScope({ projectId, scopeVersionId: guidedScope.scopeVersionId })
+    if (!sameBoundGuidedScope(guidedScope, current)) throw new Error('GUIDED source scope changed during approval; submit a new request.')
+    for (const datasetVersionId of current.datasetVersionIds) {
+      const { error } = await admin.schema('governance').rpc('attach_ai_capability_e2e_dataset_version', { p_run_id: capabilityRunId, p_dataset_version_id: datasetVersionId })
+      if (error) throw new Error(`Unable to attach selected version ${datasetVersionId}: ${error.message}`)
+    }
+    return current.datasetVersionIds
+  }
   const { data: datasets, error: datasetError } = await admin.schema('catalog').from('datasets').select('id').eq('project_id', projectId).eq('status', 'ACTIVE')
   if (datasetError) throw new Error(`Unable to resolve project datasets: ${datasetError.message}`)
   const ids = (datasets ?? []).map(row => String(row.id))
@@ -113,6 +123,34 @@ export async function resumeGovernanceOrchestratorAfterApproval(input: {
   }
 
   const trace = safeObject(run.decision_trace)
+  let guidedScope: BoundGuidedScope | null = null
+  if (policy.mode === 'GUIDED') {
+    if (trace.guided_scope_mode === 'EXPLICIT') {
+      if (!trace.guided_scope || typeof trace.guided_scope !== 'object' || Array.isArray(trace.guided_scope)) {
+        throw new Error('GUIDED approval is missing its exact approved scope snapshot. Resume denied.')
+      }
+      const snapshot = safeObject(trace.guided_scope)
+    const scopeVersionId = String(snapshot.scope_version_id ?? '')
+    if (!scopeVersionId || !Array.isArray(snapshot.qualified_names) || !Array.isArray(snapshot.dataset_version_ids)) {
+      throw new Error('GUIDED request is missing its exact approved source snapshot. Resume denied.')
+    }
+    const expected: BoundGuidedScope = {
+      scopeVersionId, sourceId: String(snapshot.source_id ?? ''), scopeHash: String(snapshot.scope_hash ?? ''),
+      qualifiedNames: snapshot.qualified_names.map(String), datasetVersionIds: snapshot.dataset_version_ids.map(String),
+    }
+    const observed = await resolveBoundGuidedScope({ projectId: input.projectId, scopeVersionId })
+    if (!sameBoundGuidedScope(expected, observed)) throw new Error('Source scope or dataset versions changed while approval was pending. Resume denied; submit a new GUIDED request.')
+      guidedScope = observed
+    } else if (trace.guided_scope_mode === 'NONE') {
+      if (Object.prototype.hasOwnProperty.call(trace, 'guided_scope')) {
+        throw new Error('GUIDED approval contains contradictory source-scope data. Resume denied.')
+      }
+    } else {
+      // Legacy or altered approval rows without a signed-in request marker
+      // must be resubmitted rather than silently widening or dropping scope.
+      throw new Error('GUIDED approval is missing its immutable source-scope marker. Submit a new governed request.')
+    }
+  }
   const startedAt = new Date().toISOString()
   const { data: claimed, error: claimError } = await admin.schema('governance').from('governance_orchestrator_runs').update({
     status: 'RUNNING',
@@ -138,8 +176,10 @@ export async function resumeGovernanceOrchestratorAfterApproval(input: {
       if (error) throw new Error(`Unable to bind canonical capability run: ${error.message}`)
     }
 
-    const datasetVersionIds = await attachLatestDatasetVersions(input.projectId, capabilityRunId)
-    if (!datasetVersionIds.length) {
+    const datasetVersionIds = policy.mode === 'GUIDED' && !guidedScope
+      ? [] // No implicit dataset attachment for a data-independent GUIDED objective.
+      : await attachLatestDatasetVersions(input.projectId, capabilityRunId, guidedScope)
+    if (!datasetVersionIds.length && !(policy.mode === 'GUIDED' && !guidedScope)) {
       await admin.schema('governance').from('governance_orchestrator_runs').update({
         status: 'BLOCKED_EXTERNAL', completed_at: new Date().toISOString(),
         decision_trace: { ...trace, approval_request_id: input.approvalRequestId, approval_decision: 'APPROVED', blocker: 'No AVAILABLE dataset version exists. Canonical certification requires at least one dataset version.' },

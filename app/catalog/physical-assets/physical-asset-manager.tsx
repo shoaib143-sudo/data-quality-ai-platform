@@ -15,10 +15,10 @@ function tone(value:number){return value>=.85?'bg-emerald-50 text-emerald-700 bo
 function statusTone(value:string){const status=value.toUpperCase();if(status==='PROMOTED'||status==='APPROVED')return'bg-emerald-50 text-emerald-700';if(status==='REJECTED')return'bg-rose-50 text-rose-700';if(status==='REQUESTED')return'bg-blue-50 text-blue-700';return'bg-violet-50 text-violet-700'}
 function record(value:unknown){return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{} }
 
-export function PhysicalAssetManager({assets,trust,requests,sources}:{assets:Asset[];trust:Trust[];requests:Promotion[];sources:Source[]}){
+export function PhysicalAssetManager({assets,trust,requests,sources,initialQuery='',initialSourceId='ALL'}:{assets:Asset[];trust:Trust[];requests:Promotion[];sources:Source[];initialQuery?:string;initialSourceId?:string}){
   const router=useRouter()
-  const [query,setQuery]=useState('')
-  const [sourceFilter,setSourceFilter]=useState('ALL')
+  const [query,setQuery]=useState(initialQuery)
+  const [sourceFilter,setSourceFilter]=useState(initialSourceId)
   const [busy,setBusy]=useState<string|null>(null)
   const [message,setMessage]=useState('')
   const trustByIdentity=useMemo(()=>new Map(trust.map(item=>[`${item.source_id}:${item.identity_key}`,item])),[trust])

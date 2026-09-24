@@ -40,6 +40,13 @@ on:
       - 'scripts/audit-execution-modes-adversarial.mjs'
       - 'scripts/test-execution-mode-ui-ux.mjs'
       - 'scripts/test-execution-mode-ui-accessibility.mjs'
+      - 'scripts/test-guided-governance-journey.mjs'
+      - 'scripts/test-guided-governance-journey-ui.mjs'
+      - 'lib/orchestration/governance-guided-readiness.ts'
+      - 'lib/orchestration/governance-guided-journey.ts'
+      - 'lib/orchestration/governance-journey-run-identity.ts'
+      - 'scripts/test-governance-journey-run-identity.mjs'
+      - 'lib/orchestration/governance-guided-source-selection.ts'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
   pull_request:
@@ -80,6 +87,13 @@ on:
       - 'scripts/audit-execution-modes-adversarial.mjs'
       - 'scripts/test-execution-mode-ui-ux.mjs'
       - 'scripts/test-execution-mode-ui-accessibility.mjs'
+      - 'scripts/test-guided-governance-journey.mjs'
+      - 'scripts/test-guided-governance-journey-ui.mjs'
+      - 'lib/orchestration/governance-guided-readiness.ts'
+      - 'lib/orchestration/governance-guided-journey.ts'
+      - 'lib/orchestration/governance-journey-run-identity.ts'
+      - 'scripts/test-governance-journey-run-identity.mjs'
+      - 'lib/orchestration/governance-guided-source-selection.ts'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
 
@@ -127,3 +141,9 @@ jobs:
         run: node --test scripts/test-execution-mode-ui-ux.mjs
       - name: Execution-mode accessibility contract tests
         run: node --test scripts/test-execution-mode-ui-accessibility.mjs
+      - name: User-facing GUIDED E2E state and negative-path tests
+        run: node --experimental-strip-types --test scripts/test-guided-governance-journey.mjs
+      - name: On-screen GUIDED walkthrough UX and authorization checks
+        run: node --test scripts/test-guided-governance-journey-ui.mjs
+      - name: Reject stale GUIDED project policy goal and source-scope evidence
+        run: node --experimental-strip-types --test scripts/test-governance-journey-run-identity.mjs
