@@ -1113,6 +1113,7 @@ jobs:
       - name: Verify exact deployed identity
         shell: bash
         env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
           EXACT_SHA: ${{ steps.identity.outputs.sha }}
         run: |
@@ -1120,7 +1121,16 @@ jobs:
           BASE_URL="${DEPLOYMENT_URL%/}"
           ok=0
           for attempt in $(seq 1 12); do
-            code="$(curl --silent --show-error --connect-timeout 5 --max-time 15               --output /tmp/vercel-deployed-build.json --write-out '%{http_code}'               "$BASE_URL/api/build-info" || true)"
+            if vercel curl /api/build-info \
+              --deployment "$BASE_URL" \
+              --token "$VERCEL_TOKEN" \
+              --scope "$VERCEL_SCOPE" \
+              --output /tmp/vercel-deployed-build.json >/tmp/vercel-curl.log 2>&1
+            then
+              code="200"
+            else
+              code="000"
+            fi
             if [ "$code" = "200" ] && node - "$EXACT_SHA" /tmp/vercel-deployed-build.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
