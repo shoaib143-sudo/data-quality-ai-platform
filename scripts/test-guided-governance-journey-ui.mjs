@@ -14,6 +14,7 @@ const scope = readFileSync('lib/orchestration/governance-guided-source-selection
 const runtime = readFileSync('lib/orchestration/governance-orchestrator-service-v2.ts', 'utf8')
 const resume = readFileSync('lib/orchestration/governance-orchestrator-approval-service.ts', 'utf8')
 const endpoint = readFileSync('app/api/agents/governance-orchestrator/route.ts', 'utf8')
+const runIdentity = readFileSync('lib/orchestration/governance-journey-run-identity.ts', 'utf8')
 
 test('the actual GUIDED journey is visible with seven numbered steps and an actionable on-screen instruction', () => {
   for (const label of ['GUIDED governance E2E','Do this now','Select project','Verify tables',
@@ -142,4 +143,28 @@ test('approved GUIDED scope cannot silently degrade into an unscoped run', () =>
   assert.match(resume, /missing its immutable source-scope marker/)
   assert.match(resume, /contains contradictory source-scope data/)
   assert.match(resume, /missing its exact approved scope snapshot/)
+})
+
+
+test('GUIDED walkthrough progress is fenced to the exact persisted goal, policy and source scope', () => {
+  assert.match(consoleUi, /matchesGovernanceRunIdentity\(\{/)
+  assert.match(consoleUi, /crypto\.subtle\.digest\('SHA-256', new TextEncoder\(\)\.encode\(goal\)\)/)
+  assert.match(consoleUi, /guidedScope: policy\.mode === 'GUIDED'/)
+  assert.match(consoleUi, /scopeVersionId: guidedSourceId !== '' \? readiness\?\.scopes\[0\]\?\.scopeVersionId/)
+  assert.match(consoleUi, /runId: matchesCurrentRun \? orchestratorRunId : null/)
+  assert.match(consoleUi, /certificationReady = matchesCurrentRun/)
+  assert.match(consoleUi, /!projectId \|\| !canCertify \|\| !orchestratorRunId \|\| !matchesCurrentRun/)
+  assert.match(consoleUi, /await refreshRunState\(\)/)
+  assert.doesNotMatch(consoleUi, /setCoverage\(\{ \.\.\.body, mode:/)
+  assert.match(runIdentity, /trace\.guided_scope_mode === 'EXPLICIT'/)
+  assert.match(runIdentity, /snapshot\.scope_version_id === input\.guidedScope\.scopeVersionId/)
+  assert.match(runIdentity, /trace\.guided_scope_mode === 'NONE'/)
+  assert.match(runIdentity, /!Object\.prototype\.hasOwnProperty\.call\(trace, 'guided_scope'\)/)
+})
+
+test('shared-environment UI keeps a real active run single-flight while allowing a new goal after prior success', () => {
+  assert.match(consoleUi, /\['WAITING_APPROVAL', 'RUNNING'\]\.includes\(String\(coverage\?\.status/)
+  assert.match(consoleUi, /matchesCurrentRun && coverage\?\.status === 'SUCCEEDED'/)
+  assert.match(consoleUi, /disabled=\{busy\} onChange=\{event => \{/)
+  assert.match(consoleUi, /runRequest\.current \+= 1/)
 })
