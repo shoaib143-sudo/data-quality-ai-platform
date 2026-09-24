@@ -64,6 +64,12 @@ if (!/package-ecosystem:\s*npm/.test(dependabot)) failures.push('Dependabot must
 if (!/package-ecosystem:\s*github-actions/.test(dependabot)) failures.push('Dependabot must manage GitHub Actions')
 if ((dependabot.match(/interval:\s*weekly/g) ?? []).length < 2) failures.push('Dependabot updates must use a bounded weekly schedule')
 
+const releaseDocs = await readFile('docs/release-governance.md', 'utf8')
+if (!releaseDocs.includes('.github/workflows/release-governance.yml')) failures.push('release governance docs must reference the integrated Release Governance workflow')
+if (!releaseDocs.includes('operation=vercel-production-deploy')) failures.push('release governance docs must name the governed Vercel deployment operation')
+if (/vercel-production-deploy\.yml/.test(releaseDocs)) failures.push('release governance docs must not reference the retired standalone Vercel workflow')
+if (/confirm_deploy=true/.test(releaseDocs)) failures.push('release governance docs must not require the retired confirm_deploy input')
+
 const securityPolicy = await readFile('SECURITY.md', 'utf8')
 if (!/Do not disclose suspected vulnerabilities in a public issue/i.test(securityPolicy)) failures.push('SECURITY.md must prohibit public vulnerability disclosure')
 if (!/credentials, tokens, personal data, and tenant data removed/i.test(securityPolicy)) failures.push('SECURITY.md must require sensitive-data redaction')
