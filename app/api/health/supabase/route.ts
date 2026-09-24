@@ -14,7 +14,7 @@ export async function GET() {
     const timeout = setTimeout(() => controller.abort(), SUPABASE_HEALTH_TIMEOUT_MS)
 
     try {
-      const response = await fetch(`${url.replace(/\/$/, '')}/rest/v1/`, {
+      const response = await fetch(`${url.replace(/\/$/, '')}/auth/v1/settings`, {
         method: 'GET',
         headers: {
           apikey: publishableKey,

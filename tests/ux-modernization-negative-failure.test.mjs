@@ -122,4 +122,6 @@ test('Supabase health probe mirrors client authentication headers',()=>{
   const health=read('app/api/health/supabase/route.ts')
   assert.match(health,/apikey:\s*publishableKey/)
   assert.ok(health.includes('Authorization: `Bearer ${publishableKey}`'))
+  assert.ok(health.includes('/auth/v1/settings'))
+  assert.ok(!health.includes('/rest/v1/'))
 })
