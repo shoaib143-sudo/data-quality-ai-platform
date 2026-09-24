@@ -40,11 +40,11 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
   const run = runResult.data
 
   if (!run) {
-    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-8 text-slate-950">
-      <div className="mx-auto max-w-5xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling" contextLabel="Governed profiling evidence" homeHref="/home" /><div className="mt-6 rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Activity className="h-7 w-7" /></div>
-        <h1 className="mt-5 text-2xl font-black">No profiling evidence yet</h1>
-        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Run profiling on a governed dataset. Once the run persists evidence, this page will consolidate its summary, statistics, distributions, sensitive-data signals, outliers, duplicates and sample preview.</p>
+    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] p-5 text-slate-100 sm:p-8">
+      <div className="mx-auto max-w-5xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling" contextLabel="Governed profiling evidence" homeHref="/home" /><div className="mt-6 rounded-[26px] border border-cyan-300/12 bg-[#09192d] p-10 text-center shadow-[0_20px_60px_rgba(0,0,0,.24)]">
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.07] text-cyan-300"><Activity className="h-7 w-7" /></div>
+        <h1 className="mt-5 text-2xl font-black text-white">No profiling evidence yet</h1>
+        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-400">Run profiling on a governed dataset. Once the run persists evidence, this page will consolidate its summary, statistics, distributions, sensitive-data signals, outliers, duplicates and sample preview.</p>
         {canDatasets ? <Link href="/datasets" className="mt-6 inline-flex rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Open datasets</Link> : null}
       </div></div>
     </main>
