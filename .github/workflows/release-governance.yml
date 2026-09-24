@@ -449,7 +449,7 @@ jobs:
           node - /tmp/canary-supabase.json <<'NODE'
           const fs = require('node:fs')
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
-          if (body.status !== 'READY' || body.provider !== 'supabase' || body.boundary !== 'public-data-api') process.exit(1)
+          if (body.status !== 'READY' || body.provider !== 'supabase' || body.boundary !== 'public-api-gateway') process.exit(1)
           NODE
           mutation_code="$(curl --silent --show-error --output /tmp/canary-mutation.json --write-out '%{http_code}' -X POST "$BASE_URL/api/internal/governance/approval-automation")"
           test "$mutation_code" = "403"
@@ -1084,7 +1084,7 @@ jobs:
           node - /tmp/vercel-supabase.json <<'NODE'
           const fs = require('node:fs')
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
-          if (body.status !== 'READY' || body.provider !== 'supabase' || body.boundary !== 'public-data-api') process.exit(1)
+          if (body.status !== 'READY' || body.provider !== 'supabase' || body.boundary !== 'public-api-gateway') process.exit(1)
           NODE
 
           schema_code="$(curl --silent --show-error --output /tmp/vercel-release-schema.json --write-out '%{http_code}' "$BASE_URL/api/health/release-schema")"

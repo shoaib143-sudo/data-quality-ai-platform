@@ -124,4 +124,5 @@ test('Supabase health probe mirrors client authentication headers',()=>{
   assert.ok(health.includes('Authorization: `Bearer ${publishableKey}`'))
   assert.ok(health.includes('/auth/v1/settings'))
   assert.ok(!health.includes('/rest/v1/'))
+  assert.match(health,/boundary:\s*'public-api-gateway'/)
 })

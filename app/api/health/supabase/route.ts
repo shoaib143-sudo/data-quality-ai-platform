@@ -28,7 +28,7 @@ export async function GET() {
         return NextResponse.json({
           status: 'UNAVAILABLE',
           provider: 'supabase',
-          boundary: 'public-data-api',
+          boundary: 'public-api-gateway',
           httpStatus: response.status,
           latencyMs: Date.now() - startedAt,
           timestamp: new Date().toISOString(),
@@ -41,7 +41,7 @@ export async function GET() {
       return NextResponse.json({
         status: 'READY',
         provider: 'supabase',
-        boundary: 'public-data-api',
+        boundary: 'public-api-gateway',
         latencyMs: Date.now() - startedAt,
         timestamp: new Date().toISOString(),
       }, {
@@ -54,7 +54,7 @@ export async function GET() {
     return NextResponse.json({
       status: 'UNAVAILABLE',
       provider: 'supabase',
-      boundary: 'public-data-api',
+      boundary: 'public-api-gateway',
       latencyMs: Date.now() - startedAt,
       timestamp: new Date().toISOString(),
     }, {

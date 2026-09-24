@@ -77,17 +77,18 @@ test('Cloudflare tooling runs from an isolated pinned workspace and exposes the 
 })
 
 
-test('Cloudflare canary deployment proves live Supabase public Data API connectivity without service-role credentials', () => {
+test('Cloudflare canary deployment proves live Supabase public API gateway connectivity without service-role credentials', () => {
   assert.match(supabaseHealth, /getSupabaseEnv/)
-  assert.match(supabaseHealth, /\/rest\/v1\//)
+  assert.match(supabaseHealth, /\/auth\/v1\/settings/)
   assert.match(supabaseHealth, /apikey: publishableKey/)
+  assert.match(supabaseHealth, /Authorization: `Bearer \$\{publishableKey\}`/)
   assert.match(supabaseHealth, /status: 'READY'/)
   assert.match(supabaseHealth, /provider: 'supabase'/)
   assert.doesNotMatch(supabaseHealth, /SUPABASE_SERVICE_ROLE_KEY/)
   assert.match(workflow, /api\/health\/supabase/)
   assert.match(workflow, /body\.status !== 'READY'/)
   assert.match(workflow, /body\.provider !== 'supabase'/)
-  assert.match(workflow, /body\.boundary !== 'public-data-api'/)
+  assert.match(workflow, /body\.boundary !== 'public-api-gateway'/)
 })
 
 
