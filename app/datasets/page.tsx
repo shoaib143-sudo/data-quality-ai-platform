@@ -148,8 +148,14 @@ export default async function DatasetsPage() {
           </div>
         </section>
 
+        <section aria-label="Onboarding progress" className="mt-5 grid gap-2 rounded-2xl border border-slate-200 bg-white/80 p-2 shadow-sm sm:grid-cols-3">
+          <a href="#connect-source" className="rounded-xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800 transition hover:bg-blue-100">1. Connect a source</a>
+          <a href="#register-dataset" className="rounded-xl bg-purple-50 px-4 py-3 text-sm font-semibold text-purple-800 transition hover:bg-purple-100">2. Register a dataset</a>
+          <Link href="/profiling" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100">3. Profile and review evidence</Link>
+        </section>
+
         <section className="mt-7 grid gap-5 lg:grid-cols-2">
-          <div className="rounded-2xl border border-blue-100 bg-white p-1 shadow-sm"><div className="rounded-xl bg-gradient-to-br from-blue-50 to-white p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><Database className="h-5 w-5" /></span><div><h2 className="font-semibold">1. Connect a source</h2><p className="text-xs text-slate-500">Save or validate a reusable connection. Discovery evidence is established separately.</p></div></div><JdbcSourceForm projects={projects} organizations={organizations} canOpenDiscovery={canDiscovery} /></div></div>
+          <div id="connect-source" className="scroll-mt-24 rounded-2xl border border-blue-100 bg-white p-1 shadow-sm"><div className="rounded-xl bg-gradient-to-br from-blue-50 to-white p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><Database className="h-5 w-5" /></span><div><h2 className="font-semibold">1. Connect a source</h2><p className="text-xs text-slate-500">Save or validate a reusable connection. Discovery evidence is established separately.</p></div></div><JdbcSourceForm projects={projects} organizations={organizations} canOpenDiscovery={canDiscovery} /></div></div>
           <div id="register-dataset" className="scroll-mt-24 rounded-2xl border border-purple-100 bg-white p-1 shadow-sm"><div className="rounded-xl bg-gradient-to-br from-purple-50 to-white p-5"><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-purple-600 text-white shadow-sm"><Layers3 className="h-5 w-5" /></span><div><h2 className="font-semibold">2. Register a dataset</h2><p className="text-xs text-slate-500">Bind a dataset to a configured source. Execution readiness is validated separately.</p></div></div><RegisterDatasetForm projects={projects} organizations={organizations} sources={sources.map(s => ({ id: s.id, projectId: s.project_id, name: s.name, sourceType: s.source_type, status: s.status }))} /></div></div>
         </section>
 
@@ -157,7 +163,7 @@ export default async function DatasetsPage() {
           <div className="border-b border-slate-100 bg-gradient-to-r from-white via-blue-50/40 to-purple-50/40 px-6 py-5 sm:px-7">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><Activity className="h-5 w-5 text-blue-600" /><h2 className="text-xl font-bold">Connections</h2></div><p className="mt-1 text-sm text-slate-500">Lifecycle is configuration authority. Operational state below comes only from governed discovery evidence and never rewrites lifecycle.</p></div><span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">{sources.length} total</span></div>
           </div>
-          {sources.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No connections are registered yet.</div> : <div className="divide-y divide-slate-100">{Array.from(sourcesByProject.entries()).map(([projectId, projectSources]) => <div key={projectId} className="p-5 sm:p-6">
+          {sources.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No connections are registered yet. <a href="#connect-source" className="font-semibold text-blue-600 hover:text-blue-700">Connect your first source</a>.</div> : <div className="divide-y divide-slate-100">{Array.from(sourcesByProject.entries()).map(([projectId, projectSources]) => <div key={projectId} className="p-5 sm:p-6">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700"><span className="h-2 w-2 rounded-full bg-blue-500" />{projectById.get(projectId)?.name ?? 'Unknown project'}</div>
             <div className="grid gap-3">{projectSources.map(source => {
               const operational = readinessBySource.get(source.id)
@@ -172,7 +178,7 @@ export default async function DatasetsPage() {
 
         <section className="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-gradient-to-r from-white via-purple-50/30 to-blue-50/40 px-6 py-5 sm:px-7"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><Layers3 className="h-5 w-5 text-purple-600" /><h2 className="text-xl font-bold">Datasets</h2></div><p className="mt-1 text-sm text-slate-500">Profiling executable means an available dataset version has an active execution binding to an active configured source. It does not claim source observation authority.</p></div><span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">{datasets.length} total</span></div></div>
-          {datasets.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No datasets are registered yet.</div> : <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-2">{datasets.map(dataset => {
+          {datasets.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No datasets are registered yet. <a href="#register-dataset" className="font-semibold text-purple-600 hover:text-purple-700">Register your first dataset</a>.</div> : <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-2">{datasets.map(dataset => {
             const datasetVersions = versionsByDataset.get(dataset.id) ?? []
             const latest = datasetVersions.reduce<VersionRow | undefined>((current, version) => !current || version.version_number > current.version_number ? version : current, undefined)
             const source = dataset.data_source_id ? sourceById.get(dataset.data_source_id) : undefined

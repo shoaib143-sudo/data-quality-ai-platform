@@ -21,8 +21,10 @@ const fieldKey=(datasetId:string|null,assetId:string,columnName:string)=>`${data
 const findingPenalty=(severity:string)=>({CRITICAL:20,HIGH:12,MEDIUM:6,LOW:2}[severity.toUpperCase()]??1)
 const uniqueStrings=(values:Array<string|null|undefined>)=>[...new Set(values.filter((value):value is string=>Boolean(value)))]
 
-export default async function LineagePage(){
+export default async function LineagePage({searchParams}:{searchParams:Promise<{q?:string}>}){
   const user=await requireUser()
+  const requested=await searchParams
+  const initialQuery=(requested.q??'').trim().slice(0,120)
   const [supabase,landing]=await Promise.all([createClient(),resolveLandingAccess(user.id)])
   const canCatalog=canAccessWorkspace(landing.persona,'catalog',landing.organizationRole)
   const canGlossary=canAccessWorkspace(landing.persona,'glossary',landing.organizationRole)
@@ -253,10 +255,10 @@ export default async function LineagePage(){
     if(!fieldMap.has(key))fieldMap.set(key,buildField(syntheticAssetId,columnName,datasetId,datasets.get(datasetId)?.name??'Profiled dataset'))
   }
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen text-slate-100"><div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Lineage" contextLabel="Governance intelligence lineage" homeHref="/home" />
-    <nav className="mb-6 mt-4 flex flex-wrap items-center justify-end gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm"><div className="flex flex-wrap gap-2 text-sm">{canCatalog?<Link href="/catalog" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Catalog</Link>:null}{canGlossary?<Link href="/glossary" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Glossary</Link>:null}{canDataQuality?<Link href="/data-quality" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Data Quality</Link>:null}<Link href="/lineage/impact" className="rounded-xl px-3 py-2 font-semibold text-violet-600 hover:bg-violet-50">Impact analysis</Link>{canLineageManage?<Link href="/lineage/ingest" className="rounded-xl bg-violet-600 px-3 py-2 font-semibold text-white">Ingest lineage</Link>:null}</div></nav>
-    <header className="rounded-3xl border border-violet-100 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600"><GitBranch className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Governance Intelligence Lineage Explorer</h1><p className="mt-1 max-w-4xl text-sm text-slate-500">Trace fields end to end and overlay Data Quality, business meaning, stakeholders, classifications, certifications, contracts, issues, observability and profiling evidence in one governed view. The overview is a bounded recent working set; complete dataset and field traversal is served through the anchor-driven GraphProvider navigators.</p></div></div></header>
-    <LineageExplorer fields={[...fieldMap.values()]} mappings={fieldMappings} edges={[]} stats={{edges:edgeCountResult.count??0,datasets:datasetCountResult.count??0,assets:assetCountResult.count??0,transformations:transformationCountResult.count??0,mappedColumns:mappingCountResult.count??0}}/>
+    <nav className="dn-glass-rail sticky top-[4.5rem] z-30 mb-3 mt-3 flex flex-wrap items-center justify-end gap-2 rounded-2xl px-3 py-2"><div className="flex flex-wrap gap-2 text-sm">{canCatalog?<Link href="/catalog" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Catalog</Link>:null}{canGlossary?<Link href="/glossary" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Glossary</Link>:null}{canDataQuality?<Link href="/data-quality" className="rounded-xl px-3 py-2 font-semibold text-blue-600 hover:bg-blue-50">Data Quality</Link>:null}<Link href="/lineage/impact" className="rounded-xl px-3 py-2 font-semibold text-violet-600 hover:bg-violet-50">Impact analysis</Link>{canLineageManage?<Link href="/lineage/ingest" className="rounded-xl bg-violet-600 px-3 py-2 font-semibold text-white">Ingest lineage</Link>:null}</div></nav>
+    <header className="dn-surface p-5 sm:p-6"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-400/[0.08] text-violet-200"><GitBranch className="h-5 w-5"/></span><div><h1 className="text-3xl font-black">Lineage Explorer</h1><p className="mt-1 max-w-4xl text-sm text-slate-500">Explore upstream and downstream relationships with quality, business meaning, ownership, classifications, contracts, issues and observability in context. Expand the graph progressively; DataNexus never infers lineage that is not persisted.</p></div></div></header>
+    <LineageExplorer fields={[...fieldMap.values()]} mappings={fieldMappings} edges={[]} initialQuery={initialQuery} stats={{edges:edgeCountResult.count??0,datasets:datasetCountResult.count??0,assets:assetCountResult.count??0,transformations:transformationCountResult.count??0,mappedColumns:mappingCountResult.count??0}}/>
   </div></main>
 }

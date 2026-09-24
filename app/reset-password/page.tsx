@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { AuthShell, authFieldClass, authPrimaryButtonClass } from '@/components/auth/auth-shell'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -37,17 +38,13 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="flex min-h-screen items-center justify-center px-6 py-16">
-      <form onSubmit={onSubmit} className="w-full max-w-md space-y-6 rounded-xl border p-8 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-semibold">Choose a new password</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Set a new password for your account.</p>
-        </div>
-        <label className="block text-sm">New password<input required name="new-password" autoComplete="new-password" minLength={8} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" /></label>
-        <label className="block text-sm">Confirm password<input required name="confirm-password" autoComplete="new-password" minLength={8} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-2 w-full rounded-md border px-3 py-2" /></label>
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        <button type="submit" disabled={loading} className="w-full rounded-md bg-black px-4 py-2 text-white disabled:opacity-50">{loading ? 'Updating…' : 'Update password'}</button>
+    <AuthShell eyebrow="Secure your account" title="Choose a new password" description="Set a new password for your DataNexus account.">
+      <form onSubmit={onSubmit} className="space-y-5">
+        <label className="block text-sm">New password<input required name="new-password" autoComplete="new-password" minLength={8} type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={authFieldClass} /></label>
+        <label className="block text-sm">Confirm password<input required name="confirm-password" autoComplete="new-password" minLength={8} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={authFieldClass} /></label>
+        {error && <p role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">{error}</p>}
+        <button type="submit" disabled={loading} className={authPrimaryButtonClass}>{loading ? 'Updating…' : 'Update password'}</button>
       </form>
-    </main>
+    </AuthShell>
   )
 }

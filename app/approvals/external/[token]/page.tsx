@@ -6,11 +6,24 @@ import { ExternalApprovalDecisionForm } from './external-approval-decision-form'
 export default async function ExternalApprovalPage({ params }: { params: Promise<{ token: string }> }) {
   const user = await requireUser()
   const { token } = await params
-  const payload = verifyExternalApprovalToken(token)
+  let payload
+  try {
+    payload = verifyExternalApprovalToken(token)
+  } catch {
+    return (
+      <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6">
+        <div className="mx-auto max-w-2xl rounded-2xl border p-6">
+          <h1 className="text-2xl font-bold">Approval link unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">This approval link is invalid or has expired. Request a new governed approval link or open your approval inbox.</p>
+          <Link href="/approvals" className="mt-4 inline-block text-sm font-semibold underline">Open Approvals</Link>
+        </div>
+      </main>
+    )
+  }
 
   if (payload.recipientUserId !== user.id) {
     return (
-      <main id="main-content" tabIndex={-1} className="min-h-screen p-6 sm:p-8">
+      <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6">
         <div className="mx-auto max-w-2xl rounded-2xl border p-6">
           <h1 className="text-2xl font-bold">Approval link unavailable</h1>
           <p className="mt-2 text-sm text-muted-foreground">This signed approval link was issued to a different DataNexus user.</p>

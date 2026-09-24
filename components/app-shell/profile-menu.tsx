@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 
 type SessionIdentity = { email: string }
 
-const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#061426]'
+const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1422]'
 
 export function ProfileMenu() {
   const [identity, setIdentity] = useState<SessionIdentity | null>(null)
@@ -68,19 +68,19 @@ export function ProfileMenu() {
       <button
         type="button"
         onClick={() => setOpen(value => !value)}
-        className={`inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-[#08182b]/95 px-2.5 text-slate-300 shadow-[0_10px_28px_rgba(0,0,0,.28)] backdrop-blur hover:border-cyan-400/25 hover:text-white ${focus}`}
+        className={`inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-[#102036]/92 px-2.5 text-slate-300 shadow-[8px_8px_20px_rgba(2,8,18,.24),-3px_-3px_10px_rgba(39,64,91,.045)] backdrop-blur-xl hover:border-sky-300/20 hover:text-white ${focus}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Open profile menu"
       >
-        <span className="grid h-7 w-7 place-items-center rounded-lg border border-cyan-400/20 bg-cyan-400/10 text-cyan-200">
+        <span className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 bg-white/[0.05] text-sky-200">
           <UserRound className="h-4 w-4" aria-hidden="true" />
         </span>
         <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
 
       {open ? (
-        <div role="menu" aria-label="Profile" className="mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/10 bg-[#08182b]/98 shadow-[0_24px_70px_rgba(0,0,0,.45)] backdrop-blur-xl">
+        <div role="menu" aria-label="Profile" className="mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/10 bg-[#102036]/96 shadow-[12px_12px_30px_rgba(2,8,18,.34),-5px_-5px_16px_rgba(39,64,91,.05)] backdrop-blur-xl">
           <div className="border-b border-white/[0.08] px-4 py-4">
             <p className="truncate text-sm font-bold text-white">{displayName}</p>
             <p className="mt-1 truncate text-xs text-slate-500">{identity.email}</p>

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Activity, Bot, CheckCircle2, Sparkles, Wrench } from 'lucide-react'
 
 import { RunAgentForm, type AgentOption, type DatasetVersionOption, type ProjectOption } from './run-agent-form'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
@@ -164,28 +165,41 @@ export default async function AgentsPage() {
     existing.push(tool)
     toolsByAgent.set(tool.agent_definition_id, existing)
   }
+  const enabledToolCount = tools.filter(tool => tool.enabled).length
+  const successfulRuns = runs.filter(run => ['SUCCEEDED','COMPLETED'].includes(String(run.status).toUpperCase())).length
+  const runsByAgent = new Map<string,AgentRun[]>()
+  for (const run of runs) runsByAgent.set(run.agent_definition_id,[...(runsByAgent.get(run.agent_definition_id)??[]),run])
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-8">
-      <div className="mx-auto max-w-6xl space-y-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 text-slate-100 sm:p-6">
+      <div className="mx-auto max-w-7xl space-y-6">
         <GlobalUtilityBar persona={accessContext.persona} organizationRole={accessContext.organizationRole} roleLabel="AI Agents" contextLabel="Governed automation and execution" homeHref="/home" />
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <div className="flex flex-wrap gap-2">
-            {governanceSuperAdmin ? (
-              <Link href="/admin/learning-cases" className="rounded-lg border border-violet-200 px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50">
-                Review learning cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}
-              </Link>
-            ) : null}
-            {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Open Job Monitor</Link> : null}
+        <nav aria-label="Agent workspace" className="flex items-center justify-between gap-3 overflow-x-auto rounded-2xl border border-white/10 bg-[#102036] px-4 py-3 shadow-sm">
+          <span className="shrink-0 text-xs font-black uppercase tracking-[0.14em] text-slate-500">Agent workspace</span>
+          <div className="flex shrink-0 gap-2">
+            <Link href="/agents" aria-current="page" className="rounded-xl bg-violet-500/15 px-3 py-2 text-sm font-semibold text-violet-200 ring-1 ring-violet-400/20">Agents</Link>
+            {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white">Job Monitor</Link> : null}
+            {governanceSuperAdmin ? <Link href="/admin/learning-cases" className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-white">Review learning cases{pendingLearningCases ? ` (${pendingLearningCases})` : ''}</Link> : null}
           </div>
-        </div>
+        </nav>
 
-        <header>
-          <h1 className="text-3xl font-semibold">AI Agents</h1>
-          <p className="mt-2 text-muted-foreground">
-            Live agent registry, registered tools, authenticated execution, and recent run history.
-          </p>
+        <header className="rounded-[22px] border border-white/10 bg-[#102036] p-6 shadow-[10px_10px_28px_rgba(0,0,0,.24)] sm:p-7">
+          <div className="flex flex-wrap items-start justify-between gap-5">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-violet-400/10 px-3 py-1.5 text-xs font-bold text-violet-300"><Sparkles className="h-3.5 w-3.5" />Governed AI operations</div>
+              <h1 className="mt-4 text-3xl font-black tracking-tight text-white">AI Agents</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Choose a governed agent, run approved automation, inspect registered tools, and follow execution evidence without leaving the control plane.</p>
+            </div>
+            {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold text-white hover:bg-violet-500">Open Job Monitor <Activity className="ml-1 inline h-4 w-4" /></Link> : null}
+          </div>
         </header>
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-5"><Bot className="h-5 w-5 text-violet-300" /><p className="mt-3 text-3xl font-black text-white">{enabledAgents.length}</p><p className="mt-1 text-sm font-bold text-slate-200">Enabled agents</p><p className="mt-1 text-xs text-slate-500">Governed capabilities available in this workspace</p></div>
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-5"><Wrench className="h-5 w-5 text-cyan-300" /><p className="mt-3 text-3xl font-black text-white">{enabledToolCount}</p><p className="mt-1 text-sm font-bold text-slate-200">Registered tools</p><p className="mt-1 text-xs text-slate-500">Enabled tools bound to active agents</p></div>
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-5"><Activity className="h-5 w-5 text-blue-300" /><p className="mt-3 text-3xl font-black text-white">{runs.length}</p><p className="mt-1 text-sm font-bold text-slate-200">Recent runs</p><p className="mt-1 text-xs text-slate-500">Authorized execution history in view</p></div>
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-5"><CheckCircle2 className="h-5 w-5 text-emerald-300" /><p className="mt-3 text-3xl font-black text-white">{successfulRuns}</p><p className="mt-1 text-sm font-bold text-slate-200">Successful recent runs</p><p className="mt-1 text-xs text-slate-500">Completed or succeeded visible executions</p></div>
+        </section>
 
         <RunAgentForm
           agents={agentOptions}
@@ -210,9 +224,11 @@ export default async function AgentsPage() {
           <div className="space-y-6">
             {enabledAgents.map((agent) => {
               const agentTools = toolsByAgent.get(agent.id) ?? []
+              const agentRuns = runsByAgent.get(agent.id) ?? []
+              const touchedDatasets = new Set(agentRuns.flatMap(run => run.dataset_id ? [run.dataset_id] : [])).size
               const detailHref = canonicalRoutes.agent(agent.agent_key, agent.version)
               return (
-                <section key={agent.id} className="space-y-5 rounded-xl border p-6">
+                <section key={agent.id} className="space-y-5 rounded-[22px] border border-white/10 bg-[#102036] p-6">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -226,7 +242,7 @@ export default async function AgentsPage() {
                       <p className="mt-2 text-xs text-muted-foreground">Key: {agent.agent_key}</p>
                       <Link href={detailHref} className="mt-3 inline-block text-sm font-medium underline underline-offset-4">View agent details →</Link>
                     </div>
-                    <div className="text-sm text-muted-foreground">{agentTools.length} {agentTools.length === 1 ? 'tool' : 'tools'}</div>
+                    <div className="grid shrink-0 grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl border border-white/[0.07] bg-[#0d1c30] px-3 py-2"><p className="text-lg font-black text-white">{agentTools.length}</p><p className="text-slate-500">tools</p></div><div className="rounded-xl border border-white/[0.07] bg-[#0d1c30] px-3 py-2"><p className="text-lg font-black text-white">{agentRuns.length}</p><p className="text-slate-500">runs</p></div><div className="rounded-xl border border-white/[0.07] bg-[#0d1c30] px-3 py-2"><p className="text-lg font-black text-white">{touchedDatasets}</p><p className="text-slate-500">datasets</p></div></div>
                   </div>
 
                   <div>
@@ -236,7 +252,7 @@ export default async function AgentsPage() {
                     ) : (
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         {agentTools.map((tool) => (
-                          <div key={tool.id} className="rounded-lg border p-4">
+                          <div key={tool.id} className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4">
                             <div className="flex items-center justify-between gap-3">
                               <h4 className="font-medium">{tool.name}</h4>
                               <span className="text-xs text-muted-foreground">v{tool.version}</span>

@@ -381,7 +381,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
   const activeStage = stages.find(stage => ['BLOCKED', 'IN_PROGRESS', 'NOT_STARTED'].includes(stage.state)) ?? null
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#0b1422] text-slate-100">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar
           persona={landing.persona}
@@ -429,7 +429,7 @@ export default async function GovernanceRunPage({ params }: { params: Promise<{ 
           ) : null}
         </header>
 
-        <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Sources ready</p><p className="mt-2 text-2xl font-black text-white">{observedReady.length}/{sources.length}</p></div>
           <div className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><p className="text-xs font-bold text-slate-500">Datasets</p><p className="mt-2 text-2xl font-black text-white">{datasets.length}</p></div>
           <Link href={profileHref} className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4 hover:border-cyan-300/20"><p className="text-xs font-bold text-slate-500">Latest quality</p><p className="mt-2 text-2xl font-black text-cyan-200">{formatScore(latestScore?.overall_score)}</p></Link>

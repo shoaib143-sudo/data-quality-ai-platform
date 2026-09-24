@@ -27,7 +27,7 @@ export default async function AutonomousGovernancePage({ searchParams }: { searc
   const viewableIds = new Set(viewable.filter((id): id is string => Boolean(id)))
   const visibleProjects = projects.filter(project => viewableIds.has(project.id))
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-6 md:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Autonomous Governance" contextLabel="Governed orchestrator controls" homeHref="/home" />
         {(canAgents || canMonitoring) ? <div className="flex flex-wrap items-center justify-between gap-3">

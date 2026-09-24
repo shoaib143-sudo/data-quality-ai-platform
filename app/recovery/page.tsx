@@ -80,7 +80,7 @@ export default async function RecoveryPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-5 sm:p-6">
       <div className="mx-auto max-w-6xl space-y-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Execution Recovery" contextLabel="Terminal failure recovery" homeHref="/home" />
         <div className="flex flex-wrap items-center justify-between gap-3">

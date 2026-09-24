@@ -11,7 +11,7 @@ export default async function ResourceAccessPage() {
   const canApprovals = canAccessWorkspaceHref(landing.persona, '/approvals', landing.organizationRole)
   const canMonitoring = canAccessWorkspaceHref(landing.persona, '/monitoring', landing.organizationRole)
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-6 sm:p-8 text-slate-950">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-4 text-slate-950 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Resource Access" contextLabel="Dataset authorization policy" homeHref="/home" />
         <header className="rounded-3xl border bg-white p-7 shadow-sm">

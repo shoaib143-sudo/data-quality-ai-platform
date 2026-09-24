@@ -22,7 +22,7 @@ export default async function ApprovalsPage() {
   const canMonitoring = canAccessWorkspace(landing.persona, 'monitoring', landing.organizationRole)
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-6 sm:p-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Approvals" contextLabel="Governed decisions and execution" homeHref="/home" />
         <header className="flex flex-wrap items-start justify-between gap-4">

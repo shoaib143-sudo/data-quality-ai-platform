@@ -218,20 +218,42 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
   const interrupts = (interruptsResult.data ?? []) as AgentInterrupt[]
   const supervisorEvents = (supervisorEventsResult.data ?? []) as AgentSupervisorEvent[]
   const agent = agentResult.data
+  const sideEffectingTools = tools.filter(tool => !tool.read_only).length
+  const approvalInterrupts = interrupts.filter(interrupt => interrupt.interrupt_type.toUpperCase().includes('APPROVAL')).length
+  const maxRiskTier = supervisorEvents.reduce<number|null>((max,event) => typeof event.risk_tier === 'number' ? Math.max(max ?? event.risk_tier,event.risk_tier) : max,null)
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen p-8">
-      <div className="mx-auto max-w-6xl space-y-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen p-4 text-slate-100 sm:p-6">
+      <div className="mx-auto max-w-7xl space-y-6">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Agent Run" contextLabel="Execution evidence" homeHref="/home" />
         <div className="flex flex-wrap items-center justify-between gap-3">
           {canAgents ? <Link href="/agents" className="text-sm underline">← Back to AI Agents</Link> : <span className="text-sm text-muted-foreground">Governed execution evidence</span>}
           <span className="rounded-full border px-3 py-1 text-xs font-medium">{typedRun.status}</span>
         </div>
 
-        <header>
-          <h1 className="text-3xl font-semibold">Agent Run</h1>
-          <p className="mt-2 break-all text-sm text-muted-foreground">{typedRun.id}</p>
+        <header id="summary" className="scroll-mt-28 rounded-[22px] border border-white/10 bg-[#102036] p-6">
+          <p className="text-xs font-black uppercase tracking-[.14em] text-violet-300">Execution evidence</p>
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-black text-white">{agent ? agent.name : 'Agent run'}</h1><p className="mt-2 font-mono text-xs text-slate-500">{typedRun.id}</p></div><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-slate-200">{typedRun.status}</span></div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {typedRun.dataset_id ? <Link href={`/catalog/dataset/${encodeURIComponent(typedRun.dataset_id)}`} className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-400/10">Dataset 360</Link> : null}
+            <Link href={`/monitoring?run=${encodeURIComponent(typedRun.id)}`} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.07]">Live execution context</Link>
+            {typedRun.parent_run_id ? <Link href={`/agents/runs/${encodeURIComponent(typedRun.parent_run_id)}`} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.07]">Parent run</Link> : null}
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4"><p className="text-xs font-bold text-slate-500">Steps</p><p className="mt-1 text-2xl font-black text-white">{steps.length}</p></div>
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4"><p className="text-xs font-bold text-slate-500">Tool invocations</p><p className="mt-1 text-2xl font-black text-white">{tools.length}</p><p className="mt-1 text-[11px] text-slate-600">{sideEffectingTools} side-effecting</p></div>
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4"><p className="text-xs font-bold text-slate-500">Approval gates</p><p className="mt-1 text-2xl font-black text-white">{approvalInterrupts}</p></div>
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4"><p className="text-xs font-bold text-slate-500">Max observed risk tier</p><p className="mt-1 text-2xl font-black text-white">{maxRiskTier ?? 'N/A'}</p></div>
+          </div>
         </header>
+
+        <nav aria-label="Agent run evidence views" className="sticky top-2 z-20 flex gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-[#102036]/95 p-2 backdrop-blur">
+          <a href="#summary" className="shrink-0 rounded-xl bg-violet-500/15 px-3 py-2 text-sm font-bold text-violet-200">Summary</a>
+          <a href="#steps" className="shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05]">Plan & steps</a>
+          <a href="#guardrails" className="shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05]">Guardrails</a>
+          <a href="#evidence" className="shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05]">Evidence</a>
+          <a href="#artifacts" className="shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05]">Artifacts</a>
+        </nav>
 
         <section className="grid gap-4 rounded-xl border p-6 md:grid-cols-2 lg:grid-cols-4">
           <div><p className="text-xs text-muted-foreground">Agent</p><p className="mt-1 font-medium">{agent ? `${agent.name} v${agent.version}` : 'Unknown agent'}</p></div>
@@ -248,8 +270,8 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
           </section>
         )}
 
-        <section className="rounded-xl border p-6">
-          <h2 className="text-lg font-semibold">Execution steps</h2>
+        <section id="steps" className="scroll-mt-28 rounded-[22px] border border-white/10 bg-[#102036] p-6">
+          <h2 className="text-lg font-black text-white">Plan & execution steps</h2>
           {steps.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No execution steps were recorded.</p> : (
             <div className="mt-4 space-y-4">
               {steps.map((step) => (
@@ -290,9 +312,9 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
           )}
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border p-6">
-            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Governed tool invocations</h2><span className="text-xs text-muted-foreground">{tools.length}</span></div>
+        <section id="guardrails" className="scroll-mt-28 grid gap-6 lg:grid-cols-2">
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-6">
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-black text-white">Governed tool invocations</h2><span className="text-xs text-muted-foreground">{tools.length}</span></div>
             {tools.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No governed tool invocations were recorded.</p> : <div className="mt-4 space-y-3">{tools.map(tool => <article key={tool.id} className="rounded-lg border p-4"><div className="flex flex-wrap items-center justify-between gap-3"><span className="font-medium">{tool.tool_key} v{tool.tool_version}</span><span className="rounded-full border px-2 py-1 text-xs">{tool.status}</span></div><p className="mt-2 text-xs text-muted-foreground">Executor {tool.executor_key} · {tool.read_only ? 'read-only' : 'side-effecting'} · {tool.idempotent ? 'idempotent' : 'non-idempotent'}</p><p className="mt-2 break-all text-xs text-muted-foreground">Contract {tool.contract_hash}</p><p className="mt-1 break-all text-xs text-muted-foreground">Input {tool.input_hash}{tool.output_hash ? ` · Output ${tool.output_hash}` : ''}</p>{tool.approval_interrupt_id ? <p className="mt-1 break-all text-xs text-muted-foreground">Approval interrupt {tool.approval_interrupt_id}</p> : null}{tool.error_code ? <p className="mt-2 text-sm">{tool.error_code}{tool.error_summary ? `: ${tool.error_summary}` : ''}</p> : null}<p className="mt-2 text-xs text-muted-foreground">Started {formatDate(tool.started_at)} · Completed {formatDate(tool.completed_at)}</p></article>)}</div>}
           </div>
           <div className="rounded-xl border p-6">
@@ -312,14 +334,14 @@ export default async function AgentRunPage({ params }: { params: Promise<{ runId
           </div>
         </section>
 
-        <section className="rounded-xl border p-6">
-          <h2 className="text-lg font-semibold">Run output</h2>
+        <section id="evidence" className="scroll-mt-28 rounded-[22px] border border-white/10 bg-[#102036] p-6">
+          <h2 className="text-lg font-black text-white">Run output and evidence</h2>
           <div className="mt-4"><JsonBlock value={typedRun.output} /></div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border p-6">
-            <h2 className="text-lg font-semibold">Messages</h2>
+        <section id="artifacts" className="scroll-mt-28 grid gap-6 lg:grid-cols-2">
+          <div className="rounded-[22px] border border-white/10 bg-[#102036] p-6">
+            <h2 className="text-lg font-black text-white">Messages</h2>
             {messages.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">No agent messages were recorded.</p> : <div className="mt-4 space-y-3">{messages.map((message) => <article key={message.id} className="rounded-lg border p-4"><div className="flex justify-between gap-3"><span className="font-medium">{message.message_type}</span><span className="text-xs text-muted-foreground">{message.status}</span></div><p className="mt-1 text-xs text-muted-foreground">{formatDate(message.created_at)}</p><div className="mt-3"><JsonBlock value={message.payload} /></div></article>)}</div>}
           </div>
 

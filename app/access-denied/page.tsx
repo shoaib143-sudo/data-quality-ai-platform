@@ -14,21 +14,21 @@ export default async function AccessDeniedPage() {
   const canSearch = canAccessWorkspace(access.persona, 'search', access.organizationRole)
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-12 text-slate-950 sm:px-6">
-      <section className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-7 shadow-sm sm:p-9" role="status" aria-labelledby="access-denied-title">
-        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-slate-100 text-slate-700">
+    <main id="main-content" tabIndex={-1} className="min-h-screen px-4 py-8 text-slate-100 sm:px-6 sm:py-12">
+      <section className="dn-surface mx-auto max-w-3xl p-6 sm:p-8" role="status" aria-labelledby="access-denied-title">
+        <span className="dn-inset grid h-12 w-12 place-items-center text-slate-300">
           <ShieldX className="h-7 w-7" aria-hidden="true" />
         </span>
-        <p className="mt-6 text-xs font-black uppercase tracking-[0.16em] text-slate-500">Workspace unavailable</p>
+        <p className="mt-5 text-xs font-black uppercase tracking-[0.16em] text-slate-500">Workspace unavailable</p>
         <h1 id="access-denied-title" className="mt-2 text-3xl font-black tracking-tight">This workspace is not available in your current governance context.</h1>
-        <p className="mt-4 max-w-2xl leading-7 text-slate-600">
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
           DataNexus has not changed any data or permissions. Continue from your {persona.title} home or another workspace already available to your current role and organization context.
         </p>
         <p className="mt-3 text-sm text-slate-500">
           For security, this page does not disclose the internal capability or policy rule that denied access.
         </p>
 
-        <div className="mt-7 flex flex-wrap gap-3">
+        <div className="mt-6 flex flex-wrap gap-2">
           <Link href={homeHref} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Return to role home

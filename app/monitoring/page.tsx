@@ -58,7 +58,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/recovery" className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/30 hover:bg-cyan-400/5">Execution Recovery</Link>
-          <Link href="/agents" className="rounded-xl border border-cyan-300/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,.12)] transition hover:bg-cyan-400/15">Run governed feature</Link>
+          <Link href="/agents" className="rounded-xl border border-cyan-300/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-[6px_6px_16px_rgba(2,8,18,.20),-3px_-3px_10px_rgba(39,64,91,.04)] transition hover:bg-cyan-400/15">Run governed feature</Link>
         </div>
       </header>
 
@@ -77,7 +77,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
         />
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#061426] px-5 py-4 text-xs text-slate-500">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#0b1422] px-5 py-4 text-xs text-slate-500">
         <span>Job Monitor is the domain-level execution surface. Select a domain to drill into feature results, datasets, lineage, impact and governed evidence.</span>
         <Link href="/recovery" className="font-bold text-cyan-200/75 hover:text-cyan-100">Open execution recovery →</Link>
       </div>

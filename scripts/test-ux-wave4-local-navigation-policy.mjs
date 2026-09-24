@@ -7,6 +7,7 @@ const quality = fs.readFileSync('app/data-quality/page.tsx', 'utf8')
 const reports = fs.readFileSync('app/reports/page.tsx', 'utf8')
 const agents = fs.readFileSync('app/agents/page.tsx', 'utf8')
 const ai = fs.readFileSync('app/ai-capabilities/page.tsx', 'utf8')
+const learningCases = fs.readFileSync('app/admin/learning-cases/page.tsx', 'utf8')
 
 assert.ok(catalog.includes("canAccessWorkspace(landing.persona,'discovery'"), 'Catalog Discovery CTA must derive from workspace policy')
 assert.ok(catalog.includes("canAccessWorkspace(landing.persona,'glossary'"), 'Catalog Glossary CTA must derive from workspace policy')
@@ -32,7 +33,8 @@ assert.ok(reports.includes('canAudit?<Link href="/audit"'), 'Reports Audit CTA m
 
 assert.ok(agents.includes("canAccessWorkspace(accessContext.persona, 'monitoring'"), 'Agents Job Monitor CTA must derive from workspace policy')
 assert.ok(agents.includes('canMonitoring ? <Link href={canonicalRoutes.monitoring}'), 'Agents Job Monitor CTA must fail closed')
-assert.ok(agents.includes('governanceSuperAdmin ? ('), 'learning-case administration must remain super-admin gated')
+assert.ok(agents.includes('governanceSuperAdmin ? <Link href="/admin/learning-cases"'), 'learning-case navigation must remain super-admin gated')
+assert.ok(learningCases.includes('authorizeDataGovernanceSuperAdminForOrganization(user.id, membership.organizationId)'), 'learning-case administration must remain server-side super-admin gated')
 
 assert.ok(ai.includes("canAccessWorkspaceHref(landing.persona, '/ai-insights'"), 'AI Capabilities must use canonical href policy for AI Insights')
 assert.ok(ai.includes('canAiInsights ? <Link href="/ai-insights"'), 'AI Insights CTA must fail closed through the href policy')

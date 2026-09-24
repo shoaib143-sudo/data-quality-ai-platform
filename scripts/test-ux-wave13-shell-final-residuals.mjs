@@ -44,6 +44,11 @@ const intentionalExceptions=new Map([
   ['app/signup/page.tsx','standalone authentication surface'],
 ])
 
+const authShell=fs.readFileSync('components/auth/auth-shell.tsx','utf8')
+assert.ok(authShell.includes('id="main-content"'), 'Shared AuthShell must expose the shared skip target')
+assert.ok(authShell.includes('tabIndex={-1}'), 'Shared AuthShell main target must be focusable')
+assert.ok(!authShell.includes('<GlobalUtilityBar'), 'Shared AuthShell must remain outside the authenticated Product Shell')
+
 const boundaryScreens=[
   'app/login/page.tsx',
   'app/signup/page.tsx',
@@ -55,8 +60,13 @@ const boundaryScreens=[
 ]
 for(const file of boundaryScreens){
   const source=fs.readFileSync(file,'utf8')
-  assert.ok(source.includes('id="main-content"'), `Boundary screen ${file} must expose the shared skip target`)
-  assert.ok(source.includes('tabIndex={-1}'), `Boundary screen ${file} main target must be focusable`)
+  const delegatesToAuthShell=['app/login/page.tsx','app/signup/page.tsx','app/forgot-password/page.tsx','app/reset-password/page.tsx'].includes(file)
+  if(delegatesToAuthShell){
+    assert.ok(source.includes('<AuthShell'), `Boundary screen ${file} must delegate its focusable main landmark to AuthShell`)
+  }else{
+    assert.ok(source.includes('id="main-content"'), `Boundary screen ${file} must expose the shared skip target`)
+    assert.ok(source.includes('tabIndex={-1}'), `Boundary screen ${file} main target must be focusable`)
+  }
   assert.ok(!source.includes('<GlobalUtilityBar'), `Boundary screen ${file} must not receive the authenticated Product Shell`)
 }
 

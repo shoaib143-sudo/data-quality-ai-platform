@@ -40,7 +40,7 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
   const run = runResult.data
 
   if (!run) {
-    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-8 text-slate-950">
+    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 text-slate-950 sm:p-6">
       <div className="mx-auto max-w-5xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Profiling" contextLabel="Governed profiling evidence" homeHref="/home" /><div className="mt-6 rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Activity className="h-7 w-7" /></div>
         <h1 className="mt-5 text-2xl font-black">No profiling evidence yet</h1>

@@ -30,7 +30,7 @@ export default async function AuditEvidencePage({ searchParams }: { searchParams
     return createGovernanceAuditCommandCenterState().read(selectedProjectId)
   })() : null
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-4 sm:p-6">
     <div className="mx-auto max-w-7xl space-y-7">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="AI Audit Ledger" contextLabel="Canonical audit evidence" homeHref="/home" />
       {canAdminWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3">

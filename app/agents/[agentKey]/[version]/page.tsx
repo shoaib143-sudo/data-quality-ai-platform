@@ -79,8 +79,10 @@ export default async function AgentDetailPage({
 
   const tools = (toolsResult.data ?? []) as ToolDefinition[]
   const runs = await filterAuthorizedExecutionRuns(user.id, (runsResult.data ?? []) as AgentRun[])
-  const completedRuns = runs.filter((run) => run.status === 'COMPLETED').length
-  const failedRuns = runs.filter((run) => run.status === 'FAILED').length
+  const completedRuns = runs.filter((run) => ['COMPLETED','SUCCEEDED'].includes(String(run.status).toUpperCase())).length
+  const failedRuns = runs.filter((run) => String(run.status).toUpperCase() === 'FAILED').length
+  const touchedDatasets = new Set(runs.flatMap(run => run.dataset_id ? [run.dataset_id] : [])).size
+  const touchedProjects = new Set(runs.map(run => run.project_id)).size
 
   return (
     <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6 lg:px-8">
@@ -94,7 +96,14 @@ export default async function AgentDetailPage({
           </div>
         </div> : null}
 
-        <section className="rounded-2xl border bg-white p-6 shadow-sm sm:p-8">
+        <nav aria-label="Agent 360 views" className="sticky top-2 z-20 flex gap-1 overflow-x-auto rounded-2xl border bg-white p-2 shadow-sm">
+          <a href="#summary" aria-current="page" className="shrink-0 rounded-xl bg-violet-50 px-3 py-2 text-sm font-bold text-violet-700">Summary</a>
+          <a href="#tools" className="shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Tools</a>
+          <a href="#activity" className="shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Activity</a>
+          {canMonitoring ? <Link href={canonicalRoutes.monitoring} className="shrink-0 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Observability</Link> : null}
+        </nav>
+
+        <section id="summary" className="scroll-mt-28 rounded-2xl border bg-white p-6 shadow-sm sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
@@ -118,7 +127,7 @@ export default async function AgentDetailPage({
               </dl>
             </div>
 
-            <div className="grid min-w-[220px] grid-cols-3 gap-2 text-center sm:grid-cols-1">
+            <div className="grid min-w-[250px] grid-cols-2 gap-2 text-center">
               <div className="rounded-xl border bg-slate-50 px-4 py-3">
                 <p className="text-2xl font-bold">{tools.length}</p>
                 <p className="text-xs text-slate-500">Enabled tools</p>
@@ -131,11 +140,13 @@ export default async function AgentDetailPage({
                 <p className="text-2xl font-bold">{failedRuns}</p>
                 <p className="text-xs text-slate-500">Recent failed</p>
               </div>
+              <div className="rounded-xl border bg-slate-50 px-4 py-3"><p className="text-2xl font-bold">{touchedDatasets}</p><p className="text-xs text-slate-500">Datasets touched</p></div>
+              <div className="rounded-xl border bg-slate-50 px-4 py-3"><p className="text-2xl font-bold">{touchedProjects}</p><p className="text-xs text-slate-500">Projects observed</p></div>
             </div>
           </div>
         </section>
 
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <section id="tools" className="scroll-mt-28 rounded-2xl border bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-xl font-semibold">Registered tools</h2>
             <p className="mt-1 text-sm text-slate-500">Capabilities currently enabled for this exact agent version.</p>
@@ -158,7 +169,7 @@ export default async function AgentDetailPage({
           )}
         </section>
 
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <section id="activity" className="scroll-mt-28 rounded-2xl border bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-xl font-semibold">Recent runs</h2>
             <p className="mt-1 text-sm text-slate-500">Persisted execution evidence for this exact registered agent version, filtered to runs this user is authorized to view.</p>

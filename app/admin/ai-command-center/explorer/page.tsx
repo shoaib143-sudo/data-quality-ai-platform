@@ -149,7 +149,7 @@ export default async function AICommandCenterExplorerPage({ searchParams }: { se
     ]
   }
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-4 sm:p-6">
     <div className="mx-auto max-w-7xl space-y-6">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Command Center Explorer" contextLabel="Read-only AI governance evidence" homeHref="/home" />
       <header className="rounded-3xl border bg-white p-7 shadow-sm">
