@@ -18,6 +18,7 @@ export async function GET() {
         method: 'GET',
         headers: {
           apikey: publishableKey,
+          Authorization: `Bearer ${publishableKey}`,
         },
         cache: 'no-store',
         signal: controller.signal,
