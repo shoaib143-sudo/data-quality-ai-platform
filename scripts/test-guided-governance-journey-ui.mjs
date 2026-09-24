@@ -156,7 +156,7 @@ test('GUIDED walkthrough progress is fenced to the exact persisted goal, policy 
   assert.match(consoleUi, /!projectId \|\| !canCertify \|\| !orchestratorRunId \|\| !matchesCurrentRun/)
   assert.match(consoleUi, /await refreshRunState\(\)/)
   assert.doesNotMatch(consoleUi, /setCoverage\(\{ \.\.\.body, mode:/)
-  assert.match(runIdentity, /trace\.guided_scope_mode === 'EXPLICIT'/)
+  assert.match(runIdentity, /trace\.guided_scope_mode !== 'EXPLICIT'/)
   assert.match(runIdentity, /snapshot\.scope_version_id === input\.guidedScope\.scopeVersionId/)
   assert.match(runIdentity, /trace\.guided_scope_mode === 'NONE'/)
   assert.match(runIdentity, /!Object\.prototype\.hasOwnProperty\.call\(trace, 'guided_scope'\)/)
