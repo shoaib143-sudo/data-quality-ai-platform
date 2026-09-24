@@ -43,8 +43,11 @@ export function ExternalApprovalDecisionForm({ token, axis, channel }: {
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {axis === 'BUSINESS' ? 'Business approval' : 'Governance approval'} · via {channel === 'EMAIL' ? 'Email' : 'Microsoft Teams'}
       </p>
+      <label htmlFor="external-approval-comment" className="mt-4 block text-sm font-semibold">Reason/comment</label>
       <textarea
-        className="mt-4 w-full rounded-lg border bg-background px-3 py-2 text-sm"
+        id="external-approval-comment"
+        aria-required="true"
+        className="mt-2 w-full rounded-lg border bg-background px-3 py-2 text-sm"
         rows={4}
         value={comment}
         onChange={event => setComment(event.target.value.slice(0, 2000))}
@@ -55,7 +58,7 @@ export function ExternalApprovalDecisionForm({ token, axis, channel }: {
         <button type="button" onClick={() => decide('APPROVED')} disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Approve</button>
         <button type="button" onClick={() => decide('REJECTED')} disabled={busy} className="rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-50">Reject</button>
       </div>
-      {message ? <p role="status" className="mt-4 rounded-lg border p-3 text-sm">{message}</p> : null}
+      {message ? <p role="alert" className="mt-4 rounded-lg border p-3 text-sm">{message}</p> : null}
     </section>
   )
 }

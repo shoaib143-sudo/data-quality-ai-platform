@@ -105,3 +105,14 @@ test('malformed UUID route inputs fail closed before database queries',()=>{
   assert.match(dataset360,/\^\[0-9a-f\]\{8\}/)
   assert.match(profiling,/\^\[0-9a-f\]\{8\}/)
 })
+
+
+test('external approval failures remain governed and accessible',()=>{
+  const page=read('app/approvals/external/[token]/page.tsx')
+  const form=read('app/approvals/external/[token]/external-approval-decision-form.tsx')
+  assert.match(page,/This approval link is invalid or has expired/)
+  assert.match(page,/try \{[\s\S]*verifyExternalApprovalToken\(token\)[\s\S]*\} catch/)
+  assert.match(form,/htmlFor="external-approval-comment"/)
+  assert.match(form,/aria-required="true"/)
+  assert.match(form,/role="alert"/)
+})
