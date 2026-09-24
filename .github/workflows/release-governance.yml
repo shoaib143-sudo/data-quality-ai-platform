@@ -1150,6 +1150,7 @@ jobs:
             sleep 10
           done
           test "$ok" = "1" || {
+            cat /tmp/vercel-curl.log 2>/dev/null || true
             echo "::error::Exact deployment identity verification failed"
             exit 1
           }
