@@ -89,12 +89,14 @@ test('post-deploy verification fails closed on identity and critical health cont
 })
 
 test('staged production release verifies before promotion and verifies alias after promotion', () => {
+  const snapshot = deploy.indexOf('Snapshot current production identity')
   const stage = deploy.indexOf('Stage exact current main as Vercel Production build')
   const identity = deploy.indexOf('Verify exact deployed identity')
   const stagedHealth = deploy.indexOf('Verify staged artifact provenance and critical health')
   const promote = deploy.indexOf('Promote verified staged deployment to Production')
   const alias = deploy.indexOf('Verify production alias and critical health contracts')
-  assert.ok(stage >= 0)
+  assert.ok(snapshot >= 0)
+  assert.ok(stage > snapshot)
   assert.ok(identity > stage)
   assert.ok(stagedHealth > identity)
   assert.ok(promote > stagedHealth)
@@ -104,11 +106,28 @@ test('staged production release verifies before promotion and verifies alias aft
 test('successful release persists immutable machine-readable evidence', () => {
   assert.match(deploy, /Persist production release evidence/)
   assert.match(deploy, /evidenceKind: 'VERCEL_PRODUCTION_RELEASE'/)
+  assert.match(deploy, /generatedAt: new Date\(\)\.toISOString\(\)/)
+  assert.match(deploy, /buildInfo: readJson\('\/tmp\/vercel-previous-production-build\.json'\)/)
+  assert.match(deploy, /deployment: readJson\('\/tmp\/vercel-previous-production-deployment\.json'\)/)
   assert.match(deploy, /staged\.provenance\.sourceCommitSha !== evidence\.exactCommitSha/)
   assert.match(deploy, /production\.buildInfo\.commitSha !== evidence\.exactCommitSha/)
   assert.match(deploy, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/)
   assert.match(deploy, /release-evidence\/vercel-production-release\.json/)
   assert.match(deploy, /if-no-files-found: error/)
+  assert.match(deploy, /retention-days: 90/)
+})
+
+test('release captures prior production identity without blocking emergency recovery', () => {
+  assert.match(deploy, /Snapshot current production identity/)
+  assert.match(deploy, /vercel-previous-production-build\.json/)
+  assert.match(deploy, /Previous production build identity could not be captured before promotion/)
+  assert.match(deploy, /Previous production deployment record could not be captured before promotion/)
+  assert.match(deploy, /https:\/\/api\.vercel\.com\/v13\/deployments\/\$PRODUCTION_HOST/)
+  assert.match(deploy, /Authorization: Bearer \$VERCEL_TOKEN/)
+  assert.match(deploy, /id: body\.id \?\? null/)
+  assert.match(deploy, /url: body\.url \?/)
+  assert.match(deploy, /httpCode: code/)
+  assert.doesNotMatch(deploy, /Previous production identity could not be captured[\s\S]{0,120}exit 1/)
 })
 
 test('automatic Vercel Git deployments remain disabled', () => {
