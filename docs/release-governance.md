@@ -42,13 +42,20 @@ A merge to `main` is eligible for production deployment only after the required 
 
 ## Governed Vercel production deployment
 
-Vercel production deployment is a separate manual release operation implemented by
-`.github/workflows/vercel-production-deploy.yml`.
+Vercel production deployment is the manual `vercel-production-deploy` operation
+inside `.github/workflows/release-governance.yml`.
+
+Dispatch it from the **Release Governance** workflow on branch `main` with:
+
+- `operation=vercel-production-deploy`;
+- `commit_sha=<exact current protected main SHA>`.
+
+The Vercel release operation does not use the Cloudflare paid-activation confirmation
+inputs. Those inputs remain scoped to Cloudflare operations.
 
 The workflow:
 
 - accepts only an explicit 40-character commit SHA;
-- requires explicit `confirm_deploy=true`;
 - requires that SHA to equal the current protected `main` SHA;
 - serializes production deployments so a second release cannot overlap the first;
 - uses the GitHub `production` environment;
