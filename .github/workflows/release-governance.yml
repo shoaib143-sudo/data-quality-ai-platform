@@ -1054,7 +1054,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN" || {
-            echo "::error::VERCEL_TOKEN is not configured for the production deployment environment"
+            echo "::error::Required Vercel production credential is not configured"
             exit 1
           }
 
