@@ -57,3 +57,13 @@ test('Dataset 360 follows an asset-centered navigation spine', () => {
   assert.match(dataset360, /id="issues"/)
   assert.match(dataset360, /aria-label="Dataset at a glance"/)
 })
+
+
+test('Dataset 360 respects lineage edge versus field-mapping schema contracts', () => {
+  assert.match(dataset360, /from\('lineage_edges'\)\.select\('id'\)\.in\('source_id',lineageAssetIds\)/)
+  assert.match(dataset360, /from\('lineage_edges'\)\.select\('id'\)\.in\('target_id',lineageAssetIds\)/)
+  assert.doesNotMatch(dataset360, /from\('lineage_edges'\)\.select\('id'\)\.in\('source_asset_id',lineageAssetIds\)/)
+  assert.doesNotMatch(dataset360, /from\('lineage_edges'\)\.select\('id'\)\.in\('target_asset_id',lineageAssetIds\)/)
+  assert.match(dataset360, /from\('lineage_column_mappings'\)\.select\('id'\)\.in\('source_asset_id',lineageAssetIds\)/)
+  assert.match(dataset360, /from\('lineage_column_mappings'\)\.select\('id'\)\.in\('target_asset_id',lineageAssetIds\)/)
+})

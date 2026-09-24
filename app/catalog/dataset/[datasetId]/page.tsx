@@ -102,8 +102,8 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
   const lineageAssets=lineageAssetsResult.data??[]
   const lineageAssetIds=lineageAssets.map(row=>String(row.id))
   const [sourceEdgesResult,targetEdgesResult,sourceMappingsResult,targetMappingsResult]=lineageAssetIds.length?await Promise.all([
-    supabase.schema('governance').from('lineage_edges').select('id').in('source_asset_id',lineageAssetIds),
-    supabase.schema('governance').from('lineage_edges').select('id').in('target_asset_id',lineageAssetIds),
+    supabase.schema('governance').from('lineage_edges').select('id').in('source_id',lineageAssetIds),
+    supabase.schema('governance').from('lineage_edges').select('id').in('target_id',lineageAssetIds),
     supabase.schema('governance').from('lineage_column_mappings').select('id').in('source_asset_id',lineageAssetIds),
     supabase.schema('governance').from('lineage_column_mappings').select('id').in('target_asset_id',lineageAssetIds),
   ]):[empty,empty,empty,empty]
