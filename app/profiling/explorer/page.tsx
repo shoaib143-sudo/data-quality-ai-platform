@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
@@ -9,6 +10,10 @@ import ProfilingExplorer from '@/app/profiling/profiling-explorer'
 import ProfilingGovernancePanel from '@/app/profiling/profiling-governance-panel'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
 
 type ExplorerSearchParams = Promise<{
   runId?: string
@@ -35,6 +40,7 @@ export default async function ProfilingExplorerPage({ searchParams }: { searchPa
   const supabase = await createClient()
   const [requested, landing] = await Promise.all([searchParams, resolveLandingAccess(user.id)])
   const requestedRunId = requested.runId?.trim() || null
+  if(requestedRunId&&!isUuid(requestedRunId))notFound()
 
   const requestedRun = requestedRunId
     ? await supabase

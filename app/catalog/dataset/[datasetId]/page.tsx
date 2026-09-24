@@ -20,6 +20,10 @@ import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
 function pct(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : 'N/A'
 }
@@ -31,6 +35,7 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
   const landing=await resolveLandingAccess(user.id)
   const presentation=buildDatasetPresentationPlan(landing.persona)
   const {datasetId}=await params
+  if(!isUuid(datasetId))notFound()
   const supabase=await createClient()
 
   const canGlossary=canAccessWorkspace(landing.persona,'glossary',landing.organizationRole)

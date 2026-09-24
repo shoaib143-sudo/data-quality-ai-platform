@@ -95,3 +95,13 @@ test('admin membership controls and document evidence remain accessible at scale
   assert.match(documents,/aria-label="Document chunk pages"/)
   assert.match(documents,/shown of \{totalChunks\} chunks/)
 })
+
+
+test('malformed UUID route inputs fail closed before database queries',()=>{
+  const dataset360=read('app/catalog/dataset/[datasetId]/page.tsx')
+  const profiling=read('app/profiling/explorer/page.tsx')
+  assert.match(dataset360,/if\(!isUuid\(datasetId\)\)notFound\(\)/)
+  assert.match(profiling,/if\(requestedRunId&&!isUuid\(requestedRunId\)\)notFound\(\)/)
+  assert.match(dataset360,/\^\[0-9a-f\]\{8\}/)
+  assert.match(profiling,/\^\[0-9a-f\]\{8\}/)
+})
