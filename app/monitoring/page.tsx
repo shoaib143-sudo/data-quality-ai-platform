@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Activity, AlertTriangle, CheckCircle2, PlayCircle } from 'lucide-react'
 
 import { requireUser } from '@/lib/supabase/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -48,17 +49,32 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
   const typedProjects = (projectsResult.data ?? []) as MonitoringProject[]
   const typedSteps = (stepsResult.data ?? []) as MonitoringStep[]
 
+  const activeRuns = typedRuns.filter(run => ['QUEUED','RUNNING','RETRYING','PAUSED'].includes(String(run.status).toUpperCase())).length
+  const failedRuns = typedRuns.filter(run => ['FAILED','DEAD','CANCELLED'].includes(String(run.status).toUpperCase())).length
+  const completedRuns = typedRuns.filter(run => ['SUCCEEDED','COMPLETED'].includes(String(run.status).toUpperCase())).length
+  const activeSteps = typedSteps.filter(step => ['RUNNING','RETRYING'].includes(String(step.status).toUpperCase())).length
+
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#020b17] text-slate-100">
     <div className="mx-auto max-w-[1760px] px-4 py-5 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Job Monitor" contextLabel="Governed execution observability" homeHref="/home" />
-      <header className="mb-5 mt-4 flex flex-col gap-4 border-b border-cyan-400/10 pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="font-serif text-4xl tracking-[0.08em] text-white">JOB MONITOR</h1>
-          <p className="mt-1 text-sm text-slate-400">Living Data Domains · governed DG/AI feature execution</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/recovery" className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/30 hover:bg-cyan-400/5">Execution Recovery</Link>
-          <Link href="/agents" className="rounded-xl border border-cyan-300/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,.12)] transition hover:bg-cyan-400/15">Run governed feature</Link>
+      <header className="relative mb-5 mt-4 overflow-hidden rounded-[26px] border border-cyan-300/12 bg-[#07182a] p-5 shadow-[0_20px_60px_rgba(0,0,0,.26)] sm:p-6">
+        <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-500/[0.08] blur-3xl"/>
+        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_520px] xl:items-end">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.17em] text-cyan-300">Governed execution observability</p>
+            <h1 className="mt-2 max-w-4xl text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">See where every governed run is, why it moved, and what needs intervention.</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Living Data Domains connects execution state to datasets, features, evidence and recovery without hiding failure or authorization boundaries.</p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Link href="/recovery" className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-200 transition hover:border-cyan-300/25 hover:bg-white/[0.05]">Execution Recovery</Link>
+              <Link href="/agents" className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-[0_0_22px_rgba(34,211,238,.12)]"><PlayCircle className="h-4 w-4" aria-hidden="true"/>Run governed feature</Link>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-2xl border border-cyan-300/12 bg-[#04111f] p-3"><Activity className="h-4 w-4 text-cyan-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{activeRuns}</p><p className="text-[10px] text-slate-500">Active runs</p></div>
+            <div className="rounded-2xl border border-rose-300/12 bg-[#04111f] p-3"><AlertTriangle className="h-4 w-4 text-rose-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{failedRuns}</p><p className="text-[10px] text-slate-500">Failed / stopped</p></div>
+            <div className="rounded-2xl border border-emerald-300/12 bg-[#04111f] p-3"><CheckCircle2 className="h-4 w-4 text-emerald-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{completedRuns}</p><p className="text-[10px] text-slate-500">Completed</p></div>
+            <div className="rounded-2xl border border-violet-300/12 bg-[#04111f] p-3"><Activity className="h-4 w-4 text-violet-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{activeSteps}</p><p className="text-[10px] text-slate-500">Active steps</p></div>
+          </div>
         </div>
       </header>
 
