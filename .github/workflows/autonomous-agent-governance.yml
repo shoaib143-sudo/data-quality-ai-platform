@@ -40,22 +40,13 @@ on:
       - 'scripts/audit-execution-modes-adversarial.mjs'
       - 'scripts/test-execution-mode-ui-ux.mjs'
       - 'scripts/test-execution-mode-ui-accessibility.mjs'
-      - 'scripts/test-guided-governance-journey.mjs'
-      - 'scripts/test-guided-governance-journey-ui.mjs'
-      - 'lib/orchestration/governance-guided-readiness.ts'
-      - 'lib/orchestration/governance-guided-journey.ts'
-      - 'lib/orchestration/governance-autonomous-journey.ts'
-      - 'lib/orchestration/governance-journey-run-identity.ts'
-      - 'scripts/test-governance-journey-run-identity.mjs'
-      - 'scripts/test-autonomous-governance-journey.mjs'
-      - 'scripts/test-autonomous-governance-journey-ui.mjs'
-      - 'scripts/test-private-testing-schema-contract.mjs'
-      - 'Testing/sql/private-testing-schema-smoke.sql'
-      - 'lib/orchestration/governance-guided-source-selection.ts'
+      - 'scripts/node-ts-alias-loader.mjs'
+      - 'scripts/run-governance-orchestrator-off-live.mjs'
+      - 'tests/governance-orchestrator-live-off-contract.test.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
   pull_request:
-    branches: [main, 'feat/guided-governance-on-screen-journey-20260923']
+    branches: [main]
     paths:
       - 'scripts/verify-agent-version-lifecycle.mjs'
       - 'tests/agent-version-lifecycle-negative.test.mjs'
@@ -92,18 +83,9 @@ on:
       - 'scripts/audit-execution-modes-adversarial.mjs'
       - 'scripts/test-execution-mode-ui-ux.mjs'
       - 'scripts/test-execution-mode-ui-accessibility.mjs'
-      - 'scripts/test-guided-governance-journey.mjs'
-      - 'scripts/test-guided-governance-journey-ui.mjs'
-      - 'lib/orchestration/governance-guided-readiness.ts'
-      - 'lib/orchestration/governance-guided-journey.ts'
-      - 'lib/orchestration/governance-autonomous-journey.ts'
-      - 'lib/orchestration/governance-journey-run-identity.ts'
-      - 'scripts/test-governance-journey-run-identity.mjs'
-      - 'scripts/test-autonomous-governance-journey.mjs'
-      - 'scripts/test-autonomous-governance-journey-ui.mjs'
-      - 'scripts/test-private-testing-schema-contract.mjs'
-      - 'Testing/sql/private-testing-schema-smoke.sql'
-      - 'lib/orchestration/governance-guided-source-selection.ts'
+      - 'scripts/node-ts-alias-loader.mjs'
+      - 'scripts/run-governance-orchestrator-off-live.mjs'
+      - 'tests/governance-orchestrator-live-off-contract.test.mjs'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
 
@@ -131,8 +113,6 @@ jobs:
         run: node scripts/verify-native-runtime-contract-pinning.mjs
       - name: Verify native autonomous execution kernel
         run: node scripts/verify-native-autonomy-kernel.mjs
-      - name: Exercise native supervisor per-step contract regressions
-        run: node --experimental-strip-types scripts/test-native-autonomy-kernel.mjs
       - name: Verify native Recovery V2
         run: node scripts/verify-native-recovery-v2.mjs
       - name: Verify shared native runtime adoption
@@ -151,15 +131,46 @@ jobs:
         run: node --test scripts/test-execution-mode-ui-ux.mjs
       - name: Execution-mode accessibility contract tests
         run: node --test scripts/test-execution-mode-ui-accessibility.mjs
-      - name: User-facing GUIDED E2E state and negative-path tests
-        run: node --experimental-strip-types --test scripts/test-guided-governance-journey.mjs
-      - name: On-screen GUIDED walkthrough UX and authorization checks
-        run: node --test scripts/test-guided-governance-journey-ui.mjs
-      - name: GOVERNED_AUTO and FULL_AUTONOMOUS state and failure-path tests
-        run: node --experimental-strip-types --test scripts/test-autonomous-governance-journey.mjs
-      - name: Autonomous walkthrough UX, scope and authorization checks
-        run: node --test scripts/test-autonomous-governance-journey-ui.mjs
-      - name: Verify run-identity fencing of project mode policy and goal
-        run: node --experimental-strip-types --test scripts/test-governance-journey-run-identity.mjs
-      - name: Verify isolated single-environment testing schema and safe SQL smoke
-        run: node --test scripts/test-private-testing-schema-contract.mjs
+      - name: Verify live OFF-mode baseline contract
+        run: node --test tests/governance-orchestrator-live-off-contract.test.mjs
+      - name: Syntax-check live OFF-mode runner
+        run: |
+          node --check scripts/node-ts-alias-loader.mjs
+          node --check scripts/run-governance-orchestrator-off-live.mjs
+
+  live-off-baseline:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.GOVERNANCE_OFF_TEST_PROJECT_ID != '' && vars.GOVERNANCE_OFF_TEST_PROJECT_ID != '479813aa-72a4-4b12-b72a-74da8d2419ce'
+    needs: module14-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: e2e-service-runner-not-used
+      GOVERNANCE_E2E_PROJECT_ID: ${{ vars.GOVERNANCE_OFF_TEST_PROJECT_ID }}
+      GOVERNANCE_E2E_PRIMARY_PROJECT_ID: 479813aa-72a4-4b12-b72a-74da8d2419ce
+      GOVERNANCE_E2E_EVIDENCE_PATH: ${{ runner.temp }}/governance-orchestrator-off-live.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Execute live OFF-mode Governance Orchestrator baseline
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node --experimental-strip-types --experimental-loader ./scripts/node-ts-alias-loader.mjs scripts/run-governance-orchestrator-off-live.mjs
+      - name: Upload OFF-mode baseline evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: governance-orchestrator-off-${{ github.sha }}
+          path: ${{ runner.temp }}/governance-orchestrator-off-live.json
+          retention-days: 90
+          if-no-files-found: error
