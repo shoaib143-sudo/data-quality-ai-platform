@@ -101,6 +101,16 @@ test('staged production release verifies before promotion and verifies alias aft
   assert.ok(alias > promote)
 })
 
+test('successful release persists immutable machine-readable evidence', () => {
+  assert.match(deploy, /Persist production release evidence/)
+  assert.match(deploy, /evidenceKind: 'VERCEL_PRODUCTION_RELEASE'/)
+  assert.match(deploy, /staged\.provenance\.sourceCommitSha !== evidence\.exactCommitSha/)
+  assert.match(deploy, /production\.buildInfo\.commitSha !== evidence\.exactCommitSha/)
+  assert.match(deploy, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/)
+  assert.match(deploy, /release-evidence\/vercel-production-release\.json/)
+  assert.match(deploy, /if-no-files-found: error/)
+})
+
 test('automatic Vercel Git deployments remain disabled', () => {
   assert.equal(vercelConfig.git?.deploymentEnabled, false)
 })
