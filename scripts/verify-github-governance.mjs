@@ -31,6 +31,31 @@ for (const contract of REQUIRED_WORKFLOWS) {
   for (const failure of result.failures) failures.push(`${contract.file}: ${failure}`)
 }
 
+const releaseGovernance = await readFile('.github/workflows/release-governance.yml', 'utf8')
+const releaseContracts = [
+  ['manual Vercel production deploy operation', /- vercel-production-deploy/],
+  ['governed Vercel production deploy job', /\n  deploy-vercel-production:/],
+  ['staged production deployment without domain promotion', /--prod\s+--skip-domain/],
+  ['authenticated immutable deployment identity check', /vercel --token "\$VERCEL_TOKEN" --scope "\$VERCEL_SCOPE" curl \/api\/build-info/],
+  ['deployed artifact provenance verification', /\/\.well-known\/deployed-artifact-provenance\.json/],
+  ['verified deployment promotion', /Promote verified staged deployment to Production/],
+  ['Vercel promote command', /vercel --token "\$VERCEL_TOKEN" --scope "\$VERCEL_SCOPE" promote "\$DEPLOYMENT_URL" --yes/],
+  ['production liveness verification', /\/api\/health\/live/],
+  ['production Supabase verification', /\/api\/health\/supabase/],
+  ['production release schema verification', /\/api\/health\/release-schema/],
+  ['production readiness verification', /\/api\/health\/ready/],
+  ['durable release evidence generation', /evidenceKind: 'VERCEL_PRODUCTION_RELEASE'/],
+  ['pinned release evidence upload', /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/],
+]
+for (const [label, pattern] of releaseContracts) {
+  if (!pattern.test(releaseGovernance)) failures.push(`release governance sentinel: missing ${label}`)
+}
+
+const vercelConfig = JSON.parse(await readFile('vercel.json', 'utf8'))
+if (vercelConfig.git?.deploymentEnabled !== false) {
+  failures.push('release governance sentinel: automatic Vercel Git deployments must remain disabled')
+}
+
 const ruleset = JSON.parse(await readFile('.github/rulesets/main.json', 'utf8'))
 for (const failure of validateMainRuleset(ruleset).failures) failures.push(`main ruleset: ${failure}`)
 
