@@ -69,7 +69,7 @@ test('deployment preserves exact release identity and production-only intent', (
 test('post-deploy verification fails closed on identity and critical health contracts', () => {
   assert.match(deploy, /\/api\/build-info/)
   assert.match(deploy, /VERCEL_TOKEN: \$\{\{ secrets\.VERCEL_TOKEN \}\}/)
-  assert.match(deploy, /vercel --token "\$VERCEL_TOKEN" --scope "\$VERCEL_SCOPE" curl \/api\/build-info/)
+  assert.match(deploy, /vercel curl \/api\/build-info/)
   assert.match(deploy, /--deployment "\$BASE_URL"/)
   assert.match(deploy, /\/\.well-known\/deployed-artifact-provenance\.json/)
   assert.match(deploy, /body\.sourceCommitSha !== expected/)
@@ -86,6 +86,14 @@ test('post-deploy verification fails closed on identity and critical health cont
   assert.match(deploy, /\/api\/health\/release-schema/)
   assert.match(deploy, /cloudflare-supabase-release-v1/)
   assert.match(deploy, /\/api\/health\/ready/)
+})
+
+test('vercel curl uses environment authentication and never forwards token flags', () => {
+  assert.match(deploy, /env:\n[\s\S]*VERCEL_TOKEN: \$\{\{ secrets\.VERCEL_TOKEN \}\}/)
+  assert.match(deploy, /vercel curl \/api\/build-info/)
+  assert.match(deploy, /--deployment "\$BASE_URL"[\s\S]*--scope "\$VERCEL_SCOPE"/)
+  assert.doesNotMatch(deploy, /vercel --token "\$VERCEL_TOKEN"[\s\S]{0,80}curl/)
+  assert.doesNotMatch(deploy, /vercel curl[^\n]*--token/)
 })
 
 test('staged production release verifies before promotion and verifies alias after promotion', () => {
