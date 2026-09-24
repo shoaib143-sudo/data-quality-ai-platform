@@ -61,7 +61,7 @@ The workflow:
 - verifies the official production alias after promotion;
 - requires liveness, Supabase public Data API health, release-schema parity, and
   full readiness to pass before the workflow reports success;
-- captures the current production build identity before promotion as recovery context;
+- captures the current production build identity plus its immutable Vercel deployment ID/URL before promotion as recovery context;
 - persists a machine-readable release evidence bundle binding the exact commit,
   previous production identity, staged artifact provenance, staged health, and
   post-promotion production health;
