@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, CheckCircle2, CircleDollarSign, Database, FileWarning, Gauge, Layers3, ShieldCheck, Sparkles, Users } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Database, FileWarning, Gauge, Layers3, ShieldCheck, Sparkles } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { createClient } from '@/lib/supabase/server'
@@ -15,7 +15,7 @@ type ObservabilityAlert = { id: string; category: string; severity: string; stat
 type AgentRun = { id: string; status: string; error_code: string | null }
 
 function percent(value: number | null | undefined) { return typeof value === 'number' ? `${Math.round(value * 100)}%` : 'N/A' }
-function scoreTone(value: number | null) { if (value === null) return 'text-slate-400'; if (value >= .9) return 'text-emerald-600'; if (value >= .75) return 'text-blue-600'; if (value >= .6) return 'text-amber-600'; return 'text-red-600' }
+function scoreTone(value: number | null) { if (value === null) return 'text-slate-400'; if (value >= .9) return 'text-emerald-300'; if (value >= .75) return 'text-cyan-300'; if (value >= .6) return 'text-amber-300'; return 'text-rose-300' }
 
 export default async function DashboardPage() {
   const user = await requireUser()
@@ -72,36 +72,184 @@ export default async function DashboardPage() {
   const failedJobs = agentRuns.filter(run => run.status === 'FAILED').length
   const coverageGap = Math.max(0, datasets.length - readyDatasets)
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[radial-gradient(circle_at_5%_0%,_rgba(219,234,254,0.95),_transparent_28%),radial-gradient(circle_at_95%_5%,_rgba(243,232,255,0.9),_transparent_26%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_45%,_#f8fafc_100%)] text-slate-950"><div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-    <GlobalUtilityBar contextLabel="Executive governance" />
-    <section className="relative overflow-hidden rounded-3xl border border-blue-100 bg-white/95 p-7 shadow-[0_24px_80px_rgba(37,99,235,0.12)] sm:p-9"><div className="absolute -right-24 -top-28 h-72 w-72 rounded-full bg-blue-100/80 blur-3xl"/><div className="absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-purple-100/70 blur-3xl"/><div className="relative grid gap-8 lg:grid-cols-[1fr_300px] lg:items-center"><div><div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700"><Sparkles className="h-3.5 w-3.5"/> Executive governance summary</div><h1 className="mt-4 max-w-4xl text-3xl font-bold tracking-tight sm:text-5xl">Is poor data quality putting the business at risk?</h1><p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">A business first view of where data can affect revenue, customers, regulatory confidence and operational decisions. The numbers below reflect evidence persisted by the platform, not assumed business losses.</p><div className="mt-6 flex flex-wrap gap-3"><Link href="/data-quality" className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700">Review business risks <ArrowRight className="h-4 w-4"/></Link><Link href="/datasets" className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:border-blue-200 hover:bg-blue-50">Improve governance coverage</Link></div></div><div className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-6 text-center shadow-sm"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-white shadow-md"><Gauge className={`h-10 w-10 ${scoreTone(overallScore)}`}/></div><p className="mt-4 text-xs font-bold uppercase tracking-wider text-slate-500">Overall data health</p><p className={`mt-1 text-4xl font-black ${scoreTone(overallScore)}`}>{percent(overallScore)}</p><p className="mt-2 text-sm font-medium text-slate-600">{overallScore===null?'Build the evidence base':overallScore>=.8?'Generally trusted for decisions':'Attention required before relying on it broadly'}</p></div></div></section>
-    <section id="governance-workspaces" className="mt-7 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-xl font-black">Governance workspaces</h2><p className="mt-1 text-sm text-slate-500">Operational modules for discovery, ownership, controls, monitoring and evidence management.</p></div><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">Production capabilities</span></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{[
-      ['/catalog','Data Catalog','Owners, criticality, lifecycle, tags and certification'],
-      ['/glossary','Business Glossary','Business terms, definitions and dataset or column mappings'],
-      ['/lineage','Data Lineage','Upstream and downstream impact analysis'],
-      ['/stewardship','Stewardship','Accountability assignments and certification workflow'],
-      ['/classification','Classification & Policy','Sensitive-data approval and handling controls'],
-      ['/issues','Remediation','Issue ownership, due dates, comments and resolution evidence'],
-      ['/data-quality/rules','Quality Rules','Create, tune and automate data quality controls'],
-      ['/schedules','Schedules','Recurring profiling and data quality execution'],
-      ['/monitoring','Job Monitor','Live profiling and quality job execution'],
-      ['/observability/settings','Observability Settings','Dataset SLAs, alert thresholds and notification routing'],
-      ['/audit','Audit Trail','Governance change and control evidence history'],
-      ['/reports','Reports','CSV and JSON governance evidence exports'],
-      ['/admin','Administration','Organization membership and role management'],
-      ['/retention','Retention','Legal hold, archival and evidence lifecycle'],
-      ['/profiling/explorer','Profiling Explorer','Metric, distribution and profile evidence investigation'],
-      ['/agents','AI Agents','Operational profiling and data quality agents'],
-    ].map(([href,title,description])=><Link key={href} href={href} className="group rounded-2xl border border-slate-200 bg-slate-50/60 p-4 transition hover:border-blue-200 hover:bg-blue-50"><div className="flex items-center justify-between gap-3"><span className="font-bold text-slate-900 group-hover:text-blue-700">{title}</span><ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-blue-600"/></div><p className="mt-2 text-xs leading-5 text-slate-500">{description}</p></Link>)}</div></section>
-    <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-600"><Database className="h-5 w-5"/></span><span className="text-xs font-semibold text-slate-400">ASSETS</span></div><p className="mt-4 text-3xl font-black">{datasets.length}</p><p className="text-sm font-medium text-slate-500">Governed datasets</p></div><div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><CheckCircle2 className="h-5 w-5"/></span><span className="text-xs font-semibold text-slate-400">COVERAGE</span></div><p className="mt-4 text-3xl font-black">{governanceCoverage}%</p><p className="text-sm font-medium text-slate-500">Datasets with profiling evidence</p></div><div className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 text-amber-600"><AlertTriangle className="h-5 w-5"/></span><span className="text-xs font-semibold text-slate-400">EXPOSURE</span></div><p className="mt-4 text-3xl font-black">{affectedDatasetIds.size}</p><p className="text-sm font-medium text-slate-500">Datasets with findings</p></div><div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="grid h-10 w-10 place-items-center rounded-xl bg-red-50 text-red-600"><FileWarning className="h-5 w-5"/></span><span className="text-xs font-semibold text-slate-400">PRIORITY</span></div><p className="mt-4 text-3xl font-black">{highFindings.length}</p><p className="text-sm font-medium text-slate-500">High or critical issues</p></div><div className="rounded-2xl border border-purple-100 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><span className="grid h-10 w-10 place-items-center rounded-xl bg-purple-50 text-purple-600"><ShieldCheck className="h-5 w-5"/></span><span className="text-xs font-semibold text-slate-400">TRUST</span></div><p className="mt-4 text-3xl font-black">{readySources}/{sources.length}</p><p className="text-sm font-medium text-slate-500">Connections ready for use</p></div></section>
-    <section className="mt-7 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]"><div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7"><div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-blue-600"/><h2 className="text-xl font-bold">Governance observations</h2></div><p className="mt-1 text-sm text-slate-500">Evidence-led observations from profiling, automated controls, observability and job execution. Counts are persisted platform evidence.</p></div><Link href="/observability" className="text-sm font-bold text-blue-600">Inspect signals</Link></div><div className="mt-6 grid gap-3 sm:grid-cols-2">
-      <div className="rounded-2xl border border-purple-100 bg-purple-50/70 p-5"><div className="flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-purple-600"/><div className="font-bold">Sensitive data exposure</div></div><p className="mt-3 text-3xl font-black">{sensitivityFindings.length}</p><p className="mt-1 text-sm leading-6 text-slate-600">{sensitivityFindings.length ? 'Sensitive-data indicators are present in persisted profiling findings and should be covered by classification and access controls.' : 'No sensitivity findings are currently persisted.'}</p></div>
-      <div className="rounded-2xl border border-red-100 bg-red-50/70 p-5"><div className="flex items-center gap-3"><FileWarning className="h-5 w-5 text-red-600"/><div className="font-bold">Quality control failures</div></div><p className="mt-3 text-3xl font-black">{failedQualityControls}</p><p className="mt-1 text-sm leading-6 text-slate-600">{failedQualityControls ? 'Automated data quality controls have failed and require evidence-based remediation.' : 'No automated quality control failures are currently persisted.'}</p></div>
-      <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-5"><div className="flex items-center gap-3"><AlertTriangle className="h-5 w-5 text-amber-600"/><div className="font-bold">Change and drift signals</div></div><p className="mt-3 text-3xl font-black">{openGovernanceAlerts.length}</p><p className="mt-1 text-sm leading-6 text-slate-600">{schemaDriftAlerts ? `${schemaDriftAlerts} open schema drift alert${schemaDriftAlerts === 1 ? '' : 's'} require compatibility review.` : openGovernanceAlerts.length ? 'Open governance alerts are based on score, volume or quality-control changes.' : 'No open observability alerts are currently persisted.'}</p></div>
-      <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-5"><div className="flex items-center gap-3"><Database className="h-5 w-5 text-blue-600"/><div className="font-bold">Coverage and execution</div></div><p className="mt-3 text-3xl font-black">{coverageGap}</p><p className="mt-1 text-sm leading-6 text-slate-600">{coverageGap ? `${coverageGap} governed dataset${coverageGap === 1 ? '' : 's'} currently lack completed profiling evidence.` : 'All registered datasets currently have completed profiling evidence.'} {failedJobs ? `${failedJobs} recent agent job${failedJobs === 1 ? '' : 's'} failed and remain visible in Job Monitor.` : ''}</p></div>
-    </div></div><div className="rounded-3xl border border-purple-100 bg-gradient-to-br from-purple-50 to-white p-6 shadow-sm sm:p-7"><h2 className="text-xl font-bold">Priority actions</h2><p className="mt-1 text-sm text-slate-500">Start with evidence that can affect confidence and continuity.</p><div className="mt-6 space-y-3"><Link href="/data-quality" className="flex items-center justify-between rounded-xl border border-white bg-white p-4 shadow-sm hover:border-blue-200"><span><strong>Review critical findings</strong><span className="block text-xs text-slate-500">{highFindings.length} high or critical issues</span></span><ArrowRight className="h-4 w-4 text-blue-600"/></Link><Link href="/datasets" className="flex items-center justify-between rounded-xl border border-white bg-white p-4 shadow-sm hover:border-blue-200"><span><strong>Improve coverage</strong><span className="block text-xs text-slate-500">{datasets.length} governed datasets</span></span><ArrowRight className="h-4 w-4 text-blue-600"/></Link><Link href="/datasets" className="flex items-center justify-between rounded-xl border border-white bg-white p-4 shadow-sm hover:border-blue-200"><span><strong>Resolve connection readiness</strong><span className="block text-xs text-slate-500">{readySources}/{sources.length} ready</span></span><ArrowRight className="h-4 w-4 text-blue-600"/></Link></div></div></section>
-    <section className="mt-7 grid gap-5 lg:grid-cols-2"><div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7"><h2 className="text-xl font-bold">Where attention is concentrated</h2><p className="mt-1 text-sm text-slate-500">Business domains are shown only when present in registered dataset metadata.</p><div className="mt-5 space-y-3">{Object.entries(domainCounts).length ? Object.entries(domainCounts).map(([domain,count])=><div key={domain} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3"><span className="font-medium text-slate-700">{domain}</span><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{count} dataset{count===1?'':'s'}</span></div>) : <p className="text-sm text-slate-500">No business domains have been assigned yet.</p>}</div></div><div className="rounded-3xl border border-red-100 bg-white p-6 shadow-sm sm:p-7"><div className="flex items-start justify-between"><div><h2 className="text-xl font-bold">Priority findings</h2><p className="mt-1 text-sm text-slate-500">Highest severity evidence currently persisted.</p></div><Link href="/data-quality" className="text-sm font-bold text-blue-600">View all</Link></div><div className="mt-5 space-y-3">{topFindings.length ? topFindings.map(f=><div key={f.id} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4"><div className="flex items-start justify-between gap-3"><div className="font-semibold text-slate-800">{f.title}</div><span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700">{f.severity}</span></div><p className="mt-2 text-sm leading-6 text-slate-600">{f.description}</p><p className="mt-2 text-xs font-medium text-slate-500">Business consequence: {String(f.finding_type).toLowerCase().includes('null')?'incomplete information can weaken decisions and downstream processing.':String(f.finding_type).toLowerCase().includes('duplicate')?'duplicate information can distort volumes and customer views.':'the issue can reduce confidence and increase manual remediation.'}</p></div>) : <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">No high or critical findings are currently persisted.</div>}</div></div></section>
-    <section className="mt-7 grid gap-4 sm:grid-cols-3"><Link href="/profiling" className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm hover:border-blue-300 hover:shadow-md"><div className="font-bold">Profiling evidence</div><p className="mt-2 text-sm text-slate-500">Inspect the metrics, findings and quality scores behind this summary.</p><span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-blue-600">Open workspace <ArrowRight className="h-4 w-4"/></span></Link><Link href="/observability" className="rounded-2xl border border-purple-100 bg-white p-5 shadow-sm hover:border-purple-300 hover:shadow-md"><div className="font-bold">Monitor change</div><p className="mt-2 text-sm text-slate-500">Track changes in quality, freshness and operational signals over time.</p><span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-purple-600">Open observability <ArrowRight className="h-4 w-4"/></span></Link><Link href="/agents" className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm hover:border-emerald-300 hover:shadow-md"><div className="font-bold">Automate next actions</div><p className="mt-2 text-sm text-slate-500">Use governed AI agent capabilities to investigate evidence and recommend action.</p><span className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-emerald-600">Open AI agents <ArrowRight className="h-4 w-4"/></span></Link></section>
-    <footer className="mt-7 flex flex-wrap justify-between gap-3 rounded-2xl border border-slate-200 bg-white/80 px-5 py-4 text-xs text-slate-500"><span>Signed in as {user.email ?? 'current user'}</span><span>Governance decisions are based on persisted platform evidence.</span></footer>
-  </div></main>
+  const primaryWorkspaces = [
+    { href: '/catalog', title: 'Data Catalog', description: 'Find governed assets and metadata.', icon: Database },
+    { href: '/data-quality', title: 'Data Quality', description: 'Review quality evidence and controls.', icon: ShieldCheck },
+    { href: '/lineage', title: 'Data Lineage', description: 'Understand impact and dependencies.', icon: Layers3 },
+    { href: '/monitoring', title: 'Job Monitor', description: 'Track execution health and failures.', icon: Activity },
+    { href: '/profiling/explorer', title: 'Profiling Explorer', description: 'Inspect metrics, distributions and findings.', icon: Gauge },
+    { href: '/agents', title: 'AI Agents', description: 'Investigate and recommend governed next actions.', icon: Sparkles },
+  ] as const
+
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] text-slate-100">
+    <div className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">
+      <GlobalUtilityBar contextLabel="Executive governance" />
+
+      <section className="relative mt-4 overflow-hidden rounded-[28px] border border-cyan-300/12 bg-[#09192d] p-6 shadow-[0_24px_70px_rgba(0,0,0,.28)] sm:p-8">
+        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-cyan-400/[0.06] blur-3xl" />
+        <div className="absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-violet-500/[0.07] blur-3xl" />
+        <div className="relative grid gap-7 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-3 py-1.5 text-xs font-black text-cyan-200">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Executive governance overview
+            </div>
+            <h1 className="mt-5 max-w-4xl text-3xl font-black tracking-[-0.035em] text-white sm:text-5xl">Know what is trusted, what is at risk, and where to act next.</h1>
+            <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400 sm:text-base">
+              A business-first view built from persisted profiling, quality, observability and governance evidence. No assumed business loss is presented as fact.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href="/data-quality" className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 px-5 py-3 text-sm font-black text-white shadow-[0_0_20px_rgba(34,211,238,.10)] hover:from-blue-500 hover:to-cyan-500">
+                Review priority risks <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+              <Link href="/datasets" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-5 py-3 text-sm font-bold text-slate-200 hover:border-cyan-300/25 hover:bg-white/[0.055]">
+                Improve evidence coverage
+              </Link>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/[0.08] bg-[#061321]/85 p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Overall data health</p>
+                <p className={`mt-2 text-5xl font-black ${scoreTone(overallScore)}`}>{percent(overallScore)}</p>
+              </div>
+              <span className="grid h-16 w-16 place-items-center rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.06]">
+                <Gauge className={`h-8 w-8 ${scoreTone(overallScore)}`} aria-hidden="true" />
+              </span>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-400">
+              {overallScore === null ? 'Build the evidence base before relying on an aggregate health signal.' : overallScore >= .8 ? 'Current evidence is generally trusted for governed decision-making.' : 'Current evidence indicates material attention is required before broad reliance.'}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Coverage</p><p className="mt-1 text-xl font-black text-white">{governanceCoverage}%</p></div>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Ready sources</p><p className="mt-1 text-xl font-black text-white">{readySources}/{sources.length}</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: 'Governed datasets', value: datasets.length, detail: 'registered assets', icon: Database, tone: 'text-cyan-300 bg-cyan-300/[0.07] border-cyan-300/15' },
+          { label: 'Datasets with findings', value: affectedDatasetIds.size, detail: 'require review', icon: AlertTriangle, tone: 'text-amber-300 bg-amber-300/[0.07] border-amber-300/15' },
+          { label: 'High or critical issues', value: highFindings.length, detail: 'priority evidence', icon: FileWarning, tone: 'text-rose-300 bg-rose-300/[0.07] border-rose-300/15' },
+          { label: 'Failed jobs', value: failedJobs, detail: 'recent automation', icon: Activity, tone: 'text-violet-300 bg-violet-300/[0.07] border-violet-300/15' },
+        ].map(({ label, value, detail, icon: Icon, tone }) => (
+          <div key={label} className="rounded-2xl border border-white/[0.08] bg-[#09192d] p-4 shadow-[0_10px_28px_rgba(0,0,0,.18)]">
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-600">{label}</p><p className="mt-2 text-3xl font-black text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>
+              <span className={`grid h-10 w-10 place-items-center rounded-xl border ${tone}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
+        <article className="rounded-[24px] border border-white/[0.08] bg-[#09192d] p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.15em] text-rose-300">Attention now</p>
+              <h2 className="mt-1 text-xl font-black text-white">Evidence requiring action</h2>
+              <p className="mt-1 text-sm text-slate-500">The highest-severity persisted findings and operational signals.</p>
+            </div>
+            <Link href="/data-quality" className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-cyan-300 hover:border-cyan-300/25 hover:bg-white/[0.04]">Open Data Quality</Link>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {topFindings.length ? topFindings.map((finding, index) => (
+              <Link key={finding.id} href="/data-quality" className="group flex items-start gap-4 rounded-2xl border border-white/[0.07] bg-[#061321] p-4 hover:border-cyan-300/25 hover:bg-[#08182b]">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rose-400/[0.09] text-xs font-black text-rose-300">{index + 1}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-start justify-between gap-2">
+                    <span className="font-bold text-slate-100">{finding.title}</span>
+                    <span className="rounded-lg bg-rose-400/[0.09] px-2 py-1 text-[10px] font-black text-rose-300">{finding.severity}</span>
+                  </span>
+                  <span className="mt-1 line-clamp-2 block text-xs leading-5 text-slate-500">{finding.description}</span>
+                </span>
+                <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-600 group-hover:text-cyan-300" aria-hidden="true" />
+              </Link>
+            )) : (
+              <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.055] p-4 text-sm text-emerald-200">No high or critical findings are currently persisted.</div>
+            )}
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <Link href="/data-quality/rules" className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 hover:border-cyan-300/20">
+              <p className="text-2xl font-black text-white">{failedQualityControls}</p>
+              <p className="mt-1 text-xs font-bold text-slate-300">Failed quality controls</p>
+              <p className="mt-1 text-[11px] leading-5 text-slate-600">Automated controls requiring review.</p>
+            </Link>
+            <Link href="/observability" className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 hover:border-cyan-300/20">
+              <p className="text-2xl font-black text-white">{openGovernanceAlerts.length}</p>
+              <p className="mt-1 text-xs font-bold text-slate-300">Open governance alerts</p>
+              <p className="mt-1 text-[11px] leading-5 text-slate-600">{schemaDriftAlerts} schema drift signal{schemaDriftAlerts === 1 ? '' : 's'}.</p>
+            </Link>
+            <Link href="/profiling" className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 hover:border-cyan-300/20">
+              <p className="text-2xl font-black text-white">{coverageGap}</p>
+              <p className="mt-1 text-xs font-bold text-slate-300">Coverage gaps</p>
+              <p className="mt-1 text-[11px] leading-5 text-slate-600">Datasets without completed profiling evidence.</p>
+            </Link>
+          </div>
+        </article>
+
+        <aside className="space-y-5">
+          <article className="rounded-[24px] border border-white/[0.08] bg-[#09192d] p-5 sm:p-6">
+            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-cyan-300">Governance coverage</p>
+            <h2 className="mt-1 text-xl font-black text-white">Evidence completeness</h2>
+            <div className="mt-5">
+              <div className="flex items-end justify-between gap-3"><p className="text-4xl font-black text-white">{governanceCoverage}%</p><p className="text-xs text-slate-500">{readyDatasets}/{datasets.length} datasets profiled</p></div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{ width: `${governanceCoverage}%` }} /></div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-white/[0.06] bg-[#061321] p-3"><p className="text-xs text-slate-500">Sensitive indicators</p><p className="mt-1 text-xl font-black text-white">{sensitivityFindings.length}</p></div>
+              <div className="rounded-xl border border-white/[0.06] bg-[#061321] p-3"><p className="text-xs text-slate-500">Active connections</p><p className="mt-1 text-xl font-black text-white">{readySources}</p></div>
+            </div>
+          </article>
+
+          <article className="rounded-[24px] border border-white/[0.08] bg-[#09192d] p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-black text-white">Business domains</h2><Link href="/catalog" className="text-xs font-bold text-cyan-300">Open catalog</Link></div>
+            <div className="mt-4 space-y-2">
+              {Object.entries(domainCounts).length ? Object.entries(domainCounts).slice(0,6).map(([domain, count]) => (
+                <Link key={domain} href={`/catalog?q=${encodeURIComponent(domain)}`} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-[#061321] px-3 py-2.5 text-sm hover:border-cyan-300/20">
+                  <span className="font-semibold text-slate-300">{domain}</span><span className="text-xs font-black text-slate-500">{count}</span>
+                </Link>
+              )) : <p className="text-sm text-slate-500">No business domains have been assigned yet.</p>}
+            </div>
+          </article>
+        </aside>
+      </section>
+
+      <section className="mt-5 rounded-[24px] border border-white/[0.08] bg-[#09192d] p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><p className="text-[10px] font-black uppercase tracking-[0.15em] text-violet-300">Act next</p><h2 className="mt-1 text-xl font-black text-white">Primary governance workspaces</h2><p className="mt-1 text-sm text-slate-500">Start with the workspaces that most directly change trust, quality and operational confidence.</p></div>
+          <span className="rounded-full border border-violet-300/15 bg-violet-300/[0.06] px-3 py-1 text-[10px] font-black uppercase tracking-wider text-violet-200">Production capabilities</span>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {primaryWorkspaces.map(({ href, title, description, icon: WorkspaceIcon }) => (
+            <Link key={href} href={href} className="group rounded-2xl border border-white/[0.07] bg-[#061321] p-4 hover:-translate-y-0.5 hover:border-cyan-300/25 hover:bg-[#08182b]">
+              <div className="flex items-start justify-between gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl border border-cyan-300/12 bg-cyan-300/[0.05] text-cyan-300"><WorkspaceIcon className="h-5 w-5" aria-hidden="true" /></span><ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-cyan-300" aria-hidden="true" /></div>
+              <p className="mt-4 font-black text-slate-100">{title}</p><p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+            </Link>
+          ))}
+        </div>
+
+        <details className="mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.02]">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-300">All governance workspaces</summary>
+          <div className="grid gap-2 border-t border-white/[0.06] p-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['/glossary','Business Glossary'],['/stewardship','Stewardship'],['/classification','Classification & Policy'],['/issues','Remediation'],
+              ['/data-quality/rules','Quality Rules'],['/schedules','Schedules'],['/observability/settings','Observability Settings'],['/audit','Audit Trail'],
+              ['/reports','Reports'],['/admin','Administration'],['/retention','Retention'],['/datasets','Datasets'],
+            ].map(([href,title]) => <Link key={href} href={href} className="rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-400 hover:bg-white/[0.04] hover:text-cyan-200">{title}</Link>)}
+          </div>
+        </details>
+      </section>
+
+      <footer className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#09192d] px-5 py-4 text-xs text-slate-600">
+        <span>Signed in as {user.email ?? 'current user'}</span>
+        <span>Governance decisions are based on persisted platform evidence.</span>
+      </footer>
+    </div>
+  </main>
 }
