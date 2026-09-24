@@ -44,13 +44,18 @@ on:
       - 'scripts/test-guided-governance-journey-ui.mjs'
       - 'lib/orchestration/governance-guided-readiness.ts'
       - 'lib/orchestration/governance-guided-journey.ts'
+      - 'lib/orchestration/governance-autonomous-journey.ts'
       - 'lib/orchestration/governance-journey-run-identity.ts'
       - 'scripts/test-governance-journey-run-identity.mjs'
+      - 'scripts/test-autonomous-governance-journey.mjs'
+      - 'scripts/test-autonomous-governance-journey-ui.mjs'
+      - 'scripts/test-private-testing-schema-contract.mjs'
+      - 'Testing/sql/private-testing-schema-smoke.sql'
       - 'lib/orchestration/governance-guided-source-selection.ts'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
   pull_request:
-    branches: [main]
+    branches: [main, 'feat/guided-governance-on-screen-journey-20260923']
     paths:
       - 'scripts/verify-agent-version-lifecycle.mjs'
       - 'tests/agent-version-lifecycle-negative.test.mjs'
@@ -91,8 +96,13 @@ on:
       - 'scripts/test-guided-governance-journey-ui.mjs'
       - 'lib/orchestration/governance-guided-readiness.ts'
       - 'lib/orchestration/governance-guided-journey.ts'
+      - 'lib/orchestration/governance-autonomous-journey.ts'
       - 'lib/orchestration/governance-journey-run-identity.ts'
       - 'scripts/test-governance-journey-run-identity.mjs'
+      - 'scripts/test-autonomous-governance-journey.mjs'
+      - 'scripts/test-autonomous-governance-journey-ui.mjs'
+      - 'scripts/test-private-testing-schema-contract.mjs'
+      - 'Testing/sql/private-testing-schema-smoke.sql'
       - 'lib/orchestration/governance-guided-source-selection.ts'
       - 'package.json'
       - '.github/workflows/autonomous-agent-governance.yml'
@@ -145,5 +155,11 @@ jobs:
         run: node --experimental-strip-types --test scripts/test-guided-governance-journey.mjs
       - name: On-screen GUIDED walkthrough UX and authorization checks
         run: node --test scripts/test-guided-governance-journey-ui.mjs
-      - name: Reject stale GUIDED project policy goal and source-scope evidence
+      - name: GOVERNED_AUTO and FULL_AUTONOMOUS state and failure-path tests
+        run: node --experimental-strip-types --test scripts/test-autonomous-governance-journey.mjs
+      - name: Autonomous walkthrough UX, scope and authorization checks
+        run: node --test scripts/test-autonomous-governance-journey-ui.mjs
+      - name: Verify run-identity fencing of project mode policy and goal
         run: node --experimental-strip-types --test scripts/test-governance-journey-run-identity.mjs
+      - name: Verify isolated single-environment testing schema and safe SQL smoke
+        run: node --test scripts/test-private-testing-schema-contract.mjs
