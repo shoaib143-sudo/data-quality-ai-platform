@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, ShieldCheck, Wrench } from 'lucide-react'
+import { AlertTriangle, ArrowRight, FolderKanban, ShieldCheck, Wrench } from 'lucide-react'
 import { hasProjectCapability } from '@/lib/auth/authorize'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { buildFindingsIssuesPresentation } from '@/lib/governance/persona-findings-issues-presentation'
@@ -36,15 +36,32 @@ export default async function IssuesPage() {
     .map(([projectId]) => projectId)
   const canDataQuality = canAccessWorkspace(landing.persona, 'data-quality', landing.organizationRole)
   const canProfiling = canAccessWorkspace(landing.persona, 'profiling', landing.organizationRole)
-  const incidentIssues = (issues.data ?? []).slice(0, 5)
+  const issueRows = issues.data ?? []
+  const highPriorityIssues = issueRows.filter(issue => ['HIGH','CRITICAL'].includes(String(issue.severity).toUpperCase())).length
+  const incidentIssues = issueRows.slice(0, 5)
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] text-slate-100"><div className="mx-auto max-w-[1480px] px-4 py-5 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Issues" contextLabel={presentation.title} homeHref="/home" />
     <nav className="mb-6 mt-4 flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-white/10 bg-[#0a1d33] px-5 py-3 shadow-sm"><div className="flex items-center gap-2">{canProfiling && presentation.showProfilingEvidence ? <Link href="/profiling/explorer" className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[0.05]">Profiling findings <ArrowRight className="h-3.5 w-3.5"/></Link> : null}{canDataQuality ? <Link href="/data-quality" className="rounded-xl px-3 py-2 text-sm font-semibold text-blue-300 hover:bg-white/[0.05]">Data Quality</Link> : null}</div></nav>
-    <header className="rounded-3xl border border-white/10 bg-[#0a1d33] p-7 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-5"><div className="flex items-start gap-3"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-400/10 text-amber-300"><Wrench className="h-6 w-6"/></span><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Persona-aware governed workspace</p><h1 className="mt-1 text-3xl font-black text-white">{presentation.title}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{presentation.description}</p></div></div><div className="rounded-2xl border border-white/[0.07] bg-[#08182b] px-4 py-3"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[.12em] text-emerald-300"><ShieldCheck className="h-4 w-4"/>Governed truth</div><p className="mt-2 text-xs text-slate-500">{presentation.truthBoundary} · {presentation.authorizationBoundary}</p></div></div><div className="mt-5 flex flex-wrap gap-2">{presentation.priorities.map(priority => <span key={priority} className="rounded-lg border border-white/[0.07] bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-slate-300">{priority.replaceAll('-',' ')}</span>)}</div></header>
+    <header className="relative overflow-hidden rounded-[28px] border border-cyan-300/12 bg-[#09192d] p-7 shadow-[0_24px_70px_rgba(0,0,0,.24)]">
+      <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-amber-500/[0.07] blur-3xl"/>
+      <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_430px] xl:items-end">
+        <div className="flex items-start gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-amber-300/15 bg-amber-300/[0.07] text-amber-300"><Wrench className="h-6 w-6" aria-hidden="true"/></span>
+          <div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Persona-aware governed workspace</p><h1 className="mt-1 text-3xl font-black tracking-tight text-white">{presentation.title}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{presentation.description}</p></div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-2xl border border-amber-300/12 bg-[#061321] p-3"><Wrench className="h-4 w-4 text-amber-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{issueRows.length}</p><p className="text-[10px] text-slate-500">Visible issues</p></div>
+          <div className="rounded-2xl border border-rose-300/12 bg-[#061321] p-3"><AlertTriangle className="h-4 w-4 text-rose-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{highPriorityIssues}</p><p className="text-[10px] text-slate-500">High priority</p></div>
+          <div className="rounded-2xl border border-cyan-300/12 bg-[#061321] p-3"><FolderKanban className="h-4 w-4 text-cyan-300" aria-hidden="true"/><p className="mt-2 text-2xl font-black text-white">{manageableProjectIds.length}</p><p className="text-[10px] text-slate-500">Manageable projects</p></div>
+        </div>
+      </div>
+      <div className="relative mt-5 rounded-2xl border border-white/[0.07] bg-[#061321] px-4 py-3"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[.12em] text-emerald-300"><ShieldCheck className="h-4 w-4" aria-hidden="true"/>Governed truth</div><p className="mt-2 text-xs text-slate-500">{presentation.truthBoundary} · {presentation.authorizationBoundary}</p></div>
+      <div className="relative mt-4 flex flex-wrap gap-2">{presentation.priorities.map(priority => <span key={priority} className="rounded-lg border border-white/[0.07] bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-slate-300">{priority.replaceAll('-',' ')}</span>)}</div>
+    </header>
 
     {incidentIssues.length ? <section className="mt-6 rounded-3xl border border-cyan-400/10 bg-cyan-400/[0.03] p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.12em] text-cyan-300">Canonical incident journey</p><h2 className="mt-1 text-lg font-black text-white">Trace issue → evidence → impact → remediation → verification</h2><p className="mt-1 text-sm text-slate-500">The same governed incident truth is rendered through the active persona policy.</p></div><span className="rounded-lg border border-white/[0.07] bg-[#08182b] px-2.5 py-1 text-[10px] font-black uppercase tracking-[.1em] text-slate-500">all 13 personas</span></div><div className="mt-4 grid gap-2 md:grid-cols-2">{incidentIssues.map(issue => <Link key={issue.id} href={canonicalRoutes.governedIncident(issue.id)} className="group flex items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#08182b] px-4 py-3 hover:border-cyan-400/30"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-200">{issue.title}</p><p className="mt-1 text-xs text-slate-500">{issue.severity} · {issue.status}</p></div><ArrowRight className="h-4 w-4 shrink-0 text-cyan-400 transition-transform group-hover:translate-x-0.5"/></Link>)}</div></section> : null}
 
-    <IssueManager projects={projects.data ?? []} datasets={datasets.data ?? []} members={members.data ?? []} initialIssues={issues.data ?? []} manageableProjectIds={manageableProjectIds} presentation={presentation}/>
+    <IssueManager projects={projects.data ?? []} datasets={datasets.data ?? []} members={members.data ?? []} initialIssues={issueRows} manageableProjectIds={manageableProjectIds} presentation={presentation}/>
   </div></main>
 }
