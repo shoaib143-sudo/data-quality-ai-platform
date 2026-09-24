@@ -60,7 +60,9 @@ The workflow:
 - promotes only the verified staged production deployment;
 - verifies the official production alias after promotion;
 - requires liveness, Supabase public Data API health, release-schema parity, and
-  full readiness to pass before the workflow reports success.
+  full readiness to pass before the workflow reports success;
+- persists a machine-readable release evidence bundle binding the exact commit,
+  staged artifact provenance, staged health, and post-promotion production health.
 
 Automatic Vercel Git deployments remain disabled in `vercel.json`. GitHub is the
 release authority; Vercel is the production deployment runtime.

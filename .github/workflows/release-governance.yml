@@ -1303,6 +1303,64 @@ jobs:
           if (body.status !== 'READY') process.exit(1)
           NODE
 
+      - name: Persist production release evidence
+        shell: bash
+        env:
+          EXACT_SHA: ${{ steps.identity.outputs.sha }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence
+          node - "$EXACT_SHA" "$DEPLOYMENT_URL" "$DATANEXUS_VERCEL_PRODUCTION_URL" <<'NODE'
+          const fs = require('node:fs')
+          const readJson = (path) => JSON.parse(fs.readFileSync(path, 'utf8'))
+          const evidence = {
+            schemaVersion: 1,
+            evidenceKind: 'VERCEL_PRODUCTION_RELEASE',
+            exactCommitSha: process.argv[2],
+            deploymentUrl: process.argv[3],
+            productionUrl: process.argv[4],
+            github: {
+              repository: process.env.GITHUB_REPOSITORY,
+              runId: process.env.GITHUB_RUN_ID,
+              runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+              workflowSha: process.env.GITHUB_SHA,
+            },
+            staged: {
+              buildInfo: readJson('/tmp/vercel-deployed-build.json'),
+              provenance: readJson('/tmp/vercel-staged-provenance.json'),
+              live: readJson('/tmp/vercel-staged-live.json'),
+              supabase: readJson('/tmp/vercel-staged-supabase.json'),
+              releaseSchema: readJson('/tmp/vercel-staged-release-schema.json'),
+              ready: readJson('/tmp/vercel-staged-ready.json'),
+            },
+            production: {
+              buildInfo: readJson('/tmp/vercel-production-build.json'),
+              live: readJson('/tmp/vercel-production-live.json'),
+              supabase: readJson('/tmp/vercel-production-supabase.json'),
+              releaseSchema: readJson('/tmp/vercel-production-release-schema.json'),
+              ready: readJson('/tmp/vercel-production-ready.json'),
+            },
+          }
+          if (
+            evidence.staged.buildInfo.commitSha !== evidence.exactCommitSha ||
+            evidence.staged.provenance.sourceCommitSha !== evidence.exactCommitSha ||
+            evidence.production.buildInfo.commitSha !== evidence.exactCommitSha
+          ) process.exit(1)
+          fs.writeFileSync(
+            'release-evidence/vercel-production-release.json',
+            JSON.stringify(evidence, null, 2) + '\n',
+          )
+          NODE
+
+      - name: Upload production release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vercel-production-release-${{ steps.identity.outputs.sha }}
+          path: release-evidence/vercel-production-release.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Record production release summary
         shell: bash
         env:
