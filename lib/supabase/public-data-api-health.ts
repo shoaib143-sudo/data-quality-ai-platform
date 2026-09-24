@@ -22,18 +22,19 @@ export async function probeSupabasePublicDataApi(
   )
 
   try {
-    // Probe a real, read-only Data API resource instead of /rest/v1/ root.
-    // Supabase's new API gateway requires a secret key for the root metadata
-    // endpoint, while publishable keys are valid on resource routes.
+    // Probe a purpose-built zero-data RPC instead of /rest/v1/ root.
+    // Supabase's new API gateway reserves the root metadata endpoint for secret
+    // keys, while publishable keys are valid on ordinary Data API resources.
     const response = await (options.fetchImpl ?? fetch)(
-      `${options.url.replace(/\/$/, '')}/rest/v1/agent_definitions?select=id&limit=0`,
+      `${options.url.replace(/\/$/, '')}/rest/v1/rpc/public_data_api_health`,
       {
-        method: 'GET',
+        method: 'POST',
         headers: {
           apikey: options.publishableKey,
           authorization: `Bearer ${options.publishableKey}`,
-          'accept-profile': 'agent',
+          'content-type': 'application/json',
         },
+        body: '{}',
         cache: 'no-store',
         signal: controller.signal,
       },
