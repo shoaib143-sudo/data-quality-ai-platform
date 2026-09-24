@@ -67,7 +67,7 @@ test('deployment preserves exact release identity and production-only intent', (
 
 test('post-deploy verification fails closed on identity and critical health contracts', () => {
   assert.match(deploy, /\/api\/build-info/)
-  assert.match(deploy, /VERCEL_TOKEN: \\$\\{\\{ secrets\\.VERCEL_TOKEN \\}\\}/)
+  assert.match(deploy, /VERCEL_TOKEN: \$\{\{ secrets\.VERCEL_TOKEN \}\}/)
   assert.match(deploy, /vercel curl \/api\/build-info/)
   assert.match(deploy, /--deployment "\\$BASE_URL"/)
   assert.match(deploy, /--token "\\$VERCEL_TOKEN"/)
