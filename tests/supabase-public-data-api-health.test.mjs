@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 import {
   probeSupabasePublicDataApi,
 } from '../lib/supabase/public-data-api-health.ts'
@@ -74,4 +75,24 @@ test('timeout aborts a hung upstream probe and fails closed', async () => {
   assert.deepEqual(result, { ok: false, httpStatus: null })
   assert.ok(Date.now() - started >= 200)
   assert.ok(Date.now() - started < 2_000)
+})
+
+
+test('database migration exposes only a constant zero-data health RPC', () => {
+  const migration = readFileSync(
+    'supabase/migrations/20260924055500_public_data_api_health_probe.sql',
+    'utf8',
+  )
+
+  assert.match(migration, /create or replace function public\.public_data_api_health\(\)/i)
+  assert.match(migration, /returns boolean/i)
+  assert.match(migration, /language sql/i)
+  assert.match(migration, /immutable/i)
+  assert.match(migration, /set search_path = pg_catalog/i)
+  assert.match(migration, /select true/i)
+  assert.match(migration, /revoke all on function public\.public_data_api_health\(\) from public/i)
+  assert.match(migration, /grant execute on function public\.public_data_api_health\(\) to anon, authenticated, service_role/i)
+  assert.doesNotMatch(migration, /security definer/i)
+  assert.doesNotMatch(migration, /\bfrom\s+(?:app|catalog|agent|profiling|governance|storage)\./i)
+  assert.doesNotMatch(migration, /\b(insert|update|delete|truncate|drop)\b/i)
 })
