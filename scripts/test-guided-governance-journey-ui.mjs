@@ -41,6 +41,13 @@ test('guided source preflight uses real project-scoped catalog state, not fabric
   assert.match(coach, /readiness\.readyCount/)
   assert.match(coach, /readiness\.tables\.map/)
   assert.match(coach, /NOT_REGISTERED/)
+  assert.match(coach, /Live E2E prerequisites blocked/)
+  assert.match(coach, /currentScopeDiscovery/)
+  assert.match(coach, /participantReadiness/)
+  assert.match(coach, /operatorCapabilities/)
+  assert.match(readinessApi, /CURRENT_SCOPE_DISCOVERY_EVIDENCE_MISSING/)
+  assert.match(readinessApi, /PROJECT_ROLE_BINDINGS_MISSING/)
+  assert.match(readinessApi, /e2eReady/)
 })
 test('unsaved policy and emergency-stop state block the run, and paused approvals are polled', () => {
   assert.match(consoleUi, /setPersistedPolicy\(body\.policy\)/)
