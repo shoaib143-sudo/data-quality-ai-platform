@@ -76,6 +76,7 @@ export async function GET(request: Request) {
       { data: rows, error: datasetError },
       { data: discovered, error: discoveredError },
       { data: discoveryRun, error: discoveryRunError },
+      { data: latestDiscoveryAttempt, error: latestDiscoveryAttemptError },
       { data: activeRoleBindings, error: roleBindingsError },
       operatorCanExecute,
       operatorCanRunDiscovery,
@@ -97,6 +98,16 @@ export async function GET(request: Request) {
           .limit(1)
           .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
+      selectedScopeVersionIds.length
+        ? admin.schema('catalog').from('discovery_runs')
+          .select('id,status,scope_version_id,started_at,completed_at,error_message')
+          .eq('project_id', projectId)
+          .eq('source_id', selectedSourceId)
+          .in('scope_version_id', selectedScopeVersionIds)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
       admin.schema('governance').from('project_role_bindings')
         .select('user_id,role_key').eq('project_id', projectId).eq('active', true).limit(1000),
       hasProjectCapability(user.id, projectId, 'agent.execute'),
@@ -104,6 +115,7 @@ export async function GET(request: Request) {
     ])
     if (datasetError || discoveredError) throw new Error('Unable to verify the selected source assets.')
     if (discoveryRunError) throw new Error('Unable to verify current-scope discovery evidence.')
+    if (latestDiscoveryAttemptError) throw new Error('Unable to verify the latest discovery attempt.')
     if (roleBindingsError) throw new Error('Unable to verify active project role bindings.')
     if ((activeRoleBindings ?? []).length >= 1000) throw new Error('Too many active project role bindings for this bounded preflight.')
     const datasets: GuidedDataset[] = (rows ?? []).map(row => ({
@@ -163,6 +175,18 @@ export async function GET(request: Request) {
       && missingObjects === 0
       && selectedScopeVersionIds.includes(String(discoveryRun.scope_version_id ?? '')),
     )
+    const latestDiscoveryErrorMessage = typeof latestDiscoveryAttempt?.error_message === 'string'
+      ? latestDiscoveryAttempt.error_message
+      : ''
+    const latestDiscoveryErrorCode = !latestDiscoveryErrorMessage
+      ? null
+      : /invalid access token/i.test(latestDiscoveryErrorMessage)
+        ? 'INVALID_CREDENTIAL'
+        : /credential|token|unauthoriz|forbidden/i.test(latestDiscoveryErrorMessage)
+          ? 'CREDENTIAL_OR_AUTH'
+          : /timeout|timed out/i.test(latestDiscoveryErrorMessage)
+            ? 'UPSTREAM_TIMEOUT'
+            : 'UPSTREAM_DISCOVERY_FAILED'
     const activeParticipants = new Set((activeRoleBindings ?? []).map(row => String(row.user_id)))
     const roleCounts = (activeRoleBindings ?? []).reduce<Record<string, number>>((counts, row) => {
       const role = String(row.role_key ?? 'UNKNOWN')
@@ -171,6 +195,7 @@ export async function GET(request: Request) {
     }, {})
     const preflightBlockerCodes = [
       ...(!currentScopeDiscoveryReady ? ['CURRENT_SCOPE_DISCOVERY_EVIDENCE_MISSING'] : []),
+      ...(latestDiscoveryErrorCode === 'INVALID_CREDENTIAL' ? ['DISCOVERY_INVALID_CREDENTIAL'] : []),
       ...(!operatorCanExecute ? ['OPERATOR_AGENT_EXECUTE_MISSING'] : []),
       ...(activeParticipants.size === 0 ? ['PROJECT_ROLE_BINDINGS_MISSING'] : []),
       ...(!result.ready ? ['SELECTED_TABLES_NOT_READY'] : []),
@@ -184,6 +209,14 @@ export async function GET(request: Request) {
       currentScopeDiscovery: {
         ready: currentScopeDiscoveryReady,
         expectedObjects,
+        latestAttempt: latestDiscoveryAttempt ? {
+          id: String(latestDiscoveryAttempt.id),
+          status: String(latestDiscoveryAttempt.status),
+          scopeVersionId: String(latestDiscoveryAttempt.scope_version_id),
+          startedAt: latestDiscoveryAttempt.started_at ? String(latestDiscoveryAttempt.started_at) : null,
+          completedAt: latestDiscoveryAttempt.completed_at ? String(latestDiscoveryAttempt.completed_at) : null,
+          errorCode: latestDiscoveryErrorCode,
+        } : null,
         latestRun: discoveryRun ? {
           id: String(discoveryRun.id),
           scopeVersionId: String(discoveryRun.scope_version_id),
