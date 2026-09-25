@@ -50,3 +50,16 @@ test('browser evidence enforces exact persona home routing and fails closed', ()
   assert.match(runner, /evidence\.status !== 'PASS'/)
   assert.match(workflow, /if-no-files-found: error/)
 })
+
+
+test('read-only acceptance rejects silent redirects away from the requested route', () => {
+  assert.match(runner, /finalUrl\.pathname === requested\.pathname/)
+  assert.doesNotMatch(runner, /target !== `\/home\/\$\{slug\}` \|\| finalUrl\.pathname ===/)
+})
+
+test('literal persona acceptance proves negative cross-persona home isolation', () => {
+  assert.match(runner, /crossPersonaIsolation/)
+  assert.match(runner, /isolationFinal\.pathname !== isolationTarget\.pathname/)
+  assert.match(runner, /crossPersonaIsolationPassed/)
+  assert.match(runner, /!item\.crossPersonaIsolationPassed/)
+})
