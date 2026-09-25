@@ -104,8 +104,9 @@ export async function runScheduledWorkerCycle(workerId: string) {
   const scheduled = await enqueueDueSchedules(20)
   const dispatch = await dispatchAdaptiveRounds(workerId)
   const eventLane = await executeOutboxLane(workerId)
+  const incidentSlaEvaluation = evaluateIncidentSlaEscalations(50)
   const [incidentEscalations, projections, semanticIndexScheduling, objectRetention] = await Promise.all([
-    evaluateIncidentSlaEscalations(50),
+    incidentSlaEvaluation,
     runProjectionWorker({ projectLimit: 10, batchSize: 200 }),
     enqueueDailySemanticIndexJobs(100),
     cleanupExpiredObjectArtifacts(25),
