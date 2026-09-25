@@ -46,3 +46,10 @@ test('GUIDED readiness sanitizes discovery credential failures without returning
   assert.match(route, /errorCode: latestDiscoveryErrorCode/)
   assert.doesNotMatch(route, /errorMessage: latestDiscoveryErrorMessage/)
 })
+
+
+test('GUIDED readiness does not expose unexpected internal error messages to clients', () => {
+  assert.match(route, /console\.error\('Guided source readiness verification failed\.', error\)/)
+  assert.match(route, /error: 'Guided source readiness could not be verified\.'/)
+  assert.doesNotMatch(route, /error: error instanceof Error \? error\.message/)
+})
