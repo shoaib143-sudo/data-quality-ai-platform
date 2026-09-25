@@ -108,7 +108,7 @@ function toPlaywrightCookies(cookies, baseUrl) {
   }))
 }
 
-async function browserEvidence({ browser, baseUrl, slug, cookies, readRoutes }) {
+async function browserEvidence({ browser, baseUrl, slug, cookies, readRoutes, otherPersona }) {
   const context = await browser.newContext()
   try {
     await context.addCookies(toPlaywrightCookies(cookies, baseUrl))
@@ -127,7 +127,7 @@ async function browserEvidence({ browser, baseUrl, slug, cookies, readRoutes }) 
         && !finalUrl.pathname.startsWith('/login/')
         && (response?.status() ?? 500) < 400
         && !/Application error|Authentication could not be completed/i.test(bodyText)
-        && (target !== `/home/${slug}` || finalUrl.pathname === `/home/${slug}`)
+        && finalUrl.pathname === requested.pathname
       results.push({
         requestedPath: requested.pathname + requested.search,
         finalPath: finalUrl.pathname + finalUrl.search,
@@ -137,7 +137,23 @@ async function browserEvidence({ browser, baseUrl, slug, cookies, readRoutes }) 
       })
       if (!passed) break
     }
-    return results
+    const isolationTarget = new URL(`/home/${otherPersona}`, baseUrl)
+    const isolationResponse = await page.goto(isolationTarget.toString(), { waitUntil: 'domcontentloaded', timeout: 45_000 })
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+    const isolationFinal = new URL(page.url())
+    const isolationPassed = isolationFinal.origin === new URL(baseUrl).origin
+      && (isolationResponse?.status() ?? 500) < 400
+      && isolationFinal.pathname !== isolationTarget.pathname
+      && !isolationFinal.pathname.startsWith('/login')
+    return {
+      routes: results,
+      crossPersonaIsolation: {
+        requestedPath: isolationTarget.pathname,
+        finalPath: isolationFinal.pathname + isolationFinal.search,
+        httpStatus: isolationResponse?.status() ?? null,
+        passed: isolationPassed,
+      },
+    }
   } finally {
     await context.close()
   }
@@ -192,23 +208,29 @@ async function main() {
 
       const cookies = await sessionCookies({ url: supabaseUrl, key: serviceRoleKey, email })
       const readRoutes = personaReadRoutes(slug)
-      const routes = await browserEvidence({ browser, baseUrl, slug, cookies, readRoutes })
+      const otherPersona = slugs[(slugs.indexOf(slug) + 1) % slugs.length]
+      const browserResult = await browserEvidence({ browser, baseUrl, slug, cookies, readRoutes, otherPersona })
+      const routes = browserResult.routes
       personaEvidence.push({
         persona: slug,
         expectedRoleKey: expectedRoleKey(slug),
         authenticatedLandingPassed: routes[0]?.passed === true,
+        crossPersonaIsolationPassed: browserResult.crossPersonaIsolation.passed === true,
         readRouteCount: readRoutes.length,
         readRoutesPassed: routes.filter((row, index) => index > 0 && row.passed).length,
+        crossPersonaIsolation: browserResult.crossPersonaIsolation,
         routes,
       })
-      if (routes.some(row => !row.passed)) break
+      if (routes.some(row => !row.passed) || !browserResult.crossPersonaIsolation.passed) break
     }
   } finally {
     await browser.close()
   }
 
   const failed = personaEvidence.filter(item =>
-    !item.authenticatedLandingPassed || item.readRoutesPassed !== item.readRouteCount
+    !item.authenticatedLandingPassed
+    || !item.crossPersonaIsolationPassed
+    || item.readRoutesPassed !== item.readRouteCount
   )
   const evidence = {
     evidenceKind: 'DATANEXUS_13_PERSONA_LIVE_BROWSER_ACCEPTANCE',
