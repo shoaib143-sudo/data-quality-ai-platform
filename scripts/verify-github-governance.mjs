@@ -37,7 +37,7 @@ const releaseContracts = [
   ['governed Vercel production deploy job', /\n  deploy-vercel-production:/],
   ['staged production deployment without domain promotion', /--prod\s+--skip-domain/],
   ['authenticated immutable deployment identity check', /vercel curl \/api\/build-info/],
-  ['deployed artifact provenance verification', /\/\.well-known\/deployed-artifact-provenance\.json/],
+  ['deployed artifact provenance verification', /vercel curl \/\.well-known\/deployed-artifact-provenance\.json[\s\S]*--scope "\$VERCEL_SCOPE"/],
   ['verified deployment promotion', /Promote verified staged deployment to Production/],
   ['Vercel promote command', /vercel --token "\$VERCEL_TOKEN" --scope "\$VERCEL_SCOPE" promote "\$DEPLOYMENT_URL" --yes/],
   ['production liveness verification', /\/api\/health\/live/],
