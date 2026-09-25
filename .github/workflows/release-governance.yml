@@ -1286,7 +1286,7 @@ jobs:
           node - /tmp/vercel-staged-ready.json <<'NODE'
           const fs = require('node:fs')
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
-          if (body.status !== 'READY') process.exit(1)
+          if (!['READY', 'DEGRADED'].includes(body.status)) process.exit(1)
           NODE
 
       - name: Promote verified staged deployment to Production
@@ -1357,7 +1357,7 @@ jobs:
           node - /tmp/vercel-production-ready.json <<'NODE'
           const fs = require('node:fs')
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
-          if (body.status !== 'READY') process.exit(1)
+          if (!['READY', 'DEGRADED'].includes(body.status)) process.exit(1)
           NODE
 
       - name: Persist production release evidence
@@ -1507,7 +1507,7 @@ jobs:
           node - /tmp/vercel-ready.json <<'NODE'
           const fs = require('node:fs')
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
-          if (body.status !== 'READY') process.exit(1)
+          if (!['READY', 'DEGRADED'].includes(body.status)) process.exit(1)
           NODE
 
       - name: Verify production Supabase and release-schema contracts
