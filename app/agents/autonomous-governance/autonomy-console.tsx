@@ -380,8 +380,10 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
           projectName={project?.name ?? ''}
           readiness={readiness}
           readinessBusy={readinessBusy}
+          discoveryBusy={discoveryBusy}
           readinessError={readinessError}
           onRefreshReadiness={() => { void refreshReadiness() }}
+          onRunDiscovery={() => { void runGuidedSourceDiscovery() }}
           onChooseSource={sourceId => { setGuidedSourceId(sourceId); setMessage('') }}
           sourceSelectionDisabled={['WAITING_APPROVAL', 'RUNNING'].includes(String(coverage?.status ?? ''))}
           onChooseGuided={() => chooseMode('GUIDED')}
