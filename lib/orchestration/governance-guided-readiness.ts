@@ -44,6 +44,29 @@ export type GuidedReadiness = {
   sourceOptions?: { id: string; name: string }[]
   scopes: { sourceId: string; sourceName: string; scopeVersionId?: string; versionNumber: number; mode: string; count: number }[]
   tables: GuidedTable[]
+  e2eReady?: boolean
+  preflightBlockerCodes?: string[]
+  currentScopeDiscovery?: {
+    ready: boolean
+    expectedObjects: number
+    latestRun: {
+      id: string
+      scopeVersionId: string
+      completedAt: string | null
+      objectsObserved: number
+      objectsMissing: number
+    } | null
+  }
+  participantReadiness?: {
+    ready: boolean
+    activeBindingCount: number
+    activeParticipantCount: number
+    roleCounts: Record<string, number>
+  }
+  operatorCapabilities?: {
+    agentExecute: boolean
+    discoveryExecute: boolean
+  }
 }
 
 export function assessGuidedReadiness(input: {
