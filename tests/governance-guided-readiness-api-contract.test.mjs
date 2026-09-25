@@ -17,9 +17,12 @@ test('GUIDED readiness requires current-scope discovery evidence', () => {
 
 test('GUIDED readiness exposes project participant bindings without user identifiers', () => {
   assert.match(route, /from\('project_role_bindings'\)/)
+  assert.match(route, /\.select\('user_id,role_key'\)/)
   assert.match(route, /activeParticipantCount/)
   assert.match(route, /activeBindingCount/)
   assert.match(route, /roleCounts/)
+  assert.match(route, /row\.role_key/)
+  assert.doesNotMatch(route, /\.select\('user_id,role'\)/)
   assert.doesNotMatch(route, /participantReadiness:[\s\S]*userIds/)
 })
 
