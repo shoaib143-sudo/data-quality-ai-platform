@@ -64,7 +64,7 @@ jobs:
       - name: Verify 13-persona incident truth contract (non-browser)
         run: node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/test-governed-incident-13-persona-certification.mjs
       - name: Verify real-persona authenticated-routing structural contract
-        run: node --test tests/ux-real-persona-e2e-contract.test.mjs
+        run: node --test tests/ux-real-persona-e2e-contract.test.mjs tests/persona-live-browser-acceptance-contract.test.mjs
       - name: Syntax-check live 13-persona browser harness
         run: node --check scripts/run-13-persona-browser-acceptance.mjs
       - name: Re-run governed incident lifecycle tests
