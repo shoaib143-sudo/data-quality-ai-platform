@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
+import { authorizeProject, authorizationErrorResponse, hasProjectCapability } from '@/lib/auth/authorize'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
@@ -69,15 +69,43 @@ export async function GET(request: Request) {
       ...assessGuidedReadiness({ scopes: [], datasets: [], versions: [], executionSources: [], discoveredAssets: [] }),
       selectedSourceId, sourceOptions,
     }, { headers: { 'Cache-Control': 'no-store' } })
-    const [{ data: rows, error: datasetError }, { data: discovered, error: discoveredError }] = await Promise.all([
+    const selectedScopeVersionIds = selectedScopes
+      .map(scope => scope.scopeVersionId)
+      .filter((id): id is string => Boolean(id))
+    const [
+      { data: rows, error: datasetError },
+      { data: discovered, error: discoveredError },
+      { data: discoveryRun, error: discoveryRunError },
+      { data: activeRoleBindings, error: roleBindingsError },
+      operatorCanExecute,
+      operatorCanRunDiscovery,
+    ] = await Promise.all([
       admin.schema('catalog').from('datasets')
         .select('id,data_source_id,source_identifier,status').eq('project_id', projectId).in('data_source_id', selectedSourceIds),
       qualifiedNames.length
         ? admin.schema('catalog').from('discovered_assets')
           .select('source_id,asset_key,is_current').in('source_id', selectedSourceIds).in('asset_key', qualifiedNames).eq('is_current', true)
         : Promise.resolve({ data: [], error: null }),
+      selectedScopeVersionIds.length
+        ? admin.schema('catalog').from('discovery_runs')
+          .select('id,status,scope_version_id,completed_at,error_message,objects_observed,objects_missing')
+          .eq('project_id', projectId)
+          .eq('source_id', selectedSourceId)
+          .in('scope_version_id', selectedScopeVersionIds)
+          .eq('status', 'COMPLETED')
+          .order('completed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      admin.schema('governance').from('project_role_bindings')
+        .select('user_id,role').eq('project_id', projectId).eq('active', true).limit(1000),
+      hasProjectCapability(user.id, projectId, 'agent.execute'),
+      hasProjectCapability(user.id, projectId, 'discovery.execute'),
     ])
     if (datasetError || discoveredError) throw new Error('Unable to verify the selected source assets.')
+    if (discoveryRunError) throw new Error('Unable to verify current-scope discovery evidence.')
+    if (roleBindingsError) throw new Error('Unable to verify active project role bindings.')
+    if ((activeRoleBindings ?? []).length >= 1000) throw new Error('Too many active project role bindings for this bounded preflight.')
     const datasets: GuidedDataset[] = (rows ?? []).map(row => ({
       id: String(row.id), dataSourceId: String(row.data_source_id),
       sourceIdentifier: row.source_identifier ? String(row.source_identifier) : null,
@@ -125,7 +153,56 @@ export async function GET(request: Request) {
         sourceId: String(row.source_id), assetKey: String(row.asset_key), isCurrent: row.is_current === true,
       })) as GuidedDiscoveredAsset[],
     })
-    return NextResponse.json({ ...result, selectedSourceId, sourceOptions }, { headers: { 'Cache-Control': 'no-store' } })
+    const expectedObjects = qualifiedNames.length
+    const observedObjects = Number(discoveryRun?.objects_observed ?? 0)
+    const missingObjects = Number(discoveryRun?.objects_missing ?? 0)
+    const currentScopeDiscoveryReady = Boolean(
+      discoveryRun
+      && !discoveryRun.error_message
+      && observedObjects >= expectedObjects
+      && missingObjects === 0
+      && selectedScopeVersionIds.includes(String(discoveryRun.scope_version_id ?? '')),
+    )
+    const activeParticipants = new Set((activeRoleBindings ?? []).map(row => String(row.user_id)))
+    const roleCounts = (activeRoleBindings ?? []).reduce<Record<string, number>>((counts, row) => {
+      const role = String(row.role ?? 'UNKNOWN')
+      counts[role] = (counts[role] ?? 0) + 1
+      return counts
+    }, {})
+    const preflightBlockerCodes = [
+      ...(!currentScopeDiscoveryReady ? ['CURRENT_SCOPE_DISCOVERY_EVIDENCE_MISSING'] : []),
+      ...(!operatorCanExecute ? ['OPERATOR_AGENT_EXECUTE_MISSING'] : []),
+      ...(activeParticipants.size === 0 ? ['PROJECT_ROLE_BINDINGS_MISSING'] : []),
+      ...(!result.ready ? ['SELECTED_TABLES_NOT_READY'] : []),
+    ]
+    return NextResponse.json({
+      ...result,
+      selectedSourceId,
+      sourceOptions,
+      e2eReady: result.ready && preflightBlockerCodes.length === 0,
+      preflightBlockerCodes,
+      currentScopeDiscovery: {
+        ready: currentScopeDiscoveryReady,
+        expectedObjects,
+        latestRun: discoveryRun ? {
+          id: String(discoveryRun.id),
+          scopeVersionId: String(discoveryRun.scope_version_id),
+          completedAt: discoveryRun.completed_at ? String(discoveryRun.completed_at) : null,
+          objectsObserved: observedObjects,
+          objectsMissing: missingObjects,
+        } : null,
+      },
+      participantReadiness: {
+        ready: activeParticipants.size > 0,
+        activeBindingCount: (activeRoleBindings ?? []).length,
+        activeParticipantCount: activeParticipants.size,
+        roleCounts,
+      },
+      operatorCapabilities: {
+        agentExecute: operatorCanExecute,
+        discoveryExecute: operatorCanRunDiscovery,
+      },
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
