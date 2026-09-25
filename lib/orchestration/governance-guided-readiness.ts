@@ -49,6 +49,14 @@ export type GuidedReadiness = {
   currentScopeDiscovery?: {
     ready: boolean
     expectedObjects: number
+    latestAttempt: {
+      id: string
+      status: string
+      scopeVersionId: string
+      startedAt: string | null
+      completedAt: string | null
+      errorCode: string | null
+    } | null
     latestRun: {
       id: string
       scopeVersionId: string

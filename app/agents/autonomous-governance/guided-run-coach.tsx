@@ -135,15 +135,23 @@ export function GuidedRunCoach({
             <div><dt className="inline font-medium">Operator can run discovery: </dt><dd className="inline">{readiness.operatorCapabilities?.discoveryExecute ? 'yes' : 'no'}</dd></div>
           </dl>
           {(readiness.preflightBlockerCodes?.length ?? 0) > 0 && <p className="mt-2 break-words text-amber-700 dark:text-amber-300">Blockers: {readiness.preflightBlockerCodes?.join(', ')}</p>}
+          {readiness.currentScopeDiscovery?.latestAttempt?.errorCode && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300" role="alert">
+            Latest discovery attempt: {readiness.currentScopeDiscovery.latestAttempt.status} · {readiness.currentScopeDiscovery.latestAttempt.errorCode === 'INVALID_CREDENTIAL' ? 'Stored source credential is no longer accepted by the provider.' : readiness.currentScopeDiscovery.latestAttempt.errorCode.replaceAll('_', ' ')}
+          </p>}
           {readiness.currentScopeDiscovery?.latestRun && <p className="mt-1 text-xs text-muted-foreground">Latest exact-scope discovery observed {readiness.currentScopeDiscovery.latestRun.objectsObserved} objects with {readiness.currentScopeDiscovery.latestRun.objectsMissing} missing.</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             {readiness.preflightBlockerCodes?.includes('CURRENT_SCOPE_DISCOVERY_EVIDENCE_MISSING')
+              && !readiness.preflightBlockerCodes?.includes('DISCOVERY_INVALID_CREDENTIAL')
               && readiness.operatorCapabilities?.discoveryExecute
               && readiness.selectedSourceId
               && <button type="button" onClick={onRunDiscovery} disabled={discoveryBusy || readinessBusy}
                 className="min-h-10 rounded-lg border border-sky-400/60 px-3 py-2 text-xs font-semibold disabled:opacity-50">
                 {discoveryBusy ? 'Queuing discovery…' : 'Run fresh discovery'}
               </button>}
+            {readiness.preflightBlockerCodes?.includes('DISCOVERY_INVALID_CREDENTIAL')
+              && <Link href="/datasets" className="inline-flex min-h-10 items-center rounded-lg border border-rose-400/60 px-3 py-2 text-xs font-semibold">
+                Update source credential
+              </Link>}
             {readiness.preflightBlockerCodes?.includes('PROJECT_ROLE_BINDINGS_MISSING')
               && <Link href="/admin/project-roles" className="inline-flex min-h-10 items-center rounded-lg border border-amber-400/60 px-3 py-2 text-xs font-semibold">
                 Manage project participants

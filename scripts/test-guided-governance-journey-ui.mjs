@@ -188,3 +188,12 @@ test('GUIDED execution is fail-closed on full live E2E readiness and exposes gov
   assert.match(coach, /\/admin\/project-roles/)
   assert.match(coach, /PROJECT_ROLE_BINDINGS_MISSING/)
 })
+
+
+test('GUIDED source preflight avoids retry loops when the provider credential is invalid', () => {
+  assert.match(coach, /DISCOVERY_INVALID_CREDENTIAL/)
+  assert.match(coach, /Update source credential/)
+  assert.match(coach, /href="\/datasets"/)
+  assert.match(coach, /!readiness\.preflightBlockerCodes\?\.includes\('DISCOVERY_INVALID_CREDENTIAL'\)/)
+  assert.match(coach, /Stored source credential is no longer accepted by the provider/)
+})
