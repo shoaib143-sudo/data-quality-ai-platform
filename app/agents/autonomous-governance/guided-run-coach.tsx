@@ -122,6 +122,17 @@ export function GuidedRunCoach({
           <span className="font-semibold">{readiness.ready ? 'Registration preflight ready' : 'Registration preflight incomplete'}</span>
           {' · '}{readiness.readyCount} of {readiness.expectedCount} selected tables have current discovery evidence, an AVAILABLE dataset version, an active execution binding and authoritative profiling readiness. Live connector read and profiling still need to be tested.
         </div>
+        {readiness.e2eReady !== undefined && <div className={'rounded-lg border p-3 text-sm ' + (readiness.e2eReady ? 'border-emerald-400/50 bg-emerald-500/[0.04]' : 'border-amber-400/50 bg-amber-500/[0.05]')} role="status" aria-live="polite">
+          <span className="font-semibold">{readiness.e2eReady ? 'Live E2E prerequisites ready' : 'Live E2E prerequisites blocked'}</span>
+          <dl className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
+            <div><dt className="inline font-medium">Current-scope discovery: </dt><dd className="inline">{readiness.currentScopeDiscovery?.ready ? 'ready' : 'missing or incomplete'}</dd></div>
+            <div><dt className="inline font-medium">Active project participants: </dt><dd className="inline">{readiness.participantReadiness?.activeParticipantCount ?? 0}</dd></div>
+            <div><dt className="inline font-medium">Operator can execute agent: </dt><dd className="inline">{readiness.operatorCapabilities?.agentExecute ? 'yes' : 'no'}</dd></div>
+            <div><dt className="inline font-medium">Operator can run discovery: </dt><dd className="inline">{readiness.operatorCapabilities?.discoveryExecute ? 'yes' : 'no'}</dd></div>
+          </dl>
+          {(readiness.preflightBlockerCodes?.length ?? 0) > 0 && <p className="mt-2 break-words text-amber-700 dark:text-amber-300">Blockers: {readiness.preflightBlockerCodes?.join(', ')}</p>}
+          {readiness.currentScopeDiscovery?.latestRun && <p className="mt-1 text-xs text-muted-foreground">Latest exact-scope discovery observed {readiness.currentScopeDiscovery.latestRun.objectsObserved} objects with {readiness.currentScopeDiscovery.latestRun.objectsMissing} missing.</p>}
+        </div>}
         {readiness.scopes.some(scope => scope.mode !== 'SELECTED') && <p className="text-xs" role="alert">This source has an unbounded selection. Choose a different, explicitly enumerated scope or narrow this one before the GUIDED test.</p>}
         {readiness.tables.length > 0 && <div className="overflow-x-auto rounded-lg border">
           <table className="w-full min-w-[540px] text-left text-xs">
