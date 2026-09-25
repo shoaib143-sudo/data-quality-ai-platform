@@ -55,6 +55,10 @@ if (/vercel --token "\$VERCEL_TOKEN"[\s\S]{0,80}curl/.test(releaseGovernance)) {
   failures.push('release governance sentinel: vercel curl must authenticate through VERCEL_TOKEN environment, not --token forwarding')
 }
 
+if (!/\['READY', 'DEGRADED'\]\.includes\(body\.status\)/.test(releaseGovernance)) {
+  failures.push('release governance sentinel: readiness gate must preserve DEGRADED as noncritical HTTP-200 state')
+}
+
 const vercelConfig = JSON.parse(await readFile('vercel.json', 'utf8'))
 if (vercelConfig.git?.deploymentEnabled !== false) {
   failures.push('release governance sentinel: automatic Vercel Git deployments must remain disabled')
