@@ -78,6 +78,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   const [guidedSourceId, setGuidedSourceId] = useState('')
   const [autoProjectScopeAcknowledged, setAutoProjectScopeAcknowledged] = useState(false)
   const [readinessBusy, setReadinessBusy] = useState(false)
+  const [discoveryBusy, setDiscoveryBusy] = useState(false)
   const [readinessError, setReadinessError] = useState('')
   const readinessRequest = useRef(0)
   const runRequest = useRef(0)
@@ -145,6 +146,31 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
       if (requestId === readinessRequest.current) setReadinessBusy(false)
     }
   }, [projectId, guidedSourceId])
+
+  const runGuidedSourceDiscovery = useCallback(async () => {
+    if (!projectId || !guidedSourceId || !readiness?.operatorCapabilities?.discoveryExecute) return
+    setDiscoveryBusy(true)
+    setReadinessError('')
+    try {
+      const response = await fetch('/api/catalog/discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `guided-preflight:${projectId}:${guidedSourceId}:${readiness.scopes[0]?.scopeVersionId ?? 'current'}`,
+        },
+        body: JSON.stringify({ sourceId: guidedSourceId }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'Could not queue fresh metadata discovery.')
+      setMessage(body.alreadyActive
+        ? 'Fresh metadata discovery is already running for this source. Recheck readiness after it completes.'
+        : 'Fresh metadata discovery queued. Recheck readiness after the job completes.')
+    } catch (error) {
+      setReadinessError(error instanceof Error ? error.message : 'Could not queue fresh metadata discovery.')
+    } finally {
+      setDiscoveryBusy(false)
+    }
+  }, [projectId, guidedSourceId, readiness])
 
   useEffect(() => {
     void refreshReadiness()
@@ -232,7 +258,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
 
   async function runOrchestrator() {
     if (!projectId || !canExecute || !goal.trim()) return
-    if (policy.mode === 'GUIDED' && (!persistedGuidedReady || (guidedSourceId !== '' && (!readiness?.ready || !readiness.scopes[0]?.scopeVersionId)))) {
+    if (policy.mode === 'GUIDED' && (!persistedGuidedReady || (guidedSourceId !== '' && (readiness?.e2eReady !== true || !readiness.scopes[0]?.scopeVersionId)))) {
       setMessage('GUIDED execution requires a saved safe policy. If you explicitly selected a source, its readiness must also pass.')
       return
     }
@@ -338,7 +364,7 @@ export function AutonomyConsole({ projects, executableProjectIds, manageableProj
   }) : null
   const executionBlocked = !persistedPolicy || hasUnsavedPolicyEdits || !persistedPolicy.enabled
     || persistedPolicy.emergencyStop || policy.mode === 'OFF'
-    || (policy.mode === 'GUIDED' && guidedSourceId !== '' && (!readiness?.ready || !readiness.scopes[0]?.scopeVersionId))
+    || (policy.mode === 'GUIDED' && guidedSourceId !== '' && (readiness?.e2eReady !== true || !readiness.scopes[0]?.scopeVersionId))
     || (autonomousMode !== null && !autoProjectScopeAcknowledged)
     || !goal.trim() || !goalFingerprint || goalFingerprint.goal !== goal
     || ['WAITING_APPROVAL', 'RUNNING'].includes(String(coverage?.status ?? ''))
