@@ -36,7 +36,7 @@ const releaseContracts = [
   ['manual Vercel production deploy operation', /- vercel-production-deploy/],
   ['governed Vercel production deploy job', /\n  deploy-vercel-production:/],
   ['staged production deployment without domain promotion', /--prod\s+--skip-domain/],
-  ['authenticated immutable deployment identity check', /vercel --token "\$VERCEL_TOKEN" --scope "\$VERCEL_SCOPE" curl \/api\/build-info/],
+  ['authenticated immutable deployment identity check', /vercel curl \/api\/build-info/],
   ['deployed artifact provenance verification', /\/\.well-known\/deployed-artifact-provenance\.json/],
   ['verified deployment promotion', /Promote verified staged deployment to Production/],
   ['Vercel promote command', /vercel --token "\$VERCEL_TOKEN" --scope "\$VERCEL_SCOPE" promote "\$DEPLOYMENT_URL" --yes/],
@@ -49,6 +49,10 @@ const releaseContracts = [
 ]
 for (const [label, pattern] of releaseContracts) {
   if (!pattern.test(releaseGovernance)) failures.push(`release governance sentinel: missing ${label}`)
+}
+
+if (/vercel --token "\$VERCEL_TOKEN"[\s\S]{0,80}curl/.test(releaseGovernance)) {
+  failures.push('release governance sentinel: vercel curl must authenticate through VERCEL_TOKEN environment, not --token forwarding')
 }
 
 const vercelConfig = JSON.parse(await readFile('vercel.json', 'utf8'))

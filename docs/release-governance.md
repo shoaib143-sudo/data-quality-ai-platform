@@ -61,6 +61,7 @@ The workflow:
 - uses the GitHub `production` environment;
 - pins the Vercel team, project, and CLI version;
 - keeps `VERCEL_TOKEN` step-scoped;
+- ensures `vercel curl` probes authenticate through the step-scoped `VERCEL_TOKEN` environment rather than forwarding `--token` to native curl;
 - injects immutable DataNexus release identity into the Vercel deployment;
 - stages the production build without assigning production domains;
 - verifies exact deployed identity, immutable artifact provenance, and critical health before promotion;
