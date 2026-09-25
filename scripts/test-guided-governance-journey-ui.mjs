@@ -175,3 +175,16 @@ test('shared-environment UI keeps a real active run single-flight while allowing
   assert.match(consoleUi, /disabled=\{busy\} onChange=\{event => \{/)
   assert.match(consoleUi, /runRequest\.current \+= 1/)
 })
+
+
+test('GUIDED execution is fail-closed on full live E2E readiness and exposes governed blocker actions', () => {
+  assert.match(consoleUi, /readiness\?\.e2eReady !== true/)
+  assert.match(consoleUi, /\/api\/catalog\/discovery/)
+  assert.match(consoleUi, /Idempotency-Key/)
+  assert.match(consoleUi, /operatorCapabilities\?\.discoveryExecute/)
+  assert.match(coach, /Run fresh discovery/)
+  assert.match(coach, /CURRENT_SCOPE_DISCOVERY_EVIDENCE_MISSING/)
+  assert.match(coach, /Manage project participants/)
+  assert.match(coach, /\/admin\/project-roles/)
+  assert.match(coach, /PROJECT_ROLE_BINDINGS_MISSING/)
+})
