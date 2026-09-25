@@ -15,8 +15,19 @@ on:
       - 'components/governance/role-landing-page.tsx'
       - 'tests/ux-real-persona-e2e-contract.test.mjs'
       - 'scripts/test-governed-incident-13-persona-certification.mjs'
+      - 'scripts/run-13-persona-browser-acceptance.mjs'
       - 'scripts/ts-extension-loader.mjs'
       - '.github/workflows/governed-incident-13-persona-certification.yml'
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Persona acceptance mode
+        required: true
+        default: structural-only
+        type: choice
+        options:
+          - structural-only
+          - live-browser-readonly
   pull_request:
     paths:
       - 'lib/governance/governed-incident*.ts'
@@ -30,6 +41,7 @@ on:
       - 'components/governance/role-landing-page.tsx'
       - 'tests/ux-real-persona-e2e-contract.test.mjs'
       - 'scripts/test-governed-incident-13-persona-certification.mjs'
+      - 'scripts/run-13-persona-browser-acceptance.mjs'
       - 'scripts/ts-extension-loader.mjs'
       - '.github/workflows/governed-incident-13-persona-certification.yml'
 
@@ -53,9 +65,60 @@ jobs:
         run: node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/test-governed-incident-13-persona-certification.mjs
       - name: Verify real-persona authenticated-routing structural contract
         run: node --test tests/ux-real-persona-e2e-contract.test.mjs
+      - name: Syntax-check live 13-persona browser harness
+        run: node --check scripts/run-13-persona-browser-acceptance.mjs
       - name: Re-run governed incident lifecycle tests
         run: node --experimental-strip-types scripts/test-governed-incident-foundation.mjs
       - name: Re-run evidence normalization tests
         run: node --experimental-strip-types scripts/test-incident-evidence-normalization.mjs
       - name: TypeScript
         run: pnpm exec tsc --noEmit
+
+  live-browser-personas:
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'live-browser-readonly'
+    needs: certify-personas
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install isolated browser dependency
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Execute read-only live 13-persona browser acceptance
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DATANEXUS_BASE_URL: https://data-quality-ai-platform.vercel.app
+          PERSONA_PROJECT_ID: ab595892-828f-4585-bafb-b6c657585ce5
+          PERSONA_EVIDENCE_PATH: ${{ runner.temp }}/13-persona-live-browser-acceptance.json
+        run: node scripts/run-13-persona-browser-acceptance.mjs
+
+      - name: Upload live persona acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: 13-persona-live-browser-${{ github.sha }}
+          path: ${{ runner.temp }}/13-persona-live-browser-acceptance.json
+          retention-days: 90
+          if-no-files-found: error
+
