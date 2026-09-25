@@ -98,7 +98,7 @@ export async function GET(request: Request) {
           .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       admin.schema('governance').from('project_role_bindings')
-        .select('user_id,role').eq('project_id', projectId).eq('active', true).limit(1000),
+        .select('user_id,role_key').eq('project_id', projectId).eq('active', true).limit(1000),
       hasProjectCapability(user.id, projectId, 'agent.execute'),
       hasProjectCapability(user.id, projectId, 'discovery.execute'),
     ])
@@ -165,7 +165,7 @@ export async function GET(request: Request) {
     )
     const activeParticipants = new Set((activeRoleBindings ?? []).map(row => String(row.user_id)))
     const roleCounts = (activeRoleBindings ?? []).reduce<Record<string, number>>((counts, row) => {
-      const role = String(row.role ?? 'UNKNOWN')
+      const role = String(row.role_key ?? 'UNKNOWN')
       counts[role] = (counts[role] ?? 0) + 1
       return counts
     }, {})
