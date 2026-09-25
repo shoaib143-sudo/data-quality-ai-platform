@@ -6,6 +6,16 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Live lineage operation
+        required: true
+        default: postgres-reference
+        type: choice
+        options:
+          - postgres-reference
+          - databricks-pub-gold-preview
+          - databricks-pub-gold-apply
 
 permissions:
   contents: read
@@ -30,8 +40,10 @@ jobs:
         run: node --test tests/postgres-connector-service-role-boundary.test.mjs
       - name: Verify real-field-lineage live revalidation boundary
         run: node --test tests/real-field-lineage-live-revalidation-contract.test.mjs
-      - name: Syntax-check real-field-lineage evidence runner
-        run: node --check scripts/run-real-field-lineage-revalidation.mjs
+      - name: Syntax-check real-field-lineage evidence runners
+        run: |
+          node --check scripts/run-real-field-lineage-revalidation.mjs
+          node --check scripts/run-databricks-field-lineage-revalidation.mjs
       - name: Verify cross-dataset relationship authority boundaries
         run: node --experimental-strip-types --test tests/dataset-relationship-intelligence.test.mjs
 
@@ -54,10 +66,15 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
+          OPERATION: ${{ inputs.operation }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "run_live=true" >> "$GITHUB_OUTPUT"
+            if [ "$OPERATION" = "postgres-reference" ]; then
+              echo "run_live=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "run_live=false" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           fi
 
@@ -110,3 +127,48 @@ jobs:
           path: ${{ runner.temp }}/real-field-lineage-revalidation.json
           retention-days: 90
           if-no-files-found: error
+
+  live-databricks-field-lineage:
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'databricks-pub-gold-preview' || inputs.operation == 'databricks-pub-gold-apply')
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install application dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Execute controlled Databricks PUB Gold lineage revalidation
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LINEAGE_PROJECT_ID: 479813aa-72a4-4b12-b72a-74da8d2419ce
+          LINEAGE_SOURCE_ID: f0e5a063-7d0e-4ffe-bc81-80404fcf4b5b
+          LINEAGE_APPLY: ${{ inputs.operation == 'databricks-pub-gold-apply' }}
+          LINEAGE_EVIDENCE_PATH: ${{ runner.temp }}/databricks-pub-gold-lineage-revalidation.json
+        run: node scripts/run-databricks-field-lineage-revalidation.mjs
+
+      - name: Upload Databricks lineage evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: databricks-pub-gold-lineage-${{ github.sha }}-${{ inputs.operation }}
+          path: ${{ runner.temp }}/databricks-pub-gold-lineage-revalidation.json
+          retention-days: 90
+          if-no-files-found: error
+
