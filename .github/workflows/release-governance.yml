@@ -1219,6 +1219,7 @@ jobs:
 
           vercel curl /.well-known/deployed-artifact-provenance.json \
             --deployment "$BASE_URL" \
+            --scope "$VERCEL_SCOPE" \
             --output /tmp/vercel-staged-provenance.json >/tmp/vercel-provenance.log 2>&1
 
           node - "$EXACT_SHA" /tmp/vercel-staged-provenance.json <<'NODE'
