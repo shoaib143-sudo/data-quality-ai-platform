@@ -37,7 +37,7 @@ const releaseContracts = [
   ['governed Vercel production deploy job', /\n  deploy-vercel-production:/],
   ['staged production deployment without domain promotion', /--prod\s+--skip-domain/],
   ['authenticated immutable deployment identity check', /vercel curl \/api\/build-info/],
-  ['deployed artifact provenance verification', /vercel curl \/\.well-known\/deployed-artifact-provenance\.json[\s\S]*--scope "\$VERCEL_SCOPE"/],
+  ['deployed artifact provenance verification', /Vercel remote build did not emit deployed artifact provenance[\s\S]*api\.vercel\.com\/v13\/deployments\/\$DEPLOYMENT_HOST/],
   ['verified deployment promotion', /Promote verified staged deployment to Production/],
   ['Vercel promote command', /vercel --token "\$VERCEL_TOKEN" --scope "\$VERCEL_SCOPE" promote "\$DEPLOYMENT_URL" --yes/],
   ['production liveness verification', /\/api\/health\/live/],
@@ -53,6 +53,10 @@ for (const [label, pattern] of releaseContracts) {
 
 if (/vercel --token "\$VERCEL_TOKEN"[\s\S]{0,80}curl/.test(releaseGovernance)) {
   failures.push('release governance sentinel: vercel curl must authenticate through VERCEL_TOKEN environment, not --token forwarding')
+}
+
+if (/vercel curl \/\.well-known\/deployed-artifact-provenance\.json/.test(releaseGovernance)) {
+  failures.push('release governance sentinel: staged provenance must be verified from remote build evidence plus Vercel deployment metadata, not protected static-file routing')
 }
 
 if (!/\['READY', 'DEGRADED'\]\.includes\(body\.status\)/.test(releaseGovernance)) {

@@ -1217,28 +1217,63 @@ jobs:
           set -euo pipefail
           BASE_URL="${DEPLOYMENT_URL%/}"
 
-          vercel curl /.well-known/deployed-artifact-provenance.json \
-            --deployment "$BASE_URL" \
-            --scope "$VERCEL_SCOPE" \
-            --output /tmp/vercel-staged-provenance.json >/tmp/vercel-provenance.log 2>&1
-
-          node - "$EXACT_SHA" /tmp/vercel-staged-provenance.json <<'NODE'
+          node - "$EXACT_SHA" "$BASE_URL" /tmp/vercel-deploy.log /tmp/vercel-staged-provenance.json <<'NODE'
           const fs = require('node:fs')
           const expected = process.argv[2]
-          const body = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
+          const deploymentUrl = process.argv[3]
+          const logPath = process.argv[4]
+          const outPath = process.argv[5]
+          const log = fs.readFileSync(logPath, 'utf8')
+          const candidates = log.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith('{') && line.endsWith('}'))
+          const body = candidates.map((line) => {
+            try { return JSON.parse(line) } catch { return null }
+          }).find((value) => value?.evidenceKind === 'VERCEL_DEPLOYED_ARTIFACT')
+          if (!body) {
+            console.error('Vercel remote build did not emit deployed artifact provenance')
+            process.exit(1)
+          }
           if (
             body.status !== 'WRITTEN' ||
-            body.evidenceKind !== 'VERCEL_DEPLOYED_ARTIFACT' ||
             body.artifactClass !== 'PRODUCTION_DEPLOYMENT' ||
             body.environment !== 'production' ||
             body.sourceCommitSha !== expected ||
+            typeof body.deploymentId !== 'string' ||
+            !/^dpl_[A-Za-z0-9]+$/.test(body.deploymentId) ||
             typeof body.artifactDigest !== 'string' ||
             !body.artifactDigest.startsWith('sha256:') ||
             !Number.isInteger(body.artifactFileCount) ||
             body.artifactFileCount <= 0 ||
             !Number.isInteger(body.artifactBytes) ||
             body.artifactBytes <= 0
-          ) process.exit(1)
+          ) {
+            console.error('Vercel remote build provenance contract failed')
+            process.exit(1)
+          }
+          fs.writeFileSync(outPath, JSON.stringify({ ...body, deploymentUrl }))
+          NODE
+
+          DEPLOYMENT_HOST="${BASE_URL#https://}"
+          curl --silent --show-error --fail-with-body --connect-timeout 5 --max-time 20 \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_HOST?teamId=$VERCEL_ORG_ID&withGitRepoInfo=true" \
+            --output /tmp/vercel-staged-deployment.json
+
+          node - "$EXACT_SHA" /tmp/vercel-staged-provenance.json /tmp/vercel-staged-deployment.json <<'NODE'
+          const fs = require('node:fs')
+          const expected = process.argv[2]
+          const provenance = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'))
+          const deployment = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'))
+          const deploymentSha = deployment.meta?.githubCommitSha ?? null
+          if (
+            deployment.id !== provenance.deploymentId ||
+            deploymentSha !== expected ||
+            provenance.sourceCommitSha !== expected ||
+            deployment.readyState !== 'READY' ||
+            deployment.target !== 'production'
+          ) {
+            console.error('Vercel deployment metadata does not match remote-build provenance')
+            process.exit(1)
+          }
           NODE
 
           fetch_staged() {
