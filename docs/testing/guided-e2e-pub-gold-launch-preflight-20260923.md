@@ -21,6 +21,21 @@
 - Existing Business and Governance approval-authority assignments: three per axis, but zero active project-role bindings; verify each intended participant's actual signed-in access and project binding.
 - Draft #1037 resolves step-local pinned contract mismatch; #1039 adds the exact on-screen GUIDED journey, snapshot-based five-table attachment, resumed scope revalidation and current profiling readiness checks. Require passing exact-head CI, review, deployed-code parity before the real-user test.
 
+## Live revalidation, 25 September 2026
+
+This section records a new read-only revalidation and does not rewrite the historical 23 September evidence above.
+
+- The ACTIVE PUB Gold scope is still version 4, current version id `dd2f6378-6067-4a4b-8145-fac5ff047164`, mode `DYNAMIC`, native selection `SELECTED`, with the same five qualified names and a populated immutable scope hash.
+- No discovery run is recorded against the current v4 scope version. The most recent completed discovery runs are against older scope versions, so current-scope discovery success remains unproven.
+- All five PUB Gold objects still exist as current discovered assets.
+- Two objects are registered as ACTIVE datasets with AVAILABLE latest versions and completed profiling history:
+  - `pub.gold.customer_water_consumption_behavior_drift_metrics` has 11 completed profile runs; its latest run has an overall quality score of 0.5455 and 12 findings, 7 HIGH/CRITICAL.
+  - `pub.gold.customer_water_consumption_behavior_profile_metrics` has 8 completed profile runs; its latest run has an overall quality score of 0.5494 and 17 findings, 7 HIGH/CRITICAL.
+- Three selected objects remain discovered-only and are not registered datasets: `pub.gold.customer_water_consumption_behavior`, `pub.gold.test`, and `pub.gold.water_quality_compliance`.
+- The target project currently has zero active project-role bindings. Persona test principals remain structurally bound to the separate UI Regression Test Project, so they must not be treated as authorized actors for this PUB Gold project.
+- The orchestrator policy for the target project is currently `GUIDED` and enabled, with emergency stop false. Execution budget and model budget remain zero, automatic remediation and automatic rollback remain disabled, all autonomy action policies remain disabled, and there are zero active orchestrator runs.
+- This state is safe for read-only preparation, but it is not sufficient to claim the five-table optional PUB Gold E2E scenario is ready to execute. The remaining blocking preparation is fresh v4 discovery evidence, governed promotion/registration of the three discovered-only assets if they are selected for the scenario, and real authorized project-role bindings for the intended human participants.
+
 ## Preparation sequence for the OPTIONAL PUB Gold scenario (no governance execution yet)
 
 1. **Source owner or Data Custodian:** perform a fresh authenticated discovery for the ACTIVE v4 PUB Gold scope and verify successful, complete, non-truncated, zero-failure evidence; run the authoritative readiness RPC again. A historic discovered-asset row is not sufficient.
