@@ -239,8 +239,9 @@ export async function GET(request: Request) {
   } catch (error) {
     const authorization = authorizationErrorResponse(error)
     if (authorization) return NextResponse.json({ error: authorization.error }, { status: authorization.status })
+    console.error('Guided source readiness verification failed.', error)
     return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Guided source readiness could not be verified.',
+      error: 'Guided source readiness could not be verified.',
     }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
