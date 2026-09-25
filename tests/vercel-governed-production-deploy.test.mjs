@@ -87,6 +87,7 @@ test('post-deploy verification fails closed on identity and critical health cont
   assert.match(deploy, /\/api\/health\/release-schema/)
   assert.match(deploy, /cloudflare-supabase-release-v1/)
   assert.match(deploy, /\/api\/health\/ready/)
+  assert.match(deploy, /\['READY', 'DEGRADED'\]\.includes\(body\.status\)/)
 })
 
 test('vercel curl uses environment authentication and never forwards token flags', () => {
