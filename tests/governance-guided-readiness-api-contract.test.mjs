@@ -37,3 +37,12 @@ test('GUIDED E2E readiness fails closed when any live prerequisite is blocked', 
   assert.match(route, /PROJECT_ROLE_BINDINGS_MISSING/)
   assert.match(route, /SELECTED_TABLES_NOT_READY/)
 })
+
+
+test('GUIDED readiness sanitizes discovery credential failures without returning provider error text', () => {
+  assert.match(route, /latestDiscoveryAttempt/)
+  assert.match(route, /INVALID_CREDENTIAL/)
+  assert.match(route, /DISCOVERY_INVALID_CREDENTIAL/)
+  assert.match(route, /errorCode: latestDiscoveryErrorCode/)
+  assert.doesNotMatch(route, /errorMessage: latestDiscoveryErrorMessage/)
+})
