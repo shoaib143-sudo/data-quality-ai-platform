@@ -28,8 +28,10 @@ export function GuidedRunCoach({
   projectName,
   readiness,
   readinessBusy,
+  discoveryBusy,
   readinessError,
   onRefreshReadiness,
+  onRunDiscovery,
   onChooseSource,
   sourceSelectionDisabled,
   onChooseGuided,
@@ -40,8 +42,10 @@ export function GuidedRunCoach({
   projectName: string
   readiness: GuidedReadiness | null
   readinessBusy: boolean
+  discoveryBusy: boolean
   readinessError: string
   onRefreshReadiness: () => void
+  onRunDiscovery: () => void
   onChooseSource: (sourceId: string) => void
   sourceSelectionDisabled: boolean
   onChooseGuided: () => void
@@ -132,6 +136,19 @@ export function GuidedRunCoach({
           </dl>
           {(readiness.preflightBlockerCodes?.length ?? 0) > 0 && <p className="mt-2 break-words text-amber-700 dark:text-amber-300">Blockers: {readiness.preflightBlockerCodes?.join(', ')}</p>}
           {readiness.currentScopeDiscovery?.latestRun && <p className="mt-1 text-xs text-muted-foreground">Latest exact-scope discovery observed {readiness.currentScopeDiscovery.latestRun.objectsObserved} objects with {readiness.currentScopeDiscovery.latestRun.objectsMissing} missing.</p>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {readiness.preflightBlockerCodes?.includes('CURRENT_SCOPE_DISCOVERY_EVIDENCE_MISSING')
+              && readiness.operatorCapabilities?.discoveryExecute
+              && readiness.selectedSourceId
+              && <button type="button" onClick={onRunDiscovery} disabled={discoveryBusy || readinessBusy}
+                className="min-h-10 rounded-lg border border-sky-400/60 px-3 py-2 text-xs font-semibold disabled:opacity-50">
+                {discoveryBusy ? 'Queuing discovery…' : 'Run fresh discovery'}
+              </button>}
+            {readiness.preflightBlockerCodes?.includes('PROJECT_ROLE_BINDINGS_MISSING')
+              && <Link href="/admin/project-roles" className="inline-flex min-h-10 items-center rounded-lg border border-amber-400/60 px-3 py-2 text-xs font-semibold">
+                Manage project participants
+              </Link>}
+          </div>
         </div>}
         {readiness.scopes.some(scope => scope.mode !== 'SELECTED') && <p className="text-xs" role="alert">This source has an unbounded selection. Choose a different, explicitly enumerated scope or narrow this one before the GUIDED test.</p>}
         {readiness.tables.length > 0 && <div className="overflow-x-auto rounded-lg border">
