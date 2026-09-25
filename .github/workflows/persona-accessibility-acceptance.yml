@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'app/glossary/**'
+      - 'app/home/[persona]/**'
+      - 'components/governance/role-landing-page.tsx'
+      - 'lib/governance/personas.ts'
+      - 'lib/governance/workspace-policy.ts'
+      - 'tests/ux-real-persona-e2e-contract.test.mjs'
       - 'infra/accessibility/**'
       - 'lib/accessibility/**'
       - 'scripts/test-persona-accessibility-contract.mjs'
@@ -14,6 +19,11 @@ on:
     branches: [main]
     paths:
       - 'app/glossary/**'
+      - 'app/home/[persona]/**'
+      - 'components/governance/role-landing-page.tsx'
+      - 'lib/governance/personas.ts'
+      - 'lib/governance/workspace-policy.ts'
+      - 'tests/ux-real-persona-e2e-contract.test.mjs'
       - 'infra/accessibility/**'
       - 'lib/accessibility/**'
       - 'scripts/test-persona-accessibility-contract.mjs'
@@ -40,6 +50,8 @@ jobs:
         run: node scripts/verify-persona-accessibility-contract.mjs
       - name: Accessibility negative/failure tests
         run: node --experimental-strip-types scripts/test-persona-accessibility-contract.mjs
+      - name: Verify real-persona authenticated-routing structural contract
+        run: node --test tests/ux-real-persona-e2e-contract.test.mjs
       - name: Data Steward glossary accessibility
         run: node --test scripts/test-data-steward-glossary-accessibility.mjs
       - name: Data Steward live-status accessibility tests
