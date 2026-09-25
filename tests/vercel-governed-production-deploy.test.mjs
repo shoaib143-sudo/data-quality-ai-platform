@@ -76,7 +76,7 @@ test('post-deploy verification fails closed on identity and critical health cont
   assert.match(deploy, /deployment\.id !== provenance\.deploymentId/)
   assert.match(deploy, /deployment\.meta\?\.githubCommitSha/)
   assert.match(deploy, /--deployment "\$BASE_URL"/)
-  assert.match(deploy, /\/\.well-known\/deployed-artifact-provenance\.json/)
+  assert.doesNotMatch(deploy, /vercel curl \/\.well-known\/deployed-artifact-provenance\.json/)
   assert.match(deploy, /body\.sourceCommitSha !== expected/)
   assert.match(deploy, /body\.artifactDigest\.startsWith\('sha256:'\)/)
   assert.match(deploy, /Promote verified staged deployment to Production/)
