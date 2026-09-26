@@ -72,6 +72,17 @@ async function main() {
     .eq('id', DGA_BINDING_ID).eq('project_id', PROJECT_ID).eq('user_id', persona.id)
   if (activateError) throw new Error('Unable to activate temporary exact-project DGA binding.')
 
+  const { data: scopeResult, error: scopeError } = await admin.schema('catalog').rpc('ensure_source_scope_version', {
+    p_project_id: PROJECT_ID,
+    p_source_id: SOURCE_ID,
+    p_native_selection: EXACT_SELECTION,
+    p_actor: persona.id,
+  })
+  if (scopeError) throw new Error('Unable to restore exact PUB Gold source scope.')
+  const scopeRow = Array.isArray(scopeResult) ? scopeResult[0] : scopeResult
+  const expectedScopeVersionId = scopeRow?.scope_version_id
+  if (!expectedScopeVersionId) throw new Error('Exact PUB Gold scope version was not returned.')
+
   const { data: binding, error: bindingError } = await admin.schema('governance').from('project_role_bindings')
     .select('id,role_key,active,expires_at').eq('project_id', PROJECT_ID).eq('user_id', persona.id)
     .eq('role_key', 'DATA_GOVERNANCE_ADMIN').eq('active', true).maybeSingle()
