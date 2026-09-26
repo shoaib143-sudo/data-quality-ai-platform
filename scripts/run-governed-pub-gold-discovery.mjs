@@ -66,6 +66,12 @@ async function main() {
   const persona = users?.users?.find((user) => user.email?.toLowerCase() === PERSONA_EMAIL)
   if (!persona) throw new Error('DGA persona principal was not found.')
 
+  const temporaryExpiry = new Date(Date.now() + 20 * 60 * 1000).toISOString()
+  const { error: activateError } = await admin.schema('governance').from('project_role_bindings')
+    .update({ active: true, expires_at: temporaryExpiry })
+    .eq('id', DGA_BINDING_ID).eq('project_id', PROJECT_ID).eq('user_id', persona.id)
+  if (activateError) throw new Error('Unable to activate temporary exact-project DGA binding.')
+
   const { data: binding, error: bindingError } = await admin.schema('governance').from('project_role_bindings')
     .select('id,role_key,active,expires_at').eq('project_id', PROJECT_ID).eq('user_id', persona.id)
     .eq('role_key', 'DATA_GOVERNANCE_ADMIN').eq('active', true).maybeSingle()
