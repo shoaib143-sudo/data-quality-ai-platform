@@ -61,6 +61,11 @@ async function main() {
   if (source.project_id !== PROJECT_ID) throw new Error('PUB Gold source project boundary mismatch.')
   if (source.status !== 'CONFIGURED') throw new Error(`PUB Gold source is not CONFIGURED: ${source.status}`)
 
+  const { data: users, error: usersError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  if (usersError) throw new Error('Unable to resolve DGA persona.')
+  const persona = users?.users?.find((user) => user.email?.toLowerCase() === PERSONA_EMAIL)
+  if (!persona) throw new Error('DGA persona principal was not found.')
+
   const { data: binding, error: bindingError } = await admin.schema('governance').from('project_role_bindings')
     .select('id,role_key,active,expires_at').eq('project_id', PROJECT_ID).eq('user_id', persona.id)
     .eq('role_key', 'DATA_GOVERNANCE_ADMIN').eq('active', true).maybeSingle()
