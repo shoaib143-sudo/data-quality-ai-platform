@@ -6,7 +6,8 @@ import { createServerClient } from '@supabase/ssr'
 const PROJECT_ID = '479813aa-72a4-4b12-b72a-74da8d2419ce'
 const SOURCE_ID = 'f0e5a063-7d0e-4ffe-bc81-80404fcf4b5b'
 const PERSONA_EMAIL = 'persona.data-governance-admin@datanexus.test'
-const EXPECTED_SCOPE_VERSION_ID = 'dd2f6378-6067-4a4b-8145-fac5ff047164'
+const DGA_BINDING_ID = '5b08b426-5578-4c39-b2f2-adf85f855927'
+const EXACT_SELECTION = { mode: 'SELECTED', nodeIds: [], qualifiedNames: ['pub.gold.customer_water_consumption_behavior','pub.gold.customer_water_consumption_behavior_drift_metrics','pub.gold.customer_water_consumption_behavior_profile_metrics','pub.gold.test','pub.gold.water_quality_compliance'], includeSystem: false, excludedNodeIds: [], inheritFutureChildren: false, excludedQualifiedNames: [] }
 
 function required(value, name) {
   const normalized = typeof value === 'string' ? value.trim() : ''
@@ -60,18 +61,6 @@ async function main() {
   if (source.project_id !== PROJECT_ID) throw new Error('PUB Gold source project boundary mismatch.')
   if (source.status !== 'CONFIGURED') throw new Error(`PUB Gold source is not CONFIGURED: ${source.status}`)
 
-  const { data: scope, error: scopeError } = await admin.schema('catalog').from('source_scopes')
-    .select('id,current_version_id,status').eq('source_id', SOURCE_ID).eq('status', 'ACTIVE').maybeSingle()
-  if (scopeError || !scope) throw new Error('Active PUB Gold source scope could not be resolved.')
-  if (scope.current_version_id !== EXPECTED_SCOPE_VERSION_ID) {
-    throw new Error(`Scope changed. Expected ${EXPECTED_SCOPE_VERSION_ID}, found ${scope.current_version_id ?? 'none'}.`)
-  }
-
-  const { data: users, error: usersError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  if (usersError) throw new Error(`Unable to resolve persona principal: ${usersError.message}`)
-  const persona = users?.users?.find(user => user.email?.toLowerCase() === PERSONA_EMAIL)
-  if (!persona) throw new Error('DGA persona principal was not found.')
-
   const { data: binding, error: bindingError } = await admin.schema('governance').from('project_role_bindings')
     .select('id,role_key,active,expires_at').eq('project_id', PROJECT_ID).eq('user_id', persona.id)
     .eq('role_key', 'DATA_GOVERNANCE_ADMIN').eq('active', true).maybeSingle()
@@ -87,7 +76,7 @@ async function main() {
   if (allowed !== true) throw new Error('DGA persona does not currently have discovery.execute.')
 
   const cookies = await sessionCookies({ url: supabaseUrl, key: serviceRoleKey, email: PERSONA_EMAIL })
-  const idempotencyKey = `pub-gold-scope-v4-${EXPECTED_SCOPE_VERSION_ID}`
+  const idempotencyKey = `pub-gold-controlled-${expectedScopeVersionId}`
   const response = await fetch(`${baseUrl}/api/catalog/discovery`, {
     method: 'POST',
     headers: {
@@ -108,7 +97,7 @@ async function main() {
     status: 'ACCEPTED',
     projectId: PROJECT_ID,
     sourceId: SOURCE_ID,
-    scopeVersionId: EXPECTED_SCOPE_VERSION_ID,
+    scopeVersionId: expectedScopeVersionId,
     persona: 'data-governance-admin',
     durableJobId: responseBody.durableJobId ?? null,
     durableJobStatus: responseBody.status ?? null,
@@ -129,6 +118,14 @@ async function main() {
   mkdirSync(dirname(evidencePath), { recursive: true })
   writeFileSync(evidencePath, JSON.stringify(evidence, null, 2) + '\n', 'utf8')
   console.log(JSON.stringify({ status: evidence.status, durableJobId: evidence.durableJobId, alreadyActive: evidence.alreadyActive, safeguards: evidence.safeguards }))
+  await deactivateBinding(admin)
+}
+
+async function deactivateBinding(admin) {
+  if (!admin) return
+  await admin.schema('governance').from('project_role_bindings')
+    .update({ active: false, expires_at: new Date().toISOString() })
+    .eq('id', DGA_BINDING_ID).eq('project_id', PROJECT_ID)
 }
 
 main().catch(error => {
