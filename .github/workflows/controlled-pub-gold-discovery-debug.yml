@@ -1,0 +1,46 @@
+name: Controlled PUB Gold Discovery Debug
+
+on:
+  push:
+    branches:
+      - ops/governed-pub-gold-discovery-20260926
+    paths:
+      - scripts/run-governed-pub-gold-discovery.mjs
+      - .github/workflows/controlled-pub-gold-discovery-debug.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: controlled-pub-gold-discovery-debug
+  cancel-in-progress: false
+
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      DATANEXUS_BASE_URL: https://data-quality-ai-platform.vercel.app
+      DISCOVERY_EVIDENCE_PATH: artifacts/pub-gold-discovery.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Execute exact-scope governed discovery
+        run: node scripts/run-governed-pub-gold-discovery.mjs
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: controlled-pub-gold-discovery-evidence
+          path: artifacts/pub-gold-discovery.json
+          if-no-files-found: warn
+          retention-days: 30
