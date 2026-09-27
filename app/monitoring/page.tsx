@@ -66,6 +66,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
       <div className={`${styles.monitoringStage} mt-5`}>
         <JobMonitor
           initialRuns={typedRuns}
+          initialSteps={typedSteps}
           initialAgents={typedAgents}
           initialDatasets={typedDatasets}
           initialProjects={typedProjects}
