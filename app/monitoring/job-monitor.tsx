@@ -90,9 +90,9 @@ type DomainCell = {
 }
 
 const ACTIVE = new Set(['RUNNING', 'CREATED', 'PENDING'])
-const WAITING = new Set(['WAITING'])
+const WAITING = new Set(['WAITING', 'WAITING_APPROVAL', 'AWAITING_APPROVAL', 'BLOCKED'])
 const QUEUED = new Set(['QUEUED'])
-const COMPLETE = new Set(['SUCCEEDED', 'COMPLETED'])
+const COMPLETE = new Set(['SUCCEEDED', 'COMPLETED', 'PASSED', 'VERIFIED'])
 const TIME_FORMATTER = new Intl.DateTimeFormat('en-SG', { timeStyle: 'short', timeZone: 'Asia/Singapore' })
 
 const FEATURE_PRESENTATION: Record<string, FeaturePresentation> = {
@@ -281,6 +281,7 @@ function OrganicDomainCell({
   selected,
   onSelectDomain,
   onSelectAgent,
+  steps,
 }: {
   cell: DomainCell
   agents: Map<string, MonitoringAgent>
@@ -289,12 +290,19 @@ function OrganicDomainCell({
   selected: boolean
   onSelectDomain: () => void
   onSelectAgent: (agentId: string, runId: string | null) => void
+  steps: MonitoringStep[]
 }) {
   const meta = statusMeta(cell.status)
   const palette = domainPalette(cell.key)
   const visibleComponents = cell.components
   const denseNodes = visibleComponents.length > 8
   const featureProgress = cell.progressPercent
+  const stepsByRun = new Map<string, MonitoringStep[]>()
+  for (const step of steps) {
+    const current = stepsByRun.get(step.agent_run_id) ?? []
+    current.push(step)
+    stepsByRun.set(step.agent_run_id, current)
+  }
   const domainStyle = {
     '--domain-edge': palette.edge,
     '--domain-glow': palette.glow,
@@ -311,8 +319,15 @@ function OrganicDomainCell({
     <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full opacity-30">
       {visibleComponents.map((component, index) => {
         const position = organicNodePosition(index, visibleComponents.length)
-        const stroke = component.run ? palette.edge : 'rgba(100,116,139,.28)'
-        return <line key={component.agent.id} x1="50%" y1="53%" x2={`${position.left}%`} y2={`${position.top}%`} stroke={stroke} strokeWidth={component.run ? '1.15' : '0.65'} style={{ filter: component.run ? `drop-shadow(0 0 4px ${palette.edge})` : undefined }} />
+        const componentSteps = component.run ? stepsByRun.get(component.run.id) ?? [] : []
+        const runStatus = component.run ? normalizeRunStatus(component.run.status) : 'IDLE'
+        const hasRunningStep = componentSteps.some((step) => normalizeRunStatus(step.status) === 'RUNNING')
+        const hasFailedStep = componentSteps.some((step) => normalizeRunStatus(step.status) === 'FAILED')
+        const hasWaitingStep = componentSteps.some((step) => normalizeRunStatus(step.status) === 'WAITING')
+        const evidenceStatus: CellStatus = hasFailedStep ? 'FAILED' : hasRunningStep ? 'RUNNING' : hasWaitingStep ? 'WAITING' : runStatus
+        const illuminated = evidenceStatus !== 'IDLE'
+        const stroke = evidenceStatus === 'FAILED' ? '#e879f9' : evidenceStatus === 'WAITING' ? '#fcd34d' : evidenceStatus === 'COMPLETE' ? '#6ee7b7' : illuminated ? palette.edge : 'rgba(100,116,139,.28)'
+        return <line key={component.agent.id} x1="50%" y1="53%" x2={`${position.left}%`} y2={`${position.top}%`} stroke={stroke} strokeWidth={illuminated ? '1.35' : '0.65'} strokeDasharray={evidenceStatus === 'WAITING' ? '5 4' : undefined} className={evidenceStatus === 'RUNNING' ? 'motion-safe:animate-pulse' : undefined} style={{ filter: illuminated ? `drop-shadow(0 0 5px ${stroke})` : undefined }} />
       })}
     </svg>
 
@@ -594,6 +609,7 @@ export function JobMonitor({
             selected={selectedCell?.key === cell.key}
             onSelectDomain={() => selectDomain(cell)}
             onSelectAgent={(agentId, runId) => selectAgent(cell, agentId, runId)}
+            steps={steps}
           />)}
         </div> : <div className="relative z-10 grid min-h-[480px] place-items-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02]">
           <div className="text-center">
