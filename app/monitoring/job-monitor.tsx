@@ -50,6 +50,7 @@ export type MonitoringProject = { id: string; name: string; description: string 
 
 type Props = {
   initialRuns: MonitoringRun[]
+  initialSteps?: MonitoringStep[]
   initialAgents: MonitoringAgent[]
   initialDatasets: MonitoringDataset[]
   initialProjects: MonitoringProject[]
@@ -363,6 +364,7 @@ function OrganicDomainCell({
 
 export function JobMonitor({
   initialRuns,
+  initialSteps = [],
   initialAgents,
   initialDatasets,
   initialProjects,
@@ -373,6 +375,7 @@ export function JobMonitor({
   userId: _userId,
 }: Props) {
   const [runs, setRuns] = useState(initialRuns)
+  const [steps, setSteps] = useState(initialSteps)
   const initialSelectedRun = initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialAgentId ? null : initialRuns[0]?.id ?? null
   const [selectedRunId, setSelectedRunId] = useState<string | null>(initialSelectedRun)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(initialAgentId ?? (initialSelectedRun ? initialRuns.find((run) => run.id === initialSelectedRun)?.agent_definition_id ?? null : null))
@@ -391,8 +394,9 @@ export function JobMonitor({
     try {
       const response = await fetch('/api/monitoring/runs', { cache: 'no-store' })
       if (!response.ok) return
-      const payload = await response.json() as { runs?: MonitoringRun[] }
+      const payload = await response.json() as { runs?: MonitoringRun[]; steps?: MonitoringStep[] }
       setRuns(payload.runs ?? [])
+      setSteps(payload.steps ?? [])
       setLastUpdated(new Date())
     } finally {
       setRefreshing(false)
@@ -464,6 +468,15 @@ export function JobMonitor({
   }, [domainCells, statusFilter, search, agents, datasets])
 
   const selectedCell = domainCells.find((cell) => cell.key === selectedDomainKey) ?? domainCells[0] ?? null
+  const selectedRunSteps = useMemo(() => {
+    if (!selectedRunId) return []
+    return steps
+      .filter((step) => step.agent_run_id === selectedRunId)
+      .sort((a, b) => a.step_order - b.step_order || a.attempt - b.attempt)
+  }, [steps, selectedRunId])
+  const selectedRunProgress = selectedRunSteps.length
+    ? Math.round((selectedRunSteps.filter((step) => normalizeRunStatus(step.status) === 'COMPLETE').length / selectedRunSteps.length) * 100)
+    : null
 
   const activeJobs = runs.filter((run) => ACTIVE.has(run.status)).length
   const queuedJobs = runs.filter((run) => WAITING.has(run.status) || QUEUED.has(run.status)).length
@@ -538,6 +551,24 @@ export function JobMonitor({
         <div className="rounded-xl border border-cyan-300/25 bg-cyan-300/8 px-3 py-2.5 text-sm font-bold text-cyan-100">Domain Cells</div>
       </div>
     </div>
+
+    {selectedRunId && selectedRunSteps.length > 0 ? <div className="border-b border-cyan-300/10 bg-cyan-300/[0.035] px-5 py-3" aria-label="Selected execution pulse">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200/70">Execution pulse</span>
+        {selectedRunSteps.map((step, index) => {
+          const status = normalizeRunStatus(step.status)
+          const meta = statusMeta(status)
+          return <span key={step.id} className="inline-flex items-center gap-2">
+            {index > 0 ? <span className={`h-px w-5 ${status === 'IDLE' ? 'bg-slate-700' : 'bg-cyan-300/60'}`} /> : null}
+            <span title={`${step.step_name} · ${meta.label} · attempt ${step.attempt}`} className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-bold ${meta.ring} ${meta.soft} ${meta.text}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${status === 'RUNNING' ? 'motion-safe:animate-pulse' : ''}`} />
+              {step.step_name}
+            </span>
+          </span>
+        })}
+        <span className="ml-auto text-[11px] font-black text-white">{selectedRunProgress}% evidence complete</span>
+      </div>
+    </div> : null}
 
     <div className="min-h-[720px]">
       <div className="relative overflow-hidden bg-[#03101d] p-5 sm:p-7">
