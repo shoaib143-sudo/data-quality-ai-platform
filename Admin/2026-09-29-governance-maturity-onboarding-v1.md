@@ -17,6 +17,6 @@ Key administrative boundaries:
 * Multiple respondent answers remain separate for consensus analysis.
 * Evidence and machine observations remain independent from self-declared answers.
 * Reassessment creates a new historical cycle.
-* Production activation of automated verification remains a separate controlled step.
+* Automated verification is bounded to read-only coverage observations over connected catalog, data-quality, lineage, and stewardship evidence; observations never overwrite declared maturity.
 
 Implementation reference: `docs/governance-maturity-assessment-v1.md`.
