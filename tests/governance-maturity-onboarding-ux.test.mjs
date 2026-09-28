@@ -37,3 +37,9 @@ test('non-admin members cannot initialize organization assessment context', () =
   assert.match(ui, /!data\.assessment && !data\.canManageProfile/)
   assert.match(ui, /assessment initialization is intentionally administrator controlled/)
 })
+
+test('roadmap actions launch only persona-accessible DataNexus workspaces with governed fallback', () => {
+  assert.match(ui, /canAccessWorkspaceHref/)
+  assert.match(ui, /Open relevant DataNexus workspace/)
+  assert.match(ui, /return canAccessWorkspaceHref\(persona, preferred, organizationRole\) \? preferred : '\/journeys'/)
+})
