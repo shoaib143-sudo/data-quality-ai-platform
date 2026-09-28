@@ -31,3 +31,10 @@ test('direct browser database access fails closed for maturity evidence', () => 
 test('score persistence is explicitly not regulatory certification', () => {
   assert.match(sql, /not regulatory certification/)
 })
+
+test('reassessment cycle creation is atomic and service-role only', () => {
+  assert.match(sql, /function governance\.start_maturity_assessment_cycle/)
+  assert.match(sql, /update governance\.maturity_assessments[\s\S]*insert into governance\.maturity_assessments/)
+  assert.match(sql, /revoke all on function governance\.start_maturity_assessment_cycle\(uuid,text,jsonb,uuid\) from public, anon, authenticated/)
+  assert.match(sql, /grant execute on function governance\.start_maturity_assessment_cycle\(uuid,text,jsonb,uuid\) to service_role/)
+})
