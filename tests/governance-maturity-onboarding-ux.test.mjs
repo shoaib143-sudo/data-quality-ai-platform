@@ -32,3 +32,8 @@ test('results keep critical gaps, evidence, coverage, consensus and target state
   }
   assert.match(ui, /not legal advice, regulatory certification/)
 })
+
+test('non-admin members cannot initialize organization assessment context', () => {
+  assert.match(ui, /!data\.assessment && !data\.canManageProfile/)
+  assert.match(ui, /assessment initialization is intentionally administrator controlled/)
+})
