@@ -59,6 +59,7 @@ on:
       - 'scripts/test-governed-learning-paired-benchmark.mjs'
       - 'scripts/test-governed-learning-evaluation-ledger.mjs'
       - 'scripts/test-learning-benchmark-dataset-manifest.mjs'
+      - 'scripts/test-learning-benchmark-dataset-manifest.sql'
       - 'scripts/test-learning-self-improvement-adversarial.mjs'
       - 'scripts/test-governed-learning-prospective-outcomes.mjs'
       - 'scripts/test-agent-run-outcome-coverage.mjs'
@@ -137,6 +138,7 @@ on:
       - 'scripts/test-governed-learning-paired-benchmark.mjs'
       - 'scripts/test-governed-learning-evaluation-ledger.mjs'
       - 'scripts/test-learning-benchmark-dataset-manifest.mjs'
+      - 'scripts/test-learning-benchmark-dataset-manifest.sql'
       - 'scripts/test-learning-self-improvement-adversarial.mjs'
       - 'scripts/test-governed-learning-prospective-outcomes.mjs'
       - 'scripts/test-agent-run-outcome-coverage.mjs'
@@ -224,3 +226,27 @@ jobs:
         run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
       - name: Run independent continuous learning governance adversarial audit
         run: node scripts/audit-continuous-learning-governance-adversarial.mjs
+
+  database-fixture:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Execute isolated benchmark manifest fixture
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-learning-benchmark-dataset-manifest.sql

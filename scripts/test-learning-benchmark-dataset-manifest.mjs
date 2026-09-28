@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import { createHash } from 'node:crypto'
 
 const migration = fs.readFileSync(new URL('../supabase/migrations/20260929000300_learning_benchmark_dataset_manifest.sql', import.meta.url), 'utf8')
+const fixture = fs.readFileSync(new URL('./test-learning-benchmark-dataset-manifest.sql', import.meta.url), 'utf8')
 const digest = (value) => createHash('sha256').update(value).digest('hex')
 const cases = [
   { case_key: digest('case-a'), split: 'TRAINING', source_case_ref: 'source-a' },
@@ -17,6 +18,11 @@ assert.match(migration, /split text not null check \(split in \('TRAINING',\s*'H
 assert.match(migration, /manifest hash does not match canonical case manifest/)
 assert.match(migration, /requires a registered immutable dataset manifest/)
 assert.match(migration, /c\.split = 'HELD_OUT'/)
+assert.match(fixture, /register_learning_benchmark_dataset\(/)
+assert.match(fixture, /mismatched aggregate unexpectedly succeeded/)
+assert.match(fixture, /failed benchmark was not rolled back/)
+assert.match(fixture, /training case benchmark unexpectedly succeeded/)
+assert.match(fixture, /learning benchmark dataset registration and paired-binding SQL fixture passed/)
 assert.equal(manifestHash.length, 71)
 assert.notEqual(cases[0].case_key, cases[1].case_key)
 console.log('Learning benchmark dataset manifest contract pins immutable cases, split assignments, and held-out binding.')
