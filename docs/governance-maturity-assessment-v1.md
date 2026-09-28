@@ -29,7 +29,7 @@ DataNexus does not collapse all assessment evidence into one number.
 
 * Declared maturity records what respondents say.
 * Supporting evidence is stored independently with its own verification state.
-* System observations are stored independently for future automated verification.
+* System observations are stored independently and can be collected from the connected DataNexus estate.
 * Control coverage is separate from maturity.
 * Evidence confidence is separate from maturity.
 * Assessment consensus is derived from multi-respondent variance.
@@ -93,3 +93,15 @@ pnpm run verify:governance-maturity
 ```
 
 The gate checks framework/version contracts, persistence isolation, API authorization boundaries, multi-respondent preservation, evidence separation, UX requirements, and TypeScript compilation.
+
+
+## Automated verification v1
+
+The organization administrator can run **Verify connected estate** from the results view. DataNexus records current coverage observations for:
+
+* catalog metadata coverage;
+* enabled data-quality rule coverage;
+* lineage dataset coverage; and
+* active stewardship assignment coverage.
+
+If the instance has no projects or no datasets, verification returns a skipped state rather than representing absence of connected evidence as zero maturity. Machine observations increase evidence confidence and can supply control coverage, but they do not overwrite the respondent's declared maturity.
