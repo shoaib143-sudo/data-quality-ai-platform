@@ -19,7 +19,7 @@ export default async function GovernanceMaturityPage() {
           contextLabel="Organization readiness assessment"
           homeHref="/home"
         />
-        <GovernanceMaturityOnboarding initial={initial} />
+        <GovernanceMaturityOnboarding initial={initial} persona={landing.persona} organizationRole={landing.organizationRole} />
       </div>
     </main>
   )
