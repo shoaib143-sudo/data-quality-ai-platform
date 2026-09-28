@@ -20,8 +20,6 @@ create table if not exists agent.agent_run_outcome_coverage (
   provenance_status text not null check (provenance_status in ('PRODUCTION_ELIGIBLE','SYNTHETIC_OR_TEST','NOT_RECORDED')),
   production_eligible boolean not null default false,
   synthetic_or_test_detected boolean not null default false,
-  outcome_capture_status text not null default 'AWAITING_VERIFIED_OUTCOME'
-    check (outcome_capture_status in ('AWAITING_VERIFIED_OUTCOME','VERIFIED_OUTCOME_AVAILABLE','INCONCLUSIVE_OUTCOME')),
   evidence jsonb not null default '{}'::jsonb check (jsonb_typeof(evidence) = 'object'),
   observed_at timestamptz not null default now(),
   constraint agent_run_outcome_coverage_project_run_fk
@@ -146,7 +144,14 @@ select
   count(*) filter (where c.production_eligible)::integer as production_eligible_runs,
   count(*) filter (where not c.production_eligible and c.provenance_status = 'NOT_RECORDED')::integer as pending_provenance_runs,
   count(*) filter (where c.provenance_status = 'SYNTHETIC_OR_TEST')::integer as excluded_synthetic_or_test_runs,
-  count(*) filter (where c.outcome_capture_status = 'AWAITING_VERIFIED_OUTCOME')::integer as awaiting_verified_outcome_runs,
+  count(*) filter (where not exists (
+    select 1 from agent.learning_prospective_outcomes o
+    where o.project_id = c.project_id and o.source_agent_run_id = c.agent_run_id
+  ))::integer as awaiting_verified_outcome_runs,
+  count(*) filter (where exists (
+    select 1 from agent.learning_prospective_outcomes o
+    where o.project_id = c.project_id and o.source_agent_run_id = c.agent_run_id
+  ))::integer as verified_outcome_runs,
   count(*) filter (where c.terminal_status in ('FAILED','PARTIAL','CANCELLED'))::integer as non_success_terminal_runs,
   min(c.observed_at) as first_observed_at,
   max(c.observed_at) as last_observed_at
@@ -156,4 +161,4 @@ group by c.project_id, c.agent_key, c.agent_version, c.run_mode, c.mode_source;
 comment on table agent.agent_run_outcome_coverage is
   'Immutable terminal run coverage. Every terminal status is counted as awaiting verified outcome until independent outcome evidence is recorded; execution success alone never implies effectiveness.';
 comment on view agent.agent_run_prospective_outcome_denominator is
-  'Explicit per-agent and per-run-mode prospective denominator. Pending provenance and awaiting verification remain visible and are never silently counted as improvement.';
+  'Explicit per-agent and per-run-mode prospective denominator. Verified outcome availability is derived from immutable prospective outcome evidence, so pending verification remains visible without mutating the terminal-run ledger.';
