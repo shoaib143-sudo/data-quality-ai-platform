@@ -258,11 +258,19 @@ export async function createOrUpdateMaturityAssessment(
   const profile = normalizeProfile(input.profile ?? current.profile)
 
   if (input.startNew && current.assessment) {
-    const { error: archiveError } = await admin.schema('governance').from('maturity_assessments')
-      .update({ status: 'ARCHIVED', updated_at: new Date().toISOString() })
-      .eq('id', current.assessment.id)
-      .eq('organization_id', membership.organizationId)
-    if (archiveError) throw new Error(`Unable to archive previous maturity assessment: ${archiveError.message}`)
+    const { data: newAssessmentId, error: cycleError } = await admin.schema('governance').rpc('start_maturity_assessment_cycle', {
+      p_organization_id: membership.organizationId,
+      p_framework_version: GOVERNANCE_MATURITY_FRAMEWORK_VERSION,
+      p_organization_profile: profile,
+      p_created_by: userId,
+    })
+    if (cycleError || !newAssessmentId) throw new Error(`Unable to start maturity reassessment cycle: ${cycleError?.message ?? 'No assessment id returned.'}`)
+    const { data: created, error: createdError } = await admin.schema('governance').from('maturity_assessments')
+      .select('id,organization_id,framework_version,status,organization_profile,scorecard,created_at,updated_at,completed_at')
+      .eq('id', newAssessmentId)
+      .single()
+    if (createdError) throw new Error(`Unable to load new maturity reassessment cycle: ${createdError.message}`)
+    return created as StoredAssessment
   } else if (current.assessment) {
     const { data, error } = await admin.schema('governance').from('maturity_assessments').update({
       organization_profile: profile,
