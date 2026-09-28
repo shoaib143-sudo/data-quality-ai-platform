@@ -44,7 +44,7 @@ test('runner executes only READ-mode acceptance routes', () => {
 })
 
 test('browser evidence enforces exact persona home routing and fails closed', () => {
-  assert.match(runner, /finalUrl\.pathname === `\/home\/\$\{slug\}`/)
+  assert.match(runner, /finalUrl\.pathname === requested\.pathname/)
   assert.match(runner, /personaCountExecuted/)
   assert.match(runner, /failedPersonas/)
   assert.match(runner, /evidence\.status !== 'PASS'/)
