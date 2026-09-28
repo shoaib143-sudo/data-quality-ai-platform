@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const migration = fs.readFileSync(
+const migration = [
   'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql',
-  'utf8',
-)
+  'supabase/migrations/20260929000225_pgcl_terminal_run_learning_provenance.sql',
+].map((path) => fs.readFileSync(path, 'utf8')).join('\n')
 const runtime = fs.readFileSync('lib/agents/proactive-governed-case-learning-runtime.ts', 'utf8')
 const provenance = fs.readFileSync('lib/agents/pgcl-run-learning-provenance.ts', 'utf8')
 
