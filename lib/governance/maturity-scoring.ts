@@ -124,6 +124,7 @@ export function scoreGovernanceMaturity(
   let weightedTarget = 0
   let totalWeight = 0
   let riskPoints = 0
+  let maxAnsweredRisk = 0
   const evidenceValues: number[] = []
   const coverageValues: number[] = []
   const consensusValues: number[] = []
@@ -166,6 +167,7 @@ export function scoreGovernanceMaturity(
     weightedTarget += targetScore * weight
     totalWeight += weight
     riskPoints += gap * criticalityFactor[question.criticality] * priorityFactor[priority] * weight
+    maxAnsweredRisk += 5 * criticalityFactor[question.criticality] * 1.4 * weight
 
     questionScores.push({
       questionId: question.id,
@@ -188,11 +190,7 @@ export function scoreGovernanceMaturity(
   const maturity = totalWeight ? round(weightedMaturity / totalWeight) : 0
   const targetMaturity = totalWeight ? round(weightedTarget / totalWeight) : 0
   const completion = applicableQuestions.length ? round((questionScores.length / applicableQuestions.length) * 100) : 0
-  const maxRisk = applicableQuestions.reduce((sum, question) => {
-    const weight = question.weight * (domainWeight.get(question.domainId) ?? 1)
-    return sum + 5 * criticalityFactor[question.criticality] * 1.4 * weight
-  }, 0)
-  const normalizedRisk = maxRisk ? (riskPoints / maxRisk) * 100 : 0
+  const normalizedRisk = maxAnsweredRisk ? (riskPoints / maxAnsweredRisk) * 100 : 0
   const riskExposure = normalizedRisk >= 34 ? 'CRITICAL' : normalizedRisk >= 20 ? 'HIGH' : normalizedRisk >= 9 ? 'MODERATE' : 'LOW'
 
   const questionScoreMap = new Map(questionScores.map(score => [score.questionId, score]))
