@@ -103,8 +103,8 @@ begin
   if not found then
     raise exception 'PGCL learning provenance source run is missing or cross-project';
   end if;
-  if v_run.status::text not in ('SUCCEEDED', 'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED') then
-    raise exception 'PGCL learning provenance requires a terminal agent run';
+  if v_run.status <> 'SUCCEEDED' then
+    raise exception 'PGCL learning provenance requires a SUCCEEDED agent run';
   end if;
 
   if v_run.parent_run_id is not null then
