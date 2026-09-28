@@ -1,5 +1,19 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
+type ProspectiveSummaryRow = {
+  agent_key: string
+  agent_version: string
+  run_mode: string
+  sample_count: number | string
+  effective_count: number | string
+  ineffective_count: number | string
+  partial_count: number | string
+  other_count: number | string
+  mean_effectiveness: number | string | null
+  first_verified_at: string
+  last_verified_at: string
+}
+
 /** Returns observed counts only. Missing agents and modes have no measured results. */
 export async function listGovernedLearningProspectiveResults(projectId: string) {
   const admin = createAdminClient()
@@ -7,7 +21,7 @@ export async function listGovernedLearningProspectiveResults(projectId: string) 
     p_project_id: projectId,
   })
   if (error) throw new Error(`Unable to read prospective learning outcomes: ${error.message}`)
-  return (data ?? []).map((row) => ({
+  return ((data ?? []) as ProspectiveSummaryRow[]).map((row) => ({
     agentKey: String(row.agent_key),
     agentVersion: String(row.agent_version),
     runMode: String(row.run_mode),
