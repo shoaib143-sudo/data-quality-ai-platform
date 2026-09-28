@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import test from 'node:test'
+
+const sql = fs.readFileSync('supabase/migrations/20260929070000_governance_maturity_assessment.sql', 'utf8')
+
+test('maturity assessment persistence preserves separate answer, evidence, and observation truth', () => {
+  assert.match(sql, /create table if not exists governance\.maturity_assessments/)
+  assert.match(sql, /create table if not exists governance\.maturity_assessment_responses/)
+  assert.match(sql, /create table if not exists governance\.maturity_assessment_evidence/)
+  assert.match(sql, /create table if not exists governance\.maturity_assessment_observations/)
+})
+
+test('multi-respondent answers cannot overwrite another respondent', () => {
+  assert.match(sql, /unique \(assessment_id, question_id, respondent_user_id\)/)
+})
+
+test('direct browser database access fails closed for maturity evidence', () => {
+  for (const table of [
+    'maturity_assessments',
+    'maturity_assessment_responses',
+    'maturity_assessment_evidence',
+    'maturity_assessment_observations',
+  ]) {
+    assert.match(sql, new RegExp('alter table governance\\.' + table + ' enable row level security'))
+    assert.match(sql, new RegExp('revoke all on governance\\.' + table + ' from public, anon, authenticated'))
+    assert.match(sql, new RegExp('grant select, insert, update, delete on governance\\.' + table + ' to service_role'))
+  }
+})
+
+test('score persistence is explicitly not regulatory certification', () => {
+  assert.match(sql, /not regulatory certification/)
+})
