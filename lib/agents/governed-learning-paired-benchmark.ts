@@ -29,7 +29,7 @@ export function validatePairedLearningBenchmark(input: {
   let adversarialFailures = 0
   for (const item of cases) {
     const key = item.caseKey.trim()
-    if (!key || caseKeys.has(key)) throw new Error('paired benchmark case keys must be nonempty and unique')
+    if (!/^[a-f0-9]{64}$/.test(key) || caseKeys.has(key)) throw new Error('paired benchmark case keys must be SHA-256 digests and unique')
     if (trainingKeys.has(key)) throw new Error('paired benchmark held-out case overlaps candidate training evidence')
     caseKeys.add(key)
     if (!Number.isFinite(item.baselineScore) || item.baselineScore < 0 || item.baselineScore > 1
@@ -37,7 +37,7 @@ export function validatePairedLearningBenchmark(input: {
       throw new Error('paired benchmark scores must be between 0 and 1')
     }
     for (const ref of [item.baselineEvidenceRef, item.candidateEvidenceRef]) {
-      if (!ref.trim() || refs.has(ref.trim())) throw new Error('paired benchmark evidence references must be nonempty and unique')
+      if (!/^[a-f0-9-]{36}$/.test(ref.trim()) || refs.has(ref.trim())) throw new Error('paired benchmark evidence references must be UUIDs and unique')
       refs.add(ref.trim())
     }
     baselineTotal += item.baselineScore

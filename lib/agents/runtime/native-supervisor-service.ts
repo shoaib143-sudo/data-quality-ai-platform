@@ -248,7 +248,7 @@ export async function runNativeSpecialistSupervisor(input: {
     agent_definition_id: supervisorDefinition.id,
     project_id: projectId,
     status: 'RUNNING',
-    input: { goal_hash: goalHash, worker_count: resolvedWorkers.length, execution_mode: 'native_supervisor_specialist_v1' },
+    input: { goal_hash: goalHash, worker_count: resolvedWorkers.length, execution_mode: 'native_supervisor_specialist_v1', learningRunMode: input.learningRunMode ?? 'HANDSFREE' },
     started_at: new Date().toISOString(),
   }).select('id').single()
   if (supervisorRunError || !supervisorRun) throw new Error(`Unable to create native supervisor run: ${supervisorRunError?.message ?? 'unknown error'}`)
@@ -282,7 +282,7 @@ export async function runNativeSpecialistSupervisor(input: {
         project_id: projectId,
         parent_run_id: supervisorRun.id,
         status: 'QUEUED',
-        input: { question: worker.question, supervisor_goal_hash: goalHash, depends_on_step_ids: dependencyStepIds, execution_mode: 'native_supervisor_specialist_read_only' },
+        input: { question: worker.question, supervisor_goal_hash: goalHash, depends_on_step_ids: dependencyStepIds, execution_mode: 'native_supervisor_specialist_read_only', learningRunMode: input.learningRunMode ?? 'HANDSFREE' },
       }).select('id').single()
       if (childRunError || !childRun) throw new Error(`Unable to create supervisor child run for ${worker.agentKey}: ${childRunError?.message ?? 'unknown error'}`)
       childRunIds.push(childRun.id)
