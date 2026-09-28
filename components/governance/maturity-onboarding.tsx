@@ -145,6 +145,33 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
     }
   }
 
+  async function verifyConnectedEstate() {
+    if (!data.assessment) return
+    setBusy(true)
+    setFeedback('')
+    try {
+      const response = await fetch('/api/governance/maturity/observe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assessmentId: data.assessment.id }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error ?? 'Unable to verify connected governance coverage.')
+      setData(payload.assessment)
+      setProfile(payload.assessment.profile)
+      refreshDrafts(payload.assessment)
+      setFeedback(
+        payload.result?.skipped
+          ? 'System verification is ready, but no connected datasets are available yet.'
+          : `DataNexus recorded ${payload.result?.observations?.length ?? 0} system observations.`,
+      )
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Unable to verify connected governance coverage.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function saveAnswer(moveNext = true) {
     if (!question || !data.assessment) return
     const draft = drafts[question.id] ?? blankAnswer(question, responseByQuestion.get(question.id))
@@ -439,13 +466,19 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <button onClick={() => { setPhase('baseline'); setIndex(0) }} className="rounded-2xl bg-white p-4 text-left shadow-sm"><p className="font-black">Complete quick baseline</p><p className="mt-1 text-xs leading-5 text-slate-500">{baselineAnswered}/{baselineQuestions.length} answered</p></button>
               <button onClick={() => { setPhase('full'); setIndex(0) }} className="rounded-2xl bg-white p-4 text-left shadow-sm"><p className="font-black">Deepen the assessment</p><p className="mt-1 text-xs leading-5 text-slate-500">{fullAnswered}/{data.questions.length} applicable questions answered</p></button>
-              <div className="rounded-2xl bg-white p-4 shadow-sm"><p className="font-black">Add more evidence</p><p className="mt-1 text-xs leading-5 text-slate-500">Evidence remains independently verifiable and can later be replaced by system observation.</p></div>
+              <div className="rounded-2xl bg-white p-4 shadow-sm"><p className="font-black">Add more evidence</p><p className="mt-1 text-xs leading-5 text-slate-500">Evidence remains independently verifiable and can be corroborated by DataNexus observations.</p></div>
             </div>
             {data.canManageProfile ? (
-              <button onClick={() => void configureAssessment(true)} disabled={busy} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 hover:bg-blue-50 disabled:opacity-40">
-                Start a new reassessment cycle <ArrowRight className="h-4 w-4" />
-              </button>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button onClick={() => void verifyConnectedEstate()} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-40">
+                  Verify connected estate <ShieldCheck className="h-4 w-4" />
+                </button>
+                <button onClick={() => void configureAssessment(true)} disabled={busy} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 hover:bg-blue-50 disabled:opacity-40">
+                  Start a new reassessment cycle <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
             ) : null}
+            {feedback ? <p role="status" className="mt-4 text-sm font-semibold text-slate-600">{feedback}</p> : null}
           </section>
 
           {data.history.length > 1 ? (
