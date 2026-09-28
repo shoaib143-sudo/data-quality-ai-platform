@@ -56,6 +56,8 @@ The current tables and RPCs are the starting point, not permission to create par
 
 Integrity rules: no evidence created after a claimed observation time; no duplicate case counted as independent evidence; no same-run feedback used in a held-out test; no cross-project or cross-asset leakage; no synthetic case certifies a real outcome; no self-evaluation alone promotes a candidate; no feedback changes policy or tool allowlists. PR #1078 enforces one temporal rule at the benchmark insert boundary.
 
+The paired benchmark recording adapter also checks that baseline and candidate totals come from the same unique case keys, do not overlap the declared training keys, and match the cited aggregate evidence and safety counts. This is an application-level integrity check. Independent dataset provenance and the evaluation ledger's case-to-evidence binding still need database-backed validation before it can prove a truly held-out improvement.
+
 ## Eight-agent learning matrix
 
 Each agent may learn from verified outcomes within its existing tool allowlist. The terms below are candidate behaviors and evaluation targets, not current production claims.

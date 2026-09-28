@@ -1,10 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { SkillBenchmarkEvidence } from './governed-skill-promotion-gate'
+import { validatePairedLearningBenchmark, type PairedLearningCase } from './governed-learning-paired-benchmark'
 
 export async function recordGovernedLearningCandidateBenchmark(input: {
   projectId: string
   candidateId: string
   benchmark: SkillBenchmarkEvidence
+  pairedCases: readonly PairedLearningCase[]
+  trainingCaseKeys: readonly string[]
   rollbackRef: string
   minimumCaseCount?: number
   minimumCandidateScore?: number
@@ -12,6 +15,11 @@ export async function recordGovernedLearningCandidateBenchmark(input: {
 }) {
   const admin = createAdminClient()
   const benchmark = input.benchmark
+  validatePairedLearningBenchmark({
+    benchmark,
+    cases: input.pairedCases,
+    trainingCaseKeys: input.trainingCaseKeys,
+  })
   const { data, error } = await admin.schema('agent').rpc('record_learning_candidate_benchmark', {
     p_project_id: input.projectId,
     p_candidate_id: input.candidateId,
