@@ -38,3 +38,8 @@ test('reassessment cycle creation is atomic and service-role only', () => {
   assert.match(sql, /revoke all on function governance\.start_maturity_assessment_cycle\(uuid,text,jsonb,uuid\) from public, anon, authenticated/)
   assert.match(sql, /grant execute on function governance\.start_maturity_assessment_cycle\(uuid,text,jsonb,uuid\) to service_role/)
 })
+
+test('only one active assessment cycle is allowed per organization and framework version', () => {
+  assert.match(sql, /unique index if not exists maturity_assessments_one_active_cycle_idx/)
+  assert.match(sql, /where status <> 'ARCHIVED'/)
+})
