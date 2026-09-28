@@ -576,6 +576,7 @@
 
 .dn-app-rail-menu { display: none; }
 @media (max-width: 700px) {
+  .dn-page main:has(.dn-app-rail) .dn-topbar { top: 61px; }
   .dn-app-rail-links { display: none; }
   .dn-app-rail-menu { display: block; position: relative; margin-left: auto; color: white; }
   .dn-app-rail-menu summary { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px; list-style: none; font-size: 12px; font-weight: 750; cursor: pointer; }
