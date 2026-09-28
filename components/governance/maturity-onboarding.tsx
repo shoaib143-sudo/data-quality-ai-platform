@@ -331,7 +331,7 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
                 {MATURITY_LEVELS.map(level => <option key={level.level} value={level.level}>{level.level} · {level.label}</option>)}
               </select>
             </label>
-            <label className="text-sm font-bold">Observed control coverage, optional
+            <label className="text-sm font-bold">Reported control coverage, optional
               <input type="number" min={0} max={100} value={currentDraft.coverage ?? ''} onChange={event => updateDraft({ coverage: event.target.value === '' ? null : Number(event.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3" placeholder="0 to 100%" />
             </label>
           </div>
