@@ -84,14 +84,20 @@ begin
     return new;
   end if;
 
-  v_run_mode := upper(coalesce(nullif(btrim(new.input->>'learningRunMode'), ''), nullif(btrim(new.input->>'run_mode'), ''), 'UNCLASSIFIED'));
-  if v_run_mode not in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF') then
+  if upper(coalesce(new.input->>'learningRunMode', '')) in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF')
+    and upper(coalesce(new.input->>'run_mode', '')) in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF')
+    and upper(new.input->>'learningRunMode') <> upper(new.input->>'run_mode') then
     v_run_mode := 'UNCLASSIFIED';
     v_mode_source := 'UNCLASSIFIED';
-  elsif new.input ? 'learningRunMode' then
+  elsif upper(coalesce(new.input->>'learningRunMode', '')) in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF') then
+    v_run_mode := upper(new.input->>'learningRunMode');
     v_mode_source := 'LEARNING_RUN_MODE';
-  else
+  elsif upper(coalesce(new.input->>'run_mode', '')) in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF') then
+    v_run_mode := upper(new.input->>'run_mode');
     v_mode_source := 'RUN_MODE';
+  else
+    v_run_mode := 'UNCLASSIFIED';
+    v_mode_source := 'UNCLASSIFIED';
   end if;
 
   begin
