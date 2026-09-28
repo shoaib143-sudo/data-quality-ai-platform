@@ -2,14 +2,19 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const migration = fs.readFileSync('supabase/migrations/20260929000250_agent_run_outcome_coverage.sql', 'utf8')
-const provenance = fs.readFileSync('supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql', 'utf8')
+const provenance = [
+  'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql',
+  'supabase/migrations/20260929000225_pgcl_terminal_run_learning_provenance.sql',
+].map((path) => fs.readFileSync(path, 'utf8')).join('\n')
 
 for (const invariant of [
   'create table if not exists agent.agent_run_outcome_coverage',
   "terminal_status text not null check (terminal_status in ('SUCCEEDED','COMPLETED','PARTIAL','FAILED','CANCELLED'))",
   "run_mode text not null check (run_mode in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF','UNCLASSIFIED'))",
   "provenance_status text not null check (provenance_status in ('PRODUCTION_ELIGIBLE','SYNTHETIC_OR_TEST','NOT_RECORDED'))",
-  "outcome_capture_status text not null default 'AWAITING_VERIFIED_OUTCOME'",
+  'agent.learning_prospective_outcomes',
+  'awaiting_verified_outcome_runs',
+  'verified_outcome_runs',
   'reject_agent_run_outcome_coverage_mutation',
   'create or replace function agent.capture_terminal_agent_run_outcome_coverage',
   "new.status::text not in ('SUCCEEDED', 'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED')",
@@ -33,4 +38,4 @@ for (const forbidden of [
   'grant delete on agent.agent_run_outcome_coverage',
 ]) assert.equal(migration.includes(forbidden), false, `unsafe outcome coverage grant: ${forbidden}`)
 
-console.log('Agent run outcome coverage records terminal failures and explicit pending denominator status by agent and run mode.')
+console.log('Agent run outcome coverage records terminal failures and derives verified versus pending outcome coverage from immutable prospective evidence.')
