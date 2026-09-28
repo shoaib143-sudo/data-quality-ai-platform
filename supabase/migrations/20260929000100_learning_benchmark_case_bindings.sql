@@ -148,5 +148,14 @@ create trigger bind_learning_benchmark_cases
 after insert on agent.learning_candidate_benchmarks
 for each row execute function agent.bind_learning_benchmark_cases();
 
+-- Existing aggregates cannot be grandfathered into an independently bound gate.
+do $$
+begin
+  if exists (select 1 from agent.learning_candidate_benchmarks) then
+    raise exception 'existing benchmarks require a verified paired-evidence backfill before installing case bindings';
+  end if;
+end;
+$$;
+
 comment on table agent.learning_benchmark_case_bindings is
   'Immutable paired held-out evaluation bindings. Case keys are opaque SHA-256 digests, not source content.';
