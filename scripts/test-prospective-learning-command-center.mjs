@@ -3,6 +3,7 @@ import fs from 'node:fs'
 
 const state = fs.readFileSync('lib/ai/prospective-learning-command-center-state.ts', 'utf8')
 const migration = fs.readFileSync('supabase/migrations/20260929000200_learning_prospective_outcomes.sql', 'utf8')
+const page = fs.readFileSync('app/admin/ai-command-center/learning-governance/page.tsx', 'utf8')
 
 for (const invariant of [
   "rpc('summarize_learning_prospective_outcomes'",
@@ -19,6 +20,18 @@ for (const invariant of [
 }
 for (const forbidden of ['.insert(', '.update(', '.delete(', '.upsert(', 'activate', 'rollback']) {
   assert.equal(state.includes(forbidden), false, `prospective Command Center must remain read-only: ${forbidden}`)
+}
+for (const invariant of [
+  'readProspectiveLearningCommandCenterState',
+  'Prospective results by agent and run mode',
+  'prospective.agentCoverage.map',
+  'prospective.summaries.map',
+  'Measured agent versions and run modes',
+  'No evidence yet',
+  'Awaiting the prospective outcome database migration',
+  'if (!/PGRST202|42883|',
+]) {
+  assert.ok(page.includes(invariant), `missing Command Center prospective integration: ${invariant}`)
 }
 for (const invariant of [
   'create table agent.learning_prospective_outcomes',

@@ -122,7 +122,6 @@ begin
 end; $$;
 revoke all on function agent.register_learning_benchmark_dataset(uuid,text,text,text,text,text,timestamptz,jsonb) from public, anon, authenticated, service_role;
 grant execute on function agent.register_learning_benchmark_dataset(uuid,text,text,text,text,text,timestamptz,jsonb) to service_role;
-grant execute on function agent.register_learning_benchmark_dataset(uuid,text,text,text,text,text,timestamptz,jsonb) to service_role;
 
 -- Enforce the manifest at benchmark insert time. Existing case-binding logic
 -- persists individual evaluations first; this trigger then rejects a claim

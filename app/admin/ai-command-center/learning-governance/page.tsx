@@ -4,6 +4,7 @@ import { Activity, BookOpenCheck, ShieldCheck } from 'lucide-react'
 import { authorizeProject } from '@/lib/auth/authorize'
 import { readGovernedLearningLifecycleCommandCenter } from '@/lib/ai/governed-learning-command-center-state'
 import { readPgclCommandCenterState } from '@/lib/ai/pgcl-command-center-state'
+import { readProspectiveLearningCommandCenterState } from '@/lib/ai/prospective-learning-command-center-state'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
@@ -43,15 +44,26 @@ export default async function LearningGovernancePage({
 
   const control = selectedProjectId ? await (async () => {
     await authorizeProject(user.id, selectedProjectId, 'admin.manage')
-    const [lifecycle, pgcl] = await Promise.all([
+    const [lifecycle, pgcl, prospective] = await Promise.all([
       readGovernedLearningLifecycleCommandCenter(selectedProjectId),
       readPgclCommandCenterState(selectedProjectId, user.id),
+      (async () => {
+        try {
+          return await readProspectiveLearningCommandCenterState(selectedProjectId, user.id)
+        } catch (error) {
+          // A preview may precede the migration. Surface other read failures.
+          const message = error instanceof Error ? error.message : String(error)
+          if (!/PGRST202|42883|summarize_learning_prospective_outcomes.*(not found|does not exist|schema cache)/i.test(message)) throw error
+          return null
+        }
+      })(),
     ])
-    return { lifecycle, pgcl }
+    return { lifecycle, pgcl, prospective }
   })() : null
 
   const lifecycle = control?.lifecycle ?? null
   const pgcl = control?.pgcl ?? null
+  const prospective = control?.prospective ?? null
 
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-6">
     <div className="mx-auto max-w-7xl space-y-7">
@@ -96,6 +108,37 @@ export default async function LearningGovernancePage({
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.usageEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Reuse records</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.succeeded}</p><p className="text-xs font-bold uppercase text-slate-500">Successful reuse</p></article>
         </section>
+
+        {!prospective && <section className="rounded-2xl border bg-white p-6" role="status">
+          <h2 className="text-xl font-black">Prospective results</h2>
+          <p className="mt-1 text-sm text-slate-500">Awaiting the prospective outcome database migration. No improvement evidence is available on this environment.</p>
+        </section>}
+
+        {prospective && <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-xl font-black">Prospective results by agent and run mode</h2><p className="mt-1 text-sm text-slate-500">Verified production outcomes only. Missing agents or modes remain explicitly unmeasured and cannot be interpreted as success.</p></div>
+            <p className="text-xs text-slate-500">{prospective.counts.observedOutcomes} outcomes · {prospective.counts.measuredModes} measured modes</p>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{prospective.counts.agentsWithEvidence}/8</p><p className="text-xs font-bold uppercase text-slate-500">Agents with evidence</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black text-emerald-700">{prospective.counts.effective}</p><p className="text-xs font-bold uppercase text-slate-500">Effective</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black text-red-700">{prospective.counts.ineffective}</p><p className="text-xs font-bold uppercase text-slate-500">Ineffective</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black text-amber-700">{prospective.counts.partial + prospective.counts.other}</p><p className="text-xs font-bold uppercase text-slate-500">Partial or unresolved</p></article>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent</th><th className="p-3">Verified outcomes</th><th className="p-3">Effective</th><th className="p-3">Ineffective</th><th className="p-3">Partial / unresolved</th><th className="p-3">Measured modes</th><th className="p-3">Last verified</th></tr></thead>
+              <tbody>{prospective.agentCoverage.map((agent) => <tr key={agent.agentKey} className="border-b last:border-0"><td className="p-3 font-bold">{agent.agentKey}</td><td className="p-3">{agent.sampleCount}</td><td className="p-3">{agent.effectiveCount}</td><td className="p-3">{agent.ineffectiveCount}</td><td className="p-3">{agent.partialCount + agent.otherCount}</td><td className="p-3">{agent.measuredModes.join(', ') || 'No evidence yet'}</td><td className="p-3 text-xs text-slate-500">{agent.lastVerifiedAt ? new Date(agent.lastVerifiedAt).toLocaleString() : 'Not measured'}</td></tr>)}</tbody>
+            </table>
+          </div>
+          <h3 className="mt-6 font-bold">Measured agent versions and run modes</h3>
+          {prospective.summaries.length === 0 ? <p className="mt-2 text-sm text-slate-500">No verified production outcomes yet.</p> : <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent</th><th className="p-3">Version</th><th className="p-3">Run mode</th><th className="p-3">Outcomes</th><th className="p-3">Effective</th><th className="p-3">Ineffective</th><th className="p-3">Partial / unresolved</th></tr></thead>
+              <tbody>{prospective.summaries.map((row) => <tr key={`${row.agentKey}:${row.agentVersion}:${row.runMode}`} className="border-b last:border-0"><td className="p-3 font-bold">{row.agentKey}</td><td className="p-3">{row.agentVersion}</td><td className="p-3">{row.runMode}</td><td className="p-3">{row.sampleCount}</td><td className="p-3">{row.effectiveCount}</td><td className="p-3">{row.ineffectiveCount}</td><td className="p-3">{row.partialCount + row.otherCount}</td></tr>)}</tbody>
+            </table>
+          </div>}
+        </section>}
 
         <section className="rounded-2xl border bg-white p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">

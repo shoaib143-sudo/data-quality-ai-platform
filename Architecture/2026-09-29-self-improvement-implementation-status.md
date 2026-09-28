@@ -70,3 +70,14 @@ npm run verify:governed-learning-prospective-outcomes
 ```
 
 The test is intentionally structural. It verifies the persistence, ordering, immutability, negative-outcome accounting, and runtime binding contract. It does not manufacture production results and therefore cannot substitute for live governed outcomes.
+
+## Isolated activation sequence
+
+1. Create an isolated Supabase test branch after confirming its cost. Apply the forward migrations in timestamp order and verify the schema and RPCs there. Do not point the production application at this branch.
+2. Register a sealed benchmark manifest with independent `TRAINING` and `HELD_OUT` cases and a source evidence cutoff before candidate creation. Record its hash.
+3. Run the baseline and candidate against each held-out case under an independent evaluator. Persist both evaluation rows and their distinct evidence references before recording the aggregate benchmark.
+4. Exercise every applicable agent and explicit run mode with controlled test runs. Check failed, partial, cancelled, blocked, and unknown outcomes, delayed verification, conflicting run modes, and synthetic exclusion.
+5. Inspect read-only Command Center coverage by agent, version, and mode. Missing cells remain missing evidence. Preserve test artifacts and negative-path evidence.
+6. Review candidate safety, authority, policy, cost, latency, and rollback evidence before a controlled production canary. Only real verified outcomes on future comparable work can demonstrate improvement.
+
+The branch contains no isolated database fixture or production prospective results yet. Green CI establishes implementation integrity; it does not satisfy the live evidence gates above. Production merge, migration, candidate activation, and cutover are separate release actions.
