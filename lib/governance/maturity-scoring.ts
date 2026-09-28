@@ -5,7 +5,7 @@ import {
   type AssessmentPriority,
   type MaturityCriticality,
   type OrganizationAssessmentProfile,
-} from './maturity-framework'
+} from './maturity-framework.ts'
 
 export type AssessmentAnswer = {
   questionId: string
