@@ -252,6 +252,21 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
   const fullAnswered = data.questions.filter(item => responseByQuestion.has(item.id)).length
   const currentDraft = question ? (drafts[question.id] ?? blankAnswer(question, responseByQuestion.get(question.id))) : null
 
+  if (!data.assessment && !data.canManageProfile) {
+    return (
+      <section className="mt-5 space-y-5">
+        <header className="rounded-3xl border border-blue-100 bg-white p-7 shadow-sm sm:p-9">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">DataNexus Governance Maturity & Readiness Assessment</p>
+          <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Organization baseline has not started yet.</h1>
+          <p className="mt-4 max-w-4xl text-base leading-7 text-slate-600">An organization OWNER or ADMIN must configure the organization context and start the first assessment cycle. Once it is started, organization members can contribute their own responses and supporting evidence.</p>
+        </header>
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm leading-6 text-amber-900">
+          Your access is valid, but assessment initialization is intentionally administrator controlled.
+        </div>
+      </section>
+    )
+  }
+
   if (!data.assessment) {
     return (
       <section className="mt-5 space-y-5">
