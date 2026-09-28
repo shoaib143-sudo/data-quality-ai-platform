@@ -12,6 +12,12 @@ create table agent.learning_prospective_outcomes (
   effectiveness numeric check (effectiveness between 0 and 1),
   verified_at timestamptz not null,
   recorded_at timestamptz not null default now(),
+  check (length(btrim(agent_key)) > 0),
+  check (length(btrim(agent_version)) > 0),
+  check (length(btrim(run_mode)) > 0),
+  check (length(btrim(mode_source)) > 0),
+  check (length(btrim(outcome_type)) > 0),
+  check (verified_at <= recorded_at),
   check (run_mode <> 'UNCLASSIFIED' or mode_source = 'MISSING_OR_UNRECOGNIZED'),
   check (run_mode = 'UNCLASSIFIED' or mode_source in ('learningRunMode','run_mode'))
 );

@@ -20,7 +20,7 @@ for (const invariant of [
   'add column if not exists production_eligible boolean not null default false',
   'add column if not exists learning_provenance_recorded_at timestamptz',
   'create or replace function agent.record_pgcl_run_learning_provenance',
-  "v_run.status <> 'SUCCEEDED'",
+  "v_run.status::text not in ('SUCCEEDED', 'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED')",
   "v_run.input->>'synthetic'",
   "v_run.input->>'synthetic_bootstrap'",
   "v_run.input->>'acceptance_test'",
