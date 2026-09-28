@@ -101,8 +101,8 @@ jobs:
 
       - name: Install isolated browser dependency
         run: |
-          npm install --no-save --package-lock=false playwright@1.55.0
-          npx playwright install --with-deps chromium
+          pnpm add --save-dev --ignore-workspace-root-check --lockfile=false playwright@1.55.0
+          pnpm exec playwright install --with-deps chromium
 
       - name: Execute read-only live 13-persona browser acceptance
         env:
