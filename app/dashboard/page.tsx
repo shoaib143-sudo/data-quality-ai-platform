@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Activity, AlertTriangle, ArrowRight, CheckCircle2, Database, FileWarning, Gauge, Network, ShieldCheck, Sparkles } from 'lucide-react'
 import { requireUser } from '@/lib/supabase/auth'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { createClient } from '@/lib/supabase/server'
 import './dashboard.css'
@@ -20,6 +21,7 @@ function percent(value: number | null | undefined) { return typeof value === 'nu
 export default async function DashboardPage() {
   const user = await requireUser()
   const supabase = await createClient()
+  const landing = await resolveLandingAccess(user.id)
   const [datasetsResult, versionsResult, runsResult, scoresResult, findingsResult, sourcesResult, qualityRunsResult, alertsResult, agentRunsResult] = await Promise.all([
     supabase.schema('catalog').from('datasets').select('id,name,status,business_domain').order('created_at', { ascending: false }),
     supabase.schema('catalog').from('dataset_versions').select('id,dataset_id,status,version_number').order('version_number', { ascending: false }),
@@ -81,7 +83,7 @@ export default async function DashboardPage() {
     <main id="main-content" tabIndex={-1} className="dn-light-workspace dashboard-shell">
       <div className="dashboard-frame">
         <div className="dashboard-workspace">
-          <GlobalUtilityBar contextLabel="Governance overview" />
+          <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} contextLabel="Governance overview" homeHref="/home" />
           <div className="dashboard-content">
             <div className="dashboard-heading">
               <div><p className="dashboard-eyebrow">DATA GOVERNANCE / OVERVIEW</p><h1>Good to see you, {user.email?.split('@')[0] ?? 'there'}.</h1><p>Your governance workspace at a glance, based on recorded platform evidence.</p></div>
