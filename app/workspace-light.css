@@ -1,0 +1,70 @@
+/* Opt-in light workspace surface for migrated page families. */
+.dn-page main.dn-light-workspace {
+  background: #f5f6fb;
+  color: #292d45;
+}
+
+.dn-page main.dn-light-workspace [class*="bg-[#102036]"] {
+  background: #fff;
+  border-color: #e6e7ef;
+  box-shadow: 0 12px 30px rgba(48, 44, 106, .055), 0 2px 8px rgba(48, 44, 106, .025);
+}
+
+.dn-page main.dn-light-workspace [class*="bg-[#0d1c30]"],
+.dn-page main.dn-light-workspace [class*="bg-[#0b1422]"] {
+  background: #fafaff;
+  border-color: #e8e8f1;
+}
+
+.dn-page main.dn-light-workspace :is(h1, h2, h3, p, span, div, a).text-white:not([class*="bg-blue-600"]) {
+  color: #292d45;
+}
+
+.dn-page main.dn-light-workspace :is(.text-slate-100, .text-slate-200, .text-slate-300) {
+  color: #41465f;
+}
+
+.dn-page main.dn-light-workspace :is(.text-slate-400, .text-slate-500) {
+  color: #69718a;
+}
+
+.dn-page main.dn-light-workspace :is(.text-blue-200, .text-blue-300, .text-cyan-200, .text-cyan-300, .text-violet-200, .text-violet-300) {
+  color: #594cc3;
+}
+
+.dn-page main.dn-light-workspace [class*="bg-blue-600/20"] {
+  background: #eeeaff;
+  color: #5142bd;
+  --tw-ring-color: #ddd7ff;
+}
+
+.dn-page main.dn-light-workspace [class*="bg-blue-600"]:not([class*="bg-blue-600/20"]) {
+  background: #604fd0;
+  color: #fff;
+}
+
+.dn-page main.dn-light-workspace [class*="bg-blue-600"]:not([class*="bg-blue-600/20"]):hover {
+  background: #4d3db8;
+}
+
+.dn-page main.dn-light-workspace :is(input, select, textarea) {
+  background: #fff;
+  border-color: #dcddec;
+  color: #292d45;
+}
+
+.dn-page main.dn-light-workspace :is(input, textarea)::placeholder {
+  color: #858ba1;
+}
+
+.dn-page main.dn-light-workspace [class*="border-white/10"],
+.dn-page main.dn-light-workspace [class*="border-white/[0.08]"],
+.dn-page main.dn-light-workspace [class*="border-white/[0.07]"],
+.dn-page main.dn-light-workspace [class*="border-white/[0.06]"] {
+  border-color: #e7e7f0;
+}
+
+.dn-page main.dn-light-workspace a:hover,
+.dn-page main.dn-light-workspace button:hover {
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+}
