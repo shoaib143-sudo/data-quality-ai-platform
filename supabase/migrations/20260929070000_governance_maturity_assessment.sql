@@ -19,6 +19,10 @@ create index if not exists maturity_assessments_org_created_idx
 create index if not exists maturity_assessments_framework_idx
   on governance.maturity_assessments(framework_version, organization_id);
 
+create unique index if not exists maturity_assessments_one_active_cycle_idx
+  on governance.maturity_assessments(organization_id, framework_version)
+  where status <> 'ARCHIVED';
+
 create table if not exists governance.maturity_assessment_responses (
   id uuid primary key default gen_random_uuid(),
   assessment_id uuid not null references governance.maturity_assessments(id) on delete cascade,
