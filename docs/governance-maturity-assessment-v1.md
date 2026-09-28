@@ -105,3 +105,10 @@ The organization administrator can run **Verify connected estate** from the resu
 * active stewardship assignment coverage.
 
 If the instance has no projects or no datasets, verification returns a skipped state rather than representing absence of connected evidence as zero maturity. Machine observations increase evidence confidence and can supply control coverage, but they do not overwrite the respondent's declared maturity.
+
+
+## Actionable roadmap
+
+Each prioritized roadmap or critical-gap item resolves to a relevant DataNexus workspace. The client checks the current persona and organization-role workspace policy before rendering the destination. If the preferred specialist workspace is not available to that persona, the action falls back to the governed Journeys workspace rather than sending the user into an unauthorized route.
+
+Risk exposure is calculated only across capabilities that have actually been assessed. Assessment completion remains a separate metric, preventing unanswered questions from artificially diluting known risk.
