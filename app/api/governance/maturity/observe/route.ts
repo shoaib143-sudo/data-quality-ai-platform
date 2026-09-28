@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizationErrorResponse } from '@/lib/auth/authorize'
 import { collectGovernanceMaturityObservations } from '@/lib/governance/maturity-observation-service'
-import { loadLatestMaturityAssessment } from '@/lib/governance/maturity-service'
+import { loadLatestMaturityAssessment, refreshMaturityAssessmentScorecard } from '@/lib/governance/maturity-service'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 export async function POST(request: Request) {
@@ -13,6 +13,7 @@ export async function POST(request: Request) {
     if (!assessmentId) return NextResponse.json({ error: 'assessmentId is required.' }, { status: 400 })
 
     const result = await collectGovernanceMaturityObservations(user.id, assessmentId)
+    await refreshMaturityAssessmentScorecard(assessmentId)
     await writeGovernanceAudit({
       actorUserId: user.id,
       eventType: 'GOVERNANCE_MATURITY_SYSTEM_OBSERVATION_COLLECTED',
