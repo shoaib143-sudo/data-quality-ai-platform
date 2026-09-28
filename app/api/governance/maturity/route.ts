@@ -27,13 +27,13 @@ export async function POST(request: Request) {
   try {
     const user = await requireApiUser()
     const body = await request.json().catch(() => ({}))
-    const assessment = await createOrUpdateMaturityAssessment(user.id, { profile: body.profile })
+    const assessment = await createOrUpdateMaturityAssessment(user.id, { profile: body.profile, startNew: body.startNew === true })
     await writeGovernanceAudit({
       actorUserId: user.id,
       eventType: 'GOVERNANCE_MATURITY_ASSESSMENT_CONFIGURED',
       entityType: 'MATURITY_ASSESSMENT',
       entityId: assessment.id,
-      metadata: { framework_version: assessment.framework_version },
+      metadata: { framework_version: assessment.framework_version, start_new_cycle: body.startNew === true },
     })
     return NextResponse.json(await loadLatestMaturityAssessment(user.id), { status: 201 })
   } catch (error) {

@@ -45,6 +45,7 @@ type AssessmentPayload = {
   scorecard: MaturityScorecard
   evidenceCount: number
   observationCount: number
+  history: Array<{ id: string; status: string; framework_version: string; scorecard: Record<string, unknown>; created_at: string; completed_at: string | null }>
 }
 
 type DraftAnswer = {
@@ -118,14 +119,14 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
     ])))
   }
 
-  async function configureAssessment() {
+  async function configureAssessment(startNew = false) {
     setBusy(true)
     setFeedback('')
     try {
       const response = await fetch('/api/governance/maturity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile }),
+        body: JSON.stringify({ profile, startNew }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error ?? 'Unable to configure assessment.')
@@ -134,7 +135,7 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
       refreshDrafts(payload)
       setPhase('baseline')
       setIndex(0)
-      setFeedback('Organization context saved. Your adaptive baseline is ready.')
+      setFeedback(startNew ? 'New reassessment cycle created.' : 'Organization context saved. Your adaptive baseline is ready.')
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Unable to configure assessment.')
     } finally {
@@ -260,7 +261,7 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
               </label>
             ))}
           </div>
-          <button onClick={() => void configureAssessment()} disabled={busy} className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50">
+          <button onClick={() => void configureAssessment(false)} disabled={busy} className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50">
             {busy ? 'Preparing assessment…' : 'Build my governance baseline'} <ArrowRight className="h-4 w-4" />
           </button>
           {feedback ? <p role="status" className="mt-3 text-sm font-semibold text-slate-600">{feedback}</p> : null}
@@ -397,6 +398,20 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <div className="flex items-center gap-2"><Target className="h-5 w-5 text-blue-600" /><h2 className="text-2xl font-black">Prioritized improvement roadmap</h2></div>
+            <p className="mt-2 text-sm text-slate-600">Roadmap priority is derived from target gap, capability weight, criticality, and your stated priority. It does not alter the underlying maturity answer.</p>
+            <div className="mt-5 grid gap-3">
+              {data.scorecard.roadmap.length ? data.scorecard.roadmap.slice(0, 8).map((item, position) => (
+                <article key={item.questionId} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{position + 1}. {item.label}</h3><span className="rounded-full bg-white px-3 py-1 text-xs font-black">{item.criticality} · Gap {item.gap}</span></div>
+                  <p className="mt-3 text-sm leading-6 text-slate-700">{item.recommendedAction}</p>
+                  <p className="mt-2 text-sm font-bold text-blue-700">DataNexus action: {item.dataNexusAction}</p>
+                </article>
+              )) : <p className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-bold text-emerald-800">No material target gaps have been scored yet.</p>}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-600" /><h2 className="text-2xl font-black">Critical gaps</h2></div>
             <p className="mt-2 text-sm text-slate-600">Critical weaknesses remain visible even when other capabilities raise the aggregate maturity score.</p>
             <div className="mt-5 grid gap-3">
@@ -424,7 +439,24 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
               <button onClick={() => { setPhase('full'); setIndex(0) }} className="rounded-2xl bg-white p-4 text-left shadow-sm"><p className="font-black">Deepen the assessment</p><p className="mt-1 text-xs leading-5 text-slate-500">{fullAnswered}/{data.questions.length} applicable questions answered</p></button>
               <div className="rounded-2xl bg-white p-4 shadow-sm"><p className="font-black">Add more evidence</p><p className="mt-1 text-xs leading-5 text-slate-500">Evidence remains independently verifiable and can later be replaced by system observation.</p></div>
             </div>
+            {data.canManageProfile ? (
+              <button onClick={() => void configureAssessment(true)} disabled={busy} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 hover:bg-blue-50 disabled:opacity-40">
+                Start a new reassessment cycle <ArrowRight className="h-4 w-4" />
+              </button>
+            ) : null}
           </section>
+
+          {data.history.length > 1 ? (
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <h2 className="text-2xl font-black">Assessment history</h2>
+              <div className="mt-4 grid gap-3">
+                {data.history.map(item => {
+                  const score = typeof item.scorecard?.maturity === 'number' ? item.scorecard.maturity : null
+                  return <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"><div><p className="font-bold">{new Date(item.created_at).toLocaleDateString()}</p><p className="text-xs text-slate-500">{item.status} · {item.framework_version}</p></div><p className="text-lg font-black">{score === null ? 'Not scored' : `${score}/100`}</p></div>
+                })}
+              </div>
+            </section>
+          ) : null}
 
           <p className="rounded-2xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500">DataNexus Governance Maturity & Readiness Assessment is an organizational learning and prioritization tool. It is not legal advice, regulatory certification, or an official score from the Broadband Commission or any other referenced framework.</p>
         </div>

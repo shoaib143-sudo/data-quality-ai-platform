@@ -105,6 +105,13 @@ async function refreshScorecard(assessment: StoredAssessment) {
 export async function loadLatestMaturityAssessment(userId: string) {
   const membership = await resolveInstanceOrganizationMembership(userId)
   const admin = createAdminClient()
+  const historyResult = await admin.schema('governance').from('maturity_assessments')
+    .select('id,status,framework_version,scorecard,created_at,completed_at')
+    .eq('organization_id', membership.organizationId)
+    .order('created_at', { ascending: false })
+    .limit(20)
+  if (historyResult.error) throw new Error(`Unable to load maturity assessment history: ${historyResult.error.message}`)
+  const history = historyResult.data ?? []
   const { data, error } = await admin.schema('governance').from('maturity_assessments')
     .select('id,organization_id,framework_version,status,organization_profile,scorecard,created_at,updated_at,completed_at')
     .eq('organization_id', membership.organizationId)
@@ -130,6 +137,7 @@ export async function loadLatestMaturityAssessment(userId: string) {
       scorecard: scoreGovernanceMaturity(profile, []),
       evidenceCount: 0,
       observationCount: 0,
+      history,
     }
   }
 
@@ -153,12 +161,13 @@ export async function loadLatestMaturityAssessment(userId: string) {
     scorecard,
     evidenceCount: evidenceResult.count ?? 0,
     observationCount: observationResult.count ?? 0,
+    history,
   }
 }
 
 export async function createOrUpdateMaturityAssessment(
   userId: string,
-  input: { profile?: unknown; status?: string },
+  input: { profile?: unknown; status?: string; startNew?: boolean },
 ) {
   const membership = await resolveInstanceOrganizationMembership(userId)
   if (!isAdministrator(membership.organizationRole)) throw new AuthorizationError('Organization administrator access is required to configure the maturity assessment.')
@@ -166,7 +175,13 @@ export async function createOrUpdateMaturityAssessment(
   const current = await loadLatestMaturityAssessment(userId)
   const profile = normalizeProfile(input.profile ?? current.profile)
 
-  if (current.assessment) {
+  if (input.startNew && current.assessment) {
+    const { error: archiveError } = await admin.schema('governance').from('maturity_assessments')
+      .update({ status: 'ARCHIVED', updated_at: new Date().toISOString() })
+      .eq('id', current.assessment.id)
+      .eq('organization_id', membership.organizationId)
+    if (archiveError) throw new Error(`Unable to archive previous maturity assessment: ${archiveError.message}`)
+  } else if (current.assessment) {
     const { data, error } = await admin.schema('governance').from('maturity_assessments').update({
       organization_profile: profile,
       updated_at: new Date().toISOString(),

@@ -44,6 +44,18 @@ export type MaturityScorecard = {
   riskExposure: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL'
   completion: number
   respondentCount: number
+  roadmap: Array<{
+    questionId: string
+    label: string
+    maturity: number
+    target: number
+    gap: number
+    criticality: MaturityCriticality
+    priority: AssessmentPriority
+    priorityScore: number
+    recommendedAction: string
+    dataNexusAction: string
+  }>
   criticalGaps: Array<{
     questionId: string
     label: string
@@ -184,6 +196,27 @@ export function scoreGovernanceMaturity(
   const riskExposure = normalizedRisk >= 34 ? 'CRITICAL' : normalizedRisk >= 20 ? 'HIGH' : normalizedRisk >= 9 ? 'MODERATE' : 'LOW'
 
   const questionScoreMap = new Map(questionScores.map(score => [score.questionId, score]))
+  const roadmap = applicableQuestions.flatMap(question => {
+    const score = questionScoreMap.get(question.id)
+    if (!score || score.gap < 0.5) return []
+    const priorityScore = score.gap
+      * criticalityFactor[question.criticality]
+      * priorityFactor[score.priority]
+      * score.weight
+    return [{
+      questionId: question.id,
+      label: question.shortLabel,
+      maturity: score.maturity,
+      target: score.target,
+      gap: score.gap,
+      criticality: question.criticality,
+      priority: score.priority,
+      priorityScore: round(priorityScore, 2),
+      recommendedAction: question.recommendedAction,
+      dataNexusAction: question.dataNexusAction,
+    }]
+  }).sort((a, b) => b.priorityScore - a.priorityScore)
+
   const criticalGaps = applicableQuestions.flatMap(question => {
     const score = questionScoreMap.get(question.id)
     if (!score || question.criticality !== 'CRITICAL' || score.gap < 1 || score.maturity >= 3) return []
@@ -221,6 +254,7 @@ export function scoreGovernanceMaturity(
     riskExposure,
     completion,
     respondentCount: respondentIds.size || (questionScores.length ? 1 : 0),
+    roadmap,
     criticalGaps,
     domains,
     questions: questionScores,
