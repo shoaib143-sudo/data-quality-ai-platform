@@ -161,25 +161,29 @@ export default async function JourneysPage() {
   })
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#050b17] text-slate-100">
+      <div className="mx-auto max-w-[1480px] px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel={persona.title} contextLabel="Guided governance journeys" homeHref="/home" />
 
-        <header className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm sm:p-9">
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-blue-700"><Compass className="h-4 w-4" /> Guided journey</div>
-          <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-5xl">{persona.title} workflow and governed evidence.</h1>
-          <p className="mt-4 max-w-4xl text-base leading-7 text-slate-600">Your role workflow comes from the canonical DataNexus persona contract. Platform evidence is shown separately so technical lifecycle progress is never presented as if it were your personal responsibility.</p>
+        <header className="relative mt-4 overflow-hidden rounded-[28px] border border-cyan-300/12 bg-[#09192d] p-7 shadow-[0_24px_70px_rgba(0,0,0,.26)] sm:p-8">
+          <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-blue-500/[0.08] blur-3xl"/>
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-cyan-200"><Compass className="h-4 w-4" aria-hidden="true"/> Guided journey</div>
+            <h1 className="mt-4 max-w-5xl text-3xl font-black tracking-[-0.035em] text-white sm:text-5xl">{persona.title} workflow and governed evidence.</h1>
+            <p className="mt-4 max-w-4xl text-sm leading-7 text-slate-400">Your role workflow comes from the canonical DataNexus persona contract. Platform evidence is shown separately so technical lifecycle progress is never presented as if it were your personal responsibility.</p>
+            <div className="mt-5 inline-flex items-center gap-2 rounded-xl border border-violet-300/15 bg-violet-300/[0.05] px-3 py-2 text-xs text-violet-200"><ShieldCheck className="h-4 w-4" aria-hidden="true"/>Role responsibility and platform lifecycle evidence remain separate.</div>
+          </div>
         </header>
 
-        <section className="mt-6 rounded-3xl border border-blue-100 bg-white p-6 shadow-sm sm:p-7" aria-labelledby="role-workflow-title">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">Your role workflow</p>
-          <h2 id="role-workflow-title" className="mt-2 text-2xl font-black">{persona.primaryQuestion}</h2>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">Focus: {persona.focus}. These are the workspaces DataNexus expects this persona to use in normal governance work.</p>
+        <section className="mt-5 rounded-[24px] border border-cyan-300/10 bg-[#09192d] p-6 shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:p-7" aria-labelledby="role-workflow-title">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-300">Your role workflow</p>
+          <h2 id="role-workflow-title" className="mt-2 text-2xl font-black text-white">{persona.primaryQuestion}</h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">Focus: {persona.focus}. These are the workspaces DataNexus expects this persona to use in normal governance work.</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {roleWorkflow.map((item, index) => (
-              <Link key={`${item.label}-${item.href}`} href={item.href} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-200 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Role task {index + 1}</p>
-                <div className="mt-2 flex items-center justify-between gap-3"><span className="font-black">{item.label}</span><ArrowRight className="h-4 w-4 text-blue-600" aria-hidden="true" /></div>
+              <Link key={`${item.label}-${item.href}`} href={item.href} className="rounded-2xl border border-white/[0.07] bg-[#061321] p-4 transition hover:-translate-y-0.5 hover:border-cyan-300/25 hover:bg-[#08182b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-600">Role task {index + 1}</p>
+                <div className="mt-2 flex items-center justify-between gap-3"><span className="font-black">{item.label}</span><ArrowRight className="h-4 w-4 text-cyan-300" aria-hidden="true" /></div>
               </Link>
             ))}
           </div>
@@ -187,25 +191,25 @@ export default async function JourneysPage() {
 
         <section className="mt-6 space-y-5" aria-labelledby="evidence-lifecycle-title">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Platform evidence lifecycle</p>
-            <h2 id="evidence-lifecycle-title" className="mt-1 text-2xl font-black">Connected data to verified governance evidence</h2>
-            <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">These stages describe persisted platform evidence without claiming certification or completion that has not been proven. They do not imply that your persona is responsible for executing every technical stage.</p>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-violet-300">Platform evidence lifecycle</p>
+            <h2 id="evidence-lifecycle-title" className="mt-1 text-2xl font-black text-white">Connected data to verified governance evidence</h2>
+            <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">These stages describe persisted platform evidence without claiming certification or completion that has not been proven. They do not imply that your persona is responsible for executing every technical stage.</p>
           </div>
           {journeys.length ? journeys.map(({ project, steps, nextStep, completed, telemetryStage }) => (
-            <article key={project.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
+            <article key={project.id} className="rounded-[24px] border border-white/[0.08] bg-[#09192d] p-6 shadow-[0_12px_34px_rgba(0,0,0,.18)] sm:p-7">
               <JourneyViewTelemetry projectId={project.id} stage={telemetryStage} completedStages={completed} />
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Project evidence</p>
-                  <h3 className="mt-1 text-2xl font-black">{project.name}</h3>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-600">Project evidence</p>
+                  <h3 className="mt-1 text-2xl font-black text-white">{project.name}</h3>
                   <p className="mt-2 text-sm text-slate-500">{completed} of {steps.length} evidence stages currently satisfied.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link href={canonicalRoutes.governanceRun(project.id)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-bold text-blue-700 shadow-sm hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                  <Link href={canonicalRoutes.governanceRun(project.id)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-bold text-slate-200 hover:border-cyan-300/25 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
                     Open Governance Run <ArrowRight className="h-4 w-4" />
                   </Link>
                   {nextStep ? (
-                    <TrackedJourneyLink projectId={project.id} stage={telemetryStage} completedStages={completed} href={nextStep.href} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                    <TrackedJourneyLink projectId={project.id} stage={telemetryStage} completedStages={completed} href={nextStep.href} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 px-4 py-3 text-sm font-black text-white shadow-[0_0_18px_rgba(34,211,238,.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
                       {nextStep.action} <ArrowRight className="h-4 w-4" />
                     </TrackedJourneyLink>
                   ) : (
@@ -216,13 +220,13 @@ export default async function JourneysPage() {
                 </div>
               </div>
 
-              <section className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4" aria-label="Next best action">
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">Next best action</p>
+              <section className="mt-5 rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.05] p-4" aria-label="Next best action">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-300">Next best action</p>
                 {nextStep ? (
                   <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="font-black text-slate-950">{nextStep.action}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-600">{nextStep.detail}</p>
+                      <p className="font-black text-white">{nextStep.action}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-400">{nextStep.detail}</p>
                       <p className="mt-1 text-xs text-slate-500">Recommended because this is the first lifecycle stage without sufficient governed evidence.</p>
                     </div>
                     <TrackedJourneyLink projectId={project.id} stage={telemetryStage} completedStages={completed} href={nextStep.href} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
