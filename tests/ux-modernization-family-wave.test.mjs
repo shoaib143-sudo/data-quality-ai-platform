@@ -36,6 +36,11 @@ test('metadata and lineage workspaces use compact contextual rails', () => {
   assert.match(read('app/lineage/page.tsx'),/never infers lineage that is not persisted/)
 })
 
+test('mobile workspace rail keeps the sticky utility header below fixed navigation', () => {
+  const globals = read('app/globals.css')
+  assert.match(globals,/main:has\(\.dn-app-rail\) \.dn-topbar \{ top: 61px; \}/)
+})
+
 test('personal and admin surfaces share the modernized design foundation', () => {
   assert.match(read('app/profile/page.tsx'),/dn-surface/)
   assert.match(read('app/settings/page.tsx'),/dn-surface/)
