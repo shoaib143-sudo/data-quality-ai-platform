@@ -12,6 +12,7 @@ const acceptance = fs.readFileSync('docs/ux/DUAL-ENVIRONMENT-ACCEPTANCE-MATRIX.m
 const wcag = JSON.parse(fs.readFileSync('infra/accessibility/wcag22-aa-persona-contract.json', 'utf8'))
 const personaWorkflow = fs.readFileSync('.github/workflows/governed-incident-13-persona-certification.yml', 'utf8')
 const liveRunner = fs.readFileSync('scripts/run-13-persona-browser-acceptance.mjs', 'utf8')
+const personaAcceptanceSource = fs.readFileSync('lib/governance/persona-acceptance-tasks.ts', 'utf8')
 
 function extractQuotedArray(source, declaration) {
   const marker = 'export const ' + declaration + ' = ['
@@ -75,12 +76,34 @@ test('live persona harness creates one-time real sessions without storing passwo
 })
 
 test('live persona harness executes the authoritative 13-persona registry and only READ acceptance tasks', () => {
+  const governancePersonas = extractQuotedArray(personasSource, 'personaSlugs')
+
   assert.match(liveRunner, /Expected exactly 13 unique personas/)
-  assert.match(liveRunner, /personaAcceptanceTasks/)
+  assert.match(liveRunner, /lib\/governance\/persona-acceptance-tasks\.ts/)
   assert.match(liveRunner, /mode: 'READ'/)
   assert.match(liveRunner, /mutationTasksExecuted: false/)
   assert.match(liveRunner, /\/home\/\$\{slug\}/)
   assert.match(liveRunner, /readRoutesPassed/)
+
+  for (const persona of governancePersonas) {
+    const marker = "  '" + persona + "': ["
+    const start = personaAcceptanceSource.indexOf(marker)
+    assert.ok(start >= 0, 'Acceptance contract missing persona ' + persona)
+
+    const tail = personaAcceptanceSource.slice(start + marker.length)
+    const end = tail.indexOf('\n  ],')
+    assert.ok(end >= 0, 'Acceptance contract malformed for persona ' + persona)
+
+    const block = tail.slice(0, end)
+    const readRoutes = [...block.matchAll(/\{[^{}]*route: '([^']+)'[^{}]*mode: 'READ'[^{}]*\}/g)]
+      .map(row => row[1])
+
+    assert.ok(readRoutes.length > 0, 'Persona ' + persona + ' must expose at least one READ acceptance route')
+    assert.equal(new Set(readRoutes).size, readRoutes.length, 'Persona ' + persona + ' has duplicate READ acceptance routes')
+    for (const route of readRoutes) {
+      assert.match(route, /^\//, 'Persona ' + persona + ' READ acceptance route must be absolute')
+    }
+  }
 })
 
 test('live persona evidence is durable and secret-scoped', () => {
