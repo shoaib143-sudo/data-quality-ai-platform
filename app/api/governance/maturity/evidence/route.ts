@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizationErrorResponse } from '@/lib/auth/authorize'
-import { addMaturityEvidence, loadLatestMaturityAssessment } from '@/lib/governance/maturity-service'
+import { addMaturityEvidence, loadLatestMaturityAssessment, refreshMaturityAssessmentScorecard } from '@/lib/governance/maturity-service'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 export async function POST(request: Request) {
@@ -16,6 +16,7 @@ export async function POST(request: Request) {
       referenceUri: typeof body.referenceUri === 'string' ? body.referenceUri : undefined,
       metadata: body.metadata && typeof body.metadata === 'object' ? body.metadata : undefined,
     })
+    await refreshMaturityAssessmentScorecard(String(body.assessmentId))
     await writeGovernanceAudit({
       actorUserId: user.id,
       eventType: 'GOVERNANCE_MATURITY_EVIDENCE_ADDED',
