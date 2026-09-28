@@ -77,7 +77,7 @@ test('live persona harness creates one-time real sessions without storing passwo
 test('live persona harness executes the authoritative 13-persona registry and only READ acceptance tasks', () => {
   assert.match(liveRunner, /Expected exactly 13 unique personas/)
   assert.match(liveRunner, /personaAcceptanceTasks/)
-  assert.match(liveRunner, /mode: 'READ'/)
+  assert.match(liveRunner, /tasks\.filter\(task => task\.mode === 'READ'\)/)
   assert.match(liveRunner, /mutationTasksExecuted: false/)
   assert.match(liveRunner, /\/home\/\$\{slug\}/)
   assert.match(liveRunner, /readRoutesPassed/)
