@@ -266,7 +266,7 @@ export default async function DomainDetailPage({
     '--neural-glow': palette.glow,
   } as CSSProperties
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#020b17] text-slate-100">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace dn-neural-v3 min-h-screen bg-[#020b17] text-slate-100">
     <div className="mx-auto max-w-[1760px] px-4 py-5 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Domain Monitoring" contextLabel={domainName} homeHref="/home" />
       <div className="mb-5 mt-4 flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-end lg:justify-between">

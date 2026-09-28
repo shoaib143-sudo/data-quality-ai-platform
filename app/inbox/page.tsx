@@ -58,7 +58,7 @@ export default async function InboxPage(){
     canMonitoring?{label:'Failed jobs',value:failedJobs.length,Icon:AlertTriangle,href:'/monitoring'}:null,
   ].filter((item):item is {label:string;value:number;Icon:typeof GitBranch;href:string}=>Boolean(item))
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
       <GlobalUtilityBar contextLabel="Governance inbox" persona={landing.persona} organizationRole={landing.organizationRole} roleLabel={landing.persona}/>
 

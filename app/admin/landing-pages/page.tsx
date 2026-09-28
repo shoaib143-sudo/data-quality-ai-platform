@@ -23,7 +23,7 @@ export default async function LandingPageAdministrationPage() {
   const organizationIds = (membershipsResult.data ?? []).map(row => row.organization_id)
 
   if (!organizationIds.length) {
-    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-4xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Landing Pages" contextLabel="Experience controls" homeHref="/home" /><div className="mt-6 rounded-3xl bg-[#eef2f7] p-8 shadow-[10px_10px_28px_#cbd2dc,-10px_-10px_28px_#ffffff]"><ShieldCheck className="h-8 w-8 text-amber-600"/><h1 className="mt-4 text-2xl font-black">Landing page administration</h1><p className="mt-2 text-slate-600">OWNER or ADMIN membership is required.</p><Link href="/home" className="mt-6 inline-block text-sm font-bold text-blue-600">Return home</Link></div></div></main>
+    return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-4xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Landing Pages" contextLabel="Experience controls" homeHref="/home" /><div className="mt-6 rounded-3xl bg-[#eef2f7] p-8 shadow-[10px_10px_28px_#cbd2dc,-10px_-10px_28px_#ffffff]"><ShieldCheck className="h-8 w-8 text-amber-600"/><h1 className="mt-4 text-2xl font-black">Landing page administration</h1><p className="mt-2 text-slate-600">OWNER or ADMIN membership is required.</p><Link href="/home" className="mt-6 inline-block text-sm font-bold text-blue-600">Return home</Link></div></div></main>
   }
 
   const [organizationsResult, settingsResult] = await Promise.all([

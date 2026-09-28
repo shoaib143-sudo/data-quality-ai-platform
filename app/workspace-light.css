@@ -4,10 +4,63 @@
   color: #292d45;
 }
 
+html.dark .dn-page main.dn-light-workspace.bg-slate-50,
+html.dark .dn-page main.dn-light-workspace.bg-gray-50 {
+  background: #f5f6fb;
+  color: #292d45;
+}
+
+html.dark .dn-page main.dn-light-workspace :is(.bg-white, .dn-surface, .dn-kpi, .dn-glass-rail) {
+  background: #fff;
+  border-color: #e6e7ef;
+  box-shadow: 0 12px 30px rgba(48, 44, 106, .055), 0 2px 8px rgba(48, 44, 106, .025);
+}
+
+html.dark .dn-page main.dn-light-workspace :is(.bg-slate-50, .bg-gray-50, .dn-inset) {
+  background: #fafaff;
+  border-color: #e8e8f1;
+  box-shadow: inset 2px 2px 6px rgba(48, 44, 106, .025);
+}
+
+html.dark .dn-page main.dn-light-workspace :is(.bg-slate-100, .bg-gray-100) {
+  background: #f0f0fa;
+}
+
+html.dark .dn-page main.dn-light-workspace :is(.text-slate-950, .text-slate-900, .text-gray-950, .text-gray-900) {
+  color: #292d45;
+}
+
+html.dark .dn-page main.dn-light-workspace :is(.text-slate-800, .text-slate-700, .text-gray-800, .text-gray-700) {
+  color: #41465f;
+}
+
+html.dark .dn-page main.dn-light-workspace :is(.text-slate-600, .text-slate-500, .text-slate-400, .text-gray-600, .text-gray-500, .text-gray-400) {
+  color: #69718a;
+}
+
+html.dark .dn-page main.dn-light-workspace :is(.border-slate-200, .border-slate-300, .border-gray-200, .border-gray-300) {
+  border-color: #e6e7ef;
+}
+
+html.dark .dn-page main.dn-light-workspace :is(.text-blue-600, .text-blue-700, .text-violet-600, .text-violet-700, .text-purple-600, .text-purple-700) {
+  color: #594cc3;
+}
+
 .dn-page main.dn-light-workspace [class*="bg-[#102036]"] {
   background: #fff;
   border-color: #e6e7ef;
   box-shadow: 0 12px 30px rgba(48, 44, 106, .055), 0 2px 8px rgba(48, 44, 106, .025);
+}
+
+.dn-page main.dn-light-workspace [class*="bg-[#0a1d33]"] {
+  background: #fff;
+  border-color: #e6e7ef;
+  box-shadow: 0 12px 30px rgba(48, 44, 106, .055);
+}
+
+.dn-page main.dn-light-workspace [class*="bg-[#08182b]"] {
+  background: #fafaff;
+  border-color: #e8e8f1;
 }
 
 .dn-page main.dn-light-workspace [class*="bg-[#0d1c30]"],
@@ -16,7 +69,7 @@
   border-color: #e8e8f1;
 }
 
-.dn-page main.dn-light-workspace :is(h1, h2, h3, p, span, div, a).text-white:not([class*="bg-blue-600"]) {
+.dn-page main.dn-light-workspace :is(h1, h2, h3, p, span, div, a).text-white:not([class*="bg-blue-600"]):not([class*="bg-violet-600"]):not([class*="bg-purple-600"]):not([class*="bg-emerald-600"]):not([class*="bg-red-600"]):not([class*="bg-rose-600"]) {
   color: #292d45;
 }
 

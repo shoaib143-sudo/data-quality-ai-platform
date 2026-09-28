@@ -51,7 +51,7 @@ export default async function ExperienceInsightsPage() {
 
   if (!projectIds.length) {
     return (
-      <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
+      <main id="main-content" tabIndex={-1} className="dn-light-workspace dn-reporting-v3 min-h-screen bg-slate-50 text-slate-950">
         <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
           <GlobalUtilityBar contextLabel="Experience insights" />
           <WorkspaceEmptyState
@@ -194,7 +194,7 @@ export default async function ExperienceInsightsPage() {
   const projectsWithTelemetry = rows.filter(row => row.journeyViews + row.nextActions > 0).length
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace dn-reporting-v3 min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar contextLabel="Experience insights" />
 

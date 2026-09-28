@@ -49,7 +49,7 @@ export default async function GlossaryPage() {
   })).filter(asset => asset.project_id)
   const canCatalog = canAccessWorkspace(landing.persona, 'catalog', landing.organizationRole)
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen text-slate-100">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen text-slate-100">
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Business Glossary" contextLabel="Governed business meaning" homeHref="/home" />
       <nav className="dn-glass-rail sticky top-[4.5rem] z-30 mb-3 mt-3 flex items-center justify-end rounded-2xl px-3 py-2">

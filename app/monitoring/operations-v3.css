@@ -1,0 +1,79 @@
+/* Operational workspaces share the light shell while retaining their own evidence colors. */
+.dn-page main.dn-operations-v3 [class*="bg-[#0a1d33]"] {
+  background: #fff;
+  border-color: #e7e7f1;
+  box-shadow: 0 12px 32px rgba(49, 43, 116, .055), 0 2px 8px rgba(49, 43, 116, .025);
+}
+
+.dn-page main.dn-operations-v3 [class*="bg-[#08182b]"],
+.dn-page main.dn-operations-v3 [class*="bg-[#061426]"] {
+  background: #fafaff;
+  border-color: #e8e8f2;
+}
+
+.dn-page main.dn-operations-v3 [class*="bg-white/[0.04]"],
+.dn-page main.dn-operations-v3 [class*="bg-white/[0.05]"],
+.dn-page main.dn-operations-v3 [class*="bg-white/[0.06]"] {
+  background: #f0edfc;
+}
+
+.dn-page main.dn-operations-v3 [class*="bg-cyan-400/[0.03]"] {
+  background: #f5f2ff;
+  border-color: #e4defa;
+}
+
+.dn-page main.dn-operations-v3 :is(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid #6454d3;
+  outline-offset: 3px;
+}
+
+.dn-page main.dn-operations-v3 :is(.text-rose-300, .text-red-300) { color: #b53459; }
+.dn-page main.dn-operations-v3 .text-amber-300 { color: #995614; }
+.dn-page main.dn-operations-v3 .text-emerald-300 { color: #08765b; }
+.dn-page main.dn-operations-v3 .text-slate-600 { color: #71778f; }
+
+.dn-page main.dn-operations-v3 a:hover {
+  color: #4e3db5;
+}
+
+/* The neural canvas remains dark so status signals and connecting lines stay legible. */
+.dn-page main.dn-neural-v3 {
+  background: #f5f6fb;
+  color: #292d45;
+}
+
+.dn-page main.dn-neural-v3 > div > :is(header, div:first-of-type) h1 {
+  color: #292d45;
+  font-family: inherit;
+  letter-spacing: -.025em;
+}
+
+.dn-page main.dn-neural-v3 > div > header {
+  border-color: #e3e3ef;
+}
+
+.dn-page main.dn-neural-v3 > div > header p,
+.dn-page main.dn-neural-v3 > div > div:first-of-type > div > p.text-slate-500 {
+  color: #69718a;
+}
+
+.dn-page main.dn-neural-v3 > div > header a,
+.dn-page main.dn-neural-v3 > div > div:first-of-type a {
+  color: #5547c2;
+}
+
+.dn-page main.dn-neural-v3 > div > header a[class*="bg-white"],
+.dn-page main.dn-neural-v3 > div > div:first-of-type a[class*="bg-white"] {
+  background: #fff;
+  border-color: #dedff0;
+}
+
+.dn-page main.dn-neural-v3 > div > div:last-child[class*="bg-[#0b1422]"] {
+  background: #fff;
+  border-color: #e8e8f1;
+  color: #69718a;
+}
+
+.dn-page main.dn-neural-v3 > div > div:last-child[class*="bg-[#0b1422]"] a {
+  color: #5547c2;
+}

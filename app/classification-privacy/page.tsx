@@ -33,7 +33,7 @@ export default async function ClassificationPrivacyPage() {
   const canCatalog = canAccessWorkspace(landing.persona, 'catalog', landing.organizationRole)
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Classification & Privacy" contextLabel="Governed classification and privacy controls" homeHref={homeHref} />
         <nav className="mb-6 mt-4 flex items-center justify-end rounded-2xl border bg-white px-5 py-3 shadow-sm">

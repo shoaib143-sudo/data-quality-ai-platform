@@ -43,7 +43,7 @@ export default async function SuperAdminCleanupPage() {
   const sourceRows = (sourcesResult.data ?? []) as CleanupSource[]
   const datasetRows = (datasetsResult.data ?? []) as CleanupDataset[]
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
     <div className="mx-auto max-w-7xl">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Super Admin Cleanup" contextLabel="Governed cleanup controls" homeHref="/home" />
       <div className="mb-6 mt-4 flex flex-wrap justify-end gap-2 text-sm">

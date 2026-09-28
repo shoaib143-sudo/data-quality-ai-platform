@@ -11,7 +11,7 @@ export default async function ExternalApprovalPage({ params }: { params: Promise
     payload = verifyExternalApprovalToken(token)
   } catch {
     return (
-      <main id="main-content" tabIndex={-1} className="min-h-screen p-4 sm:p-6">
+      <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen p-4 sm:p-6">
         <div className="mx-auto max-w-2xl rounded-2xl border p-6">
           <h1 className="text-2xl font-bold">Approval link unavailable</h1>
           <p className="mt-2 text-sm text-muted-foreground">This approval link is invalid or has expired. Request a new governed approval link or open your approval inbox.</p>

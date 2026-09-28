@@ -56,7 +56,7 @@ export default async function InfrastructurePage() {
 
   const organizationIds = (memberships ?? []).map((row) => row.organization_id)
   if (!organizationIds.length) {
-    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-4xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Infrastructure" contextLabel="Runtime and storage convergence" homeHref="/home" /><div className="mt-6 rounded-3xl border border-amber-200 bg-white p-8 shadow-sm"><ShieldCheck className="h-8 w-8 text-amber-600"/><h1 className="mt-4 text-2xl font-black">Infrastructure integration</h1><p className="mt-2 text-slate-600">OWNER or ADMIN membership is required to view infrastructure status.</p><Link href="/home" className="mt-6 inline-block text-sm font-bold text-blue-600">Return home</Link></div></div></main>
+    return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-4xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Infrastructure" contextLabel="Runtime and storage convergence" homeHref="/home" /><div className="mt-6 rounded-3xl border border-amber-200 bg-white p-8 shadow-sm"><ShieldCheck className="h-8 w-8 text-amber-600"/><h1 className="mt-4 text-2xl font-black">Infrastructure integration</h1><p className="mt-2 text-slate-600">OWNER or ADMIN membership is required to view infrastructure status.</p><Link href="/home" className="mt-6 inline-block text-sm font-bold text-blue-600">Return home</Link></div></div></main>
   }
 
   const { data: projects, error: projectError } = await admin

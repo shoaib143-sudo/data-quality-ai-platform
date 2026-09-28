@@ -78,7 +78,7 @@ export default async function DashboardPage() {
   ]
 
   return (
-    <main id="main-content" tabIndex={-1} className="dashboard-shell">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace dashboard-shell">
       <div className="dashboard-frame">
         <div className="dashboard-workspace">
           <GlobalUtilityBar contextLabel="Governance overview" />

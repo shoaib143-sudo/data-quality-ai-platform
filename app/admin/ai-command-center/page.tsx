@@ -54,7 +54,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
   const systemName = new Map(state?.aiSystems.map((system) => [system.id, system.name]) ?? [])
   const versionLabel = new Map(state?.aiSystemVersions.map((version) => [version.id, `v${version.version_number}`]) ?? [])
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen p-4 text-slate-100 sm:p-6">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen p-4 text-slate-100 sm:p-6">
     <div className="mx-auto max-w-7xl space-y-4">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="AI Command Center" contextLabel="AI governance plane" homeHref="/home" />
       {(canAdminWorkspace || canAiCapabilities) ? <div className="flex flex-wrap items-center justify-between gap-3">
