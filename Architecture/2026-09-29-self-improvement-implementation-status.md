@@ -52,6 +52,15 @@ The self-improvement task is complete only when all of the following are true:
 
 Until those gates are met, the correct status is `IMPLEMENTED_INFRASTRUCTURE_NO_PROSPECTIVE_PROOF`.
 
+## Takeover hardening completed
+
+The takeover pass closed two implementation defects discovered during exact-head review:
+
+- Released migration immutability is restored. The historical PGCL provenance migration is byte-identical to `main`; terminal-run provenance is introduced by the forward-only migration `20260929000225_pgcl_terminal_run_learning_provenance.sql`.
+- Prospective outcome collection now handles both immediate verified inserts and later transitions to `VERIFIED`. Run-mode parsing is normalized consistently, and terminal-run denominator coverage derives verified-versus-pending state from immutable prospective outcome evidence instead of mutating the terminal ledger.
+
+The resulting implementation remains deliberately non-authoritative: terminal provenance places failures, partial runs, and cancellations into the measurement denominator, but does not turn them into positive learning cases. Production activation, merge, or deployment is not authorized by this document.
+
 ## Verification
 
 Run the focused contract check with:
