@@ -29,7 +29,7 @@ The engine generates a prioritized roadmap from the gap between current and targ
 
 Assessment, evidence, and observation are separate records.
 
-A self-declared answer is never overwritten merely because a later system observation differs. DataNexus preserves both and can surface the discrepancy.
+A self-declared answer is never overwritten merely because a later system observation differs. DataNexus preserves both and can surface the discrepancy. The v1 verifier reads connected metadata, quality-rule, lineage, and stewardship coverage and stores those results as independent system observations.
 
 ## Longitudinal model
 
