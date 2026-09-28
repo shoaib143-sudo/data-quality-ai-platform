@@ -23,6 +23,8 @@ test('daily work surfaces prioritize attention and compact density', () => {
   assert.match(dashboard,/aria-label="Attention now"/)
   assert.match(dashboard,/dashboard-stat-grid/)
   assert.match(dashboard,/persisted platform evidence/)
+  assert.match(dashboard,/persona=\{landing\.persona\}/)
+  assert.match(dashboard,/organizationRole=\{landing\.organizationRole\}/)
   assert.match(inbox,/grid auto-rows-fr gap-3/)
   assert.match(inbox,/dn-surface/)
 })
