@@ -78,6 +78,7 @@ begin
       or v_eval.evaluator_type is distinct from new.evaluator_type
       or v_eval.metadata->>'benchmark_key' is distinct from new.benchmark_key
       or v_eval.score is null
+      or jsonb_array_length(v_eval.evidence_refs) = 0
       or v_eval.created_at < v_candidate.evidence_cutoff_at
       or v_eval.observed_at < v_candidate.evidence_cutoff_at
       or v_eval.created_at > new.observed_at
