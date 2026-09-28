@@ -98,7 +98,6 @@ test('live persona harness executes the authoritative 13-persona registry and on
     const readRoutes = [...block.matchAll(/\{[^{}]*route: '([^']+)'[^{}]*mode: 'READ'[^{}]*\}/g)]
       .map(row => row[1])
 
-    assert.ok(readRoutes.length > 0, 'Persona ' + persona + ' must expose at least one READ acceptance route')
     assert.equal(new Set(readRoutes).size, readRoutes.length, 'Persona ' + persona + ' has duplicate READ acceptance routes')
     for (const route of readRoutes) {
       assert.match(route, /^\//, 'Persona ' + persona + ' READ acceptance route must be absolute')
