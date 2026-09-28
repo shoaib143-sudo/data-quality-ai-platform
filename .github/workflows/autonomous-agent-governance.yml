@@ -150,7 +150,6 @@ jobs:
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: e2e-service-runner-not-used
       GOVERNANCE_E2E_PROJECT_ID: ${{ vars.GOVERNANCE_OFF_TEST_PROJECT_ID }}
       GOVERNANCE_E2E_PRIMARY_PROJECT_ID: 479813aa-72a4-4b12-b72a-74da8d2419ce
-      GOVERNANCE_E2E_EVIDENCE_PATH: ${{ runner.temp }}/governance-orchestrator-off-live.json
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
@@ -165,6 +164,7 @@ jobs:
       - name: Execute live OFF-mode Governance Orchestrator baseline
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOVERNANCE_E2E_EVIDENCE_PATH: ${{ runner.temp }}/governance-orchestrator-off-live.json
         run: node --experimental-strip-types --experimental-loader ./scripts/node-ts-alias-loader.mjs scripts/run-governance-orchestrator-off-live.mjs
       - name: Upload OFF-mode baseline evidence
         if: always()
