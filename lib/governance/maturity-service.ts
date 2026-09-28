@@ -169,6 +169,17 @@ async function refreshScorecard(assessment: StoredAssessment) {
   return { rows, scorecard, status }
 }
 
+export async function refreshMaturityAssessmentScorecard(assessmentId: string) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('governance').from('maturity_assessments')
+    .select('id,organization_id,framework_version,status,organization_profile,scorecard,created_at,updated_at,completed_at')
+    .eq('id', assessmentId)
+    .maybeSingle()
+  if (error) throw new Error(`Unable to resolve maturity assessment for score refresh: ${error.message}`)
+  if (!data) throw new AuthorizationError('Maturity assessment was not found.', 404)
+  return refreshScorecard(data as StoredAssessment)
+}
+
 export async function loadLatestMaturityAssessment(userId: string) {
   const membership = await resolveInstanceOrganizationMembership(userId)
   const admin = createAdminClient()
