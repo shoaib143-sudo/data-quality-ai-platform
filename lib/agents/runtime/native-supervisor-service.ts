@@ -17,7 +17,6 @@ import { proposePgclCasesFromVerifiedSupervisorRun } from '@/lib/agents/proactiv
 import type { PgclRunMode } from '@/lib/agents/proactive-governed-case-learning'
 import {
   loadApprovedPgclPrecedents,
-  markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
 } from '@/lib/agents/pgcl-approved-precedent'
 import {
@@ -384,22 +383,6 @@ export async function runNativeSpecialistSupervisor(input: {
           nativeAttempt: attempt,
         })
         if (executed.runId !== binding.agentRunId) throw new Error(`${step.id}: specialist executor returned an unexpected child run`)
-
-        if (pgclPrecedents.length) {
-          try {
-            await markPgclPrecedentsApplied({
-              projectId,
-              agentRunId: binding.agentRunId,
-              cases: pgclPrecedents,
-              executionSurface: 'SUPERVISOR_SPECIALIST',
-            })
-          } catch (learningError) {
-            console.error(
-              '[native-supervisor] approved PGCL precedent attribution failed safely:',
-              learningError instanceof Error ? learningError.message : learningError,
-            )
-          }
-        }
 
         return { ...(executed.output as Record<string, unknown>), governedHandoffEnvelopeIds: envelopeIds }
       },
