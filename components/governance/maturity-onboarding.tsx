@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
@@ -13,6 +14,8 @@ import {
   Users,
 } from 'lucide-react'
 import { MATURITY_LEVELS, type MaturityQuestion, type OrganizationAssessmentProfile } from '@/lib/governance/maturity-framework'
+import type { PersonaSlug } from '@/lib/governance/personas'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-policy'
 import type { MaturityScorecard } from '@/lib/governance/maturity-scoring'
 
 type StoredResponse = {
@@ -88,7 +91,41 @@ function Metric({ label, value, suffix = '' }: { label: string; value: string | 
   )
 }
 
-export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentPayload }) {
+const actionRoutes: Record<string, string> = {
+  'PURPOSE-STRATEGY': '/journeys',
+  'PURPOSE-VALUE': '/journeys',
+  'PURPOSE-REVIEW': '/journeys',
+  'PRINCIPLES-DOCUMENTED': '/documents',
+  'PRINCIPLES-EMBEDDED': '/workflows',
+  'PRINCIPLES-EXTERNAL': '/contracts',
+  'PEOPLE-LEADERSHIP': '/admin/project-roles',
+  'PEOPLE-STEWARDSHIP': '/stewardship',
+  'PEOPLE-COORDINATION': '/approvals',
+  'PRACTICES-POLICY': '/documents',
+  'PRACTICES-RISK': '/approvals',
+  'PRACTICES-QUALITY': '/data-quality',
+  'PRACTICES-METADATA': '/catalog',
+  'PRACTICES-LINEAGE': '/lineage',
+  'PRACTICES-PRIVACY': '/retention',
+  'PRACTICES-SECURITY': '/resource-access',
+  'PRACTICES-SHARING': '/contracts',
+  'PRACTICES-CROSSBORDER': '/contracts',
+  'AI-FRAMEWORK': '/ai-capabilities',
+  'AI-DATA-READINESS': '/ai-capabilities',
+  'CAPACITY-LITERACY': '/reports',
+  'CAPACITY-COMMUNITY': '/journeys',
+  'CAPACITY-INVESTMENT': '/reports',
+}
+
+export function GovernanceMaturityOnboarding({
+  initial,
+  persona,
+  organizationRole,
+}: {
+  initial: AssessmentPayload
+  persona: PersonaSlug
+  organizationRole: string | null
+}) {
   const [data, setData] = useState(initial)
   const [profile, setProfile] = useState<OrganizationAssessmentProfile>(initial.profile)
   const [phase, setPhase] = useState<'baseline' | 'full' | 'results'>(
@@ -251,6 +288,11 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
   const baselineAnswered = baselineQuestions.filter(item => responseByQuestion.has(item.id)).length
   const fullAnswered = data.questions.filter(item => responseByQuestion.has(item.id)).length
   const currentDraft = question ? (drafts[question.id] ?? blankAnswer(question, responseByQuestion.get(question.id))) : null
+
+  function actionHref(questionId: string) {
+    const preferred = actionRoutes[questionId] ?? '/journeys'
+    return canAccessWorkspaceHref(persona, preferred, organizationRole) ? preferred : '/journeys'
+  }
 
   if (!data.assessment && !data.canManageProfile) {
     return (
@@ -450,6 +492,9 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
                   <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{position + 1}. {item.label}</h3><span className="rounded-full bg-white px-3 py-1 text-xs font-black">{item.criticality} · Gap {item.gap}</span></div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">{item.recommendedAction}</p>
                   <p className="mt-2 text-sm font-bold text-blue-700">DataNexus action: {item.dataNexusAction}</p>
+                  <Link href={actionHref(item.questionId)} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-black text-white hover:bg-blue-700">
+                    Open relevant DataNexus workspace <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
                 </article>
               )) : <p className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-bold text-emerald-800">No material target gaps have been scored yet.</p>}
             </div>
@@ -464,6 +509,9 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
                   <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{gap.label}</h3><span className="rounded-full bg-white px-3 py-1 text-xs font-black">Current {gap.maturity} · Target {gap.target}</span></div>
                   <p className="mt-3 text-sm leading-6 text-slate-700">{gap.recommendedAction}</p>
                   <p className="mt-2 text-sm font-bold text-blue-700">DataNexus action: {gap.dataNexusAction}</p>
+                  <Link href={actionHref(gap.questionId)} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-blue-200 bg-white px-3.5 py-2 text-xs font-black text-blue-700 hover:bg-blue-50">
+                    Open relevant DataNexus workspace <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
                 </article>
               )) : <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-bold text-emerald-800"><CheckCircle2 className="mr-2 inline h-4 w-4" />No currently answered critical capability meets the critical-gap trigger.</div>}
             </div>
