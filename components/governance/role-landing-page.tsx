@@ -155,7 +155,7 @@ export function RoleLandingPage({ persona, data, userLabel, canAdmin=false }: { 
   const hasScopedFilter = Boolean(data.selectedDatasetId) || data.selectedDomain !== 'overall'
 
   return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#061426] text-slate-100"><div className="mx-auto grid max-w-[1680px] gap-5 px-3 py-3 lg:grid-cols-[245px_minmax(0,1fr)] lg:px-5 lg:py-5">
-    <aside className={`${surface} hidden min-h-[calc(100vh-40px)] p-4 lg:flex lg:flex-col`}>
+    <aside className={`${surface} dn-persona-sidebar hidden min-h-[calc(100vh-40px)] p-4 lg:flex lg:flex-col`}>
       <Link href={homeHref} className={`flex items-center gap-3 rounded-2xl px-2 py-2 ${focus}`}><span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600"><ShieldCheck className="h-5 w-5" /></span><span><span className="block text-lg font-black text-white">DataNexus AI</span><span className="block text-[10px] text-slate-500">Trusted data. Better decisions.</span></span></Link>
       <nav className="mt-6 space-y-1.5" aria-label="Persona workspace">{visibleNav.map((item,index)=><Link key={item.href} href={item.href} data-track-recent="true" data-recent-label={item.label} className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold ${focus} ${index===0?'bg-blue-600/20 text-blue-200 ring-1 ring-blue-400/20':'text-slate-400 hover:bg-white/[0.05] hover:text-white'}`}><span>{item.label}</span><ArrowRight className="h-3.5 w-3.5 opacity-50" /></Link>)}</nav>
       <div className="mt-5"><LandingRecentlyViewed /></div>
@@ -165,7 +165,7 @@ export function RoleLandingPage({ persona, data, userLabel, canAdmin=false }: { 
     </aside>
 
     <section className="min-w-0">
-      <nav className={`${surface} mb-4 flex gap-2 overflow-x-auto p-2 lg:hidden`} aria-label="Persona workspace">
+      <nav className={`${surface} dn-persona-mobile-nav mb-4 flex gap-2 overflow-x-auto p-2 lg:hidden`} aria-label="Persona workspace">
         {visibleNav.map((item,index)=><Link key={item.href} href={item.href} data-track-recent="true" data-recent-label={item.label} className={`shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold ${focus} ${index===0?'bg-blue-600 text-white shadow-sm':'bg-white/[0.035] text-slate-300 hover:bg-white/[0.07] hover:text-white'}`} aria-current={index===0?'page':undefined}>{item.label}</Link>)}
         {canAdmin?<Link href="/admin" className={`shrink-0 rounded-xl border border-white/10 px-3 py-2.5 text-sm font-semibold text-slate-300 ${focus}`}>Administration</Link>:null}
       </nav>
