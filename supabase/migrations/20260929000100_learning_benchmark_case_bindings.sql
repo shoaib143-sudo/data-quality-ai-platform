@@ -84,8 +84,8 @@ begin
       or v_eval.created_at > new.observed_at
       or v_eval.observed_at > new.observed_at
     then raise exception 'benchmark evaluation has invalid held-out identity or provenance: %', v_ref; end if;
-    if v_eval.metadata->>'version' is distinct from
-      case when v_variant = 'BASELINE' then new.baseline_version else new.candidate_version end
+    if (v_variant = 'BASELINE' and v_eval.metadata->>'version' is distinct from new.baseline_version)
+      or (v_variant = 'CANDIDATE' and v_eval.metadata->>'version' is distinct from new.candidate_version)
     then raise exception 'benchmark evaluation version mismatch: %', v_ref; end if;
     if coalesce(v_eval.metadata->>'authority_violation', '') not in ('true','false')
       or coalesce(v_eval.metadata->>'adversarial_failure', '') not in ('true','false')
