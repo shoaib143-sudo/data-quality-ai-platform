@@ -64,17 +64,71 @@ function normalizeProfile(value: unknown): OrganizationAssessmentProfile {
   return profile
 }
 
-function responseAsAnswer(row: StoredResponse): AssessmentAnswer {
+const evidenceConfidenceByState: Record<string, number> = {
+  SELF_DECLARED: 20,
+  CORROBORATED: 40,
+  EVIDENCE_SUPPORTED: 70,
+  SYSTEM_OBSERVED: 85,
+  CONTINUOUSLY_VERIFIED: 100,
+  CONFLICTING: 10,
+  EXPIRED: 0,
+}
+
+function responseAsAnswer(
+  row: StoredResponse,
+  evidenceConfidence?: number | null,
+  observedCoverage?: number | null,
+): AssessmentAnswer {
   return {
     questionId: row.question_id,
     respondentId: row.respondent_user_id,
     maturity: Number(row.maturity),
     target: row.target === null ? null : Number(row.target),
     priority: row.priority,
-    evidenceConfidence: row.evidence_confidence === null ? null : Number(row.evidence_confidence),
-    coverage: row.coverage === null ? null : Number(row.coverage),
+    evidenceConfidence: evidenceConfidence ?? (row.evidence_confidence === null ? null : Number(row.evidence_confidence)),
+    coverage: observedCoverage ?? (row.coverage === null ? null : Number(row.coverage)),
     comment: row.comment,
   }
+}
+
+function activeAt(expiresAt: unknown) {
+  return !expiresAt || new Date(String(expiresAt)).getTime() > Date.now()
+}
+
+function enrichAssessmentAnswers(
+  responses: StoredResponse[],
+  evidence: Array<{ question_id: string; verification_state: string; expires_at: string | null }>,
+  observations: Array<{ question_id: string; confidence: number | null; coverage: number | null; observed_at: string; expires_at: string | null }>,
+) {
+  const evidenceByQuestion = new Map<string, number>()
+  for (const item of evidence) {
+    if (!activeAt(item.expires_at)) continue
+    const confidence = evidenceConfidenceByState[String(item.verification_state)] ?? 0
+    evidenceByQuestion.set(item.question_id, Math.max(evidenceByQuestion.get(item.question_id) ?? 0, confidence))
+  }
+
+  const observationByQuestion = new Map<string, { confidence: number | null; coverage: number | null; observed_at: string }>()
+  for (const item of observations) {
+    if (!activeAt(item.expires_at)) continue
+    const current = observationByQuestion.get(item.question_id)
+    if (!current || new Date(item.observed_at).getTime() > new Date(current.observed_at).getTime()) {
+      observationByQuestion.set(item.question_id, item)
+    }
+  }
+
+  return responses.map(row => {
+    const observation = observationByQuestion.get(row.question_id)
+    const evidenceConfidence = Math.max(
+      row.evidence_confidence === null ? 0 : Number(row.evidence_confidence),
+      evidenceByQuestion.get(row.question_id) ?? 0,
+      observation?.confidence === null || observation?.confidence === undefined ? 0 : Number(observation.confidence),
+    )
+    return responseAsAnswer(
+      row,
+      evidenceConfidence > 0 ? evidenceConfidence : null,
+      observation?.coverage === null || observation?.coverage === undefined ? null : Number(observation.coverage),
+    )
+  })
 }
 
 async function loadAssessmentRows(assessmentId: string) {
@@ -88,9 +142,22 @@ async function loadAssessmentRows(assessmentId: string) {
 
 async function refreshScorecard(assessment: StoredAssessment) {
   const admin = createAdminClient()
-  const rows = await loadAssessmentRows(assessment.id)
+  const [rows, evidenceResult, observationsResult] = await Promise.all([
+    loadAssessmentRows(assessment.id),
+    admin.schema('governance').from('maturity_assessment_evidence')
+      .select('question_id,verification_state,expires_at').eq('assessment_id', assessment.id),
+    admin.schema('governance').from('maturity_assessment_observations')
+      .select('question_id,confidence,coverage,observed_at,expires_at').eq('assessment_id', assessment.id).order('observed_at', { ascending: false }),
+  ])
+  if (evidenceResult.error) throw new Error(`Unable to load maturity evidence: ${evidenceResult.error.message}`)
+  if (observationsResult.error) throw new Error(`Unable to load maturity observations: ${observationsResult.error.message}`)
   const profile = normalizeProfile(assessment.organization_profile)
-  const scorecard = scoreGovernanceMaturity(profile, rows.map(responseAsAnswer))
+  const enrichedAnswers = enrichAssessmentAnswers(
+    rows,
+    (evidenceResult.data ?? []) as Array<{ question_id: string; verification_state: string; expires_at: string | null }>,
+    (observationsResult.data ?? []) as Array<{ question_id: string; confidence: number | null; coverage: number | null; observed_at: string; expires_at: string | null }>,
+  )
+  const scorecard = scoreGovernanceMaturity(profile, enrichedAnswers)
   const status = scorecard.completion >= 100 ? 'COMPLETE' : scorecard.completion > 0 ? 'BASELINE' : 'DRAFT'
   const { error } = await admin.schema('governance').from('maturity_assessments').update({
     scorecard,
@@ -143,12 +210,16 @@ export async function loadLatestMaturityAssessment(userId: string) {
 
   const [responses, evidenceResult, observationResult] = await Promise.all([
     loadAssessmentRows(assessment.id),
-    admin.schema('governance').from('maturity_assessment_evidence').select('*', { count: 'exact', head: true }).eq('assessment_id', assessment.id),
-    admin.schema('governance').from('maturity_assessment_observations').select('*', { count: 'exact', head: true }).eq('assessment_id', assessment.id),
+    admin.schema('governance').from('maturity_assessment_evidence')
+      .select('question_id,verification_state,expires_at').eq('assessment_id', assessment.id),
+    admin.schema('governance').from('maturity_assessment_observations')
+      .select('question_id,confidence,coverage,observed_at,expires_at').eq('assessment_id', assessment.id).order('observed_at', { ascending: false }),
   ])
-  if (evidenceResult.error) throw new Error(`Unable to count maturity evidence: ${evidenceResult.error.message}`)
-  if (observationResult.error) throw new Error(`Unable to count maturity observations: ${observationResult.error.message}`)
-  const scorecard = scoreGovernanceMaturity(profile, responses.map(responseAsAnswer))
+  if (evidenceResult.error) throw new Error(`Unable to load maturity evidence: ${evidenceResult.error.message}`)
+  if (observationResult.error) throw new Error(`Unable to load maturity observations: ${observationResult.error.message}`)
+  const evidenceRows = (evidenceResult.data ?? []) as Array<{ question_id: string; verification_state: string; expires_at: string | null }>
+  const observationRows = (observationResult.data ?? []) as Array<{ question_id: string; confidence: number | null; coverage: number | null; observed_at: string; expires_at: string | null }>
+  const scorecard = scoreGovernanceMaturity(profile, enrichAssessmentAnswers(responses, evidenceRows, observationRows))
   return {
     organizationId: membership.organizationId,
     organizationRole: membership.organizationRole,
@@ -159,8 +230,8 @@ export async function loadLatestMaturityAssessment(userId: string) {
     currentUserResponses: responses.filter(row => row.respondent_user_id === userId),
     allResponses: responses,
     scorecard,
-    evidenceCount: evidenceResult.count ?? 0,
-    observationCount: observationResult.count ?? 0,
+    evidenceCount: evidenceRows.length,
+    observationCount: observationRows.length,
     history,
   }
 }
