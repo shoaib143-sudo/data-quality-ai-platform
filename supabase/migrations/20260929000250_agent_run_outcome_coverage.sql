@@ -22,6 +22,7 @@ create table if not exists agent.agent_run_outcome_coverage (
   synthetic_or_test_detected boolean not null default false,
   evidence jsonb not null default '{}'::jsonb check (jsonb_typeof(evidence) = 'object'),
   observed_at timestamptz not null default now(),
+  constraint agent_run_outcome_coverage_agent_run_uq unique (agent_run_id),
   constraint agent_run_outcome_coverage_project_run_fk
     foreign key (agent_run_id, project_id)
     references agent.agent_runs(id, project_id)
@@ -70,7 +71,7 @@ declare
   v_production_eligible boolean := false;
   v_synthetic boolean := false;
 begin
-  if tg_op <> 'UPDATE' or old.status::text = new.status::text then
+  if tg_op = 'UPDATE' and old.status::text = new.status::text then
     return new;
   end if;
   if new.status::text not in ('SUCCEEDED', 'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED') then
@@ -120,11 +121,14 @@ begin
     jsonb_build_object(
       'source', 'agent.agent_runs',
       'agentRunId', new.id,
-      'statusTransition', jsonb_build_object('from', old.status::text, 'to', new.status::text),
+      'statusTransition', case
+        when tg_op = 'UPDATE' then jsonb_build_object('from', old.status::text, 'to', new.status::text)
+        else jsonb_build_object('from', null, 'to', new.status::text)
+      end,
       'provenance', v_provenance,
       'verifiedOutcomeRequired', true
     )
-  );
+  ) on conflict (agent_run_id) do nothing;
 
   return new;
 end;
@@ -133,7 +137,13 @@ $$;
 revoke all on function agent.capture_terminal_agent_run_outcome_coverage() from public, anon, authenticated, service_role;
 
 drop trigger if exists capture_terminal_agent_run_outcome_coverage on agent.agent_runs;
-create trigger capture_terminal_agent_run_outcome_coverage
+drop trigger if exists capture_terminal_agent_run_outcome_coverage_insert on agent.agent_runs;
+drop trigger if exists capture_terminal_agent_run_outcome_coverage_update on agent.agent_runs;
+create trigger capture_terminal_agent_run_outcome_coverage_insert
+after insert on agent.agent_runs
+for each row execute function agent.capture_terminal_agent_run_outcome_coverage();
+
+create trigger capture_terminal_agent_run_outcome_coverage_update
 after update of status on agent.agent_runs
 for each row execute function agent.capture_terminal_agent_run_outcome_coverage();
 
