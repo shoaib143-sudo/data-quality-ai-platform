@@ -54,3 +54,10 @@ assert.equal(consensus.respondentCount, 2)
 
 assert.ok(GOVERNANCE_MATURITY_QUESTIONS.every(question => question.provenance.source.length > 0), 'every question must retain provenance')
 console.log('PASS governance maturity scoring tests')
+
+const partialCritical = scoreGovernanceMaturity(profile, [
+  { questionId: 'PRACTICES-SECURITY', respondentId: 'security', maturity: 0, target: 5, priority: 'HIGH' },
+])
+assert.equal(partialCritical.riskExposure, 'CRITICAL', 'unanswered questions must not dilute assessed risk')
+assert.ok(partialCritical.completion < 20, 'completion remains separate from assessed risk')
+console.log('PASS governance maturity partial-risk denominator')
