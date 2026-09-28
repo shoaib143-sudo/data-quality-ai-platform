@@ -23,7 +23,10 @@ test('multi respondent responses are upserted without deleting other respondents
   assert.doesNotMatch(service, /maturity_assessment_responses'\)\.delete/)
 })
 
-test('evidence is stored independently and audit events are emitted', () => {
+test('evidence is stored independently, contributes confidence by verification state, and audit events are emitted', () => {
+  assert.match(service, /evidenceConfidenceByState/)
+  assert.match(service, /CONTINUOUSLY_VERIFIED: 100/)
+  assert.match(service, /enrichAssessmentAnswers/)
   assert.match(evidenceRoute, /addMaturityEvidence/)
   assert.match(evidenceRoute, /GOVERNANCE_MATURITY_EVIDENCE_ADDED/)
   assert.match(route, /GOVERNANCE_MATURITY_RESPONSES_UPDATED/)
