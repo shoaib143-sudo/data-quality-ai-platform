@@ -58,14 +58,14 @@ begin
   ) then return false; end if;
   select * into v_definition from agent.agent_definitions where id = v_run.agent_definition_id;
   if not found then raise exception 'source agent definition missing'; end if;
-  if v_run.input->>'learningRunMode' in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS')
-    and v_run.input->>'run_mode' in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS')
-    and v_run.input->>'learningRunMode' <> v_run.input->>'run_mode' then
+  if upper(coalesce(v_run.input->>'learningRunMode', '')) in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF')
+    and upper(coalesce(v_run.input->>'run_mode', '')) in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF')
+    and upper(v_run.input->>'learningRunMode') <> upper(v_run.input->>'run_mode') then
     v_mode := 'UNCLASSIFIED';
-  elsif v_run.input->>'learningRunMode' in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS') then
-    v_mode := v_run.input->>'learningRunMode'; v_source := 'learningRunMode';
-  elsif v_run.input->>'run_mode' in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS') then
-    v_mode := v_run.input->>'run_mode'; v_source := 'run_mode';
+  elsif upper(coalesce(v_run.input->>'learningRunMode', '')) in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF') then
+    v_mode := upper(v_run.input->>'learningRunMode'); v_source := 'learningRunMode';
+  elsif upper(coalesce(v_run.input->>'run_mode', '')) in ('SUPERVISED','HANDSFREE','GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS','OFF') then
+    v_mode := upper(v_run.input->>'run_mode'); v_source := 'run_mode';
   else
     v_mode := 'UNCLASSIFIED';
   end if;
@@ -95,6 +95,12 @@ revoke all on function agent.collect_learning_prospective_on_outcome_insert() fr
 create trigger collect_learning_prospective_on_outcome_insert
 after insert on governance.governed_action_outcomes
 for each row execute function agent.collect_learning_prospective_on_outcome_insert();
+
+create trigger collect_learning_prospective_on_outcome_verify
+after update of verification_state on governance.governed_action_outcomes
+for each row
+when (old.verification_state is distinct from new.verification_state and new.verification_state = 'VERIFIED')
+execute function agent.collect_learning_prospective_on_outcome_insert();
 
 create function agent.collect_learning_prospective_on_provenance_insert()
 returns trigger language plpgsql security definer
