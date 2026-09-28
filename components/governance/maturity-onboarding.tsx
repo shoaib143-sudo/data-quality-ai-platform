@@ -57,7 +57,9 @@ type DraftAnswer = {
   comment: string
 }
 
-const booleanProfileFields: Array<{ key: keyof OrganizationAssessmentProfile; label: string; detail: string }> = [
+type BooleanProfileKey = 'regulated' | 'processesPersonalData' | 'processesSensitiveData' | 'usesAi' | 'sharesDataExternally' | 'crossBorderTransfers'
+
+const booleanProfileFields: Array<{ key: BooleanProfileKey; label: string; detail: string }> = [
   { key: 'regulated', label: 'Regulated organization', detail: 'Activates stronger risk and evidence expectations.' },
   { key: 'processesPersonalData', label: 'Processes personal data', detail: 'Activates privacy, minimization, retention, and disposal questions.' },
   { key: 'processesSensitiveData', label: 'Processes sensitive data', detail: 'Raises the relevance of privacy, security, and impact assessment controls.' },
