@@ -92,6 +92,47 @@ grant select, insert, update, delete on governance.maturity_assessment_responses
 grant select, insert, update, delete on governance.maturity_assessment_evidence to service_role;
 grant select, insert, update, delete on governance.maturity_assessment_observations to service_role;
 
+create or replace function governance.start_maturity_assessment_cycle(
+  p_organization_id uuid,
+  p_framework_version text,
+  p_organization_profile jsonb,
+  p_created_by uuid
+) returns uuid
+language plpgsql
+security definer
+set search_path = pg_catalog, governance
+as $
+declare
+  v_assessment_id uuid;
+begin
+  update governance.maturity_assessments
+     set status = 'ARCHIVED',
+         updated_at = now()
+   where organization_id = p_organization_id
+     and status <> 'ARCHIVED';
+
+  insert into governance.maturity_assessments(
+    organization_id,
+    framework_version,
+    organization_profile,
+    scorecard,
+    created_by
+  ) values (
+    p_organization_id,
+    p_framework_version,
+    coalesce(p_organization_profile, '{}'::jsonb),
+    '{}'::jsonb,
+    p_created_by
+  )
+  returning id into v_assessment_id;
+
+  return v_assessment_id;
+end;
+$;
+
+revoke all on function governance.start_maturity_assessment_cycle(uuid,text,jsonb,uuid) from public, anon, authenticated;
+grant execute on function governance.start_maturity_assessment_cycle(uuid,text,jsonb,uuid) to service_role;
+
 comment on table governance.maturity_assessments is
   'Versioned DataNexus organizational governance maturity assessments. Scores are DataNexus assessment outputs, not regulatory certification.';
 comment on table governance.maturity_assessment_responses is
