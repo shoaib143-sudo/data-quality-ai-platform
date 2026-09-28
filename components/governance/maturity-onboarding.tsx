@@ -387,7 +387,7 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
           <section className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-5">
             <div className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-emerald-700" /><h3 className="font-black">Optional supporting evidence</h3></div>
             <p className="mt-1 text-xs leading-5 text-slate-600">Evidence is stored separately from the answer so DataNexus can later corroborate, expire, or challenge it without rewriting the original response.</p>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <label className="text-xs font-bold">Evidence type
                 <select value={evidenceType} onChange={event => setEvidenceType(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                   <option value="DOCUMENT">Document</option><option value="URL">URL</option><option value="CONTROL_REPORT">Control report</option><option value="SYSTEM_CONNECTION">System connection</option><option value="OWNER_ATTESTATION">Owner attestation</option><option value="AUDIT_RESULT">Audit result</option><option value="COMMENT">Comment</option>
@@ -482,13 +482,14 @@ export function GovernanceMaturityOnboarding({ initial }: { initial: AssessmentP
               <button onClick={() => { setPhase('baseline'); setIndex(0) }} className="rounded-2xl bg-white p-4 text-left shadow-sm"><p className="font-black">Complete quick baseline</p><p className="mt-1 text-xs leading-5 text-slate-500">{baselineAnswered}/{baselineQuestions.length} answered</p></button>
               <button onClick={() => { setPhase('full'); setIndex(0) }} className="rounded-2xl bg-white p-4 text-left shadow-sm"><p className="font-black">Deepen the assessment</p><p className="mt-1 text-xs leading-5 text-slate-500">{fullAnswered}/{data.questions.length} applicable questions answered</p></button>
               <div className="rounded-2xl bg-white p-4 shadow-sm"><p className="font-black">Add more evidence</p><p className="mt-1 text-xs leading-5 text-slate-500">Evidence remains independently verifiable and can be corroborated by DataNexus observations.</p></div>
+              {data.canManageProfile ? <a href="/admin" className="rounded-2xl bg-white p-4 text-left shadow-sm"><p className="font-black">Invite contributors</p><p className="mt-1 text-xs leading-5 text-slate-500">Add governance, security, technology, and business respondents so DataNexus can measure consensus.</p></a> : <div className="rounded-2xl bg-white p-4 shadow-sm"><p className="font-black">Multi-role consensus</p><p className="mt-1 text-xs leading-5 text-slate-500">Additional organization respondents can contribute independently without overwriting your answers.</p></div>}
             </div>
             {data.canManageProfile ? (
               <div className="mt-5 flex flex-wrap gap-2">
                 <button onClick={() => void verifyConnectedEstate()} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-40">
                   Verify connected estate <ShieldCheck className="h-4 w-4" />
                 </button>
-                <button onClick={() => void configureAssessment(true)} disabled={busy} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 hover:bg-blue-50 disabled:opacity-40">
+                <button onClick={() => void configureAssessment(true)} disabled={busy} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 hover:bg-blue-50 disabled:opacity-40">
                   Start a new reassessment cycle <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
