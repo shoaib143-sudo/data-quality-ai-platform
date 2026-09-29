@@ -115,6 +115,19 @@ export default async function LearningGovernancePage({
         </section>
 
         <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-xl font-black">Learning cost and token impact</h2><p className="mt-1 text-sm text-slate-500">Observed model usage linked to source agent runs for the current learning candidates. Missing usage remains zero rather than being estimated.</p></div>
+            <p className="text-xs text-slate-500">Canonical telemetry only</p>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.inputTokens.toLocaleString()}</p><p className="text-xs font-bold uppercase text-slate-500">Input tokens</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.outputTokens.toLocaleString()}</p><p className="text-xs font-bold uppercase text-slate-500">Output tokens</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.totalTokens.toLocaleString()}</p><p className="text-xs font-bold uppercase text-slate-500">Total tokens</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">${lifecycle.counts.costUsd.toFixed(4)}</p><p className="text-xs font-bold uppercase text-slate-500">Observed cost</p></article>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6">
           <h2 className="text-xl font-black">Authority boundaries</h2>
           <p className="mt-1 text-sm text-slate-500">Learning evidence remains context and evaluation evidence. It does not create action authority.</p>
           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
