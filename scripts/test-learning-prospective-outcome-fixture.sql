@@ -53,7 +53,7 @@ with org_row as (
   select d.id, p.id, r.status::agent.run_status, r.input, r.output, now() - interval '2 minutes', now()
   from project_row p cross join definition_row d
   cross join (values
-    ('SUCCEEDED', '{"learningRunMode":"SUPERVISED"}'::jsonb, '{"result":"completed"}'::jsonb),
+    ('COMPLETED', '{"learningRunMode":"SUPERVISED"}'::jsonb, '{"result":"completed"}'::jsonb),
     ('PARTIAL', '{"run_mode":"HANDSFREE"}'::jsonb, '{"result":"partial"}'::jsonb),
     ('FAILED', '{"run_mode":"GUIDED"}'::jsonb, '{"error":"fixture failure"}'::jsonb),
     ('CANCELLED', '{"learningRunMode":"FULL_AUTONOMOUS","run_mode":"GUIDED"}'::jsonb, '{}'::jsonb)
@@ -62,7 +62,7 @@ with org_row as (
 )
 insert into learning_fixture_ids(project_id, definition_id, success_run_id, partial_run_id, failed_run_id, cancelled_run_id, action_id)
 select p.id, d.id,
-  (select id from runs where status = 'SUCCEEDED'::agent.run_status),
+  (select id from runs where status = 'COMPLETED'::agent.run_status),
   (select id from runs where status = 'PARTIAL'::agent.run_status),
   (select id from runs where status = 'FAILED'::agent.run_status),
   (select id from runs where status = 'CANCELLED'::agent.run_status),
@@ -82,7 +82,7 @@ begin
 
   if not exists (
     select 1 from agent.agent_run_outcome_coverage
-    where agent_run_id = v_ids.success_run_id and terminal_status = 'SUCCEEDED'
+    where agent_run_id = v_ids.success_run_id and terminal_status = 'COMPLETED'
       and run_mode = 'SUPERVISED' and mode_source = 'LEARNING_RUN_MODE'
       and production_eligible and provenance_status = 'PRODUCTION_ELIGIBLE'
   ) then raise exception 'successful supervised run was not captured as production eligible'; end if;
@@ -128,8 +128,9 @@ begin
   ) values (
     v_ids.project_id, 'CREATE_GOVERNANCE_ISSUE', true, 'AUTO', 0.8,
     'LOW', true, array['PROJECT'], '{}'::jsonb
-  ) returning id into v_policy_id;
-  select current_version_id into v_version_id from governance.autonomy_policies where id = v_policy_id;
+  ) on conflict (project_id, action_key) do update set enabled = excluded.enabled
+    returning id into v_policy_id;
+  v_version_id := governance.capture_autonomy_policy_version(v_policy_id, 'ISOLATED_FIXTURE');
   if v_version_id is null then raise exception 'fixture policy version was not captured'; end if;
   insert into governance.autonomy_actions(
     id, project_id, policy_id, policy_version_id, source_agent_run_id,

@@ -8,7 +8,7 @@ const workflow = fs.readFileSync('.github/workflows/delegation-admin-policy.yml'
 for (const marker of [
   "fixture_guard=ISOLATED_PROSPECTIVE_OUTCOME_FIXTURE",
   "current_setting('app.fixture_guard', true) <> 'ISOLATED_PROSPECTIVE_OUTCOME_FIXTURE'",
-  "('SUCCEEDED', '{\"learningRunMode\":\"SUPERVISED\"}'::jsonb",
+  "('COMPLETED', '{\"learningRunMode\":\"SUPERVISED\"}'::jsonb",
   "('PARTIAL', '{\"run_mode\":\"HANDSFREE\"}'::jsonb",
   "('FAILED', '{\"run_mode\":\"GUIDED\"}'::jsonb",
   "('CANCELLED', '{\"learningRunMode\":\"FULL_AUTONOMOUS\",\"run_mode\":\"GUIDED\"}'::jsonb",
