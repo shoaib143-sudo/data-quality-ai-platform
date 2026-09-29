@@ -3,6 +3,7 @@ import { writeGovernanceAudit } from '@/lib/governance/audit'
 import {
   loadApprovedPgclPrecedents,
   loadApprovedPgclAvoidanceCases,
+  markPgclAvoidanceCasesApplied,
   markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
   type AppliedPgclAvoidanceCase,
@@ -331,6 +332,7 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
       pgclAvoidanceCases = await loadApprovedPgclAvoidanceCases({
         projectId: String(agentRun.project_id),
         agentDefinitionId: String(agentRun.agent_definition_id),
+        agentRunId: input.agentRunId,
         query: precedentQuery,
         limit: 5,
       })
@@ -524,6 +526,18 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
       })
     } catch (error) {
       console.error('[data-quality-investigation] approved PGCL precedent attribution failed safely:', error)
+    }
+  }
+  if (pgclAvoidanceCases.length) {
+    try {
+      await markPgclAvoidanceCasesApplied({
+        projectId: String(agentRun.project_id),
+        agentRunId: input.agentRunId,
+        cases: pgclAvoidanceCases,
+        executionSurface: 'DATA_QUALITY_INVESTIGATION',
+      })
+    } catch (error) {
+      console.error('[data-quality-investigation] approved negative-case attribution failed safely:', error)
     }
   }
 
