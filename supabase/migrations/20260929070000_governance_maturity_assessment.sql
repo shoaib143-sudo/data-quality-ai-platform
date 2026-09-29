@@ -105,7 +105,7 @@ create or replace function governance.start_maturity_assessment_cycle(
 language plpgsql
 security definer
 set search_path = pg_catalog, governance
-as $
+as $$
 declare
   v_assessment_id uuid;
 begin
@@ -132,7 +132,7 @@ begin
 
   return v_assessment_id;
 end;
-$;
+$$;
 
 revoke all on function governance.start_maturity_assessment_cycle(uuid,text,jsonb,uuid) from public, anon, authenticated;
 grant execute on function governance.start_maturity_assessment_cycle(uuid,text,jsonb,uuid) to service_role;
