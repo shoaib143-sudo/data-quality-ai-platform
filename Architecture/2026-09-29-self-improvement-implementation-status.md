@@ -83,3 +83,16 @@ The existing decision in `Major discussion/2026-09-11-session-summary-recovery-u
 6. Review candidate safety, authority, policy, cost, latency, and rollback evidence before a controlled production canary. Only real verified outcomes on future comparable work can demonstrate improvement.
 
 A `test` schema inside the connected production project can hold narrowly scoped disposable tables and queries at no extra branch charge. It shares the same database, roles, Auth, extensions, compute, and project configuration, so it cannot validate a full migration replay or serve as an isolated application environment. Do not copy the agent/governance migrations into `test` and interpret that as production parity. The CI fixture now covers the database rules at no additional Supabase branch charge. It does not manufacture prospective production outcomes or validate a hosted preview. Production merge, migration, candidate activation, and cutover are separate release actions.
+
+### Existing `testing` schema inventory and options, 2026-09-29
+
+Read-only inspection of the connected project found `testing.fixture_runs` and `testing.fixture_assertions`, with four synthetic smoke runs and four assertions. Both tables have RLS enabled, no authenticated or anonymous schema usage, and service-role access. The run table enforces `synthetic = true` and currently permits `OFF`, `GUIDED`, `GOVERNED_AUTO`, and `FULL_AUTONOMOUS`; it cannot represent `SUPERVISED` or `HANDSFREE` without a schema change. These records are fixture evidence only.
+
+| Option | Can verify | Cannot establish | Current choice |
+| --- | --- | --- | --- |
+| Existing private `testing` schema | Narrow synthetic assertions, negative paths, fixture bookkeeping, and service-role access boundaries | Clean replay of migrations that create objects in `agent` and `governance`, separate Auth/API/runtime configuration, or real prospective effectiveness | Use for bounded fixture evidence without modifying existing mode constraints merely to imply coverage |
+| Isolated CI PostgreSQL and Supabase reconstruction | Real migration ordering, manifest registration, paired-binding triggers, rollback, leakage rejection, and schema health | Hosted preview behavior or production improvement | Default no-additional-Supabase-charge database test path; the exact PR head passed its database fixture and reconstruction jobs |
+| Existing `DataNexus UX E2E Controlled` project | Potential hosted UI and Auth test after deliberate reconciliation | Immediate schema parity; only four migrations are recorded there versus 470 in the connected main project | Do not silently repurpose or assume parity |
+| New paid preview branch | Separate hosted DB, Auth, API keys, and configuration for full preview | Real production improvement from synthetic runs | Optional only if a later hosted test requires it and its hourly cost is explicitly accepted |
+
+No paid branch or production schema change is needed for the current implementation tests. None of these synthetic environments can satisfy the prospective production-outcome gate for all eight agents and applicable run modes.
