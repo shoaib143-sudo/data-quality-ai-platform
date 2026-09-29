@@ -18,6 +18,7 @@ import type { PgclRunMode } from '@/lib/agents/proactive-governed-case-learning'
 import {
   loadApprovedPgclPrecedents,
   loadApprovedPgclAvoidanceCases,
+  markPgclAvoidanceCasesApplied,
   markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
   type AppliedPgclAvoidanceCase,
@@ -364,6 +365,7 @@ export async function runNativeSpecialistSupervisor(input: {
           pgclAvoidanceCases = await loadApprovedPgclAvoidanceCases({
             projectId,
             agentDefinitionId: worker.agentDefinitionId,
+            agentRunId: binding.agentRunId,
             query: [
               worker.agentKey,
               worker.question ?? '',
@@ -418,6 +420,21 @@ export async function runNativeSpecialistSupervisor(input: {
           } catch (learningError) {
             console.error(
               '[native-supervisor] approved PGCL precedent attribution failed safely:',
+              learningError instanceof Error ? learningError.message : learningError,
+            )
+          }
+        }
+        if (pgclAvoidanceCases.length) {
+          try {
+            await markPgclAvoidanceCasesApplied({
+              projectId,
+              agentRunId: binding.agentRunId,
+              cases: pgclAvoidanceCases,
+              executionSurface: 'SUPERVISOR_SPECIALIST',
+            })
+          } catch (learningError) {
+            console.error(
+              '[native-supervisor] approved negative-case attribution failed safely:',
               learningError instanceof Error ? learningError.message : learningError,
             )
           }
