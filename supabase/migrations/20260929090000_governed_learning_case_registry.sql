@@ -77,6 +77,29 @@ comment on table agent.negative_learning_cases is
   'Human-reviewed negative learning evidence. Rows never grant action authority or mutate agent permissions.';
 
 
+create table if not exists agent.negative_learning_case_occurrences (
+  id uuid primary key default gen_random_uuid(),
+  candidate_id uuid not null,
+  project_id uuid not null references app.projects(id) on delete cascade,
+  source_agent_run_id uuid not null references agent.agent_runs(id) on delete restrict,
+  evidence_refs text[] not null,
+  verification_evidence_refs text[] not null default '{}'::text[],
+  observed_at timestamptz not null default now(),
+  constraint negative_learning_case_occurrences_candidate_fk
+    foreign key (candidate_id, project_id)
+    references agent.negative_learning_cases(candidate_id, project_id)
+    on delete cascade,
+  constraint negative_learning_case_occurrences_evidence_ck check (cardinality(evidence_refs) > 0),
+  constraint negative_learning_case_occurrences_run_uq unique (candidate_id, source_agent_run_id)
+);
+
+create index if not exists negative_learning_case_occurrences_project_idx
+  on agent.negative_learning_case_occurrences(project_id, candidate_id, observed_at desc);
+
+alter table agent.negative_learning_case_occurrences enable row level security;
+revoke all on agent.negative_learning_case_occurrences from public, anon, authenticated, service_role;
+grant select, insert on agent.negative_learning_case_occurrences to service_role;
+
 create table if not exists agent.negative_learning_case_reviews (
   id uuid primary key default gen_random_uuid(),
   candidate_id uuid not null,
@@ -178,6 +201,36 @@ begin
     raise exception 'negative learning evidence must bind the exact source agent run';
   end if;
 
+  select lc.* into v_existing
+  from agent.learning_candidates lc
+  join agent.negative_learning_cases nc
+    on nc.candidate_id = lc.id
+   and nc.project_id = lc.project_id
+  where lc.project_id = p_project_id
+    and lc.candidate_type = 'NEGATIVE_CASE'
+    and lc.agent_key = p_agent_key
+    and lc.skill_key = p_skill_key
+    and nc.use_case_key = btrim(p_use_case_key)
+    and nc.review_status in ('PENDING_REVIEW','APPROVED','DEFERRED')
+  order by lc.created_at desc
+  limit 1;
+
+  if found then
+    insert into agent.negative_learning_case_occurrences(
+      candidate_id,project_id,source_agent_run_id,evidence_refs,verification_evidence_refs
+    ) values (
+      v_existing.id,p_project_id,p_source_agent_run_id,v_evidence_refs,coalesce(v_verification_refs,'{}'::text[])
+    )
+    on conflict (candidate_id, source_agent_run_id) do nothing;
+
+    update agent.negative_learning_cases
+    set updated_at = now()
+    where candidate_id = v_existing.id
+      and project_id = p_project_id;
+
+    return v_existing.id;
+  end if;
+
   select * into v_existing
   from agent.learning_candidates
   where project_id = p_project_id
@@ -212,6 +265,12 @@ begin
     v_candidate_id,p_project_id,p_source_agent_run_id,p_run_mode,btrim(p_use_case_key),
     btrim(p_problem_signature),btrim(p_failure_summary),btrim(p_avoid_lesson),
     v_evidence_refs,coalesce(v_verification_refs,'{}'::text[])
+  );
+
+  insert into agent.negative_learning_case_occurrences(
+    candidate_id,project_id,source_agent_run_id,evidence_refs,verification_evidence_refs
+  ) values (
+    v_candidate_id,p_project_id,p_source_agent_run_id,v_evidence_refs,coalesce(v_verification_refs,'{}'::text[])
   );
 
   insert into agent.learning_candidate_transitions(
