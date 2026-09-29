@@ -14,6 +14,16 @@ export type AppliedPgclPrecedent = {
   evidence: Record<string, unknown>
 }
 
+export type AppliedPgclAvoidanceCase = {
+  learningCaseId: string
+  candidateId: string
+  caseKey: string
+  problemType: string
+  avoidLesson: string
+  relevance: number
+  evidence: Record<string, unknown>
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -66,6 +76,38 @@ export async function loadApprovedPgclPrecedents(input: {
   })
 
   return cases
+}
+
+
+export async function loadApprovedPgclAvoidanceCases(input: {
+  projectId: string
+  agentDefinitionId: string
+  query: string
+  limit?: number
+}): Promise<AppliedPgclAvoidanceCase[]> {
+  const context = await retrieveGovernedLearningContext({
+    projectId: input.projectId,
+    agentDefinitionId: input.agentDefinitionId,
+    query: input.query,
+    limit: input.limit ?? 5,
+  })
+
+  return context.approvedNegativeCases.flatMap((learningCase) => {
+    const recommendation = record(learningCase.recommendation)
+    const avoidLesson = text(recommendation.avoid_lesson)
+    const candidateId = text(learningCase.candidate_id)
+    if (!candidateId || !avoidLesson || learningCase.relevance <= 0) return []
+
+    return [{
+      learningCaseId: String(learningCase.id),
+      candidateId,
+      caseKey: String(learningCase.case_key),
+      problemType: String(learningCase.problem_type),
+      avoidLesson,
+      relevance: Number(learningCase.relevance),
+      evidence: record(learningCase.evidence),
+    }]
+  })
 }
 
 export async function markPgclPrecedentsApplied(input: {
