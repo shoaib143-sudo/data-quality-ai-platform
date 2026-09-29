@@ -317,7 +317,7 @@ export async function processGovernanceAgentJobs(jobs: DurableJob[]) {
     } catch (error) {
       await markDurableJobFailed(job, error)
       const failedRunId = text(job.agent_run_id) || text(job.payload?.agentRunId)
-      if (failedRunId) {
+      if (failedRunId && job.attempts >= job.max_attempts) {
         try {
           await proposeNegativeCaseFromFailedAgentRun({
             projectId: job.project_id,
