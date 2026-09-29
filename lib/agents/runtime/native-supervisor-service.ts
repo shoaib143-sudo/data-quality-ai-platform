@@ -471,6 +471,7 @@ export async function runNativeSpecialistSupervisor(input: {
           childRunIds,
           runMode: input.learningRunMode ?? 'HANDSFREE',
           supervisorEvaluationId: String(trajectoryEvaluation.id),
+          runMode: input.learningRunMode ?? 'HANDSFREE',
           actorUserId,
         })
         learningEvaluation = {
@@ -523,6 +524,7 @@ export async function runNativeSpecialistSupervisor(input: {
           projectId,
           agentRunId: childRunId,
           failureSummary: `Native supervisor stopped at ${result.stepId ?? 'plan'} with ${result.code}.`,
+          runMode: input.learningRunMode ?? 'HANDSFREE',
           actorUserId,
         })
       } catch (learningError) {
