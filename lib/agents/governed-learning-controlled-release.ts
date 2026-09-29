@@ -23,7 +23,7 @@ async function loadReleaseParameters(input: {
 
   const [{ data: candidate, error: candidateError }, { data: benchmark, error: benchmarkError }] = await Promise.all([
     admin.schema('agent').from('learning_candidates')
-      .select('id,project_id,agent_key,skill_key,baseline_version,candidate_version,status')
+      .select('id,project_id,candidate_type,agent_key,skill_key,baseline_version,candidate_version,status')
       .eq('id', input.candidateId)
       .eq('project_id', input.projectId)
       .maybeSingle(),
@@ -36,6 +36,9 @@ async function loadReleaseParameters(input: {
   if (candidateError) throw new Error(`Unable to load learning candidate: ${candidateError.message}`)
   if (benchmarkError) throw new Error(`Unable to load learning benchmark: ${benchmarkError.message}`)
   if (!candidate || !benchmark) throw new Error('Learning release context is incomplete.')
+  if (candidate.candidate_type !== 'SKILL_IMPROVEMENT') {
+    throw new Error('Positive and negative case memory cannot enter the controlled-release path.')
+  }
   if (benchmark.gate_status !== 'REVIEW_REQUIRED') throw new Error('Learning release benchmark is not eligible for release.')
 
   return {
