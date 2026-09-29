@@ -134,11 +134,11 @@ begin
   if v_version_id is null then raise exception 'fixture policy version was not captured'; end if;
   insert into governance.autonomy_actions(
     id, project_id, policy_id, policy_version_id, source_agent_run_id,
-    action_key, target_type, risk_level, confidence, status, idempotency_key,
+    action_key, target_type, target_id, risk_level, confidence, status, idempotency_key,
     input, before_state, result, executed_at
   ) values (
     (select action_id from learning_fixture_ids), v_ids.project_id, v_policy_id,
-    v_version_id, v_ids.success_run_id, 'CREATE_GOVERNANCE_ISSUE', 'PROJECT',
+    v_version_id, v_ids.success_run_id, 'CREATE_GOVERNANCE_ISSUE', 'PROJECT', v_ids.project_id,
     'LOW', 0.95, 'EXECUTED', 'prospective-outcome-fixture-action',
     '{}'::jsonb, '{}'::jsonb, '{"fixture":true}'::jsonb, now()
   ) returning id into v_action_id;
