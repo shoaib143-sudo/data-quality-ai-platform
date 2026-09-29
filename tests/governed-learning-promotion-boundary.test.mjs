@@ -24,7 +24,7 @@ test('learning policies fail closed on authority and adversarial regressions', (
 })
 
 test('failed governed runs can produce negative cases but successful runs cannot', () => {
-  assert.match(negative, /if \(input\.run\.status === 'SUCCEEDED'\) return null/)
+  assert.match(negative, /\['FAILED', 'CANCELLED'\]\.includes\(input\.run\.status\)/)
   assert.match(negative, /caseType: 'NEGATIVE_CASE'/)
   assert.match(negative, /agent_run:/)
 })
