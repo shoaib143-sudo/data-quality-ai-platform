@@ -313,6 +313,7 @@ async function executeGovernanceAgentJob(job: DurableJob) {
     agentRunId: result.runId,
     question: effectiveQuestion || null,
     output: specialistOutput,
+    preloadedLearningContext: preExecutionLearning,
   })
   await persistRunOutput(result.runId, output)
 
