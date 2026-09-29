@@ -65,6 +65,10 @@ create table if not exists governance.maturity_assessment_evidence (
 create index if not exists maturity_evidence_assessment_idx
   on governance.maturity_assessment_evidence(assessment_id, question_id);
 
+create index if not exists maturity_evidence_response_idx
+  on governance.maturity_assessment_evidence(response_id)
+  where response_id is not null;
+
 create table if not exists governance.maturity_assessment_observations (
   id uuid primary key default gen_random_uuid(),
   assessment_id uuid not null references governance.maturity_assessments(id) on delete cascade,
