@@ -45,9 +45,9 @@ with org_row as (
   from org_row
   returning id
 ), definition_row as (
-  insert into agent.agent_definitions(agent_key, name, description, version, system_prompt, configuration)
-  values ('support_agent', 'Prospective Outcome Fixture Agent', 'Disposable fixture agent', 'fixture-1.0', 'fixture', '{}'::jsonb)
-  returning id
+  select id from agent.agent_definitions
+  where agent_key = 'support_agent' and enabled
+  limit 1
 ), runs as (
   insert into agent.agent_runs(agent_definition_id, project_id, status, input, output, started_at, completed_at)
   select d.id, p.id, r.status::agent.run_status, r.input, r.output, now() - interval '2 minutes', now()
