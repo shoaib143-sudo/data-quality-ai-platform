@@ -31,6 +31,16 @@ on:
       - 'scripts/test-pgcl-production-learning-provenance.mjs'
       - 'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'lib/agents/governed-learning-case-registry.ts'
+      - 'lib/agents/governed-negative-case-learning.ts'
+      - 'lib/agents/governed-negative-case-learning-service.ts'
+      - 'lib/agents/governed-negative-case-learning-admin.ts'
+      - 'lib/agents/governed-negative-case-learning-runtime.ts'
+      - 'lib/agents/governed-learning-policy.ts'
+      - 'supabase/migrations/20260929090000_governed_learning_case_registry.sql'
+      - 'tests/governed-learning-case-registry.test.mjs'
+      - 'tests/governed-learning-promotion-boundary.test.mjs'
+      - 'tests/governed-negative-case-runtime.test.mjs'
       - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'scripts/verify-governed-learning-golden-journey.mjs'
       - 'lib/agents/governed-learning-production-readiness.ts'
@@ -92,6 +102,16 @@ on:
       - 'scripts/test-pgcl-production-learning-provenance.mjs'
       - 'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'lib/agents/governed-learning-case-registry.ts'
+      - 'lib/agents/governed-negative-case-learning.ts'
+      - 'lib/agents/governed-negative-case-learning-service.ts'
+      - 'lib/agents/governed-negative-case-learning-admin.ts'
+      - 'lib/agents/governed-negative-case-learning-runtime.ts'
+      - 'lib/agents/governed-learning-policy.ts'
+      - 'supabase/migrations/20260929090000_governed_learning_case_registry.sql'
+      - 'tests/governed-learning-case-registry.test.mjs'
+      - 'tests/governed-learning-promotion-boundary.test.mjs'
+      - 'tests/governed-negative-case-runtime.test.mjs'
       - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'scripts/verify-governed-learning-golden-journey.mjs'
       - 'lib/agents/governed-learning-production-readiness.ts'
@@ -172,6 +192,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-governed-learning-command-center.mjs
       - name: Run PGCL Command Center observability tests
         run: node scripts/test-pgcl-command-center-observability.mjs
+      - name: Run governed positive and negative case tests
+        run: node --test tests/governed-learning-case-registry.test.mjs tests/governed-learning-promotion-boundary.test.mjs tests/governed-negative-case-runtime.test.mjs
       - name: Run continuous learning governance tests
         run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
       - name: Run independent continuous learning governance adversarial audit
