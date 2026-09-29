@@ -50,3 +50,9 @@ test('reassessment function uses a valid PL/pgSQL dollar-quoted body', () => {
   assert.match(sql, /end;\\s+\\$\\$;/)
   assert.doesNotMatch(sql, /\\sas \\$\\s*\\ndeclare/)
 })
+
+
+test('indexes the evidence response foreign key used during evidence lifecycle operations', () => {
+  assert.match(sql, /create index if not exists maturity_evidence_response_idx/)
+  assert.match(sql, /on governance\.maturity_assessment_evidence\(response_id\)/)
+})
