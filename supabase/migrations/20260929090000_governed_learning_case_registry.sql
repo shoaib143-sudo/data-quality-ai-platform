@@ -124,6 +124,7 @@ as $$
 declare
   v_candidate_id uuid;
   v_source_run agent.agent_runs%rowtype;
+  v_source_definition agent.agent_definitions%rowtype;
   v_existing agent.learning_candidates%rowtype;
   v_evidence_refs text[];
   v_verification_refs text[];
@@ -164,9 +165,17 @@ begin
   if not found then
     raise exception 'source agent run is missing or cross-project';
   end if;
-  if v_source_run.status = 'SUCCEEDED' and coalesce(cardinality(v_verification_refs),0) > 0 then
-    raise exception 'negative case cannot be created from a fully successful verified run';
+  if v_source_run.status not in ('FAILED','CANCELLED') then
+    raise exception 'negative learning cases require a terminal failed or cancelled agent run';
   end if;
+
+  select * into v_source_definition
+  from agent.agent_definitions d
+  where d.id = v_source_run.agent_definition_id;
+  if not found or v_source_definition.agent_key <> p_agent_key then
+    raise exception 'negative learning case agent identity does not match source run';
+  end if;
+
   if not ('agent_run:' || p_source_agent_run_id::text = any(v_evidence_refs)) then
     raise exception 'negative learning evidence must bind the exact source agent run';
   end if;
