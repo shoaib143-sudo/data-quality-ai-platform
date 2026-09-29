@@ -206,7 +206,9 @@ export async function POST(request: Request) {
         relevance: Number(learningCase.relevance ?? 0),
         evidence,
       }]
-    })    const approvedNegativeCases = preExecutionLearning.approvedNegativeCases.flatMap((learningCase) => {
+    })
+
+    const approvedNegativeCases = preExecutionLearning.approvedNegativeCases.flatMap((learningCase) => {
       const evidence = learningCase.evidence && typeof learningCase.evidence === 'object' && !Array.isArray(learningCase.evidence)
         ? learningCase.evidence as Record<string, unknown>
         : {}
