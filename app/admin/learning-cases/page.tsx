@@ -5,6 +5,8 @@ import { authorizeDataGovernanceSuperAdminForOrganization } from '@/lib/auth/dat
 import { resolveInstanceOrganizationMembership } from '@/lib/governance/instance-organization'
 import { loadPositiveLearningCaseAdminInbox } from '@/lib/agents/proactive-governed-case-learning-admin'
 import { PositiveLearningCaseReviewManager } from './positive-learning-case-review-manager'
+import { loadNegativeLearningCaseAdminInbox } from '@/lib/agents/governed-negative-case-learning-admin'
+import { NegativeLearningCaseReviewManager } from './negative-learning-case-review-manager'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
@@ -16,7 +18,10 @@ export default async function LearningCasesPage() {
   const canApprovals = canAccessWorkspaceHref(landing.persona, '/approvals', landing.organizationRole)
   const membership = await resolveInstanceOrganizationMembership(user.id)
   await authorizeDataGovernanceSuperAdminForOrganization(user.id, membership.organizationId)
-  const items = await loadPositiveLearningCaseAdminInbox(user.id)
+  const [items, negativeItems] = await Promise.all([
+    loadPositiveLearningCaseAdminInbox(user.id),
+    loadNegativeLearningCaseAdminInbox(user.id),
+  ])
   const supervisedCases = items.filter(item => String(item.runMode).toUpperCase().includes('SUPERVISED')).length
   const handsfreeCases = items.filter(item => String(item.runMode).toUpperCase().includes('HANDSFREE')).length
   const repeatedCases = items.filter(item => item.occurrenceCount > 1).length
@@ -37,14 +42,13 @@ export default async function LearningCasesPage() {
             </span>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">Proactive Governed Case Learning</p>
-              <h1 className="text-3xl font-black">Positive case review</h1>
+              <h1 className="text-3xl font-black">Governed learning case review</h1>
             </div>
           </div>
           <div className="mt-4 flex items-start gap-2 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
             <p>
-              Successful Supervised and Handsfree runs are only proposed here when verified and materially reusable.
-              Nothing becomes reusable organizational knowledge until a Data Governance Admin explicitly approves it.
+              Positive and negative Supervised or Handsfree outcomes become reusable organizational knowledge only after explicit Data Governance Admin review. Learning evidence never expands action authority.
             </p>
           </div>
         </header>
@@ -57,6 +61,7 @@ export default async function LearningCasesPage() {
         </section>
 
         <PositiveLearningCaseReviewManager items={items} />
+        <NegativeLearningCaseReviewManager items={negativeItems} />
       </div>
     </main>
   )
