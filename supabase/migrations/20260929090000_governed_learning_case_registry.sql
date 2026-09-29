@@ -76,3 +76,296 @@ grant select, insert, update on agent.negative_learning_cases to service_role;
 
 comment on table agent.negative_learning_cases is
   'Human-reviewed negative learning evidence. Rows never grant action authority or mutate agent permissions.';
+
+
+create table if not exists agent.negative_learning_case_reviews (
+  id uuid primary key default gen_random_uuid(),
+  candidate_id uuid not null,
+  project_id uuid not null references app.projects(id) on delete cascade,
+  decision text not null check (decision in ('APPROVE_NEGATIVE_CASE','REJECT','DEFER','MARK_ONE_OFF')),
+  reason text not null check (length(btrim(reason)) > 0),
+  actor_user_id uuid not null references auth.users(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  constraint negative_learning_case_reviews_candidate_fk
+    foreign key (candidate_id, project_id)
+    references agent.negative_learning_cases(candidate_id, project_id)
+    on delete cascade
+);
+
+alter table agent.negative_learning_case_reviews enable row level security;
+drop policy if exists negative_learning_case_reviews_project_read on agent.negative_learning_case_reviews;
+create policy negative_learning_case_reviews_project_read
+  on agent.negative_learning_case_reviews for select to authenticated
+  using (app_private.is_project_member(project_id));
+revoke all on agent.negative_learning_case_reviews from public, anon, authenticated, service_role;
+grant select on agent.negative_learning_case_reviews to authenticated, service_role;
+grant select, insert on agent.negative_learning_case_reviews to service_role;
+
+create or replace function agent.create_negative_learning_case(
+  p_project_id uuid,
+  p_candidate_key text,
+  p_agent_key text,
+  p_skill_key text,
+  p_source_agent_run_id uuid,
+  p_run_mode text,
+  p_use_case_key text,
+  p_problem_signature text,
+  p_failure_summary text,
+  p_avoid_lesson text,
+  p_evidence_refs text[],
+  p_verification_evidence_refs text[] default '{}'::text[],
+  p_actor_user_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = pg_catalog, agent, app
+as $$
+declare
+  v_candidate_id uuid;
+  v_source_run agent.agent_runs%rowtype;
+  v_existing agent.learning_candidates%rowtype;
+  v_evidence_refs text[];
+  v_verification_refs text[];
+begin
+  if p_project_id is null or p_source_agent_run_id is null then
+    raise exception 'project and source agent run are required';
+  end if;
+  if p_run_mode not in ('SUPERVISED','HANDSFREE') then
+    raise exception 'negative learning cases require SUPERVISED or HANDSFREE mode';
+  end if;
+  if length(btrim(coalesce(p_candidate_key,''))) = 0
+    or length(btrim(coalesce(p_use_case_key,''))) = 0
+    or length(btrim(coalesce(p_problem_signature,''))) = 0
+    or length(btrim(coalesce(p_failure_summary,''))) = 0
+    or length(btrim(coalesce(p_avoid_lesson,''))) = 0
+  then
+    raise exception 'negative learning case text fields are required';
+  end if;
+
+  select array_agg(distinct btrim(v) order by btrim(v))
+    into v_evidence_refs
+  from unnest(coalesce(p_evidence_refs, '{}'::text[])) v
+  where length(btrim(v)) > 0;
+
+  select array_agg(distinct btrim(v) order by btrim(v))
+    into v_verification_refs
+  from unnest(coalesce(p_verification_evidence_refs, '{}'::text[])) v
+  where length(btrim(v)) > 0;
+
+  if coalesce(cardinality(v_evidence_refs),0) = 0 then
+    raise exception 'negative learning cases require evidence';
+  end if;
+
+  select * into v_source_run
+  from agent.agent_runs
+  where id = p_source_agent_run_id
+    and project_id = p_project_id;
+  if not found then
+    raise exception 'source agent run is missing or cross-project';
+  end if;
+  if v_source_run.status = 'SUCCEEDED' and coalesce(cardinality(v_verification_refs),0) > 0 then
+    raise exception 'negative case cannot be created from a fully successful verified run';
+  end if;
+  if not ('agent_run:' || p_source_agent_run_id::text = any(v_evidence_refs)) then
+    raise exception 'negative learning evidence must bind the exact source agent run';
+  end if;
+
+  select * into v_existing
+  from agent.learning_candidates
+  where project_id = p_project_id
+    and candidate_key = btrim(p_candidate_key);
+
+  if found then
+    if v_existing.candidate_type <> 'NEGATIVE_CASE'
+      or v_existing.source_agent_run_id is distinct from p_source_agent_run_id
+    then
+      raise exception 'candidate key already belongs to a different governed learning candidate';
+    end if;
+    return v_existing.id;
+  end if;
+
+  insert into agent.learning_candidates(
+    project_id,candidate_key,candidate_type,agent_key,skill_key,category,title,proposed_change,
+    baseline_version,candidate_version,evidence_cutoff_at,source_agent_run_id,
+    may_auto_apply,may_self_promote,may_expand_tool_authority,may_change_mutation_boundary,
+    requires_human_review,current_authorization_required_at_release,status
+  ) values (
+    p_project_id,btrim(p_candidate_key),'NEGATIVE_CASE',p_agent_key,p_skill_key,
+    'NEGATIVE_CASE_EXPERIENCE','Negative case: ' || btrim(p_use_case_key),btrim(p_avoid_lesson),
+    'negative-case-memory-v1','negative-case:' || p_source_agent_run_id::text,now(),p_source_agent_run_id,
+    false,false,false,false,true,true,'REVIEW_REQUIRED'
+  )
+  returning id into v_candidate_id;
+
+  insert into agent.negative_learning_cases(
+    candidate_id,project_id,source_agent_run_id,run_mode,use_case_key,problem_signature,
+    failure_summary,avoid_lesson,evidence_refs,verification_evidence_refs
+  ) values (
+    v_candidate_id,p_project_id,p_source_agent_run_id,p_run_mode,btrim(p_use_case_key),
+    btrim(p_problem_signature),btrim(p_failure_summary),btrim(p_avoid_lesson),
+    v_evidence_refs,coalesce(v_verification_refs,'{}'::text[])
+  );
+
+  insert into agent.learning_candidate_transitions(
+    project_id,candidate_id,from_status,to_status,reason,actor_user_id
+  ) values (
+    p_project_id,v_candidate_id,null,'REVIEW_REQUIRED',
+    'VERIFIED_NEGATIVE_CASE_AWAITS_ADMIN_REVIEW',p_actor_user_id
+  );
+
+  return v_candidate_id;
+end;
+$$;
+
+create or replace function agent.review_negative_learning_case(
+  p_project_id uuid,
+  p_candidate_id uuid,
+  p_actor_user_id uuid,
+  p_decision text,
+  p_reason text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = pg_catalog, agent, governance
+as $$
+declare
+  v_case agent.negative_learning_cases%rowtype;
+  v_learning_target_status text;
+  v_review_status text;
+  v_agent_definition_id uuid;
+begin
+  if p_decision not in ('APPROVE_NEGATIVE_CASE','REJECT','DEFER','MARK_ONE_OFF') then
+    raise exception 'unsupported negative-case admin decision';
+  end if;
+  if length(btrim(coalesce(p_reason,''))) = 0 then
+    raise exception 'negative-case review reason is required';
+  end if;
+
+  if not exists (
+    select 1 from governance.project_role_bindings b
+    where b.project_id = p_project_id
+      and b.user_id = p_actor_user_id
+      and b.role_key = 'DATA_GOVERNANCE_ADMIN'
+      and b.active = true
+      and (b.expires_at is null or b.expires_at > now())
+  ) then
+    raise exception 'Data Governance Admin authority is required to review a negative learning case';
+  end if;
+
+  select * into v_case
+  from agent.negative_learning_cases
+  where candidate_id = p_candidate_id and project_id = p_project_id
+  for update;
+  if not found then raise exception 'negative learning case not found in project'; end if;
+  if v_case.review_status not in ('PENDING_REVIEW','DEFERRED') then
+    raise exception 'negative learning case is no longer reviewable';
+  end if;
+
+  v_review_status := case p_decision
+    when 'APPROVE_NEGATIVE_CASE' then 'APPROVED'
+    when 'REJECT' then 'REJECTED'
+    when 'DEFER' then 'DEFERRED'
+    when 'MARK_ONE_OFF' then 'ONE_OFF'
+  end;
+  v_learning_target_status := case p_decision
+    when 'APPROVE_NEGATIVE_CASE' then 'ACTIVE'
+    when 'REJECT' then 'REJECTED'
+    when 'DEFER' then 'REVIEW_REQUIRED'
+    when 'MARK_ONE_OFF' then 'RETIRED'
+  end;
+
+  update agent.negative_learning_cases
+  set review_status = v_review_status,
+      reviewed_by = p_actor_user_id,
+      reviewed_at = now(),
+      review_reason = btrim(p_reason),
+      updated_at = now()
+  where candidate_id = p_candidate_id and project_id = p_project_id;
+
+  insert into agent.negative_learning_case_reviews(
+    candidate_id,project_id,decision,reason,actor_user_id
+  ) values (
+    p_candidate_id,p_project_id,p_decision,btrim(p_reason),p_actor_user_id
+  );
+
+  update agent.learning_candidates
+  set status = v_learning_target_status, updated_at = now()
+  where id = p_candidate_id
+    and project_id = p_project_id
+    and candidate_type = 'NEGATIVE_CASE'
+    and status = 'REVIEW_REQUIRED';
+  if not found then raise exception 'canonical negative learning candidate is not REVIEW_REQUIRED'; end if;
+
+  insert into agent.learning_candidate_transitions(
+    project_id,candidate_id,from_status,to_status,reason,actor_user_id
+  ) values (
+    p_project_id,p_candidate_id,'REVIEW_REQUIRED',v_learning_target_status,
+    'NEGATIVE_CASE_ADMIN_DECISION:' || p_decision,p_actor_user_id
+  );
+
+  if p_decision = 'APPROVE_NEGATIVE_CASE' then
+    select r.agent_definition_id into v_agent_definition_id
+    from agent.agent_runs r
+    where r.id = v_case.source_agent_run_id
+      and r.project_id = p_project_id;
+    if v_agent_definition_id is null then
+      raise exception 'source agent definition is unavailable for negative learning case';
+    end if;
+
+    insert into agent.agent_learning_cases(
+      project_id,agent_definition_id,source_agent_run_id,case_key,source_kind,problem_type,
+      context,recommendation,decision_status,outcome_status,evidence,status,occurred_at,updated_at
+    ) values (
+      p_project_id,v_agent_definition_id,v_case.source_agent_run_id,
+      'negative-case:' || p_candidate_id::text,'PGCL_NEGATIVE_CASE',v_case.use_case_key,
+      jsonb_build_object(
+        'negative_case_candidate_id',p_candidate_id,
+        'problem_signature',v_case.problem_signature,
+        'failure_summary',v_case.failure_summary,
+        'run_mode',v_case.run_mode,
+        'admin_review_reason',btrim(p_reason)
+      ),
+      jsonb_build_object('avoid_lesson',v_case.avoid_lesson),
+      'VERIFIED','VERIFIED',
+      jsonb_build_object(
+        'negative_case_candidate_id',p_candidate_id,
+        'evidence_refs',v_case.evidence_refs,
+        'verification_evidence_refs',v_case.verification_evidence_refs,
+        'reviewed_by',p_actor_user_id,
+        'reviewed_at',now()
+      ),
+      'ACTIVE',now(),now()
+    )
+    on conflict (project_id, case_key) do update
+    set context = excluded.context,
+        recommendation = excluded.recommendation,
+        evidence = excluded.evidence,
+        decision_status = 'VERIFIED',
+        outcome_status = 'VERIFIED',
+        status = 'ACTIVE',
+        updated_at = now();
+  end if;
+
+  return p_candidate_id;
+end;
+$$;
+
+revoke all on function agent.create_negative_learning_case(
+  uuid,text,text,text,uuid,text,text,text,text,text,text[],text[],uuid
+) from public, anon, authenticated;
+grant execute on function agent.create_negative_learning_case(
+  uuid,text,text,text,uuid,text,text,text,text,text,text[],text[],uuid
+) to service_role;
+
+revoke all on function agent.review_negative_learning_case(
+  uuid,uuid,uuid,text,text
+) from public, anon, authenticated;
+grant execute on function agent.review_negative_learning_case(
+  uuid,uuid,uuid,text,text
+) to service_role;
+
+comment on function agent.create_negative_learning_case(
+  uuid,text,text,text,uuid,text,text,text,text,text,text[],text[],uuid
+) is 'Creates a human-reviewable negative learning case from failure evidence. It grants no execution authority.';
