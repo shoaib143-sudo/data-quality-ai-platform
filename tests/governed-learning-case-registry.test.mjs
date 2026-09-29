@@ -52,3 +52,11 @@ test('Command Center exposes negative learning cases as a separate governed sign
   assert.match(learningPage, /Canary failures/)
   assert.match(learningPage, /Rollbacks/)
 })
+
+
+test('negative learning evidence uses least-privilege reads', () => {
+  assert.doesNotMatch(migration, /grant select on agent\.negative_learning_cases to authenticated/)
+  assert.doesNotMatch(migration, /grant select on agent\.negative_learning_case_reviews to authenticated/)
+  assert.match(migration, /grant select \(project_id,candidate_id,usage_status,updated_at\)/)
+  assert.match(migration, /on agent\.negative_learning_case_usages to authenticated/)
+})
