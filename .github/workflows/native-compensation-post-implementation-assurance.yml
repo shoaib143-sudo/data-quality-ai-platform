@@ -1,4 +1,4 @@
-name: Native Compensation Post Implementation Assurance
+name: Post Implementation Assurance
 
 on:
   pull_request:
@@ -11,6 +11,13 @@ on:
       - 'scripts/test-native-compensation-lease-timing.sh'
       - 'supabase/migrations/**native_compensation*.sql'
       - '.github/workflows/native-compensation-post-implementation-assurance.yml'
+      - 'infra/platform-assurance/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'lib/**'
+      - 'app/**'
+      - 'Admin/2026-09-29-post-implementation-assurance-plan.md'
+      - 'Major discussion/2026-09-29-post-implementation-assurance-decision.md'
   push:
     branches: [main]
     paths:
@@ -21,6 +28,15 @@ on:
       - 'scripts/test-native-compensation-lease-timing.sh'
       - 'supabase/migrations/**native_compensation*.sql'
       - '.github/workflows/native-compensation-post-implementation-assurance.yml'
+      - 'infra/platform-assurance/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'lib/**'
+      - 'app/**'
+      - 'Admin/2026-09-29-post-implementation-assurance-plan.md'
+      - 'Major discussion/2026-09-29-post-implementation-assurance-decision.md'
+
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -84,3 +100,128 @@ jobs:
           pnpm dlx supabase@2.117.0 db reset --local
           bash "$ROOT/scripts/test-native-compensation-reclaim-fencing-adversarial.sh"
           bash "$ROOT/scripts/test-native-compensation-lease-timing.sh"
+
+  contract-and-unit:
+    name: contract-and-unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify post-implementation certification contract
+        run: |
+          node scripts/verify-post-implementation-certification-contract.mjs
+          node --test scripts/test-post-implementation-certification-contract.mjs
+          node --test scripts/test-post-implementation-certification-decision.mjs
+          node --experimental-strip-types --test scripts/test-certification-independence.mjs
+      - name: Exercise deterministic unit contracts
+        run: |
+          node --test tests/job-monitor-deterministic-actions.test.mjs
+          node --test tests/agent-version-lifecycle-negative.test.mjs
+          node --test tests/governance-orchestrator-live-off-contract.test.mjs
+
+  authorization-adversarial:
+    name: authorization-adversarial
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Independent authorization and governance adversarial suite
+        run: |
+          node scripts/test-governed-incident-adversarial-hardening.mjs
+          node scripts/test-adversarial-human-remediation-handoff.mjs
+          node scripts/audit-execution-modes-adversarial.mjs
+          node scripts/audit-domain-cell-job-monitor-adversarial.mjs
+          node scripts/audit-job-monitor-dependency-evidence-adversarial.mjs
+          node scripts/audit-governance-orchestrator-final-assurance.mjs
+
+  negative-failure-recovery:
+    name: negative-failure-recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Negative and degraded failure paths
+        run: |
+          node --test tests/ux-modernization-negative-failure.test.mjs
+          node --test tests/lineage-enrichment-fail-closed.test.mjs
+          node --test tests/infrastructure-integration-adversarial.test.mjs
+          node --experimental-strip-types scripts/test-governance-recovery.mjs
+          node --experimental-strip-types scripts/test-governance-run-inline-decisions-recovery.mjs
+          node --test tests/autonomous-governance-verifier-ordering.test.mjs
+
+  journeys-personas-accessibility:
+    name: journeys-personas-accessibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Golden and governance journey contracts
+        run: |
+          node scripts/test-golden-path-handoff.mjs
+          node scripts/test-guided-governance-journey.mjs
+          node scripts/test-autonomous-governance-journey.mjs
+          node scripts/test-governance-journey-run-identity.mjs
+      - name: Persona and accessibility contracts
+        run: |
+          node scripts/test-persona-accessibility-contract.mjs
+          node --test tests/ux-real-persona-e2e-contract.test.mjs
+          node --test tests/persona-live-browser-acceptance-contract.test.mjs
+
+  data360-lineage-job-monitor:
+    name: data360-lineage-job-monitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Data 360 and governed AI connected context
+        run: |
+          node --test tests/data-360-connected-context.test.mjs
+          node --test tests/ai-ux-governance-context.test.mjs
+          node --test tests/ai-learning-governance-ux.test.mjs
+      - name: Lineage and Job Monitor evidence contracts
+        run: |
+          node scripts/verify-lineage-authority-integrity.mjs
+          node scripts/verify-lineage-atomic-ingestion.mjs
+          node scripts/verify-lineage-source-identity.mjs
+          node --test tests/job-monitor-runtime-evidence-drilldown.test.mjs
+          node scripts/test-domain-cell-job-monitor.mjs
