@@ -8,7 +8,7 @@ import {
   type AssessmentPriority,
   type OrganizationAssessmentProfile,
 } from './maturity-framework'
-import { scoreGovernanceMaturity, type AssessmentAnswer } from './maturity-scoring'
+import { scoreGovernanceMaturity, type AssessmentAnswer, type MaturityScorecard } from './maturity-scoring'
 
 type StoredAssessment = {
   id: string
@@ -93,6 +93,55 @@ function responseAsAnswer(
 
 function activeAt(expiresAt: unknown) {
   return !expiresAt || new Date(String(expiresAt)).getTime() > Date.now()
+}
+
+export type AssessmentHealth = {
+  score: number
+  resultConfidence: 'LOW' | 'MEDIUM' | 'HIGH'
+  evidenceCoverage: number
+  systemVerificationCoverage: number
+  evidenceFreshness: number | null
+  stakeholderDepth: number
+  activeEvidenceItems: number
+  activeObservationCapabilities: number
+}
+
+function buildAssessmentHealth(
+  scorecard: MaturityScorecard,
+  evidence: Array<{ question_id: string; verification_state: string; expires_at: string | null }>,
+  observations: Array<{ question_id: string; confidence: number | null; coverage: number | null; observed_at: string; expires_at: string | null }>,
+): AssessmentHealth {
+  const answeredQuestionIds = new Set(scorecard.questions.map(question => question.questionId))
+  const activeEvidence = evidence.filter(item => activeAt(item.expires_at))
+  const activeObservations = observations.filter(item => activeAt(item.expires_at))
+  const evidenceQuestions = new Set(activeEvidence.filter(item => answeredQuestionIds.has(item.question_id)).map(item => item.question_id))
+  const observationQuestions = new Set(activeObservations.filter(item => answeredQuestionIds.has(item.question_id)).map(item => item.question_id))
+  const denominator = answeredQuestionIds.size
+  const evidenceCoverage = denominator ? Math.round((evidenceQuestions.size / denominator) * 100) : 0
+  const systemVerificationCoverage = denominator ? Math.round((observationQuestions.size / denominator) * 100) : 0
+  const evidenceFreshness = evidence.length ? Math.round((activeEvidence.length / evidence.length) * 100) : null
+  const stakeholderDepth = Math.min(100, scorecard.respondentCount * 25)
+  const consensus = scorecard.assessmentConsensus ?? 0
+  const freshness = evidenceFreshness ?? 0
+  const score = Math.round(
+    scorecard.completion * 0.30
+      + evidenceCoverage * 0.20
+      + systemVerificationCoverage * 0.15
+      + stakeholderDepth * 0.15
+      + consensus * 0.10
+      + freshness * 0.10,
+  )
+  const resultConfidence = score >= 75 ? 'HIGH' : score >= 45 ? 'MEDIUM' : 'LOW'
+  return {
+    score,
+    resultConfidence,
+    evidenceCoverage,
+    systemVerificationCoverage,
+    evidenceFreshness,
+    stakeholderDepth,
+    activeEvidenceItems: activeEvidence.length,
+    activeObservationCapabilities: observationQuestions.size,
+  }
 }
 
 function enrichAssessmentAnswers(
@@ -203,6 +252,7 @@ export async function loadLatestMaturityAssessment(userId: string) {
   const profile = normalizeProfile(assessment?.organization_profile)
   const questions = questionsForProfile(profile)
   if (!assessment) {
+    const scorecard = scoreGovernanceMaturity(profile, [])
     return {
       organizationId: membership.organizationId,
       organizationRole: membership.organizationRole,
@@ -212,7 +262,8 @@ export async function loadLatestMaturityAssessment(userId: string) {
       questions,
       currentUserResponses: [] as StoredResponse[],
       allResponses: [] as StoredResponse[],
-      scorecard: scoreGovernanceMaturity(profile, []),
+      scorecard,
+      assessmentHealth: buildAssessmentHealth(scorecard, [], []),
       evidenceCount: 0,
       observationCount: 0,
       history,
@@ -241,6 +292,7 @@ export async function loadLatestMaturityAssessment(userId: string) {
     currentUserResponses: responses.filter(row => row.respondent_user_id === userId),
     allResponses: responses,
     scorecard,
+    assessmentHealth: buildAssessmentHealth(scorecard, evidenceRows, observationRows),
     evidenceCount: evidenceRows.length,
     observationCount: observationRows.length,
     history,
