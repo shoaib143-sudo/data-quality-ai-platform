@@ -30,8 +30,19 @@ export type LearningLifecycleCandidate = {
   canaryAverageScore: number | null
 }
 
+export type LearningAgentCoverage = {
+  agentKey: string
+  total: number
+  positiveCases: number
+  negativeCases: number
+  skillImprovements: number
+  active: number
+  rolledBack: number
+}
+
 export type LearningLifecycleCommandCenterState = {
   candidates: LearningLifecycleCandidate[]
+  agentCoverage: LearningAgentCoverage[]
   counts: {
     total: number
     positiveCases: number
@@ -185,8 +196,22 @@ export async function readGovernedLearningLifecycleCommandCenter(
 
   const statuses = candidates.map((candidate) => candidate.status)
   const candidateTypes = candidates.map((candidate) => candidate.candidateType)
+  const agentKeys = [...new Set(candidates.map((candidate) => candidate.agentKey))].sort()
+  const agentCoverage: LearningAgentCoverage[] = agentKeys.map((agentKey) => {
+    const rows = candidates.filter((candidate) => candidate.agentKey === agentKey)
+    return {
+      agentKey,
+      total: rows.length,
+      positiveCases: rows.filter((candidate) => candidate.candidateType === 'POSITIVE_CASE').length,
+      negativeCases: rows.filter((candidate) => candidate.candidateType === 'NEGATIVE_CASE').length,
+      skillImprovements: rows.filter((candidate) => candidate.candidateType === 'SKILL_IMPROVEMENT').length,
+      active: rows.filter((candidate) => candidate.status === 'ACTIVE').length,
+      rolledBack: rows.filter((candidate) => candidate.status === 'ROLLED_BACK').length,
+    }
+  })
   return {
     candidates,
+    agentCoverage,
     counts: {
       total: candidates.length,
       positiveCases: candidateTypes.filter((candidateType) => candidateType === 'POSITIVE_CASE').length,
