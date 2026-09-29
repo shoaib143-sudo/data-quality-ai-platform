@@ -1,7 +1,31 @@
-/* Opt-in light workspace surface for migrated page families. */
+/* Opt-in light workspace surface for migrated page families.
+   Neural monitoring keeps a dark canvas inside its light page shell. */
 .dn-page main.dn-light-workspace {
   background: #f5f6fb;
   color: #292d45;
+}
+
+/* Components using the shared semantic tokens need the same palette as the
+   light surface. Keep the neural monitoring canvas on its native dark tokens. */
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #292d45;
+  --card: #ffffff;
+  --card-foreground: #292d45;
+  --popover: #ffffff;
+  --popover-foreground: #292d45;
+  --primary: #594cc3;
+  --primary-foreground: #ffffff;
+  --secondary: #f0edfc;
+  --secondary-foreground: #292d45;
+  --muted: #f2f2fa;
+  --muted-foreground: #69718a;
+  --accent: #eeeaff;
+  --accent-foreground: #5142bd;
+  --border: #e6e7ef;
+  --input: #dcddec;
+  --ring: #6454d3;
 }
 
 html.dark .dn-page main.dn-light-workspace.bg-slate-50,
@@ -10,114 +34,114 @@ html.dark .dn-page main.dn-light-workspace.bg-gray-50 {
   color: #292d45;
 }
 
-html.dark .dn-page main.dn-light-workspace :is(.bg-white, .dn-surface, .dn-kpi, .dn-glass-rail) {
+html.dark .dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.bg-white, .dn-surface, .dn-kpi, .dn-glass-rail) {
   background: #fff;
   border-color: #e6e7ef;
   box-shadow: 0 12px 30px rgba(48, 44, 106, .055), 0 2px 8px rgba(48, 44, 106, .025);
 }
 
-html.dark .dn-page main.dn-light-workspace :is(.bg-slate-50, .bg-gray-50, .dn-inset) {
+html.dark .dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.bg-slate-50, .bg-gray-50, .dn-inset) {
   background: #fafaff;
   border-color: #e8e8f1;
   box-shadow: inset 2px 2px 6px rgba(48, 44, 106, .025);
 }
 
-html.dark .dn-page main.dn-light-workspace :is(.bg-slate-100, .bg-gray-100) {
+html.dark .dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.bg-slate-100, .bg-gray-100) {
   background: #f0f0fa;
 }
 
-html.dark .dn-page main.dn-light-workspace :is(.text-slate-950, .text-slate-900, .text-gray-950, .text-gray-900) {
+html.dark .dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.text-slate-950, .text-slate-900, .text-gray-950, .text-gray-900) {
   color: #292d45;
 }
 
-html.dark .dn-page main.dn-light-workspace :is(.text-slate-800, .text-slate-700, .text-gray-800, .text-gray-700) {
+html.dark .dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.text-slate-800, .text-slate-700, .text-gray-800, .text-gray-700) {
   color: #41465f;
 }
 
-html.dark .dn-page main.dn-light-workspace :is(.text-slate-600, .text-slate-500, .text-slate-400, .text-gray-600, .text-gray-500, .text-gray-400) {
+html.dark .dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.text-slate-600, .text-slate-500, .text-slate-400, .text-gray-600, .text-gray-500, .text-gray-400) {
   color: #69718a;
 }
 
-html.dark .dn-page main.dn-light-workspace :is(.border-slate-200, .border-slate-300, .border-gray-200, .border-gray-300) {
+html.dark .dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.border-slate-200, .border-slate-300, .border-gray-200, .border-gray-300) {
   border-color: #e6e7ef;
 }
 
-html.dark .dn-page main.dn-light-workspace :is(.text-blue-600, .text-blue-700, .text-violet-600, .text-violet-700, .text-purple-600, .text-purple-700) {
+html.dark .dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.text-blue-600, .text-blue-700, .text-violet-600, .text-violet-700, .text-purple-600, .text-purple-700) {
   color: #594cc3;
 }
 
-.dn-page main.dn-light-workspace [class*="bg-[#102036]"] {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="bg-[#102036]"] {
   background: #fff;
   border-color: #e6e7ef;
   box-shadow: 0 12px 30px rgba(48, 44, 106, .055), 0 2px 8px rgba(48, 44, 106, .025);
 }
 
-.dn-page main.dn-light-workspace [class*="bg-[#0a1d33]"] {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="bg-[#0a1d33]"] {
   background: #fff;
   border-color: #e6e7ef;
   box-shadow: 0 12px 30px rgba(48, 44, 106, .055);
 }
 
-.dn-page main.dn-light-workspace [class*="bg-[#08182b]"] {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="bg-[#08182b]"] {
   background: #fafaff;
   border-color: #e8e8f1;
 }
 
-.dn-page main.dn-light-workspace [class*="bg-[#0d1c30]"],
-.dn-page main.dn-light-workspace [class*="bg-[#0b1422]"] {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="bg-[#0d1c30]"],
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="bg-[#0b1422]"] {
   background: #fafaff;
   border-color: #e8e8f1;
 }
 
-.dn-page main.dn-light-workspace :is(h1, h2, h3, p, span, div, a).text-white:not([class*="bg-blue-600"]):not([class*="bg-violet-600"]):not([class*="bg-purple-600"]):not([class*="bg-emerald-600"]):not([class*="bg-red-600"]):not([class*="bg-rose-600"]) {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(h1, h2, h3, p, span, div, a).text-white:not([class*="bg-blue-600"]):not([class*="bg-violet-600"]):not([class*="bg-purple-600"]):not([class*="bg-emerald-600"]):not([class*="bg-red-600"]):not([class*="bg-rose-600"]) {
   color: #292d45;
 }
 
-.dn-page main.dn-light-workspace :is(.text-slate-100, .text-slate-200, .text-slate-300) {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.text-slate-100, .text-slate-200, .text-slate-300) {
   color: #41465f;
 }
 
-.dn-page main.dn-light-workspace :is(.text-slate-400, .text-slate-500) {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.text-slate-400, .text-slate-500) {
   color: #69718a;
 }
 
-.dn-page main.dn-light-workspace :is(.text-blue-200, .text-blue-300, .text-cyan-200, .text-cyan-300, .text-violet-200, .text-violet-300) {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(.text-blue-200, .text-blue-300, .text-cyan-200, .text-cyan-300, .text-violet-200, .text-violet-300) {
   color: #594cc3;
 }
 
-.dn-page main.dn-light-workspace [class*="bg-blue-600/20"] {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="bg-blue-600/20"] {
   background: #eeeaff;
   color: #5142bd;
   --tw-ring-color: #ddd7ff;
 }
 
-.dn-page main.dn-light-workspace [class*="bg-blue-600"]:not([class*="bg-blue-600/20"]) {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="bg-blue-600"]:not([class*="bg-blue-600/20"]) {
   background: #604fd0;
   color: #fff;
 }
 
-.dn-page main.dn-light-workspace [class*="bg-blue-600"]:not([class*="bg-blue-600/20"]):hover {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="bg-blue-600"]:not([class*="bg-blue-600/20"]):hover {
   background: #4d3db8;
 }
 
-.dn-page main.dn-light-workspace :is(input, select, textarea) {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(input, select, textarea) {
   background: #fff;
   border-color: #dcddec;
   color: #292d45;
 }
 
-.dn-page main.dn-light-workspace :is(input, textarea)::placeholder {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) :is(input, textarea)::placeholder {
   color: #858ba1;
 }
 
-.dn-page main.dn-light-workspace [class*="border-white/10"],
-.dn-page main.dn-light-workspace [class*="border-white/[0.08]"],
-.dn-page main.dn-light-workspace [class*="border-white/[0.07]"],
-.dn-page main.dn-light-workspace [class*="border-white/[0.06]"] {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="border-white/10"],
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="border-white/[0.08]"],
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="border-white/[0.07]"],
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) [class*="border-white/[0.06]"] {
   border-color: #e7e7f0;
 }
 
-.dn-page main.dn-light-workspace a:hover,
-.dn-page main.dn-light-workspace button:hover {
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) a:hover,
+.dn-page main.dn-light-workspace:not(.dn-neural-v3) button:hover {
   transition: background-color .18s ease, color .18s ease, border-color .18s ease;
 }
