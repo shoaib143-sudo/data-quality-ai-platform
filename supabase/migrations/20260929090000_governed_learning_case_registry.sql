@@ -71,7 +71,6 @@ create policy negative_learning_cases_project_read
   using (app_private.is_project_member(project_id));
 
 revoke all on agent.negative_learning_cases from public, anon, authenticated, service_role;
-grant select on agent.negative_learning_cases to authenticated, service_role;
 grant select, insert, update on agent.negative_learning_cases to service_role;
 
 comment on table agent.negative_learning_cases is
@@ -98,7 +97,6 @@ create policy negative_learning_case_reviews_project_read
   on agent.negative_learning_case_reviews for select to authenticated
   using (app_private.is_project_member(project_id));
 revoke all on agent.negative_learning_case_reviews from public, anon, authenticated, service_role;
-grant select on agent.negative_learning_case_reviews to authenticated, service_role;
 grant select, insert on agent.negative_learning_case_reviews to service_role;
 
 create or replace function agent.create_negative_learning_case(
@@ -501,7 +499,8 @@ create policy negative_learning_case_usages_project_read
   using (app_private.is_project_member(project_id));
 
 revoke all on agent.negative_learning_case_usages from public, anon, authenticated, service_role;
-grant select on agent.negative_learning_case_usages to authenticated, service_role;
+grant select (project_id,candidate_id,usage_status,updated_at)
+  on agent.negative_learning_case_usages to authenticated;
 grant select, insert, update on agent.negative_learning_case_usages to service_role;
 
 revoke all on function agent.validate_negative_learning_case_usage() from public, anon, authenticated, service_role;
