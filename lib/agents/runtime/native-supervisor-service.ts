@@ -14,6 +14,7 @@ import { startNativeAgentLifecycle } from '@/lib/agents/runtime/native-agent-lif
 import { hashNativeRuntimeValue } from '@/lib/agents/runtime/native-tool-contracts'
 import { evaluateNativeSupervisorTrajectory } from '@/lib/agents/runtime/native-trajectory-evaluation'
 import { proposePgclCasesFromVerifiedSupervisorRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
+import { proposeNegativeCaseFromFailedAgentRun } from '@/lib/agents/governed-negative-case-learning-runtime'
 import type { PgclRunMode } from '@/lib/agents/proactive-governed-case-learning'
 import {
   loadApprovedPgclPrecedents,
@@ -516,6 +517,21 @@ export async function runNativeSpecialistSupervisor(input: {
     }
 
     const trajectoryEvaluation = await evaluateNativeSupervisorTrajectory(supervisorRun.id)
+    for (const childRunId of childRunIds) {
+      try {
+        await proposeNegativeCaseFromFailedAgentRun({
+          projectId,
+          agentRunId: childRunId,
+          failureSummary: `Native supervisor stopped at ${result.stepId ?? 'plan'} with ${result.code}.`,
+          actorUserId,
+        })
+      } catch (learningError) {
+        console.error(
+          '[native-supervisor] negative-case learning failed safely:',
+          learningError instanceof Error ? learningError.message : learningError,
+        )
+      }
+    }
     await updateSupervisorRun({
       supervisorRunId: supervisorRun.id,
       status: 'FAILED',
@@ -535,6 +551,21 @@ export async function runNativeSpecialistSupervisor(input: {
         }).in('id', childRunIds).in('status', ['QUEUED', 'RUNNING'])
       } catch {
         // Preserve the original supervisor failure if child cleanup also fails.
+      }
+      for (const childRunId of childRunIds) {
+        try {
+          await proposeNegativeCaseFromFailedAgentRun({
+            projectId,
+            agentRunId: childRunId,
+            failureSummary: error instanceof Error ? error.message : String(error),
+            actorUserId,
+          })
+        } catch (learningError) {
+          console.error(
+            '[native-supervisor] aborted-child negative-case learning failed safely:',
+            learningError instanceof Error ? learningError.message : learningError,
+          )
+        }
       }
     }
     try {
