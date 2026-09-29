@@ -300,7 +300,7 @@ requireAll('PGCL retrieval tests', pgclRetrievalTests, [
   'Learned cases cannot authorize, approve, execute, or promote a new governance action',
 ])
 requireAll('eight-agent conformance', eightAgentTests, [
-  'All eight canonical agents share the same governed positive-case learning contract',
+  'All eight canonical agents share governed positive and negative learning contracts',
   'PGCL runtime must not special-case',
   'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
 ])
