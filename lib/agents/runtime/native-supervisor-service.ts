@@ -17,8 +17,10 @@ import { proposePgclCasesFromVerifiedSupervisorRun } from '@/lib/agents/proactiv
 import type { PgclRunMode } from '@/lib/agents/proactive-governed-case-learning'
 import {
   loadApprovedPgclPrecedents,
+  loadApprovedPgclAvoidanceCases,
   markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
+  type AppliedPgclAvoidanceCase,
 } from '@/lib/agents/pgcl-approved-precedent'
 import {
   createGovernedHandoffEnvelope,
@@ -346,6 +348,7 @@ export async function runNativeSpecialistSupervisor(input: {
         })
 
         let pgclPrecedents: AppliedPgclPrecedent[] = []
+        let pgclAvoidanceCases: AppliedPgclAvoidanceCase[] = []
         try {
           pgclPrecedents = await loadApprovedPgclPrecedents({
             projectId,
@@ -355,6 +358,16 @@ export async function runNativeSpecialistSupervisor(input: {
               worker.agentKey,
               worker.question ?? '',
               'governance specialist verified precedent',
+            ].join(' '),
+            limit: 5,
+          })
+          pgclAvoidanceCases = await loadApprovedPgclAvoidanceCases({
+            projectId,
+            agentDefinitionId: worker.agentDefinitionId,
+            query: [
+              worker.agentKey,
+              worker.question ?? '',
+              'governance specialist verified avoidance precedent',
             ].join(' '),
             limit: 5,
           })
@@ -376,6 +389,15 @@ export async function runNativeSpecialistSupervisor(input: {
             caseKey: learningCase.caseKey,
             problemType: learningCase.problemType,
             reusableLesson: learningCase.reusableLesson,
+            relevance: learningCase.relevance,
+            evidence: learningCase.evidence,
+          })),
+          negativeLearningCases: pgclAvoidanceCases.map((learningCase) => ({
+            id: learningCase.learningCaseId,
+            candidateId: learningCase.candidateId,
+            caseKey: learningCase.caseKey,
+            problemType: learningCase.problemType,
+            avoidLesson: learningCase.avoidLesson,
             relevance: learningCase.relevance,
             evidence: learningCase.evidence,
           })),
