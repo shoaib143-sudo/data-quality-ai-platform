@@ -43,3 +43,12 @@ test('roadmap actions launch only persona-accessible DataNexus workspaces with g
   assert.match(ui, /Open relevant DataNexus workspace/)
   assert.match(ui, /return canAccessWorkspaceHref\(persona, preferred, organizationRole\) \? preferred : '\/journeys'/)
 })
+
+
+test('assessment health exposes confidence quality without changing maturity', () => {
+  for (const label of ['Assessment health', 'Overall result confidence', 'Evidence-backed questions', 'System-verified capabilities', 'Evidence freshness']) {
+    assert.match(ui, new RegExp(label))
+  }
+  assert.match(ui, /It does not increase governance maturity/)
+  assert.match(ui, /stakeholderDepth/)
+})
