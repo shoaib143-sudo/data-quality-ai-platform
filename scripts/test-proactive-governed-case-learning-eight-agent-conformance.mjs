@@ -7,6 +7,7 @@ const {
   derivePgclCandidateFromVerifiedRun,
 } = await import('../lib/agents/proactive-governed-case-learning.ts')
 const { GOVERNED_AGENT_KEYS } = await import('../lib/agents/governed-agent-registry.ts')
+const { deriveNegativeLearningCaseFromFailedRun } = await import('../lib/agents/governed-negative-case-learning.ts')
 
 const expectedSkills = {
   profiling_agent: 'profile_evidence_analysis',
@@ -51,6 +52,28 @@ for (const agentKey of GOVERNED_AGENT_KEYS) {
   assert.ok(candidate.candidateKey.includes(`positive-case:${agentKey}:${expectedSkills[agentKey]}`))
 }
 
+for (const agentKey of GOVERNED_AGENT_KEYS) {
+  const negative = deriveNegativeLearningCaseFromFailedRun({
+    run: {
+      id: `failed-${agentKey}`,
+      project_id: 'project-1',
+      status: 'FAILED',
+      input: { question: `failed use case for ${agentKey}` },
+      output: { error: `${agentKey} failed under governed execution` },
+    },
+    agentKey,
+    runMode: agentKey === 'profiling_agent' ? 'SUPERVISED' : 'HANDSFREE',
+    failureEvidenceRefs: [`failure:${agentKey}`],
+  })
+  assert.ok(negative, `${agentKey} must be eligible to emit a governed negative-case candidate`)
+  assert.equal(negative.agentKey, agentKey)
+  assert.equal(negative.skillKey, expectedSkills[agentKey])
+  assert.equal(negative.candidateType, 'NEGATIVE_CASE')
+  assert.equal(negative.requiresHumanReview, true)
+  assert.equal(negative.mayAutoApply, false)
+  assert.equal(negative.maySelfPromote, false)
+}
+
 const runtime = fs.readFileSync('lib/agents/proactive-governed-case-learning-runtime.ts', 'utf8')
 for (const invariant of [
   'isGovernedAgentKey',
@@ -74,6 +97,8 @@ for (const invariant of [
   'proposePgclCaseFromVerifiedAgentRun',
   'positiveLearningCases: approvedPositiveCases',
   'approved_positive_case_count: approvedPositiveCases.length',
+  'approved_negative_case_count: approvedNegativeCases.length',
+  'negativeLearningCases: approvedNegativeCases',
   'enrichGovernedAgentWithMemory',
 ]) {
   assert.ok(governanceRoute.includes(invariant), `missing governance-specialist PGCL integration: ${invariant}`)
@@ -93,7 +118,11 @@ for (const agentKey of [
 for (const invariant of [
   'positiveLearningCases',
   'learnedPositiveCases',
+  'learnedNegativeCases',
   'appliedPositiveCaseIds',
+  'appliedNegativeCaseIds',
+  'LEARNED_AVOIDANCE',
+  'PGCL_NEGATIVE_CASE',
   'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
   'Data Governance Admin-approved positive cases are historical precedent only',
 ]) {
@@ -106,7 +135,9 @@ for (const invariant of [
   'childRunIds',
   'supervisorEvaluationId',
   'loadApprovedPgclPrecedents',
+  'loadApprovedPgclAvoidanceCases',
   'positiveLearningCases: pgclPrecedents.map',
+  'negativeLearningCases: pgclAvoidanceCases.map',
   'markPgclPrecedentsApplied',
   "executionSurface: 'SUPERVISOR_SPECIALIST'",
 ]) {
@@ -119,7 +150,10 @@ const profilingInvestigation = fs.readFileSync('lib/profiling/investigation-engi
 for (const invariant of [
   'loadApprovedPgclPrecedents',
   'approved_positive_case_learning',
+  'approved_negative_case_learning',
+  'avoidance_guidance',
   'appliedPositiveCaseIds',
+  'appliedNegativeCaseIds',
   'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
   'markPgclPrecedentsApplied',
   "executionSurface: 'PROFILING_INVESTIGATION'",
@@ -133,7 +167,10 @@ const dqInvestigation = fs.readFileSync('lib/data-quality/autonomous-operations.
 for (const invariant of [
   'loadApprovedPgclPrecedents',
   'approved_positive_case_learning',
+  'approved_negative_case_learning',
+  'avoidance_guidance',
   'applied_positive_case_ids',
+  'applied_negative_case_ids',
   'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
   'markPgclPrecedentsApplied',
   "executionSurface: 'DATA_QUALITY_INVESTIGATION'",
@@ -144,6 +181,8 @@ for (const invariant of [
 const sharedAdapter = fs.readFileSync('lib/agents/pgcl-approved-precedent.ts', 'utf8')
 for (const invariant of [
   'retrieveGovernedLearningContext',
+  'loadApprovedPgclAvoidanceCases',
+  'approvedNegativeCases',
   'recordPositiveLearningCaseRetrievals',
   "status: 'APPLIED'",
   "attribution: 'CONTEXT_ONLY_EXECUTION'",
@@ -153,4 +192,4 @@ for (const invariant of [
   assert.ok(sharedAdapter.includes(invariant), `missing shared PGCL precedent invariant: ${invariant}`)
 }
 
-console.log('All eight canonical agents share the same governed positive-case learning contract, retain current-policy authority boundaries, and can both propose and consume approved precedent across direct, Profiling, Data Quality, and Handsfree specialist execution surfaces.')
+console.log('All eight canonical agents share governed positive and negative learning contracts, retain current-policy authority boundaries, and can consume approved precedent and avoidance context across direct, Profiling, Data Quality, and Handsfree specialist execution surfaces.')
