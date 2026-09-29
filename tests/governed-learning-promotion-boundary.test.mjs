@@ -6,6 +6,7 @@ const approval = fs.readFileSync('lib/agents/governed-learning-release-approval.
 const release = fs.readFileSync('lib/agents/governed-learning-controlled-release.ts','utf8')
 const policy = fs.readFileSync('lib/agents/governed-learning-policy.ts','utf8')
 const negative = fs.readFileSync('lib/agents/governed-negative-case-learning.ts','utf8')
+const benchmarkService = fs.readFileSync('lib/agents/governed-learning-benchmark-service.ts','utf8')
 
 test('controlled release is exclusive to skill improvements', () => {
   assert.match(approval, /candidate_type/)
@@ -18,6 +19,8 @@ test('learning policies fail closed on authority and adversarial regressions', (
   assert.match(policy, /adversarial regression blocks learning promotion/)
   assert.match(policy, /PRIVILEGED_OR_DESTRUCTIVE/)
   assert.match(policy, /automaticPromotionAllowed: false/)
+  assert.match(benchmarkService, /governedLearningPolicy/)
+  assert.match(release, /minimumShadowRuns/)
 })
 
 test('failed governed runs can produce negative cases but successful runs cannot', () => {
