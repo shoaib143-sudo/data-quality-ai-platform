@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export type LearningLifecycleCandidate = {
   id: string
+  candidateType: string
   agentKey: string
   skillKey: string
   category: string
@@ -33,6 +34,9 @@ export type LearningLifecycleCommandCenterState = {
   candidates: LearningLifecycleCandidate[]
   counts: {
     total: number
+    positiveCases: number
+    negativeCases: number
+    skillImprovements: number
     reviewRequired: number
     approvedForControlledRelease: number
     canary: number
@@ -61,7 +65,7 @@ export async function readGovernedLearningLifecycleCommandCenter(
 
   const [candidateResult, benchmarkResult, approvalResult, releaseResult, transitionResult, canaryEvidenceResult] = await Promise.all([
     supabase.schema('agent').from('learning_candidates')
-      .select('id,agent_key,skill_key,category,title,baseline_version,candidate_version,status,created_at,updated_at')
+      .select('id,candidate_type,agent_key,skill_key,category,title,baseline_version,candidate_version,status,created_at,updated_at')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false })
       .limit(100),
@@ -150,6 +154,7 @@ export async function readGovernedLearningLifecycleCommandCenter(
     const canary = canaryByCandidate.get(String(row.id))
     return {
       id: String(row.id),
+      candidateType: String(row.candidate_type),
       agentKey: String(row.agent_key),
       skillKey: String(row.skill_key),
       category: String(row.category),
@@ -179,10 +184,14 @@ export async function readGovernedLearningLifecycleCommandCenter(
   })
 
   const statuses = candidates.map((candidate) => candidate.status)
+  const candidateTypes = candidates.map((candidate) => candidate.candidateType)
   return {
     candidates,
     counts: {
       total: candidates.length,
+      positiveCases: candidateTypes.filter((candidateType) => candidateType === 'POSITIVE_CASE').length,
+      negativeCases: candidateTypes.filter((candidateType) => candidateType === 'NEGATIVE_CASE').length,
+      skillImprovements: candidateTypes.filter((candidateType) => candidateType === 'SKILL_IMPROVEMENT').length,
       reviewRequired: statuses.filter((status) => status === 'REVIEW_REQUIRED').length,
       approvedForControlledRelease: statuses.filter((status) => status === 'APPROVED_FOR_CONTROLLED_RELEASE').length,
       canary: statuses.filter((status) => status === 'CANARY').length,
