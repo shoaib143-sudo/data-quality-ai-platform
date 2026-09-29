@@ -40,7 +40,7 @@ function collectPages(dir){
 }
 
 const pages=collectPages(path.join(root,'app')).sort()
-assert.equal(pages.length,79,'Expected the current UX coverage boundary to contain 79 page routes')
+assert.equal(pages.length,80,'Expected the current UX coverage boundary to contain 80 page routes')
 
 const missing=pages.filter(page=>!manifest.includes('`'+page+'`'))
 assert.deepEqual(missing,[],'Every page route must remain represented in the UX revalidation manifest')
@@ -76,4 +76,4 @@ const authShell=fs.readFileSync(path.join(root,'components/auth/auth-shell.tsx')
 assert.match(authShell,/var\(--font-inter\)|Inter|DataNexus AI/)
 assert.match(authShell,/Governed intelligence workspace/)
 
-console.log('Independent UX modernization adversarial audit passed for 79-page coverage, all 13 real DataNexus personas, responsive density, palette consistency, neomorphic restraint, and explicit focus visibility.')
+console.log('Independent UX modernization adversarial audit passed for 80-page coverage, all 13 real DataNexus personas, responsive density, palette consistency, neomorphic restraint, and explicit focus visibility.')

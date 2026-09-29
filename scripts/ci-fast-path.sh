@@ -8,6 +8,7 @@ set -euo pipefail
 # in dedicated jobs or run automatically on the exact merged main SHA.
 node scripts/audit-user-facing-admin-routes.mjs
 node scripts/verify-migration-version-uniqueness.mjs
+pnpm run verify:governance-maturity
 node scripts/verify-delegation-admin-policy.mjs
 node --test tests/public-auth-proxy-fast-path.test.mjs
 node --experimental-strip-types --test tests/derived-state-rebuild.test.mjs
