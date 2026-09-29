@@ -4,6 +4,7 @@ import {
   validateApprovalForExecution,
 } from '@/lib/governance/agent-approval-service'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { governedLearningPolicy, type LearningRiskClass } from './governed-learning-policy'
 
 async function loadReleaseParameters(input: {
   projectId: string
@@ -84,15 +85,21 @@ export async function startGovernedLearningCanary(input: {
   actorUserId: string
   minimumCaseCount?: number
   minimumAverageScore?: number
+  riskClass?: LearningRiskClass
 }) {
   await revalidateReleaseApproval(input)
+  const policy = governedLearningPolicy(input.riskClass ?? 'RECOMMENDATION')
+  if (policy.riskClass === 'PRIVILEGED_OR_DESTRUCTIVE') {
+    throw new Error('privileged or destructive learning cannot enter controlled release')
+  }
+  const minimumCaseCount = Math.max(input.minimumCaseCount ?? 20, policy.minimumShadowRuns)
   const admin = createAdminClient()
   const { data, error } = await admin.schema('agent').rpc('start_learning_candidate_canary', {
     p_project_id: input.projectId,
     p_candidate_id: input.candidateId,
     p_approval_request_id: input.approvalRequestId,
     p_actor_user_id: input.actorUserId,
-    p_minimum_case_count: input.minimumCaseCount ?? 20,
+    p_minimum_case_count: minimumCaseCount,
     p_minimum_average_score: input.minimumAverageScore ?? 0.8,
   })
   if (error || !data) throw new Error(`Unable to start learning canary: ${error?.message ?? 'no release id returned'}`)
