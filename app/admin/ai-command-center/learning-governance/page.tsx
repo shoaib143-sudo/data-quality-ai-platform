@@ -130,6 +130,19 @@ export default async function LearningGovernancePage({
 
         <section className="rounded-2xl border bg-white p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-xl font-black">Governed learning coverage by agent</h2><p className="mt-1 text-sm text-slate-500">Cross-type coverage across skill improvements, approved positive precedent, and negative avoidance cases.</p></div>
+            <p className="text-xs text-slate-500">{lifecycle.agentCoverage.length} agents represented</p>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            {lifecycle.agentCoverage.length ? <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent</th><th className="p-3">Total</th><th className="p-3">Skill improvements</th><th className="p-3">Positive cases</th><th className="p-3">Negative cases</th><th className="p-3">Active</th><th className="p-3">Rolled back</th></tr></thead>
+              <tbody>{lifecycle.agentCoverage.map((agent) => <tr key={agent.agentKey} className="border-b last:border-0"><td className="p-3 font-bold">{agent.agentKey}</td><td className="p-3">{agent.total}</td><td className="p-3">{agent.skillImprovements}</td><td className="p-3">{agent.positiveCases}</td><td className="p-3">{agent.negativeCases}</td><td className="p-3">{agent.active}</td><td className="p-3">{agent.rolledBack}</td></tr>)}</tbody>
+            </table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No governed learning candidates are recorded for this project.</p>}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h2 className="text-xl font-black">Learning portfolio by agent</h2><p className="mt-1 text-sm text-slate-500">The eight canonical agents share one governed positive-case learning contract.</p></div>
             <p className="text-xs text-slate-500">{pgcl.counts.agentsRepresented}/8 agents currently have recorded cases</p>
           </div>
