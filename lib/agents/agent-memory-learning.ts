@@ -5,6 +5,10 @@ import {
   recordPositiveLearningCaseOutcome,
   recordPositiveLearningCaseRetrievals,
 } from '@/lib/agents/proactive-governed-case-learning-service'
+import {
+  recordNegativeLearningCaseOutcome,
+  recordNegativeLearningCaseRetrievals,
+} from '@/lib/agents/governed-negative-case-learning-service'
 
 export async function enrichGovernedAgentWithMemory(input: {
   projectId: string
@@ -85,6 +89,16 @@ export async function enrichGovernedAgentWithMemory(input: {
     }] : []),
   })
 
+  await recordNegativeLearningCaseRetrievals({
+    projectId: input.projectId,
+    consumerAgentRunId: input.agentRunId,
+    cases: approvedNegativeCases.flatMap((learningCase) => learningCase.candidate_id ? [{
+      candidateId: learningCase.candidate_id,
+      learningCaseId: String(learningCase.id),
+      relevance: Number(learningCase.relevance ?? 0),
+    }] : []),
+  })
+
   const retrievedCandidateIds = new Set(
     approvedPositiveCases
       .map((learningCase) => learningCase.candidate_id)
@@ -111,6 +125,33 @@ export async function enrichGovernedAgentWithMemory(input: {
     })
   }
 
+  const retrievedNegativeCandidateIds = new Set(
+    approvedNegativeCases
+      .map((learningCase) => learningCase.candidate_id)
+      .filter((candidateId): candidateId is string => Boolean(candidateId)),
+  )
+  const appliedNegativeCaseIds = Array.isArray(input.output.appliedNegativeCaseIds)
+    ? [...new Set(input.output.appliedNegativeCaseIds
+        .filter((candidateId): candidateId is string => typeof candidateId === 'string')
+        .map((candidateId) => candidateId.trim())
+        .filter((candidateId) => retrievedNegativeCandidateIds.has(candidateId)))]
+    : []
+
+  for (const candidateId of appliedNegativeCaseIds) {
+    await recordNegativeLearningCaseOutcome({
+      projectId: input.projectId,
+      candidateId,
+      consumerAgentRunId: input.agentRunId,
+      status: 'APPLIED',
+      outcome: {
+        attribution: 'EXPLICIT_AGENT_OUTPUT_AVOIDANCE',
+        execution_surface: 'DIRECT_SPECIALIST',
+        current_authorization_still_required: true,
+        current_policy_still_required: true,
+      },
+    })
+  }
+
   const enriched = {
     ...input.output,
     recommendations: existingRecommendations,
@@ -124,6 +165,7 @@ export async function enrichGovernedAgentWithMemory(input: {
       approvedNegativeCaseMatches: approvedNegativeCases.length,
       approvedNegativeCases,
       appliedPositiveCaseIds,
+      appliedNegativeCaseIds,
       influenceEvidence: verifiedEpisodes.map((episode) => ({
         learning_case_id: episode.id,
         source_kind: episode.source_kind,
