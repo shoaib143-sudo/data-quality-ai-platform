@@ -54,7 +54,9 @@ export async function enrichGovernedAgentWithMemory(input: {
       relevance: learningCase.relevance,
       evidence,
     }
-  })  const approvedNegativeCases = prior.approvedNegativeCases.map((learningCase) => {
+  })
+
+  const approvedNegativeCases = prior.approvedNegativeCases.map((learningCase) => {
     const evidence = learningCase.evidence && typeof learningCase.evidence === 'object' && !Array.isArray(learningCase.evidence)
       ? learningCase.evidence as Record<string, unknown>
       : {}
