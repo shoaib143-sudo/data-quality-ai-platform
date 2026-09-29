@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export type LearningLifecycleCandidate = {
   id: string
+  sourceAgentRunId: string | null
   candidateType: string
   agentKey: string
   skillKey: string
@@ -32,6 +33,10 @@ export type LearningLifecycleCandidate = {
   negativeAppliedCount: number
   negativeSucceededCount: number
   negativeFailedCount: number
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  costUsd: number
 }
 
 export type LearningAgentCoverage = {
@@ -67,6 +72,10 @@ export type LearningLifecycleCommandCenterState = {
     negativeApplied: number
     negativeSucceeded: number
     negativeFailed: number
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    costUsd: number
   }
   authority: {
     selfPromotionAllowed: false
@@ -82,9 +91,9 @@ export async function readGovernedLearningLifecycleCommandCenter(
 ): Promise<LearningLifecycleCommandCenterState> {
   const supabase = await createClient()
 
-  const [candidateResult, benchmarkResult, approvalResult, releaseResult, transitionResult, canaryEvidenceResult, negativeUsageResult] = await Promise.all([
+  const [candidateResult, benchmarkResult, approvalResult, releaseResult, transitionResult, canaryEvidenceResult, negativeUsageResult, telemetryResult] = await Promise.all([
     supabase.schema('agent').from('learning_candidates')
-      .select('id,candidate_type,agent_key,skill_key,category,title,baseline_version,candidate_version,status,created_at,updated_at')
+      .select('id,source_agent_run_id,candidate_type,agent_key,skill_key,category,title,baseline_version,candidate_version,status,created_at,updated_at')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false })
       .limit(100),
@@ -115,6 +124,12 @@ export async function readGovernedLearningLifecycleCommandCenter(
       .eq('project_id', projectId)
       .order('updated_at', { ascending: false })
       .limit(1000),
+    supabase.schema('governance').from('ai_telemetry_events')
+      .select('agent_run_id,input_tokens,output_tokens,cost_usd,observed_at')
+      .eq('project_id', projectId)
+      .not('agent_run_id', 'is', null)
+      .order('observed_at', { ascending: false })
+      .limit(5000),
   ])
 
   if (candidateResult.error) throw new Error(`Unable to load governed learning candidates: ${candidateResult.error.message}`)
@@ -124,6 +139,7 @@ export async function readGovernedLearningLifecycleCommandCenter(
   if (transitionResult.error) throw new Error(`Unable to load governed learning transitions: ${transitionResult.error.message}`)
   if (canaryEvidenceResult.error) throw new Error(`Unable to load governed learning canary evidence: ${canaryEvidenceResult.error.message}`)
   if (negativeUsageResult.error) throw new Error(`Unable to load negative learning usage evidence: ${negativeUsageResult.error.message}`)
+  if (telemetryResult.error) throw new Error(`Unable to load learning cost/token telemetry: ${telemetryResult.error.message}`)
 
   const latestBenchmark = new Map<string, (typeof benchmarkResult.data)[number]>()
   for (const row of benchmarkResult.data ?? []) {
@@ -183,6 +199,18 @@ export async function readGovernedLearningLifecycleCommandCenter(
     negativeUsageByCandidate.set(key, current)
   }
 
+  type UsageStats = { inputTokens: number; outputTokens: number; costUsd: number }
+  const usageByRun = new Map<string, UsageStats>()
+  for (const row of telemetryResult.data ?? []) {
+    if (!row.agent_run_id) continue
+    const key = String(row.agent_run_id)
+    const current = usageByRun.get(key) ?? { inputTokens: 0, outputTokens: 0, costUsd: 0 }
+    current.inputTokens += Number(row.input_tokens ?? 0)
+    current.outputTokens += Number(row.output_tokens ?? 0)
+    current.costUsd += Number(row.cost_usd ?? 0)
+    usageByRun.set(key, current)
+  }
+
   const candidates: LearningLifecycleCandidate[] = (candidateResult.data ?? []).map((row) => {
     const benchmark = latestBenchmark.get(String(row.id))
     const approval = latestApproval.get(String(row.id))
@@ -190,8 +218,11 @@ export async function readGovernedLearningLifecycleCommandCenter(
     const transitions = transitionByCandidate.get(String(row.id))
     const canary = canaryByCandidate.get(String(row.id))
     const negativeUsage = negativeUsageByCandidate.get(String(row.id))
+    const sourceAgentRunId = row.source_agent_run_id ? String(row.source_agent_run_id) : null
+    const usage = sourceAgentRunId ? usageByRun.get(sourceAgentRunId) : undefined
     return {
       id: String(row.id),
+      sourceAgentRunId,
       candidateType: String(row.candidate_type),
       agentKey: String(row.agent_key),
       skillKey: String(row.skill_key),
@@ -222,6 +253,10 @@ export async function readGovernedLearningLifecycleCommandCenter(
       negativeAppliedCount: negativeUsage?.applied ?? 0,
       negativeSucceededCount: negativeUsage?.succeeded ?? 0,
       negativeFailedCount: negativeUsage?.failed ?? 0,
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+      totalTokens: (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0),
+      costUsd: usage?.costUsd ?? 0,
     }
   })
 
@@ -263,6 +298,10 @@ export async function readGovernedLearningLifecycleCommandCenter(
       negativeApplied: candidates.reduce((sum, candidate) => sum + candidate.negativeAppliedCount, 0),
       negativeSucceeded: candidates.reduce((sum, candidate) => sum + candidate.negativeSucceededCount, 0),
       negativeFailed: candidates.reduce((sum, candidate) => sum + candidate.negativeFailedCount, 0),
+      inputTokens: candidates.reduce((sum, candidate) => sum + candidate.inputTokens, 0),
+      outputTokens: candidates.reduce((sum, candidate) => sum + candidate.outputTokens, 0),
+      totalTokens: candidates.reduce((sum, candidate) => sum + candidate.totalTokens, 0),
+      costUsd: candidates.reduce((sum, candidate) => sum + candidate.costUsd, 0),
     },
     authority: {
       selfPromotionAllowed: false,
