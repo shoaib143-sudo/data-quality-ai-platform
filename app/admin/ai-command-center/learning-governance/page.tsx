@@ -163,6 +163,19 @@ export default async function LearningGovernancePage({
         </section>
 
         <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-xl font-black">Regression monitor</h2><p className="mt-1 text-sm text-slate-500">Fail-closed signals from controlled learning. Canary failures and rollbacks require review before any further promotion.</p></div>
+            <Badge value={lifecycle.counts.canaryFailures + lifecycle.counts.rolledBack > 0 ? 'REVIEW_REQUIRED' : 'VERIFIED'} />
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.canaryFailures}</p><p className="text-xs font-bold uppercase text-slate-500">Canary failures</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.rolledBack}</p><p className="text-xs font-bold uppercase text-slate-500">Rollbacks</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.notReadyOrRejected}</p><p className="text-xs font-bold uppercase text-slate-500">Not ready / rejected</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.canaryEvidenceEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Shadow evidence</p></article>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">Controlled learning lifecycle</h2><p className="mt-1 text-sm text-slate-500">Canonical proposal, benchmark, approval, canary, activation and rollback state with transition and canary evidence counts.</p></div><p className="text-xs text-slate-500">{lifecycle.counts.transitionEvents} transitions · {lifecycle.counts.canaryEvidenceEvents} canary evidence rows · {lifecycle.counts.rolledBack} rolled back</p></div>
           <div className="mt-5 overflow-x-auto">
             {lifecycle.candidates.length ? <table className="w-full min-w-[1050px] text-left text-sm">
