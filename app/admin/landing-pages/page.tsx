@@ -36,7 +36,7 @@ export default async function LandingPageAdministrationPage() {
 
   const settings = new Map((settingsResult.data ?? []).map(row => [`${row.organization_id}:${row.persona_slug}`, Boolean(row.enabled)]))
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#eef2f7] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-[#eef2f7] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
     <div className="mx-auto max-w-7xl">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Landing Pages" contextLabel="Experience controls" homeHref="/home" />
       <div className="mb-7 mt-4 flex flex-wrap justify-end gap-2 text-sm">{canAdminWorkspace ? <Link href="/admin/project-roles" className="rounded-2xl px-4 py-2 font-semibold text-slate-600 hover:text-blue-700">Project Roles</Link> : null}<Link href="/home" className="rounded-2xl px-4 py-2 font-semibold text-slate-600 hover:text-blue-700">Role Home</Link></div>

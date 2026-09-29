@@ -27,7 +27,7 @@ export default async function EditSourcePage({ params }: { params: Promise<{ sou
   }
 
   const selection = hierarchySelection(metadata.hierarchy_selection)
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6"><div className="mx-auto max-w-4xl">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6"><div className="mx-auto max-w-4xl">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Edit Connection" contextLabel={source.name} homeHref="/home" />
     {canDatasets ? <Link href="/datasets" className="mt-5 inline-block text-sm font-semibold text-blue-600">Back to connections</Link> : null}
     <h1 className="my-5 text-3xl font-bold">Edit database connection</h1>
