@@ -4,6 +4,7 @@ import { loadRecommendationEffectiveness } from '@/lib/profiling/recommendation-
 import {
   loadApprovedPgclPrecedents,
   loadApprovedPgclAvoidanceCases,
+  markPgclAvoidanceCasesApplied,
   markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
   type AppliedPgclAvoidanceCase,
@@ -212,6 +213,7 @@ export async function investigateProfilingRun(
         pgclAvoidanceCases = await loadApprovedPgclAvoidanceCases({
           projectId,
           agentDefinitionId: String(sourceRun.agent_definition_id),
+          agentRunId: String(profileRun.agent_run_id),
           query: precedentQuery,
           limit: 5,
         })
@@ -400,6 +402,18 @@ export async function investigateProfilingRun(
       })
     } catch (error) {
       console.error('[profiling-investigation] approved PGCL precedent attribution failed safely:', error)
+    }
+  }
+  if (projectId && profileRun.agent_run_id && pgclAvoidanceCases.length) {
+    try {
+      await markPgclAvoidanceCasesApplied({
+        projectId,
+        agentRunId: String(profileRun.agent_run_id),
+        cases: pgclAvoidanceCases,
+        executionSurface: 'PROFILING_INVESTIGATION',
+      })
+    } catch (error) {
+      console.error('[profiling-investigation] approved negative-case attribution failed safely:', error)
     }
   }
 
