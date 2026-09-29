@@ -30,3 +30,15 @@ test('negative case storage is project-scoped and protected by RLS', () => {
 test('negative learning evidence remains non-authoritative', () => {
   assert.match(migration, /never grant action authority or mutate agent permissions/)
 })
+
+
+const commandCenterState = fs.readFileSync('lib/ai/governed-learning-command-center-state.ts', 'utf8')
+const learningPage = fs.readFileSync('app/admin/ai-command-center/learning-governance/page.tsx', 'utf8')
+
+test('Command Center exposes negative learning cases as a separate governed signal', () => {
+  assert.match(commandCenterState, /candidateType: string/)
+  assert.match(commandCenterState, /negativeCases:/)
+  assert.match(commandCenterState, /candidate_type/)
+  assert.match(learningPage, /Negative cases/)
+  assert.match(learningPage, /candidate\.candidateType/)
+})
