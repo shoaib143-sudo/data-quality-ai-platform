@@ -14,6 +14,8 @@ const memory = fs.readFileSync('lib/agents/agent-memory-learning.ts','utf8')
 const profilingJob = fs.readFileSync('lib/agents/run-profiling-job.ts','utf8')
 const dqWorker = fs.readFileSync('lib/orchestration/worker.ts','utf8')
 const supervisor = fs.readFileSync('lib/agents/runtime/native-supervisor-service.ts','utf8')
+const negativeService = fs.readFileSync('lib/agents/governed-negative-case-learning-service.ts','utf8')
+const governedOutcome = fs.readFileSync('lib/governance/governed-outcome-learning.ts','utf8')
 
 test('terminal durable failures can propose bounded negative learning', () => {
   assert.match(worker, /job\.attempts >= job\.max_attempts/)
@@ -64,4 +66,12 @@ test('negative learning is wired to terminal failure surfaces across the eight-a
   assert.match(supervisor, /proposeNegativeCaseFromFailedAgentRun/)
   assert.match(supervisor, /childRunIds/)
   assert.match(supervisor, /input\.learningRunMode \?\? 'HANDSFREE'/)
+})
+
+
+test('verified governed outcomes close the negative learning feedback loop', () => {
+  assert.match(negativeService, /reconcileNegativeLearningCaseUsagesFromGovernedOutcome/)
+  assert.match(negativeService, /AUTHORITATIVE_GOVERNED_OUTCOME/)
+  assert.match(negativeService, /usage_status', 'APPLIED'/)
+  assert.match(governedOutcome, /reconcileNegativeLearningCaseUsagesFromGovernedOutcome/)
 })
