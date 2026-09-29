@@ -429,3 +429,84 @@ grant execute on function agent.list_approved_negative_learning_cases(uuid,uuid,
 
 comment on function agent.list_approved_negative_learning_cases(uuid,uuid,integer) is
   'Returns active, verified, Data Governance Admin-approved negative learning cases for the same project and originating agent definition. Cases are context-only avoidance guidance and confer no action authority.';
+
+
+create table if not exists agent.negative_learning_case_usages (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references app.projects(id) on delete cascade,
+  candidate_id uuid not null,
+  learning_case_id uuid not null,
+  consumer_agent_run_id uuid not null,
+  relevance numeric null check (relevance is null or (relevance >= 0 and relevance <= 1)),
+  usage_status text not null default 'RETRIEVED'
+    check (usage_status in ('RETRIEVED','APPLIED','SUCCEEDED','FAILED','DISMISSED')),
+  outcome jsonb not null default '{}'::jsonb,
+  first_retrieved_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint negative_learning_case_usages_candidate_fk
+    foreign key (candidate_id, project_id)
+    references agent.negative_learning_cases(candidate_id, project_id)
+    on delete cascade,
+  constraint negative_learning_case_usages_learning_case_project_fk
+    foreign key (learning_case_id, project_id)
+    references agent.agent_learning_cases(id, project_id)
+    on delete cascade,
+  constraint negative_learning_case_usages_consumer_run_project_fk
+    foreign key (consumer_agent_run_id, project_id)
+    references agent.agent_runs(id, project_id)
+    on delete cascade,
+  constraint negative_learning_case_usages_uq
+    unique (project_id, candidate_id, consumer_agent_run_id)
+);
+
+create or replace function agent.validate_negative_learning_case_usage()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, agent
+as $$
+declare
+  v_learning_case agent.agent_learning_cases%rowtype;
+begin
+  select * into v_learning_case
+  from agent.agent_learning_cases
+  where id = new.learning_case_id
+    and project_id = new.project_id;
+
+  if not found
+    or v_learning_case.source_kind <> 'PGCL_NEGATIVE_CASE'
+    or v_learning_case.evidence->>'negative_case_candidate_id' <> new.candidate_id::text
+  then
+    raise exception 'negative learning usage must reference the matching approved negative learning case';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists validate_negative_learning_case_usage on agent.negative_learning_case_usages;
+create trigger validate_negative_learning_case_usage
+before insert or update on agent.negative_learning_case_usages
+for each row execute function agent.validate_negative_learning_case_usage();
+
+create index if not exists negative_learning_case_usages_candidate_idx
+  on agent.negative_learning_case_usages(project_id, candidate_id, updated_at desc);
+create index if not exists negative_learning_case_usages_consumer_run_idx
+  on agent.negative_learning_case_usages(consumer_agent_run_id, updated_at desc);
+
+alter table agent.negative_learning_case_usages enable row level security;
+drop policy if exists negative_learning_case_usages_project_read on agent.negative_learning_case_usages;
+create policy negative_learning_case_usages_project_read
+  on agent.negative_learning_case_usages for select to authenticated
+  using (app_private.is_project_member(project_id));
+
+revoke all on agent.negative_learning_case_usages from public, anon, authenticated, service_role;
+grant select on agent.negative_learning_case_usages to authenticated, service_role;
+grant select, insert, update on agent.negative_learning_case_usages to service_role;
+
+revoke all on function agent.validate_negative_learning_case_usage() from public, anon, authenticated, service_role;
+
+comment on table agent.negative_learning_case_usages is
+  'Tracks retrieval and bounded application of approved negative learning context by consuming agent runs. Usage evidence never grants authority.';
+comment on function agent.validate_negative_learning_case_usage() is
+  'Trigger-only guard requiring usage attribution to the exact approved negative learning case.';
