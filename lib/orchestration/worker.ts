@@ -1,4 +1,5 @@
 import { proposePgclCaseFromVerifiedAgentRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
+import { proposeNegativeCaseFromFailedAgentRun } from '@/lib/agents/governed-negative-case-learning-runtime'
 import { executePreparedProfilingJob } from '@/lib/agents/run-profiling-job'
 import { executeQualityAutomation } from '@/lib/data-quality/automation'
 import { investigateDataQualityRun } from '@/lib/data-quality/autonomous-operations'
@@ -622,6 +623,26 @@ export async function processDurableJobs(jobs: DurableJob[]) {
       results.push({ jobId: job.id, agentRunId: job.agent_run_id, status: 'SUCCEEDED' })
     } catch (error) {
       await markDurableJobFailed(job, error)
+      if (job.job_type === 'DATA_QUALITY' && job.attempts >= job.max_attempts) {
+        const payload = job.payload ?? {}
+        const failedAgentRunId = text(payload.agentRunId) || text(job.agent_run_id)
+        if (failedAgentRunId) {
+          try {
+            await proposeNegativeCaseFromFailedAgentRun({
+              projectId: job.project_id,
+              agentRunId: failedAgentRunId,
+              failureSummary: error instanceof Error ? error.message : 'Durable data quality job failed.',
+              runMode: text(payload.learningRunMode) === 'SUPERVISED' ? 'SUPERVISED' : 'HANDSFREE',
+              actorUserId: text(payload.userId) || null,
+            })
+          } catch (learningError) {
+            console.error(
+              '[data-quality-worker] negative-case learning failed safely:',
+              learningError instanceof Error ? learningError.message : learningError,
+            )
+          }
+        }
+      }
       if (job.job_type === 'EXPORT' && job.attempts >= job.max_attempts) {
         await markHistoricalExportFailed(job, error)
       }
