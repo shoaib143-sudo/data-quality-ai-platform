@@ -12,6 +12,7 @@ import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governa
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { createGovernanceExecutionController } from '@/lib/ai/governance-execution-controller'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { proposeNegativeCaseFromFailedAgentRun } from '@/lib/agents/governed-negative-case-learning-runtime'
 import {
   markDurableJobFailed,
   markDurableJobSucceeded,
@@ -315,6 +316,19 @@ export async function processGovernanceAgentJobs(jobs: DurableJob[]) {
       results.push(result)
     } catch (error) {
       await markDurableJobFailed(job, error)
+      const failedRunId = text(job.agent_run_id) || text(job.payload?.agentRunId)
+      if (failedRunId) {
+        try {
+          await proposeNegativeCaseFromFailedAgentRun({
+            projectId: job.project_id,
+            agentRunId: failedRunId,
+            failureSummary: error instanceof Error ? error.message : 'Durable governance agent job failed.',
+            actorUserId: text(job.payload?.userId) || text(job.payload?.actorUserId) || null,
+          })
+        } catch (learningError) {
+          console.error('[governed-learning] unable to propose negative case from failed run', learningError)
+        }
+      }
       results.push({
         jobId: job.id,
         agentRunId: job.agent_run_id,
