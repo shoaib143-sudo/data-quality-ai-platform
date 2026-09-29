@@ -67,7 +67,7 @@ export default async function LearningGovernancePage({
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">Phase 11 governed learning</p>
             <h1 className="text-3xl font-black">Learning Governance</h1>
-            <p className="mt-2 max-w-4xl text-sm text-slate-600">Read-only visibility across learning candidates, benchmark gates, human approval, controlled release, proactive positive cases, and reuse outcomes. This view exposes no review, approval, promotion, activation, rollback, tool-authority, or mutation action.</p>
+            <p className="mt-2 max-w-4xl text-sm text-slate-600">Read-only visibility across learning candidates, benchmark gates, human approval, controlled release, proactive positive cases, governed negative cases, and reuse outcomes. This view exposes no review, approval, promotion, activation, rollback, tool-authority, or mutation action.</p>
           </div>
         </div>
       </header>
@@ -86,9 +86,10 @@ export default async function LearningGovernancePage({
           <p className="font-black">Production learning provenance schema pending</p>
           <p className="mt-1">The connected database does not expose the PGCL production-provenance columns yet. Positive cases remain visible but are treated as non-production or unclassified until migration <span className="font-mono">20260920016000_pgcl_production_learning_provenance</span> is reconciled.</p>
         </section>}
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-9">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-10">
           <article className="rounded-2xl border bg-white p-5"><BookOpenCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.total}</p><p className="text-xs font-bold uppercase text-slate-500">Lifecycle candidates</p></article>
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.negativeCases}</p><p className="text-xs font-bold uppercase text-slate-500">Negative cases</p></article>
+          <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.negativeUsageEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Avoidance reuse</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.active}</p><p className="text-xs font-bold uppercase text-slate-500">Active releases</p></article>
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.total}</p><p className="text-xs font-bold uppercase text-slate-500">Positive cases</p></article>
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.pendingReview + pgcl.counts.deferred}</p><p className="text-xs font-bold uppercase text-slate-500">Awaiting review</p></article>
