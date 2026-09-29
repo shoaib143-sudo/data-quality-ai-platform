@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
+import { retrieveGovernedLearningContext } from '@/lib/agents/governed-learning-context'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { enrichGovernedOutputWithSkillPlan } from '@/lib/agents/governed-skill-plan-output'
 import { enrichInvestigatorOutputWithBoundedRca } from '@/lib/agents/investigator-rca-output-enrichment'
@@ -227,6 +228,45 @@ async function executeGovernanceAgentJob(job: DurableJob) {
       ].filter(Boolean).join(' ').slice(0, 1000)
     : question
 
+  const preExecutionLearning = await retrieveGovernedLearningContext({
+    projectId,
+    agentDefinitionId,
+    query: effectiveQuestion || 'governance quality risk stewardship',
+    limit: 5,
+  })
+  const approvedPositiveCases = preExecutionLearning.approvedPositiveCases.flatMap((learningCase) => {
+    const evidence = record(learningCase.evidence) ?? {}
+    const recommendation = record(learningCase.recommendation) ?? {}
+    const candidateId = text(evidence.pgcl_candidate_id)
+    const reusableLesson = text(recommendation.reusable_lesson)
+    if (!candidateId || !reusableLesson) return []
+    return [{
+      id: String(learningCase.id),
+      candidateId,
+      caseKey: String(learningCase.case_key),
+      problemType: String(learningCase.problem_type),
+      reusableLesson,
+      relevance: Number(learningCase.relevance ?? 0),
+      evidence,
+    }]
+  })
+  const approvedNegativeCases = preExecutionLearning.approvedNegativeCases.flatMap((learningCase) => {
+    const evidence = record(learningCase.evidence) ?? {}
+    const recommendation = record(learningCase.recommendation) ?? {}
+    const candidateId = text(learningCase.candidate_id)
+    const avoidLesson = text(recommendation.avoid_lesson)
+    if (!candidateId || !avoidLesson) return []
+    return [{
+      id: String(learningCase.id),
+      candidateId,
+      caseKey: String(learningCase.case_key),
+      problemType: String(learningCase.problem_type),
+      avoidLesson,
+      relevance: Number(learningCase.relevance ?? 0),
+      evidence,
+    }]
+  })
+
   let result = await loadReusableSucceededRun(job, agentDefinitionId)
   if (!result) {
     const executed = await executeGovernanceSpecialistAgent({
@@ -234,6 +274,8 @@ async function executeGovernanceAgentJob(job: DurableJob) {
       agentDefinitionId,
       actorUserId,
       question: effectiveQuestion || null,
+      positiveLearningCases: approvedPositiveCases,
+      negativeLearningCases: approvedNegativeCases,
     })
     result = { runId: executed.runId, output: executed.output as Record<string, unknown> }
     await attachAgentRunToJob(job.id, result.runId)
