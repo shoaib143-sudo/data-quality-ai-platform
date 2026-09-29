@@ -18,6 +18,7 @@ const pgclRuntimeCode = fs.readFileSync('lib/agents/proactive-governed-case-lear
 const pgclServiceCode = fs.readFileSync('lib/agents/proactive-governed-case-learning-service.ts', 'utf8')
 const pgclPrecedentCode = fs.readFileSync('lib/agents/pgcl-approved-precedent.ts', 'utf8')
 const negativeCaseCode = fs.readFileSync('lib/agents/governed-negative-case-learning.ts', 'utf8')
+const caseRegistryCode = fs.readFileSync('lib/agents/governed-learning-case-registry.ts', 'utf8')
 const negativeRuntimeCode = fs.readFileSync('lib/agents/governed-negative-case-learning-runtime.ts', 'utf8')
 const learningPolicyCode = fs.readFileSync('lib/agents/governed-learning-policy.ts', 'utf8')
 const learningContextCode = fs.readFileSync('lib/agents/governed-learning-context.ts', 'utf8')
@@ -192,11 +193,17 @@ for (const invariant of [
 for (const invariant of [
   "['FAILED', 'CANCELLED'].includes(input.run.status)",
   "caseType: 'NEGATIVE_CASE'",
-  'requiresHumanReview',
-  'mayAutoApply',
-  'maySelfPromote',
 ]) {
-  assert.ok(negativeCaseCode.includes(invariant), `negative-case governance boundary missing: ${invariant}`)
+  assert.ok(negativeCaseCode.includes(invariant), `negative-case derivation boundary missing: ${invariant}`)
+}
+for (const invariant of [
+  'requiresHumanReview: true',
+  'mayAutoApply: false',
+  'maySelfPromote: false',
+  'mayExpandToolAuthority: false',
+  'mayChangeMutationBoundary: false',
+]) {
+  assert.ok(caseRegistryCode.includes(invariant), `negative-case governance boundary missing: ${invariant}`)
 }
 
 for (const invariant of [
