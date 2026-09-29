@@ -22,6 +22,7 @@ const pgclRuntime = read('lib/agents/proactive-governed-case-learning-runtime.ts
 const pgclProvenanceCode = read('lib/agents/pgcl-run-learning-provenance.ts')
 const memoryCode = read('lib/agents/agent-memory-learning.ts')
 const negativeCaseCode = read('lib/agents/governed-negative-case-learning.ts')
+const caseRegistryCode = read('lib/agents/governed-learning-case-registry.ts')
 const negativeRuntimeCode = read('lib/agents/governed-negative-case-learning-runtime.ts')
 const learningPolicyCode = read('lib/agents/governed-learning-policy.ts')
 const learningContextCode = read('lib/agents/governed-learning-context.ts')
@@ -273,12 +274,16 @@ requireAll('negative case persistence', negativeCaseMigration, [
   'revoke all on function agent.review_negative_learning_case',
   'to service_role',
 ])
-requireAll('negative case contract', negativeCaseCode, [
+requireAll('negative case derivation', negativeCaseCode, [
   "['FAILED', 'CANCELLED'].includes(input.run.status)",
   "caseType: 'NEGATIVE_CASE'",
-  'requiresHumanReview',
-  'mayAutoApply',
-  'maySelfPromote',
+])
+requireAll('negative case authority contract', caseRegistryCode, [
+  'requiresHumanReview: true',
+  'mayAutoApply: false',
+  'maySelfPromote: false',
+  'mayExpandToolAuthority: false',
+  'mayChangeMutationBoundary: false',
 ])
 requireAll('negative case runtime', negativeRuntimeCode, [
   'deriveNegativeLearningCaseFromFailedRun',
@@ -361,6 +366,7 @@ for (const source of [
   pgclRuntime,
   pgclProvenanceCode,
   negativeCaseCode,
+  caseRegistryCode,
   negativeRuntimeCode,
   learningPolicyCode,
   learningContextCode,
