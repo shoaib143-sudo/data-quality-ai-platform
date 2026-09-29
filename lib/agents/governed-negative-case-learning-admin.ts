@@ -16,6 +16,7 @@ export type NegativeLearningCaseAdminItem = {
   evidenceRefs: string[]
   verificationEvidenceRefs: string[]
   reviewStatus: string
+  occurrenceCount: number
   createdAt: string
 }
 
@@ -41,6 +42,19 @@ export async function loadNegativeLearningCaseAdminInbox(userId: string): Promis
     : { data: [], error: null }
   if (candidateError) throw new Error(`Unable to load negative learning candidate metadata: ${candidateError.message}`)
 
+  const { data: occurrences, error: occurrenceError } = candidateIds.length
+    ? await admin.schema('agent').from('negative_learning_case_occurrences')
+        .select('candidate_id')
+        .in('candidate_id', candidateIds)
+    : { data: [], error: null }
+  if (occurrenceError) throw new Error(`Unable to load negative learning occurrence evidence: ${occurrenceError.message}`)
+
+  const occurrenceCounts = new Map<string, number>()
+  for (const occurrence of occurrences ?? []) {
+    const key = String(occurrence.candidate_id)
+    occurrenceCounts.set(key, (occurrenceCounts.get(key) ?? 0) + 1)
+  }
+
   const projectNames = new Map((projects ?? []).map((p) => [String(p.id), String(p.name)]))
   const candidateById = new Map((candidates ?? []).map((c) => [String(c.id), c]))
 
@@ -61,6 +75,7 @@ export async function loadNegativeLearningCaseAdminInbox(userId: string): Promis
       evidenceRefs: Array.isArray(item.evidence_refs) ? item.evidence_refs.map(String) : [],
       verificationEvidenceRefs: Array.isArray(item.verification_evidence_refs) ? item.verification_evidence_refs.map(String) : [],
       reviewStatus: String(item.review_status),
+      occurrenceCount: occurrenceCounts.get(String(item.candidate_id)) ?? 1,
       createdAt: String(item.created_at),
     }
   })
