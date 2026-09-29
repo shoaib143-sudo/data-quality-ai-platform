@@ -8,6 +8,9 @@ const service = fs.readFileSync('lib/agents/governed-negative-case-learning-serv
 const api = fs.readFileSync('app/api/admin/learning-cases/[candidateId]/negative-review/route.ts','utf8')
 const page = fs.readFileSync('app/admin/learning-cases/page.tsx','utf8')
 const manager = fs.readFileSync('app/admin/learning-cases/negative-learning-case-review-manager.tsx','utf8')
+const migration = fs.readFileSync('supabase/migrations/20260929090000_governed_learning_case_registry.sql','utf8')
+const precedent = fs.readFileSync('lib/agents/pgcl-approved-precedent.ts','utf8')
+const memory = fs.readFileSync('lib/agents/agent-memory-learning.ts','utf8')
 
 test('terminal durable failures can propose bounded negative learning', () => {
   assert.match(worker, /job\.attempts >= job\.max_attempts/)
@@ -34,4 +37,17 @@ test('negative case review UI exposes source evidence and authority boundary', (
   assert.match(manager, /Source run/)
   assert.match(manager, /Negative learning is context only/)
   assert.match(manager, /never grants tool, mutation, approval, or execution authority/)
+})
+
+
+test('approved negative cases have provenance-bearing retrieval and application attribution', () => {
+  assert.match(migration, /create table if not exists agent\.negative_learning_case_usages/)
+  assert.match(migration, /validate_negative_learning_case_usage/)
+  assert.match(migration, /PGCL_NEGATIVE_CASE/)
+  assert.match(precedent, /recordNegativeLearningCaseRetrievals/)
+  assert.match(precedent, /markPgclAvoidanceCasesApplied/)
+  assert.match(precedent, /CONTEXT_ONLY_AVOIDANCE/)
+  assert.match(memory, /approvedNegativeCaseMatches/)
+  assert.match(memory, /recordNegativeLearningCaseOutcome/)
+  assert.match(memory, /current_policy_still_required: true/)
 })
