@@ -48,7 +48,9 @@ export default async function LearningCasesPage() {
           <div className="mt-4 flex items-start gap-2 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
             <p>
-              Positive and negative Supervised or Handsfree outcomes become reusable organizational knowledge only after explicit Data Governance Admin review. Learning evidence never expands action authority.
+              Successful Supervised and Handsfree runs are only proposed here when verified and materially reusable.
+              Nothing becomes reusable organizational knowledge until a Data Governance Admin explicitly approves it.
+              Negative failure patterns follow the same explicit review boundary, and learning evidence never expands action authority.
             </p>
           </div>
         </header>
