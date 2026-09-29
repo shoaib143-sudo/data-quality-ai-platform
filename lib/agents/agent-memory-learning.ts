@@ -54,7 +54,24 @@ export async function enrichGovernedAgentWithMemory(input: {
       relevance: learningCase.relevance,
       evidence,
     }
+  })  const approvedNegativeCases = prior.approvedNegativeCases.map((learningCase) => {
+    const evidence = learningCase.evidence && typeof learningCase.evidence === 'object' && !Array.isArray(learningCase.evidence)
+      ? learningCase.evidence as Record<string, unknown>
+      : {}
+    return {
+      id: learningCase.id,
+      candidate_id: typeof evidence.negative_case_candidate_id === 'string' ? evidence.negative_case_candidate_id : null,
+      case_key: learningCase.case_key,
+      problem_type: learningCase.problem_type,
+      avoid_lesson: learningCase.recommendation && typeof learningCase.recommendation === 'object' && !Array.isArray(learningCase.recommendation)
+        ? (learningCase.recommendation as Record<string, unknown>).avoid_lesson ?? null
+        : null,
+      relevance: learningCase.relevance,
+      evidence,
+    }
   })
+
+
 
   await recordPositiveLearningCaseRetrievals({
     projectId: input.projectId,
@@ -102,6 +119,8 @@ export async function enrichGovernedAgentWithMemory(input: {
       verifiedEpisodes,
       approvedPositiveCaseMatches: approvedPositiveCases.length,
       approvedPositiveCases,
+      approvedNegativeCaseMatches: approvedNegativeCases.length,
+      approvedNegativeCases,
       appliedPositiveCaseIds,
       influenceEvidence: verifiedEpisodes.map((episode) => ({
         learning_case_id: episode.id,
@@ -110,6 +129,12 @@ export async function enrichGovernedAgentWithMemory(input: {
         evidence_record_id: episode.evidence_record_id,
         verified: episode.evidence_verified,
         relevance: episode.relevance,
+      })),
+      negativeCaseInfluenceEvidence: approvedNegativeCases.map((learningCase) => ({
+        learning_case_id: learningCase.id,
+        case_key: learningCase.case_key,
+        relevance: learningCase.relevance,
+        evidence: learningCase.evidence,
       })),
       positiveCaseInfluenceEvidence: approvedPositiveCases.map((learningCase) => ({
         learning_case_id: learningCase.id,
@@ -129,13 +154,14 @@ export async function enrichGovernedAgentWithMemory(input: {
     learningPolicy: {
       use_verified_prior_episodes_as_context: true,
       use_admin_approved_positive_cases_as_context: true,
+      use_admin_approved_negative_cases_as_context: true,
       reuse_prior_recommendation_prose: false,
       semantic_memory_requires_separate_authority_gate: true,
       human_validated_semantic_memory_required_for_high_risk_action: true,
       memory_never_authorizes_actions: true,
       current_authorization_required_for_every_action: true,
       current_policy_decision_required_for_every_action: true,
-      note: 'Verified prior episodes and Data Governance Admin-approved positive cases are provenance-bearing context only. Learned cases cannot authorize, approve, execute, or promote a new governance action; current deterministic authorization and policy controls remain independent.',
+      note: 'Verified prior episodes and Data Governance Admin-approved positive and negative cases are provenance-bearing context only. Learned cases cannot authorize, approve, execute, or promote a new governance action; current deterministic authorization and policy controls remain independent.',
     },
   }
 
@@ -153,6 +179,7 @@ export async function enrichGovernedAgentWithMemory(input: {
       observations: observations.slice(0, 10),
       retrieved_memory_ids: prior.memories.map((memory) => memory.id),
       approved_positive_case_ids: approvedPositiveCases.map((learningCase) => learningCase.id),
+      approved_negative_case_ids: approvedNegativeCases.map((learningCase) => learningCase.id),
       verified_episode_ids: prior.verifiedEpisodes.map((episode) => episode.id),
       verified_episode_influence_evidence: verifiedEpisodes.map((episode) => ({
         learning_case_id: episode.id,
