@@ -41,4 +41,7 @@ test('Command Center exposes negative learning cases as a separate governed sign
   assert.match(commandCenterState, /candidate_type/)
   assert.match(learningPage, /Negative cases/)
   assert.match(learningPage, /candidate\.candidateType/)
+  assert.match(learningPage, /Regression monitor/)
+  assert.match(learningPage, /Canary failures/)
+  assert.match(learningPage, /Rollbacks/)
 })
