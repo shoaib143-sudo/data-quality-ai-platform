@@ -11,6 +11,9 @@ const manager = fs.readFileSync('app/admin/learning-cases/negative-learning-case
 const migration = fs.readFileSync('supabase/migrations/20260929090000_governed_learning_case_registry.sql','utf8')
 const precedent = fs.readFileSync('lib/agents/pgcl-approved-precedent.ts','utf8')
 const memory = fs.readFileSync('lib/agents/agent-memory-learning.ts','utf8')
+const profilingJob = fs.readFileSync('lib/agents/run-profiling-job.ts','utf8')
+const dqWorker = fs.readFileSync('lib/orchestration/worker.ts','utf8')
+const supervisor = fs.readFileSync('lib/agents/runtime/native-supervisor-service.ts','utf8')
 
 test('terminal durable failures can propose bounded negative learning', () => {
   assert.match(worker, /job\.attempts >= job\.max_attempts/)
@@ -50,4 +53,15 @@ test('approved negative cases have provenance-bearing retrieval and application 
   assert.match(memory, /approvedNegativeCaseMatches/)
   assert.match(memory, /recordNegativeLearningCaseOutcome/)
   assert.match(memory, /current_policy_still_required: true/)
+})
+
+
+test('negative learning is wired to terminal failure surfaces across the eight-agent runtime', () => {
+  assert.match(profilingJob, /proposeNegativeCaseFromFailedAgentRun/)
+  assert.match(profilingJob, /PROFILING_EXECUTION_FAILED/)
+  assert.match(dqWorker, /job\.job_type === 'DATA_QUALITY'/)
+  assert.match(dqWorker, /negative-case learning failed safely/)
+  assert.match(supervisor, /proposeNegativeCaseFromFailedAgentRun/)
+  assert.match(supervisor, /childRunIds/)
+  assert.match(supervisor, /input\.learningRunMode \?\? 'HANDSFREE'/)
 })
