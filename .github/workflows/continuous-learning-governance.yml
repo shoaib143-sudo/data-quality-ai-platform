@@ -60,6 +60,9 @@ on:
       - 'scripts/test-governed-learning-evaluation-ledger.mjs'
       - 'scripts/test-learning-benchmark-dataset-manifest.mjs'
       - 'scripts/test-learning-benchmark-dataset-manifest.sql'
+      - 'scripts/test-learning-prospective-outcome-fixture.sql'
+      - 'scripts/run-learning-prospective-outcome-fixture.sh'
+      - 'scripts/test-learning-prospective-outcome-fixture-contract.mjs'
       - 'scripts/test-learning-self-improvement-adversarial.mjs'
       - 'scripts/test-governed-learning-prospective-outcomes.mjs'
       - 'scripts/test-agent-run-outcome-coverage.mjs'
@@ -139,6 +142,9 @@ on:
       - 'scripts/test-governed-learning-evaluation-ledger.mjs'
       - 'scripts/test-learning-benchmark-dataset-manifest.mjs'
       - 'scripts/test-learning-benchmark-dataset-manifest.sql'
+      - 'scripts/test-learning-prospective-outcome-fixture.sql'
+      - 'scripts/run-learning-prospective-outcome-fixture.sh'
+      - 'scripts/test-learning-prospective-outcome-fixture-contract.mjs'
       - 'scripts/test-learning-self-improvement-adversarial.mjs'
       - 'scripts/test-governed-learning-prospective-outcomes.mjs'
       - 'scripts/test-agent-run-outcome-coverage.mjs'
@@ -210,6 +216,8 @@ jobs:
         run: node scripts/test-learning-self-improvement-adversarial.mjs
       - name: Run prospective learning outcome tests
         run: node scripts/test-governed-learning-prospective-outcomes.mjs
+      - name: Check isolated prospective outcome SQL fixture contract
+        run: node scripts/test-learning-prospective-outcome-fixture-contract.mjs
       - name: Run terminal learning outcome coverage tests
         run: node scripts/test-agent-run-outcome-coverage.mjs
       - name: Run prospective learning Command Center tests
