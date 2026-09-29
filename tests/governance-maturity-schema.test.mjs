@@ -43,3 +43,10 @@ test('only one active assessment cycle is allowed per organization and framework
   assert.match(sql, /unique index if not exists maturity_assessments_one_active_cycle_idx/)
   assert.match(sql, /where status <> 'ARCHIVED'/)
 })
+
+
+test('reassessment function uses a valid PL/pgSQL dollar-quoted body', () => {
+  assert.match(sql, /set search_path = pg_catalog, governance\\s+as \\$\\$\\s+declare/)
+  assert.match(sql, /end;\\s+\\$\\$;/)
+  assert.doesNotMatch(sql, /\\sas \\$\\s*\\ndeclare/)
+})
