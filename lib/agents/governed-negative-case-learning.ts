@@ -25,7 +25,7 @@ export function deriveNegativeLearningCaseFromFailedRun(input: {
   failureEvidenceRefs: readonly string[]
   verificationEvidenceRefs?: readonly string[]
 }): GovernedLearningCaseDraft | null {
-  if (input.run.status === 'SUCCEEDED') return null
+  if (!['FAILED', 'CANCELLED'].includes(input.run.status)) return null
   if (!input.failureEvidenceRefs.length) return null
 
   const runInput = record(input.run.input)
