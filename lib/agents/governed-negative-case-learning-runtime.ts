@@ -8,7 +8,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 function runMode(input: Record<string, unknown>): 'SUPERVISED' | 'HANDSFREE' | null {
-  const raw = String(input.runMode ?? input.run_mode ?? input.executionMode ?? input.execution_mode ?? input.mode ?? '').toUpperCase()
+  const raw = String(input.learningRunMode ?? input.learning_run_mode ?? input.runMode ?? input.run_mode ?? input.executionMode ?? input.execution_mode ?? input.mode ?? '').toUpperCase()
   if (raw === 'SUPERVISED') return 'SUPERVISED'
   if (raw === 'HANDSFREE' || raw === 'HANDS_FREE') return 'HANDSFREE'
   return null
@@ -18,6 +18,7 @@ export async function proposeNegativeCaseFromFailedAgentRun(input: {
   projectId: string
   agentRunId: string
   failureSummary?: string | null
+  runMode?: 'SUPERVISED' | 'HANDSFREE'
   actorUserId?: string | null
 }) {
   const admin = createAdminClient()
@@ -31,7 +32,7 @@ export async function proposeNegativeCaseFromFailedAgentRun(input: {
   }
   if (rawRun.status === 'SUCCEEDED') return { evaluated: 1, proposed: 0, candidateId: null as string | null }
 
-  const mode = runMode(record(rawRun.input))
+  const mode = input.runMode ?? runMode(record(rawRun.input))
   if (!mode) return { evaluated: 1, proposed: 0, candidateId: null as string | null }
 
   const { data: definition, error: definitionError } = await admin.schema('agent').from('agent_definitions')
