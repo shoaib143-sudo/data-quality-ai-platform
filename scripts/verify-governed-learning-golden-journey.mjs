@@ -7,6 +7,7 @@ const benchmarkMigration = fs.readFileSync('supabase/migrations/20260920011000_g
 const approvalMigration = fs.readFileSync('supabase/migrations/20260920012000_governed_learning_release_approval.sql', 'utf8')
 const releaseMigration = fs.readFileSync('supabase/migrations/20260920013000_governed_learning_controlled_release.sql', 'utf8')
 const pgclMigration = fs.readFileSync('supabase/migrations/20260920014000_proactive_governed_case_learning.sql', 'utf8')
+const caseRegistryMigration = fs.readFileSync('supabase/migrations/20260929090000_governed_learning_case_registry.sql', 'utf8')
 const candidateCode = fs.readFileSync('lib/agents/governed-learning-candidates.ts', 'utf8')
 const benchmarkCode = fs.readFileSync('lib/agents/governed-learning-benchmarks.ts', 'utf8')
 const approvalCode = fs.readFileSync('lib/agents/governed-learning-release-approval.ts', 'utf8')
@@ -16,6 +17,10 @@ const pgclCode = fs.readFileSync('lib/agents/proactive-governed-case-learning.ts
 const pgclRuntimeCode = fs.readFileSync('lib/agents/proactive-governed-case-learning-runtime.ts', 'utf8')
 const pgclServiceCode = fs.readFileSync('lib/agents/proactive-governed-case-learning-service.ts', 'utf8')
 const pgclPrecedentCode = fs.readFileSync('lib/agents/pgcl-approved-precedent.ts', 'utf8')
+const negativeCaseCode = fs.readFileSync('lib/agents/governed-negative-case-learning.ts', 'utf8')
+const negativeRuntimeCode = fs.readFileSync('lib/agents/governed-negative-case-learning-runtime.ts', 'utf8')
+const learningPolicyCode = fs.readFileSync('lib/agents/governed-learning-policy.ts', 'utf8')
+const learningContextCode = fs.readFileSync('lib/agents/governed-learning-context.ts', 'utf8')
 const profilingInvestigationCode = fs.readFileSync('lib/profiling/investigation-engine.ts', 'utf8')
 const dataQualityInvestigationCode = fs.readFileSync('lib/data-quality/autonomous-operations.ts', 'utf8')
 const nativeSupervisorCode = fs.readFileSync('lib/agents/runtime/native-supervisor-service.ts', 'utf8')
@@ -61,6 +66,17 @@ const phases = [
     "candidate_type = 'POSITIVE_CASE'",
     "status = 'REVIEW_REQUIRED'",
     "'PGCL_ADMIN_DECISION:' || p_decision",
+  ]],
+  ['governed negative case learning', caseRegistryMigration, [
+    'create table if not exists agent.negative_learning_cases',
+    'create table if not exists agent.negative_learning_case_reviews',
+    'create_negative_learning_case',
+    'review_negative_learning_case',
+    'list_approved_negative_learning_cases',
+    "'PGCL_NEGATIVE_CASE'",
+    'negative learning cases require a terminal failed or cancelled agent run',
+    'negative learning case agent identity does not match source run',
+    'Data Governance Admin authority is required to review a negative learning case',
   ]],
 ]
 
@@ -174,7 +190,42 @@ for (const invariant of [
 }
 
 for (const invariant of [
+  "['FAILED', 'CANCELLED'].includes(input.run.status)",
+  "caseType: 'NEGATIVE_CASE'",
+  'requiresHumanReview',
+  'mayAutoApply',
+  'maySelfPromote',
+]) {
+  assert.ok(negativeCaseCode.includes(invariant), `negative-case governance boundary missing: ${invariant}`)
+}
+
+for (const invariant of [
+  'deriveNegativeLearningCaseFromFailedRun',
+  'persistGovernedNegativeLearningCase',
+  'isGovernedAgentKey',
+]) {
+  assert.ok(negativeRuntimeCode.includes(invariant), `negative-case runtime integration missing: ${invariant}`)
+}
+
+for (const invariant of [
+  'automaticPromotionAllowed: false',
+  'authority regression blocks learning promotion',
+  'adversarial regression blocks learning promotion',
+  'PRIVILEGED_OR_DESTRUCTIVE',
+]) {
+  assert.ok(learningPolicyCode.includes(invariant), `risk-sensitive learning policy missing: ${invariant}`)
+}
+
+for (const invariant of [
+  'approvedNegativeCases',
+  'list_approved_negative_learning_cases',
+]) {
+  assert.ok(learningContextCode.includes(invariant), `negative learning context missing: ${invariant}`)
+}
+
+for (const invariant of [
   'retrieveGovernedLearningContext',
+  'loadApprovedPgclAvoidanceCases',
   'recordPositiveLearningCaseRetrievals',
   'markPgclPrecedentsApplied',
   "attribution: 'CONTEXT_ONLY_EXECUTION'",
@@ -190,6 +241,8 @@ for (const [label, source, surface] of [
 ]) {
   for (const invariant of [
     'loadApprovedPgclPrecedents',
+    'loadApprovedPgclAvoidanceCases',
+    'approved_negative_case_learning',
     'markPgclPrecedentsApplied',
     'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
     surface,
@@ -200,7 +253,9 @@ for (const [label, source, surface] of [
 
 for (const invariant of [
   'loadApprovedPgclPrecedents',
+  'loadApprovedPgclAvoidanceCases',
   'positiveLearningCases: pgclPrecedents.map',
+  'negativeLearningCases: pgclAvoidanceCases.map',
   'markPgclPrecedentsApplied',
   'SUPERVISOR_SPECIALIST',
 ]) {
@@ -239,4 +294,4 @@ assert.equal(
   'human approval must remain separate from activation',
 )
 
-console.log('Phase 11 golden journey certifies governed skill improvement and PGCL positive-case learning across all eight agents, including proposal generation, approved-precedent consumption, usage attribution, Admin review, outcome feedback, observability, fail-closed release gates, rollback, and future-use authority boundaries.')
+console.log('Phase 11 golden journey certifies governed skill improvement plus positive and negative case learning across all eight agents, including proposal generation, precedent and avoidance consumption, Admin review, evaluation, shadow release, rollback, observability, and future-use authority boundaries.')
