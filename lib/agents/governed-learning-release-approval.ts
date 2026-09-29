@@ -23,12 +23,15 @@ async function loadLearningCandidateReleaseContext(input: {
   const admin = createAdminClient()
   const { data: candidate, error: candidateError } = await admin.schema('agent')
     .from('learning_candidates')
-    .select('id,project_id,agent_key,baseline_version,candidate_version,status')
+    .select('id,project_id,candidate_type,agent_key,baseline_version,candidate_version,status')
     .eq('id', input.candidateId)
     .eq('project_id', input.projectId)
     .maybeSingle()
   if (candidateError) throw new Error(`Unable to load learning candidate: ${candidateError.message}`)
   if (!candidate) throw new Error('Learning candidate was not found in project.')
+  if (candidate.candidate_type !== 'SKILL_IMPROVEMENT') {
+    throw new Error('Only SKILL_IMPROVEMENT candidates may enter controlled release.')
+  }
   if (candidate.status !== 'REVIEW_REQUIRED') {
     throw new Error(`Learning candidate must be REVIEW_REQUIRED before release approval. Current status: ${candidate.status}.`)
   }
