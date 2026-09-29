@@ -46,6 +46,16 @@ type AssessmentPayload = {
   currentUserResponses: StoredResponse[]
   allResponses: StoredResponse[]
   scorecard: MaturityScorecard
+  assessmentHealth: {
+    score: number
+    resultConfidence: 'LOW' | 'MEDIUM' | 'HIGH'
+    evidenceCoverage: number
+    systemVerificationCoverage: number
+    evidenceFreshness: number | null
+    stakeholderDepth: number
+    activeEvidenceItems: number
+    activeObservationCapabilities: number
+  }
   evidenceCount: number
   observationCount: number
   history: Array<{ id: string; status: string; framework_version: string; scorecard: Record<string, unknown>; created_at: string; completed_at: string | null }>
@@ -471,6 +481,29 @@ export function GovernanceMaturityOnboarding({
                 <Metric label="System observations" value={data.observationCount} />
               </div>
             </div>
+          </section>
+
+          <section className="rounded-3xl border border-violet-100 bg-white p-6 shadow-sm sm:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2"><ClipboardCheck className="h-5 w-5 text-violet-700" /><h2 className="text-2xl font-black">Assessment health</h2></div>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Assessment health describes how well-supported the result is. It does not increase governance maturity. The score combines completion, evidence-backed question coverage, system verification coverage, respondent depth, consensus, and evidence freshness.</p>
+              </div>
+              <div className="rounded-2xl border border-violet-100 bg-violet-50 px-5 py-4 text-right">
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-violet-700">Overall result confidence</p>
+                <p className="mt-1 text-2xl font-black text-slate-950">{data.assessmentHealth.resultConfidence}</p>
+                <p className="mt-1 text-xs text-slate-500">Health {data.assessmentHealth.score}/100</p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Metric label="Questions complete" value={data.scorecard.completion} suffix="%" />
+              <Metric label="Stakeholder depth" value={data.assessmentHealth.stakeholderDepth} suffix="%" />
+              <Metric label="Evidence-backed questions" value={data.assessmentHealth.evidenceCoverage} suffix="%" />
+              <Metric label="System-verified capabilities" value={data.assessmentHealth.systemVerificationCoverage} suffix="%" />
+              <Metric label="Response consensus" value={data.scorecard.assessmentConsensus ?? 'Needs 2+ respondents'} suffix={data.scorecard.assessmentConsensus === null ? '' : '%'} />
+              <Metric label="Evidence freshness" value={data.assessmentHealth.evidenceFreshness ?? 'No evidence yet'} suffix={data.assessmentHealth.evidenceFreshness === null ? '' : '%'} />
+            </div>
+            <p className="mt-4 text-xs leading-5 text-slate-500">Evidence-backed coverage counts applicable answered questions with current supporting evidence. System verification counts distinct answered capabilities with current machine observations. Stakeholder depth reaches 100% at four distinct respondents.</p>
           </section>
 
           <section className="grid gap-4 lg:grid-cols-2">
