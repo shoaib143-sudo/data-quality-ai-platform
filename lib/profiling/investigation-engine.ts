@@ -3,8 +3,10 @@ import { enrichInvestigationWithModel } from '@/lib/ai/investigation-model'
 import { loadRecommendationEffectiveness } from '@/lib/profiling/recommendation-learning'
 import {
   loadApprovedPgclPrecedents,
+  loadApprovedPgclAvoidanceCases,
   markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
+  type AppliedPgclAvoidanceCase,
 } from '@/lib/agents/pgcl-approved-precedent'
 
 type Finding = {
@@ -180,6 +182,7 @@ export async function investigateProfilingRun(
 
   let pgclStatus: 'AVAILABLE' | 'NO_MATCH' | 'UNAVAILABLE' = projectId && profileRun.agent_run_id ? 'NO_MATCH' : 'UNAVAILABLE'
   let pgclPrecedents: AppliedPgclPrecedent[] = []
+  let pgclAvoidanceCases: AppliedPgclAvoidanceCase[] = []
 
   if (projectId && profileRun.agent_run_id) {
     try {
@@ -206,7 +209,13 @@ export async function investigateProfilingRun(
           query: precedentQuery,
           limit: 5,
         })
-        pgclStatus = pgclPrecedents.length ? 'AVAILABLE' : 'NO_MATCH'
+        pgclAvoidanceCases = await loadApprovedPgclAvoidanceCases({
+          projectId,
+          agentDefinitionId: String(sourceRun.agent_definition_id),
+          query: precedentQuery,
+          limit: 5,
+        })
+        pgclStatus = pgclPrecedents.length || pgclAvoidanceCases.length ? 'AVAILABLE' : 'NO_MATCH'
       }
     } catch (error) {
       pgclStatus = 'UNAVAILABLE'
@@ -301,7 +310,24 @@ export async function investigateProfilingRun(
         evidence: learningCase.evidence,
       })),
     },
+    approved_negative_case_learning: {
+      status: pgclStatus,
+      project_id: projectId,
+      matches: pgclAvoidanceCases.length,
+      authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+      cases: pgclAvoidanceCases.map((learningCase) => ({
+        learning_case_id: learningCase.learningCaseId,
+        candidate_id: learningCase.candidateId,
+        case_key: learningCase.caseKey,
+        problem_type: learningCase.problemType,
+        avoid_lesson: learningCase.avoidLesson,
+        relevance: learningCase.relevance,
+        evidence: learningCase.evidence,
+      })),
+    },
+    avoidance_guidance: pgclAvoidanceCases.map((learningCase) => learningCase.avoidLesson),
     appliedPositiveCaseIds: pgclPrecedents.map((learningCase) => learningCase.candidateId),
+    appliedNegativeCaseIds: pgclAvoidanceCases.map((learningCase) => learningCase.candidateId),
     approval_required: recommendations.some((recommendation) => recommendation.approval_required === true),
     confidence: investigationConfidence,
     evidence,
@@ -309,7 +335,7 @@ export async function investigateProfilingRun(
       'Root cause attribution is evidence based and does not claim upstream causality without lineage or operational evidence.',
       'Business impact is qualitative until business criticality, lineage, usage, and financial or operational impact data are available.',
       'Historical recommendation effectiveness is observational evidence and does not prove causality or automatically authorize a future action.',
-      'Data Governance Admin-approved positive cases are historical precedent only and cannot alter metric truth, readiness, authorization, or approval requirements.',
+      'Data Governance Admin-approved positive and negative cases are historical context only and cannot alter metric truth, readiness, authorization, or approval requirements.',
       'No production data, schema, governance policy, or pipeline change is executed by this investigation step.',
     ],
   }
