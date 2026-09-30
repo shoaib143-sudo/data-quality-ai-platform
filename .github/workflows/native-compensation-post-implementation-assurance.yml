@@ -130,6 +130,7 @@ jobs:
           node --test tests/governance-orchestrator-live-off-contract.test.mjs
           node --test tests/analysis-evidence-envelope-replay.test.mjs
           node --test tests/legacy-privileged-rpc-replay.test.mjs
+          node --test tests/clean-replay-helper-coverage.test.mjs
 
   authorization-adversarial:
     name: authorization-adversarial
