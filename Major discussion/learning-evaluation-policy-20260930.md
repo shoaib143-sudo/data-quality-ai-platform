@@ -1,7 +1,11 @@
 # Prospective self-improvement evaluation
 
-See the [canonical evaluation policy and live inventory](../docs/testing/learning-evaluation-policy-20260930.md).
+See the [canonical evaluation policy and live inventory](../docs/testing/learning-evaluation-policy-20260930.md) and the [implementation status](../docs/testing/learning-evaluation-policy-implementation-status-20260930.md).
 
-A tied benchmark can pass the existing human-review eligibility gate, but cannot establish improvement. Measure a predeclared positive gain independently for every applicable agent/mode, preserve negative outcomes and missing evidence, and confirm sustained results before promotion. Historical run counts are not prospective evidence. Additional supervisor/orchestrator definitions do not change the canonical eight-agent scope.
+Decision: benchmark eligibility and prospective improvement are separate gates.
 
-Preparation is complete; candidate execution requires the concrete activation record described in the policy.
+A tied benchmark may remain eligible for human review under the historical benchmark contract, but it does not establish self-improvement. PR #1091 adds a stricter prospective gate. Release review now requires persisted evidence of a predeclared positive gain, independently verified evidence, sufficient sample coverage, positive uncertainty lower bound, confirmation window, complete accounting, no safety or authority violations, and compliance with locked cost, token and latency ceilings.
+
+The gate does not auto-promote. It feeds the existing human approval and controlled shadow-canary path. Exact policy/result identity, manifest, execution mode and evaluator are bound into the approval fingerprint and revalidated during controlled release.
+
+Historical run counts, synthetic fixtures and successful technical execution are not prospective improvement evidence.
