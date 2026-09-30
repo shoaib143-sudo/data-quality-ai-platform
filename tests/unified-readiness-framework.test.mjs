@@ -39,3 +39,14 @@ test('stale and expired evidence reduce confidence rather than silently proving 
   assert.equal(result.aggregateScore, null)
   assert.equal(result.overallGate, 'CONDITIONAL')
 })
+
+test('every canonical capability has governance metadata and stable identifiers', () => {
+  for (const capability of ALL_READINESS_CAPABILITIES) {
+    assert.match(capability.id, /^URA-[A-Z]+-[A-Z]+-[0-9]{3}$/)
+    assert.ok(capability.label.length > 3)
+    assert.ok(capability.recommendedAction.length > 10)
+    assert.ok(capability.dataNexusAction.length > 10)
+    assert.ok(capability.mappings.length > 0)
+    assert.ok(capability.observationSignals.length > 0)
+  }
+})
