@@ -1,21 +1,38 @@
 # Evaluation policy implementation status
 
-2026-09-30. PR #1091 now contains a pure typed policy validator and result classifier, essential behavior tests, an npm verification command and Continuous Learning Governance CI integration. Local Node 24 behavior tests passed.
+2026-09-30. PR #1091 now contains the typed policy validator and result classifier plus persistent prospective evaluation evidence and release-path admission binding.
 
-The module rejects missing specification fields, same baseline/candidate, self-evaluator identity, invalid hashes, duplicate dataset versions, unsupported normalized modes and invalid budgets. Results bind to policy/project/candidate/version/mode/manifest/evaluator, reject pre-policy evidence, stop on missing/exceeded accounting, distinguish regression/ties/missing evidence, require a positive confidence lower bound and confirmation window, and reject authority/safety violations even when quality evidence is missing. No automatic promotion is permitted.
+Implemented:
+- fail-closed policy validation across project, candidate, agent, skill, mode, datasets, versions, evaluator separation, immutable manifest, analysis plan, positive gain, score, cost, token and latency limits;
+- result classification that separates STOPPED, REJECTED and REVIEW_REQUIRED from IMPROVED, REGRESSED and INCONCLUSIVE;
+- append-only `agent.learning_evaluation_policies` and `agent.learning_evaluation_results` with project RLS and no browser mutation grants;
+- service-role-only policy/result RPCs with duplicate, cross-candidate, version, safety, evidence, sample, uncertainty and budget validation;
+- release admission requiring a persisted REVIEW_REQUIRED + IMPROVED decision with automatic promotion disabled;
+- exact evaluation policy/result, manifest, mode and evaluator bindings added to the existing approval fingerprint;
+- controlled-release revalidation of the same prospective evaluation evidence before canary and activation;
+- essential positive, negative, safety, regression, inconclusive and static persistence/release-binding tests;
+- Continuous Learning Governance CI coverage through `verify:learning-evaluation-policy`.
 
-These are pure functions. Caller-supplied values are not authorization or empirical proof. Persistent immutable policy registration, actor/project/dataset and organizational evaluator resolution, release-path admission, runtime budget enforcement, independently computed statistical evidence and Command Center integration remain required. This change does not activate a candidate or modify the production release path. Sample values in tests are synthetic and not recommended statistically sufficient thresholds.
+The existing canonical project runtime cost enforcement remains authoritative for provider execution. PR #1091 does not introduce a second resource-control plane. Its locked experiment budget is an additional experiment-specific ceiling and evidence check.
+
+Still intentionally external to this implementation:
+- real project/dataset selection and independent evaluator assignment;
+- independently computed confidence/statistical evidence;
+- actual prospective baseline/candidate outcomes;
+- live candidate execution or promotion.
+
+No automatic promotion is permitted. A technically successful run is not evidence of improvement. A candidate reaches release review only after a persisted, independently verified positive result satisfies the locked policy.
 
 ## Native capability challenge required by AGENTS.md
 
-Reference: https://docs.langchain.com/langsmith/evaluation-types (reviewed 2026-09-30). It distinguishes offline curated-dataset evaluation and online evaluation with multiple evaluator approaches. DataNexus keeps its own authority and evidence boundaries rather than adopting an external control plane.
+Reference reviewed 2026-09-30: LangSmith evaluation concepts distinguish offline curated evaluation and online evaluation. DataNexus retains its own governance authority, evidence, RLS and release controls.
 
 | Capability | Status | Disposition | Evidence needed |
 | --- | --- | --- | --- |
-| Offline/online evidence separation | PARTIAL | KEEP | Existing manifests/prospective ledger; real independently scored outcomes pending |
-| Explicit experiment and result bindings | PARTIAL | BUILD_NOW | Pure validator behavior tests; immutable persisted admission pending |
-| Independent evaluator calibration | GAP_REQUIRED | BUILD_NOW | Authorized independent actor and reviewed calibration record |
-| Runtime cost/latency stop enforcement | GAP_REQUIRED | BUILD_NOW | Measured accounting at execution boundary, not classifier alone |
-| Replaceable evaluator integration | PARTIAL | EXTENSION_POINT | Locked rubric/analysis references and independent provider adapter |
+| Offline/online evidence separation | IMPLEMENTED CONTRACT | KEEP | Real independently scored outcomes pending |
+| Explicit experiment and result bindings | IMPLEMENTED | KEEP | Exact-head CI and migration reconstruction |
+| Independent evaluator calibration | CONTRACT ENFORCED | KEEP | Authorized evaluator plus real calibration record |
+| Runtime cost/latency stop enforcement | INTEGRATED | KEEP | Existing canonical runtime enforcement plus experiment ceiling |
+| Replaceable evaluator integration | EXTENSION POINT | KEEP | Locked rubric, calibration and analysis references |
 
-No ADR-007 agent classification, tool allowlist, mutation boundary, authentication, RLS or approval authority changes. Pure policy/evidence inputs keep the evaluator replaceable. Unmeasured frontier parity is not claimed.
+No ADR-007 agent classification, tool allowlist, mutation boundary, authentication, RLS authority or approval authority is expanded by this work.
