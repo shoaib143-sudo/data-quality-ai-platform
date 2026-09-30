@@ -21,6 +21,8 @@ Do not store credentials, access tokens, secrets, private keys, or other sensiti
 
 - `2026-09-19-vercel-cloudflare-r2-operations-runbook.md` records the Vercel deployment-capacity controls, Git disconnect state, Cloudflare canary/DR boundary, R2 production certification gates, exact-SHA release procedure, and rollback rules established during the September 19 capacity incident.
 
+- `2026-09-30-multi-platform-governance-automation-operating-baseline.md` records the approved operating rules for the provider-neutral governance control plane, including reconciliation, simulation, idempotency, retry ownership, bulk execution, MCP boundaries, provider projections, verification, and Informatica-first rollout.
+
 ## Preservation rule
 
 Administrative decisions should be dated. Time-sensitive state must be marked as observed rather than permanent. Before executing a production action, operators must revalidate the live platform state and current repository HEAD.
