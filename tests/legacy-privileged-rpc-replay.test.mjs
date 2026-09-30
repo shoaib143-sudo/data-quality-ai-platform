@@ -5,35 +5,35 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 
-const helperPath = path.resolve('scripts/prepare-clean-migration-replay.mjs')
+const helperPath = path.resolve('scripts/prepare-clean-security-definer-acl-replay.mjs')
+const workflow = fs.readFileSync('.github/workflows/native-compensation-post-implementation-assurance.yml', 'utf8')
 
-test('clean replay restores privileged RPC execute revokes before security-definer validation', () => {
-  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'dn-privileged-rpc-replay-'))
+test('clean replay restores the canonical SECURITY DEFINER browser ACL boundary', () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'dn-security-definer-replay-'))
   try {
     const result = spawnSync(process.execPath, [helperPath], {
-      env: {
-        ...process.env,
-        SOURCE_MIGRATION_DIR: path.resolve('supabase/migrations'),
-        TARGET_MIGRATION_DIR: target,
-      },
+      env: { ...process.env, TARGET_MIGRATION_DIR: target },
       encoding: 'utf8',
     })
     assert.equal(result.status, 0, result.stderr || result.stdout)
 
-    const filename = '20260911050539_reconstruct_legacy_privileged_rpc_execute_revokes.sql'
+    const filename = '20260915163959_reconcile_security_definer_acl.sql'
     const generated = path.join(target, filename)
-    assert.ok(fs.existsSync(generated), 'privileged RPC replay hardening must be generated before the allowlist checkpoint')
+    assert.ok(fs.existsSync(generated), 'canonical SECURITY DEFINER ACL replay reconciliation must be generated')
 
     const sql = fs.readFileSync(generated, 'utf8')
-    for (const invariant of [
-      'revoke all on function profiling.get_dataset_execution_source(uuid) from public, anon, authenticated',
-      'revoke all on function public.create_file_dataset(uuid,text,text,text,text) from public, anon, authenticated',
-      'revoke all on function public.create_organization(text,text) from public, anon, authenticated',
-      'revoke all on function public.create_project(uuid,text,text,text) from public, anon, authenticated',
-    ]) assert.ok(sql.includes(invariant), `missing replay execute-revoke invariant: ${invariant}`)
-
-    assert.ok('20260911050539' < '20260911050541', 'execute revokes must precede the historical cleanup that reaches the allowlist validation')
+    assert.match(sql, /p\.prosecdef = true/)
+    assert.match(sql, /revoke execute on function %s from public, anon, authenticated/)
+    assert.match(sql, /is_org_admin/)
+    assert.match(sql, /is_project_member/)
+    assert.match(sql, /resolve_runtime_interrupt/)
+    assert.match(sql, /request_execution_recovery_action_admin/)
+    assert.ok('20260915163959' < '20260915164000', 'ACL reconciliation must precede the canonical authenticated SECURITY DEFINER allowlist assertion')
   } finally {
     fs.rmSync(target, { recursive: true, force: true })
   }
+})
+
+test('post implementation assurance invokes the canonical SECURITY DEFINER ACL replay helper', () => {
+  assert.match(workflow, /prepare-clean-security-definer-acl-replay\.mjs/)
 })
