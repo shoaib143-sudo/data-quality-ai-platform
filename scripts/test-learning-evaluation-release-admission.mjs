@@ -7,6 +7,7 @@ const service = fs.readFileSync('lib/agents/governed-learning-evaluation-service
 const approval = fs.readFileSync('lib/agents/governed-learning-release-approval.ts', 'utf8')
 const release = fs.readFileSync('lib/agents/governed-learning-controlled-release.ts', 'utf8')
 const migration = fs.readFileSync('supabase/migrations/20260930123000_governed_learning_evaluation_release_admission.sql', 'utf8')
+const indexMigration = fs.readFileSync('supabase/migrations/20260930144500_governed_learning_evaluation_fk_indexes.sql', 'utf8')
 
 for (const invariant of [
   'assertLearningEvaluationEligibleForReleaseReview',
@@ -101,3 +102,11 @@ assert.equal(
 )
 
 console.log('Prospective learning evaluation is append-only, independently bound, fail-closed, and required by release approval and controlled release revalidation.')
+
+
+for (const invariant of [
+  'learning_evaluation_policies_candidate_fk_idx',
+  'learning_evaluation_policies_manifest_fk_idx',
+  'learning_evaluation_results_candidate_fk_idx',
+  'learning_evaluation_results_policy_fk_idx',
+]) assert.ok(indexMigration.includes(invariant), `missing evaluation FK index: ${invariant}`)
