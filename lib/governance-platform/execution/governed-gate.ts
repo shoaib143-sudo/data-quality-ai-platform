@@ -1,0 +1,40 @@
+import type { AuthorizationCapability } from '@/lib/auth/authorize'
+import type { GovernedExecutionController } from '@/lib/ai/execution-controller'
+import type { PolicyDecisionProvider, PolicyRiskLevel } from '@/lib/governance/policy-decision-provider'
+
+export type GovernedExecutionGateRequest = {
+  projectId: string
+  actionKey: string
+  targetType: string
+  requiredCapability: AuthorizationCapability
+  riskLevel: PolicyRiskLevel
+  confidence: number
+}
+
+export type GovernedExecutionGateDependencies = {
+  authorize: (projectId: string, capability: AuthorizationCapability) => Promise<void>
+  executionController: Pick<GovernedExecutionController, 'assertAllowed'>
+  policyDecisionProvider: PolicyDecisionProvider
+}
+
+export async function evaluateGovernedExecutionGate(
+  request: GovernedExecutionGateRequest,
+  dependencies: GovernedExecutionGateDependencies,
+) {
+  await dependencies.authorize(request.projectId, request.requiredCapability)
+  const executionControl = await dependencies.executionController.assertAllowed({ projectId: request.projectId })
+  const policy = await dependencies.policyDecisionProvider.decide({
+    projectId: request.projectId,
+    actionKey: request.actionKey,
+    targetType: request.targetType,
+    riskLevel: request.riskLevel,
+    confidence: request.confidence,
+  })
+  return {
+    allowed: policy.decision === 'ALLOW',
+    requiresApproval: policy.decision === 'REQUIRE_APPROVAL',
+    denied: policy.decision === 'DENY',
+    executionControl,
+    policy,
+  }
+}
