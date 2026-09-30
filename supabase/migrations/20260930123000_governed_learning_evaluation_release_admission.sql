@@ -300,6 +300,7 @@ begin
       or p_candidate_score - p_baseline_score < v_policy.minimum_gain
       or p_candidate_score < v_policy.minimum_score
       or p_gain_lower_confidence_bound is null or p_gain_lower_confidence_bound <= 0
+      or p_gain_lower_confidence_bound > p_candidate_score - p_baseline_score
       or p_total_cost > v_policy.total_cost_budget
       or p_max_run_cost > v_policy.per_run_cost_budget
       or p_total_tokens > v_policy.total_token_budget
@@ -310,6 +311,7 @@ begin
     end if;
   end if;
   if p_reasons is null or cardinality(p_reasons) = 0 then raise exception 'evaluation decision reasons are required'; end if;
+  if length(btrim(coalesce(p_recorded_by,''))) = 0 then raise exception 'recordedBy is required'; end if;
 
   insert into agent.learning_evaluation_results(
     project_id,policy_id,candidate_id,observed_at,sample_count,baseline_score,candidate_score,
