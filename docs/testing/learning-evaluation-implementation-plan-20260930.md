@@ -106,3 +106,18 @@ No paid Supabase branch, new hosting service or repeated deployment is required 
 6. Present the complete experiment specification for the required candidate-release review, then execute its approved bounded evaluation.
 
 No arbitrary candidate, evaluator identity, dataset permission, statistical sample or paid allowance is invented to bypass missing inputs. When an inventory cannot establish a required business value, report that exact unresolved field with a recommended choice.
+
+## Double-check findings, 2026-09-30
+
+Live read-only recheck: terminal coverage = 0; prospective outcomes = 0. No improvement claim is supported. At inspected PR head bdb07f94ec54654ec584b6f515f9eeefb4bf0275, build, analyze, CodeQL and database reconstruction checks succeeded; a Cloudflare container certification check remained in progress. Skipped checks are not passed tests. This is not an all-green claim.
+
+The Planned labels above are intentional. Proposed rubrics, gain and sample guidance are not executable policy or calibrated evaluation. Implementation must prove:
+
+1. Candidate release admission consumes the approved immutable experiment specification and rejects unset fields. Organizational evaluator independence, rubric calibration, sample adequacy and strictly positive gain need validation beyond the existing promotion eligibility gate.
+2. The existing candidate >= baseline check permits ties. Review eligibility must remain distinct from measured improvement.
+3. Cost and latency stop rules operate at the execution/release boundary with measured accounting. Missing accounting blocks candidate execution.
+4. Reviewer identity resolves to an authorized actor for the exact experiment scope. A nonmatching identity string alone does not prove independence.
+5. Safety disposition is separate from quality inference: prohibited safety/authority violations yield STOPPED or REJECTED regardless of quality score. INCONCLUSIVE must not neutralize a safety rejection.
+6. Zero terminal coverage alone does not prove a broken trigger. Check new eligible traffic, provenance and delayed verification before diagnosing a collector defect.
+
+These are explicit acceptance requirements, not completed code changes. No candidate was selected or activated by this review.
