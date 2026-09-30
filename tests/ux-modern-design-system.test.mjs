@@ -41,8 +41,9 @@ test('motion and form-control targets degrade accessibly', () => {
 })
 
 test('global navigation names the AI workspace directly', () => {
-  assert.match(utility, /label: 'AI Agents'/)
-  assert.doesNotMatch(utility, /label: 'Automation'/)
+  assert.match(navigation, /shortLabel: 'AI Agents'/)
+  assert.doesNotMatch(navigation, /shortLabel: 'Automation'/)
+  assert.match(utility, /workspaceNavItems/)
 })
 
 
