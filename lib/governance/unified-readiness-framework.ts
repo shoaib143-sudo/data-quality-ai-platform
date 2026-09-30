@@ -1,4 +1,4 @@
-import type { OrganizationAssessmentProfile } from './maturity-framework'
+import type { OrganizationAssessmentProfile } from './maturity-framework.ts'
 
 export const UNIFIED_READINESS_FRAMEWORK_VERSION = 'DN-URA-1.0' as const
 
