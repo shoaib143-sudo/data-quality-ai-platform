@@ -19,9 +19,8 @@ for (const invariant of [
   'registerLearningEvaluationPolicy',
   'recordLearningEvaluationDecision',
   'loadLearningReleaseAdmission',
-  "eq('disposition', 'REVIEW_REQUIRED')",
-  "eq('quality', 'IMPROVED')",
-  "eq('automatic_promotion_allowed', false)",
+  "order('created_at', { ascending: false })",
+  "The latest prospective evaluation decision is not eligible for release review.",
   'assertLearningEvaluationEligibleForReleaseReview',
 ]) assert.ok(service.includes(invariant), `missing evaluation service invariant: ${invariant}`)
 
@@ -56,6 +55,8 @@ for (const invariant of [
   'automatic_promotion_allowed boolean not null default false check (automatic_promotion_allowed = false)',
   'improved evaluation still requires release review',
   'improved evaluation does not satisfy locked release admission policy',
+  'p_gain_lower_confidence_bound > p_candidate_score - p_baseline_score',
+  'recordedBy is required',
   'reject_learning_evaluation_policy_mutation',
   'reject_learning_evaluation_result_mutation',
   'grant select on agent.learning_evaluation_policies to authenticated, service_role',
@@ -66,6 +67,11 @@ assert.equal(
   /grant\s+(insert|update|delete)/i.test(migration),
   false,
   'learning evaluation evidence must not expose direct table mutation grants',
+)
+assert.equal(
+  service.includes(".eq('quality', 'IMPROVED')"),
+  false,
+  'release admission must inspect the latest decision overall rather than select an older positive result',
 )
 assert.equal(
   /automatic_promotion_allowed\s+boolean[^\n]*default\s+true/i.test(migration),
