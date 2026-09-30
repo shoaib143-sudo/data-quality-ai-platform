@@ -21,7 +21,10 @@ test('daily work surfaces prioritize attention and compact density', () => {
   const dashboard = read('app/dashboard/page.tsx')
   const inbox = read('app/inbox/page.tsx')
   assert.match(dashboard,/aria-label="Attention now"/)
-  assert.match(dashboard,/dn-kpi dn-interactive/)
+  assert.match(dashboard,/dashboard-stat-grid/)
+  assert.match(dashboard,/persisted platform evidence/)
+  assert.match(dashboard,/persona=\{landing\.persona\}/)
+  assert.match(dashboard,/organizationRole=\{landing\.organizationRole\}/)
   assert.match(inbox,/grid auto-rows-fr gap-3/)
   assert.match(inbox,/dn-surface/)
 })
@@ -31,6 +34,11 @@ test('metadata and lineage workspaces use compact contextual rails', () => {
     assert.match(read(path),/dn-(?:glass-rail|surface)/)
   }
   assert.match(read('app/lineage/page.tsx'),/never infers lineage that is not persisted/)
+})
+
+test('mobile workspace rail keeps the sticky utility header below fixed navigation', () => {
+  const globals = read('app/globals.css')
+  assert.match(globals,/main:has\(\.dn-app-rail\) \.dn-topbar \{ top: 61px; \}/)
 })
 
 test('personal and admin surfaces share the modernized design foundation', () => {

@@ -14,7 +14,7 @@ export default async function AuditPage(){
   const {data,error}=await supabase.schema('governance').from('audit_events').select('*').order('created_at',{ascending:false}).limit(500)
   if(error)throw new Error(`Unable to load audit events: ${error.message}`)
   const events=data??[]
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 text-slate-950"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Audit" contextLabel="Immutable governance history" homeHref="/home" />
     <nav className="mb-6 mt-4 flex items-center justify-end rounded-2xl border bg-white px-5 py-3 shadow-sm">{canLineage?<Link href="/lineage" className="text-sm font-semibold text-blue-600">Lineage</Link>:null}</nav>
     <header className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-700"><ClipboardList className="h-6 w-6"/></span><div><h1 className="text-3xl font-black">Governance Audit Trail</h1><p className="mt-1 text-sm text-slate-500">Immutable operational history for governed entity changes, automation and lifecycle actions.</p></div></div></header>

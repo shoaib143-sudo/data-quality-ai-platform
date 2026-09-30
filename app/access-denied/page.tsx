@@ -14,7 +14,7 @@ export default async function AccessDeniedPage() {
   const canSearch = canAccessWorkspace(access.persona, 'search', access.organizationRole)
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen px-4 py-8 text-slate-100 sm:px-6 sm:py-12">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen px-4 py-8 text-slate-100 sm:px-6 sm:py-12">
       <section className="dn-surface mx-auto max-w-3xl p-6 sm:p-8" role="status" aria-labelledby="access-denied-title">
         <span className="dn-inset grid h-12 w-12 place-items-center text-slate-300">
           <ShieldX className="h-7 w-7" aria-hidden="true" />

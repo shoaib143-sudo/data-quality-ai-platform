@@ -207,7 +207,7 @@ export default function ProfilingDashboard({ run, datasetName, datasetSubtitle, 
 
   const runComplete = ['COMPLETED', 'SUCCEEDED'].includes(run.status.toUpperCase())
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={persona} organizationRole={organizationRole} roleLabel="Profiling" contextLabel={datasetName} homeHref="/home" />
       <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

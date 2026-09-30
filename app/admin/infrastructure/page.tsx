@@ -56,7 +56,7 @@ export default async function InfrastructurePage() {
 
   const organizationIds = (memberships ?? []).map((row) => row.organization_id)
   if (!organizationIds.length) {
-    return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-4xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Infrastructure" contextLabel="Runtime and storage convergence" homeHref="/home" /><div className="mt-6 rounded-3xl border border-amber-200 bg-white p-8 shadow-sm"><ShieldCheck className="h-8 w-8 text-amber-600"/><h1 className="mt-4 text-2xl font-black">Infrastructure integration</h1><p className="mt-2 text-slate-600">OWNER or ADMIN membership is required to view infrastructure status.</p><Link href="/home" className="mt-6 inline-block text-sm font-bold text-blue-600">Return home</Link></div></div></main>
+    return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-4xl"><GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Infrastructure" contextLabel="Runtime and storage convergence" homeHref="/home" /><div className="mt-6 rounded-3xl border border-amber-200 bg-white p-8 shadow-sm"><ShieldCheck className="h-8 w-8 text-amber-600"/><h1 className="mt-4 text-2xl font-black">Infrastructure integration</h1><p className="mt-2 text-slate-600">OWNER or ADMIN membership is required to view infrastructure status.</p><Link href="/home" className="mt-6 inline-block text-sm font-bold text-blue-600">Return home</Link></div></div></main>
   }
 
   const { data: projects, error: projectError } = await admin
@@ -111,7 +111,7 @@ export default async function InfrastructurePage() {
   const productionCutoverApproved = process.env.STORAGE_R2_PRODUCTION_CUTOVER_APPROVED?.trim().toLowerCase() === 'true'
   const platform = process.env.VERCEL === '1' ? 'Vercel' : (process.env.DATANEXUS_PLATFORM ?? 'Unknown runtime')
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[radial-gradient(circle_at_10%_0%,_rgba(219,234,254,0.8),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_60%,_#f8fafc_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-[radial-gradient(circle_at_10%_0%,_rgba(219,234,254,0.8),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_60%,_#f8fafc_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
     <div className="mx-auto max-w-7xl space-y-6">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Infrastructure" contextLabel="Runtime and storage convergence" homeHref="/home" />
       {canAdminWorkspace ? <div className="flex flex-wrap justify-end gap-2 text-sm"><Link href="/admin" className="rounded-xl px-3 py-2 font-semibold text-slate-700 hover:bg-blue-50">Organization Access</Link></div> : null}

@@ -120,7 +120,7 @@ export default async function DatasetsPage() {
   }).length
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(219,234,254,0.9),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(243,232,255,0.8),_transparent_32%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_45%,_#f8fafc_100%)] text-slate-950">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(219,234,254,0.9),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(243,232,255,0.8),_transparent_32%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_45%,_#f8fafc_100%)] text-slate-950">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Sources & Datasets" contextLabel="Onboarding and profiling readiness" homeHref="/home" />
         <nav className="mb-6 mt-4 flex flex-wrap items-center justify-end gap-2 rounded-2xl border border-white/80 bg-white/85 px-5 py-3 shadow-sm backdrop-blur">

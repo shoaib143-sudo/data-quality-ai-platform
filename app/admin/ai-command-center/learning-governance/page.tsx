@@ -65,7 +65,7 @@ export default async function LearningGovernancePage({
   const pgcl = control?.pgcl ?? null
   const prospective = control?.prospective ?? null
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-6">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 p-5 sm:p-6">
     <div className="mx-auto max-w-7xl space-y-7">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Learning Governance" contextLabel="Governed AI learning evidence" homeHref="/home" />
       {canAdminWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3">

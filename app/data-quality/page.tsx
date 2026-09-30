@@ -152,7 +152,7 @@ export default async function DataQualityPage() {
   const impactHref = canLineage ? '/lineage' : canReports ? '/reports' : '/catalog'
   const prepareHref = canDatasets ? '/datasets' : '/catalog'
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#0b1422] text-slate-100">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace dn-quality-v3 min-h-screen bg-[#0b1422] text-slate-100">
     <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Data Quality" contextLabel="Evidence-backed quality decisions" homeHref="/home" />
       <nav aria-label="Data quality workspace" className={`${surface} mb-6 mt-4 flex items-center justify-between gap-4 overflow-x-auto px-4 py-3 sm:px-5`}>
