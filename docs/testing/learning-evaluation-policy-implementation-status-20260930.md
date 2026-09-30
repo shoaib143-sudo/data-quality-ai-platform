@@ -28,16 +28,23 @@ No automatic promotion is permitted. A technically successful run is not evidenc
 
 ## Native capability challenge required by AGENTS.md
 
-Reference reviewed 2026-09-30: LangSmith evaluation concepts distinguish offline curated evaluation and online evaluation. DataNexus retains its own governance authority, evidence, RLS and release controls.
+Current references reviewed 2026-09-30:
+- OpenAI evaluation best practices: eval-driven development, task-specific datasets, continuous evaluation, human calibration of automated graders and production-representative cases.
+- Arize/Phoenix agent evaluation guidance: versioned datasets and experiments, trace-derived failure taxonomies, deterministic and model-based evaluators, human calibration, CI evaluation and promotion of confirmed failures into regression suites.
+- LangSmith evaluation concepts previously reviewed for offline versus online evaluation and evaluator separation.
 
-| Capability | Status | Disposition | Evidence needed |
+DataNexus keeps authentication, project scope, RLS, evidence, approval, release and learning authority in its own control plane. External evaluation providers remain replaceable adapters rather than release authorities.
+
+| Capability | Status | Disposition | Evidence / remaining boundary |
 | --- | --- | --- | --- |
-| Offline/online evidence separation | IMPLEMENTED CONTRACT | KEEP | Real independently scored outcomes pending |
-| Explicit experiment and result bindings | IMPLEMENTED | KEEP | Exact-head CI and migration reconstruction |
-| Sealed held-out manifest binding | IMPLEMENTED | KEEP | Registered manifest ID/hash/version and cutoff enforced by persistence RPC |
-| Learning decision observability | IMPLEMENTED | KEEP | Read-only Command Center contract and UI verification |
-| Independent evaluator calibration | CONTRACT ENFORCED | KEEP | Authorized evaluator plus real calibration record |
-| Runtime cost/latency stop enforcement | INTEGRATED | KEEP | Existing canonical runtime enforcement plus experiment ceiling |
-| Replaceable evaluator integration | EXTENSION POINT | KEEP | Locked rubric, calibration and analysis references |
+| Offline and online evidence separation | PARITY | KEEP | Immutable benchmark manifests plus prospective production ledger; first real candidate comparison still pending |
+| Explicit experiment and result bindings | PARITY | KEEP | Exact candidate, versions, mode, evaluator, policy, manifest and decision are release-fingerprinted |
+| Sealed held-out manifest binding | PARITY | KEEP | Registered manifest ID/hash/version and cutoff enforced by persistence RPC |
+| CI evaluation and regression gating | PARITY | KEEP | Focused positive, negative, adversarial, release-admission and observability tests are mandatory |
+| Learning decision observability | PARTIAL | KEEP | Locked policy and decision evidence is visible read-only; richer trajectory-level evaluator views are not part of this PR |
+| Independent evaluator calibration | PARTIAL | KEEP | Evaluator separation plus rubric/calibration references are enforced; real reviewer calibration evidence remains operational |
+| Runtime cost and latency stop enforcement | PARITY | KEEP | Existing canonical runtime enforcement remains authoritative, with experiment-specific ceilings added here |
+| Replaceable evaluator integration | PARTIAL | EXTENSION_POINT | Locked rubric, calibration and analysis references preserve provider-neutral integration |
+| Trace or trajectory-level semantic evaluation | GAP_DEFERRED | BUILD_LATER | Existing traces and governed outcomes can support it, but this PR does not add an external or agent-as-judge control plane |
 
-No ADR-007 agent classification, tool allowlist, mutation boundary, authentication, RLS authority or approval authority is expanded by this work.
+No ADR-007 agent classification, tool allowlist, mutation boundary, authentication, RLS authority or approval authority is expanded by this work. The new evaluation layer is benchmarkable and replaceable without surrendering DataNexus control-plane authority.
