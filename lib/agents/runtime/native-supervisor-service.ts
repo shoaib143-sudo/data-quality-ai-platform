@@ -17,7 +17,6 @@ import { proposePgclCasesFromVerifiedSupervisorRun } from '@/lib/agents/proactiv
 import type { PgclRunMode } from '@/lib/agents/proactive-governed-case-learning'
 import {
   loadApprovedPgclPrecedents,
-  markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
 } from '@/lib/agents/pgcl-approved-precedent'
 import {
@@ -249,7 +248,7 @@ export async function runNativeSpecialistSupervisor(input: {
     agent_definition_id: supervisorDefinition.id,
     project_id: projectId,
     status: 'RUNNING',
-    input: { goal_hash: goalHash, worker_count: resolvedWorkers.length, execution_mode: 'native_supervisor_specialist_v1' },
+    input: { goal_hash: goalHash, worker_count: resolvedWorkers.length, execution_mode: 'native_supervisor_specialist_v1', learningRunMode: input.learningRunMode ?? 'HANDSFREE' },
     started_at: new Date().toISOString(),
   }).select('id').single()
   if (supervisorRunError || !supervisorRun) throw new Error(`Unable to create native supervisor run: ${supervisorRunError?.message ?? 'unknown error'}`)
@@ -283,7 +282,7 @@ export async function runNativeSpecialistSupervisor(input: {
         project_id: projectId,
         parent_run_id: supervisorRun.id,
         status: 'QUEUED',
-        input: { question: worker.question, supervisor_goal_hash: goalHash, depends_on_step_ids: dependencyStepIds, execution_mode: 'native_supervisor_specialist_read_only' },
+        input: { question: worker.question, supervisor_goal_hash: goalHash, depends_on_step_ids: dependencyStepIds, execution_mode: 'native_supervisor_specialist_read_only', learningRunMode: input.learningRunMode ?? 'HANDSFREE' },
       }).select('id').single()
       if (childRunError || !childRun) throw new Error(`Unable to create supervisor child run for ${worker.agentKey}: ${childRunError?.message ?? 'unknown error'}`)
       childRunIds.push(childRun.id)
@@ -384,22 +383,6 @@ export async function runNativeSpecialistSupervisor(input: {
           nativeAttempt: attempt,
         })
         if (executed.runId !== binding.agentRunId) throw new Error(`${step.id}: specialist executor returned an unexpected child run`)
-
-        if (pgclPrecedents.length) {
-          try {
-            await markPgclPrecedentsApplied({
-              projectId,
-              agentRunId: binding.agentRunId,
-              cases: pgclPrecedents,
-              executionSurface: 'SUPERVISOR_SPECIALIST',
-            })
-          } catch (learningError) {
-            console.error(
-              '[native-supervisor] approved PGCL precedent attribution failed safely:',
-              learningError instanceof Error ? learningError.message : learningError,
-            )
-          }
-        }
 
         return { ...(executed.output as Record<string, unknown>), governedHandoffEnvelopeIds: envelopeIds }
       },

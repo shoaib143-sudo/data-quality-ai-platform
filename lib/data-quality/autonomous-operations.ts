@@ -2,7 +2,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import {
   loadApprovedPgclPrecedents,
-  markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
 } from '@/lib/agents/pgcl-approved-precedent'
 
@@ -384,7 +383,7 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
         evidence: learningCase.evidence,
       })),
     },
-    applied_positive_case_ids: pgclPrecedents.map((learningCase) => learningCase.candidateId),
+    applied_positive_case_ids: [],
     failed_rules: failedRules.map(({ rule, runs }) => ({
       rule_definition_id: rule.id,
       rule_key: rule.rule_key,
@@ -487,18 +486,6 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
     },
   })
 
-  if (pgclPrecedents.length) {
-    try {
-      await markPgclPrecedentsApplied({
-        projectId: String(agentRun.project_id),
-        agentRunId: input.agentRunId,
-        cases: pgclPrecedents,
-        executionSurface: 'DATA_QUALITY_INVESTIGATION',
-      })
-    } catch (error) {
-      console.error('[data-quality-investigation] approved PGCL precedent attribution failed safely:', error)
-    }
-  }
 
   return {
     investigationId: investigation.id,
@@ -515,7 +502,7 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
     approvedPositiveCaseLearning: {
       status: pgclStatus,
       matches: pgclPrecedents.length,
-      appliedCandidateIds: pgclPrecedents.map((learningCase) => learningCase.candidateId),
+      appliedCandidateIds: [],
       authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
     },
     workflow,

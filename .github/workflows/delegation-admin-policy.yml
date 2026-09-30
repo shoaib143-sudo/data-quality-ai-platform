@@ -19,6 +19,12 @@ on:
       - 'scripts/test-profiling-jdbc-runtime.ts'
       - 'scripts/test-profiling-metric-concurrency-runtime.ts'
       - 'scripts/test-direct-approval-authority-concurrency.sh'
+      - 'scripts/test-learning-prospective-outcome-fixture.sql'
+      - 'scripts/run-learning-prospective-outcome-fixture.sh'
+      - 'scripts/test-learning-prospective-outcome-fixture-contract.mjs'
+      - 'supabase/migrations/20260929000200_learning_prospective_outcomes.sql'
+      - 'supabase/migrations/20260929000225_pgcl_terminal_run_learning_provenance.sql'
+      - 'supabase/migrations/20260929000250_agent_run_outcome_coverage.sql'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
       - '.github/workflows/v6-operational-certification.yml'
@@ -41,6 +47,12 @@ on:
       - 'scripts/test-profiling-jdbc-runtime.ts'
       - 'scripts/test-profiling-metric-concurrency-runtime.ts'
       - 'scripts/test-direct-approval-authority-concurrency.sh'
+      - 'scripts/test-learning-prospective-outcome-fixture.sql'
+      - 'scripts/run-learning-prospective-outcome-fixture.sh'
+      - 'scripts/test-learning-prospective-outcome-fixture-contract.mjs'
+      - 'supabase/migrations/20260929000200_learning_prospective_outcomes.sql'
+      - 'supabase/migrations/20260929000225_pgcl_terminal_run_learning_provenance.sql'
+      - 'supabase/migrations/20260929000250_agent_run_outcome_coverage.sql'
       - 'supabase/migrations/*approval_authority*'
       - '.github/workflows/delegation-admin-policy.yml'
       - '.github/workflows/v6-operational-certification.yml'
@@ -114,6 +126,7 @@ jobs:
           test -n "${API_URL:-}"
           test -n "${ANON_KEY:-}"
           test -n "${SERVICE_ROLE_KEY:-}"
+          DB_URL="$DB_URL" ROOT="$ROOT" bash "$ROOT/scripts/run-learning-prospective-outcome-fixture.sh"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-assignment.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-direct-approval-authority-expiry-reassignment.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/assert-profiling-persistence-lifecycle.sql"
