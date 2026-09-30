@@ -197,6 +197,16 @@ begin
     raise exception 'evaluation policy lock must follow candidate and dataset evidence cutoffs';
   end if;
   if length(btrim(coalesce(p_policy_key,''))) = 0 then raise exception 'policy key is required'; end if;
+  if length(btrim(coalesce(p_rollback_ref,''))) = 0
+    or length(btrim(coalesce(p_evaluator_actor_id,''))) = 0
+    or length(btrim(coalesce(p_proposer_actor_id,''))) = 0
+    or length(btrim(coalesce(p_rubric_ref,''))) = 0
+    or length(btrim(coalesce(p_calibration_ref,''))) = 0
+    or length(btrim(coalesce(p_primary_metric,''))) = 0
+    or length(btrim(coalesce(p_analysis_plan_ref,''))) = 0
+  then
+    raise exception 'evaluation governance references must be non-empty';
+  end if;
   if p_mode not in ('GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS') then raise exception 'unsupported evaluation mode'; end if;
   if p_dataset_version_ids is null or cardinality(p_dataset_version_ids) = 0 then raise exception 'dataset versions are required'; end if;
   if exists (select 1 from unnest(p_dataset_version_ids) v where v is null or length(btrim(v)) = 0 or v <> btrim(v)) then
@@ -209,7 +219,7 @@ begin
     raise exception 'registered dataset manifest version is outside evaluation dataset allowlist';
   end if;
   if p_evaluator_actor_id = p_proposer_actor_id then raise exception 'evaluator must differ from proposer'; end if;
-  if p_manifest_hash !~ '^sha256:[a-f0-9]{64}$' then raise exception 'manifest hash must be SHA-256'; end if;
+  if p_manifest_hash is null or p_manifest_hash !~ '^sha256:[a-f0-9]{64}$' then raise exception 'manifest hash must be SHA-256'; end if;
   if p_sample_size < 1 or p_minimum_gain <= 0 or p_minimum_gain > 1 or p_minimum_score < 0 or p_minimum_score > 1 then
     raise exception 'evaluation thresholds are invalid';
   end if;
