@@ -20,7 +20,11 @@ for (const invariant of [
   'recordLearningEvaluationDecision',
   'loadLearningReleaseAdmission',
   'datasetManifestId',
+  "from('learning_evaluation_policies')",
+  "from('learning_evaluation_results')",
+  ".eq('policy_id', persistedPolicy.id)",
   "order('created_at', { ascending: false })",
+  'The latest prospective evaluation policy has no recorded decision.',
   "The latest prospective evaluation decision is not eligible for release review.",
   'assertLearningEvaluationEligibleForReleaseReview',
 ]) assert.ok(service.includes(invariant), `missing evaluation service invariant: ${invariant}`)
