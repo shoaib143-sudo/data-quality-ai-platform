@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { loadLearningReleaseAdmission } from './governed-learning-evaluation-service'
 import {
   createAgentApprovalRequest,
   currentExecutionFingerprint,
@@ -14,6 +15,12 @@ type LearningCandidateReleaseContext = {
   benchmarkId: string
   rollbackRef: string
   agentDefinitionId: string
+  evaluationPolicyRecordId: string
+  evaluationResultId: string
+  evaluationPolicyKey: string
+  evaluationManifestHash: string
+  evaluationMode: string
+  evaluatorActorId: string
 }
 
 async function loadLearningCandidateReleaseContext(input: {
@@ -23,7 +30,7 @@ async function loadLearningCandidateReleaseContext(input: {
   const admin = createAdminClient()
   const { data: candidate, error: candidateError } = await admin.schema('agent')
     .from('learning_candidates')
-    .select('id,project_id,agent_key,baseline_version,candidate_version,status')
+    .select('id,project_id,agent_key,skill_key,baseline_version,candidate_version,status')
     .eq('id', input.candidateId)
     .eq('project_id', input.projectId)
     .maybeSingle()
@@ -65,6 +72,20 @@ async function loadLearningCandidateReleaseContext(input: {
     throw new Error('Candidate agent definition must be in CANDIDATE lifecycle state before release approval.')
   }
 
+  const admission = await loadLearningReleaseAdmission({
+    projectId: input.projectId,
+    candidateId: input.candidateId,
+  })
+  if (
+    admission.policy.agentKey !== candidate.agent_key
+    || admission.policy.skillKey !== candidate.skill_key
+    || admission.policy.baselineVersion !== candidate.baseline_version
+    || admission.policy.candidateVersion !== candidate.candidate_version
+    || admission.policy.rollbackRef !== benchmark.rollback_ref
+  ) {
+    throw new Error('Prospective evaluation admission does not match the current learning release context.')
+  }
+
   return {
     candidateId: String(candidate.id),
     projectId: String(candidate.project_id),
@@ -74,6 +95,12 @@ async function loadLearningCandidateReleaseContext(input: {
     benchmarkId: String(benchmark.id),
     rollbackRef: String(benchmark.rollback_ref),
     agentDefinitionId: String(agentDefinition.id),
+    evaluationPolicyRecordId: admission.evaluationPolicyRecordId,
+    evaluationResultId: admission.evaluationResultId,
+    evaluationPolicyKey: admission.policy.policyId,
+    evaluationManifestHash: admission.policy.manifestHash,
+    evaluationMode: admission.policy.mode,
+    evaluatorActorId: admission.policy.evaluatorActorId,
   }
 }
 
@@ -86,6 +113,12 @@ function releaseParameters(context: LearningCandidateReleaseContext) {
     benchmarkId: context.benchmarkId,
     rollbackRef: context.rollbackRef,
     agentDefinitionId: context.agentDefinitionId,
+    evaluationPolicyRecordId: context.evaluationPolicyRecordId,
+    evaluationResultId: context.evaluationResultId,
+    evaluationPolicyKey: context.evaluationPolicyKey,
+    evaluationManifestHash: context.evaluationManifestHash,
+    evaluationMode: context.evaluationMode,
+    evaluatorActorId: context.evaluatorActorId,
   }
 }
 
