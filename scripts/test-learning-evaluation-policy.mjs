@@ -1,6 +1,6 @@
 import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
-const { validateLearningEvaluationPolicy, classifyLearningEvaluation } = await import('../lib/agents/learning-evaluation-policy.ts')
+const { validateLearningEvaluationPolicy, classifyLearningEvaluation, assertLearningEvaluationEligibleForReleaseReview } = await import('../lib/agents/learning-evaluation-policy.ts')
 
 const policy = {
   policyId: 'policy-1', projectId: 'project-1', candidateId: 'candidate-1',
@@ -37,8 +37,11 @@ for (const patch of [
 const classify = patch => classifyLearningEvaluation(policy, { ...result, ...patch })
 assert.equal(classify({}).quality, 'IMPROVED')
 assert.equal(classify({}).automaticPromotionAllowed, false)
+assert.equal(assertLearningEvaluationEligibleForReleaseReview(policy, result).quality, 'IMPROVED')
 assert.equal(classify({ candidateScore: 0.7, gainLowerConfidenceBound: 0 }).quality, 'INCONCLUSIVE')
+assert.throws(() => assertLearningEvaluationEligibleForReleaseReview(policy, { ...result, candidateScore: 0.7, gainLowerConfidenceBound: 0 }), /not eligible for release review/)
 assert.equal(classify({ candidateScore: 0.6 }).quality, 'REGRESSED')
+assert.throws(() => assertLearningEvaluationEligibleForReleaseReview(policy, { ...result, candidateScore: 0.6 }), /not eligible for release review/)
 assert.equal(classify({ sampleCount: 99 }).quality, 'INCONCLUSIVE')
 assert.equal(classify({ independentlyVerified: false }).quality, 'INCONCLUSIVE')
 assert.equal(classify({ evidenceComplete: false }).quality, 'INCONCLUSIVE')
@@ -52,6 +55,7 @@ assert.equal(classify({ maxLatencyMs: 1001 }).disposition, 'STOPPED')
 assert.equal(classify({ observedAt: '2026-09-29T00:00:00Z' }).disposition, 'STOPPED')
 for (const key of ['policyId', 'projectId', 'candidateId', 'baselineVersion', 'candidateVersion', 'mode', 'manifestHash', 'evaluatorActorId']) assert.equal(classify({ [key]: 'mismatch' }).disposition, 'STOPPED', key)
 assert.equal(classify({ authorityViolations: 1, candidateScore: null, accountingComplete: false }).disposition, 'REJECTED')
+assert.throws(() => assertLearningEvaluationEligibleForReleaseReview(policy, { ...result, authorityViolations: 1, candidateScore: null, accountingComplete: false }), /not eligible for release review/)
 assert.equal(classify({ safetyFailures: 1, policyId: 'wrong' }).disposition, 'REJECTED')
 assert.throws(() => classify({ sampleCount: -1 }))
 assert.throws(() => classify({ authorityViolations: NaN }))
