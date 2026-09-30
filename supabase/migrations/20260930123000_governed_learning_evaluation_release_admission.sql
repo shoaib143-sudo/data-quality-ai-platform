@@ -6,6 +6,7 @@ create table if not exists agent.learning_evaluation_policies (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references app.projects(id) on delete cascade,
   candidate_id uuid not null,
+  dataset_manifest_id uuid not null,
   policy_key text not null,
   agent_key text not null,
   skill_key text not null,
@@ -35,6 +36,10 @@ create table if not exists agent.learning_evaluation_policies (
     foreign key (candidate_id, project_id)
     references agent.learning_candidates(id, project_id)
     on delete cascade,
+  constraint learning_evaluation_policy_manifest_fk
+    foreign key (dataset_manifest_id, project_id)
+    references agent.learning_benchmark_dataset_manifests(id, project_id)
+    on delete restrict,
   constraint learning_evaluation_policy_key_ck check (length(btrim(policy_key)) > 0),
   constraint learning_evaluation_policy_manifest_ck check (manifest_hash ~ '^sha256:[a-f0-9]{64}$'),
   constraint learning_evaluation_policy_versions_ck check (baseline_version <> candidate_version),
@@ -138,6 +143,7 @@ create or replace function agent.record_learning_evaluation_policy(
   p_skill_key text,
   p_mode text,
   p_dataset_version_ids text[],
+  p_dataset_manifest_id uuid,
   p_baseline_version text,
   p_candidate_version text,
   p_rollback_ref text,
@@ -165,6 +171,7 @@ set search_path = pg_catalog, agent, app
 as $$
 declare
   v_candidate agent.learning_candidates%rowtype;
+  v_manifest agent.learning_benchmark_dataset_manifests%rowtype;
   v_existing agent.learning_evaluation_policies%rowtype;
   v_id uuid;
 begin
@@ -180,6 +187,15 @@ begin
   then
     raise exception 'evaluation policy versions do not match candidate';
   end if;
+  if p_dataset_manifest_id is null then raise exception 'dataset manifest is required'; end if;
+  select * into v_manifest
+  from agent.learning_benchmark_dataset_manifests
+  where id = p_dataset_manifest_id and project_id = p_project_id;
+  if not found then raise exception 'sealed benchmark dataset manifest not found in project'; end if;
+  if v_manifest.manifest_hash <> p_manifest_hash then raise exception 'evaluation policy manifest hash does not match registered dataset manifest'; end if;
+  if p_locked_at is null or p_locked_at < v_candidate.evidence_cutoff_at or p_locked_at < v_manifest.evidence_cutoff_at then
+    raise exception 'evaluation policy lock must follow candidate and dataset evidence cutoffs';
+  end if;
   if length(btrim(coalesce(p_policy_key,''))) = 0 then raise exception 'policy key is required'; end if;
   if p_mode not in ('GUIDED','GOVERNED_AUTO','FULL_AUTONOMOUS') then raise exception 'unsupported evaluation mode'; end if;
   if p_dataset_version_ids is null or cardinality(p_dataset_version_ids) = 0 then raise exception 'dataset versions are required'; end if;
@@ -188,6 +204,9 @@ begin
   end if;
   if (select count(distinct v) from unnest(p_dataset_version_ids) v) <> cardinality(p_dataset_version_ids) then
     raise exception 'duplicate dataset versions are not allowed';
+  end if;
+  if not (v_manifest.dataset_version = any(p_dataset_version_ids)) then
+    raise exception 'registered dataset manifest version is outside evaluation dataset allowlist';
   end if;
   if p_evaluator_actor_id = p_proposer_actor_id then raise exception 'evaluator must differ from proposer'; end if;
   if p_manifest_hash !~ '^sha256:[a-f0-9]{64}$' then raise exception 'manifest hash must be SHA-256'; end if;
@@ -206,6 +225,7 @@ begin
   where project_id = p_project_id and policy_key = btrim(p_policy_key);
   if found then
     if v_existing.candidate_id <> p_candidate_id
+      or v_existing.dataset_manifest_id <> p_dataset_manifest_id
       or v_existing.agent_key <> p_agent_key
       or v_existing.skill_key <> p_skill_key
       or v_existing.mode <> p_mode
@@ -236,13 +256,13 @@ begin
   end if;
 
   insert into agent.learning_evaluation_policies(
-    project_id,candidate_id,policy_key,agent_key,skill_key,mode,dataset_version_ids,
+    project_id,candidate_id,dataset_manifest_id,policy_key,agent_key,skill_key,mode,dataset_version_ids,
     baseline_version,candidate_version,rollback_ref,evaluator_actor_id,proposer_actor_id,
     rubric_ref,calibration_ref,manifest_hash,locked_at,primary_metric,analysis_plan_ref,
     sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,
     total_token_budget,per_run_token_budget,latency_ms_budget
   ) values (
-    p_project_id,p_candidate_id,btrim(p_policy_key),p_agent_key,p_skill_key,p_mode,p_dataset_version_ids,
+    p_project_id,p_candidate_id,p_dataset_manifest_id,btrim(p_policy_key),p_agent_key,p_skill_key,p_mode,p_dataset_version_ids,
     btrim(p_baseline_version),btrim(p_candidate_version),btrim(p_rollback_ref),btrim(p_evaluator_actor_id),btrim(p_proposer_actor_id),
     btrim(p_rubric_ref),btrim(p_calibration_ref),p_manifest_hash,p_locked_at,btrim(p_primary_metric),btrim(p_analysis_plan_ref),
     p_sample_size,p_minimum_gain,p_minimum_score,p_total_cost_budget,p_per_run_cost_budget,
@@ -253,11 +273,11 @@ end;
 $$;
 
 revoke all on function agent.record_learning_evaluation_policy(
-  uuid,uuid,text,text,text,text,text[],text,text,text,text,text,text,text,text,timestamptz,text,text,
+  uuid,uuid,text,text,text,text,text[],uuid,text,text,text,text,text,text,text,text,timestamptz,text,text,
   integer,numeric,numeric,numeric,numeric,bigint,bigint,integer
 ) from public, anon, authenticated;
 grant execute on function agent.record_learning_evaluation_policy(
-  uuid,uuid,text,text,text,text,text[],text,text,text,text,text,text,text,text,timestamptz,text,text,
+  uuid,uuid,text,text,text,text,text[],uuid,text,text,text,text,text,text,text,text,timestamptz,text,text,
   integer,numeric,numeric,numeric,numeric,bigint,bigint,integer
 ) to service_role;
 
