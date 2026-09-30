@@ -19,3 +19,20 @@ test('snapshots are append-only by design and actions are proposals',()=>{
 test('readiness tables have RLS enabled',()=>{
  for(const table of ['readiness_assessments','readiness_evidence','readiness_snapshots','readiness_action_proposals']) assert.match(sql,new RegExp(`alter table governance\\.${table} enable row level security`))
 })
+
+
+test('browser roles cannot mutate readiness persistence and service role access is explicit',()=>{
+ for(const table of ['readiness_assessments','readiness_evidence','readiness_snapshots','readiness_action_proposals']) {
+   assert.match(sql,new RegExp(`revoke all on governance\\.${table} from public, anon, authenticated`))
+ }
+ assert.match(sql,/grant select, insert, update, delete on governance\.readiness_assessments to service_role/)
+ assert.match(sql,/grant select, insert, update, delete on governance\.readiness_evidence to service_role/)
+ assert.match(sql,/grant select, insert on governance\.readiness_snapshots to service_role/)
+ assert.match(sql,/grant select, insert, update, delete on governance\.readiness_action_proposals to service_role/)
+})
+
+test('snapshot append-only semantics are enforced by the database',()=>{
+ assert.match(sql,/function governance\.reject_readiness_snapshot_mutation\(\)/)
+ assert.match(sql,/before update or delete on governance\.readiness_snapshots/)
+ assert.match(sql,/raise exception 'readiness snapshots are append-only'/)
+})
