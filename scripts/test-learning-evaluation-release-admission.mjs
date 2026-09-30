@@ -56,6 +56,7 @@ for (const invariant of [
   'evaluation policy manifest hash does not match registered dataset manifest',
   'registered dataset manifest version is outside evaluation dataset allowlist',
   'evaluation policy lock must follow candidate and dataset evidence cutoffs',
+  'evaluation governance references must be non-empty',
   'record_learning_evaluation_policy',
   'record_learning_evaluation_result',
   'evaluator_actor_id <> proposer_actor_id',
