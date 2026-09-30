@@ -1,11 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { READINESS_CAPABILITIES, readinessCapabilitiesForContext, unresolvedHumanCapabilities } from '../lib/governance/unified-readiness-framework.ts'
+import { ALL_READINESS_CAPABILITIES, READINESS_CAPABILITIES, readinessCapabilitiesForContext, unresolvedHumanCapabilities } from '../lib/governance/unified-readiness-framework.ts'
 import { evaluateReadiness } from '../lib/governance/unified-readiness-engine.ts'
 
 test('capability identifiers are unique and ten dimensions are represented', () => {
-  assert.equal(new Set(READINESS_CAPABILITIES.map(x => x.id)).size, READINESS_CAPABILITIES.length)
-  assert.equal(new Set(READINESS_CAPABILITIES.map(x => x.dimensionId)).size, 10)
+  assert.equal(new Set(ALL_READINESS_CAPABILITIES.map(x => x.id)).size, ALL_READINESS_CAPABILITIES.length)
+  assert.equal(new Set(ALL_READINESS_CAPABILITIES.map(x => x.dimensionId)).size, 10)
+  assert.equal(ALL_READINESS_CAPABILITIES.length, 40)
 })
 
 test('AI governance is not scored as zero when AI is not applicable', () => {
