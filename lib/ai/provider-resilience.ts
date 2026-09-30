@@ -73,6 +73,7 @@ export class ResilientReasoningProvider implements ReasoningProvider {
     request.signal?.throwIfAborted()
     try {
       const result = await this.primary.provider.generateJson(request)
+      request.signal?.throwIfAborted()
       return {
         ...result,
         resilience: {
@@ -98,6 +99,7 @@ export class ResilientReasoningProvider implements ReasoningProvider {
         attempts += 1
         try {
           const result = await candidate.provider.generateJson(request)
+          request.signal?.throwIfAborted()
           return {
             ...result,
             resilience: {
