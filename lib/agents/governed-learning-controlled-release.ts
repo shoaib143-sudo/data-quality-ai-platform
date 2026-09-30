@@ -68,6 +68,7 @@ async function loadReleaseParameters(input: {
       evaluationPolicyRecordId: admission.evaluationPolicyRecordId,
       evaluationResultId: admission.evaluationResultId,
       evaluationPolicyKey: admission.policy.policyId,
+      evaluationDatasetManifestId: admission.policy.datasetManifestId,
       evaluationManifestHash: admission.policy.manifestHash,
       evaluationMode: admission.policy.mode,
       evaluatorActorId: admission.policy.evaluatorActorId,
