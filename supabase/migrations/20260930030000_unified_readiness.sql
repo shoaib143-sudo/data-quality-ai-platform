@@ -62,3 +62,34 @@ alter table governance.readiness_action_proposals enable row level security;
 
 comment on table governance.readiness_snapshots is 'Append-only DN-URA readiness snapshots. Application code must never update or delete historical snapshots.';
 comment on table governance.readiness_action_proposals is 'Readiness findings become proposals only. Existing authorization and approval services remain the execution authority.';
+
+
+-- Fail closed for browser roles. Readiness persistence is accessed through
+-- governed server-side services until explicit organization-scoped policies
+-- and mutation APIs are introduced.
+revoke all on governance.readiness_assessments from public, anon, authenticated;
+revoke all on governance.readiness_evidence from public, anon, authenticated;
+revoke all on governance.readiness_snapshots from public, anon, authenticated;
+revoke all on governance.readiness_action_proposals from public, anon, authenticated;
+
+grant select, insert, update, delete on governance.readiness_assessments to service_role;
+grant select, insert, update, delete on governance.readiness_evidence to service_role;
+grant select, insert on governance.readiness_snapshots to service_role;
+grant select, insert, update, delete on governance.readiness_action_proposals to service_role;
+
+create or replace function governance.reject_readiness_snapshot_mutation()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, governance
+as $$
+begin
+  raise exception 'readiness snapshots are append-only';
+end;
+$$;
+
+drop trigger if exists reject_readiness_snapshot_mutation on governance.readiness_snapshots;
+create trigger reject_readiness_snapshot_mutation
+before update or delete on governance.readiness_snapshots
+for each row execute function governance.reject_readiness_snapshot_mutation();
+
+revoke all on function governance.reject_readiness_snapshot_mutation() from public, anon, authenticated;
