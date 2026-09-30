@@ -18,6 +18,7 @@ type LearningCandidateReleaseContext = {
   evaluationPolicyRecordId: string
   evaluationResultId: string
   evaluationPolicyKey: string
+  evaluationDatasetManifestId: string
   evaluationManifestHash: string
   evaluationMode: string
   evaluatorActorId: string
@@ -98,6 +99,7 @@ async function loadLearningCandidateReleaseContext(input: {
     evaluationPolicyRecordId: admission.evaluationPolicyRecordId,
     evaluationResultId: admission.evaluationResultId,
     evaluationPolicyKey: admission.policy.policyId,
+    evaluationDatasetManifestId: admission.policy.datasetManifestId,
     evaluationManifestHash: admission.policy.manifestHash,
     evaluationMode: admission.policy.mode,
     evaluatorActorId: admission.policy.evaluatorActorId,
@@ -116,6 +118,7 @@ function releaseParameters(context: LearningCandidateReleaseContext) {
     evaluationPolicyRecordId: context.evaluationPolicyRecordId,
     evaluationResultId: context.evaluationResultId,
     evaluationPolicyKey: context.evaluationPolicyKey,
+    evaluationDatasetManifestId: context.evaluationDatasetManifestId,
     evaluationManifestHash: context.evaluationManifestHash,
     evaluationMode: context.evaluationMode,
     evaluatorActorId: context.evaluatorActorId,
