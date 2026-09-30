@@ -70,6 +70,7 @@ export class ResilientReasoningProvider implements ReasoningProvider {
   }
 
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
+    request.signal?.throwIfAborted()
     try {
       const result = await this.primary.provider.generateJson(request)
       return {
@@ -85,12 +86,15 @@ export class ResilientReasoningProvider implements ReasoningProvider {
         },
       }
     } catch (primaryError) {
+      // A run-wide cancellation/deadline must never become another paid attempt.
+      request.signal?.throwIfAborted()
       const reason = fallbackReason(primaryError)
       if (!reason || this.fallbacks.length === 0) throw primaryError
 
       let lastError: unknown = primaryError
       let attempts = 1
       for (const candidate of this.fallbacks) {
+        request.signal?.throwIfAborted()
         attempts += 1
         try {
           const result = await candidate.provider.generateJson(request)
@@ -107,6 +111,7 @@ export class ResilientReasoningProvider implements ReasoningProvider {
             },
           }
         } catch (error) {
+          request.signal?.throwIfAborted()
           lastError = error
           if (!fallbackReason(error)) throw error
         }
