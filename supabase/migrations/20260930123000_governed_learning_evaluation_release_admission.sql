@@ -206,10 +206,29 @@ begin
   where project_id = p_project_id and policy_key = btrim(p_policy_key);
   if found then
     if v_existing.candidate_id <> p_candidate_id
-      or v_existing.manifest_hash <> p_manifest_hash
+      or v_existing.agent_key <> p_agent_key
+      or v_existing.skill_key <> p_skill_key
+      or v_existing.mode <> p_mode
+      or v_existing.dataset_version_ids is distinct from p_dataset_version_ids
       or v_existing.baseline_version <> btrim(p_baseline_version)
       or v_existing.candidate_version <> btrim(p_candidate_version)
+      or v_existing.rollback_ref <> btrim(p_rollback_ref)
+      or v_existing.evaluator_actor_id <> btrim(p_evaluator_actor_id)
+      or v_existing.proposer_actor_id <> btrim(p_proposer_actor_id)
+      or v_existing.rubric_ref <> btrim(p_rubric_ref)
+      or v_existing.calibration_ref <> btrim(p_calibration_ref)
+      or v_existing.manifest_hash <> p_manifest_hash
       or v_existing.locked_at <> p_locked_at
+      or v_existing.primary_metric <> btrim(p_primary_metric)
+      or v_existing.analysis_plan_ref <> btrim(p_analysis_plan_ref)
+      or v_existing.sample_size <> p_sample_size
+      or v_existing.minimum_gain <> p_minimum_gain
+      or v_existing.minimum_score <> p_minimum_score
+      or v_existing.total_cost_budget <> p_total_cost_budget
+      or v_existing.per_run_cost_budget <> p_per_run_cost_budget
+      or v_existing.total_token_budget <> p_total_token_budget
+      or v_existing.per_run_token_budget <> p_per_run_token_budget
+      or v_existing.latency_ms_budget <> p_latency_ms_budget
     then
       raise exception 'policy key reuse does not match immutable evaluation policy';
     end if;
