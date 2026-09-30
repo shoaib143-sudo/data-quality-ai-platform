@@ -92,24 +92,32 @@ export async function loadLearningReleaseAdmission(input: {
   candidateId: string
 }) {
   const admin = createAdminClient()
-  const { data: rows, error } = await admin.schema('agent')
-    .from('learning_evaluation_results')
-    .select('id,policy_id,candidate_id,observed_at,sample_count,baseline_score,candidate_score,gain_lower_confidence_bound,independently_verified,evidence_complete,confirmation_window_passed,authority_violations,safety_failures,accounting_complete,total_cost,max_run_cost,total_tokens,max_run_tokens,max_latency_ms,disposition,quality,reasons,automatic_promotion_allowed,learning_evaluation_policies!inner(policy_key,project_id,candidate_id,dataset_manifest_id,agent_key,skill_key,mode,dataset_version_ids,baseline_version,candidate_version,rollback_ref,evaluator_actor_id,proposer_actor_id,rubric_ref,calibration_ref,manifest_hash,locked_at,primary_metric,analysis_plan_ref,sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,total_token_budget,per_run_token_budget,latency_ms_budget)')
+
+  const { data: policyRows, error: policyError } = await admin.schema('agent')
+    .from('learning_evaluation_policies')
+    .select('id,policy_key,project_id,candidate_id,dataset_manifest_id,agent_key,skill_key,mode,dataset_version_ids,baseline_version,candidate_version,rollback_ref,evaluator_actor_id,proposer_actor_id,rubric_ref,calibration_ref,manifest_hash,locked_at,primary_metric,analysis_plan_ref,sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,total_token_budget,per_run_token_budget,latency_ms_budget')
     .eq('project_id', input.projectId)
     .eq('candidate_id', input.candidateId)
     .order('created_at', { ascending: false })
     .limit(1)
-  if (error) throw new Error(`Unable to load learning release admission evidence: ${error.message}`)
+  if (policyError) throw new Error(`Unable to load latest learning evaluation policy: ${policyError.message}`)
+  const persistedPolicy = Array.isArray(policyRows) ? policyRows[0] : null
+  if (!persistedPolicy) throw new Error('A locked prospective evaluation policy is required before release review.')
+
+  const { data: rows, error } = await admin.schema('agent')
+    .from('learning_evaluation_results')
+    .select('id,policy_id,candidate_id,observed_at,sample_count,baseline_score,candidate_score,gain_lower_confidence_bound,independently_verified,evidence_complete,confirmation_window_passed,authority_violations,safety_failures,accounting_complete,total_cost,max_run_cost,total_tokens,max_run_tokens,max_latency_ms,disposition,quality,reasons,automatic_promotion_allowed')
+    .eq('project_id', input.projectId)
+    .eq('candidate_id', input.candidateId)
+    .eq('policy_id', persistedPolicy.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (error) throw new Error(`Unable to load latest learning evaluation decision: ${error.message}`)
   const row = Array.isArray(rows) ? rows[0] : null
-  if (!row) throw new Error('A persisted prospective evaluation decision is required before release review.')
+  if (!row) throw new Error('The latest prospective evaluation policy has no recorded decision.')
   if (String(row.disposition) !== 'REVIEW_REQUIRED' || String(row.quality) !== 'IMPROVED' || row.automatic_promotion_allowed !== false) {
     throw new Error('The latest prospective evaluation decision is not eligible for release review.')
   }
-
-  const persistedPolicy = Array.isArray((row as any).learning_evaluation_policies)
-    ? (row as any).learning_evaluation_policies[0]
-    : (row as any).learning_evaluation_policies
-  if (!persistedPolicy) throw new Error('Learning evaluation policy binding is missing.')
 
   const policy: LearningEvaluationPolicy = {
     policyId: String(persistedPolicy.policy_key),
@@ -175,7 +183,7 @@ export async function loadLearningReleaseAdmission(input: {
   }
   return {
     evaluationResultId: String(row.id),
-    evaluationPolicyRecordId: String(row.policy_id),
+    evaluationPolicyRecordId: String(persistedPolicy.id),
     policy,
     result,
     decision,
