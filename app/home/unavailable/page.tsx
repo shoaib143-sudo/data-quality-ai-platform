@@ -10,7 +10,7 @@ export default async function LandingUnavailablePage() {
   const persona = personas[access.persona]
 
   if (access.enabled) {
-    return <main id="main-content" tabIndex={-1} className="min-h-screen px-4 py-8 text-slate-100 sm:px-6 sm:py-12">
+    return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen px-4 py-8 text-slate-100 sm:px-6 sm:py-12">
       <div className="dn-surface mx-auto max-w-3xl p-7 text-center sm:p-9">
         <ShieldCheck className="mx-auto h-9 w-9 text-blue-600" />
         <h1 className="mt-5 text-3xl font-black">Your landing page is available</h1>
@@ -20,7 +20,7 @@ export default async function LandingUnavailablePage() {
     </main>
   }
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen px-4 py-8 text-slate-100 sm:px-6 sm:py-12">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen px-4 py-8 text-slate-100 sm:px-6 sm:py-12">
     <div className="dn-surface mx-auto max-w-3xl p-7 text-center sm:p-9">
       <span className="dn-inset mx-auto grid h-12 w-12 place-items-center text-slate-400"><EyeOff className="h-6 w-6" /></span>
       <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Role experience unavailable</p>

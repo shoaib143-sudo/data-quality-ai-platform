@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { ArrowLeft, Home, Search, Sparkles } from 'lucide-react'
 
 export default function NotFound(){
-  return <main id="main-content" className="dn-page grid min-h-screen place-items-center px-4 py-12 text-slate-100">
+  return <main id="main-content" className="dn-light-workspace dn-page grid min-h-screen place-items-center px-4 py-12 text-slate-100">
     <section className="dn-surface w-full max-w-2xl p-7 sm:p-9" aria-labelledby="not-found-title">
       <p className="text-xs font-black uppercase tracking-[.16em] text-cyan-300">Resource unavailable</p>
       <h1 id="not-found-title" className="mt-3 text-3xl font-black text-white">DataNexus could not find this governed resource.</h1>
