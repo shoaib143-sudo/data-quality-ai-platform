@@ -16,7 +16,7 @@ export default function DashboardError({
   }, [error])
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-12 text-slate-950">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 px-4 py-12 text-slate-950">
       <section className="mx-auto max-w-2xl rounded-3xl border border-amber-200 bg-white p-7 shadow-sm sm:p-9">
         <div className="flex items-start gap-4">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-50 text-amber-700">

@@ -85,7 +85,7 @@ export default async function AgentDetailPage({
   const touchedProjects = new Set(runs.map(run => run.project_id)).size
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Agent Detail" contextLabel={`${agent.name} v${agent.version}`} homeHref="/home" />
         {(canAgents || canMonitoring) ? <div className="flex flex-wrap items-center justify-between gap-3">

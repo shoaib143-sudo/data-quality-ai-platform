@@ -128,7 +128,7 @@ export default async function DiscoveryPage() {
   }
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Metadata Discovery" contextLabel="Source reconciliation and readiness" homeHref="/home" />
         <nav className="mb-6 mt-4 flex items-center justify-end rounded-2xl border bg-white px-5 py-3 shadow-sm">

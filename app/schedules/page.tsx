@@ -33,7 +33,7 @@ export default async function SchedulesPage(){
   ]):[{data:[],error:null},{data:[],error:null},{data:[],error:null}]
   for(const result of [datasetsResult,versionsResult,schedulesResult]) if(result.error) throw new Error(result.error.message)
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Schedules" contextLabel="Recurring governed execution" homeHref="/home" />
       <div className="mb-6 mt-4 flex flex-wrap justify-end gap-2 text-sm">{canMonitoring?<Link href="/monitoring" className="rounded-xl border bg-white px-3 py-2 font-semibold hover:bg-slate-100">Job Monitor</Link>:null}{canQuality?<Link href="/data-quality" className="rounded-xl border bg-white px-3 py-2 font-semibold hover:bg-slate-100">Data Quality</Link>:null}</div>

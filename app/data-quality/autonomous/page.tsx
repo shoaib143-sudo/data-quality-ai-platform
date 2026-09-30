@@ -107,7 +107,7 @@ export default async function AutonomousDataQualityPage() {
   const decidedLearning=effectiveLearning+ineffectiveLearning
   const overallEffectiveness=decidedLearning?effectiveLearning/decidedLearning:null
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 text-slate-950">
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <GlobalUtilityBar persona={landingAccess.persona} organizationRole={landingAccess.organizationRole} roleLabel="Autonomous Data Quality" contextLabel="Investigate, remediate, verify and learn" homeHref="/home" />
       <nav className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white px-5 py-3 shadow-sm">

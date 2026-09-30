@@ -1,8 +1,10 @@
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
+import { personaSlugs as canonicalPersonaSlugs } from '../lib/governance/personas.ts'
+import { personaAcceptanceTasks } from '../lib/governance/persona-acceptance-tasks.ts'
 
 function required(value, name) {
   const normalized = typeof value === 'string' ? value.trim() : ''
@@ -11,14 +13,7 @@ function required(value, name) {
 }
 
 function personaSlugs() {
-  const source = readFileSync('lib/governance/personas.ts', 'utf8')
-  const marker = 'export const personaSlugs = ['
-  const start = source.indexOf(marker)
-  if (start < 0) throw new Error('Unable to locate persona registry.')
-  const tail = source.slice(start + marker.length)
-  const end = tail.indexOf('] as const')
-  if (end < 0) throw new Error('Unable to locate persona registry terminator.')
-  const slugs = [...tail.slice(0, end).matchAll(/'([^']+)'/g)].map(row => row[1])
+  const slugs = [...canonicalPersonaSlugs]
   if (slugs.length !== 13 || new Set(slugs).size !== 13) {
     throw new Error(`Expected exactly 13 unique personas, found ${slugs.length}.`)
   }
@@ -26,16 +21,9 @@ function personaSlugs() {
 }
 
 function personaReadRoutes(slug) {
-  const source = readFileSync('lib/governance/persona-acceptance-tasks.ts', 'utf8')
-  const marker = `  '${slug}': [`
-  const start = source.indexOf(marker)
-  if (start < 0) throw new Error(`Acceptance tasks missing persona ${slug}.`)
-  const tail = source.slice(start + marker.length)
-  const end = tail.indexOf('\n  ],')
-  if (end < 0) throw new Error(`Acceptance tasks for ${slug} are malformed.`)
-  const block = tail.slice(0, end)
-  return [...block.matchAll(/\{[^{}]*route: '([^']+)'[^{}]*mode: 'READ'[^{}]*\}/g)]
-    .map(row => row[1])
+  const tasks = personaAcceptanceTasks[slug]
+  if (!tasks?.length) throw new Error(`Acceptance tasks missing persona ${slug}.`)
+  return tasks.filter(task => task.mode === 'READ').map(task => task.route)
 }
 
 function expectedRoleKey(slug) {
