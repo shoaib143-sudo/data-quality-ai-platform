@@ -83,6 +83,8 @@ AI-assisted lineage follows the same authority principle: metadata-derived candi
 - `2026-09-13-chat-review-decision-register-and-unresolved-items.md` is the current September 13 discussion synthesis. It extracts chat-agreed engineering rules, design and architecture decisions, tradeoffs, authority boundaries, superseded decisions, later same-day implementation evidence, and unresolved architecture items.
 - `2026-09-19-vercel-capacity-cloudflare-continuity-and-runtime-decisions.md` records the Vercel deployment-capacity incident, deployment-explosion root cause, Git disconnect and retention controls, active-passive Vercel/Cloudflare continuity architecture, provider-neutral runtime changes, exact-SHA release model, R2/OIDC production boundaries, and operator safeguards.
 
+- `2026-09-30-multi-platform-governance-automation-architecture-and-implementation-plan.md` defines the approved provider-neutral governance automation architecture, canonical model, provider SDK, desired-state reconciler, capability negotiation, bulk/runtime design, MCP facade, Informatica reference implementation, future Collibra/Alation adapters, five parallel workstreams, and E2E completion gates.
+
 The capability matrix is intentionally broader than the current implementation scope. Future implementation should draw from it rather than recreate the exploration from scratch.
 
 ## Current continuation checkpoint
