@@ -88,12 +88,14 @@ export type LearningEvaluationResult = {
   maxLatencyMs: number
 }
 
-export function classifyLearningEvaluation(policy: LearningEvaluationPolicy, result: LearningEvaluationResult): {
+export type LearningEvaluationDecision = {
   disposition: 'STOPPED' | 'REJECTED' | 'REVIEW_REQUIRED'
   quality: 'IMPROVED' | 'REGRESSED' | 'INCONCLUSIVE'
   reasons: string[]
   automaticPromotionAllowed: false
-} {
+}
+
+export function classifyLearningEvaluation(policy: LearningEvaluationPolicy, result: LearningEvaluationResult): LearningEvaluationDecision {
   validateLearningEvaluationPolicy(policy)
   const answer = (disposition: 'STOPPED' | 'REJECTED' | 'REVIEW_REQUIRED', quality: 'IMPROVED' | 'REGRESSED' | 'INCONCLUSIVE', ...reasons: string[]) => ({ disposition, quality, reasons, automaticPromotionAllowed: false as const })
   for (const key of ['authorityViolations', 'safetyFailures'] as const) number(result[key], key, 0, true)
@@ -121,4 +123,20 @@ export function classifyLearningEvaluation(policy: LearningEvaluationPolicy, res
   if (result.gainLowerConfidenceBound > gain) throw new Error('confidence lower bound exceeds observed gain')
   if (gain < policy.minimumGain || result.candidateScore! < policy.minimumScore || result.gainLowerConfidenceBound <= 0 || result.confirmationWindowPassed !== true) return answer('REVIEW_REQUIRED', 'INCONCLUSIVE', 'GAIN_NOT_CONFIRMED')
   return answer('REVIEW_REQUIRED', 'IMPROVED', 'POSITIVE_GAIN_REQUIRES_RELEASE_REVIEW')
+}
+
+
+export function assertLearningEvaluationEligibleForReleaseReview(
+  policy: LearningEvaluationPolicy,
+  result: LearningEvaluationResult,
+): LearningEvaluationDecision {
+  const decision = classifyLearningEvaluation(policy, result)
+  if (
+    decision.disposition !== 'REVIEW_REQUIRED'
+    || decision.quality !== 'IMPROVED'
+    || decision.automaticPromotionAllowed !== false
+  ) {
+    throw new Error(`Learning evaluation is not eligible for release review: ${decision.reasons.join(',') || 'NO_ELIGIBLE_DECISION'}`)
+  }
+  return decision
 }
