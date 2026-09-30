@@ -10,7 +10,9 @@ Implemented:
 - release admission requiring a persisted REVIEW_REQUIRED + IMPROVED decision with automatic promotion disabled;
 - exact evaluation policy/result, manifest, mode and evaluator bindings added to the existing approval fingerprint;
 - controlled-release revalidation of the same prospective evaluation evidence before canary and activation;
-- essential positive, negative, safety, regression, inconclusive and static persistence/release-binding tests;
+- latest-decision precedence, so newer rejection, regression, stop or inconclusive evidence invalidates an older positive result;
+- read-only Learning Governance observability for locked policies, evaluator/manifest identity, decision quality/disposition, uncertainty, safety and accounting evidence;
+- essential positive, negative, safety, regression, inconclusive, stale-positive and persistence/release-binding tests;
 - Continuous Learning Governance CI coverage through `verify:learning-evaluation-policy`.
 
 The existing canonical project runtime cost enforcement remains authoritative for provider execution. PR #1091 does not introduce a second resource-control plane. Its locked experiment budget is an additional experiment-specific ceiling and evidence check.
@@ -31,6 +33,7 @@ Reference reviewed 2026-09-30: LangSmith evaluation concepts distinguish offline
 | --- | --- | --- | --- |
 | Offline/online evidence separation | IMPLEMENTED CONTRACT | KEEP | Real independently scored outcomes pending |
 | Explicit experiment and result bindings | IMPLEMENTED | KEEP | Exact-head CI and migration reconstruction |
+| Learning decision observability | IMPLEMENTED | KEEP | Read-only Command Center contract and UI verification |
 | Independent evaluator calibration | CONTRACT ENFORCED | KEEP | Authorized evaluator plus real calibration record |
 | Runtime cost/latency stop enforcement | INTEGRATED | KEEP | Existing canonical runtime enforcement plus experiment ceiling |
 | Replaceable evaluator integration | EXTENSION POINT | KEEP | Locked rubric, calibration and analysis references |
