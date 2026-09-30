@@ -13,6 +13,19 @@ function requiredText(value: string, label: string) {
   return normalized
 }
 
+/** created_at can tie within one transaction. UUID ordering is not chronology.
+ * Refuse ambiguous admission instead of picking a possibly stale positive row. */
+function latestUnambiguousRow<T extends { created_at: string }>(rows: T[] | null, label: string): T | null {
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  const first = Date.parse(rows[0].created_at)
+  if (!Number.isFinite(first)) throw new Error(`${label} has invalid creation time.`)
+  if (rows.length > 1) {
+    const second = Date.parse(rows[1].created_at)
+    if (!Number.isFinite(second) || first <= second) throw new Error(`${label} chronology is ambiguous; release review is blocked.`)
+  }
+  return rows[0]
+}
+
 export async function registerLearningEvaluationPolicy(policy: LearningEvaluationPolicy) {
   validateLearningEvaluationPolicy(policy)
   const admin = createAdminClient()
@@ -95,25 +108,25 @@ export async function loadLearningReleaseAdmission(input: {
 
   const { data: policyRows, error: policyError } = await admin.schema('agent')
     .from('learning_evaluation_policies')
-    .select('id,policy_key,project_id,candidate_id,dataset_manifest_id,agent_key,skill_key,mode,dataset_version_ids,baseline_version,candidate_version,rollback_ref,evaluator_actor_id,proposer_actor_id,rubric_ref,calibration_ref,manifest_hash,locked_at,primary_metric,analysis_plan_ref,sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,total_token_budget,per_run_token_budget,latency_ms_budget')
+    .select('id,created_at,policy_key,project_id,candidate_id,dataset_manifest_id,agent_key,skill_key,mode,dataset_version_ids,baseline_version,candidate_version,rollback_ref,evaluator_actor_id,proposer_actor_id,rubric_ref,calibration_ref,manifest_hash,locked_at,primary_metric,analysis_plan_ref,sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,total_token_budget,per_run_token_budget,latency_ms_budget')
     .eq('project_id', input.projectId)
     .eq('candidate_id', input.candidateId)
     .order('created_at', { ascending: false })
-    .limit(1)
+    .limit(2)
   if (policyError) throw new Error(`Unable to load latest learning evaluation policy: ${policyError.message}`)
-  const persistedPolicy = Array.isArray(policyRows) ? policyRows[0] : null
+  const persistedPolicy = latestUnambiguousRow(policyRows, 'Evaluation policy')
   if (!persistedPolicy) throw new Error('A locked prospective evaluation policy is required before release review.')
 
   const { data: rows, error } = await admin.schema('agent')
     .from('learning_evaluation_results')
-    .select('id,policy_id,candidate_id,observed_at,sample_count,baseline_score,candidate_score,gain_lower_confidence_bound,independently_verified,evidence_complete,confirmation_window_passed,authority_violations,safety_failures,accounting_complete,total_cost,max_run_cost,total_tokens,max_run_tokens,max_latency_ms,disposition,quality,reasons,automatic_promotion_allowed')
+    .select('id,created_at,policy_id,candidate_id,observed_at,sample_count,baseline_score,candidate_score,gain_lower_confidence_bound,independently_verified,evidence_complete,confirmation_window_passed,authority_violations,safety_failures,accounting_complete,total_cost,max_run_cost,total_tokens,max_run_tokens,max_latency_ms,disposition,quality,reasons,automatic_promotion_allowed')
     .eq('project_id', input.projectId)
     .eq('candidate_id', input.candidateId)
     .eq('policy_id', persistedPolicy.id)
     .order('created_at', { ascending: false })
-    .limit(1)
+    .limit(2)
   if (error) throw new Error(`Unable to load latest learning evaluation decision: ${error.message}`)
-  const row = Array.isArray(rows) ? rows[0] : null
+  const row = latestUnambiguousRow(rows, 'Evaluation decision')
   if (!row) throw new Error('The latest prospective evaluation policy has no recorded decision.')
   if (String(row.disposition) !== 'REVIEW_REQUIRED' || String(row.quality) !== 'IMPROVED' || row.automatic_promotion_allowed !== false) {
     throw new Error('The latest prospective evaluation decision is not eligible for release review.')

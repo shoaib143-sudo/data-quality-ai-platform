@@ -16,7 +16,7 @@ Implemented:
 - essential positive, negative, safety, regression, inconclusive, stale-positive and persistence/release-binding tests;
 - Continuous Learning Governance CI coverage through `verify:learning-evaluation-policy`.
 
-The existing canonical project runtime cost enforcement remains authoritative for provider execution. PR #1091 does not introduce a second resource-control plane. Its locked experiment budget is an additional experiment-specific ceiling and evidence check.
+The existing canonical project runtime cost enforcement remains authoritative for provider execution. PR #1091 does not introduce a second resource-control plane. Its locked experiment budget is checked against recorded evaluation evidence. Admission and post-run accounting checks do not prove that experiment-specific limits interrupt an in-flight provider request; that execution-boundary integration remains to be demonstrated.
 
 Still intentionally external to this implementation:
 - real project/dataset selection and independent evaluator assignment;
@@ -43,8 +43,14 @@ DataNexus keeps authentication, project scope, RLS, evidence, approval, release 
 | CI evaluation and regression gating | PARITY | KEEP | Focused positive, negative, adversarial, release-admission and observability tests are mandatory |
 | Learning decision observability | PARTIAL | KEEP | Locked policy and decision evidence is visible read-only; richer trajectory-level evaluator views are not part of this PR |
 | Independent evaluator calibration | PARTIAL | KEEP | Evaluator separation plus rubric/calibration references are enforced; real reviewer calibration evidence remains operational |
-| Runtime cost and latency stop enforcement | PARITY | KEEP | Existing canonical runtime enforcement remains authoritative, with experiment-specific ceilings added here |
+| Runtime cost and latency stop enforcement | PARTIAL | BUILD_NOW | Existing project runtime controls remain authoritative; experiment-specific ceilings are checked on evaluation evidence, and in-flight enforcement remains unverified |
 | Replaceable evaluator integration | PARTIAL | EXTENSION_POINT | Locked rubric, calibration and analysis references preserve provider-neutral integration |
 | Trace or trajectory-level semantic evaluation | GAP_DEFERRED | BUILD_LATER | Existing traces and governed outcomes can support it, but this PR does not add an external or agent-as-judge control plane |
 
 No ADR-007 agent classification, tool allowlist, mutation boundary, authentication, RLS authority or approval authority is expanded by this work. The new evaluation layer is benchmarkable and replaceable without surrendering DataNexus control-plane authority.
+
+## Resume audit and behavioral verification
+
+Added executable service tests with a test-only admin-client substitute. They verify project/candidate/policy query bindings, newest policy/decision selection, stale-positive invalidation, result reclassification, database error handling, missing accounting, budget excess and safety rejection. Both rows and their timestamps are inspected; tied or malformed chronology blocks admission rather than guessing with UUID order. Date parsing may conservatively treat sub-millisecond differences as a tie; a new unambiguous decision is required in that case.
+
+Synthetic behavior tests do not prove real quality gain, organizational reviewer independence, empirical statistical confidence or runtime cost enforcement. They do not activate any experiment.
