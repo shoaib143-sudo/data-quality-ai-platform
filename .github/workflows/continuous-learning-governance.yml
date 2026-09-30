@@ -52,6 +52,27 @@ on:
       - 'lib/agents/governed-learning-benchmark-service.ts'
       - 'scripts/test-governed-learning-benchmarks.mjs'
       - 'supabase/migrations/20260920011000_governed_learning_candidate_benchmarks.sql'
+      - 'lib/agents/governed-learning-evaluation-ledger.ts'
+      - 'lib/agents/governed-learning-paired-benchmark.ts'
+      - 'lib/agents/governed-learning-prospective-results.ts'
+      - 'lib/ai/prospective-learning-command-center-state.ts'
+      - 'scripts/test-governed-learning-paired-benchmark.mjs'
+      - 'scripts/test-governed-learning-evaluation-ledger.mjs'
+      - 'scripts/test-learning-benchmark-dataset-manifest.mjs'
+      - 'scripts/test-learning-benchmark-dataset-manifest.sql'
+      - 'scripts/test-learning-prospective-outcome-fixture.sql'
+      - 'scripts/run-learning-prospective-outcome-fixture.sh'
+      - 'scripts/test-learning-prospective-outcome-fixture-contract.mjs'
+      - 'scripts/test-learning-self-improvement-adversarial.mjs'
+      - 'scripts/test-governed-learning-prospective-outcomes.mjs'
+      - 'scripts/test-agent-run-outcome-coverage.mjs'
+      - 'scripts/test-prospective-learning-command-center.mjs'
+      - 'supabase/migrations/20260928010000_learning_benchmark_temporal_integrity.sql'
+      - 'supabase/migrations/20260929000100_learning_benchmark_case_bindings.sql'
+      - 'supabase/migrations/20260929000200_learning_prospective_outcomes.sql'
+      - 'supabase/migrations/20260929000225_pgcl_terminal_run_learning_provenance.sql'
+      - 'supabase/migrations/20260929000250_agent_run_outcome_coverage.sql'
+      - 'supabase/migrations/20260929000300_learning_benchmark_dataset_manifest.sql'
       - 'lib/agents/governed-learning-candidates.ts'
       - 'lib/agents/governed-learning-candidate-service.ts'
       - 'scripts/test-governed-learning-candidates.mjs'
@@ -113,6 +134,27 @@ on:
       - 'lib/agents/governed-learning-benchmark-service.ts'
       - 'scripts/test-governed-learning-benchmarks.mjs'
       - 'supabase/migrations/20260920011000_governed_learning_candidate_benchmarks.sql'
+      - 'lib/agents/governed-learning-evaluation-ledger.ts'
+      - 'lib/agents/governed-learning-paired-benchmark.ts'
+      - 'lib/agents/governed-learning-prospective-results.ts'
+      - 'lib/ai/prospective-learning-command-center-state.ts'
+      - 'scripts/test-governed-learning-paired-benchmark.mjs'
+      - 'scripts/test-governed-learning-evaluation-ledger.mjs'
+      - 'scripts/test-learning-benchmark-dataset-manifest.mjs'
+      - 'scripts/test-learning-benchmark-dataset-manifest.sql'
+      - 'scripts/test-learning-prospective-outcome-fixture.sql'
+      - 'scripts/run-learning-prospective-outcome-fixture.sh'
+      - 'scripts/test-learning-prospective-outcome-fixture-contract.mjs'
+      - 'scripts/test-learning-self-improvement-adversarial.mjs'
+      - 'scripts/test-governed-learning-prospective-outcomes.mjs'
+      - 'scripts/test-agent-run-outcome-coverage.mjs'
+      - 'scripts/test-prospective-learning-command-center.mjs'
+      - 'supabase/migrations/20260928010000_learning_benchmark_temporal_integrity.sql'
+      - 'supabase/migrations/20260929000100_learning_benchmark_case_bindings.sql'
+      - 'supabase/migrations/20260929000200_learning_prospective_outcomes.sql'
+      - 'supabase/migrations/20260929000225_pgcl_terminal_run_learning_provenance.sql'
+      - 'supabase/migrations/20260929000250_agent_run_outcome_coverage.sql'
+      - 'supabase/migrations/20260929000300_learning_benchmark_dataset_manifest.sql'
       - 'lib/agents/governed-learning-candidates.ts'
       - 'lib/agents/governed-learning-candidate-service.ts'
       - 'scripts/test-governed-learning-candidates.mjs'
@@ -164,6 +206,22 @@ jobs:
         run: node --experimental-strip-types scripts/test-governed-learning-candidates.mjs
       - name: Run governed learning benchmark tests
         run: node --experimental-strip-types scripts/test-governed-learning-benchmarks.mjs
+      - name: Run governed learning paired benchmark tests
+        run: node --experimental-strip-types scripts/test-governed-learning-paired-benchmark.mjs
+      - name: Run governed learning evaluation ledger tests
+        run: node --experimental-strip-types scripts/test-governed-learning-evaluation-ledger.mjs
+      - name: Run governed benchmark dataset manifest tests
+        run: node scripts/test-learning-benchmark-dataset-manifest.mjs
+      - name: Run governed self-improvement adversarial tests
+        run: node scripts/test-learning-self-improvement-adversarial.mjs
+      - name: Run prospective learning outcome tests
+        run: node scripts/test-governed-learning-prospective-outcomes.mjs
+      - name: Check isolated prospective outcome SQL fixture contract
+        run: node scripts/test-learning-prospective-outcome-fixture-contract.mjs
+      - name: Run terminal learning outcome coverage tests
+        run: node scripts/test-agent-run-outcome-coverage.mjs
+      - name: Run prospective learning Command Center tests
+        run: node scripts/test-prospective-learning-command-center.mjs
       - name: Run governed learning release approval tests
         run: node --experimental-strip-types scripts/test-governed-learning-release-approval.mjs
       - name: Run governed learning controlled release tests
@@ -176,3 +234,27 @@ jobs:
         run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
       - name: Run independent continuous learning governance adversarial audit
         run: node scripts/audit-continuous-learning-governance-adversarial.mjs
+
+  database-fixture:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Execute isolated benchmark manifest fixture
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-learning-benchmark-dataset-manifest.sql

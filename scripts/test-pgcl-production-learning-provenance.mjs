@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-const migration = fs.readFileSync(
+const migration = [
   'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql',
-  'utf8',
-)
+  'supabase/migrations/20260929000225_pgcl_terminal_run_learning_provenance.sql',
+].map((path) => fs.readFileSync(path, 'utf8')).join('\n')
 const runtime = fs.readFileSync('lib/agents/proactive-governed-case-learning-runtime.ts', 'utf8')
 const provenance = fs.readFileSync('lib/agents/pgcl-run-learning-provenance.ts', 'utf8')
 
@@ -20,7 +20,7 @@ for (const invariant of [
   'add column if not exists production_eligible boolean not null default false',
   'add column if not exists learning_provenance_recorded_at timestamptz',
   'create or replace function agent.record_pgcl_run_learning_provenance',
-  "v_run.status <> 'SUCCEEDED'",
+  "v_run.status::text not in ('SUCCEEDED', 'COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED')",
   "v_run.input->>'synthetic'",
   "v_run.input->>'synthetic_bootstrap'",
   "v_run.input->>'acceptance_test'",

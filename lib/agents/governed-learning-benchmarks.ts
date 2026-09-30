@@ -69,6 +69,11 @@ export function evaluateGovernedLearningCandidateBenchmark(input: {
   minimumCaseCount?: number
   minimumCandidateScore?: number
 }): GovernedLearningBenchmarkResult {
+  const cutoff = Date.parse(input.candidate.evidenceCutoffAt)
+  const observed = Date.parse(input.benchmark.observedAt)
+  if (!Number.isFinite(cutoff) || !Number.isFinite(observed) || observed < cutoff) {
+    throw new Error('benchmark observedAt must follow candidate evidenceCutoffAt')
+  }
   const gate = evaluateGovernedSkillPromotion({
     proposal: proposalFromCandidate(input.candidate),
     currentVersion: input.candidate.baselineVersion,

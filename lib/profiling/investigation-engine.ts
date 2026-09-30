@@ -3,7 +3,6 @@ import { enrichInvestigationWithModel } from '@/lib/ai/investigation-model'
 import { loadRecommendationEffectiveness } from '@/lib/profiling/recommendation-learning'
 import {
   loadApprovedPgclPrecedents,
-  markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
 } from '@/lib/agents/pgcl-approved-precedent'
 
@@ -301,7 +300,7 @@ export async function investigateProfilingRun(
         evidence: learningCase.evidence,
       })),
     },
-    appliedPositiveCaseIds: pgclPrecedents.map((learningCase) => learningCase.candidateId),
+    appliedPositiveCaseIds: [],
     approval_required: recommendations.some((recommendation) => recommendation.approval_required === true),
     confidence: investigationConfidence,
     evidence,
@@ -364,18 +363,6 @@ export async function investigateProfilingRun(
     throw new Error(`Profiling run ${profilingRunId} was cancelled or changed before investigation persistence completed.`)
   }
 
-  if (projectId && profileRun.agent_run_id && pgclPrecedents.length) {
-    try {
-      await markPgclPrecedentsApplied({
-        projectId,
-        agentRunId: String(profileRun.agent_run_id),
-        cases: pgclPrecedents,
-        executionSurface: 'PROFILING_INVESTIGATION',
-      })
-    } catch (error) {
-      console.error('[profiling-investigation] approved PGCL precedent attribution failed safely:', error)
-    }
-  }
 
   return investigation
 }
