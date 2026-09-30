@@ -18,22 +18,83 @@ function promptFor(capability: ReadinessCapability) {
   return capability.humanPrompt ?? `Provide evidence-backed context for: ${capability.label}.`
 }
 
-export function planMinimumQuestions(context: ReadinessContext, evidence: readonly ReadinessEvidence[]): PlannedQuestion[] {
-  return readinessCapabilitiesForContext(context).flatMap(capability => {
-    const current = activeEvidence(capability.id, evidence)
-    const hasSystem = current.some(item => item.sourceType === 'SYSTEM')
-    const hasHuman = current.some(item => item.sourceType === 'HUMAN')
-    const staleOnly = evidence.some(item => item.capabilityId === capability.id && item.freshness === 'STALE') && !current.some(item => item.freshness === 'CURRENT')
-    const systemMean = current.filter(x => x.sourceType === 'SYSTEM').map(x => x.maturity)
-    const humanMean = current.filter(x => x.sourceType === 'HUMAN').map(x => x.maturity)
-    const contradiction = systemMean.length && humanMean.length
-      ? Math.abs(systemMean.reduce((a,b)=>a+b,0)/systemMean.length - humanMean.reduce((a,b)=>a+b,0)/humanMean.length) >= 1.5
-      : false
+function meanMaturity(items: readonly ReadinessEvidence[]) {
+  if (items.length === 0) return null
+  return items.reduce((total, item) => total + Number(item.maturity), 0) / items.length
+}
 
-    if (contradiction) return [{ capabilityId: capability.id, prompt: promptFor(capability), reason: 'CONTRADICTION_REVIEW' as const, priority: 100 }]
-    if (capability.evidenceMode === 'OBSERVABLE') return hasSystem ? [] : [{ capabilityId: capability.id, prompt: promptFor(capability), reason: staleOnly ? 'EVIDENCE_STALE' as const : 'EVIDENCE_MISSING' as const, priority: 80 }]
-    if (capability.evidenceMode === 'CORROBORATABLE') return hasHuman ? [] : [{ capabilityId: capability.id, prompt: promptFor(capability), reason: 'HUMAN_CONTEXT_REQUIRED' as const, priority: hasSystem ? 60 : 75 }]
-    if (capability.evidenceMode === 'EVIDENCE_REQUIRED') return hasHuman && current.some(x => x.sourceType === 'DOCUMENT') ? [] : [{ capabilityId: capability.id, prompt: promptFor(capability), reason: 'EVIDENCE_MISSING' as const, priority: 70 }]
-    return hasHuman ? [] : [{ capabilityId: capability.id, prompt: promptFor(capability), reason: 'HUMAN_CONTEXT_REQUIRED' as const, priority: 50 }]
-  }).sort((a,b) => b.priority - a.priority || a.capabilityId.localeCompare(b.capabilityId))
+export function planMinimumQuestions(context: ReadinessContext, evidence: readonly ReadinessEvidence[]): PlannedQuestion[] {
+  const questions: PlannedQuestion[] = []
+
+  for (const capability of readinessCapabilitiesForContext(context)) {
+    const current = activeEvidence(capability.id, evidence)
+    const systemEvidence = current.filter(item => item.sourceType === 'SYSTEM')
+    const humanEvidence = current.filter(item => item.sourceType === 'HUMAN')
+    const hasSystem = systemEvidence.length > 0
+    const hasHuman = humanEvidence.length > 0
+    const staleOnly =
+      evidence.some(item => item.capabilityId === capability.id && item.freshness === 'STALE')
+      && !current.some(item => item.freshness === 'CURRENT')
+
+    const systemMean = meanMaturity(systemEvidence)
+    const humanMean = meanMaturity(humanEvidence)
+    const contradiction = systemMean !== null && humanMean !== null && Math.abs(systemMean - humanMean) >= 1.5
+
+    if (contradiction) {
+      questions.push({
+        capabilityId: capability.id,
+        prompt: promptFor(capability),
+        reason: 'CONTRADICTION_REVIEW',
+        priority: 100,
+      })
+      continue
+    }
+
+    if (capability.evidenceMode === 'OBSERVABLE') {
+      if (!hasSystem) {
+        questions.push({
+          capabilityId: capability.id,
+          prompt: promptFor(capability),
+          reason: staleOnly ? 'EVIDENCE_STALE' : 'EVIDENCE_MISSING',
+          priority: 80,
+        })
+      }
+      continue
+    }
+
+    if (capability.evidenceMode === 'CORROBORATABLE') {
+      if (!hasHuman) {
+        questions.push({
+          capabilityId: capability.id,
+          prompt: promptFor(capability),
+          reason: 'HUMAN_CONTEXT_REQUIRED',
+          priority: hasSystem ? 60 : 75,
+        })
+      }
+      continue
+    }
+
+    if (capability.evidenceMode === 'EVIDENCE_REQUIRED') {
+      if (!hasHuman || !current.some(item => item.sourceType === 'DOCUMENT')) {
+        questions.push({
+          capabilityId: capability.id,
+          prompt: promptFor(capability),
+          reason: 'EVIDENCE_MISSING',
+          priority: 70,
+        })
+      }
+      continue
+    }
+
+    if (!hasHuman) {
+      questions.push({
+        capabilityId: capability.id,
+        prompt: promptFor(capability),
+        reason: 'HUMAN_CONTEXT_REQUIRED',
+        priority: 50,
+      })
+    }
+  }
+
+  return questions.sort((a, b) => b.priority - a.priority || a.capabilityId.localeCompare(b.capabilityId))
 }
