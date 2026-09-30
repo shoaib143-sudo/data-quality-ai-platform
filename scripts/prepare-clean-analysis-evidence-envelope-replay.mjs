@@ -5,7 +5,7 @@ const targetDir = process.env.TARGET_MIGRATION_DIR
 if (!targetDir) throw new Error('TARGET_MIGRATION_DIR is required')
 if (!fs.existsSync(targetDir)) throw new Error(`TARGET_MIGRATION_DIR does not exist: ${targetDir}`)
 
-const version = '20260915070000'
+const version = '20260911050540'
 const filename = `${version}_reconstruct_analysis_evidence_envelopes.sql`
 const target = path.join(targetDir, filename)
 
@@ -94,4 +94,4 @@ alter table governance.analysis_evidence_envelopes enable row level security;
 `
 
 fs.writeFileSync(target, `${sql.trim()}\n`)
-console.log(`RECONSTRUCTED ${filename}: released history references the governed analytics foundation before the repository records its creation; disposable replay restores the original 20260915102000 foundation boundary so later hardening migrations retain ownership of their constraints.`)
+console.log(`RECONSTRUCTED ${filename}: released history executes a queue cleanup that reaches governed analytics evidence before the repository records its creation; disposable replay restores the live prerequisite immediately before the first observed use while the canonical 20260915102000 migration retains ownership of the recorded foundation boundary.`)
