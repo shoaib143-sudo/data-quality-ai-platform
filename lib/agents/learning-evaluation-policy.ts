@@ -1,11 +1,14 @@
+import { GOVERNED_AGENT_KEYS, type GovernedAgentKey } from './governed-agent-registry'
+import { getGovernedSkill, type GovernedSkillKey } from './governed-skill-registry'
+
 /** Pure evaluation contract. Callers must resolve authorization and immutable
  * evidence from trusted persistence; this module never grants execution authority. */
 export type LearningEvaluationPolicy = {
   policyId: string
   projectId: string
   candidateId: string
-  agentKey: string
-  skillKey: string
+  agentKey: GovernedAgentKey
+  skillKey: GovernedSkillKey
   mode: 'GUIDED' | 'GOVERNED_AUTO' | 'FULL_AUTONOMOUS'
   datasetVersionIds: string[]
   baselineVersion: string
@@ -36,6 +39,8 @@ export function validateLearningEvaluationPolicy(policy: LearningEvaluationPolic
   if (!policy || typeof policy !== 'object') throw new Error('policy is required')
   for (const key of ['policyId', 'projectId', 'candidateId', 'agentKey', 'skillKey', 'baselineVersion', 'candidateVersion', 'rollbackRef', 'evaluatorActorId', 'proposerActorId', 'rubricRef', 'calibrationRef', 'manifestHash', 'lockedAt', 'primaryMetric', 'analysisPlanRef'] as const) text(policy[key], key)
   if (!['GUIDED', 'GOVERNED_AUTO', 'FULL_AUTONOMOUS'].includes(policy.mode)) throw new Error('unsupported evaluation mode')
+  if (!GOVERNED_AGENT_KEYS.includes(policy.agentKey)) throw new Error('unsupported governed agent')
+  if (!getGovernedSkill(policy.skillKey).eligibleAgents.includes(policy.agentKey)) throw new Error('skill is outside agent scope')
   if (policy.baselineVersion === policy.candidateVersion) throw new Error('candidate must differ from baseline')
   if (policy.evaluatorActorId === policy.proposerActorId) throw new Error('evaluator must differ from proposer')
   if (!/^sha256:[a-f0-9]{64}$/.test(policy.manifestHash)) throw new Error('manifestHash must be SHA-256')

@@ -1,5 +1,6 @@
+import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
-import { validateLearningEvaluationPolicy, classifyLearningEvaluation } from '../lib/agents/learning-evaluation-policy.ts'
+const { validateLearningEvaluationPolicy, classifyLearningEvaluation } = await import('../lib/agents/learning-evaluation-policy.ts')
 
 const policy = {
   policyId: 'policy-1', projectId: 'project-1', candidateId: 'candidate-1',
@@ -29,6 +30,8 @@ for (const patch of [
   { minimumGain: 0 }, { minimumGain: NaN }, { sampleSize: 1.5 },
   { datasetVersionIds: ['v1', 'v1'] }, { evaluatorActorId: 'proposer' },
   { candidateVersion: '1' }, { mode: 'OFF' }, { manifestHash: 'invented' },
+  { agentKey: 'native_supervisor_agent' }, { skillKey: 'invented' },
+  { agentKey: 'executive_agent', skillKey: 'profile_evidence_analysis' },
   { budget: { ...policy.budget, perRunCost: 1 } },
 ]) assert.throws(() => validateLearningEvaluationPolicy({ ...policy, ...patch }))
 const classify = patch => classifyLearningEvaluation(policy, { ...result, ...patch })
