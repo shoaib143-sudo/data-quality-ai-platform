@@ -5,7 +5,7 @@ const { validateLearningEvaluationPolicy, classifyLearningEvaluation, assertLear
 const policy = {
   policyId: 'policy-1', projectId: 'project-1', candidateId: 'candidate-1',
   agentKey: 'profiling_agent', skillKey: 'profile_evidence_analysis', mode: 'GUIDED',
-  datasetVersionIds: ['dataset-v1'], baselineVersion: '1', candidateVersion: '2',
+  datasetVersionIds: ['dataset-v1'], datasetManifestId: 'manifest-1', baselineVersion: '1', candidateVersion: '2',
   rollbackRef: 'version:1', evaluatorActorId: 'reviewer', proposerActorId: 'proposer',
   rubricRef: 'rubric:1', calibrationRef: 'calibration:1', manifestHash: `sha256:${'a'.repeat(64)}`,
   lockedAt: '2026-09-30T00:00:00Z', primaryMetric: 'verified_task_quality',
@@ -14,7 +14,7 @@ const policy = {
 }
 const result = {
   policyId: 'policy-1', projectId: 'project-1', candidateId: 'candidate-1',
-  baselineVersion: '1', candidateVersion: '2', mode: 'GUIDED', manifestHash: policy.manifestHash,
+  baselineVersion: '1', candidateVersion: '2', mode: 'GUIDED', datasetManifestId: policy.datasetManifestId, manifestHash: policy.manifestHash,
   evaluatorActorId: 'reviewer', observedAt: '2026-09-30T01:00:00Z', sampleCount: 100,
   baselineScore: 0.7, candidateScore: 0.9, gainLowerConfidenceBound: 0.1,
   independentlyVerified: true, evidenceComplete: true, confirmationWindowPassed: true,
@@ -53,7 +53,7 @@ assert.equal(classify({ totalCost: 0.01 }).disposition, 'STOPPED')
 assert.equal(classify({ totalTokens: 1 }).disposition, 'STOPPED')
 assert.equal(classify({ maxLatencyMs: 1001 }).disposition, 'STOPPED')
 assert.equal(classify({ observedAt: '2026-09-29T00:00:00Z' }).disposition, 'STOPPED')
-for (const key of ['policyId', 'projectId', 'candidateId', 'baselineVersion', 'candidateVersion', 'mode', 'manifestHash', 'evaluatorActorId']) assert.equal(classify({ [key]: 'mismatch' }).disposition, 'STOPPED', key)
+for (const key of ['policyId', 'projectId', 'candidateId', 'baselineVersion', 'candidateVersion', 'mode', 'datasetManifestId', 'manifestHash', 'evaluatorActorId']) assert.equal(classify({ [key]: 'mismatch' }).disposition, 'STOPPED', key)
 assert.equal(classify({ authorityViolations: 1, candidateScore: null, accountingComplete: false }).disposition, 'REJECTED')
 assert.throws(() => assertLearningEvaluationEligibleForReleaseReview(policy, { ...result, authorityViolations: 1, candidateScore: null, accountingComplete: false }), /not eligible for release review/)
 assert.equal(classify({ safetyFailures: 1, policyId: 'wrong' }).disposition, 'REJECTED')
