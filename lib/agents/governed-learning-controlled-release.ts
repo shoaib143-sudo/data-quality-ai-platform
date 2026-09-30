@@ -4,6 +4,7 @@ import {
   validateApprovalForExecution,
 } from '@/lib/governance/agent-approval-service'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { loadLearningReleaseAdmission } from './governed-learning-evaluation-service'
 
 async function loadReleaseParameters(input: {
   projectId: string
@@ -38,6 +39,20 @@ async function loadReleaseParameters(input: {
   if (!candidate || !benchmark) throw new Error('Learning release context is incomplete.')
   if (benchmark.gate_status !== 'REVIEW_REQUIRED') throw new Error('Learning release benchmark is not eligible for release.')
 
+  const admission = await loadLearningReleaseAdmission({
+    projectId: input.projectId,
+    candidateId: input.candidateId,
+  })
+  if (
+    admission.policy.agentKey !== candidate.agent_key
+    || admission.policy.skillKey !== candidate.skill_key
+    || admission.policy.baselineVersion !== candidate.baseline_version
+    || admission.policy.candidateVersion !== candidate.candidate_version
+    || admission.policy.rollbackRef !== benchmark.rollback_ref
+  ) {
+    throw new Error('Prospective evaluation admission does not match the current controlled release context.')
+  }
+
   return {
     candidate,
     benchmark,
@@ -50,6 +65,12 @@ async function loadReleaseParameters(input: {
       benchmarkId: String(benchmark.id),
       rollbackRef: String(benchmark.rollback_ref),
       agentDefinitionId: String(link.agent_definition_id),
+      evaluationPolicyRecordId: admission.evaluationPolicyRecordId,
+      evaluationResultId: admission.evaluationResultId,
+      evaluationPolicyKey: admission.policy.policyId,
+      evaluationManifestHash: admission.policy.manifestHash,
+      evaluationMode: admission.policy.mode,
+      evaluatorActorId: admission.policy.evaluatorActorId,
     },
   }
 }
