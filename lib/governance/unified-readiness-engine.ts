@@ -1,4 +1,4 @@
-import type { ReadinessCapability, ReadinessCriticality } from './unified-readiness-framework'
+import type { ReadinessCapability, ReadinessCriticality } from './unified-readiness-framework.ts'
 
 export type EvidenceFreshness = 'CURRENT' | 'STALE' | 'EXPIRED'
 export type EvidenceSourceType = 'SYSTEM' | 'HUMAN' | 'DOCUMENT'
