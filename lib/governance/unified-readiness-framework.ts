@@ -94,6 +94,55 @@ export const READINESS_CAPABILITIES: readonly ReadinessCapability[] = [
   { id:'URA-PEOPLE-LITERACY-001', dimensionId:'people', label:'Accountability, literacy and adoption', description:'People have clear governance responsibilities and sufficient data and AI literacy to operate controls.', criticality:'HIGH', defaultTarget:3, evidenceMode:'EVIDENCE_REQUIRED', observationSignals:['steward_coverage','training_freshness','role_coverage'], humanPrompt:'How consistently do accountable roles have the authority, skills, and operating practices needed to govern data and AI?', mappings:[gma('PEOPLE-LEADERSHIP'),gma('PEOPLE-STEWARDSHIP'),gma('CAPACITY-LITERACY'),dn('persona-governance')], recommendedAction:'Close accountability, stewardship, literacy, and adoption gaps for priority domains.', dataNexusAction:'Measure role coverage, surface missing accountability, and track evidence-backed improvement actions.' },
 ]
 
+const capability = (
+  id: string,
+  dimensionId: ReadinessDimensionId,
+  label: string,
+  criticality: ReadinessCriticality,
+  evidenceMode: EvidenceMode,
+  observationSignals: readonly string[],
+  recommendedAction: string,
+  dataNexusAction: string,
+  mappings: readonly FrameworkMapping[] = [dn('unified-readiness')],
+): ReadinessCapability => ({
+  id, dimensionId, label, description: label, criticality, defaultTarget: criticality === 'CONTEXTUAL' ? 3 : 4,
+  evidenceMode, observationSignals, mappings, recommendedAction, dataNexusAction,
+})
+
+export const READINESS_CAPABILITY_EXTENSIONS: readonly ReadinessCapability[] = [
+  capability('URA-STRAT-SPONSOR-002','strategy','Executive sponsorship and investment','HIGH','EVIDENCE_REQUIRED',['executive_sponsor','funding_commitment'],'Assign accountable executive sponsorship and sustainable investment.','Track accountable sponsorship, investment evidence, and target outcomes.'),
+  capability('URA-STRAT-PORTFOLIO-003','strategy','Use-case portfolio prioritization','STANDARD','CORROBORATABLE',['use_case_portfolio','priority_reviews'],'Maintain a governed portfolio prioritized by value, risk, and feasibility.','Link use cases to owners, assets, controls, risks, and outcomes.'),
+  capability('URA-STRAT-OUTCOMES-004','strategy','Outcome measurement','HIGH','OBSERVABLE',['outcome_metric_coverage','benefit_review_freshness'],'Define measurable outcomes and review realized value.','Measure outcome coverage and surface stale or missing benefit reviews.'),
+  capability('URA-DISC-OWNER-002','discoverability','Ownership and stewardship coverage','CRITICAL','OBSERVABLE',['owner_coverage','steward_coverage'],'Assign accountable owners and stewards to critical assets.','Identify unowned critical assets and route ownership recommendations.'),
+  capability('URA-DISC-CLASS-003','discoverability','Classification coverage','HIGH','OBSERVABLE',['classification_coverage','sensitive_classification_coverage'],'Improve classification coverage for governed and sensitive data.','Discover classification gaps and recommend governed classifications.'),
+  capability('URA-DISC-SEARCH-004','discoverability','Search and retrieval success','STANDARD','OBSERVABLE',['catalog_search_success','retrieval_success'],'Measure whether users and agents can reliably find authoritative data.','Measure search and retrieval success against governed assets.'),
+  capability('URA-QUAL-FRESH-003','quality','Data freshness fitness','HIGH','OBSERVABLE',['freshness_compliance','stale_dataset_rate'],'Define freshness expectations appropriate to each critical use case.','Monitor freshness and route stale critical assets for action.'),
+  capability('URA-QUAL-CONSIST-004','quality','Cross-system consistency','HIGH','OBSERVABLE',['consistency_rule_coverage','consistency_findings'],'Control material consistency differences across systems.','Profile cross-system consistency and surface conflicting values.'),
+  capability('URA-SEM-GLOSSARY-002','semantics','Authoritative business glossary','HIGH','CORROBORATABLE',['glossary_coverage','approved_term_coverage'],'Establish authoritative terms, definitions, and accountable owners.','Link approved terms to governed assets and owners.'),
+  capability('URA-SEM-RELATION-003','semantics','Semantic relationships','STANDARD','OBSERVABLE',['semantic_relationship_coverage','ontology_link_coverage'],'Capture meaningful relationships between governed concepts and data.','Measure semantic relationship coverage and missing mappings.'),
+  capability('URA-SEM-RAG-004','semantics','Retrieval context fitness','CRITICAL','OBSERVABLE',['retrieval_context_coverage','grounded_answer_rate'],'Ensure retrieval context is authoritative, relevant, and traceable.','Evaluate governed retrieval context and trace it to source assets.'),
+  capability('URA-ACCESS-INTEGRATE-002','access','Integration and interoperability','HIGH','OBSERVABLE',['integration_coverage','interface_health'],'Standardize reliable governed integration paths for priority data.','Measure integration coverage and unhealthy interfaces.'),
+  capability('URA-ACCESS-AUTH-003','access','Governed access success','CRITICAL','OBSERVABLE',['authorized_access_success','denied_access_auditability'],'Make legitimate access efficient without bypassing policy.','Measure authorized access outcomes and auditable denials.'),
+  capability('URA-ACCESS-REALTIME-004','access','Real-time serving readiness','CONTEXTUAL','OBSERVABLE',['stream_health','real_time_sla_compliance'],'Establish monitored real-time serving objectives where required.','Monitor streaming and real-time SLA health.'),
+  capability('URA-GOV-PRIVACY-002','governance','Privacy and minimization','CRITICAL','CORROBORATABLE',['privacy_control_coverage','retention_coverage'],'Apply purpose, minimization, retention, and disposal controls.','Measure privacy and retention control coverage.',[gma('PRACTICES-PRIVACY'),nist('GOVERN'),dn('privacy-governance')]),
+  capability('URA-GOV-SECURITY-003','governance','Security and least privilege','CRITICAL','OBSERVABLE',['least_privilege_coverage','privileged_access_review'],'Enforce least privilege and review privileged access.','Evaluate privileged scopes and access-review evidence.',[gma('PRACTICES-SECURITY'),dn('resource-access')]),
+  capability('URA-GOV-SHARING-004','governance','Sharing and third-party controls','HIGH','CORROBORATABLE',['sharing_agreement_coverage','third_party_control_coverage'],'Govern external sharing with reusable controls and obligations.','Link sharing obligations to assets, access, approvals, and audit evidence.'),
+  capability('URA-TRUST-FIELD-002','trust','Field-level lineage','CRITICAL','OBSERVABLE',['field_lineage_coverage','field_lineage_freshness'],'Prioritize fresh field-level lineage for critical data.','Measure field lineage coverage and freshness.'),
+  capability('URA-TRUST-RETRIEVAL-003','trust','Retrieval provenance','CRITICAL','OBSERVABLE',['retrieval_provenance_coverage','citation_trace_coverage'],'Trace retrieved context back to authoritative sources.','Persist retrieval provenance and source attribution.'),
+  capability('URA-TRUST-ACTION-004','trust','Agent action provenance','CRITICAL','OBSERVABLE',['agent_action_traceability','tool_call_traceability'],'Trace governed agent actions to evidence, policy, tools, and outcomes.','Link agent executions, tool calls, approvals, evidence, and outcomes.'),
+  capability('URA-AIGOV-INVENTORY-002','ai-governance','AI inventory and ownership','CRITICAL','OBSERVABLE',['ai_inventory_coverage','ai_owner_coverage'],'Maintain an accountable inventory of AI capabilities and use cases.','Register AI capabilities, owners, versions, and use contexts.'),
+  capability('URA-AIGOV-EVAL-003','ai-governance','Evaluation and validation evidence','CRITICAL','OBSERVABLE',['evaluation_coverage','validation_freshness'],'Require evidence-backed evaluation before material AI use.','Track evaluation evidence, benchmarks, and release decisions.'),
+  capability('URA-AIGOV-OVERSIGHT-004','ai-governance','Human oversight and authority boundaries','CRITICAL','CORROBORATABLE',['approval_boundary_coverage','human_oversight_coverage'],'Define human oversight and bounded authority for consequential actions.','Evaluate approval boundaries, delegations, and execution authority.'),
+  capability('URA-OBS-DATA-002','observability','Data and schema monitoring','HIGH','OBSERVABLE',['data_monitoring_coverage','schema_drift_detection'],'Continuously monitor critical data and schema changes.','Detect material data and schema changes and route findings.'),
+  capability('URA-OBS-RECOVERY-003','observability','Failure recovery and verification','CRITICAL','OBSERVABLE',['recovery_success_rate','verification_coverage'],'Use bounded recovery with durable verification evidence.','Measure recovery outcomes and post-repair verification.',[dn('execution-recovery')]),
+  capability('URA-OBS-COST-004','observability','Cost and resource observability','STANDARD','OBSERVABLE',['cost_coverage','token_accounting_coverage'],'Measure resource and AI consumption against governed budgets.','Track cost, token, and resource consumption.'),
+  capability('URA-PEOPLE-ROLE-002','people','Decision rights and stewardship','CRITICAL','OBSERVABLE',['role_coverage','decision_right_coverage'],'Clarify accountable decision rights across governance roles.','Measure role coverage, delegation, and decision authority.'),
+  capability('URA-PEOPLE-TRAIN-003','people','Data and AI literacy','HIGH','EVIDENCE_REQUIRED',['training_coverage','training_freshness'],'Maintain role-appropriate data, governance, and AI literacy.','Track training coverage and freshness by governed persona.'),
+  capability('URA-PEOPLE-ADOPT-004','people','Adoption and operating practice','STANDARD','CORROBORATABLE',['workflow_adoption','governance_participation'],'Embed governed practices into routine work and measure adoption.','Measure governed workflow adoption and participation.'),
+]
+
+export const ALL_READINESS_CAPABILITIES: readonly ReadinessCapability[] = [...READINESS_CAPABILITIES, ...READINESS_CAPABILITY_EXTENSIONS]
+
 export function readinessCapabilityApplies(capability: ReadinessCapability, context: ReadinessContext) {
   return (capability.applicability ?? []).every(rule => {
     const value = context[rule.key]
@@ -103,7 +152,7 @@ export function readinessCapabilityApplies(capability: ReadinessCapability, cont
 }
 
 export function readinessCapabilitiesForContext(context: ReadinessContext) {
-  return READINESS_CAPABILITIES.filter(capability => readinessCapabilityApplies(capability, context))
+  return ALL_READINESS_CAPABILITIES.filter(capability => readinessCapabilityApplies(capability, context))
 }
 
 export function unresolvedHumanCapabilities(
