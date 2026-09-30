@@ -11,6 +11,7 @@ export type LearningEvaluationPolicy = {
   skillKey: GovernedSkillKey
   mode: 'GUIDED' | 'GOVERNED_AUTO' | 'FULL_AUTONOMOUS'
   datasetVersionIds: string[]
+  datasetManifestId: string
   baselineVersion: string
   candidateVersion: string
   rollbackRef: string
@@ -37,7 +38,7 @@ function number(value: unknown, label: string, minimum: number, integer = false)
 
 export function validateLearningEvaluationPolicy(policy: LearningEvaluationPolicy): void {
   if (!policy || typeof policy !== 'object') throw new Error('policy is required')
-  for (const key of ['policyId', 'projectId', 'candidateId', 'agentKey', 'skillKey', 'baselineVersion', 'candidateVersion', 'rollbackRef', 'evaluatorActorId', 'proposerActorId', 'rubricRef', 'calibrationRef', 'manifestHash', 'lockedAt', 'primaryMetric', 'analysisPlanRef'] as const) text(policy[key], key)
+  for (const key of ['policyId', 'projectId', 'candidateId', 'agentKey', 'skillKey', 'datasetManifestId', 'baselineVersion', 'candidateVersion', 'rollbackRef', 'evaluatorActorId', 'proposerActorId', 'rubricRef', 'calibrationRef', 'manifestHash', 'lockedAt', 'primaryMetric', 'analysisPlanRef'] as const) text(policy[key], key)
   if (!['GUIDED', 'GOVERNED_AUTO', 'FULL_AUTONOMOUS'].includes(policy.mode)) throw new Error('unsupported evaluation mode')
   if (!GOVERNED_AGENT_KEYS.includes(policy.agentKey)) throw new Error('unsupported governed agent')
   if (!getGovernedSkill(policy.skillKey).eligibleAgents.includes(policy.agentKey)) throw new Error('skill is outside agent scope')
@@ -67,6 +68,7 @@ export type LearningEvaluationResult = {
   baselineVersion: string
   candidateVersion: string
   mode: string
+  datasetManifestId: string
   manifestHash: string
   evaluatorActorId: string
   observedAt: string
@@ -101,7 +103,7 @@ export function classifyLearningEvaluation(policy: LearningEvaluationPolicy, res
   for (const key of ['authorityViolations', 'safetyFailures'] as const) number(result[key], key, 0, true)
   // Safety rejection cannot be hidden by a missing quality score or mismatched context.
   if (result.authorityViolations || result.safetyFailures) return answer('REJECTED', 'INCONCLUSIVE', 'PROHIBITED_VIOLATION')
-  for (const key of ['policyId', 'projectId', 'candidateId', 'baselineVersion', 'candidateVersion', 'mode', 'manifestHash', 'evaluatorActorId'] as const) {
+  for (const key of ['policyId', 'projectId', 'candidateId', 'baselineVersion', 'candidateVersion', 'mode', 'datasetManifestId', 'manifestHash', 'evaluatorActorId'] as const) {
     if (result[key] !== policy[key]) return answer('STOPPED', 'INCONCLUSIVE', 'EVIDENCE_BINDING_MISMATCH')
   }
   if (!Number.isFinite(Date.parse(result.observedAt)) || Date.parse(result.observedAt) < Date.parse(policy.lockedAt)) return answer('STOPPED', 'INCONCLUSIVE', 'EVIDENCE_PREDATES_POLICY')
