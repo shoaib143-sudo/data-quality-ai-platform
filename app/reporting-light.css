@@ -1,0 +1,71 @@
+/* Reporting family refinements, scoped to opted-in workspace pages. */
+html.dark .dn-page main.dn-reporting-v3 {
+  background: #f5f6fb;
+  color: #292d45;
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(header, section, article, nav, a, div)[class*="bg-[#0a1d33]"] {
+  background: #fff;
+  border-color: #e6e7f0;
+  box-shadow: 0 12px 30px rgba(48, 44, 106, .055), 0 2px 8px rgba(48, 44, 106, .025);
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(a, div, select)[class*="bg-[#08182b]"],
+html.dark .dn-page main.dn-reporting-v3 :is(a, div, select)[class*="bg-[#07182a]"] {
+  background: #fafaff;
+  border-color: #e7e8f1;
+  box-shadow: none;
+}
+
+html.dark .dn-page main.dn-reporting-v3 .bg-white {
+  background: #fff;
+  border-color: #e6e7f0;
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(.bg-slate-50, .bg-slate-100) {
+  background: #f8f8fd;
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(.text-slate-950, .text-slate-900, .text-slate-800, .text-slate-700, .text-gray-900) {
+  color: #292d45;
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(.text-slate-600, .text-slate-500, .text-slate-400) {
+  color: #69718a;
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(.text-blue-600, .text-blue-700, .text-blue-800, .text-violet-600, .text-violet-700, .text-cyan-300, .text-cyan-200, .text-violet-300, .text-violet-200) {
+  color: #594cc3;
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(.border-slate-200, .border-slate-300, .border-blue-100, .border-violet-100) {
+  border-color: #e6e7f0;
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(a, button)[class*="bg-gradient-to-"],
+html.dark .dn-page main.dn-reporting-v3 :is(a, button).bg-emerald-600,
+html.dark .dn-page main.dn-reporting-v3 :is(a, button).bg-violet-600,
+html.dark .dn-page main.dn-reporting-v3 :is(a, button).bg-blue-600 {
+  color: #fff;
+}
+
+html.dark .dn-page main.dn-reporting-v3 [class*="bg-gradient-to-br"].text-white {
+  color: #fff;
+}
+
+html.dark .dn-page main.dn-reporting-v3 [aria-current="page"] {
+  background: #ede9ff;
+  color: #5141b9;
+  border-color: #dcd5fb;
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(input, select, textarea) {
+  background: #fff;
+  border-color: #dcddec;
+  color: #292d45;
+}
+
+html.dark .dn-page main.dn-reporting-v3 :is(a, button, select):focus-visible {
+  outline: 2px solid #6c59da;
+  outline-offset: 2px;
+}

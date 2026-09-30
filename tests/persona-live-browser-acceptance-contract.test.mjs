@@ -38,12 +38,13 @@ test('runner uses one-time magic-link sessions without password resets', () => {
 
 test('runner executes only READ-mode acceptance routes', () => {
   assert.match(runner, /persona-acceptance-tasks\.ts/)
-  assert.match(runner, /mode: 'READ'/)
+  assert.match(runner, /tasks\.filter\(task => task\.mode === 'READ'\)/)
   assert.match(runner, /testMode: 'READ_ONLY_BROWSER'/)
   assert.match(runner, /mutationTasksExecuted: false/)
 })
 
 test('browser evidence enforces exact persona home routing and fails closed', () => {
+  assert.match(runner, /const targets = \[`\/home\/\$\{slug\}`, \.\.\.readRoutes\]/)
   assert.match(runner, /finalUrl\.pathname === requested\.pathname/)
   assert.match(runner, /personaCountExecuted/)
   assert.match(runner, /failedPersonas/)

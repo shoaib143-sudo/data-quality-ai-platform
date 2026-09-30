@@ -59,6 +59,18 @@ assert.equal(passed.rollbackRequired, true)
 assert.equal(passed.currentAuthorizationRequiredAtRelease, true)
 assert.equal(passed.humanReviewRequired, true)
 
+assert.throws(() => evaluateGovernedLearningCandidateBenchmark({
+  candidate,
+  benchmark: benchmark({ observedAt: '2026-09-20T00:04:59Z' }),
+  rollbackRef: 'rollback:quality-rule-analysis-v1',
+}), /observedAt must follow candidate evidenceCutoffAt/)
+
+assert.equal(evaluateGovernedLearningCandidateBenchmark({
+  candidate,
+  benchmark: benchmark({ observedAt: candidate.evidenceCutoffAt }),
+  rollbackRef: 'rollback:quality-rule-analysis-v1',
+}).candidateStatus, 'REVIEW_REQUIRED')
+
 for (const [overrides, reason] of [
   [{ caseCount: 5 }, 'INSUFFICIENT_BENCHMARK_CASES'],
   [{ candidateScore: 0.7 }, 'CANDIDATE_SCORE_BELOW_THRESHOLD'],
@@ -117,5 +129,9 @@ for (const invariant of [
 }
 assert.equal(migration.includes("v_target_status := 'ACTIVE'"), false)
 assert.equal(migration.includes("v_target_status := 'APPROVED_FOR_CONTROLLED_RELEASE'"), false)
+
+const temporalMigration = fs.readFileSync('supabase/migrations/20260928010000_learning_benchmark_temporal_integrity.sql', 'utf8')
+assert.match(temporalMigration, /new\.observed_at < v_cutoff/)
+assert.match(temporalMigration, /before insert on agent\.learning_candidate_benchmarks/)
 
 console.log('Governed learning benchmark requires independent evidence, rejects regressions and authority failures, and stops at human review.')

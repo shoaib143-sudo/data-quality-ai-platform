@@ -24,7 +24,7 @@ export default async function EditDatasetPage({ params }: { params: Promise<{ da
 
   const { data: sources } = await supabase.schema('catalog').from('data_sources').select('id, name, source_type, status').eq('project_id', dataset.project_id).in('status', ['ACTIVE', 'CONFIGURED']).order('name')
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 px-4 py-8 text-slate-950 sm:px-6">
     <div className="mx-auto max-w-4xl">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Edit Dataset" contextLabel={dataset.name} homeHref="/home" />
       <div className="mb-6 mt-5">

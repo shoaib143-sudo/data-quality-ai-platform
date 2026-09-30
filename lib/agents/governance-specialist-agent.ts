@@ -708,7 +708,8 @@ export async function executeGovernanceSpecialistAgent(input: {
         authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
         evidence: learningCase.evidence,
       })),
-      appliedPositiveCaseIds: positiveLearningCases.map((learningCase) => learningCase.candidateId),
+      // Listing a precedent as context is not evidence that it shaped this answer.
+      appliedPositiveCaseIds: [],
       observations: (specialized as any).observations ?? [],
       recommendations: [...baseRecommendations, ...precedentRecommendations],
       hypotheses: (specialized as any).hypotheses ?? [],
