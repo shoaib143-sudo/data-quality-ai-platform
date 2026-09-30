@@ -24,6 +24,7 @@ export async function registerLearningEvaluationPolicy(policy: LearningEvaluatio
     p_skill_key: policy.skillKey,
     p_mode: policy.mode,
     p_dataset_version_ids: policy.datasetVersionIds,
+    p_dataset_manifest_id: policy.datasetManifestId,
     p_baseline_version: policy.baselineVersion,
     p_candidate_version: policy.candidateVersion,
     p_rollback_ref: policy.rollbackRef,
@@ -93,7 +94,7 @@ export async function loadLearningReleaseAdmission(input: {
   const admin = createAdminClient()
   const { data: rows, error } = await admin.schema('agent')
     .from('learning_evaluation_results')
-    .select('id,policy_id,candidate_id,observed_at,sample_count,baseline_score,candidate_score,gain_lower_confidence_bound,independently_verified,evidence_complete,confirmation_window_passed,authority_violations,safety_failures,accounting_complete,total_cost,max_run_cost,total_tokens,max_run_tokens,max_latency_ms,disposition,quality,reasons,automatic_promotion_allowed,learning_evaluation_policies!inner(policy_key,project_id,candidate_id,agent_key,skill_key,mode,dataset_version_ids,baseline_version,candidate_version,rollback_ref,evaluator_actor_id,proposer_actor_id,rubric_ref,calibration_ref,manifest_hash,locked_at,primary_metric,analysis_plan_ref,sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,total_token_budget,per_run_token_budget,latency_ms_budget)')
+    .select('id,policy_id,candidate_id,observed_at,sample_count,baseline_score,candidate_score,gain_lower_confidence_bound,independently_verified,evidence_complete,confirmation_window_passed,authority_violations,safety_failures,accounting_complete,total_cost,max_run_cost,total_tokens,max_run_tokens,max_latency_ms,disposition,quality,reasons,automatic_promotion_allowed,learning_evaluation_policies!inner(policy_key,project_id,candidate_id,dataset_manifest_id,agent_key,skill_key,mode,dataset_version_ids,baseline_version,candidate_version,rollback_ref,evaluator_actor_id,proposer_actor_id,rubric_ref,calibration_ref,manifest_hash,locked_at,primary_metric,analysis_plan_ref,sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,total_token_budget,per_run_token_budget,latency_ms_budget)')
     .eq('project_id', input.projectId)
     .eq('candidate_id', input.candidateId)
     .order('created_at', { ascending: false })
@@ -118,6 +119,7 @@ export async function loadLearningReleaseAdmission(input: {
     skillKey: persistedPolicy.skill_key,
     mode: persistedPolicy.mode,
     datasetVersionIds: [...persistedPolicy.dataset_version_ids],
+    datasetManifestId: String(persistedPolicy.dataset_manifest_id),
     baselineVersion: String(persistedPolicy.baseline_version),
     candidateVersion: String(persistedPolicy.candidate_version),
     rollbackRef: String(persistedPolicy.rollback_ref),
@@ -147,6 +149,7 @@ export async function loadLearningReleaseAdmission(input: {
     baselineVersion: policy.baselineVersion,
     candidateVersion: policy.candidateVersion,
     mode: policy.mode,
+    datasetManifestId: policy.datasetManifestId,
     manifestHash: policy.manifestHash,
     evaluatorActorId: policy.evaluatorActorId,
     observedAt: String(row.observed_at),
