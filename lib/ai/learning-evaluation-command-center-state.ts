@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export type LearningEvaluationPolicySummary = {
   id: string
   candidateId: string
+  datasetManifestId: string
   policyKey: string
   agentKey: string
   skillKey: string
@@ -95,7 +96,7 @@ export async function readLearningEvaluationCommandCenterState(
 
   const [policyResult, decisionResult] = await Promise.all([
     admin.schema('agent').from('learning_evaluation_policies')
-      .select('id,candidate_id,policy_key,agent_key,skill_key,mode,manifest_hash,evaluator_actor_id,locked_at,sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,total_token_budget,per_run_token_budget,latency_ms_budget')
+      .select('id,candidate_id,dataset_manifest_id,policy_key,agent_key,skill_key,mode,manifest_hash,evaluator_actor_id,locked_at,sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,total_token_budget,per_run_token_budget,latency_ms_budget')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false })
       .limit(100),
@@ -112,6 +113,7 @@ export async function readLearningEvaluationCommandCenterState(
   const policies: LearningEvaluationPolicySummary[] = (policyResult.data ?? []).map((row) => ({
     id: String(row.id),
     candidateId: String(row.candidate_id),
+    datasetManifestId: String(row.dataset_manifest_id),
     policyKey: String(row.policy_key),
     agentKey: String(row.agent_key),
     skillKey: String(row.skill_key),
