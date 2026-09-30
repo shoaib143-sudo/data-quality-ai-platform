@@ -382,17 +382,6 @@ const reconstructions = [
       );
     `,
   },
-  {
-    version: '20260911050539',
-    name: 'reconstruct_legacy_privileged_rpc_execute_revokes',
-    reason: 'Disposable replay restores execute revokes for historical SECURITY DEFINER RPCs whose creation is reconstructed before the later authenticated SECURITY DEFINER allowlist validation.',
-    sql: `
-      revoke all on function profiling.get_dataset_execution_source(uuid) from public, anon, authenticated;
-      revoke all on function public.create_file_dataset(uuid,text,text,text,text) from public, anon, authenticated;
-      revoke all on function public.create_organization(text,text) from public, anon, authenticated;
-      revoke all on function public.create_project(uuid,text,text,text) from public, anon, authenticated;
-    `,
-  },
 ]
 
 for (const reconstruction of reconstructions) {
