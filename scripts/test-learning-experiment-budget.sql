@@ -24,6 +24,7 @@ create function agent.reject_learning_candidate_evidence_mutation() returns trig
 create trigger policy_immutable before update or delete on agent.learning_evaluation_policies for each row execute function agent.reject_learning_candidate_evidence_mutation();
 grant select on agent.learning_evaluation_policies to service_role;
 \ir ../supabase/migrations/20261001004136_governed_learning_experiment_budget.sql
+\ir ../supabase/migrations/20261001073345_learning_experiment_budget_fk_indexes.sql
 insert into governance.ai_model_pricing_versions values('90000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','fixture-provider','fixture-model','USD',clock_timestamp()-interval '1 hour',null,'80000000-0000-4000-8000-000000000001',clock_timestamp()-interval '1 minute','policy.approve','80000000-0000-4000-8000-000000000001',clock_timestamp()-interval '1 minute',1,1);
 insert into agent.learning_candidates values('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001');
 insert into agent.learning_evaluation_policies(id,project_id,candidate_id,agent_key,mode)
