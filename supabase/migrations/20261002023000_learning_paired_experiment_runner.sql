@@ -441,6 +441,7 @@ set search_path = pg_catalog, agent
 as $$
 declare
   v_run agent.learning_experiment_runs%rowtype;
+  v_policy agent.learning_evaluation_policies%rowtype;
   v_baseline agent.learning_experiment_arm_results%rowtype;
   v_candidate agent.learning_experiment_arm_results%rowtype;
   v_battempt agent.learning_experiment_arm_attempts%rowtype;
@@ -452,6 +453,11 @@ begin
   if btrim(coalesce(p_evaluator_actor_id,''))<>v_run.evaluator_actor_id then
     raise exception 'case evaluator does not match locked policy'; end if;
   if v_run.evaluator_actor_id=v_run.proposer_actor_id then raise exception 'evaluator independence is invalid'; end if;
+  select * into v_policy from agent.learning_evaluation_policies where id=v_run.policy_id and project_id=p_project_id;
+  if not found then raise exception 'locked evaluation policy not found for score'; end if;
+  if btrim(coalesce(p_rubric_ref,''))<>v_policy.rubric_ref or btrim(coalesce(p_calibration_ref,''))<>v_policy.calibration_ref then
+    raise exception 'case score rubric or calibration does not match locked policy'; end if;
+  if p_observed_at is null or p_observed_at<v_policy.locked_at then raise exception 'case score predates locked policy'; end if;
   if p_evaluator_type not in ('DETERMINISTIC','LABELED_DATASET','ADVERSARIAL_SUITE','HUMAN_EVALUATION') then
     raise exception 'unsupported evaluator type'; end if;
   if p_baseline_score<0 or p_baseline_score>1 or p_candidate_score<0 or p_candidate_score>1 then
