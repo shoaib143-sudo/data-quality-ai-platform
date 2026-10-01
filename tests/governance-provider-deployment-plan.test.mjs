@@ -17,6 +17,7 @@ test('deployment planner computes drift independently for each provider target',
  assert.equal(collibra.plan.operations[0].action,'CREATE')
  assert.equal(collibra.operations.length,1)
  assert.equal(deployment.operations.length,1)
+ assert.equal(deployment.operations[0].deploymentId,deployment.deploymentId)
  assert.equal(deployment.deploymentFingerprint.length,64)
 })
 
