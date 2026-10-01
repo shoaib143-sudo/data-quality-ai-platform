@@ -1,4 +1,4 @@
-import { GOVERNANCE_MCP_TOOLS,type GovernanceMcpToolName } from './contracts'
+import { GOVERNANCE_MCP_TOOLS,type GovernanceMcpToolName } from './contracts.ts'
 
 const projectSchema={type:'string',minLength:1,description:'DataNexus project identifier.'} as const
 const desiredStateSchema={type:'object',description:'DataNexus canonical governance desired-state manifest.'} as const
