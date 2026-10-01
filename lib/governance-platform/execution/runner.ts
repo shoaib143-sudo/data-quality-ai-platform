@@ -39,7 +39,7 @@ async function persistCheckpoint(store:GovernanceCheckpointStore|undefined,check
 async function appendEvidence(store:GovernanceEvidenceStore|undefined,operation:ProviderPlannedOperation,result:ExecutionResult,verificationStatus:string|null,details:Record<string,unknown>){
  if(!store)return
  await store.append(governanceEvidence({
-  projectId:operation.projectId,planId:operation.planId,operationId:operation.operationId,
+  projectId:operation.projectId,planId:operation.planId,deploymentId:operation.deploymentId??operation.planId,operationId:operation.operationId,
   provider:operation.provider,connectionId:operation.connectionId,idempotencyKey:operation.idempotencyKey,
   desiredStateFingerprint:operation.desiredStateFingerprint,executionStatus:result.status,verificationStatus,
   providerObjectId:result.providerObjectId??null,providerJobId:result.providerJobId??null,details,
