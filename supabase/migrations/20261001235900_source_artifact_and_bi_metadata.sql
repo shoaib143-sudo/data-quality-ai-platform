@@ -7,7 +7,7 @@ create table if not exists governance.source_artifact_scans (
   artifact_path text not null,
   content_hash text not null,
   line_count integer not null default 0 check (line_count >= 0),
-  references jsonb not null default '[]'::jsonb,
+  reference_evidence jsonb not null default '[]'::jsonb,
   transformations jsonb not null default '[]'::jsonb,
   warnings jsonb not null default '[]'::jsonb,
   scanned_by uuid,
