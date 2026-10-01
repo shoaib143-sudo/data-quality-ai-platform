@@ -1,4 +1,4 @@
-import type { CanonicalGovernanceObject } from '../canonical/model'
+import type { CanonicalGovernanceObject } from '../canonical/model.ts'
 
 export const GOVERNANCE_DESIRED_STATE_API_VERSION = 'datanexus.io/governance/v1' as const
 
