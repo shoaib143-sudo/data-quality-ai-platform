@@ -69,3 +69,11 @@ test('provider conformance rejects duplicate capabilities and invalid constraint
  const result=validateProviderManifest(invalid)
  assert.equal(result.ok,false);assert.ok(result.issues.some(issue=>issue.code==='DUPLICATE_CAPABILITY'));assert.ok(result.issues.some(issue=>issue.code==='INVALID_CONSTRAINT'))
 })
+
+
+test('provider conformance rejects read-only capabilities that advertise mutation modes',()=>{
+ const base=new InformaticaGovernanceProvider({},{}).manifest()
+ const invalid={...base,capabilities:[{...base.capabilities[0],support:'READ_ONLY',modes:['READ','UPDATE']}]}
+ const result=validateProviderManifest(invalid)
+ assert.equal(result.ok,false);assert.ok(result.issues.some(issue=>issue.code==='READ_ONLY_MUTATION_MODE'))
+})
