@@ -1,3 +1,4 @@
+import './governance-provider-persistence-contract.test.mjs'
 import './governance-provider-config.test.mjs'
 import './governance-provider-planning.test.mjs'
 import './governance-provider-runtime.test.mjs'
