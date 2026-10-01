@@ -148,6 +148,7 @@ for (const invariant of [
   'ambiguous prior experiment attempt has no terminal evidence',
   'synthetic experiment arm cannot bind paid runtime evidence',
   'live successful arm requires canonical accounted settlement',
+  'live successful arm requires exactly one canonical budget reservation',
   'baseline successful result not found',
   'candidate successful result not found',
   'case score arm/result binding mismatch',
@@ -156,6 +157,20 @@ for (const invariant of [
   'synthetic experiment cannot bind a release-admission decision',
   'evaluation decision does not equal canonical experiment evidence',
 ]) assert.ok(migration.includes(invariant), `missing paired runner invariant: ${invariant}`)
+
+
+for (const singleton of [
+  'create table if not exists agent.learning_experiment_runs',
+  'create table if not exists agent.learning_experiment_decision_bindings',
+  'create or replace function agent.create_learning_experiment_run',
+  'create or replace function agent.prepare_learning_experiment_arm_attempt',
+  'create or replace function agent.record_learning_experiment_arm_result',
+  'create or replace function agent.record_learning_experiment_case_score',
+  'create or replace function agent.derive_learning_experiment_summary',
+  'create or replace function agent.bind_learning_experiment_decision',
+]) {
+  assert.equal(migration.split(singleton).length - 1, 1, `migration must contain exactly one canonical definition for: ${singleton}`)
+}
 
 const service = fs.readFileSync('lib/agents/governed-learning-evaluation-service.ts', 'utf8')
 assert.match(service, /learning_experiment_decision_bindings/)
