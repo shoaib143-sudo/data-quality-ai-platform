@@ -35,3 +35,13 @@ test('lineage page exposes the Excel export action', () => {
   assert.match(page, /href="\/api\/lineage\/export"/)
   assert.match(page, /Export lineage to Excel/)
 })
+
+
+test('lineage export includes steward validation columns for source-to-target review', () => {
+  const route = fs.readFileSync('app/api/lineage/export/route.ts','utf8')
+  for (const heading of ['Source Data Type','Target Data Type','Confidence','Evidence Source','Code Reference','First Seen','Last Seen','Version','Notes']) {
+    assert.ok(route.includes(heading), 'Missing lineage validation column: ' + heading)
+  }
+  assert.match(route, /mappingMetadata/)
+  assert.match(route, /transformationMetadata/)
+})
