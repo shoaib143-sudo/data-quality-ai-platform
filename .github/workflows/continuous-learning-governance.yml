@@ -249,7 +249,7 @@ jobs:
       - name: Run priority-agent PGCL hook tests
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs
       - name: Run paired experiment runner behavior and invocation tests
-        run: pnpm run verify:learning-experiment-runner
+        run: node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs
       - name: Run learning experiment runtime budget tests
         run: node --experimental-strip-types scripts/test-learning-experiment-budget-runtime.mjs
       - name: Run prospective evaluation policy behavior tests
