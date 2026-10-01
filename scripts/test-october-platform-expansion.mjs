@@ -98,3 +98,22 @@ test('manual lineage corrections are approval-gated and workspace-protected',()=
   assert.match(page,/requireWorkspaceAccess\('lineage-manage'\)/)
   assert.match(policy,/\['\/lineage\/corrections', 'lineage-manage'\]/)
 })
+
+
+test('business metadata history is immutable and rollback creates a new governed version',()=>{
+  const migration=fs.readFileSync('supabase/migrations/20261001233000_dataset_catalog_version_history.sql','utf8')
+  const api=fs.readFileSync('app/api/catalog/[datasetId]/history/route.ts','utf8')
+  assert.match(migration,/dataset_catalog_history/)
+  assert.match(migration,/capture_dataset_catalog_history/)
+  assert.match(migration,/restore_dataset_catalog_history/)
+  assert.match(migration,/certification_state_preserved/)
+  assert.match(migration,/CATALOG_METADATA_ROLLED_BACK/)
+  assert.match(api,/authorizeDataset\(user\.id,datasetId,'catalog\.update'\)/)
+})
+test('metadata discovery emits explicit schema drift evidence and keeps external notifications opt-in',()=>{
+  const discovery=fs.readFileSync('lib/catalog/discovery.ts','utf8')
+  assert.match(discovery,/METADATA_SCHEMA_CHANGE_DETECTED/)
+  assert.match(discovery,/SCHEMA_DRIFT/)
+  assert.match(discovery,/METADATA_CHANGE_NOTIFICATIONS_ENABLED/)
+  assert.match(discovery,/queueAlertNotifications/)
+})
