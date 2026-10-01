@@ -1,5 +1,5 @@
-import type { GovernanceDesiredState } from '../desired-state/model'
-import { buildGovernanceDeploymentPlan,type GovernanceTargetObservedState } from '../planning/deployment-plan'
+import type { GovernanceDesiredState } from '../desired-state/model.ts'
+import { buildGovernanceDeploymentPlan,type GovernanceTargetObservedState } from '../planning/deployment-plan.ts'
 
 export type GovernanceMcpContext={projectId:string;principalId:string}
 function assertProject(context:GovernanceMcpContext,projectId:string){if(context.projectId!==projectId)throw new Error('MCP principal is not bound to the requested DataNexus project.')}
