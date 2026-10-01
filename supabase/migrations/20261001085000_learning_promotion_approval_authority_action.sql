@@ -2,19 +2,8 @@
 -- PROMOTE_LEARNING_CANDIDATE is already a governed HIGH-risk, reversible,
 -- material production mutation in lib/governance/agent-action-catalog.ts.
 -- This migration only makes the action assignable by the existing governed
--- admin path. It does not grant the action to any existing or new authority.
-
-alter table governance.agent_approval_authorities
-  alter column action_keys set default array[
-    'CONVERSE_GOVERNANCE_AGENT',
-    'RUN_PROFILING',
-    'RUN_DATA_QUALITY',
-    'RUN_SUPERVISOR',
-    'RETRY_EXECUTION',
-    'CANCEL_EXECUTION',
-    'APPLY_GOVERNED_MUTATION',
-    'PROMOTE_LEARNING_CANDIDATE'
-  ]::text[];
+-- admin path. It deliberately preserves the historical column default and does
+-- not grant the action to any existing or future authority implicitly.
 
 alter table governance.agent_approval_authorities
   drop constraint if exists agent_approval_authorities_action_keys_check,
