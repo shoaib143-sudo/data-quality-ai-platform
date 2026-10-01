@@ -1,10 +1,10 @@
-import type { CanonicalGovernanceObject } from '../canonical/model'
-import type { GovernanceDesiredState } from '../desired-state/model'
-import { resolveGovernanceAuthorizationCapability } from '../authorization/capabilities'
-import { governanceIdempotencyKey } from './idempotency'
-import { stableGovernanceFingerprint } from './fingerprint'
-import type { GovernancePlan } from './plan'
-import type { GovernanceOperation, GovernanceOperationKind } from '../providers/sdk/provider'
+import type { CanonicalGovernanceObject } from '../canonical/model.ts'
+import type { GovernanceDesiredState } from '../desired-state/model.ts'
+import { resolveGovernanceAuthorizationCapability } from '../authorization/capabilities.ts'
+import { governanceIdempotencyKey } from './idempotency.ts'
+import { stableGovernanceFingerprint } from './fingerprint.ts'
+import type { GovernancePlan } from './plan.ts'
+import type { GovernanceOperation, GovernanceOperationKind } from '../providers/sdk/provider.ts'
 
 export type ProviderPlannedOperation = GovernanceOperation & {
   provider: string
