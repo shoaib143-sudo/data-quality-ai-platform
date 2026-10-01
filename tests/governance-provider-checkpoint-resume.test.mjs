@@ -10,3 +10,11 @@ test('claim does not increment attempts when verification is pending',async()=>{
  const result=await claimGovernanceOperation(store,{planId:'p',operationId:'o',idempotencyKey:'i'})
  assert.equal(result.claimed,false);assert.equal(result.resumeAction,'VERIFY');assert.equal(stored.attempts,1)
 })
+
+
+test('checkpoint retains provider result needed for verification-only resume',async()=>{
+ let stored={...base,status:'SUCCEEDED',providerObjectId:'vendor-1',providerJobId:null,executionEvidence:{receipt:'r1'},verificationStatus:null}
+ const store={get:async()=>stored,put:async value=>{stored=value}}
+ const result=await claimGovernanceOperation(store,{planId:'p',operationId:'o',idempotencyKey:'i'})
+ assert.equal(result.resumeAction,'VERIFY');assert.equal(result.checkpoint.providerObjectId,'vendor-1');assert.deepEqual(result.checkpoint.executionEvidence,{receipt:'r1'})
+})
