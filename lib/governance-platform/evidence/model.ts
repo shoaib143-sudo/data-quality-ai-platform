@@ -1,6 +1,7 @@
 export type GovernanceEvidenceRecord={
   projectId:string
   planId:string
+  deploymentId:string
   operationId:string
   provider:string
   connectionId:string
