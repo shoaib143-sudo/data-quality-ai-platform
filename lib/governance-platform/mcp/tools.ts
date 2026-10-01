@@ -16,7 +16,7 @@ export function governanceMcpToolDefinitions():GovernanceMcpToolDefinition[]{
   description:tool.description,
   inputSchema:tool.name==='governance.status'
    ?{type:'object',properties:{projectId:projectSchema,planId:{type:'string',minLength:1}},required:['projectId','planId'],additionalProperties:false}
-   :{type:'object',properties:{projectId:projectSchema,desiredState:desiredStateSchema,actual:{type:'array',items:{type:'object'}}},required:['projectId','desiredState'],additionalProperties:false},
+   :{type:'object',properties:{projectId:projectSchema,desiredState:desiredStateSchema,observedTargets:{type:'array',items:{type:'object'},description:'Observed canonical state grouped by provider and connection target.'}},required:['projectId','desiredState','observedTargets'],additionalProperties:false},
   annotations:{readOnlyHint:!tool.mutation,destructiveHint:tool.name==='governance.apply',idempotentHint:true},
  })).sort((a,b)=>a.name.localeCompare(b.name))
 }
