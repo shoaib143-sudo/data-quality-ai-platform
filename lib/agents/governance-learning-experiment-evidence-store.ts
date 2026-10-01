@@ -59,6 +59,7 @@ export function createGovernanceLearningExperimentEvidenceStore(): LearningExper
         attemptId: requiredString(row.attemptId, 'attemptId'),
         executionCorrelationId: requiredString(row.executionCorrelationId, 'executionCorrelationId'),
         attemptNumber: integerValue(row.attemptNumber, 'attemptNumber'),
+        sourceCaseRef: requiredString(row.sourceCaseRef, 'sourceCaseRef'),
         reused: row.reused === true,
         terminalResultId: row.terminalResultId == null ? null : requiredString(row.terminalResultId, 'terminalResultId'),
         terminalStatus: row.terminalStatus == null ? null : String(row.terminalStatus) as PreparedLearningExperimentAttempt['terminalStatus'],
