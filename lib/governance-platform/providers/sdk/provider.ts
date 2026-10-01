@@ -61,5 +61,6 @@ export interface GovernanceProvider {
   capabilities(): Promise<ProviderCapability[]>
   discover(request: DiscoveryRequest): Promise<DiscoveryResult>
   execute(operation: GovernanceOperation): Promise<ExecutionResult>
+  status?(operation: GovernanceOperation, result: ExecutionResult): Promise<ExecutionResult>
   verify(operation: GovernanceOperation, result: ExecutionResult): Promise<VerificationResult>
 }
