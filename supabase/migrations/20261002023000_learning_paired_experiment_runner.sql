@@ -355,6 +355,7 @@ declare
   v_attempt agent.learning_experiment_arm_attempts%rowtype;
   v_reservation agent.learning_experiment_budget_reservations%rowtype;
   v_settlement agent.learning_experiment_budget_settlements%rowtype;
+  v_reservation_count integer;
   v_existing agent.learning_experiment_arm_results%rowtype;
   v_id uuid;
 begin
@@ -387,11 +388,17 @@ begin
     raise exception 'observed latency must be non-negative'; end if;
 
   if v_run.evidence_class='PROSPECTIVE_LIVE' then
-    select * into v_reservation
+    select count(*) into v_reservation_count
     from agent.learning_experiment_budget_reservations
     where project_id=p_project_id and run_id=v_attempt.execution_correlation_id;
+    if p_terminal_status='SUCCEEDED' and v_reservation_count<>1 then
+      raise exception 'live successful arm requires exactly one canonical budget reservation';
+    end if;
+    select * into v_reservation
+    from agent.learning_experiment_budget_reservations
+    where project_id=p_project_id and run_id=v_attempt.execution_correlation_id
+    limit 1;
     if p_terminal_status='SUCCEEDED' then
-      if not found then raise exception 'live successful arm requires canonical budget reservation'; end if;
       select * into v_settlement
       from agent.learning_experiment_budget_settlements
       where reservation_id=v_reservation.id;
