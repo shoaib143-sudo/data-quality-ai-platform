@@ -12,15 +12,15 @@ export async function GET() {
 
     const [mappingsResult, assetsResult, transformationsResult, catalogResult, findingsResult, issuesResult, alertsResult] = await Promise.all([
       supabase.schema('governance').from('lineage_column_mappings')
-        .select('id,project_id,transformation_id,source_asset_id,source_column,target_asset_id,target_column,operation,expression,created_at')
+        .select('id,project_id,transformation_id,source_asset_id,source_column,target_asset_id,target_column,operation,expression,metadata,created_at')
         .order('created_at', { ascending: false })
         .limit(5000),
       supabase.schema('governance').from('lineage_assets')
-        .select('id,project_id,namespace,name,asset_type,dataset_id,last_seen_at')
+        .select('id,project_id,namespace,name,asset_type,dataset_id,metadata,last_seen_at')
         .order('last_seen_at', { ascending: false })
         .limit(5000),
       supabase.schema('governance').from('lineage_transformations')
-        .select('id,project_id,external_id,source_system,name,operation,logic_language,logic_hash,last_seen_at')
+        .select('id,project_id,external_id,source_system,name,operation,logic_language,logic_hash,metadata,first_seen_at,last_seen_at')
         .order('last_seen_at', { ascending: false })
         .limit(5000),
       supabase.schema('governance').from('dataset_catalog').select('dataset_id,project_id,lifecycle_status,certification_status,criticality,tags,business_description,technical_owner_user_id,business_owner_user_id,steward_user_id,retention_days').limit(5000),
@@ -43,27 +43,39 @@ export async function GET() {
     const transformationById = new Map(transformations.map((row: any) => [String(row.id), row]))
 
     const mappingRows = [
-      ['Lineage Name','Source System','Source Namespace','Source Asset','Source Column','Transformation Rule','Transformation Language','Target Namespace','Target Asset','Target Column','Operation','Project ID','Transformation ID','Mapping ID','Observed At'],
+      ['Lineage Name','Source System','Source Namespace','Source Asset','Source Column','Source Data Type','Transformation Rule','Transformation Language','Target Namespace','Target Asset','Target Column','Target Data Type','Operation','Confidence','Evidence Source','Code Reference','First Seen','Last Seen','Version','Project ID','Transformation ID','Mapping ID','Notes'],
       ...mappings.map((mapping: any) => {
         const source = assetById.get(String(mapping.source_asset_id))
         const target = assetById.get(String(mapping.target_asset_id))
         const transformation = mapping.transformation_id ? transformationById.get(String(mapping.transformation_id)) : null
+        const mappingMetadata = mapping.metadata && typeof mapping.metadata === 'object' ? mapping.metadata as Record<string, unknown> : {}
+        const sourceMetadata = source?.metadata && typeof source.metadata === 'object' ? source.metadata as Record<string, unknown> : {}
+        const targetMetadata = target?.metadata && typeof target.metadata === 'object' ? target.metadata as Record<string, unknown> : {}
+        const transformationMetadata = transformation?.metadata && typeof transformation.metadata === 'object' ? transformation.metadata as Record<string, unknown> : {}
         return [
           text(transformation?.name || transformation?.external_id || mapping.id),
           text(transformation?.source_system),
           text(source?.namespace),
           text(source?.name),
           text(mapping.source_column),
+          text(mappingMetadata.source_data_type ?? sourceMetadata.data_type),
           text(mapping.expression),
           text(transformation?.logic_language),
           text(target?.namespace),
           text(target?.name),
           text(mapping.target_column),
+          text(mappingMetadata.target_data_type ?? targetMetadata.data_type),
           text(mapping.operation || transformation?.operation),
+          text(mappingMetadata.confidence ?? transformationMetadata.confidence),
+          text(mappingMetadata.evidence_source ?? transformationMetadata.evidence_source ?? transformation?.source_system),
+          text(mappingMetadata.code_reference ?? transformationMetadata.code_reference),
+          text(transformation?.first_seen_at ?? mapping.created_at),
+          text(transformation?.last_seen_at ?? mapping.created_at),
+          text(mappingMetadata.version ?? transformationMetadata.version ?? 'current'),
           text(mapping.project_id),
           text(mapping.transformation_id),
           text(mapping.id),
-          text(mapping.created_at),
+          text(mappingMetadata.notes ?? transformationMetadata.notes),
         ]
       }),
     ]
