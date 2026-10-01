@@ -2,10 +2,13 @@ import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
 import { registerHooks } from 'node:module'
 import { setResponses, getCalls } from './fixtures/learning-experiment-runner-admin.mjs'
+import { setArtifactResponses, getArtifactCalls } from './fixtures/learning-experiment-runner-artifact.mjs'
 
 const mockUrl = new URL('./fixtures/learning-experiment-runner-admin.mjs', import.meta.url).href
+const artifactUrl = new URL('./fixtures/learning-experiment-runner-artifact.mjs', import.meta.url).href
 registerHooks({ resolve(specifier, context, next) {
   if (specifier === '@/lib/supabase/admin') return next(mockUrl, context)
+  if (specifier === '@/lib/agents/run-result-artifact') return next(artifactUrl, context)
   return next(specifier, context)
 } })
 
@@ -25,8 +28,10 @@ const ids = {
   runId: '77777777-7777-4777-8777-777777777777',
   reservationId: '88888888-8888-4888-8888-888888888888',
   costEventId: '99999999-9999-4999-8999-999999999999',
+  artifactId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
 }
 const executionKey = `sha256:${'a'.repeat(64)}`
+const contentHash = `sha256:${'c'.repeat(64)}`
 const input = {
   projectId: ids.projectId,
   policyId: ids.policyId,
@@ -44,8 +49,9 @@ const ok = data => ({ data, error: null })
 setResponses([
   ok({ attemptId: ids.attemptId, runId: ids.runId, executionKey, status: 'PREPARED', reused: false }),
   ok({ admitted: true, reason: 'DISPATCH_COMMITTED', runId: ids.runId, status: 'DISPATCHED' }),
-  ok({ status: 'COMPLETED', idempotent: false, runId: ids.runId }),
+  ok({ status: 'COMPLETED', idempotent: false, runId: ids.runId, resultArtifactId: ids.artifactId, resultContentHash: contentHash }),
 ])
+setArtifactResponses([{ artifactId: ids.artifactId, contentHash, createdAt: '2026-10-01T00:00:00Z' }])
 let executorCalls = 0
 const completed = await executeGovernedLearningExperimentArm(input, async context => {
   executorCalls += 1
@@ -53,7 +59,7 @@ const completed = await executeGovernedLearningExperimentArm(input, async contex
   assert.equal(context.status, 'DISPATCHED')
   return {
     terminalStatus: 'COMPLETED',
-    outputEvidenceRef: 'artifact:output:fixture',
+    output: { answer: 'fixture output', evidence: ['fixture:evidence'] },
     reservationId: ids.reservationId,
     costEventId: ids.costEventId,
   }
@@ -63,14 +69,18 @@ assert.equal(executorCalls, 1)
 assert.deepEqual(getCalls().map(call => call.fn), [
   'prepare_learning_experiment_attempt',
   'begin_learning_experiment_dispatch',
-  'complete_learning_experiment_attempt',
+  'complete_learning_experiment_attempt_v2',
 ])
 assert.equal(getCalls()[0].args.p_synthetic, false)
+assert.equal(getCalls()[2].args.p_result_artifact_id, ids.artifactId)
+assert.equal(getArtifactCalls().length, 1)
+assert.equal(getArtifactCalls()[0].agentRunId, ids.runId)
 
 setResponses([
   ok({ attemptId: ids.attemptId, runId: ids.runId, executionKey, status: 'DISPATCHED', reused: true }),
   ok({ admitted: false, reason: 'AMBIGUOUS_PRIOR_DISPATCH_REQUIRES_RECONCILIATION', runId: ids.runId, status: 'DISPATCHED' }),
 ])
+setArtifactResponses([])
 executorCalls = 0
 await assert.rejects(
   executeGovernedLearningExperimentArm(input, async () => {
@@ -84,8 +94,9 @@ assert.equal(executorCalls, 0, 'ambiguous prior dispatch must never issue a seco
 setResponses([
   ok({ attemptId: ids.attemptId, runId: ids.runId, executionKey, status: 'PREPARED', reused: false }),
   ok({ admitted: true, reason: 'DISPATCH_COMMITTED', runId: ids.runId, status: 'DISPATCHED' }),
-  ok({ status: 'RECONCILIATION_REQUIRED', idempotent: false, runId: ids.runId }),
+  ok({ status: 'RECONCILIATION_REQUIRED', idempotent: false, runId: ids.runId, resultArtifactId: null, resultContentHash: null }),
 ])
+setArtifactResponses([])
 await assert.rejects(
   executeGovernedLearningExperimentArm(input, async () => {
     throw Object.assign(new Error('provider process lost after dispatch'), { name: 'ProviderProcessLostError' })
@@ -93,7 +104,7 @@ await assert.rejects(
   /provider process lost after dispatch/,
 )
 const failureCalls = getCalls()
-assert.equal(failureCalls[2].fn, 'complete_learning_experiment_attempt')
+assert.equal(failureCalls[2].fn, 'complete_learning_experiment_attempt_v2')
 assert.equal(failureCalls[2].args.p_terminal_status, 'RECONCILIATION_REQUIRED')
 assert.equal(failureCalls[2].args.p_error_code, 'ProviderProcessLostError')
 
