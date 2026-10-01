@@ -49,3 +49,13 @@ test('MCP tools reuse DataNexus authorization vocabulary and principal binding',
  await authorizeGovernanceMcpTool({principalId:'service-a',projectId:'p'},'governance.apply',async request=>calls.push(request))
  assert.deepEqual(calls,[{principalId:'service-a',projectId:'p',capability:'agent.execute'}])
 })
+
+
+test('Informatica capability manifest does not overclaim uncertified coverage',()=>{
+ const provider=new InformaticaGovernanceProvider({},{})
+ const manifest=provider.manifest()
+ const catalog=manifest.capabilities.find(value=>value.capability==='catalog.asset.read')
+ const lineage=manifest.capabilities.find(value=>value.capability==='lineage.read')
+ assert.equal(catalog.support,'PARTIAL')
+ assert.equal(lineage.support,'UNSUPPORTED')
+})
