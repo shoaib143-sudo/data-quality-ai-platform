@@ -1,5 +1,5 @@
-import type { CanonicalGovernanceObject } from '../canonical/model'
-import type { DesiredGovernanceObject } from '../desired-state/model'
+import type { CanonicalGovernanceObject } from '../canonical/model.ts'
+import type { DesiredGovernanceObject } from '../desired-state/model.ts'
 
 export type GovernanceDiffAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'NOOP'
 
