@@ -6,6 +6,7 @@ import { executeWithGovernanceRetry } from '../lib/governance-platform/execution
 import { governanceMcpRequiredCapability,authorizeGovernanceMcpTool } from '../lib/governance-platform/mcp/authorization.ts'
 import { InformaticaApiClient } from '../lib/governance-platform/providers/informatica/client.ts'
 import { InformaticaGovernanceProvider } from '../lib/governance-platform/providers/informatica/provider.ts'
+import { validateProviderManifest } from '../lib/governance-platform/providers/conformance.ts'
 
 const object={id:'asset-a',type:'TECHNICAL_ASSET',externalKey:'a',name:'A',projectId:'p',attributes:{},relationships:[],version:1}
 const desired={apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[{provider:'informatica',connectionId:'prod'}],objects:[object]}
@@ -58,4 +59,13 @@ test('Informatica capability manifest does not overclaim uncertified coverage',(
  const lineage=manifest.capabilities.find(value=>value.capability==='lineage.read')
  assert.equal(catalog.support,'PARTIAL')
  assert.equal(lineage.support,'UNSUPPORTED')
+})
+
+
+test('provider conformance rejects duplicate capabilities and invalid constraints',()=>{
+ const base=new InformaticaGovernanceProvider({},{}).manifest()
+ assert.equal(validateProviderManifest(base).ok,true)
+ const invalid={...base,capabilities:[base.capabilities[0],{...base.capabilities[0],constraints:{maxBatchSize:0}}]}
+ const result=validateProviderManifest(invalid)
+ assert.equal(result.ok,false);assert.ok(result.issues.some(issue=>issue.code==='DUPLICATE_CAPABILITY'));assert.ok(result.issues.some(issue=>issue.code==='INVALID_CONSTRAINT'))
 })
