@@ -175,7 +175,10 @@ end $$;
 do $$
 begin
   begin
-    update agent.learning_evaluation_runtime_events set reason='tampered' where reservation_id=:'reservation_1'::uuid;
+    update agent.learning_evaluation_runtime_events set reason='tampered' where reservation_id = (
+      select id from agent.learning_evaluation_runtime_reservations
+      where invocation_id='60000000-0000-4000-8000-000000000001'
+    );
     raise exception 'runtime event mutation unexpectedly succeeded';
   exception when others then
     if SQLERRM not like '%append-only%' then raise; end if;
