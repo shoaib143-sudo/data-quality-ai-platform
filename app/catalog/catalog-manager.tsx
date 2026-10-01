@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Search, Save, Loader2, ArrowRight } from 'lucide-react'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 
@@ -17,11 +17,34 @@ export function CatalogManager({datasets,versions,catalog:initialCatalog,project
   const [editing,setEditing]=useState<string|null>(null)
   const [busy,setBusy]=useState(false)
   const [message,setMessage]=useState('')
+  const [savedQueries,setSavedQueries]=useState<string[]>([])
   const editableProjects=useMemo(()=>new Set(editableProjectIds),[editableProjectIds])
   const catalogByDataset=useMemo(()=>new Map(catalog.map(item=>[item.dataset_id,item])),[catalog])
   const latestVersion=useMemo(()=>{const map=new Map<string,Version>();for(const v of versions)if(!map.has(v.dataset_id))map.set(v.dataset_id,v);return map},[versions])
   const projectById=useMemo(()=>new Map(projects.map(p=>[p.id,p])),[projects])
   const filtered=datasets.filter(d=>{const c=catalogByDataset.get(d.id);const hay=[d.name,d.description,d.source_identifier,d.business_domain,c?.business_description,c?.certification_status,c?.criticality,(c?.tags??[]).join(' ')].join(' ').toLowerCase();return hay.includes(query.toLowerCase())})
+
+  useEffect(()=>{
+    try{
+      const stored=JSON.parse(window.localStorage.getItem('datanexus:catalog:saved-searches')||'[]')
+      if(Array.isArray(stored)) setSavedQueries(stored.filter((value):value is string=>typeof value==='string'&&value.trim()).slice(0,12))
+    }catch{setSavedQueries([])}
+  },[])
+
+  function saveCurrentSearch(){
+    const value=query.trim()
+    if(!value){setMessage('Enter a catalog search before saving it.');return}
+    const next=[value,...savedQueries.filter(item=>item.toLowerCase()!==value.toLowerCase())].slice(0,12)
+    setSavedQueries(next)
+    window.localStorage.setItem('datanexus:catalog:saved-searches',JSON.stringify(next))
+    setMessage(`Saved catalog search: ${value}`)
+  }
+
+  function removeSavedSearch(value:string){
+    const next=savedQueries.filter(item=>item!==value)
+    setSavedQueries(next)
+    window.localStorage.setItem('datanexus:catalog:saved-searches',JSON.stringify(next))
+  }
 
   async function save(dataset:Dataset,form:HTMLFormElement){
     if(!editableProjects.has(dataset.project_id)){setMessage('You do not have permission to update governance metadata for this project.');return}
@@ -47,7 +70,8 @@ export function CatalogManager({datasets,versions,catalog:initialCatalog,project
   }
 
   return <section className="mt-6 rounded-3xl border border-white/10 bg-[#102036] p-6 shadow-sm">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Governed assets</h2><p className="mt-1 text-sm text-slate-400">{datasets.length} registered datasets · {filtered.length} shown</p></div><label className="relative min-w-[280px]"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, domain, tag, source…" className="w-full rounded-xl border border-white/10 bg-[#0d1c30] py-2.5 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"/></label></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Governed assets</h2><p className="mt-1 text-sm text-slate-400">{datasets.length} registered datasets · {filtered.length} shown</p></div><div className="flex flex-wrap items-center gap-2"><label className="relative min-w-[280px]"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, domain, tag, source…" className="w-full rounded-xl border border-white/10 bg-[#0d1c30] py-2.5 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"/></label><button type="button" onClick={saveCurrentSearch} className="rounded-xl border border-cyan-400/20 px-3 py-2.5 text-sm font-bold text-cyan-200 hover:bg-cyan-400/10">Save search</button></div></div>
+    {savedQueries.length?<div className="mt-3 flex flex-wrap items-center gap-2"><span className="text-[10px] font-black uppercase tracking-wide text-slate-600">Saved searches</span>{savedQueries.map(item=><span key={item} className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] text-xs"><button type="button" onClick={()=>setQuery(item)} className="px-3 py-1.5 font-semibold text-slate-300 hover:text-white">{item}</button><button type="button" aria-label={`Remove saved search ${item}`} onClick={()=>removeSavedSearch(item)} className="px-2 py-1.5 text-slate-600 hover:text-rose-300">×</button></span>)}</div>:null}
     {message?<p role="status" aria-live="polite" className="mt-3 text-sm text-slate-400">{message}</p>:null}
     <div className="mt-5 space-y-3">{filtered.map(dataset=>{
       const c=catalogByDataset.get(dataset.id);const v=latestVersion.get(dataset.id);const project=projectById.get(dataset.project_id);const orgMembers=members.filter(m=>m.organization_id===project?.organization_id);const canEdit=editableProjects.has(dataset.project_id);const detailHref=canonicalRoutes.governedDataset(dataset.id);const context=contextByDataset[dataset.id]??{lineageAssets:0,openIssues:0,dataContracts:0,openAlerts:0};const lineageHref=`/lineage?q=${encodeURIComponent(dataset.name)}`
