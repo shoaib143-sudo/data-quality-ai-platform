@@ -1,4 +1,4 @@
-import type { CanonicalGovernanceObject } from '../../canonical/model'
+import type { CanonicalGovernanceObject, ProviderProjection } from '../../canonical/model'
 import type { ProviderCapability } from './capability'
 
 export type ProviderManifest = {
@@ -17,6 +17,7 @@ export type DiscoveryRequest = {
 
 export type DiscoveryResult = {
   objects: CanonicalGovernanceObject[]
+  projections: ProviderProjection[]
   observedAt: string
 }
 
