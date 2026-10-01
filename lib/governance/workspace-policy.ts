@@ -59,6 +59,7 @@ export const workspacePrefixes: readonly [string, WorkspaceKey][] = [
   ['/catalog/discovery', 'discovery'],
   ['/lineage/ingest', 'lineage-manage'],
   ['/lineage/suggestions', 'lineage-manage'],
+  ['/lineage/corrections', 'lineage-manage'],
   ['/observability/settings', 'observability-manage'],
   ['/ai-capabilities', 'ai-capabilities'],
   ['/data-quality', 'data-quality'],
