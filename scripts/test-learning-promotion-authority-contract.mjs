@@ -18,8 +18,19 @@ assert.match(forward, /pg_advisory_xact_lock/)
 
 // The repair must permit explicit governed assignment only; it must never seed or
 // implicitly inherit promotion authority.
-assert.doesNotMatch(forward, /insert\s+into\s+governance\.agent_approval_authorities[\s\S]*PROMOTE_LEARNING_CANDIDATE/i)
-assert.doesNotMatch(forward, /update\s+governance\.agent_approval_authorities/i)
+const functionStart = forward.indexOf('create or replace function governance.assign_agent_approval_authority(')
+const functionEnd = forward.indexOf('revoke all on function governance.assign_agent_approval_authority', functionStart)
+assert.ok(functionStart > 0 && functionEnd > functionStart)
+const outsideFunction = forward.slice(0, functionStart) + forward.slice(functionEnd)
+const functionBody = forward.slice(functionStart, functionEnd)
+
+// No top-level seed/update may grant promotion authority. The governed function
+// is expected to insert one row from caller-supplied, validated v_actions.
+assert.doesNotMatch(outsideFunction, /insert\s+into\s+governance\.agent_approval_authorities/i)
+assert.doesNotMatch(outsideFunction, /update\s+governance\.agent_approval_authorities/i)
+assert.match(functionBody, /insert\s+into\s+governance\.agent_approval_authorities/i)
+assert.match(functionBody, /v_actions/)
+assert.doesNotMatch(functionBody, /values\s*\([\s\S]{0,1000}PROMOTE_LEARNING_CANDIDATE/i)
 assert.doesNotMatch(forward, /alter\s+column\s+action_keys\s+set\s+default[\s\S]*PROMOTE_LEARNING_CANDIDATE/i)
 
 // The historical default remains the compatibility default and intentionally does
