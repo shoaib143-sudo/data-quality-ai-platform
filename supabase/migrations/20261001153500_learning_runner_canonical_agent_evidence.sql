@@ -323,3 +323,130 @@ comment on column agent.learning_experiment_attempts.result_artifact_id is
   'Canonical AGENT_RUN_RESULT artifact bound to the same agent run as this experiment attempt.';
 comment on column agent.learning_experiment_attempts.result_content_hash is
   'Content-addressed SHA-256 hash copied from the canonical result artifact at completion.';
+
+
+create or replace function agent.reconcile_learning_experiment_attempt(
+  p_project_id uuid,
+  p_attempt_id uuid,
+  p_execution_key text,
+  p_result_artifact_id uuid,
+  p_reservation_id uuid,
+  p_cost_event_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, agent
+as $$
+declare
+  v_attempt agent.learning_experiment_attempts%rowtype;
+  v_artifact agent.agent_artifacts%rowtype;
+  v_run agent.agent_runs%rowtype;
+  v_reservation agent.learning_experiment_budget_reservations%rowtype;
+  v_settlement agent.learning_experiment_budget_settlements%rowtype;
+  v_seq integer;
+begin
+  if p_project_id is null or p_attempt_id is null or p_result_artifact_id is null
+    or p_reservation_id is null or p_cost_event_id is null
+  then raise exception 'reconciliation requires project, attempt, artifact, reservation and cost event identities'; end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('learning-experiment-dispatch:' || p_attempt_id::text,0));
+
+  select * into v_attempt from agent.learning_experiment_attempts
+    where id=p_attempt_id and project_id=p_project_id for update;
+  if not found then raise exception 'learning experiment attempt not found'; end if;
+  if v_attempt.execution_key <> p_execution_key then raise exception 'learning experiment execution key mismatch'; end if;
+
+  if v_attempt.status = 'COMPLETED' then
+    if v_attempt.result_artifact_id = p_result_artifact_id
+      and v_attempt.reservation_id = p_reservation_id
+      and v_attempt.cost_event_id = p_cost_event_id
+    then
+      return jsonb_build_object(
+        'status','COMPLETED','idempotent',true,'runId',v_attempt.run_id,
+        'resultArtifactId',v_attempt.result_artifact_id,'resultContentHash',v_attempt.result_content_hash
+      );
+    end if;
+    raise exception 'completed learning experiment reconciliation conflicts with immutable evidence';
+  end if;
+
+  if v_attempt.status <> 'RECONCILIATION_REQUIRED' then
+    raise exception 'learning experiment attempt is not awaiting reconciliation';
+  end if;
+  if v_attempt.synthetic then
+    raise exception 'synthetic experiment attempt cannot use live accounting reconciliation';
+  end if;
+
+  select * into v_run from agent.agent_runs
+    where id=v_attempt.run_id and project_id=p_project_id;
+  if not found or v_run.agent_definition_id <> v_attempt.agent_definition_id
+    or v_run.status <> 'SUCCEEDED' or v_run.output is null
+  then raise exception 'canonical successful agent run is unavailable for reconciliation'; end if;
+
+  select * into v_artifact from agent.agent_artifacts
+    where id=p_result_artifact_id and agent_run_id=v_attempt.run_id;
+  if not found or v_artifact.artifact_type <> 'AGENT_RUN_RESULT'
+    or v_artifact.artifact_version <> '1.0'
+    or v_artifact.content_hash is null
+    or v_artifact.content_hash !~ '^sha256:[a-f0-9]{64}$'
+  then raise exception 'canonical experiment result artifact is missing or invalid'; end if;
+
+  select * into v_reservation from agent.learning_experiment_budget_reservations
+    where id=p_reservation_id and project_id=p_project_id;
+  if not found
+    or v_reservation.policy_id <> v_attempt.policy_id
+    or v_reservation.candidate_id <> v_attempt.candidate_id
+    or v_reservation.run_id <> v_attempt.run_id
+    or v_reservation.agent_key <> (select agent_key from agent.learning_evaluation_policies where id=v_attempt.policy_id)
+  then raise exception 'canonical experiment budget reservation is missing or mismatched'; end if;
+
+  select * into v_settlement from agent.learning_experiment_budget_settlements
+    where reservation_id=p_reservation_id and project_id=p_project_id;
+  if not found or v_settlement.status <> 'ACCOUNTED'
+    or v_settlement.cost_event_id is null
+    or v_settlement.cost_event_id <> p_cost_event_id
+  then raise exception 'canonical experiment accounting settlement is incomplete or mismatched'; end if;
+
+  update agent.learning_experiment_attempts set
+    status='COMPLETED',
+    result_artifact_id=p_result_artifact_id,
+    result_content_hash=v_artifact.content_hash,
+    output_evidence_ref='agent_result_artifact:' || p_result_artifact_id::text,
+    reservation_id=p_reservation_id,
+    cost_event_id=p_cost_event_id,
+    last_error_code=null,
+    completed_at=clock_timestamp()
+  where id=v_attempt.id
+  returning * into v_attempt;
+
+  select coalesce(max(event_sequence),0)+1 into v_seq
+  from agent.learning_experiment_attempt_events where attempt_id=v_attempt.id;
+
+  insert into agent.learning_experiment_attempt_events(
+    project_id,attempt_id,event_sequence,from_status,to_status,reason,metadata
+  ) values (
+    p_project_id,v_attempt.id,v_seq,'RECONCILIATION_REQUIRED','COMPLETED',
+    'DELAYED_CANONICAL_ACCOUNTING_RECONCILED',
+    jsonb_build_object(
+      'agentRunId',v_attempt.run_id,
+      'artifactId',p_result_artifact_id,
+      'artifactHash',v_artifact.content_hash,
+      'reservationId',p_reservation_id,
+      'costEventId',p_cost_event_id
+    )
+  );
+
+  return jsonb_build_object(
+    'status','COMPLETED','idempotent',false,'runId',v_attempt.run_id,
+    'resultArtifactId',v_attempt.result_artifact_id,'resultContentHash',v_attempt.result_content_hash
+  );
+end;
+$$;
+
+revoke all on function agent.reconcile_learning_experiment_attempt(uuid,uuid,text,uuid,uuid,uuid)
+  from public, anon, authenticated;
+grant execute on function agent.reconcile_learning_experiment_attempt(uuid,uuid,text,uuid,uuid,uuid)
+  to service_role;
+
+comment on function agent.reconcile_learning_experiment_attempt(uuid,uuid,text,uuid,uuid,uuid) is
+  'Resolves a RECONCILIATION_REQUIRED prospective learning attempt only from canonical existing run/artifact/budget evidence. It never re-dispatches provider execution.';
