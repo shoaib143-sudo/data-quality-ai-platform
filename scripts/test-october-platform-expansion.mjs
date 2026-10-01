@@ -212,3 +212,42 @@ test('lineage ingestion workbench exposes every requested ETL and code preset wi
   for(const key of ['INFORMATICA','BOOMI','DATAMAGIC','WEBOTX','AXWAY','AGILE_REPORTER','SSIS','NODEJS','DOTNET','VBA','SCRIPT','LOG'])assert.match(manager,new RegExp(key+':'))
   assert.match(manager,/Use the presets as connector contracts/)
 })
+
+
+test('source artifact scans can persist extracted metadata without storing source content',()=>{
+  const migration=fs.readFileSync('supabase/migrations/20261001235900_source_artifact_and_bi_metadata.sql','utf8')
+  const route=fs.readFileSync('app/api/catalog/source-artifact/scan/route.ts','utf8')
+  const page=fs.readFileSync('app/catalog/source-artifact-scan/page.tsx','utf8')
+  const workbench=fs.readFileSync('components/catalog/source-artifact-scan-workbench.tsx','utf8')
+  assert.match(migration,/source_artifact_scans/)
+  assert.match(migration,/reference_evidence/)
+  assert.doesNotMatch(migration,/source_content\s+(?:text|json|jsonb|bytea)/i)
+  assert.match(route,/authorizeProject\(user\.id,projectId,'source\.manage'\)/)
+  assert.match(route,/source_content_persisted:false/)
+  assert.match(workbench,/Persist governed scan/)
+  assert.match(page,/Source content itself is never stored/)
+})
+
+test('BI metadata imports can persist catalog evidence independently from source-to-report lineage',()=>{
+  const migration=fs.readFileSync('supabase/migrations/20261001235900_source_artifact_and_bi_metadata.sql','utf8')
+  const ingest=fs.readFileSync('app/api/catalog/bi/ingest/route.ts','utf8')
+  const workbench=fs.readFileSync('components/catalog/bi-metadata-workbench.tsx','utf8')
+  const page=fs.readFileSync('app/catalog/bi-integrations/page.tsx','utf8')
+  assert.match(migration,/bi_metadata_assets/)
+  assert.match(ingest,/authorizeProject\(user\.id,projectId,'catalog\.update'\)/)
+  assert.match(ingest,/BI_METADATA_IMPORTED/)
+  assert.match(ingest,/live_vendor_api_called:false/)
+  assert.match(workbench,/Persist BI catalog metadata/)
+  assert.match(workbench,/Persist source-to-report lineage/)
+  assert.match(page,/canPersistCatalog/)
+  assert.match(page,/canPersistLineage/)
+})
+
+test('federation workspace accurately distinguishes dry run from governed persistence',()=>{
+  const page=fs.readFileSync('app/catalog/federation/page.tsx','utf8')
+  const workbench=fs.readFileSync('components/catalog/federation-workbench.tsx','utf8')
+  assert.doesNotMatch(page,/page is dry-run only/i)
+  assert.match(page,/authorized catalog editors can persist/)
+  assert.match(workbench,/Persist governed exchange/)
+  assert.match(workbench,/canPersist/)
+})
