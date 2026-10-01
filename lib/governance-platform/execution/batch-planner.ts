@@ -1,4 +1,4 @@
-import type { ProviderPlannedOperation } from '../planning/provider-plan'
+import type { ProviderPlannedOperation } from '../planning/provider-plan.ts'
 
 export function planGovernanceBatches(operations:ProviderPlannedOperation[],maxBatchSize:number){
  if(!Number.isInteger(maxBatchSize)||maxBatchSize<1)throw new Error('maxBatchSize must be a positive integer.')
