@@ -8,6 +8,7 @@ create table if not exists agent.learning_experiment_runs (
   policy_id uuid not null,
   candidate_id uuid not null,
   dataset_manifest_id uuid not null,
+  run_key text not null check (length(btrim(run_key)) > 0),
   evidence_class text not null check (evidence_class in ('SYNTHETIC','PROSPECTIVE_LIVE')),
   agent_key text not null,
   skill_key text not null,
@@ -27,7 +28,8 @@ create table if not exists agent.learning_experiment_runs (
   constraint learning_experiment_runs_manifest_fk
     foreign key (dataset_manifest_id, project_id)
     references agent.learning_benchmark_dataset_manifests(id, project_id) on delete restrict,
-  constraint learning_experiment_runs_id_project_uq unique (id, project_id)
+  constraint learning_experiment_runs_id_project_uq unique (id, project_id),
+  constraint learning_experiment_runs_policy_run_key_uq unique (project_id, policy_id, run_key)
 );
 
 create table if not exists agent.learning_experiment_run_cases (
@@ -185,6 +187,7 @@ create or replace function agent.create_learning_experiment_run(
   p_project_id uuid,
   p_policy_id uuid,
   p_candidate_id uuid,
+  p_run_key text,
   p_evidence_class text,
   p_case_keys text[]
 )
@@ -197,10 +200,12 @@ declare
   v_policy agent.learning_evaluation_policies%rowtype;
   v_manifest agent.learning_benchmark_dataset_manifests%rowtype;
   v_run_id uuid;
+  v_existing agent.learning_experiment_runs%rowtype;
   v_case_key text;
   v_ordinal integer := 0;
   v_case agent.learning_benchmark_dataset_cases%rowtype;
 begin
+  if btrim(coalesce(p_run_key,''))='' then raise exception 'experiment run key is required'; end if;
   if p_evidence_class not in ('SYNTHETIC','PROSPECTIVE_LIVE') then
     raise exception 'unsupported experiment evidence class';
   end if;
@@ -226,12 +231,33 @@ begin
     raise exception 'experiment case keys must be unique';
   end if;
 
+  select * into v_existing
+  from agent.learning_experiment_runs
+  where project_id=p_project_id and policy_id=p_policy_id and run_key=btrim(p_run_key);
+  if found then
+    if v_existing.candidate_id<>p_candidate_id
+      or v_existing.dataset_manifest_id<>v_policy.dataset_manifest_id
+      or v_existing.evidence_class<>p_evidence_class
+      or v_existing.manifest_hash<>v_policy.manifest_hash
+    then raise exception 'experiment run key reuse does not match immutable run identity'; end if;
+    if (select count(*) from agent.learning_experiment_run_cases where run_id=v_existing.id)<>cardinality(p_case_keys)
+      or exists (
+        select 1 from unnest(p_case_keys) x(case_key)
+        where not exists (
+          select 1 from agent.learning_experiment_run_cases c
+          where c.run_id=v_existing.id and c.case_key=x.case_key
+        )
+      )
+    then raise exception 'experiment run key reuse does not match immutable case set'; end if;
+    return v_existing.id;
+  end if;
+
   insert into agent.learning_experiment_runs(
-    project_id,policy_id,candidate_id,dataset_manifest_id,evidence_class,
+    project_id,policy_id,candidate_id,dataset_manifest_id,run_key,evidence_class,
     agent_key,skill_key,mode,baseline_version,candidate_version,
     evaluator_actor_id,proposer_actor_id,manifest_hash
   ) values (
-    p_project_id,p_policy_id,p_candidate_id,v_policy.dataset_manifest_id,p_evidence_class,
+    p_project_id,p_policy_id,p_candidate_id,v_policy.dataset_manifest_id,btrim(p_run_key),p_evidence_class,
     v_policy.agent_key,v_policy.skill_key,v_policy.mode,v_policy.baseline_version,v_policy.candidate_version,
     v_policy.evaluator_actor_id,v_policy.proposer_actor_id,v_policy.manifest_hash
   ) returning id into v_run_id;
@@ -272,6 +298,7 @@ as $$
 declare
   v_run agent.learning_experiment_runs%rowtype;
   v_existing agent.learning_experiment_arm_attempts%rowtype;
+  v_existing_result agent.learning_experiment_arm_results%rowtype;
   v_attempt_id uuid;
   v_correlation_id uuid;
   v_expected_version text;
@@ -299,11 +326,19 @@ begin
       or v_existing.input_artifact_ref<>btrim(p_input_artifact_ref)
       or v_existing.input_artifact_hash<>p_input_artifact_hash
     then raise exception 'attempt key reuse does not match immutable attempt identity'; end if;
+    select * into v_existing_result
+    from agent.learning_experiment_arm_results
+    where attempt_id=v_existing.id;
+    if not found then
+      raise exception 'ambiguous existing experiment attempt has no terminal evidence';
+    end if;
     return jsonb_build_object(
       'attemptId',v_existing.id,
       'executionCorrelationId',v_existing.execution_correlation_id,
       'attemptNumber',v_existing.attempt_number,
-      'reused',true
+      'reused',true,
+      'terminalResultId',v_existing_result.id,
+      'terminalStatus',v_existing_result.terminal_status
     );
   end if;
 
@@ -676,7 +711,7 @@ begin
 end;
 $;
 
-revoke all on function agent.create_learning_experiment_run(uuid,uuid,uuid,text,text[]) from public,anon,authenticated;
+revoke all on function agent.create_learning_experiment_run(uuid,uuid,uuid,text,text,text[]) from public,anon,authenticated;
 revoke all on function agent.prepare_learning_experiment_arm_attempt(uuid,uuid,text,text,text,text,text,text,text,text) from public,anon,authenticated;
 revoke all on function agent.record_learning_experiment_arm_result(uuid,uuid,uuid,text,text,text,integer,text) from public,anon,authenticated;
 revoke all on function agent.record_learning_experiment_case_score(uuid,uuid,text,text,text,uuid,uuid,numeric,numeric,boolean,boolean,boolean,text,text,timestamptz) from public,anon,authenticated;
