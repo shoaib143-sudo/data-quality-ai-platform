@@ -12,7 +12,7 @@ registerHooks({ resolve(specifier, context, next) {
   return next(specifier, context)
 } })
 
-const { executeGovernedLearningExperimentArm } = await import('../lib/agents/governed-learning-paired-experiment-runner.ts')
+const { executeGovernedLearningExperimentArm, reconcileGovernedLearningExperimentAttempt } = await import('../lib/agents/governed-learning-paired-experiment-runner.ts')
 
 const ids = {
   projectId: '11111111-1111-4111-8111-111111111111',
@@ -122,3 +122,26 @@ assert.equal(getCalls().at(-1).fn, 'complete_learning_experiment_attempt_v2')
 assert.equal(getCalls().at(-1).args.p_terminal_status, 'RECONCILIATION_REQUIRED')
 
 console.log('Learning runner canonical evidence binding persists one content-addressed result artifact and fails closed on missing/conflicting evidence.')
+
+
+// Delayed authoritative accounting can reconcile evidence without executor re-dispatch.
+setResponses([
+  ok({
+    status: 'COMPLETED', idempotent: false, runId: ids.runId,
+    resultArtifactId: ids.artifactId, resultContentHash: contentHash,
+  }),
+])
+const reconciled = await reconcileGovernedLearningExperimentAttempt({
+  projectId: ids.projectId,
+  attemptId: ids.attemptId,
+  executionKey,
+  resultArtifactId: ids.artifactId,
+  reservationId: ids.reservationId,
+  costEventId: ids.costEventId,
+})
+assert.equal(reconciled.status, 'COMPLETED')
+assert.equal(getCalls().length, 1)
+assert.equal(getCalls()[0].fn, 'reconcile_learning_experiment_attempt')
+assert.equal(getArtifactCalls().length, 1, 'reconciliation must not repersist or re-execute output')
+
+console.log('Delayed accounting reconciliation binds existing canonical evidence without provider redispatch.')
