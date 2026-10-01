@@ -162,3 +162,13 @@ test('metadata scan diagnostics expose manifest failures and safe rescan without
   assert.match(panel,/\/api\/catalog\/discovery/)
   assert.match(discoveryRoute,/authorizeProject\(user\.id, source\.project_id, 'discovery\.execute'\)/)
 })
+
+
+test('BI workbench can persist imported metadata through the governed lineage ingestion API',()=>{
+  const workbench=fs.readFileSync('components/catalog/bi-metadata-workbench.tsx','utf8')
+  assert.match(workbench,/Persist source-to-report lineage/)
+  assert.match(workbench,/\/api\/lineage\/ingest/)
+  assert.match(workbench,/projectId/)
+  assert.match(workbench,/integrationType:provider/)
+  assert.match(workbench,/sourceKey:/)
+})
