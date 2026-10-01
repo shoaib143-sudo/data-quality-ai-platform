@@ -117,3 +117,35 @@ test('metadata discovery emits explicit schema drift evidence and keeps external
   assert.match(discovery,/METADATA_CHANGE_NOTIFICATIONS_ENABLED/)
   assert.match(discovery,/queueAlertNotifications/)
 })
+
+
+test('persona landing exposes icon-rich authorized workspace shortcuts',()=>{
+  const landing=fs.readFileSync('components/governance/role-landing-page.tsx','utf8')
+  assert.match(landing,/Workspace shortcuts/)
+  assert.match(landing,/workspaceIcon/)
+  assert.match(landing,/visibleNav\.slice\(0,6\)/)
+})
+
+test('executive summary labels readiness as evidence coverage rather than certification',()=>{
+  const page=fs.readFileSync('app/reports/executive-summary/page.tsx','utf8')
+  assert.match(page,/Evidence coverage snapshot/)
+  assert.match(page,/not a production certification score/)
+  assert.match(page,/Source readiness/)
+  assert.match(page,/Lineage evidence/)
+})
+
+test('connector registry distinguishes live bridge ingest and dry-run integration modes',()=>{
+  const registry=fs.readFileSync('lib/connectors/connector-capabilities.ts','utf8')
+  const page=fs.readFileSync('app/catalog/connectors/page.tsx','utf8')
+  for(const mode of ['LIVE_NATIVE','LIVE_BRIDGE','INGEST_ADAPTER','DRY_RUN_ADAPTER'])assert.match(registry,new RegExp(mode))
+  for(const name of ['Oracle Database','Microsoft SQL Server','Informatica','Power BI','.NET'])assert.ok(registry.includes(name))
+  assert.match(page,/Connector capability registry/)
+})
+
+test('lineage evidence timeline renders persisted ingestion and transformation evidence',()=>{
+  const page=fs.readFileSync('app/lineage/evidence/page.tsx','utf8')
+  assert.match(page,/lineage_ingestion_events/)
+  assert.match(page,/lineage_transformations/)
+  assert.match(page,/Observed lineage and transformations/)
+  assert.match(page,/distinguishes received source evidence and transformation records from inferred suggestions/)
+})
