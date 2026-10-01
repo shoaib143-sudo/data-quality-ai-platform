@@ -52,7 +52,7 @@ export function buildGovernanceDeploymentPlan(
   projectId:desired.projectId,desiredStateFingerprint,
   targets:targets.map(value=>({
    provider:value.target.provider.trim().toLowerCase(),connectionId:value.target.connectionId,
-   planFingerprint:value.plan.planFingerprint,observedAt:value.observedAt,
+   planFingerprint:value.plan.planFingerprint,
   })),
  })
  return{
