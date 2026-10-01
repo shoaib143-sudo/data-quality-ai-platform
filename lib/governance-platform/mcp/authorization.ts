@@ -12,7 +12,7 @@ export type GovernanceMcpAuthorizer=(request:GovernanceMcpAuthorizationRequest)=
 const requiredCapability:Record<GovernanceMcpToolName,AuthorizationCapability>={
  'governance.plan':'catalog.read',
  'governance.verify':'catalog.read',
- 'governance.status':'execution.view',
+ 'governance.status':'execution.view_evidence',
  'governance.apply':'agent.execute',
 }
 
