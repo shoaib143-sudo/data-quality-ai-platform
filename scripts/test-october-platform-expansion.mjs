@@ -251,3 +251,50 @@ test('federation workspace accurately distinguishes dry run from governed persis
   assert.match(workbench,/Persist governed exchange/)
   assert.match(workbench,/canPersist/)
 })
+
+
+test('metadata version comparison exposes real column-level structural deltas',()=>{
+  const page=fs.readFileSync('app/catalog/history/page.tsx','utf8')
+  const compare=fs.readFileSync('components/catalog/metadata-version-compare.tsx','utf8')
+  assert.match(page,/name,columns,version_number/)
+  assert.match(compare,/Columns added/)
+  assert.match(compare,/Columns removed/)
+  assert.match(compare,/Type\/nullability changes/)
+  assert.match(compare,/row\.data_type/)
+})
+
+test('source artifact scanner recognizes language-specific file access without promoting framework symbols to lineage',()=>{
+  const dotnet=scanSourceArtifact({kind:'DOTNET',path:'Jobs/Load.cs',content:'var p = File.ReadAllText("C:\\\\data\\\\customer.csv");'})
+  const node=scanSourceArtifact({kind:'NODEJS',path:'jobs/load.js',content:'const x = readFileSync("/data/customer.json", "utf8")'})
+  const vba=scanSourceArtifact({kind:'VBA',path:'Customer.xlsm!Module1',content:'Workbooks.Open "C:\\\\data\\\\customer.xlsx"'})
+  assert.ok(dotnet.references.some(item=>item.kind==='FILE'&&item.target.includes('customer.csv')))
+  assert.ok(node.references.some(item=>item.kind==='FILE'&&item.target.includes('customer.json')))
+  assert.ok(vba.references.some(item=>item.kind==='FILE'&&item.target.includes('customer.xlsx')))
+  assert.ok(dotnet.warnings.some(item=>item.includes('not promoted to authoritative lineage')))
+})
+
+test('BI metadata adapter accepts provider-native export collection shapes',()=>{
+  const powerBi=normalizeBiMetadata('POWER_BI',{semanticModels:[{id:'m1',name:'Customer Model',sources:['warehouse.customer']}]})
+  const tableau=normalizeBiMetadata('TABLEAU',{workbooks:[{luid:'w1',name:'Customer Workbook',dataSources:['warehouse.customer']}]})
+  const looker=normalizeBiMetadata('LOOKER',{explores:[{id:'e1',name:'customer_explore',tables:['warehouse.customer']}]})
+  assert.equal(powerBi[0]?.assetType,'SEMANTIC_MODEL')
+  assert.equal(tableau[0]?.assetType,'REPORT')
+  assert.equal(looker[0]?.assetType,'SEMANTIC_MODEL')
+  assert.deepEqual(looker[0]?.upstream,['warehouse.customer'])
+})
+
+test('observability source health includes latest metadata discovery execution evidence',()=>{
+  const page=fs.readFileSync('app/observability/page.tsx','utf8')
+  assert.match(page,/discovery_runs/)
+  assert.match(page,/latestDiscoveryBySource/)
+  assert.match(page,/Latest metadata scan/)
+  assert.match(page,/NO EVIDENCE/)
+})
+
+test('lineage flow visualization presents source transformation and target topology',()=>{
+  const explorer=fs.readFileSync('app/lineage/lineage-explorer.tsx','utf8')
+  assert.match(explorer,/sourceAssets/)
+  assert.match(explorer,/targetAssets/)
+  assert.match(explorer,/>Sources</)
+  assert.match(explorer,/>Targets</)
+})
