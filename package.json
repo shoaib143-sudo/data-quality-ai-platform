@@ -20,6 +20,7 @@
     "verify:embedding-provider": "node scripts/verify-embedding-provider.mjs && node --experimental-strip-types scripts/test-embedding-provider.mjs",
     "verify:retrieval-provider": "node scripts/verify-retrieval-provider.mjs && node --experimental-strip-types scripts/test-retrieval-provider.mjs",
     "verify:memory-provider": "node scripts/verify-memory-provider.mjs && node --experimental-strip-types scripts/test-memory-provider.mjs",
+    "verify:learning-experiment-budget": "node --experimental-strip-types scripts/test-learning-experiment-budget-runtime.mjs",
     "verify:learning-engine": "node scripts/verify-learning-engine.mjs && node --experimental-strip-types scripts/test-learning-engine.mjs",
     "verify:command-center-explorer": "node scripts/verify-command-center-explorer.mjs && node --experimental-strip-types scripts/test-command-center-explorer.mjs",
     "verify:retrieval-evaluation-command-center": "node scripts/verify-retrieval-evaluation-command-center.mjs",

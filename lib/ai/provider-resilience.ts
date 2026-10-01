@@ -90,6 +90,7 @@ export class ResilientReasoningProvider implements ReasoningProvider {
       // A run-wide cancellation/deadline must never become another paid attempt.
       request.signal?.throwIfAborted()
       const reason = fallbackReason(primaryError)
+      if (request.allowFallback === false) throw primaryError
       if (!reason || this.fallbacks.length === 0) throw primaryError
 
       let lastError: unknown = primaryError
