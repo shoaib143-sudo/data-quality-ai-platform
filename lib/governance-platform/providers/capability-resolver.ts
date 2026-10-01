@@ -1,4 +1,4 @@
-import type { ProviderCapability, CapabilityMode } from './sdk/capability'
+import type { ProviderCapability, CapabilityMode } from './sdk/capability.ts'
 
 export type SemanticLoss = 'EXACT' | 'APPROXIMATED' | 'UNSUPPORTED'
 
