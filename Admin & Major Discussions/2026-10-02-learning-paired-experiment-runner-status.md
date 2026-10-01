@@ -11,7 +11,7 @@ The new module remains non-production by default and does not authorize provider
 ## Implemented control chain
 
 1. A locked evaluation policy and sealed HELD_OUT manifest are resolved by server-owned persistence.
-2. The experiment run root and exact case list are persisted before dispatch.
+2. The experiment run root and exact ordered case list are persisted before dispatch under a stable caller-supplied `runKey`. Reusing that key is allowed only when the immutable policy/candidate/evidence class/manifest/case sequence matches exactly.
 3. Each baseline/candidate arm persists:
    - case identity;
    - arm and locked version;
@@ -19,11 +19,11 @@ The new module remains non-production by default and does not authorize provider
    - immutable input artifact reference and SHA-256 hash;
    - attempt key and attempt number;
    - unique execution correlation ID.
-4. Re-entry with the same attempt key is idempotent only when the complete immutable identity matches.
-5. A prior attempt without terminal evidence blocks redispatch, preventing ambiguous repeated paid calls after crash/retry.
+4. Re-entry with the same attempt key is idempotent only when the complete immutable identity matches. Completed terminal arm results are reused without provider redispatch; an existing attempt with no terminal evidence blocks redispatch until reconciled.
+5. Canonical `source_case_ref` is read from the sealed HELD_OUT manifest binding and returned by the persistence boundary; caller-supplied source references are not trusted. The request factory must also attest the exact input artifact SHA-256 before any provider call.
 6. PROSPECTIVE_LIVE successful arms require the existing governed experiment-budget reservation and ACCOUNTED settlement for the exact execution correlation.
 7. SYNTHETIC runs reject paid runtime evidence and remain structurally segregated from live release evidence.
-8. Successful baseline/candidate results for one held-out case are bound before an independent case score can be recorded.
+8. Successful baseline/candidate results for one held-out case are bound before an independent case score can be recorded. On restart, already-scored cases are reused without rerunning the evaluator.
 9. Canonical summary evidence derives:
    - exact case/scored-case counts;
    - baseline/candidate aggregate score;
