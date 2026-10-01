@@ -174,7 +174,7 @@ select agent.complete_learning_experiment_attempt(
   (select execution_key from agent.learning_experiment_attempts where id=:'attempt_1'::uuid),
   'COMPLETED','fixture:output:case1:candidate',null,null,null
 );
-do $
+do $$
 begin
   begin
     perform agent.complete_learning_experiment_attempt(
@@ -193,7 +193,7 @@ begin
   exception when others then
     if SQLERRM not like '%conflicts with existing immutable completion%' then raise; end if;
   end;
-end $;
+end $$;
 
 -- Reusing the same case/arm with changed immutable context is rejected.
 do $$
