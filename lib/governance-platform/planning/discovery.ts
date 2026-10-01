@@ -1,6 +1,6 @@
-import type { GovernanceDesiredState } from '../desired-state/model'
-import { getGovernanceProvider } from '../providers/registry'
-import type { GovernanceTargetObservedState } from './deployment-plan'
+import type { GovernanceDesiredState } from '../desired-state/model.ts'
+import { getGovernanceProvider } from '../providers/registry.ts'
+import type { GovernanceTargetObservedState } from './deployment-plan.ts'
 
 export async function discoverGovernanceTargetStates(desired:GovernanceDesiredState):Promise<GovernanceTargetObservedState[]>{
  const states:GovernanceTargetObservedState[]=[]
