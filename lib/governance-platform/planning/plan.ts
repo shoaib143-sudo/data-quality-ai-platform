@@ -1,8 +1,8 @@
-import type { CanonicalGovernanceObject } from '../canonical/model'
-import type { GovernanceDesiredState } from '../desired-state/model'
-import { validateGovernanceDesiredState } from '../desired-state/validate'
-import { diffGovernanceState, type GovernanceDiffAction } from './diff'
-import { stableGovernanceFingerprint } from './fingerprint'
+import type { CanonicalGovernanceObject } from '../canonical/model.ts'
+import type { GovernanceDesiredState } from '../desired-state/model.ts'
+import { validateGovernanceDesiredState } from '../desired-state/validate.ts'
+import { diffGovernanceState, type GovernanceDiffAction } from './diff.ts'
+import { stableGovernanceFingerprint } from './fingerprint.ts'
 
 export type GovernancePlanOperation = {
   operationId: string
