@@ -1,3 +1,7 @@
+import './governance-provider-target-dependencies.test.mjs'
+import './governance-provider-informatica-client.test.mjs'
+import './governance-provider-checkpoint-resume.test.mjs'
+import './governance-provider-runner-gates.test.mjs'
 import './governance-provider-persistence-contract.test.mjs'
 import './governance-provider-config.test.mjs'
 import './governance-provider-planning.test.mjs'
