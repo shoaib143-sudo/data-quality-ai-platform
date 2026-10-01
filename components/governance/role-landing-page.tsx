@@ -133,9 +133,13 @@ export function RoleLandingPage({ persona, data, userLabel, canAdmin=false, canS
   const plan = buildPersonaPresentationPlan(persona.slug)
   const view = buildRoleLandingPresentation(plan, data)
   const personaNav = persona.nav.filter(item => canAccessWorkspaceHref(persona.slug, item.href, orgRole))
-  const visibleNav = canAccessWorkspaceHref(persona.slug, '/agents', orgRole) && !personaNav.some(item => item.href === '/agents')
+  const agentNav = canAccessWorkspaceHref(persona.slug, '/agents', orgRole) && !personaNav.some(item => item.href === '/agents')
     ? [...personaNav, { label: 'AI Agents', href: '/agents' }]
     : personaNav
+  const summaryPersonas = new Set(['senior-leadership','business-user','data-owner','data-product-owner','data-governance-specialist'])
+  const visibleNav = summaryPersonas.has(persona.slug) && canAccessWorkspaceHref(persona.slug, '/reports/executive-summary', orgRole)
+    ? [...agentNav, { label: 'Executive Summary', href: '/reports/executive-summary' }]
+    : agentNav
   const metrics = view.metrics.map(item => ({ ...item, href: safeHref(item.href) }))
   const findings = data.topFindings.slice(0,3).map(item => ({ ...item, href: safeHref(item.href, '/issues') }))
   const activity = data.activity.map(item => ({ ...item, href: safeHref(item.href, '/issues') }))
