@@ -10,7 +10,7 @@ export const informaticaManifest: ProviderManifest = {
   capabilities: [
     {
       capability: 'catalog.asset.read',
-      support: 'FULL',
+      support: 'PARTIAL',
       modes: ['READ'],
       consistency: 'EVENTUAL',
       execution: 'SYNC',
@@ -18,11 +18,14 @@ export const informaticaManifest: ProviderManifest = {
       rollback: 'NONE',
       verification: 'READ_BACK',
       apiVersion: 'provider-configured',
-      limitations: ['Endpoint mapping is supplied by the configured Informatica API adapter.'],
+      limitations: [
+        'Read-only discovery is enabled only through an explicitly configured public Informatica API endpoint mapping.',
+        'Provider-specific pagination and object-type coverage remain adapter responsibilities until endpoint conformance is certified.',
+      ],
     },
     {
       capability: 'lineage.read',
-      support: 'FULL',
+      support: 'UNSUPPORTED',
       modes: ['READ'],
       consistency: 'EVENTUAL',
       execution: 'SYNC',
@@ -30,6 +33,7 @@ export const informaticaManifest: ProviderManifest = {
       rollback: 'NONE',
       verification: 'READ_BACK',
       apiVersion: 'provider-configured',
+      limitations: ['Lineage endpoint mapping and canonical normalization are not yet implemented in the Informatica reference adapter.'],
     },
   ],
 }
