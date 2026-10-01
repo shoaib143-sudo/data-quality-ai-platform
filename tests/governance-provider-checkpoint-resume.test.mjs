@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { governanceResumeAction,claimGovernanceOperation } from '../lib/governance-platform/execution/checkpoint.ts'
+
+const base={planId:'p',operationId:'o',idempotencyKey:'i',attempts:1,providerJobId:null,updatedAt:new Date().toISOString()}
+test('checkpoint resumes verification after success rather than replaying mutation',()=>{assert.equal(governanceResumeAction({...base,status:'SUCCEEDED'}),'VERIFY')})
+test('checkpoint polls durable provider jobs and completes only verified work',()=>{assert.equal(governanceResumeAction({...base,status:'PENDING',providerJobId:'job'}),'POLL');assert.equal(governanceResumeAction({...base,status:'VERIFIED'}),'COMPLETE')})
+test('claim does not increment attempts when verification is pending',async()=>{
+ let stored={...base,status:'SUCCEEDED'};const store={get:async()=>stored,put:async value=>{stored=value}}
+ const result=await claimGovernanceOperation(store,{planId:'p',operationId:'o',idempotencyKey:'i'})
+ assert.equal(result.claimed,false);assert.equal(result.resumeAction,'VERIFY');assert.equal(stored.attempts,1)
+})
