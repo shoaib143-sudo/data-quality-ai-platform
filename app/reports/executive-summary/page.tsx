@@ -4,12 +4,14 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
 function pct(value:number|null){return value==null?'N/A':`${Math.round(value*100)}%`}
 
 export default async function ExecutiveSummaryPage() {
   const user = await requireUser()
   const [supabase, landing] = await Promise.all([createClient(), resolveLandingAccess(user.id)])
+  const safeHref = (href:string, fallback='/catalog') => canAccessWorkspaceHref(landing.persona,href,landing.organizationRole) ? href : fallback
 
   const [datasetsResult,sourcesResult,runsResult,scoresResult,findingsResult,issuesResult,lineageResult,modelsResult] = await Promise.all([
     supabase.schema('catalog').from('datasets').select('id,project_id,name,status',{count:'exact'}),
@@ -46,10 +48,10 @@ export default async function ExecutiveSummaryPage() {
   const pillars=[
     {label:'Catalog & Metadata',detail:`${totalDatasets} governed datasets`,Icon:Database,href:'/catalog'},
     {label:'Data Quality',detail:`${pct(averageQuality)} average scored quality`,Icon:CheckCircle2,href:'/data-quality'},
-    {label:'Lineage',detail:`${lineageMappings} persisted field mappings`,Icon:GitBranch,href:'/lineage'},
+    {label:'Lineage',detail:`${lineageMappings} persisted field mappings`,Icon:GitBranch,href:safeHref('/lineage')},
     {label:'Governance',detail:`${openIssues} unresolved governed issues`,Icon:ShieldCheck,href:'/issues'},
-    {label:'AI Operations',detail:`${activeModels} active governed AI systems`,Icon:BrainCircuit,href:'/agents'},
-    {label:'Operations',detail:`${completedRuns} completed · ${failedRuns} failed runs`,Icon:Activity,href:'/monitoring'},
+    {label:'AI Operations',detail:`${activeModels} active governed AI systems`,Icon:BrainCircuit,href:safeHref('/agents')},
+    {label:'Operations',detail:`${completedRuns} completed · ${failedRuns} failed runs`,Icon:Activity,href:safeHref('/monitoring')},
   ]
 
   return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-[#08111f] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -60,7 +62,7 @@ export default async function ExecutiveSummaryPage() {
       <Link href="/catalog" className="rounded-2xl border border-white/10 bg-[#102036] p-5 hover:border-cyan-400/30"><Database className="h-5 w-5 text-cyan-300"/><p className="mt-3 text-3xl font-black">{totalDatasets}</p><p className="text-xs text-slate-500">Governed datasets</p></Link>
       <Link href="/data-quality" className="rounded-2xl border border-white/10 bg-[#102036] p-5 hover:border-cyan-400/30"><CheckCircle2 className="h-5 w-5 text-emerald-300"/><p className="mt-3 text-3xl font-black">{pct(averageQuality)}</p><p className="text-xs text-slate-500">Average quality score</p></Link>
       <Link href="/issues" className="rounded-2xl border border-white/10 bg-[#102036] p-5 hover:border-cyan-400/30"><AlertTriangle className="h-5 w-5 text-rose-300"/><p className="mt-3 text-3xl font-black">{highFindings}</p><p className="text-xs text-slate-500">High-priority findings</p></Link>
-      <Link href="/datasets" className="rounded-2xl border border-white/10 bg-[#102036] p-5 hover:border-cyan-400/30"><Layers3 className="h-5 w-5 text-violet-300"/><p className="mt-3 text-3xl font-black">{activeSources}/{sourcesResult.count??sources.length}</p><p className="text-xs text-slate-500">Active connected sources</p></Link>
+      <Link href={safeHref('/datasets')} className="rounded-2xl border border-white/10 bg-[#102036] p-5 hover:border-cyan-400/30"><Layers3 className="h-5 w-5 text-violet-300"/><p className="mt-3 text-3xl font-black">{activeSources}/{sourcesResult.count??sources.length}</p><p className="text-xs text-slate-500">Active connected sources</p></Link>
     </section>
 
     <section className="mt-5 rounded-3xl border border-white/10 bg-[#102036] p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.15em] text-violet-300">Core capability pillars</p><h2 className="mt-1 text-2xl font-black">One governed operating model</h2></div><Link href="/reports" className="text-sm font-bold text-blue-300">Reports →</Link></div><div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{pillars.map(({label,detail,Icon,href})=><Link key={label} href={href} className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4 hover:border-violet-400/30"><Icon className="h-5 w-5 text-violet-300"/><p className="mt-3 font-black text-white">{label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p></Link>)}</div></section>
