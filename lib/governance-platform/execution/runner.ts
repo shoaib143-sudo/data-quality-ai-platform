@@ -46,18 +46,26 @@ async function appendEvidence(store:GovernanceEvidenceStore|undefined,operation:
  }))
 }
 
-export async function executeGovernedProviderOperation(operation:ProviderPlannedOperation,dependencies:GovernedProviderExecutionDependencies){
+export async function preflightGovernedProviderOperation(operation:ProviderPlannedOperation,dependencies:GovernedProviderExecutionDependencies){
  const provider=getGovernanceProvider(operation.provider)
  if(!provider)throw new Error(`Governance provider "${operation.provider}" is not registered.`)
  const resolution=resolveProviderCapability(await provider.capabilities(),operation.capability,modeByKind[operation.kind]??'READ')
- if(!resolution.executable)return{status:'BLOCKED_CAPABILITY' as const,resolution}
-
+ if(!resolution.executable)return{status:'BLOCKED_CAPABILITY' as const,resolution,provider}
  const gate=await evaluateGovernedExecutionGate({
   projectId:operation.projectId,actionKey:operation.capability,targetType:operation.object.type,
   requiredCapability:operation.requiredCapability,riskLevel:operation.kind==='DELETE'?'HIGH':'MEDIUM',confidence:1,
  },dependencies)
- if(gate.denied)return{status:'DENIED' as const,gate,resolution}
- if(gate.requiresApproval)return{status:'APPROVAL_REQUIRED' as const,gate,resolution}
+ if(gate.denied)return{status:'DENIED' as const,gate,resolution,provider}
+ if(gate.requiresApproval)return{status:'APPROVAL_REQUIRED' as const,gate,resolution,provider}
+ return{status:'READY' as const,gate,resolution,provider}
+}
+
+export type GovernanceOperationPreflight=Awaited<ReturnType<typeof preflightGovernedProviderOperation>>
+
+export async function executeGovernedProviderOperation(operation:ProviderPlannedOperation,dependencies:GovernedProviderExecutionDependencies,prepared?:GovernanceOperationPreflight){
+ const preflight=prepared??await preflightGovernedProviderOperation(operation,dependencies)
+ if(preflight.status!=='READY')return preflight
+ const {provider,gate,resolution}=preflight
 
  const claim=dependencies.checkpointStore
   ?await claimGovernanceOperation(dependencies.checkpointStore,{planId:operation.planId,operationId:operation.operationId,idempotencyKey:operation.idempotencyKey})
