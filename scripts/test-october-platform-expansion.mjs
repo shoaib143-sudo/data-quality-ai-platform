@@ -205,3 +205,10 @@ test('lineage transformation changes create immutable version history without ob
   assert.match(migration,/old\.logic_hash is distinct from new\.logic_hash/)
   assert.match(page,/Transformation version history/)
 })
+
+
+test('lineage ingestion workbench exposes every requested ETL and code preset without claiming live API pull',()=>{
+  const manager=fs.readFileSync('app/lineage/ingest/lineage-ingest-manager.tsx','utf8')
+  for(const key of ['INFORMATICA','BOOMI','DATAMAGIC','WEBOTX','AXWAY','AGILE_REPORTER','SSIS','NODEJS','DOTNET','VBA','SCRIPT','LOG'])assert.match(manager,new RegExp(key+':'))
+  assert.match(manager,/Use the presets as connector contracts/)
+})
