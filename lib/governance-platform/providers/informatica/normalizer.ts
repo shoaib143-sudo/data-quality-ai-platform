@@ -1,4 +1,5 @@
-import type { CanonicalGovernanceObject } from '../../canonical/model'
+import type { CanonicalGovernanceObject, ProviderProjection } from '../../canonical/model'
+import { stableGovernanceFingerprint } from '../../planning/fingerprint'
 
 export type InformaticaAssetRecord = {
   id: string
@@ -8,20 +9,40 @@ export type InformaticaAssetRecord = {
   attributes?: Record<string, unknown>
 }
 
+export type NormalizedInformaticaAsset = {
+  object: CanonicalGovernanceObject
+  projection: ProviderProjection
+}
+
 export function normalizeInformaticaAsset(
   record: InformaticaAssetRecord,
   projectId: string,
-): CanonicalGovernanceObject {
+  connectionId: string,
+  observedAt: string,
+): NormalizedInformaticaAsset {
   if (!record.id?.trim() || !record.name?.trim()) throw new Error('Informatica asset id and name are required.')
-  return {
-    id: `informatica:${record.id}`,
+  const externalKey = record.externalKey?.trim() || record.id.trim()
+  const object: CanonicalGovernanceObject = {
+    id: `technical-asset:${externalKey}`,
     type: 'TECHNICAL_ASSET',
-    externalKey: record.externalKey?.trim() || record.id,
+    externalKey,
     name: record.name.trim(),
     description: record.description,
     projectId,
-    attributes: { ...(record.attributes ?? {}), provider: 'informatica', providerObjectId: record.id },
+    attributes: { ...(record.attributes ?? {}) },
     relationships: [],
     version: 1,
+  }
+  return {
+    object,
+    projection: {
+      provider: 'informatica',
+      connectionId,
+      canonicalObjectId: object.id,
+      providerObjectId: record.id.trim(),
+      lastObservedFingerprint: stableGovernanceFingerprint(object),
+      lastObservedAt: observedAt,
+      syncState: 'IN_SYNC',
+    },
   }
 }
