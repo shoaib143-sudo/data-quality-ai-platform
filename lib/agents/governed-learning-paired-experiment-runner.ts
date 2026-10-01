@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { persistAgentRunResultArtifact } from '@/lib/agents/run-result-artifact'
 
 export type LearningExperimentArm = 'BASELINE' | 'CANDIDATE'
 export type LearningExperimentAttemptStatus =
@@ -19,7 +20,8 @@ export type PreparedLearningExperimentAttempt = {
 
 export type LearningExperimentExecutionResult = {
   terminalStatus: Exclude<LearningExperimentAttemptStatus, 'PREPARED' | 'DISPATCHED'>
-  outputEvidenceRef?: string | null
+  /** Required only for COMPLETED. Persisted through the canonical AGENT_RUN_RESULT contract. */
+  output?: Record<string, unknown> | null
   reservationId?: string | null
   costEventId?: string | null
   errorCode?: string | null
@@ -119,14 +121,15 @@ export async function completeGovernedLearningExperimentAttempt(input: {
   attemptId: string
   executionKey: string
   result: LearningExperimentExecutionResult
+  resultArtifactId?: string | null
 }) {
   const admin = createAdminClient()
-  const { data, error } = await admin.schema('agent').rpc('complete_learning_experiment_attempt', {
+  const { data, error } = await admin.schema('agent').rpc('complete_learning_experiment_attempt_v2', {
     p_project_id: requiredUuid(input.projectId, 'projectId'),
     p_attempt_id: requiredUuid(input.attemptId, 'attemptId'),
     p_execution_key: requiredText(input.executionKey, 'executionKey'),
     p_terminal_status: input.result.terminalStatus,
-    p_output_evidence_ref: input.result.outputEvidenceRef?.trim() || null,
+    p_result_artifact_id: input.resultArtifactId ? requiredUuid(input.resultArtifactId, 'resultArtifactId') : null,
     p_reservation_id: input.result.reservationId ? requiredUuid(input.result.reservationId, 'reservationId') : null,
     p_cost_event_id: input.result.costEventId ? requiredUuid(input.result.costEventId, 'costEventId') : null,
     p_error_code: input.result.errorCode?.trim() || null,
@@ -138,6 +141,38 @@ export async function completeGovernedLearningExperimentAttempt(input: {
     status: parseStatus(row.status),
     idempotent: row.idempotent === true,
     runId: requiredUuid(String(row.runId ?? ''), 'runId'),
+    resultArtifactId: row.resultArtifactId ? requiredUuid(String(row.resultArtifactId), 'resultArtifactId') : null,
+    resultContentHash: row.resultContentHash ? requiredText(String(row.resultContentHash), 'resultContentHash') : null,
+  }
+}
+
+
+export async function reconcileGovernedLearningExperimentAttempt(input: {
+  projectId: string
+  attemptId: string
+  executionKey: string
+  resultArtifactId: string
+  reservationId: string
+  costEventId: string
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('agent').rpc('reconcile_learning_experiment_attempt', {
+    p_project_id: requiredUuid(input.projectId, 'projectId'),
+    p_attempt_id: requiredUuid(input.attemptId, 'attemptId'),
+    p_execution_key: requiredText(input.executionKey, 'executionKey'),
+    p_result_artifact_id: requiredUuid(input.resultArtifactId, 'resultArtifactId'),
+    p_reservation_id: requiredUuid(input.reservationId, 'reservationId'),
+    p_cost_event_id: requiredUuid(input.costEventId, 'costEventId'),
+  })
+  if (error) throw new Error(`Unable to reconcile learning experiment attempt: ${error.message}`)
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid learning experiment reconciliation evidence')
+  const row = data as Record<string, unknown>
+  return {
+    status: parseStatus(row.status),
+    idempotent: row.idempotent === true,
+    runId: requiredUuid(String(row.runId ?? ''), 'runId'),
+    resultArtifactId: row.resultArtifactId ? requiredUuid(String(row.resultArtifactId), 'resultArtifactId') : null,
+    resultContentHash: row.resultContentHash ? requiredText(String(row.resultContentHash), 'resultContentHash') : null,
   }
 }
 
@@ -167,11 +202,24 @@ export async function executeGovernedLearningExperimentArm(
 
   try {
     const result = await executor({ ...prepared, status: 'DISPATCHED' })
+    let resultArtifactId: string | null = null
+    if (result.terminalStatus === 'COMPLETED') {
+      if (!result.output || typeof result.output !== 'object' || Array.isArray(result.output)) {
+        throw new Error('Completed learning experiment execution requires structured canonical output')
+      }
+      const artifact = await persistAgentRunResultArtifact({
+        agentRunId: prepared.runId,
+        output: result.output,
+        name: `Learning experiment ${input.arm.toLowerCase()} result`,
+      })
+      resultArtifactId = artifact.artifactId
+    }
     return await completeGovernedLearningExperimentAttempt({
       projectId: input.projectId,
       attemptId: prepared.attemptId,
       executionKey: prepared.executionKey,
       result,
+      resultArtifactId,
     })
   } catch (error) {
     try {
