@@ -9,10 +9,12 @@ import { orderProviderGovernanceOperations } from '@/lib/governance-platform/pla
 import { simulateGovernanceDeployment } from '@/lib/governance-platform/planning/simulation'
 import { executeGovernedProviderOperation } from '@/lib/governance-platform/execution/runner'
 import type { GovernanceDesiredState } from '@/lib/governance-platform/desired-state/model'
+import { ensureGovernanceProvidersRegistered } from '@/lib/governance-platform/providers/informatica/bootstrap'
 
 export async function POST(request:Request){
  try{
   const user=await requireApiUser()
+  ensureGovernanceProvidersRegistered()
   const body=await request.json().catch(()=>null) as {desiredState?:GovernanceDesiredState;expectedDeploymentFingerprint?:string;confirmDestructive?:boolean}|null
   const desired=body?.desiredState
   if(!desired||!desired.projectId)return NextResponse.json({error:'desiredState.projectId is required.'},{status:400})
