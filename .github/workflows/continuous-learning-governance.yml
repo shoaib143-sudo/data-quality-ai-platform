@@ -54,6 +54,12 @@ on:
       - 'app/admin/ai-command-center/learning-governance/page.tsx'
       - 'scripts/test-learning-evaluation-release-admission.mjs'
       - 'scripts/test-learning-evaluation-admission-behavior.mjs'
+      - 'lib/agents/governed-learning-experiment-runner.ts'
+      - 'lib/agents/governance-learning-experiment-evidence-store.ts'
+      - 'lib/agents/governance-learning-experiment-arm-executor.ts'
+      - 'lib/agents/governed-learning-experiment-finalizer.ts'
+      - 'scripts/test-learning-paired-experiment-runner.mjs'
+      - 'supabase/migrations/20261002023000_learning_paired_experiment_runner.sql'
       - 'scripts/fixtures/learning-evaluation-admin.mjs'
       - 'scripts/test-learning-evaluation-command-center.mjs'
       - 'supabase/migrations/20260930123000_governed_learning_evaluation_release_admission.sql'
@@ -153,6 +159,12 @@ on:
       - 'app/admin/ai-command-center/learning-governance/page.tsx'
       - 'scripts/test-learning-evaluation-release-admission.mjs'
       - 'scripts/test-learning-evaluation-admission-behavior.mjs'
+      - 'lib/agents/governed-learning-experiment-runner.ts'
+      - 'lib/agents/governance-learning-experiment-evidence-store.ts'
+      - 'lib/agents/governance-learning-experiment-arm-executor.ts'
+      - 'lib/agents/governed-learning-experiment-finalizer.ts'
+      - 'scripts/test-learning-paired-experiment-runner.mjs'
+      - 'supabase/migrations/20261002023000_learning_paired_experiment_runner.sql'
       - 'scripts/fixtures/learning-evaluation-admin.mjs'
       - 'scripts/test-learning-evaluation-command-center.mjs'
       - 'supabase/migrations/20260930123000_governed_learning_evaluation_release_admission.sql'
@@ -244,6 +256,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-learning-evaluation-release-admission.mjs
       - name: Run release admission behavior tests
         run: node --experimental-strip-types scripts/test-learning-evaluation-admission-behavior.mjs
+      - name: Run paired learning experiment runner tests
+        run: node --experimental-strip-types scripts/test-learning-paired-experiment-runner.mjs
       - name: Run prospective evaluation Command Center tests
         run: node --experimental-strip-types scripts/test-learning-evaluation-command-center.mjs
       - name: Run governed learning candidate tests
