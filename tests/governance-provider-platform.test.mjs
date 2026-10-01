@@ -1,3 +1,4 @@
+import './governance-provider-control-plane.test.mjs'
 import './governance-provider-target-dependencies.test.mjs'
 import './governance-provider-informatica-client.test.mjs'
 import './governance-provider-checkpoint-resume.test.mjs'
