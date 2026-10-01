@@ -14,6 +14,7 @@ export type GovernancePlanOperation = {
 
 export type GovernancePlan = {
   planId: string
+  planFingerprint: string
   projectId: string
   desiredStateFingerprint: string
   operations: GovernancePlanOperation[]
@@ -41,12 +42,14 @@ export function buildGovernancePlan(
     dependencies: diff.desired.relationships.map(relationship => relationship.targetId).sort(),
   }))
 
+  const planFingerprint = stableGovernanceFingerprint({
+    projectId: desiredState.projectId,
+    desiredStateFingerprint,
+    operations,
+  })
   return {
-    planId: stableGovernanceFingerprint({
-      projectId: desiredState.projectId,
-      desiredStateFingerprint,
-      operations,
-    }).slice(0, 32),
+    planId: planFingerprint.slice(0, 32),
+    planFingerprint,
     projectId: desiredState.projectId,
     desiredStateFingerprint,
     operations,
