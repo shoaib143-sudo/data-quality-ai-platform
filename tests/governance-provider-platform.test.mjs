@@ -1,3 +1,4 @@
+import './governance-provider-api-contract.test.mjs'
 import './governance-provider-deployment-plan.test.mjs'
 import './governance-provider-control-plane.test.mjs'
 import './governance-provider-target-dependencies.test.mjs'
