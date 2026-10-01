@@ -1,7 +1,7 @@
-import { getGovernanceProvider,registerGovernanceProvider } from '../registry'
-import { InformaticaApiClient } from './client'
-import { informaticaProviderConfigFromEnv } from './config'
-import { InformaticaGovernanceProvider } from './provider'
+import { getGovernanceProvider,registerGovernanceProvider } from '../registry.ts'
+import { InformaticaApiClient } from './client.ts'
+import { informaticaProviderConfigFromEnv } from './config.ts'
+import { InformaticaGovernanceProvider } from './provider.ts'
 
 export type GovernanceProviderBootstrapResult={registered:string[];skipped:string[]}
 
