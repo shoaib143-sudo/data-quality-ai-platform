@@ -3,6 +3,7 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject,authorizationErrorResponse } from '@/lib/auth/authorize'
 import { listGovernanceProviders } from '@/lib/governance-platform/providers/registry'
 import { validateProviderManifest } from '@/lib/governance-platform/providers/conformance'
+import { getProviderCompatibility } from '@/lib/governance-platform/providers/compatibility'
 import { ensureGovernanceProvidersRegistered } from '@/lib/governance-platform/providers/informatica/bootstrap'
 
 export async function GET(request:Request){
@@ -17,6 +18,7 @@ export async function GET(request:Request){
    providerVersion:manifest.providerVersion,
    canonicalSchemaVersion:manifest.canonicalSchemaVersion,
    conformance:validateProviderManifest(manifest),
+   compatibility:getProviderCompatibility(manifest.provider),
    capabilities:manifest.capabilities,
   }))
   return NextResponse.json({projectId,providers},{headers:{'Cache-Control':'private, no-store'}})
