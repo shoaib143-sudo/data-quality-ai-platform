@@ -24,7 +24,7 @@ export async function GET() {
         .order('last_seen_at', { ascending: false })
         .limit(5000),
       supabase.schema('governance').from('dataset_catalog').select('dataset_id,project_id,lifecycle_status,certification_status,criticality,tags,business_description,technical_owner_user_id,business_owner_user_id,steward_user_id,retention_days').limit(5000),
-      supabase.schema('profiling').from('profile_findings').select('id,profile_run_id,severity,category,title,description,created_at').order('created_at',{ascending:false}).limit(5000),
+      supabase.schema('profiling').from('profile_findings').select('id,profile_run_id,severity,finding_type,title,description,created_at').order('created_at',{ascending:false}).limit(5000),
       supabase.schema('governance').from('issues').select('id,project_id,dataset_id,status,severity,title,created_at').order('created_at',{ascending:false}).limit(5000),
       supabase.schema('profiling').from('observability_alerts').select('id,project_id,dataset_id,status,severity,category,title,last_observed_at').order('last_observed_at',{ascending:false}).limit(5000),
     ])
@@ -100,7 +100,7 @@ export async function GET() {
     ]
     const qualityRows = [
       ['Finding ID','Profile Run ID','Severity','Category','Title','Description','Created At'],
-      ...findings.map((row:any)=>[text(row.id),text(row.profile_run_id),text(row.severity),text(row.category),text(row.title),text(row.description),text(row.created_at)]),
+      ...findings.map((row:any)=>[text(row.id),text(row.profile_run_id),text(row.severity),text(row.finding_type),text(row.title),text(row.description),text(row.created_at)]),
     ]
     const issueAlertRows = [
       ['Evidence Type','ID','Project ID','Dataset ID','Status','Severity','Category','Title','Observed At'],
