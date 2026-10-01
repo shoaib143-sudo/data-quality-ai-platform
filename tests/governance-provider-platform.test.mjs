@@ -1,3 +1,4 @@
+import './governance-provider-compatibility.test.mjs'
 import './governance-provider-mcp-security.test.mjs'
 import './governance-provider-durable-runner.test.mjs'
 import './governance-provider-mcp-transport.test.mjs'
