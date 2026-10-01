@@ -1,7 +1,7 @@
 import {
   GOVERNANCE_DESIRED_STATE_API_VERSION,
   type GovernanceDesiredState,
-} from './model'
+} from './model.ts'
 
 export type DesiredStateValidationResult =
   | { ok: true; value: GovernanceDesiredState }
