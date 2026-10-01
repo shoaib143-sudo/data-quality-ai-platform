@@ -184,3 +184,13 @@ test('catalog metadata approval workflow applies only approved proposals and rec
   assert.match(ui,/Apply approved change/)
   assert.match(ui,/action:'APPLY'/)
 })
+
+
+test('discovery diagnostics expose published catalog revision deltas as incremental update evidence',()=>{
+  const page=fs.readFileSync('app/catalog/discovery/history/page.tsx','utf8')
+  const panel=fs.readFileSync('components/catalog/discovery-run-history.tsx','utf8')
+  assert.match(page,/catalog_revision_changes/)
+  assert.match(panel,/Incremental catalog change log/)
+  assert.match(panel,/Missing assets remain non-destructive evidence/)
+  assert.match(panel,/change_type/)
+})
