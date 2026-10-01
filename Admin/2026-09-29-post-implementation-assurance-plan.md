@@ -41,7 +41,9 @@ No R3 authorization, governance-truth, evidence-integrity, or production-provena
 
 ## Current evidence snapshot before final release
 
-Reference head at plan creation: `0d8ac47db98eb246ff91ff366100b4be1eabe3cf`.
+Original plan reference head: `0d8ac47db98eb246ff91ff366100b4be1eabe3cf`.
+
+Closure refresh base (2026-10-01): `bc7f684c0b1a4fa353336af5e4d9dc5951691bef`. Final certification remains bound to the post-merge exact head, not either historical reference.
 
 Observed PASS evidence on that head includes:
 - Quality Gate
@@ -64,7 +66,7 @@ Representative post-implementation evidence already exercised in exact-head CI i
 ## Remaining closure boundaries
 
 The following remain explicit and must not be inferred from static/CI evidence:
-- Governance OFF live baseline against a dedicated isolated test project.
+- Governance OFF live baseline execution on the isolated UI Regression Test Project (`ab595892-828f-4585-bafb-b6c657585ce5`). Its explicit autonomy policy is provisioned as `OFF`, `enabled=false`, `policy_version=off-e2e-v1`, `emergency_stop=false`; only the protected-main live execution/evidence remains.
 - Exact-head Vercel production deployment and certification after the final documentation/implementation head is frozen.
 - Production-only source/build/deployment/runtime binding required for a PRODUCTION_VERIFIED claim.
 - Any named integrated live journey for which no direct runtime evidence exists at final head must remain pending or be executed before closure.
