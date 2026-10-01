@@ -207,6 +207,11 @@ begin
   from agent.learning_evaluation_policies
   where id=p_policy_id and project_id=p_project_id and candidate_id=p_candidate_id;
   if not found then raise exception 'locked evaluation policy not found'; end if;
+  if v_policy.locked_at>clock_timestamp() or exists (
+    select 1 from agent.learning_evaluation_policies newer
+    where newer.project_id=p_project_id and newer.candidate_id=p_candidate_id
+      and newer.id<>p_policy_id and newer.created_at>=v_policy.created_at
+  ) then raise exception 'learning experiment requires the latest unambiguous locked policy'; end if;
   select * into v_manifest
   from agent.learning_benchmark_dataset_manifests
   where id=v_policy.dataset_manifest_id and project_id=p_project_id;
