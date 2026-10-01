@@ -1,5 +1,5 @@
-import type { CanonicalGovernanceObject, ProviderProjection } from '../../canonical/model'
-import { stableGovernanceFingerprint } from '../../planning/fingerprint'
+import type { CanonicalGovernanceObject, ProviderProjection } from '../../canonical/model.ts'
+import { stableGovernanceFingerprint } from '../../planning/fingerprint.ts'
 
 export type InformaticaAssetRecord = {
   id: string
