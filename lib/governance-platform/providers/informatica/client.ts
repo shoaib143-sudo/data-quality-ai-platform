@@ -1,4 +1,4 @@
-import { GovernanceProviderError } from '../sdk/errors'
+import { GovernanceProviderError } from '../sdk/errors.ts'
 
 export type InformaticaClientConfig = {
   baseUrl: string
