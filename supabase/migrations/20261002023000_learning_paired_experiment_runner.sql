@@ -242,13 +242,14 @@ begin
     then raise exception 'experiment run key reuse does not match immutable run identity'; end if;
     if (select count(*) from agent.learning_experiment_run_cases where run_id=v_existing.id)<>cardinality(p_case_keys)
       or exists (
-        select 1 from unnest(p_case_keys) x(case_key)
+        select 1
+        from unnest(p_case_keys) with ordinality x(case_key, ordinal)
         where not exists (
           select 1 from agent.learning_experiment_run_cases c
-          where c.run_id=v_existing.id and c.case_key=x.case_key
+          where c.run_id=v_existing.id and c.case_key=x.case_key and c.ordinal=x.ordinal
         )
       )
-    then raise exception 'experiment run key reuse does not match immutable case set'; end if;
+    then raise exception 'experiment run key reuse does not match immutable ordered case set'; end if;
     return v_existing.id;
   end if;
 
@@ -299,6 +300,7 @@ declare
   v_run agent.learning_experiment_runs%rowtype;
   v_existing agent.learning_experiment_arm_attempts%rowtype;
   v_existing_result agent.learning_experiment_arm_results%rowtype;
+  v_run_case agent.learning_experiment_run_cases%rowtype;
   v_attempt_id uuid;
   v_correlation_id uuid;
   v_expected_version text;
@@ -308,10 +310,10 @@ begin
   where id=p_run_id and project_id=p_project_id;
   if not found then raise exception 'learning experiment run not found'; end if;
   if p_arm not in ('BASELINE','CANDIDATE') then raise exception 'unsupported experiment arm'; end if;
-  if not exists (
-    select 1 from agent.learning_experiment_run_cases
-    where run_id=p_run_id and project_id=p_project_id and case_key=p_case_key
-  ) then raise exception 'case is not selected for experiment run'; end if;
+  select * into v_run_case
+  from agent.learning_experiment_run_cases
+  where run_id=p_run_id and project_id=p_project_id and case_key=p_case_key;
+  if not found then raise exception 'case is not selected for experiment run'; end if;
   v_expected_version := case when p_arm='BASELINE' then v_run.baseline_version else v_run.candidate_version end;
   if btrim(coalesce(p_version,'')) <> v_expected_version then raise exception 'experiment arm version does not match locked run'; end if;
   if btrim(coalesce(p_attempt_key,''))='' then raise exception 'attempt key is required'; end if;
@@ -336,6 +338,7 @@ begin
       'attemptId',v_existing.id,
       'executionCorrelationId',v_existing.execution_correlation_id,
       'attemptNumber',v_existing.attempt_number,
+      'sourceCaseRef',v_run_case.source_case_ref,
       'reused',true,
       'terminalResultId',v_existing_result.id,
       'terminalStatus',v_existing_result.terminal_status
@@ -365,6 +368,7 @@ begin
     'attemptId',v_attempt_id,
     'executionCorrelationId',v_correlation_id,
     'attemptNumber',v_attempt_number,
+    'sourceCaseRef',v_run_case.source_case_ref,
     'reused',false
   );
 end;
