@@ -17,6 +17,8 @@ export type GovernedLearningExperimentRequestFactory = {
     executionCorrelationId: string
     caseKey: string
     sourceCaseRef: string
+    inputArtifactRef: string
+    inputArtifactHash: string
     arm: 'BASELINE' | 'CANDIDATE'
     version: string
     executableArtifactRef: string
@@ -25,6 +27,7 @@ export type GovernedLearningExperimentRequestFactory = {
   }): Promise<{
     request: ReasoningRequest
     verifiedExecutableArtifactHash: string
+    verifiedInputArtifactHash: string
     agentDefinitionId?: string | null
   }>
 }
@@ -94,6 +97,8 @@ export function createGovernedLearningExperimentArmExecutor(input: {
         executionCorrelationId: execution.executionCorrelationId,
         caseKey: execution.caseKey,
         sourceCaseRef: execution.sourceCaseRef,
+        inputArtifactRef: execution.inputArtifactRef,
+        inputArtifactHash: execution.inputArtifactHash,
         arm: execution.arm,
         version,
         executableArtifactRef: execution.executableArtifactRef,
@@ -106,6 +111,9 @@ export function createGovernedLearningExperimentArmExecutor(input: {
       }
       if (!SHA256.test(built.verifiedExecutableArtifactHash)) {
         throw new Error('Verified executable artifact hash must be sha256')
+      }
+      if (built.verifiedInputArtifactHash !== execution.inputArtifactHash || !SHA256.test(built.verifiedInputArtifactHash)) {
+        throw new Error('Loaded input artifact does not match immutable experiment attempt hash')
       }
 
       const decision = await router.route({
