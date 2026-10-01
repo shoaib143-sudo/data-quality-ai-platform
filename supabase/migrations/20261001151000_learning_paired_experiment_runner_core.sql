@@ -312,6 +312,14 @@ begin
   if v_attempt.execution_key <> p_execution_key then raise exception 'learning experiment execution key mismatch'; end if;
   if v_attempt.status <> 'DISPATCHED' then
     if v_attempt.status = p_terminal_status then
+      if v_attempt.output_evidence_ref is distinct from
+          (case when length(btrim(coalesce(p_output_evidence_ref,''))) > 0 then btrim(p_output_evidence_ref) else null end)
+        or v_attempt.reservation_id is distinct from p_reservation_id
+        or v_attempt.cost_event_id is distinct from p_cost_event_id
+        or v_attempt.last_error_code is distinct from nullif(btrim(coalesce(p_error_code,'')),'')
+      then
+        raise exception 'terminal learning experiment evidence conflicts with existing immutable completion';
+      end if;
       return jsonb_build_object('status',v_attempt.status,'idempotent',true,'runId',v_attempt.run_id);
     end if;
     raise exception 'learning experiment attempt is not in DISPATCHED state';
