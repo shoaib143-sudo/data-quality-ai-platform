@@ -1,5 +1,5 @@
-import type { GovernancePlanOperation } from './plan'
-import type { ProviderPlannedOperation } from './provider-plan'
+import type { GovernancePlanOperation } from './plan.ts'
+import type { ProviderPlannedOperation } from './provider-plan.ts'
 
 export function orderGovernanceOperations(operations: GovernancePlanOperation[]): GovernancePlanOperation[] {
   const byObjectId = new Map(operations.map(operation => [operation.objectId, operation]))
