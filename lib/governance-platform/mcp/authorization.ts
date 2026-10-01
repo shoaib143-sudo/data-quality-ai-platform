@@ -1,5 +1,5 @@
-import type { AuthorizationCapability } from '../../auth/authorize'
-import type { GovernanceMcpToolName } from './contracts'
+import type { AuthorizationCapability } from '../../auth/authorize.ts'
+import type { GovernanceMcpToolName } from './contracts.ts'
 
 export type GovernanceMcpAuthorizationRequest={
  principalId:string
