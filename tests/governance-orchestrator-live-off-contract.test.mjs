@@ -6,10 +6,10 @@ const workflow = readFileSync('.github/workflows/autonomous-agent-governance.yml
 const runner = readFileSync('scripts/run-governance-orchestrator-off-live.mjs', 'utf8')
 const loader = readFileSync('scripts/node-ts-alias-loader.mjs', 'utf8')
 
-test('live OFF baseline runs only on protected-main push', () => {
-  assert.match(workflow, /live-off-baseline:\n\s+if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/)
-  assert.match(workflow, /vars\.GOVERNANCE_OFF_TEST_PROJECT_ID != ''/)
-  assert.match(workflow, /GOVERNANCE_E2E_PROJECT_ID: \$\{\{ vars\.GOVERNANCE_OFF_TEST_PROJECT_ID \}\}/)
+test('live OFF baseline runs only on protected main and uses the isolated test project', () => {
+  assert.match(workflow, /live-off-baseline:\n\s+if: github\.ref == 'refs\/heads\/main' && \(github\.event_name == 'push' \|\| github\.event_name == 'workflow_dispatch'\)/)
+  assert.match(workflow, /GOVERNANCE_E2E_PROJECT_ID: ab595892-828f-4585-bafb-b6c657585ce5/)
+  assert.doesNotMatch(workflow, /GOVERNANCE_OFF_TEST_PROJECT_ID/)
   assert.match(runner, /PROJECT_ID === PRIMARY_PROJECT_ID/)
   assert.doesNotMatch(runner, /update\([^)]*orchestrator_autonomy_policies/)
 })
