@@ -95,6 +95,20 @@ const button = `inline-flex min-h-11 items-center justify-center gap-2 rounded-x
 
 function pct(value: number | null) { return value === null || !Number.isFinite(value) ? 'N/A' : `${Math.round(value * 100)}%` }
 function numeric(value: number | null) { return value === null || !Number.isFinite(value) ? 'N/A' : `${Math.round(value * 100)}%` }
+function workspaceIcon(href:string) {
+  if (href.startsWith('/catalog')) return <Database className="h-5 w-5"/>
+  if (href.startsWith('/data-quality') || href.startsWith('/profiling')) return <Gauge className="h-5 w-5"/>
+  if (href.startsWith('/lineage')) return <GitBranch className="h-5 w-5"/>
+  if (href.startsWith('/issues') || href.startsWith('/approvals')) return <AlertTriangle className="h-5 w-5"/>
+  if (href.startsWith('/glossary')) return <BookOpen className="h-5 w-5"/>
+  if (href.startsWith('/classification')) return <Tag className="h-5 w-5"/>
+  if (href.startsWith('/stewardship')) return <Users className="h-5 w-5"/>
+  if (href.startsWith('/reports')) return <ClipboardCheck className="h-5 w-5"/>
+  if (href.startsWith('/agents') || href.startsWith('/ai-')) return <Sparkles className="h-5 w-5"/>
+  if (href.startsWith('/monitoring') || href.startsWith('/observability')) return <Activity className="h-5 w-5"/>
+  return <Layers3 className="h-5 w-5"/>
+}
+
 function metricIcon(kind: PresentationMetricIcon) {
   if (kind === 'database') return <Database className="h-5 w-5" />
   if (kind === 'alert') return <AlertTriangle className="h-5 w-5" />
@@ -167,6 +181,9 @@ export function RoleLandingPage({ persona, data, userLabel, canAdmin=false, canS
         {canAdmin?<Link href="/admin" className={`inline-flex min-h-11 shrink-0 items-center rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-violet-50 ${focus}`}>Organization administration</Link>:null}
       </nav>
       <div className="mb-4"><LandingRecentlyViewed /></div>
+      <section aria-label="Workspace shortcuts" className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        {visibleNav.slice(0,6).map(item=><Link key={`shortcut:${item.href}`} href={item.href} data-track-recent="true" data-recent-label={item.label} className={`${inset} ${interactive} flex min-h-20 items-center gap-3 p-3`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-500/20 to-cyan-400/10 text-cyan-300">{workspaceIcon(item.href)}</span><span className="min-w-0"><span className="block truncate text-sm font-black text-slate-200">{item.label}</span><span className="mt-0.5 block text-[10px] leading-4 text-slate-500">Open governed workspace</span></span></Link>)}
+      </section>
       <header className="flex flex-wrap items-start justify-between gap-4 px-2 py-2"><div><p className="text-sm font-semibold text-cyan-300">{persona.title}</p><h1 className="mt-1 text-3xl font-black text-white sm:text-4xl">Good day, {userLabel}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{persona.primaryQuestion}</p></div><form action="/catalog" method="get" className="flex min-w-[280px] max-w-md flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-[#08182b] px-3 py-2 sm:flex-none"><Search className="h-4 w-4 text-slate-500"/><input name="q" aria-label="Search DataNexus catalog" placeholder="Search governed data..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-600"/><button type="submit" className={`rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white ${focus}`}>Search</button></form></header>
 
       <section className={`${surface} mt-4 grid gap-6 p-5 xl:grid-cols-[minmax(430px,1fr)_minmax(0,1.25fr)] xl:p-6`}><Link href={safeHref('/data-quality', evidenceHref)} className={`${interactive} flex items-center gap-5 rounded-2xl p-2`}><div className="grid h-32 w-32 shrink-0 place-items-center rounded-full bg-[conic-gradient(#6454d3_var(--score),#e6e7ef_0)] p-3" style={{'--score':data.confidence===null?'0%':`${Math.round(data.confidence*100)}%`} as CSSProperties}><div className="grid h-full w-full place-items-center rounded-full bg-white text-center"><div><p className="text-4xl font-black text-white">{pct(data.confidence)}</p><p className="mt-1 max-w-20 text-[10px] font-bold leading-4 text-slate-400">{persona.labels.confidence}</p></div></div></div><div><p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">Current governed evidence</p><p className="mt-2 text-xl font-black text-white">{view.heroTitle}</p><p className="mt-2 text-sm leading-6 text-slate-400">{view.heroDetail}</p><p className="mt-2 text-[11px] text-slate-600">Presentation changes by persona; governed evidence does not.</p>{delta===null?<p className="mt-2 text-xs text-slate-500">Trend will appear as comparable scored evidence accumulates.</p>:<p className={`mt-2 text-xs font-bold ${delta>=0?'text-emerald-300':'text-rose-300'}`}>{delta>=0?'+':''}{Math.round(delta*100)} pts across the selected trend window</p>}</div></Link><div className="grid gap-3 sm:grid-cols-2">{metrics.map(item=><KpiLink key={item.label} item={item}/>)}</div></section>
