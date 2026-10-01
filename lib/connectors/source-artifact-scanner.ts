@@ -50,6 +50,17 @@ export function scanSourceArtifact(input:{kind:SourceArtifactKind;path:string;co
     addRef(references,seen,{kind:match[0].startsWith('http')?'ENDPOINT':'FILE',target:match[0],line:lineOf(content,match.index??0),evidence:cleanEvidence(match[0])})
   }
 
+  const callPatterns:RegExp[]=[]
+  if(input.kind==='DOTNET')callPatterns.push(/\b(?:File\.(?:ReadAllText|ReadAllLines|OpenRead|OpenText|WriteAllText)|Directory\.EnumerateFiles)\s*\(\s*["']([^"']+)["']/ig)
+  if(input.kind==='NODEJS')callPatterns.push(/\b(?:readFile|readFileSync|writeFile|writeFileSync|createReadStream|createWriteStream)\s*\(\s*["'`]([^"'`]+)["'`]/ig)
+  if(input.kind==='VBA'||input.kind==='MACRO')callPatterns.push(/\b(?:Workbooks\.Open|Open)\s+(?:Filename\s*:=\s*)?["']([^"']+)["']/ig)
+  if(input.kind==='SCRIPT')callPatterns.push(/\b(?:cat|source|load|read|write)\s+["']?([^\s"']+\.(?:csv|jsonl?|parquet|xlsx?|txt|log))["']?/ig)
+  for(const pattern of callPatterns){
+    for(const match of content.matchAll(pattern)){
+      addRef(references,seen,{kind:'FILE',target:match[1]??'',line:lineOf(content,match.index??0),evidence:cleanEvidence(match[0])})
+    }
+  }
+
   for(const write of writes){
     const nearest=[...reads].reverse().find(read=>read.line<=write.line)||reads[0]||null
     transformations.push({operation:write.operation,source:nearest?.target??null,target:write.target,expression:null,line:write.line})
@@ -58,6 +69,7 @@ export function scanSourceArtifact(input:{kind:SourceArtifactKind;path:string;co
 
   const warnings:string[]=[]
   if(!references.length)warnings.push('No deterministic database, file, or endpoint references were detected.')
+  if(['DOTNET','NODEJS','VBA','MACRO'].includes(input.kind)&&!writes.length)warnings.push('No deterministic write target was detected; framework object names are not promoted to authoritative lineage without explicit source-to-target evidence.')
   if(content.length>2_000_000)warnings.push('Artifact exceeded 2 MB; callers should chunk very large artifacts before scanning.')
 
   return {
