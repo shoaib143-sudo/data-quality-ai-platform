@@ -7,6 +7,7 @@ import type { GovernancePlan } from './plan.ts'
 import type { GovernanceOperation, GovernanceOperationKind } from '../providers/sdk/provider.ts'
 
 export type ProviderPlannedOperation = GovernanceOperation & {
+  deploymentId?: string
   provider: string
   requiredCapability: ReturnType<typeof resolveGovernanceAuthorizationCapability>
   dependencies: string[]
