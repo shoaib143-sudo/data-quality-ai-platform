@@ -2,12 +2,18 @@ import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { createClient } from '@/lib/supabase/server'
 import { createXlsxWorkbook } from '@/lib/export/xlsx'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 
 function text(value: unknown) { return typeof value === 'string' ? value : value == null ? '' : String(value) }
 
 export async function GET() {
   try {
-    await requireApiUser()
+    const user = await requireApiUser()
+    const landing = await resolveLandingAccess(user.id)
+    if (!canAccessWorkspace(landing.persona, 'lineage', landing.organizationRole)) {
+      return NextResponse.json({ error: 'Lineage export is not available for this persona.' }, { status: 403 })
+    }
     const supabase = await createClient()
 
     const [mappingsResult, assetsResult, transformationsResult, catalogResult, findingsResult, issuesResult, alertsResult] = await Promise.all([
