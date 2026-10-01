@@ -132,6 +132,27 @@ export async function loadLearningReleaseAdmission(input: {
     throw new Error('The latest prospective evaluation decision is not eligible for release review.')
   }
 
+  const { data: bindingRows, error: bindingError } = await admin.schema('agent')
+    .from('learning_experiment_decision_bindings')
+    .select('id,run_id,evaluation_result_id,analysis_evidence_ref,created_at,learning_experiment_runs!inner(id,evidence_class,policy_id,candidate_id)')
+    .eq('project_id', input.projectId)
+    .eq('evaluation_result_id', row.id)
+    .limit(2)
+  if (bindingError) throw new Error(`Unable to load canonical experiment decision binding: ${bindingError.message}`)
+  if (!Array.isArray(bindingRows) || bindingRows.length !== 1) {
+    throw new Error('Release review requires exactly one canonical prospective experiment binding.')
+  }
+  const binding = bindingRows[0] as any
+  const boundRun = Array.isArray(binding.learning_experiment_runs)
+    ? binding.learning_experiment_runs[0]
+    : binding.learning_experiment_runs
+  if (!boundRun || boundRun.evidence_class !== 'PROSPECTIVE_LIVE'
+    || String(boundRun.policy_id) !== String(persistedPolicy.id)
+    || String(boundRun.candidate_id) !== input.candidateId
+    || !String(binding.analysis_evidence_ref ?? '').trim()) {
+    throw new Error('Release review experiment binding is invalid or synthetic.')
+  }
+
   const policy: LearningEvaluationPolicy = {
     policyId: String(persistedPolicy.policy_key),
     projectId: String(persistedPolicy.project_id),

@@ -8,6 +8,7 @@ const approval = fs.readFileSync('lib/agents/governed-learning-release-approval.
 const release = fs.readFileSync('lib/agents/governed-learning-controlled-release.ts', 'utf8')
 const migration = fs.readFileSync('supabase/migrations/20260930123000_governed_learning_evaluation_release_admission.sql', 'utf8')
 const indexMigration = fs.readFileSync('supabase/migrations/20260930144500_governed_learning_evaluation_fk_indexes.sql', 'utf8')
+const runnerMigration = fs.readFileSync('supabase/migrations/20261002023000_learning_paired_experiment_runner.sql', 'utf8')
 
 for (const invariant of [
   'assertLearningEvaluationEligibleForReleaseReview',
@@ -23,6 +24,8 @@ for (const invariant of [
   'datasetManifestId',
   "from('learning_evaluation_policies')",
   "from('learning_evaluation_results')",
+  "from('learning_experiment_decision_bindings')",
+  "PROSPECTIVE_LIVE",
   ".eq('policy_id', persistedPolicy.id)",
   "order('created_at', { ascending: false })",
   'The latest prospective evaluation policy has no recorded decision.',
@@ -110,3 +113,11 @@ for (const invariant of [
   'learning_evaluation_results_candidate_fk_idx',
   'learning_evaluation_results_policy_fk_idx',
 ]) assert.ok(indexMigration.includes(invariant), `missing evaluation FK index: ${invariant}`)
+
+
+for (const invariant of [
+  'create table if not exists agent.learning_experiment_decision_bindings',
+  'bind_learning_experiment_decision',
+  'synthetic experiment cannot bind a release-admission decision',
+  'evaluation decision does not equal canonical experiment evidence',
+]) assert.ok(runnerMigration.includes(invariant), `missing canonical experiment release binding invariant: ${invariant}`)

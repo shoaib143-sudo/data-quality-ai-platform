@@ -29,20 +29,26 @@ const result = {
   max_latency_ms: 100, disposition: 'REVIEW_REQUIRED', quality: 'IMPROVED',
   reasons: ['POSITIVE_GAIN_REQUIRES_RELEASE_REVIEW'], automatic_promotion_allowed: false,
 }
+const binding = {
+  id: 'binding', run_id: 'run', evaluation_result_id: 'decision', analysis_evidence_ref: 'analysis:1',
+  created_at: '2026-09-30T04:01:00Z',
+  learning_experiment_runs: { id: 'run', evidence_class: 'PROSPECTIVE_LIVE', policy_id: 'policy-record', candidate_id: 'candidate' },
+}
 const data = value => ({ data: value, error: null })
 const load = () => loadLearningReleaseAdmission({ projectId: 'project', candidateId: 'candidate' })
-setResponses([data([policy]), data([result])])
+const bound = (policyRows=[policy], resultRows=[result], bindingRows=[binding]) => [data(policyRows), data(resultRows), data(bindingRows)]
+setResponses(bound())
 const admission = await load()
 assert.equal(admission.evaluationResultId, 'decision')
 assert.equal(admission.decision.quality, 'IMPROVED')
 const calls = getCalls()
-assert.deepEqual(calls.map(c => c.limit), [2, 2])
+assert.deepEqual(calls.map(c => c.limit), [2, 2, 2])
 assert.ok(calls.every(c => c.filters.some(([key, value]) => key === 'project_id' && value === 'project')))
 assert.ok(calls[1].filters.some(([key, value]) => key === 'policy_id' && value === 'policy-record'))
 assert.ok(calls.every(c => !c.filters.some(([key]) => key === 'quality')))
-assert.ok(calls.every(c => c.orders[0][0] === 'created_at' && c.orders[0][1].ascending === false))
+assert.ok(calls.slice(0,2).every(c => c.orders[0][0] === 'created_at' && c.orders[0][1].ascending === false))
 
-setResponses([data([policy, { ...policy, id: 'old-policy', created_at: '2026-09-30T01:30:00Z' }]), data([result, { ...result, id: 'old-decision', created_at: '2026-09-30T03:30:00Z' }])])
+setResponses(bound([policy, { ...policy, id: 'old-policy', created_at: '2026-09-30T01:30:00Z' }], [result, { ...result, id: 'old-decision', created_at: '2026-09-30T03:30:00Z' }]))
 assert.equal((await load()).evaluationResultId, 'decision')
 
 setResponses([data([])])
@@ -71,11 +77,17 @@ for (const patch of [
   { accounting_complete: false }, { total_cost: 1 }, { authority_violations: 1 },
   { confirmation_window_passed: false }, { automatic_promotion_allowed: true },
 ]) {
-  setResponses([data([policy]), data([{ ...result, ...patch }])])
+  setResponses(bound([policy], [{ ...result, ...patch }]))
   await assert.rejects(load, /not eligible for release review/)
 }
 setResponses([{ data: null, error: { message: 'database unavailable' } }])
 await assert.rejects(load, /Unable to load latest learning evaluation policy/)
 setResponses([data([policy]), { data: null, error: { message: 'database unavailable' } }])
 await assert.rejects(load, /Unable to load latest learning evaluation decision/)
+setResponses([data([policy]), data([result]), data([])])
+await assert.rejects(load, /exactly one canonical prospective experiment binding/)
+setResponses([data([policy]), data([result]), data([{ ...binding, learning_experiment_runs: { ...binding.learning_experiment_runs, evidence_class: 'SYNTHETIC' } }])])
+await assert.rejects(load, /binding is invalid or synthetic/)
+setResponses([data([policy]), data([result]), { data: null, error: { message: 'binding database unavailable' } }])
+await assert.rejects(load, /Unable to load canonical experiment decision binding/)
 console.log('Release admission executes latest-policy/result queries, reclassifies evidence, blocks stale positives, database failures and ambiguous chronology.')
