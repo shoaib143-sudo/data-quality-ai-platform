@@ -10,6 +10,8 @@ import { ResilientReasoningProvider, type ProviderResiliencePolicyProvider } fro
 
 export type IntelligentRouteContext = ReasoningRouteContext & {
   projectId: string
+  /** Server execution-owned cancellation or deadline, shared by all routed calls. */
+  signal?: AbortSignal
   executionCorrelationId?: string | null
   /** Explicit immutable agent-definition identity for ADR-008 AGENT budget scope matching. */
   agentDefinitionId?: string | null

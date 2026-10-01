@@ -6,6 +6,10 @@ The native OpenAI-compatible provider forwards execution-owned AbortSignal to fe
 
 Behavior tests cover cancellation before transport, in-flight deadline propagation, cancellation suppressing fallback, and ordinary network fallback. No paid provider was called.
 
+The governed observable router now carries a server execution-owned signal to provider requests. A request-level signal is combined with the execution signal and cannot replace it. Cancellation while admission is being resolved prevents the provider call and releases acquired leases. Completed usage received at the observable boundary is accounted before a cancellation racing the result is rejected. Missing usage after an aborted transport remains unresolved.
+
+Validation also covers an already-cancelled execution, caller signal replacement attempts, cancellation after lease acquisition, and accounting of a late completed response. Next.js was patched from 16.3.3 to 16.3.6 for GHSA-vcvr-r3jv-pc5j while preserving dependency overrides. Local production dependency audit reports no known vulnerabilities; exact-head CI remains authoritative for integration and build validation.
+
 ## Remaining implementation
 
 This change is a prerequisite, not experiment budget activation. Persisted learning policy limits are not yet bound to an experiment executor. Next, resolve immutable project/agent/mode policy identity server-side, establish a run-wide deadline, and bind every baseline/candidate invocation and retry to that identity. Add atomic durable reservations before provider calls for experiment model-call, token and USD ceilings; reconcile canonical usage and pricing, retain unresolved reservations when usage is unavailable, and reject unsupported accounting rather than assume zero cost. Enforce total-token limits using provider-specific input accounting and an output ceiling. Stop later calls when limits or evidence are missing. Tests must exercise concurrent admission and crash recovery.
