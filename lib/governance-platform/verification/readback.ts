@@ -1,5 +1,5 @@
-import type { CanonicalGovernanceObject } from '../canonical/model'
-import { stableGovernanceFingerprint } from '../planning/fingerprint'
+import type { CanonicalGovernanceObject } from '../canonical/model.ts'
+import { stableGovernanceFingerprint } from '../planning/fingerprint.ts'
 
 export type ReadbackVerification={status:'VERIFIED'|'MISMATCH'|'MISSING';expectedFingerprint:string;observedFingerprint:string|null}
 
