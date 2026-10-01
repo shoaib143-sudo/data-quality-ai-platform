@@ -1,6 +1,6 @@
-import type { AuthorizationCapability } from '@/lib/auth/authorize'
-import type { GovernedExecutionController } from '@/lib/ai/execution-controller'
-import type { PolicyDecisionProvider, PolicyRiskLevel } from '@/lib/governance/policy-decision-provider'
+import type { AuthorizationCapability } from '../../auth/authorize'
+import type { GovernedExecutionController } from '../../ai/execution-controller'
+import type { PolicyDecisionProvider, PolicyRiskLevel } from '../../governance/policy-decision-provider'
 
 export type GovernedExecutionGateRequest = {
   projectId: string
