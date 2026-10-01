@@ -10,7 +10,7 @@ export async function GET() {
     await requireApiUser()
     const supabase = await createClient()
 
-    const [mappingsResult, assetsResult, transformationsResult] = await Promise.all([
+    const [mappingsResult, assetsResult, transformationsResult, catalogResult, findingsResult, issuesResult, alertsResult] = await Promise.all([
       supabase.schema('governance').from('lineage_column_mappings')
         .select('id,project_id,transformation_id,source_asset_id,source_column,target_asset_id,target_column,operation,expression,created_at')
         .order('created_at', { ascending: false })
@@ -23,14 +23,22 @@ export async function GET() {
         .select('id,project_id,external_id,source_system,name,operation,logic_language,logic_hash,last_seen_at')
         .order('last_seen_at', { ascending: false })
         .limit(5000),
+      supabase.schema('governance').from('dataset_catalog').select('dataset_id,project_id,lifecycle_status,certification_status,criticality,tags,business_description,technical_owner_user_id,business_owner_user_id,steward_user_id,retention_days').limit(5000),
+      supabase.schema('profiling').from('profile_findings').select('id,profile_run_id,severity,category,title,description,created_at').order('created_at',{ascending:false}).limit(5000),
+      supabase.schema('governance').from('issues').select('id,project_id,dataset_id,status,severity,title,created_at').order('created_at',{ascending:false}).limit(5000),
+      supabase.schema('profiling').from('observability_alerts').select('id,project_id,dataset_id,status,severity,category,title,last_observed_at').order('last_observed_at',{ascending:false}).limit(5000),
     ])
-    for (const result of [mappingsResult, assetsResult, transformationsResult]) {
+    for (const result of [mappingsResult, assetsResult, transformationsResult, catalogResult, findingsResult, issuesResult, alertsResult]) {
       if (result.error) throw new Error(result.error.message)
     }
 
     const mappings = mappingsResult.data ?? []
     const assets = assetsResult.data ?? []
     const transformations = transformationsResult.data ?? []
+    const catalog = catalogResult.data ?? []
+    const findings = findingsResult.data ?? []
+    const issues = issuesResult.data ?? []
+    const alerts = alertsResult.data ?? []
     const assetById = new Map(assets.map((row: any) => [String(row.id), row]))
     const transformationById = new Map(transformations.map((row: any) => [String(row.id), row]))
 
@@ -86,11 +94,28 @@ export async function GET() {
       ['Note', 'DataNexus does not infer missing lineage from matching names.'],
     ]
 
+    const businessRows = [
+      ['Dataset ID','Project ID','Lifecycle','Certification','Criticality','Tags','Business Description','Technical Owner','Business Owner','Steward','Retention Days'],
+      ...catalog.map((row:any)=>[text(row.dataset_id),text(row.project_id),text(row.lifecycle_status),text(row.certification_status),text(row.criticality),Array.isArray(row.tags)?row.tags.join(', '):'',text(row.business_description),text(row.technical_owner_user_id),text(row.business_owner_user_id),text(row.steward_user_id),row.retention_days??'']),
+    ]
+    const qualityRows = [
+      ['Finding ID','Profile Run ID','Severity','Category','Title','Description','Created At'],
+      ...findings.map((row:any)=>[text(row.id),text(row.profile_run_id),text(row.severity),text(row.category),text(row.title),text(row.description),text(row.created_at)]),
+    ]
+    const issueAlertRows = [
+      ['Evidence Type','ID','Project ID','Dataset ID','Status','Severity','Category','Title','Observed At'],
+      ...issues.map((row:any)=>['ISSUE',text(row.id),text(row.project_id),text(row.dataset_id),text(row.status),text(row.severity),'',text(row.title),text(row.created_at)]),
+      ...alerts.map((row:any)=>['ALERT',text(row.id),text(row.project_id),text(row.dataset_id),text(row.status),text(row.severity),text(row.category),text(row.title),text(row.last_observed_at)]),
+    ]
+
     const workbook = createXlsxWorkbook([
       { name: 'Summary', rows: summaryRows },
       { name: 'Source to Target Mapping', rows: mappingRows },
       { name: 'Transformations', rows: transformationRows },
       { name: 'Assets', rows: assetRows },
+      { name: 'Business Metadata', rows: businessRows },
+      { name: 'Data Quality Context', rows: qualityRows },
+      { name: 'Issues and Alerts', rows: issueAlertRows },
     ])
 
     const stamp = new Date().toISOString().slice(0, 10)
