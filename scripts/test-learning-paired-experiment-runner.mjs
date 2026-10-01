@@ -228,7 +228,7 @@ for (const invariant of [
   'ambiguous prior experiment attempt has no terminal evidence',
   'ambiguous existing experiment attempt has no terminal evidence',
   'experiment run key reuse does not match immutable run identity',
-  'experiment run key reuse does not match immutable case set',
+  'experiment run key reuse does not match immutable ordered case set',
   'synthetic experiment arm cannot bind paid runtime evidence',
   'live successful arm requires canonical accounted settlement',
   'live successful arm requires exactly one canonical budget reservation',
