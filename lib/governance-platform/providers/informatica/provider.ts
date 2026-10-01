@@ -26,7 +26,13 @@ export class InformaticaGovernanceProvider implements GovernanceProvider {
 
   async discover(request: DiscoveryRequest): Promise<DiscoveryResult> {
     const payload = await this.client.getJson(this.endpoints.assets(request))
-    return { objects: assetRecords(payload).map(record => normalizeInformaticaAsset(record, request.projectId)), observedAt: new Date().toISOString() }
+    const observedAt = new Date().toISOString()
+    const normalized = assetRecords(payload).map(record => normalizeInformaticaAsset(record, request.projectId, request.connectionId, observedAt))
+    return {
+      objects: normalized.map(value => value.object),
+      projections: normalized.map(value => value.projection),
+      observedAt,
+    }
   }
 
   async execute(_operation: GovernanceOperation): Promise<ExecutionResult> {
