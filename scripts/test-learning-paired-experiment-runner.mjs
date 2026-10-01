@@ -255,6 +255,13 @@ for (const singleton of [
   assert.equal(migration.split(singleton).length - 1, 1, `migration must contain exactly one canonical definition for: ${singleton}`)
 }
 
+const runnerSource = fs.readFileSync('lib/agents/governed-learning-experiment-runner.ts', 'utf8')
+const executorSource = fs.readFileSync('lib/agents/governance-learning-experiment-arm-executor.ts', 'utf8')
+assert.doesNotMatch(runnerSource, /sourceCaseRef:\s*item\.sourceCaseRef/)
+assert.match(runnerSource, /sourceCaseRef:\s*attempt\.sourceCaseRef/)
+assert.match(executorSource, /verifiedInputArtifactHash !== execution\.inputArtifactHash/)
+assert.match(executorSource, /Loaded input artifact does not match immutable experiment attempt hash/)
+
 const service = fs.readFileSync('lib/agents/governed-learning-evaluation-service.ts', 'utf8')
 assert.match(service, /learning_experiment_decision_bindings/)
 assert.match(service, /PROSPECTIVE_LIVE/)
