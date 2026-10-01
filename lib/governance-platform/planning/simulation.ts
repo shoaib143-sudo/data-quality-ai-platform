@@ -1,5 +1,5 @@
-import type { GovernancePlan } from './plan'
-import type { GovernanceDeploymentPlan } from './deployment-plan'
+import type { GovernancePlan } from './plan.ts'
+import type { GovernanceDeploymentPlan } from './deployment-plan.ts'
 
 export type GovernanceSimulationSummary={
  total:number;creates:number;updates:number;deletes:number;noops:number;destructive:boolean
