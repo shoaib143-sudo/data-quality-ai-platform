@@ -17,6 +17,7 @@ import type {
 } from './reasoning-budget-policy'
 import type { ProjectBudgetAdmission, ProjectBudgetAdmissionProvider } from './resource-budget-admission'
 import type { TelemetryProvider, TelemetryTraceContext } from './telemetry-provider'
+import type { LearningEvaluationRuntimeBudgetProvider, LearningEvaluationRuntimeReservation } from './learning-evaluation-runtime-budget'
 
 type ObservableReasoningContext = {
   projectId: string
@@ -25,6 +26,7 @@ type ObservableReasoningContext = {
   aiSystemId?: string | null
   aiSystemVersionId?: string | null
   agentDefinitionId?: string | null
+  learningEvaluationRuntime?: IntelligentRouteContext['learningEvaluationRuntime']
   modelName?: string | null
   routingPolicyId?: string | null
   routingPolicyReason?: string | null
@@ -130,6 +132,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
   private readonly budgetPolicy?: ReasoningBudgetPolicyProvider
   private readonly budgetAdmission?: ProjectBudgetAdmissionProvider
   private readonly costAccounting?: ModelCostAccountingProvider
+  private readonly learningRuntimeBudget?: LearningEvaluationRuntimeBudgetProvider
 
   constructor(
     provider: ReasoningProvider,
@@ -138,6 +141,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
     budgetPolicy?: ReasoningBudgetPolicyProvider,
     budgetAdmission?: ProjectBudgetAdmissionProvider,
     costAccounting?: ModelCostAccountingProvider,
+    learningRuntimeBudget?: LearningEvaluationRuntimeBudgetProvider,
   ) {
     this.provider = provider
     this.telemetry = telemetry
@@ -145,13 +149,14 @@ class ObservableReasoningProvider implements ReasoningProvider {
     this.budgetPolicy = budgetPolicy
     this.budgetAdmission = budgetAdmission
     this.costAccounting = costAccounting
+    this.learningRuntimeBudget = learningRuntimeBudget
     this.id = provider.id
   }
 
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
     // A caller may add cancellation but cannot replace the execution deadline.
     const signals = [this.context.signal, request.signal].filter((signal): signal is AbortSignal => signal != null)
-    const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0]
+    let signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0]
     if (signal) request = { ...request, signal }
     const startedAt = Date.now()
     let budgetEvidence = applyProjectOutputBudget(request, null)
@@ -160,6 +165,10 @@ class ObservableReasoningProvider implements ReasoningProvider {
     let admissionCorrelationId: string | null = null
     let invocationId: string | null = null
     let costEvidence: ModelCostAccountingRecord | null = null
+    let learningReservation: LearningEvaluationRuntimeReservation | null = null
+    let learningEventRecorded = false
+    let providerStarted = false
+    let providerResult: ReasoningResult | null = null
 
     const releaseAdmissionLeases = async () => {
       if (!admissionCorrelationId || !this.budgetAdmission) return
@@ -218,13 +227,49 @@ class ObservableReasoningProvider implements ReasoningProvider {
       }
 
       invocationId = randomUUID()
-      let result: ReasoningResult
+
+      if (this.context.learningEvaluationRuntime) {
+        if (!this.learningRuntimeBudget) {
+          throw new Error('Learning evaluation runtime budget provider is required for controlled evaluation execution')
+        }
+        const modelName = this.context.modelName?.trim()
+        if (!modelName) throw new Error('Controlled learning evaluation requires an exact governed model identity')
+        const executionCorrelationId = requiredExecutionCorrelationId(this.context.executionCorrelationId)
+        learningReservation = await this.learningRuntimeBudget.reserve({
+          projectId: this.context.projectId,
+          policyId: this.context.learningEvaluationRuntime.policyId,
+          candidateId: this.context.learningEvaluationRuntime.candidateId,
+          variant: this.context.learningEvaluationRuntime.variant,
+          invocationId,
+          executionCorrelationId,
+          providerId: this.provider.id,
+          modelName,
+        })
+        const deadlineSignal = AbortSignal.timeout(learningReservation.latencyMsBudget)
+        signal = signal ? AbortSignal.any([signal, deadlineSignal]) : deadlineSignal
+        const requestedMax = budgetEvidence.request.maxOutputTokens
+        const learningMax = learningReservation.reservedTokens
+        budgetEvidence = {
+          ...budgetEvidence,
+          request: {
+            ...budgetEvidence.request,
+            maxOutputTokens: requestedMax == null ? learningMax : Math.min(requestedMax, learningMax),
+            signal,
+          },
+          effectiveMaxOutputTokens: requestedMax == null
+            ? learningMax
+            : Math.min(requestedMax, learningMax),
+        }
+      }
+
       try {
         signal?.throwIfAborted()
-        result = await this.provider.generateJson(budgetEvidence.request)
+        providerStarted = true
+        providerResult = await this.provider.generateJson(budgetEvidence.request)
       } finally {
         await releaseAdmissionLeases()
       }
+      const result = providerResult
 
       if (this.costAccounting) {
         costEvidence = await this.costAccounting.recordInvocation({
@@ -238,6 +283,46 @@ class ObservableReasoningProvider implements ReasoningProvider {
           observedAt: new Date().toISOString(),
         })
       }
+
+      if (learningReservation && this.context.learningEvaluationRuntime && this.learningRuntimeBudget) {
+        const canonicalCost = costEvidence?.accountingStatus === 'PRICED'
+          && costEvidence.currency === 'USD'
+          && costEvidence.pricingVersionId === learningReservation.pricingVersionId
+          && costEvidence.totalCost != null
+          ? Number(costEvidence.totalCost)
+          : null
+        const canonicalTokens = costEvidence?.totalTokens ?? result.usage?.totalTokens ?? null
+        const accountingComplete = canonicalCost != null
+          && Number.isFinite(canonicalCost)
+          && canonicalTokens != null
+          && Number.isSafeInteger(canonicalTokens)
+          && canonicalTokens >= 0
+        const settlement = await this.learningRuntimeBudget.recordEvent({
+          projectId: this.context.projectId,
+          policyId: this.context.learningEvaluationRuntime.policyId,
+          reservationId: learningReservation.reservationId,
+          releaseWithoutProviderCall: false,
+          accountingComplete,
+          actualCostUsd: accountingComplete ? canonicalCost : null,
+          actualTokens: accountingComplete ? canonicalTokens : null,
+          actualLatencyMs: accountingComplete ? result.latencyMs : null,
+          reason: accountingComplete
+            ? 'CANONICAL_USAGE_AND_PRICING_RECONCILED'
+            : 'CANONICAL_ACCOUNTING_INCOMPLETE_OR_PRICING_MISMATCH',
+        })
+        learningEventRecorded = true
+        if (settlement.status === 'EXCEEDED') {
+          const budgetError = new Error('Learning evaluation runtime exceeded a locked per-run budget')
+          budgetError.name = 'LearningEvaluationRuntimeBudgetExceededError'
+          throw budgetError
+        }
+        if (settlement.status !== 'RECONCILED') {
+          const accountingError = new Error('Learning evaluation runtime accounting is incomplete; result consumption is blocked')
+          accountingError.name = 'LearningEvaluationAccountingIncompleteError'
+          throw accountingError
+        }
+      }
+
       // Account for a completed call even when cancellation races its response.
       signal?.throwIfAborted()
 
@@ -295,6 +380,28 @@ class ObservableReasoningProvider implements ReasoningProvider {
       }
       return result
     } catch (error) {
+      if (learningReservation && this.context.learningEvaluationRuntime && this.learningRuntimeBudget && !learningEventRecorded) {
+        try {
+          const releaseWithoutProviderCall = !providerStarted
+          await this.learningRuntimeBudget.recordEvent({
+            projectId: this.context.projectId,
+            policyId: this.context.learningEvaluationRuntime.policyId,
+            reservationId: learningReservation.reservationId,
+            releaseWithoutProviderCall,
+            accountingComplete: releaseWithoutProviderCall,
+            actualCostUsd: releaseWithoutProviderCall ? 0 : null,
+            actualTokens: releaseWithoutProviderCall ? 0 : providerResult?.usage?.totalTokens ?? null,
+            actualLatencyMs: releaseWithoutProviderCall ? 0 : providerResult?.latencyMs ?? null,
+            reason: releaseWithoutProviderCall
+              ? 'PROVIDER_TRANSPORT_NOT_STARTED'
+              : 'PROVIDER_OR_ACCOUNTING_RESULT_UNRESOLVED',
+          })
+          learningEventRecorded = true
+        } catch {
+          // The durable reservation remains budget-consuming. A settlement outage
+          // must never turn unknown provider spend into reusable experiment budget.
+        }
+      }
       const providerHttpError = sanitizedProviderHttpFailure(error)
       const primaryAdmission = admissions[0] ?? null
       try {
@@ -346,6 +453,7 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
   private readonly budgetPolicy?: ReasoningBudgetPolicyProvider
   private readonly budgetAdmission?: ProjectBudgetAdmissionProvider
   private readonly costAccounting?: ModelCostAccountingProvider
+  private readonly learningRuntimeBudget?: LearningEvaluationRuntimeBudgetProvider
 
   constructor(
     router: IntelligentModelRouter,
@@ -353,12 +461,14 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
     budgetPolicy?: ReasoningBudgetPolicyProvider,
     budgetAdmission?: ProjectBudgetAdmissionProvider,
     costAccounting?: ModelCostAccountingProvider,
+    learningRuntimeBudget?: LearningEvaluationRuntimeBudgetProvider,
   ) {
     this.router = router
     this.telemetry = telemetry
     this.budgetPolicy = budgetPolicy
     this.budgetAdmission = budgetAdmission
     this.costAccounting = costAccounting
+    this.learningRuntimeBudget = learningRuntimeBudget
   }
 
   async route(context: IntelligentRouteContext): Promise<IntelligentRouteDecision> {
@@ -396,10 +506,11 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
         aiSystemId: decision.evidence?.aiSystemId ?? null,
         aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null,
         agentDefinitionId: context.agentDefinitionId ?? null,
+        learningEvaluationRuntime: context.learningEvaluationRuntime ?? null,
         modelName: decision.evidence?.modelName ?? null,
         routingPolicyId: decision.evidence?.routingPolicyId ?? null, routingPolicyReason: decision.evidence?.routingPolicyReason ?? null,
         traceContext: context.traceContext ?? null, routeSource: decision.source, routeReason: decision.reason,
-      }, this.budgetPolicy, this.budgetAdmission, this.costAccounting),
+      }, this.budgetPolicy, this.budgetAdmission, this.costAccounting, this.learningRuntimeBudget),
     }
   }
 }
