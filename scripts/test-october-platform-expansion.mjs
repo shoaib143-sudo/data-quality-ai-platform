@@ -85,3 +85,16 @@ test('BI metadata adapter normalizes Power BI Tableau and Looker assets',()=>{
     assert.deepEqual(assets[0].upstream,['warehouse.customer'])
   }
 })
+
+
+test('manual lineage corrections are approval-gated and workspace-protected',()=>{
+  const route=fs.readFileSync('app/api/lineage/corrections/route.ts','utf8')
+  const page=fs.readFileSync('app/lineage/corrections/page.tsx','utf8')
+  const policy=fs.readFileSync('lib/governance/workspace-policy.ts','utf8')
+  assert.match(route,/LINEAGE_MANUAL_CORRECTION/)
+  assert.match(route,/status!=='APPROVED'/)
+  assert.match(route,/upsert_manual_lineage_edge/)
+  assert.match(route,/HUMAN_APPROVED_MANUAL/)
+  assert.match(page,/requireWorkspaceAccess\('lineage-manage'\)/)
+  assert.match(policy,/\['\/lineage\/corrections', 'lineage-manage'\]/)
+})
