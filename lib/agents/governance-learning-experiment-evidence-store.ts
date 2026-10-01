@@ -115,6 +115,7 @@ export function createGovernanceLearningExperimentEvidenceStore(): LearningExper
         caseCount: integerValue(row.caseCount, 'caseCount'),
         scoredCaseCount: integerValue(row.scoredCaseCount, 'scoredCaseCount'),
         complete: row.complete === true,
+        allIndependentlyVerified: row.allIndependentlyVerified === true,
         baselineScore: row.baselineScore == null ? null : numberValue(row.baselineScore, 'baselineScore'),
         candidateScore: row.candidateScore == null ? null : numberValue(row.candidateScore, 'candidateScore'),
         authorityViolations: integerValue(row.authorityViolations, 'authorityViolations'),
