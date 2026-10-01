@@ -133,7 +133,18 @@ export async function finalizeGovernedLearningExperiment(input: {
     policy,
     policyRecordId: input.policyRecordId,
     result,
-    recordedBy: `${required(input.recordedBy, 'recordedBy')}|analysis:${analysisEvidenceRef}`,
+    recordedBy: required(input.recordedBy, 'recordedBy'),
   })
-  return { ...finalized, analysisEvidenceRef }
+  const { data: bindingId, error: bindingError } = await admin.schema('agent').rpc('bind_learning_experiment_decision', {
+    p_project_id: input.projectId,
+    p_run_id: input.summary.runId,
+    p_evaluation_result_id: finalized.resultId,
+    p_analysis_evidence_ref: analysisEvidenceRef,
+    p_gain_lower_confidence_bound: analysis.gainLowerConfidenceBound,
+    p_confirmation_window_passed: analysis.confirmationWindowPassed,
+  })
+  if (bindingError || !bindingId) {
+    throw new Error(`Unable to bind evaluation decision to canonical experiment evidence: ${bindingError?.message ?? 'no binding id returned'}`)
+  }
+  return { ...finalized, experimentDecisionBindingId: String(bindingId), analysisEvidenceRef }
 }
