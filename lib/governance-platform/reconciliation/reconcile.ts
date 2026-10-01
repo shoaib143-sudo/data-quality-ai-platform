@@ -1,6 +1,6 @@
-import type { CanonicalGovernanceObject } from '../canonical/model'
-import type { GovernanceDesiredState } from '../desired-state/model'
-import { buildGovernancePlan } from '../planning/plan'
+import type { CanonicalGovernanceObject } from '../canonical/model.ts'
+import type { GovernanceDesiredState } from '../desired-state/model.ts'
+import { buildGovernancePlan } from '../planning/plan.ts'
 
 export type ReconciliationStatus='IN_SYNC'|'DRIFTED'
 export type GovernanceDriftMode='REPORT'|'RECOMMEND'|'AUTO_RECONCILE'
