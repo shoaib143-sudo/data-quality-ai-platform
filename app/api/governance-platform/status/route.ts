@@ -8,9 +8,9 @@ export async function GET(request:Request){
   const user=await requireApiUser()
   const url=new URL(request.url)
   const projectId=url.searchParams.get('projectId')?.trim()
-  const planId=url.searchParams.get('planId')?.trim()
-  if(!projectId||!planId)return NextResponse.json({error:'projectId and planId are required.'},{status:400})
-  const result=await governanceDeploymentStatusForPrincipal(user.id,projectId,planId)
+  const deploymentId=url.searchParams.get('deploymentId')?.trim()
+  if(!projectId||!deploymentId)return NextResponse.json({error:'projectId and deploymentId are required.'},{status:400})
+  const result=await governanceDeploymentStatusForPrincipal(user.id,projectId,deploymentId)
   return NextResponse.json(result,{headers:{'Cache-Control':'private, no-store'}})
  }catch(error){
   const authorization=authorizationErrorResponse(error)
