@@ -159,11 +159,34 @@ export async function POST(request: Request) {
       executionCorrelationId: crypto.randomUUID(),
     })
     if (!decision.provider) {
+      const topIssues = unresolvedIssues.slice(0, 3).map(issue => issue.title).filter(Boolean)
+      const evidenceSummary = [
+        `I can still answer from governed DataNexus evidence even though the external reasoning provider is currently unavailable.`,
+        `Current scope: ${selectedDataset?.name ?? selectedDomain ?? 'All Data Domains'}.`,
+        `Visible datasets: ${scopedDatasets.length}. Unresolved issues: ${unresolvedIssues.length}.`,
+        topIssues.length ? `Highest-priority visible issues include: ${topIssues.join('; ')}.` : 'No unresolved issue titles are available in the current governed scope.',
+        `Open the ${workspace} workspace for the underlying evidence and actions.`,
+      ]
+      const fallbackRoutes = persona.nav.map(item => item.href).filter(route => route.startsWith('/')).slice(0, 4)
+
       return NextResponse.json({
-        error: 'No governed reasoning route is currently available for DataNexus AI.',
-        code: 'AI_PROVIDER_UNAVAILABLE',
-        reason: decision.reason,
-      }, { status: 503 })
+        answer: evidenceSummary.join(' '),
+        suggestedFollowUps: [
+          'What needs my attention today?',
+          'Show the unresolved issues in this scope.',
+          'Where should I go next?',
+        ],
+        sourceRoutes: fallbackRoutes,
+        persona: persona.title,
+        scope: selectedDataset?.name ?? selectedDomain ?? 'All Data Domains',
+        workspace,
+        provider: 'datanexus_governed_evidence_fallback',
+        model: 'deterministic',
+        degraded: true,
+        routeReason: decision.reason,
+      }, {
+        headers: { 'cache-control': 'no-store' },
+      })
     }
 
     const result = await decision.provider.generateJson({
