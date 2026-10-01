@@ -5,6 +5,7 @@ import { governanceRetryDecision,governanceRetryDelayMs } from '../lib/governanc
 import { planGovernanceBatches,assertSingleProviderBatch } from '../lib/governance-platform/execution/batch-planner.ts'
 import { simulateGovernancePlan } from '../lib/governance-platform/planning/simulation.ts'
 import { GOVERNANCE_MCP_TOOLS } from '../lib/governance-platform/mcp/contracts.ts'
+import { governanceMcpToolDefinitions } from '../lib/governance-platform/mcp/tools.ts'
 
 test('retry policy retries only normalized transient failures within bound',()=>{
  assert.equal(governanceRetryDecision(new GovernanceProviderError('RATE_LIMITED','rate'),1,3).retry,true)
@@ -31,4 +32,13 @@ test('MCP contract keeps planning and verification read only while apply is muta
  assert.equal(byName.get('governance.plan').mutation,false)
  assert.equal(byName.get('governance.verify').mutation,false)
  assert.equal(byName.get('governance.apply').mutation,true)
+})
+
+
+test('MCP tool definitions are deterministic, provider neutral, and risk annotated',()=>{
+ const tools=governanceMcpToolDefinitions()
+ assert.deepEqual(tools.map(tool=>tool.name),[...tools.map(tool=>tool.name)].sort())
+ const apply=tools.find(tool=>tool.name==='governance.apply'),plan=tools.find(tool=>tool.name==='governance.plan')
+ assert.equal(apply.annotations.destructiveHint,true);assert.equal(apply.annotations.readOnlyHint,false);assert.equal(plan.annotations.readOnlyHint,true)
+ assert.equal(JSON.stringify(tools).includes('informatica'),false)
 })
