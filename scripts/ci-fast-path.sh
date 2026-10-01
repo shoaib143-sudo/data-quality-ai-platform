@@ -9,6 +9,7 @@ set -euo pipefail
 node scripts/audit-user-facing-admin-routes.mjs
 node scripts/verify-migration-version-uniqueness.mjs
 pnpm run verify:governance-maturity
+pnpm run verify:governance-provider-platform
 node scripts/verify-delegation-admin-policy.mjs
 node --test tests/public-auth-proxy-fast-path.test.mjs
 node --experimental-strip-types --test tests/derived-state-rebuild.test.mjs
