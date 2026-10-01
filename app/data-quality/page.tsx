@@ -7,6 +7,7 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { QualityRunButton } from './quality-run-button'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { RecentJobMonitor } from '@/components/monitoring/recent-job-monitor'
 
 type ProfileRun = {
   id: string
@@ -191,6 +192,7 @@ export default async function DataQualityPage() {
       })}</section>
 
       {runs.length===0?<section className={`${surface} mt-5 p-9 text-center`}><Gauge className="mx-auto h-8 w-8 text-cyan-300"/><h2 className="mt-3 text-xl font-black text-white">No quality evidence yet</h2><p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">Prepare or discover a governed dataset to establish the evidence base for quality decisions.</p><Link href={prepareHref} className={`mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white ${focus}`}>{canDatasets ? 'Prepare a dataset' : 'Open governed data'} <ArrowRight className="ml-2 h-4 w-4" /></Link></section>:null}
+      {canMonitoring ? <RecentJobMonitor title="Data quality and profiling jobs" /> : null}
     </div>
   </main>
 }
