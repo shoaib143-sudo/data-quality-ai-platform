@@ -1,10 +1,11 @@
-import { createAdminClient } from '../../supabase/admin'
-import type { GovernanceCheckpoint,GovernanceCheckpointStore } from './checkpoint'
-import type { GovernanceEvidenceRecord } from '../evidence/model'
-import type { GovernanceEvidenceStore } from '../evidence/store'
+import { createAdminClient } from '../../supabase/admin.ts'
+import type { GovernanceCheckpoint,GovernanceCheckpointStore } from './checkpoint.ts'
+import type { GovernanceEvidenceRecord } from '../evidence/model.ts'
+import type { GovernanceEvidenceStore } from '../evidence/store.ts'
 
 export class SupabaseGovernanceCheckpointStore implements GovernanceCheckpointStore{
- constructor(private readonly projectId:string){}
+ private readonly projectId:string
+ constructor(projectId:string){this.projectId=projectId}
  async get(idempotencyKey:string){
   const admin=createAdminClient()
   const {data,error}=await admin.schema('governance').from('platform_execution_checkpoints')
