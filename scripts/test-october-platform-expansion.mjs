@@ -149,3 +149,16 @@ test('lineage evidence timeline renders persisted ingestion and transformation e
   assert.match(page,/Observed lineage and transformations/)
   assert.match(page,/distinguishes received source evidence and transformation records from inferred suggestions/)
 })
+
+
+test('metadata scan diagnostics expose manifest failures and safe rescan without bypassing discovery authorization',()=>{
+  const page=fs.readFileSync('app/catalog/discovery/history/page.tsx','utf8')
+  const panel=fs.readFileSync('components/catalog/discovery-run-history.tsx','utf8')
+  const discoveryRoute=fs.readFileSync('app/api/catalog/discovery/route.ts','utf8')
+  assert.match(page,/discovery_runs/)
+  assert.match(page,/error_message/)
+  assert.match(panel,/Metadata scan diagnostics/)
+  assert.match(panel,/Rescan/)
+  assert.match(panel,/\/api\/catalog\/discovery/)
+  assert.match(discoveryRoute,/authorizeProject\(user\.id, source\.project_id, 'discovery\.execute'\)/)
+})
