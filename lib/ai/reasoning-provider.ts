@@ -11,6 +11,10 @@ export type ReasoningRequest = {
   temperature?: number
   /** Optional caller-owned provider-side output-token ceiling. This is not a budget-policy decision by itself. */
   maxOutputTokens?: number
+  /** Execution-owned cancellation/deadline. Aborting does not prove zero provider charges. */
+  signal?: AbortSignal
+  /** Server experiment execution disables fallback so every paid attempt needs its own reservation. */
+  allowFallback?: boolean
 }
 
 export type ReasoningUsage = {
@@ -121,10 +125,12 @@ export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
   }
 
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
+    request.signal?.throwIfAborted()
     const startedAt = performance.now()
     const maxOutputTokens = providerMaxOutputTokens(request.maxOutputTokens)
     const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
       method: 'POST',
+      signal: request.signal,
       headers: {
         authorization: `Bearer ${this.config.apiKey}`,
         'content-type': 'application/json',
@@ -147,6 +153,7 @@ export class OpenAICompatibleReasoningProvider implements ReasoningProvider {
       choices?: Array<{ message?: { content?: string } }>
       usage?: OpenAICompatibleUsage
     }
+    request.signal?.throwIfAborted()
     const content = payload.choices?.[0]?.message?.content
     if (!content) throw new Error('AI reasoning provider returned no content.')
 

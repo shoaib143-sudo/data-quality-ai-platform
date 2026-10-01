@@ -2,6 +2,7 @@ import type {
   ReasoningProvider,
   ReasoningProviderSelection,
 } from './reasoning-provider'
+import type { LearningExperimentScope } from './learning-experiment-budget'
 import type { ModelGateway, ReasoningRouteContext } from './model-gateway'
 import type { ModelRegistry, RegisteredModelVersion } from './model-registry'
 import type { RoutingPolicy, RoutingPolicyEvaluator, RoutingPolicyProvider } from './routing-policy'
@@ -10,6 +11,10 @@ import { ResilientReasoningProvider, type ProviderResiliencePolicyProvider } fro
 
 export type IntelligentRouteContext = ReasoningRouteContext & {
   projectId: string
+  /** Server execution-owned cancellation or deadline, shared by all routed calls. */
+  signal?: AbortSignal
+  /** Server-owned immutable experiment identity; never populated from untrusted request limits. */
+  learningExperiment?: Omit<LearningExperimentScope, 'projectId'>
   executionCorrelationId?: string | null
   /** Explicit immutable agent-definition identity for ADR-008 AGENT budget scope matching. */
   agentDefinitionId?: string | null
