@@ -2,7 +2,7 @@ import { authorizeProject } from '../../auth/authorize.ts'
 import { createGovernanceExecutionController } from '../../ai/governance-execution-controller.ts'
 import { createGovernancePolicyDecisionProvider } from '../../governance/governance-policy-decision-provider.ts'
 import type { GovernanceDesiredState } from '../desired-state/model.ts'
-import { executeGovernedProviderOperation } from '../execution/runner.ts'
+import { executeGovernedProviderOperation,preflightGovernedProviderOperation } from '../execution/runner.ts'
 import { SupabaseGovernanceCheckpointStore,SupabaseGovernanceEvidenceStore } from '../execution/supabase-store.ts'
 import { orderProviderGovernanceOperations } from '../planning/dependency-dag.ts'
 import { buildGovernanceDeploymentPlan } from '../planning/deployment-plan.ts'
@@ -57,6 +57,21 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
   executionController:createGovernanceExecutionController(),
   policyDecisionProvider:createGovernancePolicyDecisionProvider(),
  }
+ const preflight=[]
+ for(const operation of operations){
+  const result=await preflightGovernedProviderOperation(operation,dependencies)
+  preflight.push({operationId:operation.operationId,provider:operation.provider,connectionId:operation.connectionId,result})
+ }
+ const approvalRequired=preflight.filter(value=>value.result.status==='APPROVAL_REQUIRED')
+ const blocked=preflight.filter(value=>value.result.status!=='READY'&&value.result.status!=='APPROVAL_REQUIRED')
+ if(approvalRequired.length||blocked.length){
+  return{
+   accepted:false as const,
+   code:approvalRequired.length?'GOVERNANCE_APPROVAL_REQUIRED' as const:'GOVERNANCE_PREFLIGHT_BLOCKED' as const,
+   deployment,simulation,preflight,
+  }
+ }
+ const preparedByOperation=new Map(preflight.map(value=>[value.operationId,value.result]))
  for(const operation of operations){
   const blockedBy=operation.dependencies.filter(id=>byOperation.get(id)?.status!=='VERIFIED')
   if(blockedBy.length){
