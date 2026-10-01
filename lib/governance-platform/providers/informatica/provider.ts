@@ -19,7 +19,13 @@ function assetRecords(payload: unknown): InformaticaAssetRecord[] {
 }
 
 export class InformaticaGovernanceProvider implements GovernanceProvider {
-  constructor(private readonly client: InformaticaApiClient, private readonly endpoints: InformaticaEndpointResolver) {}
+  private readonly client: InformaticaApiClient
+  private readonly endpoints: InformaticaEndpointResolver
+
+  constructor(client: InformaticaApiClient, endpoints: InformaticaEndpointResolver) {
+    this.client = client
+    this.endpoints = endpoints
+  }
 
   manifest() { return informaticaManifest }
   async capabilities(): Promise<ProviderCapability[]> { return informaticaManifest.capabilities }
