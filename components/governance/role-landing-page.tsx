@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { LandingRecentlyViewed } from '@/components/governance/landing-recently-viewed'
-import type { PersonaDefinition } from '@/lib/governance/personas'
+import { personas, type PersonaDefinition } from '@/lib/governance/personas'
 import { buildPersonaPresentationPlan } from '@/lib/governance/persona-presentation'
 import {
   buildRoleLandingPresentation,
@@ -126,7 +126,7 @@ function EvidenceTile({ href, icon, label, value, detail }: { href: string; icon
   return <Link href={href} data-track-recent="true" data-recent-label={label} className={`${inset} ${interactive} block p-4`}><div className="flex items-start justify-between gap-3"><span className="text-cyan-300">{icon}</span><ArrowRight className="h-4 w-4 text-slate-500" /></div><p className="mt-3 text-xl font-black text-white">{value}</p><p className="mt-1 text-sm font-bold text-slate-200">{label}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></Link>
 }
 
-export function RoleLandingPage({ persona, data, userLabel, canAdmin=false }: { persona: PersonaDefinition; data: RoleLandingData; userLabel: string; canAdmin?: boolean }) {
+export function RoleLandingPage({ persona, data, userLabel, canAdmin=false, canSwitchPersona=false }: { persona: PersonaDefinition; data: RoleLandingData; userLabel: string; canAdmin?: boolean; canSwitchPersona?: boolean }) {
   const orgRole = canAdmin ? 'ADMIN' : null
   const homeHref = `/home/${persona.slug}`
   const safeHref = (href: string, fallback='/catalog') => canAccessWorkspaceHref(persona.slug, href, orgRole) ? href : canAccessWorkspaceHref(persona.slug, fallback, orgRole) ? fallback : homeHref
@@ -159,6 +159,7 @@ export function RoleLandingPage({ persona, data, userLabel, canAdmin=false }: { 
     <section className="min-w-0">
       <nav className="mb-4 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm" aria-label="Persona workspace">
         {visibleNav.map(item=><Link key={item.href} href={item.href} data-track-recent="true" data-recent-label={item.label} className={`inline-flex min-h-11 shrink-0 items-center rounded-xl px-3 py-2.5 text-sm font-semibold ${focus} ${item.href===homeHref?'bg-violet-100 text-violet-800':'text-slate-600 hover:bg-violet-50 hover:text-violet-800'}`} aria-current={item.href===homeHref?'page':undefined}>{item.label}</Link>)}
+        {canSwitchPersona?<details className="relative shrink-0"><summary className={`inline-flex min-h-11 cursor-pointer list-none items-center rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm font-bold text-violet-800 hover:bg-violet-100 ${focus}`}>View as: {persona.title}</summary><div className="absolute right-0 z-50 mt-2 max-h-[420px] w-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">{Object.values(personas).map(item=><Link key={item.slug} href={`/home/${item.slug}`} className={`block rounded-xl px-3 py-2.5 text-sm font-semibold ${item.slug===persona.slug?'bg-violet-100 text-violet-800':'text-slate-600 hover:bg-slate-50 hover:text-violet-800'}`}>{item.title}</Link>)}</div></details>:null}
         {canAdmin?<Link href="/admin" className={`inline-flex min-h-11 shrink-0 items-center rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-violet-50 ${focus}`}>Organization administration</Link>:null}
       </nav>
       <div className="mb-4"><LandingRecentlyViewed /></div>
