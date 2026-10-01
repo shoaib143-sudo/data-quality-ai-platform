@@ -298,3 +298,13 @@ test('lineage flow visualization presents source transformation and target topol
   assert.match(explorer,/>Sources</)
   assert.match(explorer,/>Targets</)
 })
+
+
+test('lineage export is persona-gated and available to data quality analysts as read-only evidence',()=>{
+  const policy=fs.readFileSync('lib/governance/workspace-policy.ts','utf8')
+  const route=fs.readFileSync('app/api/lineage/export/route.ts','utf8')
+  assert.match(policy,/'data-quality-analyst': \[[^\n]*'lineage'/)
+  assert.match(route,/resolveLandingAccess\(user\.id\)/)
+  assert.match(route,/canAccessWorkspace\(landing\.persona, 'lineage'/)
+  assert.match(route,/status: 403/)
+})
