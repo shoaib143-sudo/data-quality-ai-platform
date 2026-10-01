@@ -557,16 +557,118 @@ begin
 end;
 $$;
 
+
+create table if not exists agent.learning_experiment_decision_bindings (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null,
+  run_id uuid not null unique,
+  evaluation_result_id uuid not null unique,
+  analysis_evidence_ref text not null check (length(btrim(analysis_evidence_ref)) > 0),
+  gain_lower_confidence_bound numeric,
+  confirmation_window_passed boolean not null,
+  created_at timestamptz not null default clock_timestamp(),
+  constraint learning_experiment_decision_bindings_run_fk
+    foreign key (run_id, project_id)
+    references agent.learning_experiment_runs(id, project_id) on delete restrict,
+  constraint learning_experiment_decision_bindings_result_fk
+    foreign key (evaluation_result_id)
+    references agent.learning_evaluation_results(id) on delete restrict
+);
+create index if not exists learning_experiment_decision_bindings_project_idx
+  on agent.learning_experiment_decision_bindings(project_id, evaluation_result_id);
+alter table agent.learning_experiment_decision_bindings enable row level security;
+revoke all on agent.learning_experiment_decision_bindings from public,anon,authenticated,service_role;
+grant select,insert on agent.learning_experiment_decision_bindings to service_role;
+create trigger learning_experiment_decision_bindings_immutable
+before update or delete on agent.learning_experiment_decision_bindings
+for each row execute function agent.reject_learning_candidate_evidence_mutation();
+
+create or replace function agent.bind_learning_experiment_decision(
+  p_project_id uuid,
+  p_run_id uuid,
+  p_evaluation_result_id uuid,
+  p_analysis_evidence_ref text,
+  p_gain_lower_confidence_bound numeric,
+  p_confirmation_window_passed boolean
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = pg_catalog, agent
+as $
+declare
+  v_run agent.learning_experiment_runs%rowtype;
+  v_policy agent.learning_evaluation_policies%rowtype;
+  v_result agent.learning_evaluation_results%rowtype;
+  v_summary jsonb;
+  v_id uuid;
+  v_baseline numeric;
+  v_candidate numeric;
+begin
+  select * into v_run from agent.learning_experiment_runs
+  where id=p_run_id and project_id=p_project_id;
+  if not found then raise exception 'learning experiment run not found'; end if;
+  if v_run.evidence_class<>'PROSPECTIVE_LIVE' then
+    raise exception 'synthetic experiment cannot bind a release-admission decision'; end if;
+  if btrim(coalesce(p_analysis_evidence_ref,''))='' then raise exception 'analysis evidence reference is required'; end if;
+  select * into v_policy from agent.learning_evaluation_policies
+  where id=v_run.policy_id and project_id=p_project_id;
+  select * into v_result from agent.learning_evaluation_results
+  where id=p_evaluation_result_id and project_id=p_project_id
+    and policy_id=v_run.policy_id and candidate_id=v_run.candidate_id;
+  if not found then raise exception 'evaluation result does not match experiment run'; end if;
+
+  v_summary := agent.derive_learning_experiment_summary(p_project_id,p_run_id);
+  if coalesce((v_summary->>'complete')::boolean,false) is not true
+    or coalesce((v_summary->>'allIndependentlyVerified')::boolean,false) is not true
+    or coalesce((v_summary->>'accountingComplete')::boolean,false) is not true
+  then raise exception 'canonical experiment evidence is incomplete'; end if;
+  if (v_summary->>'caseCount')::integer<>v_policy.sample_size
+    or (v_summary->>'scoredCaseCount')::integer<>v_policy.sample_size
+  then raise exception 'canonical experiment sample does not match locked policy'; end if;
+
+  v_baseline := (v_summary->>'baselineScore')::numeric;
+  v_candidate := (v_summary->>'candidateScore')::numeric;
+  if v_result.sample_count<>(v_summary->>'scoredCaseCount')::integer
+    or v_result.baseline_score is distinct from v_baseline
+    or v_result.candidate_score is distinct from v_candidate
+    or v_result.gain_lower_confidence_bound is distinct from p_gain_lower_confidence_bound
+    or v_result.independently_verified is not true
+    or v_result.evidence_complete is not true
+    or v_result.confirmation_window_passed is distinct from p_confirmation_window_passed
+    or v_result.authority_violations<>(v_summary->>'authorityViolations')::integer
+    or v_result.safety_failures<>(v_summary->>'safetyFailures')::integer
+    or v_result.accounting_complete is not true
+    or v_result.total_cost<>(v_summary->>'totalCost')::numeric
+    or v_result.max_run_cost<>(v_summary->>'maxRunCost')::numeric
+    or v_result.total_tokens<>(v_summary->>'totalTokens')::bigint
+    or v_result.max_run_tokens<>(v_summary->>'maxRunTokens')::bigint
+    or v_result.max_latency_ms<>(v_summary->>'maxLatencyMs')::integer
+  then raise exception 'evaluation decision does not equal canonical experiment evidence'; end if;
+
+  insert into agent.learning_experiment_decision_bindings(
+    project_id,run_id,evaluation_result_id,analysis_evidence_ref,
+    gain_lower_confidence_bound,confirmation_window_passed
+  ) values (
+    p_project_id,p_run_id,p_evaluation_result_id,btrim(p_analysis_evidence_ref),
+    p_gain_lower_confidence_bound,p_confirmation_window_passed
+  ) returning id into v_id;
+  return v_id;
+end;
+$;
+
 revoke all on function agent.create_learning_experiment_run(uuid,uuid,uuid,text,text[]) from public,anon,authenticated;
 revoke all on function agent.prepare_learning_experiment_arm_attempt(uuid,uuid,text,text,text,text,text,text,text,text) from public,anon,authenticated;
 revoke all on function agent.record_learning_experiment_arm_result(uuid,uuid,uuid,text,text,text,integer,text) from public,anon,authenticated;
 revoke all on function agent.record_learning_experiment_case_score(uuid,uuid,text,text,text,uuid,uuid,numeric,numeric,boolean,boolean,boolean,text,text,timestamptz) from public,anon,authenticated;
 revoke all on function agent.derive_learning_experiment_summary(uuid,uuid) from public,anon,authenticated;
+revoke all on function agent.bind_learning_experiment_decision(uuid,uuid,uuid,text,numeric,boolean) from public,anon,authenticated;
 grant execute on function agent.create_learning_experiment_run(uuid,uuid,uuid,text,text[]) to service_role;
 grant execute on function agent.prepare_learning_experiment_arm_attempt(uuid,uuid,text,text,text,text,text,text,text,text) to service_role;
 grant execute on function agent.record_learning_experiment_arm_result(uuid,uuid,uuid,text,text,text,integer,text) to service_role;
 grant execute on function agent.record_learning_experiment_case_score(uuid,uuid,text,text,text,uuid,uuid,numeric,numeric,boolean,boolean,boolean,text,text,timestamptz) to service_role;
 grant execute on function agent.derive_learning_experiment_summary(uuid,uuid) to service_role;
+grant execute on function agent.bind_learning_experiment_decision(uuid,uuid,uuid,text,numeric,boolean) to service_role;
 
 comment on table agent.learning_experiment_runs is 'Immutable root identity for a locked paired learning experiment. Synthetic and prospective-live evidence are explicitly segregated.';
 comment on table agent.learning_experiment_arm_attempts is 'Pre-dispatch immutable arm attempts. Re-entry is idempotent by attempt_key and ambiguous unfinished attempts block redispatch.';
@@ -2691,3 +2793,5 @@ comment on table agent.learning_experiment_runs is 'Immutable root identity for 
 comment on table agent.learning_experiment_arm_attempts is 'Pre-dispatch immutable arm attempts. Re-entry is idempotent by attempt_key and ambiguous unfinished attempts block redispatch.';
 comment on table agent.learning_experiment_arm_results is 'Terminal arm evidence bound to canonical budget/accounting evidence for prospective-live runs.';
 comment on table agent.learning_experiment_case_scores is 'Independent paired case scores bound to successful baseline/candidate arm result evidence.';
+
+comment on table agent.learning_experiment_decision_bindings is 'Immutable proof that an aggregate evaluation decision exactly matches one complete prospective-live canonical experiment run.';
