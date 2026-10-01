@@ -44,6 +44,19 @@ export default async function ExecutiveSummaryPage() {
   const activeModels = (models as any[]).filter(row=>['ACTIVE','PRODUCTION','APPROVED'].includes(String(row.lifecycle_status).toUpperCase())).length
   const totalDatasets = datasetsResult.count ?? datasets.length
   const lineageMappings = lineageResult.count ?? 0
+  const sourceCoverage = (sourcesResult.count??sources.length) ? activeSources / (sourcesResult.count??sources.length) : null
+  const profilingSuccess = runs.length ? completedRuns / runs.length : null
+  const lineageCoverage = totalDatasets ? Math.min(1,lineageMappings / Math.max(1,totalDatasets)) : null
+  const modelCoverage = models.length ? activeModels / models.length : null
+  const evidenceSignals=[
+    {label:'Source readiness',value:sourceCoverage,detail:`${activeSources}/${sourcesResult.count??sources.length} connected sources active`},
+    {label:'Profiling execution',value:profilingSuccess,detail:`${completedRuns}/${runs.length} recent profiling runs completed`},
+    {label:'Quality evidence',value:averageQuality,detail:averageQuality==null?'No scored quality evidence yet':'Average latest scored quality evidence'},
+    {label:'Lineage evidence',value:lineageCoverage,detail:`${lineageMappings} persisted field mappings across ${totalDatasets} datasets`},
+    {label:'AI system activation',value:modelCoverage,detail:`${activeModels}/${models.length} governed AI systems active`},
+  ]
+  const measurable=evidenceSignals.filter(item=>item.value!=null) as Array<{label:string;value:number;detail:string}>
+  const evidenceCoverage=measurable.length?measurable.reduce((sum,item)=>sum+item.value,0)/measurable.length:null
 
   const pillars=[
     {label:'Catalog & Metadata',detail:`${totalDatasets} governed datasets`,Icon:Database,href:'/catalog'},
@@ -64,6 +77,8 @@ export default async function ExecutiveSummaryPage() {
       <Link href="/issues" className="rounded-2xl border border-white/10 bg-[#102036] p-5 hover:border-cyan-400/30"><AlertTriangle className="h-5 w-5 text-rose-300"/><p className="mt-3 text-3xl font-black">{highFindings}</p><p className="text-xs text-slate-500">High-priority findings</p></Link>
       <Link href={safeHref('/datasets')} className="rounded-2xl border border-white/10 bg-[#102036] p-5 hover:border-cyan-400/30"><Layers3 className="h-5 w-5 text-violet-300"/><p className="mt-3 text-3xl font-black">{activeSources}/{sourcesResult.count??sources.length}</p><p className="text-xs text-slate-500">Active connected sources</p></Link>
     </section>
+
+    <section className="mt-5 rounded-3xl border border-white/10 bg-[#102036] p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">Evidence coverage snapshot</p><h2 className="mt-1 text-2xl font-black">Current operating evidence</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">This is an evidence-coverage indicator, not a production certification score. It summarizes only the governed evidence currently visible to you.</p></div><div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4 text-center"><p className="text-3xl font-black text-cyan-200">{pct(evidenceCoverage)}</p><p className="text-[10px] font-black uppercase tracking-wide text-cyan-400">Evidence coverage</p></div></div><div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">{evidenceSignals.map(item=><article key={item.label} className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4"><div className="flex items-center justify-between gap-2"><p className="text-xs font-black text-slate-300">{item.label}</p><p className="text-sm font-black text-white">{pct(item.value)}</p></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-cyan-400" style={{width:item.value==null?'0%':`${Math.max(0,Math.min(100,item.value*100))}%`}}/></div><p className="mt-2 text-[11px] leading-4 text-slate-500">{item.detail}</p></article>)}</div></section>
 
     <section className="mt-5 rounded-3xl border border-white/10 bg-[#102036] p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.15em] text-violet-300">Core capability pillars</p><h2 className="mt-1 text-2xl font-black">One governed operating model</h2></div><Link href="/reports" className="text-sm font-bold text-blue-300">Reports →</Link></div><div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{pillars.map(({label,detail,Icon,href})=><Link key={label} href={href} className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4 hover:border-violet-400/30"><Icon className="h-5 w-5 text-violet-300"/><p className="mt-3 font-black text-white">{label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p></Link>)}</div></section>
 
