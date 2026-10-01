@@ -721,7 +721,7 @@ revoke all on function agent.record_learning_experiment_arm_result(uuid,uuid,uui
 revoke all on function agent.record_learning_experiment_case_score(uuid,uuid,text,text,text,uuid,uuid,numeric,numeric,boolean,boolean,boolean,text,text,timestamptz) from public,anon,authenticated;
 revoke all on function agent.derive_learning_experiment_summary(uuid,uuid) from public,anon,authenticated;
 revoke all on function agent.bind_learning_experiment_decision(uuid,uuid,uuid,text,numeric,boolean) from public,anon,authenticated;
-grant execute on function agent.create_learning_experiment_run(uuid,uuid,uuid,text,text[]) to service_role;
+grant execute on function agent.create_learning_experiment_run(uuid,uuid,uuid,text,text,text[]) to service_role;
 grant execute on function agent.prepare_learning_experiment_arm_attempt(uuid,uuid,text,text,text,text,text,text,text,text) to service_role;
 grant execute on function agent.record_learning_experiment_arm_result(uuid,uuid,uuid,text,text,text,integer,text) to service_role;
 grant execute on function agent.record_learning_experiment_case_score(uuid,uuid,text,text,text,uuid,uuid,numeric,numeric,boolean,boolean,boolean,text,text,timestamptz) to service_role;
