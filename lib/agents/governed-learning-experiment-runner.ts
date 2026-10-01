@@ -19,6 +19,8 @@ export type PreparedLearningExperimentAttempt = {
   executionCorrelationId: string
   attemptNumber: number
   reused: boolean
+  terminalResultId?: string | null
+  terminalStatus?: LearningExperimentTerminalStatus | null
 }
 
 export type LearningExperimentArmExecution = {
@@ -65,6 +67,7 @@ export interface LearningExperimentEvidenceStore {
     projectId: string
     policyRecordId: string
     candidateId: string
+    runKey: string
     evidenceClass: LearningExperimentEvidenceClass
     caseKeys: readonly string[]
   }): Promise<string>
@@ -86,6 +89,7 @@ export interface LearningExperimentEvidenceStore {
     attemptId: string
     execution: LearningExperimentArmExecution
   }): Promise<string>
+  findCaseScore(input: { projectId: string; runId: string; caseKey: string }): Promise<string | null>
   recordCaseScore(input: {
     projectId: string
     runId: string
@@ -164,6 +168,7 @@ export class GovernedPairedLearningExperimentRunner {
     projectId: string
     policyRecordId: string
     candidateId: string
+    runKey: string
     evidenceClass: LearningExperimentEvidenceClass
     baselineVersion: string
     candidateVersion: string
@@ -174,6 +179,7 @@ export class GovernedPairedLearningExperimentRunner {
     const projectId = required(input.projectId, 'projectId')
     const policyRecordId = required(input.policyRecordId, 'policyRecordId')
     const candidateId = required(input.candidateId, 'candidateId')
+    const runKey = required(input.runKey, 'runKey')
     const baselineVersion = required(input.baselineVersion, 'baselineVersion')
     const candidateVersion = required(input.candidateVersion, 'candidateVersion')
     const evaluatorActorId = required(input.evaluatorActorId, 'evaluatorActorId')
@@ -198,6 +204,7 @@ export class GovernedPairedLearningExperimentRunner {
       projectId,
       policyRecordId,
       candidateId,
+      runKey,
       evidenceClass: input.evidenceClass,
       caseKeys: input.cases.map((item) => item.caseKey),
     })
@@ -223,6 +230,14 @@ export class GovernedPairedLearningExperimentRunner {
           inputArtifactRef: item.inputArtifactRef,
           inputArtifactHash: item.inputArtifactHash,
         })
+
+        if (attempt.terminalResultId && attempt.terminalStatus) {
+          results.set(arm, attempt.terminalResultId)
+          if (attempt.terminalStatus !== 'SUCCEEDED') {
+            return this.store.deriveSummary({ projectId, runId })
+          }
+          continue
+        }
 
         let execution: LearningExperimentArmExecution
         try {
@@ -266,6 +281,8 @@ export class GovernedPairedLearningExperimentRunner {
       const baselineResultId = results.get('BASELINE')
       const candidateResultId = results.get('CANDIDATE')
       if (!baselineResultId || !candidateResultId) throw new Error('paired arm result identity is incomplete')
+      const existingScoreId = await this.store.findCaseScore({ projectId, runId, caseKey: item.caseKey })
+      if (existingScoreId) continue
       const score = await this.scorer.score({
         projectId,
         policyRecordId,
