@@ -1,5 +1,6 @@
 import { EnvironmentModelGateway } from './model-gateway'
 import { createGovernanceModelCostAccountingProvider } from './governance-cost-accounting'
+import { createGovernanceLearningEvaluationRuntimeBudgetProvider } from './governance-learning-evaluation-runtime-budget'
 import { createGovernanceModelRegistry } from './governance-model-registry'
 import { createGovernanceProviderResiliencePolicyProvider } from './governance-provider-resilience'
 import { createGovernanceReasoningBudgetPolicyProvider } from './governance-reasoning-budget-policy'
@@ -30,6 +31,7 @@ export function createGovernanceIntelligentRouter(): IntelligentModelRouter {
     createGovernanceReasoningBudgetPolicyProvider(),
     createGovernanceProjectBudgetAdmissionProvider(),
     createGovernanceModelCostAccountingProvider(),
+    createGovernanceLearningEvaluationRuntimeBudgetProvider(),
   )
 
   // All governed reasoning exits through task-specific output validation after
