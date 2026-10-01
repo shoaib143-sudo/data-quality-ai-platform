@@ -1,5 +1,5 @@
 import type { AuthorizationCapability } from '@/lib/auth/authorize'
-import type { GovernanceDiffAction } from '../planning/diff'
+import type { GovernanceDiffAction } from '../planning/diff.ts'
 
 const READ_CAPABILITIES: Record<string, AuthorizationCapability> = {
   BUSINESS_TERM: 'glossary.read',
