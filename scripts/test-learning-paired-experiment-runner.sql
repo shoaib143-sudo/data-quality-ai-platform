@@ -129,7 +129,12 @@ begin
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     'CANDIDATE','50000000-0000-4000-8000-000000000002','2','fixture:input:case1:candidate',true
   );
-  if (v->>'attemptId')::uuid <> :'attempt_1'::uuid or coalesce((v->>'reused')::boolean,false) is not true then
+  if (v->>'attemptId')::uuid <> (
+      select id from agent.learning_experiment_attempts
+      where policy_id='40000000-0000-4000-8000-000000000001'
+        and case_key='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        and arm='CANDIDATE'
+    ) or coalesce((v->>'reused')::boolean,false) is not true then
     raise exception 'prepare idempotency failed';
   end if;
 end $$;
@@ -142,8 +147,15 @@ do $$
 declare v jsonb;
 begin
   v := agent.begin_learning_experiment_dispatch(
-    '10000000-0000-4000-8000-000000000001', :'attempt_1'::uuid,
-    (select execution_key from agent.learning_experiment_attempts where id=:'attempt_1'::uuid)
+    '10000000-0000-4000-8000-000000000001',
+    (select id from agent.learning_experiment_attempts
+      where policy_id='40000000-0000-4000-8000-000000000001'
+        and case_key='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        and arm='CANDIDATE'),
+    (select execution_key from agent.learning_experiment_attempts
+      where policy_id='40000000-0000-4000-8000-000000000001'
+        and case_key='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        and arm='CANDIDATE')
   );
   if coalesce((v->>'admitted')::boolean,true) is not false
     or v->>'reason' <> 'AMBIGUOUS_PRIOR_DISPATCH_REQUIRES_RECONCILIATION'
@@ -218,7 +230,10 @@ select agent.complete_learning_experiment_attempt(
 );
 do $$
 begin
-  if (select status from agent.learning_experiment_attempts where id=:'attempt_3'::uuid) <> 'RECONCILIATION_REQUIRED' then
+  if (select status from agent.learning_experiment_attempts
+      where policy_id='40000000-0000-4000-8000-000000000001'
+        and case_key='cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+        and arm='CANDIDATE') <> 'RECONCILIATION_REQUIRED' then
     raise exception 'missing accounting did not force reconciliation required';
   end if;
 end $$;
@@ -227,7 +242,13 @@ end $$;
 do $$
 begin
   begin
-    update agent.learning_experiment_attempt_events set reason='tampered' where attempt_id=:'attempt_1'::uuid;
+    update agent.learning_experiment_attempt_events set reason='tampered'
+      where attempt_id=(
+        select id from agent.learning_experiment_attempts
+        where policy_id='40000000-0000-4000-8000-000000000001'
+          and case_key='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+          and arm='CANDIDATE'
+      );
     raise exception 'event mutation unexpectedly succeeded';
   exception when others then
     if SQLERRM not like '%immutable%' then raise; end if;
