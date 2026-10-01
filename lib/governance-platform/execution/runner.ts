@@ -20,6 +20,7 @@ export async function executeGovernedProviderOperation(operation:ProviderPlanned
   if(gate.requiresApproval) return {status:'APPROVAL_REQUIRED' as const,gate,resolution}
   const result=await provider.execute(operation)
   if(result.status==='PENDING') return {status:'PENDING' as const,result,gate,resolution}
+  if(result.status==='FAILED') return {status:'FAILED' as const,result,gate,resolution}
   const verification=await provider.verify(operation,result)
   return {status:verification.status==='VERIFIED'?'VERIFIED' as const:'VERIFICATION_REQUIRED' as const,result,verification,gate,resolution}
 }
