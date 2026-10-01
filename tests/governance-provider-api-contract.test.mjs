@@ -52,3 +52,12 @@ test('execution status uses the aggregate deployment id returned by apply',()=>{
  assert.doesNotMatch(route,/searchParams\.get\('planId'\)/)
  assert.match(service,/listByDeployment\(projectId,deploymentId\)/)
 })
+
+
+test('apply preflights every operation before entering the execution loop',()=>{
+ const service=read('lib/governance-platform/runtime/service.ts')
+ const preflightIndex=service.indexOf('preflightGovernedProviderOperation(operation,dependencies)')
+ const blockedIndex=service.indexOf("GOVERNANCE_APPROVAL_REQUIRED")
+ const executeIndex=service.indexOf('executeGovernedProviderOperation(operation,dependencies,preparedByOperation.get(operation.operationId))')
+ assert.ok(preflightIndex>=0&&blockedIndex>preflightIndex&&executeIndex>blockedIndex)
+})
