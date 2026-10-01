@@ -11,6 +11,7 @@ import type { GovernanceMcpToolName } from './contracts'
 import { resolveGovernanceMcpPrincipal } from './principal'
 import { governanceMcpTool, GOVERNANCE_MCP_TOOLS } from './contracts'
 import { governanceMcpToolDefinitions } from './tools'
+import { validateGovernanceMcpTransportSecurity } from './transport-security'
 
 export const GOVERNANCE_MCP_PROTOCOL_VERSION='2026-07-28' as const
 const SERVER_INFO={name:'datanexus-governance',version:'1.0.0'} as const
@@ -82,6 +83,8 @@ async function callTool(request:Request,rpc:JsonRpcRequest){
 }
 
 export async function handleGovernanceMcpRequest(request:Request){
+ const transportSecurity=validateGovernanceMcpTransportSecurity(request)
+ if(!transportSecurity.ok)return error(null,-32000,transportSecurity.message,transportSecurity.status)
  let body:unknown
  try{body=await request.json()}catch{return error(null,-32700,'Invalid JSON.',400)}
  const validated=validateModernRequest(request,body)
