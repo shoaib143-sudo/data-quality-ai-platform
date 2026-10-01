@@ -43,10 +43,10 @@ A PRODUCTION_VERIFIED claim additionally requires exact source/build/deployment 
 
 ## Current decision snapshot
 
-At adoption, current main `0d8ac47db98eb246ff91ff366100b4be1eabe3cf` has green exact-head CI across the major quality/security/operational gates and a successful 13-persona live-browser run with an uploaded evidence artifact.
+At adoption, main `0d8ac47db98eb246ff91ff366100b4be1eabe3cf` had green exact-head CI across the major quality/security/operational gates and a successful 13-persona live-browser run with an uploaded evidence artifact. On 2026-10-01 the closure branch was rebuilt from then-current main `bc7f684c0b1a4fa353336af5e4d9dc5951691bef` to eliminate stale-branch drift.
 
 The remaining material release boundaries are:
-- isolated Governance OFF live-baseline configuration/execution
+- protected-main Governance OFF live-baseline execution; configuration is complete on the isolated UI Regression Test Project (`ab595892-828f-4585-bafb-b6c657585ce5`) with an explicit disabled OFF policy
 - final exact-head governed Vercel production deployment
 - final Vercel production certification/provenance
 - any specifically named live integrated journey not yet represented by direct runtime evidence
