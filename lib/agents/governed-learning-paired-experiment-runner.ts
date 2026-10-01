@@ -146,6 +146,36 @@ export async function completeGovernedLearningExperimentAttempt(input: {
   }
 }
 
+
+export async function reconcileGovernedLearningExperimentAttempt(input: {
+  projectId: string
+  attemptId: string
+  executionKey: string
+  resultArtifactId: string
+  reservationId: string
+  costEventId: string
+}) {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('agent').rpc('reconcile_learning_experiment_attempt', {
+    p_project_id: requiredUuid(input.projectId, 'projectId'),
+    p_attempt_id: requiredUuid(input.attemptId, 'attemptId'),
+    p_execution_key: requiredText(input.executionKey, 'executionKey'),
+    p_result_artifact_id: requiredUuid(input.resultArtifactId, 'resultArtifactId'),
+    p_reservation_id: requiredUuid(input.reservationId, 'reservationId'),
+    p_cost_event_id: requiredUuid(input.costEventId, 'costEventId'),
+  })
+  if (error) throw new Error(`Unable to reconcile learning experiment attempt: ${error.message}`)
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid learning experiment reconciliation evidence')
+  const row = data as Record<string, unknown>
+  return {
+    status: parseStatus(row.status),
+    idempotent: row.idempotent === true,
+    runId: requiredUuid(String(row.runId ?? ''), 'runId'),
+    resultArtifactId: row.resultArtifactId ? requiredUuid(String(row.resultArtifactId), 'resultArtifactId') : null,
+    resultContentHash: row.resultContentHash ? requiredText(String(row.resultContentHash), 'resultContentHash') : null,
+  }
+}
+
 /**
  * Server-owned orchestration envelope for one immutable held-out case arm.
  *
