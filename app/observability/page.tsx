@@ -21,6 +21,7 @@ type Alert = { id: string; project_id: string; dataset_id: string; profile_run_i
 type AiSystem = { id:string; project_id:string; system_key:string; name:string; system_type:string; lifecycle_status:string; current_version_id:string|null; ai_system_versions?: any }
 type AiTelemetry = { project_id:string; status:string; provider_id:string|null; model_name:string|null; ai_system_id:string|null; ai_system_version_id:string|null; latency_ms:number|null; input_tokens:number|null; output_tokens:number|null; cost_usd:number|null; observed_at:string }
 type StorageObject = { provider:string; state:string; size_bytes:number|null }
+type DiscoveryRun = { id:string; source_id:string; status:string; completed_at:string|null; objects_observed:number|null; objects_added:number|null; objects_changed:number|null; objects_missing:number|null; objects_removed:number|null; error_message:string|null }
 
 const surface='rounded-[22px] border border-white/10 bg-[#0a1d33] shadow-[10px_10px_28px_rgba(0,0,0,.24),-7px_-7px_22px_rgba(30,74,114,.08)]'
 const inset='rounded-2xl border border-white/[0.07] bg-[#08182b]'
@@ -53,7 +54,7 @@ export default async function ObservabilityPage() {
   const canProfiling=canAccessWorkspace(landing.persona,'profiling',landing.organizationRole)
   const canManageWorkspace=canAccessWorkspace(landing.persona,'observability-manage',landing.organizationRole)
 
-  const [datasetsResult, versionsResult, runsResult, scoresResult, sourcesResult, agentRunsResult, agentsResult, qualityRunsResult, alertsResult] = await Promise.all([
+  const [datasetsResult, versionsResult, runsResult, scoresResult, sourcesResult, agentRunsResult, agentsResult, qualityRunsResult, alertsResult, discoveryRunsResult] = await Promise.all([
     supabase.schema('catalog').from('datasets').select('id,project_id,name,business_domain').order('name'),
     supabase.schema('catalog').from('dataset_versions').select('id,dataset_id,version_number').order('version_number', { ascending: false }),
     supabase.schema('profiling').from('profile_runs').select('id,dataset_version_id,status,row_count,column_count,schema_hash,started_at,completed_at,error_code').order('started_at', { ascending: false }).limit(250),
@@ -63,11 +64,12 @@ export default async function ObservabilityPage() {
     supabase.schema('agent').from('agent_definitions').select('id,name,agent_key,version').eq('enabled', true),
     supabase.schema('profiling').from('quality_rule_runs').select('id,status,passed,completed_at').order('started_at', { ascending: false }).limit(500),
     supabase.schema('profiling').from('observability_alerts').select('id,project_id,dataset_id,profile_run_id,category,severity,title,description,status,evidence,first_observed_at,last_observed_at').order('last_observed_at', { ascending: false }).limit(200),
+    supabase.schema('catalog').from('discovery_runs').select('id,source_id,status,completed_at,objects_observed,objects_added,objects_changed,objects_missing,objects_removed,error_message').order('observed_from',{ascending:false}).limit(500),
   ])
 
   for (const [name, result] of [
     ['datasets', datasetsResult], ['versions', versionsResult], ['profile runs', runsResult], ['scores', scoresResult],
-    ['sources', sourcesResult], ['agent runs', agentRunsResult], ['agents', agentsResult], ['quality runs', qualityRunsResult], ['alerts', alertsResult],
+    ['sources', sourcesResult], ['agent runs', agentRunsResult], ['agents', agentsResult], ['quality runs', qualityRunsResult], ['alerts', alertsResult], ['metadata discovery runs', discoveryRunsResult],
   ] as const) {
     if (result.error) throw new Error(`Unable to load observability ${name}: ${result.error.message}`)
   }
@@ -81,6 +83,7 @@ export default async function ObservabilityPage() {
   const agents = (agentsResult.data ?? []) as AgentDefinition[]
   const qualityRuns = (qualityRunsResult.data ?? []) as QualityRun[]
   const alerts = (alertsResult.data ?? []) as Alert[]
+  const discoveryRuns = (discoveryRunsResult.data ?? []) as DiscoveryRun[]
 
   const projectIds=[...new Set([...datasets.map(dataset=>dataset.project_id),...sources.map(source=>source.project_id)])]
 
@@ -110,6 +113,8 @@ export default async function ObservabilityPage() {
   const datasetsById = new Map(datasets.map((dataset) => [dataset.id, dataset]))
   const scoreByRun = new Map(scores.map((score) => [score.profile_run_id, score.overall_score]))
   const agentById = new Map(agents.map((agent) => [agent.id, agent]))
+  const latestDiscoveryBySource = new Map<string,DiscoveryRun>()
+  for (const run of discoveryRuns) if (!latestDiscoveryBySource.has(run.source_id)) latestDiscoveryBySource.set(run.source_id,run)
 
   const runsByDataset = new Map<string, ProfileRun[]>()
   for (const run of profileRuns) {
@@ -202,7 +207,7 @@ export default async function ObservabilityPage() {
 
         <section id="source-health" className={`${surface} mt-6 scroll-mt-6 p-6 sm:p-7`}>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Source health evidence</h2><p className="mt-1 text-sm text-slate-500">Lifecycle status reported from registered source evidence.</p></div>{canDatasets?<Link href="/datasets" className={`text-sm font-bold text-blue-300 ${focus}`}>Open source workspace →</Link>:null}</div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{sources.map(source=><div key={source.id} className={`${inset} p-4`}><div className="flex items-center justify-between gap-2"><span className="font-bold text-slate-200">{source.name}</span><span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${statusClass(source.status)}`}>{source.status}</span></div><p className="mt-1 text-xs text-slate-500">{source.source_type}</p></div>)}</div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{sources.map(source=>{const scan=latestDiscoveryBySource.get(source.id);const scanFailed=scan&&['FAILED','INCOMPLETE'].includes(scan.status.toUpperCase());return <div key={source.id} className={`${inset} p-4`}><div className="flex items-center justify-between gap-2"><span className="font-bold text-slate-200">{source.name}</span><span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${statusClass(source.status)}`}>{source.status}</span></div><p className="mt-1 text-xs text-slate-500">{source.source_type}</p><div className="mt-3 border-t border-white/[0.06] pt-3"><div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase tracking-wide text-slate-600">Latest metadata scan</span><span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${scan?statusClass(scan.status):'border-slate-700 text-slate-500'}`}>{scan?.status??'NO EVIDENCE'}</span></div>{scan?<><p className="mt-2 text-[11px] text-slate-500">Observed {scan.objects_observed??0} · +{scan.objects_added??0} added · {scan.objects_changed??0} changed · {scan.objects_removed??0} removed</p><p className="mt-1 text-[10px] text-slate-600">{scan.completed_at?date(scan.completed_at):'In progress'}</p>{scanFailed&&scan.error_message?<p className="mt-2 line-clamp-2 text-[11px] text-rose-300">{scan.error_message}</p>:null}</>:<p className="mt-2 text-[11px] text-slate-600">No metadata discovery run has been observed for this source.</p>}</div></div>})}</div>
         </section>
 
         <section id="ai-model-health" className={`${surface} mt-6 scroll-mt-6 p-6 sm:p-7`}>
