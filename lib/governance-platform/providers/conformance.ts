@@ -1,4 +1,4 @@
-import type { ProviderManifest } from './sdk/provider'
+import type { ProviderManifest } from './sdk/provider.ts'
 
 export type ProviderConformanceIssue={code:string;message:string}
 export type ProviderConformanceResult={ok:boolean;issues:ProviderConformanceIssue[]}
