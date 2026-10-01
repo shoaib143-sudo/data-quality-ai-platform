@@ -30,6 +30,7 @@ export function createGovernanceLearningExperimentEvidenceStore(): LearningExper
         p_project_id: input.projectId,
         p_policy_id: input.policyRecordId,
         p_candidate_id: input.candidateId,
+        p_run_key: input.runKey,
         p_evidence_class: input.evidenceClass,
         p_case_keys: [...input.caseKeys],
       })
@@ -59,6 +60,8 @@ export function createGovernanceLearningExperimentEvidenceStore(): LearningExper
         executionCorrelationId: requiredString(row.executionCorrelationId, 'executionCorrelationId'),
         attemptNumber: integerValue(row.attemptNumber, 'attemptNumber'),
         reused: row.reused === true,
+        terminalResultId: row.terminalResultId == null ? null : requiredString(row.terminalResultId, 'terminalResultId'),
+        terminalStatus: row.terminalStatus == null ? null : String(row.terminalStatus) as PreparedLearningExperimentAttempt['terminalStatus'],
       }
       return prepared
     },
@@ -76,6 +79,18 @@ export function createGovernanceLearningExperimentEvidenceStore(): LearningExper
       })
       if (error || !data) throw new Error(`Unable to persist learning experiment arm result: ${error?.message ?? 'no result id returned'}`)
       return requiredString(data, 'armResultId')
+    },
+
+    async findCaseScore(input) {
+      const { data, error } = await admin.schema('agent')
+        .from('learning_experiment_case_scores')
+        .select('id')
+        .eq('project_id', input.projectId)
+        .eq('run_id', input.runId)
+        .eq('case_key', input.caseKey)
+        .maybeSingle()
+      if (error) throw new Error(`Unable to inspect existing learning experiment case score: ${error.message}`)
+      return data?.id ? String(data.id) : null
     },
 
     async recordCaseScore(input) {
