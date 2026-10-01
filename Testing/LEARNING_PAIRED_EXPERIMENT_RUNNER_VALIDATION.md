@@ -26,6 +26,11 @@ Validate the entire runner/control chain without model calls, provider charges, 
 | executable hashes equal | reject |
 | attempt key reused with altered identity | reject |
 | prior unfinished attempt | block redispatch |
+| same run key with changed policy/case order | reject |
+| completed arm on process restart | reuse terminal result; no provider redispatch |
+| already-scored case on process restart | reuse score; no rescoring |
+| caller source reference differs from manifest | ignored; dispatch uses canonical persisted source ref |
+| request factory input artifact hash differs from attempt | reject before provider call |
 | wrong arm version | reject |
 | missing live budget reservation | reject successful live arm |
 | UNKNOWN/EXCEEDED settlement | reject successful live arm |
