@@ -1,8 +1,8 @@
-import type { CanonicalGovernanceObject } from '../canonical/model'
-import type { GovernanceDesiredState,DesiredStateTarget } from '../desired-state/model'
-import { stableGovernanceFingerprint } from './fingerprint'
-import { buildGovernancePlan,type GovernancePlan } from './plan'
-import { expandGovernancePlanForProviders,type ProviderPlannedOperation } from './provider-plan'
+import type { CanonicalGovernanceObject } from '../canonical/model.ts'
+import type { GovernanceDesiredState,DesiredStateTarget } from '../desired-state/model.ts'
+import { stableGovernanceFingerprint } from './fingerprint.ts'
+import { buildGovernancePlan,type GovernancePlan } from './plan.ts'
+import { expandGovernancePlanForProviders,type ProviderPlannedOperation } from './provider-plan.ts'
 
 export type GovernanceTargetObservedState={
  provider:string
