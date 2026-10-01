@@ -3,9 +3,11 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { requireWorkspaceAccess } from '@/lib/governance/workspace-access'
 import { LineageCorrectionManager } from '@/components/lineage/lineage-correction-manager'
 
 export default async function LineageCorrectionsPage(){
+  await requireWorkspaceAccess('lineage-manage')
   const user=await requireUser()
   const [supabase,landing]=await Promise.all([createClient(),resolveLandingAccess(user.id)])
   const {data:projects,error}=await supabase.schema('app').from('projects').select('id,name').order('name')
