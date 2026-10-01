@@ -1,4 +1,6 @@
 import { getGovernanceProvider,registerGovernanceProvider } from '../registry.ts'
+import { getProviderCompatibility,registerProviderCompatibility } from '../compatibility.ts'
+import { informaticaCompatibility } from './compatibility.ts'
 import { InformaticaApiClient } from './client.ts'
 import { informaticaProviderConfigFromEnv } from './config.ts'
 import { InformaticaGovernanceProvider } from './provider.ts'
@@ -11,6 +13,7 @@ function hasInformaticaConfig(env:NodeJS.ProcessEnv){
 
 export function ensureGovernanceProvidersRegistered(env:NodeJS.ProcessEnv=process.env):GovernanceProviderBootstrapResult{
  const registered:string[]=[],skipped:string[]=[]
+ if(!getProviderCompatibility('informatica'))registerProviderCompatibility(informaticaCompatibility)
  if(getGovernanceProvider('informatica'))skipped.push('informatica:already_registered')
  else if(!hasInformaticaConfig(env))skipped.push('informatica:not_configured')
  else{
