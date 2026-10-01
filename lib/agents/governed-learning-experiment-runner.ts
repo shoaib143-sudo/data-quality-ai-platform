@@ -47,6 +47,7 @@ export type LearningExperimentSummary = {
   caseCount: number
   scoredCaseCount: number
   complete: boolean
+  allIndependentlyVerified: boolean
   baselineScore: number | null
   candidateScore: number | null
   authorityViolations: number
