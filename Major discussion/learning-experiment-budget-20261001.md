@@ -53,3 +53,10 @@ This change does not alter ADR-007 agent classifications, allowed tools, project
 Attach the implementation commit and exact-head CI, behavior tests proving denial before dispatch, SQL concurrent-admission/duplicate/unknown-outcome checks, all-eight-agent synthetic conformance, and an explicit unsupported-provider path. Activation requires approved project/dataset/evaluator and budget choices plus backend-specific billing verification. Actual improved quality requires independent prospective results; no synthetic pass may substitute for them.
 
 See the [implementation and acceptance checklist](../Admin/learning-experiment-budget-implementation-20261001.md).
+## Database deployment follow-through
+
+On 2026-10-01 the reviewed PR #1099 budget migration was deployed to the existing Supabase database after confirming its canonical schema and immutable-policy prerequisites. RLS, browser-role denial, server-role privileges and negative RPC behavior were verified without inserting synthetic records into canonical learning evidence. A forward migration supplies the two composite FK indexes identified by the live advisor.
+
+The canonical budget tables remain in `agent`; synthetic datasets remain isolated in `testing`. No paid branch is needed. Application release parity remains on hold, and paid experiment execution remains disabled because the live registry contains only DRAFT demo models and no reviewed pricing, candidates, manifests or policies. A real pilot requires an authorized project/dataset, verified provider-specific quote, explicit budget and independent evaluator before policy locking.
+
+Capability status remains `PARTIAL` with disposition `EXTENSION_POINT` for hard provider-specific billing guarantees. No ADR-007 agent classification or release authority changed. Deployment evidence and concrete prerequisites are recorded in [the Admin deployment record](../Admin/learning-experiment-budget-deployment-20261001.md).
