@@ -84,6 +84,7 @@ create table if not exists agent.learning_experiment_arm_results (
   observed_latency_ms integer,
   failure_code text,
   completed_at timestamptz not null default clock_timestamp(),
+  constraint learning_experiment_arm_results_id_project_uq unique (id, project_id),
   constraint learning_experiment_arm_results_attempt_fk
     foreign key (attempt_id, project_id)
     references agent.learning_experiment_arm_attempts(id, project_id) on delete restrict,
