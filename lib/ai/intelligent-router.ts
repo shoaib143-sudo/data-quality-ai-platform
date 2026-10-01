@@ -7,6 +7,7 @@ import type { ModelRegistry, RegisteredModelVersion } from './model-registry'
 import type { RoutingPolicy, RoutingPolicyEvaluator, RoutingPolicyProvider } from './routing-policy'
 import type { TelemetryTraceContext } from './telemetry-provider'
 import { ResilientReasoningProvider, type ProviderResiliencePolicyProvider } from './provider-resilience.ts'
+import type { LearningEvaluationRuntimeContext } from './learning-evaluation-runtime-budget'
 
 export type IntelligentRouteContext = ReasoningRouteContext & {
   projectId: string
@@ -15,6 +16,8 @@ export type IntelligentRouteContext = ReasoningRouteContext & {
   executionCorrelationId?: string | null
   /** Explicit immutable agent-definition identity for ADR-008 AGENT budget scope matching. */
   agentDefinitionId?: string | null
+  /** Locked prospective-learning runtime identity. Presence disables provider fallback. */
+  learningEvaluationRuntime?: LearningEvaluationRuntimeContext | null
   traceContext?: TelemetryTraceContext | null
 }
 
@@ -186,7 +189,7 @@ export class EvaluationAwareIntelligentRouter implements IntelligentModelRouter 
       }
     }
 
-    if (!this.dependencies.resiliencePolicy) {
+    if (!this.dependencies.resiliencePolicy || context.learningEvaluationRuntime) {
       for (const candidate of ranked) {
         const providerId = candidate.entry.provider?.trim()
         const modelName = candidate.entry.modelName?.trim()
