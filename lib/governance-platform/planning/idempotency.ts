@@ -1,4 +1,4 @@
-import { stableGovernanceFingerprint } from './fingerprint'
+import { stableGovernanceFingerprint } from './fingerprint.ts'
 
 export type GovernanceIdempotencyInput = {
   projectId: string
