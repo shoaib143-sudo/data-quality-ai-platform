@@ -1,9 +1,11 @@
 import type { GovernanceProvider } from './sdk/provider'
+import { assertProviderManifestConformance } from './conformance'
 
 const providers = new Map<string, GovernanceProvider>()
 
 export function registerGovernanceProvider(provider: GovernanceProvider) {
-  const key = provider.manifest().provider.trim().toLowerCase()
+  const manifest=assertProviderManifestConformance(provider.manifest())
+  const key = manifest.provider.trim().toLowerCase()
   if (!key) throw new Error('Governance provider name is required.')
   if (providers.has(key)) throw new Error(`Governance provider "${key}" is already registered.`)
   providers.set(key, provider)
