@@ -263,6 +263,9 @@ assert.match(executorSource, /verifiedInputArtifactHash !== execution\.inputArti
 assert.match(executorSource, /Loaded input artifact does not match immutable experiment attempt hash/)
 
 const service = fs.readFileSync('lib/agents/governed-learning-evaluation-service.ts', 'utf8')
+assert.match(migration, /revoke all on function agent\.create_learning_experiment_run\(uuid,uuid,uuid,text,text,text\[\]\) from public,anon,authenticated/)
+assert.match(migration, /grant execute on function agent\.create_learning_experiment_run\(uuid,uuid,uuid,text,text,text\[\]\) to service_role/)
+
 assert.match(service, /learning_experiment_decision_bindings/)
 assert.match(service, /PROSPECTIVE_LIVE/)
 assert.match(service, /exactly one canonical prospective experiment binding/)
