@@ -1,5 +1,5 @@
-import type { CanonicalGovernanceObject, ProviderProjection } from '../../canonical/model'
-import type { ProviderCapability } from './capability'
+import type { CanonicalGovernanceObject, ProviderProjection } from '../../canonical/model.ts'
+import type { ProviderCapability } from './capability.ts'
 
 export type ProviderManifest = {
   provider: string
