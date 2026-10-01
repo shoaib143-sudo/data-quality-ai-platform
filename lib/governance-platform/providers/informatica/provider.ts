@@ -1,9 +1,9 @@
-import type { ProviderCapability } from '../sdk/capability'
-import { GovernanceProviderError } from '../sdk/errors'
-import type { DiscoveryRequest, DiscoveryResult, ExecutionResult, GovernanceOperation, GovernanceProvider, VerificationResult } from '../sdk/provider'
-import { InformaticaApiClient } from './client'
-import { informaticaManifest } from './manifest'
-import { normalizeInformaticaAsset, type InformaticaAssetRecord } from './normalizer'
+import type { ProviderCapability } from '../sdk/capability.ts'
+import { GovernanceProviderError } from '../sdk/errors.ts'
+import type { DiscoveryRequest, DiscoveryResult, ExecutionResult, GovernanceOperation, GovernanceProvider, VerificationResult } from '../sdk/provider.ts'
+import { InformaticaApiClient } from './client.ts'
+import { informaticaManifest } from './manifest.ts'
+import { normalizeInformaticaAsset, type InformaticaAssetRecord } from './normalizer.ts'
 
 export type InformaticaEndpointResolver = {
   assets(request: DiscoveryRequest): string
