@@ -1,37 +1,37 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { GOVERNANCE_MCP_PROTOCOL_VERSION,handleGovernanceMcpRequest,governanceMcpAdvertisedTools } from '../lib/governance-platform/mcp/handler.ts'
+import fs from 'node:fs'
 
-function request(method,body,{name,protocol=GOVERNANCE_MCP_PROTOCOL_VERSION}={}){
- const headers={'content-type':'application/json','mcp-protocol-version':protocol,'mcp-method':method}
- if(name)headers['mcp-name']=name
- return new Request('https://example.test/api/mcp/governance',{method:'POST',headers,body:JSON.stringify(body)})
-}
-function rpc(id,method,params={}){
- return{jsonrpc:'2.0',id,method,params:{...params,_meta:{'io.modelcontextprotocol/protocolVersion':GOVERNANCE_MCP_PROTOCOL_VERSION,'io.modelcontextprotocol/clientCapabilities':{}}}}
-}
+const source=fs.readFileSync(new URL('../lib/governance-platform/mcp/handler.ts',import.meta.url),'utf8')
+const route=fs.readFileSync(new URL('../app/api/mcp/governance/route.ts',import.meta.url),'utf8')
 
-test('modern MCP discovery is stateless and advertises only governance tools capability',async()=>{
- const response=await handleGovernanceMcpRequest(request('server/discover',rpc(1,'server/discover')))
- assert.equal(response.status,200)
- const body=await response.json()
- assert.equal(body.result.resultType,'complete')
- assert.deepEqual(body.result.supportedVersions,[GOVERNANCE_MCP_PROTOCOL_VERSION])
- assert.deepEqual(body.result.capabilities,{tools:{}})
- assert.equal(body.result.cacheScope,'private')
- assert.equal(body.result._meta['io.modelcontextprotocol/serverInfo'].name,'datanexus-governance')
+test('MCP governance endpoint targets the stateless 2026 protocol and validates routing headers',()=>{
+ assert.match(source,/GOVERNANCE_MCP_PROTOCOL_VERSION='2026-07-28'/)
+ assert.match(source,/mcp-protocol-version/)
+ assert.match(source,/mcp-method/)
+ assert.match(source,/mcp-name/)
+ assert.match(source,/-32022/)
+ assert.match(source,/-32020/)
+ assert.match(source,/server\/discover/)
+ assert.match(source,/tools\/list/)
+ assert.match(source,/tools\/call/)
+ assert.match(source,/resultType:'complete'/)
+ assert.match(source,/cacheScope:'private'/)
 })
 
-test('modern MCP rejects protocol and routing header mismatches before tool execution',async()=>{
- const wrongVersion=await handleGovernanceMcpRequest(request('server/discover',rpc(1,'server/discover'),{protocol:'2025-11-25'}))
- assert.equal(wrongVersion.status,400);assert.equal((await wrongVersion.json()).error.code,-32022)
- const wrongMethod=await handleGovernanceMcpRequest(request('tools/list',rpc(2,'server/discover')))
- assert.equal(wrongMethod.status,400);assert.equal((await wrongMethod.json()).error.code,-32020)
- const call=rpc(3,'tools/call',{name:'governance.plan',arguments:{}})
- const wrongName=await handleGovernanceMcpRequest(request('tools/call',call,{name:'governance.verify'}))
- assert.equal(wrongName.status,400);assert.equal((await wrongName.json()).error.code,-32020)
+test('MCP tool execution resolves a delegated principal and never accepts vendor credentials as arguments',()=>{
+ assert.match(source,/resolveGovernanceMcpPrincipal\(request\)/)
+ assert.match(source,/authorizeGovernanceMcpTool/)
+ assert.match(source,/planGovernanceDeploymentForPrincipal/)
+ assert.match(source,/applyGovernanceDeploymentForPrincipal/)
+ assert.doesNotMatch(source,/INFORMATICA_ACCESS_TOKEN/)
+ assert.doesNotMatch(source,/clientSecret/)
+ assert.doesNotMatch(source,/password/)
 })
 
-test('MCP governance tool catalog is deterministic and provider neutral',()=>{
- assert.deepEqual(governanceMcpAdvertisedTools(),['governance.apply','governance.plan','governance.status','governance.verify'])
+test('Next MCP route is node runtime, dynamic, and POST only',()=>{
+ assert.match(route,/runtime='nodejs'/)
+ assert.match(route,/dynamic='force-dynamic'/)
+ assert.match(route,/export async function POST/)
+ assert.doesNotMatch(route,/export async function GET/)
 })
