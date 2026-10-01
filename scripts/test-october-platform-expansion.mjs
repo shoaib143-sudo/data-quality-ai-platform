@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { normalizeFederatedMetadata, detectFederationConflicts } from '../lib/catalog/metadata-federation.ts'
 import { normalizeLineagePayload } from '../lib/governance/lineage-adapters.ts'
+import { scanSourceArtifact } from '../lib/connectors/source-artifact-scanner.ts'
+import { normalizeBiMetadata } from '../lib/connectors/bi-metadata.ts'
 
 test('metadata federation preserves provenance and detects competing descriptions',()=>{
   const records=normalizeFederatedMetadata({items:[
@@ -63,4 +65,23 @@ test('lineage explorer includes flow and mapping visualization modes',()=>{
   assert.match(explorer,/viewMode/)
   assert.match(explorer,/Flow view/)
   assert.match(explorer,/transformationGroups/)
+})
+
+
+test('source artifact scanner extracts database reads and writes without leaking secret evidence',()=>{
+  const result=scanSourceArtifact({kind:'NODEJS',path:'jobs/customer.js',content:'const password="secret123"; db.query("insert into curated.customer select * from raw.customer")'})
+  assert.ok(result.references.some(item=>item.kind==='READ'&&item.target.toLowerCase()==='raw.customer'))
+  assert.ok(result.references.some(item=>item.kind==='WRITE'&&item.target.toLowerCase()==='curated.customer'))
+  assert.ok(result.transformations.some(item=>item.target?.toLowerCase()==='curated.customer'))
+  assert.ok(result.references.every(item=>!item.evidence.includes('secret123')))
+})
+
+test('BI metadata adapter normalizes Power BI Tableau and Looker assets',()=>{
+  for(const provider of ['POWER_BI','TABLEAU','LOOKER']){
+    const assets=normalizeBiMetadata(provider,{items:[{id:'1',type:'semantic model',name:'Customer Model',workspace:'Finance',sources:['warehouse.customer']}]})
+    assert.equal(assets.length,1)
+    assert.equal(assets[0].provider,provider)
+    assert.equal(assets[0].assetType,'SEMANTIC_MODEL')
+    assert.deepEqual(assets[0].upstream,['warehouse.customer'])
+  }
 })
