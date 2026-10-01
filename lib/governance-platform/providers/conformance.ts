@@ -19,6 +19,9 @@ export function validateProviderManifest(manifest:ProviderManifest):ProviderConf
   if(capability.support==='UNSUPPORTED'&&capability.modes.some(mode=>mode!=='READ')){
    issues.push({code:'UNSUPPORTED_MUTATION_MODE',message:`Unsupported capability ${key} cannot advertise mutation modes.`})
   }
+  if(capability.support==='READ_ONLY'&&capability.modes.some(mode=>mode!=='READ')){
+   issues.push({code:'READ_ONLY_MUTATION_MODE',message:`Read-only capability ${key} cannot advertise mutation modes.`})
+  }
   for(const [name,value] of Object.entries(capability.constraints??{})){
    if(value!==undefined&&(!Number.isFinite(value)||Number(value)<=0))issues.push({code:'INVALID_CONSTRAINT',message:`Capability ${key} has invalid ${name}.`})
   }
