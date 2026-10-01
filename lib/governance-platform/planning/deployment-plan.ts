@@ -55,8 +55,10 @@ export function buildGovernanceDeploymentPlan(
    planFingerprint:value.plan.planFingerprint,
   })),
  })
+ const deploymentId=deploymentFingerprint.slice(0,32)
+ const boundTargets=targets.map(value=>({...value,operations:value.operations.map(operation=>({...operation,deploymentId}))}))
  return{
-  deploymentId:deploymentFingerprint.slice(0,32),deploymentFingerprint,desiredStateFingerprint,
-  projectId:desired.projectId,targets,operations:targets.flatMap(value=>value.operations),
+  deploymentId,deploymentFingerprint,desiredStateFingerprint,
+  projectId:desired.projectId,targets:boundTargets,operations:boundTargets.flatMap(value=>value.operations),
  }
 }
