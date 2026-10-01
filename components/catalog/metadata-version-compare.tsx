@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { GitCompareArrows } from 'lucide-react'
 
-type Version={id:string;version_number:number;is_current:boolean;structure_hash:string|null;first_seen_at:string;last_seen_at:string;retired_at:string|null}
+type Version={id:string;version_number:number;is_current:boolean;structure_hash:string|null;first_seen_at:string;last_seen_at:string;retired_at:string|null;columns?:unknown[]}
 type Props={assetKey:string;versions:Version[]}
 
 export function MetadataVersionCompare({assetKey,versions}:Props){
@@ -12,7 +12,31 @@ export function MetadataVersionCompare({assetKey,versions}:Props){
   const [right,setRight]=useState(String(ordered[0]?.version_number??''))
   const a=ordered.find(item=>String(item.version_number)===left)
   const b=ordered.find(item=>String(item.version_number)===right)
+  const normalizeColumns=(value:unknown[]|undefined)=>new Map((value??[]).flatMap(raw=>{
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return []
+    const row=raw as Record<string,unknown>
+    const name=typeof row.name==='string'?row.name.trim():''
+    if(!name)return []
+    return [[name.toLowerCase(),{
+      name,
+      type:String(row.type??row.data_type??row.dataType??row.native_type??'').trim()||'unknown',
+      nullable:typeof row.nullable==='boolean'?row.nullable:null,
+    }] as const]
+  }))
+  const leftColumns=normalizeColumns(a?.columns)
+  const rightColumns=normalizeColumns(b?.columns)
+  const added=[...rightColumns.entries()].filter(([key])=>!leftColumns.has(key)).map(([,column])=>column.name)
+  const removed=[...leftColumns.entries()].filter(([key])=>!rightColumns.has(key)).map(([,column])=>column.name)
+  const changed=[...rightColumns.entries()].flatMap(([key,column])=>{
+    const previous=leftColumns.get(key)
+    if(!previous)return []
+    if(previous.type===column.type&&previous.nullable===column.nullable)return []
+    return [`${column.name}: ${previous.type}${previous.nullable===null?'':previous.nullable?' nullable':' not null'} → ${column.type}${column.nullable===null?'':column.nullable?' nullable':' not null'}`]
+  })
   const changes=[
+    {label:'Columns added',from:'—',to:added.length?added.join(', '):'None'},
+    {label:'Columns removed',from:removed.length?removed.join(', '):'None',to:'—'},
+    {label:'Type/nullability changes',from:'Previous structure',to:changed.length?changed.join(' · '):'None'},
     {label:'Structure hash',from:a?.structure_hash??'N/A',to:b?.structure_hash??'N/A'},
     {label:'State',from:a?.is_current?'CURRENT':'HISTORICAL',to:b?.is_current?'CURRENT':'HISTORICAL'},
     {label:'First seen',from:a?.first_seen_at??'N/A',to:b?.first_seen_at??'N/A'},
