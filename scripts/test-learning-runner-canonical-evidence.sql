@@ -291,7 +291,7 @@ select agent.complete_learning_experiment_attempt_v2(
   'COMPLETED',:'artifact_2',:'reservation_id',:'cost_event_id',null
 );
 
-do $
+do $$
 begin
   if (select status from agent.learning_experiment_attempts
       where policy_id='40000000-0000-4000-8000-000000000001'
@@ -299,7 +299,7 @@ begin
         and arm='BASELINE') <> 'COMPLETED' then
     raise exception 'accounted non-synthetic attempt did not complete';
   end if;
-end $;
+end $$;
 
 
 -- Delayed accounting resolves the same already-executed run without any re-dispatch.
