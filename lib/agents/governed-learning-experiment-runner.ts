@@ -109,6 +109,8 @@ export interface LearningExperimentArmExecutor {
     sourceCaseRef: string
     arm: LearningExperimentArm
     version: string
+    executableArtifactRef: string
+    executableArtifactHash: string
     payload: unknown
     signal?: AbortSignal
   }): Promise<LearningExperimentArmExecution>
@@ -226,6 +228,8 @@ export class GovernedPairedLearningExperimentRunner {
             sourceCaseRef: item.sourceCaseRef,
             arm,
             version,
+            executableArtifactRef,
+            executableArtifactHash,
             payload: item.payload,
             signal: input.signal,
           })
