@@ -44,7 +44,7 @@ test('central retry runtime retries only normalized retryable provider failures'
 
 test('MCP tools reuse DataNexus authorization vocabulary and principal binding',async()=>{
  assert.equal(governanceMcpRequiredCapability('governance.plan'),'catalog.read')
- assert.equal(governanceMcpRequiredCapability('governance.status'),'execution.view')
+ assert.equal(governanceMcpRequiredCapability('governance.status'),'execution.view_evidence')
  assert.equal(governanceMcpRequiredCapability('governance.apply'),'agent.execute')
  const calls=[]
  await authorizeGovernanceMcpTool({principalId:'service-a',projectId:'p'},'governance.apply',async request=>calls.push(request))
