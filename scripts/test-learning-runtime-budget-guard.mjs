@@ -188,6 +188,10 @@ function accounting(overrides={}) {
 }
 
 const source = fs.readFileSync(new URL('../lib/ai/observable-intelligent-router.ts', import.meta.url), 'utf8')
+const migration = fs.readFileSync(new URL('../supabase/migrations/20261001084500_learning_evaluation_runtime_budget_reservations.sql', import.meta.url), 'utf8')
 assert.match(source, /AbortSignal\.timeout\(learningReservation\.latencyMsBudget\)/)
 assert.match(source, /CANONICAL_ACCOUNTING_INCOMPLETE_OR_PRICING_MISMATCH/)
+assert.match(migration, /pg_advisory_xact_lock/)
+assert.match(migration, /UNRESOLVED.*EXCEEDED/s)
+assert.match(migration, /latency_ms_budget.*interval '1 millisecond'/s)
 console.log('Learning evaluation runtime reservations, deadlines, accounting stops, and fallback isolation passed')
