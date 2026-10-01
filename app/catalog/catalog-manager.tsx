@@ -28,7 +28,7 @@ export function CatalogManager({datasets,versions,catalog:initialCatalog,project
   useEffect(()=>{
     try{
       const stored=JSON.parse(window.localStorage.getItem('datanexus:catalog:saved-searches')||'[]')
-      if(Array.isArray(stored)) setSavedQueries(stored.filter((value):value is string=>typeof value==='string'&&value.trim()).slice(0,12))
+      if(Array.isArray(stored)) setSavedQueries(stored.filter((value):value is string=>typeof value==='string'&&Boolean(value.trim())).slice(0,12))
     }catch{setSavedQueries([])}
   },[])
 
