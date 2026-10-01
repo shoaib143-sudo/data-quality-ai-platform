@@ -1,5 +1,5 @@
-import { CANONICAL_GOVERNANCE_SCHEMA_VERSION } from '../../canonical/model'
-import type { ProviderManifest } from '../sdk/provider'
+import { CANONICAL_GOVERNANCE_SCHEMA_VERSION } from '../../canonical/model.ts'
+import type { ProviderManifest } from '../sdk/provider.ts'
 
 export const INFORMATICA_PROVIDER_VERSION = '0.1.0' as const
 
