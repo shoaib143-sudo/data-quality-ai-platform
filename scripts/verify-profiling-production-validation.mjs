@@ -101,12 +101,44 @@ for (let from = 0; ; from += pageSize) {
   if (!page || page.length < pageSize) break
 }
 
+// JDBC connection/catalog roots are valid execution-source records but are not
+// profileable datasets until discovery materializes a concrete schema + table.
+// Filter those records server-side and retain only safe dataset-version IDs.
+const profileableJdbcDatasetVersionIds = new Set()
+for (let from = 0; ; from += pageSize) {
+  const { data: page, error } = await supabase
+    .schema('profiling')
+    .from('dataset_execution_sources')
+    .select('dataset_version_id')
+    .eq('active', true)
+    .eq('source_type', 'JDBC')
+    .not('execution_config->>schema', 'is', null)
+    .neq('execution_config->>schema', '')
+    .not('execution_config->>table', 'is', null)
+    .neq('execution_config->>table', '')
+    .order('dataset_version_id', { ascending: true })
+    .range(from, from + pageSize - 1)
+  if (error) throw new Error(`Unable to enumerate profileable JDBC execution sources: ${error.message}`)
+  for (const source of page ?? []) {
+    if (source.dataset_version_id) profileableJdbcDatasetVersionIds.add(source.dataset_version_id)
+  }
+  if (!page || page.length < pageSize) break
+}
+
 const activeSourceTypes = {}
 const activeSourceTypeByDatasetVersion = new Map()
 const activeSourceCountByDatasetVersion = new Map()
+const nonProfileableActiveSources = []
 for (const source of activeSources ?? []) {
   const key = String(source.source_type ?? '').toUpperCase()
   if (!key) continue
+  if (key === 'JDBC' && source.dataset_version_id && !profileableJdbcDatasetVersionIds.has(source.dataset_version_id)) {
+    nonProfileableActiveSources.push({
+      datasetVersionId: source.dataset_version_id,
+      sourceType: key,
+    })
+    continue
+  }
   activeSourceTypes[key] = Number(activeSourceTypes[key] ?? 0) + 1
   if (source.dataset_version_id) {
     activeSourceCountByDatasetVersion.set(
@@ -204,6 +236,7 @@ const snapshot = {
   profileRuns,
   completedRuns,
   activeSourceTypes,
+  nonProfileableActiveSources,
   ambiguousActiveSourceDatasetVersions,
   activeDatasetVersionsWithoutCompletedProfile,
   latestRuns,
