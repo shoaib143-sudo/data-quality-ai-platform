@@ -308,3 +308,15 @@ test('lineage export is persona-gated and available to data quality analysts as 
   assert.match(route,/canAccessWorkspace\(landing\.persona, 'lineage'/)
   assert.match(route,/status: 403/)
 })
+
+
+test('lineage evidence supports immutable transformation version comparison including expressions',()=>{
+  const page=fs.readFileSync('app/lineage/evidence/page.tsx','utf8')
+  const compare=fs.readFileSync('components/lineage/transformation-version-compare.tsx','utf8')
+  assert.match(page,/transformation_logic/)
+  assert.match(page,/TransformationVersionCompare/)
+  assert.match(compare,/Compare transformation versions/)
+  assert.match(compare,/Logic hash/)
+  assert.match(compare,/Expression/)
+  assert.doesNotMatch(compare,/fetch\(|PATCH|POST|DELETE/)
+})
