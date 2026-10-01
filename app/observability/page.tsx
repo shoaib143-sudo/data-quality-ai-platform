@@ -5,6 +5,7 @@ import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { AlertActions } from './alert-actions'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 
@@ -17,6 +18,9 @@ type AgentRun = { id: string; dataset_id: string | null; status: string; created
 type AgentDefinition = { id: string; name: string; agent_key: string; version: string }
 type QualityRun = { id: string; status: string; passed: boolean | null; completed_at: string | null }
 type Alert = { id: string; project_id: string; dataset_id: string; profile_run_id: string | null; category: string; severity: string; title: string; description: string; status: string; evidence: Record<string, unknown>; first_observed_at: string; last_observed_at: string }
+type AiSystem = { id:string; project_id:string; system_key:string; name:string; system_type:string; lifecycle_status:string; current_version_id:string|null; ai_system_versions?: any }
+type AiTelemetry = { project_id:string; status:string; provider_id:string|null; model_name:string|null; ai_system_id:string|null; ai_system_version_id:string|null; latency_ms:number|null; input_tokens:number|null; output_tokens:number|null; cost_usd:number|null; observed_at:string }
+type StorageObject = { provider:string; state:string; size_bytes:number|null }
 
 const surface='rounded-[22px] border border-white/10 bg-[#0a1d33] shadow-[10px_10px_28px_rgba(0,0,0,.24),-7px_-7px_22px_rgba(30,74,114,.08)]'
 const inset='rounded-2xl border border-white/[0.07] bg-[#08182b]'
@@ -79,6 +83,26 @@ export default async function ObservabilityPage() {
   const alerts = (alertsResult.data ?? []) as Alert[]
 
   const projectIds=[...new Set([...datasets.map(dataset=>dataset.project_id),...sources.map(source=>source.project_id)])]
+
+  const [aiSystemsResult, aiTelemetryResult] = projectIds.length ? await Promise.all([
+    supabase.schema('governance').from('ai_systems').select('id,project_id,system_key,name,system_type,lifecycle_status,current_version_id,ai_system_versions!ai_systems_current_version_fk(id,version_number,provider,model_name,intended_use,risk_tier,human_oversight)').in('project_id',projectIds).not('current_version_id','is',null),
+    supabase.schema('governance').from('ai_telemetry_events').select('project_id,status,provider_id,model_name,ai_system_id,ai_system_version_id,latency_ms,input_tokens,output_tokens,cost_usd,observed_at').in('project_id',projectIds).order('observed_at',{ascending:false}).limit(1000),
+  ]) : [{data:[],error:null},{data:[],error:null}]
+  const aiSystems = aiSystemsResult.error ? [] : (aiSystemsResult.data ?? []) as AiSystem[]
+  const aiTelemetry = aiTelemetryResult.error ? [] : (aiTelemetryResult.data ?? []) as AiTelemetry[]
+
+  const infrastructureAdmin = Boolean(landing.organizationRole && /^(OWNER|ADMIN)$/i.test(landing.organizationRole))
+  let storageObjects: StorageObject[] = []
+  let cloudflareCanary: any = null
+  if (infrastructureAdmin && projectIds.length) {
+    const admin = createAdminClient()
+    const [storageResult, canaryResult] = await Promise.all([
+      admin.schema('catalog').from('storage_objects').select('provider,state,size_bytes').in('project_id',projectIds).limit(10000),
+      admin.schema('orchestration').rpc('get_cloudflare_observability_canary_status'),
+    ])
+    if (!storageResult.error) storageObjects = (storageResult.data ?? []) as StorageObject[]
+    if (!canaryResult.error) cloudflareCanary = canaryResult.data
+  }
   const manageRows=canManageWorkspace?await Promise.all(projectIds.map(async projectId=>[projectId,await hasProjectCapability(user.id,projectId,'observability.manage')] as const)):[]
   const manageableProjects=new Set(manageRows.filter(([,allowed])=>allowed).map(([projectId])=>projectId))
 
@@ -118,6 +142,33 @@ export default async function ObservabilityPage() {
   const rulePassRate = evaluatedRules.length ? passedRules / evaluatedRules.length : null
   const schemaDriftCount = datasetSignals.filter((signal) => signal.schemaChanged).length
 
+  const aiTelemetryBySystem = new Map<string,AiTelemetry[]>()
+  for (const event of aiTelemetry) {
+    const key = event.ai_system_id || event.model_name || event.provider_id || 'unassigned'
+    aiTelemetryBySystem.set(key,[...(aiTelemetryBySystem.get(key)??[]),event])
+  }
+  const aiModelHealth = aiSystems.map(system => {
+    const version = Array.isArray(system.ai_system_versions) ? system.ai_system_versions[0] : system.ai_system_versions
+    const events = aiTelemetryBySystem.get(system.id) ?? aiTelemetry.filter(event => event.ai_system_version_id === version?.id || (event.model_name && event.model_name === version?.model_name))
+    const latencies = events.map(event => Number(event.latency_ms)).filter(value => Number.isFinite(value) && value >= 0).sort((a,b)=>a-b)
+    const p95 = latencies.length ? latencies[Math.min(latencies.length-1,Math.floor(latencies.length*0.95))] : null
+    const errors = events.filter(event => String(event.status).toUpperCase() === 'ERROR').length
+    const inputTokens = events.reduce((sum,event)=>sum+Number(event.input_tokens??0),0)
+    const outputTokens = events.reduce((sum,event)=>sum+Number(event.output_tokens??0),0)
+    const cost = events.reduce((sum,event)=>sum+Number(event.cost_usd??0),0)
+    return {system,version,events,p95,errors,inputTokens,outputTokens,cost,lastObserved:events[0]?.observed_at??null}
+  })
+
+  const storageSummary = storageObjects.reduce((acc,row)=>{
+    const provider=String(row.provider||'unknown').toLowerCase()
+    const current=acc.get(provider)??{objects:0,ready:0,bytes:0}
+    current.objects += 1
+    current.bytes += Number(row.size_bytes??0)
+    if(String(row.state).toUpperCase()==='READY') current.ready += 1
+    acc.set(provider,current)
+    return acc
+  },new Map<string,{objects:number;ready:number;bytes:number}>())
+
   const sourceHref=canDatasets?'/datasets':'#source-health'
   const jobsHref=canMonitoring?'/monitoring':'#execution-health'
 
@@ -153,6 +204,15 @@ export default async function ObservabilityPage() {
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Source health evidence</h2><p className="mt-1 text-sm text-slate-500">Lifecycle status reported from registered source evidence.</p></div>{canDatasets?<Link href="/datasets" className={`text-sm font-bold text-blue-300 ${focus}`}>Open source workspace →</Link>:null}</div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{sources.map(source=><div key={source.id} className={`${inset} p-4`}><div className="flex items-center justify-between gap-2"><span className="font-bold text-slate-200">{source.name}</span><span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${statusClass(source.status)}`}>{source.status}</span></div><p className="mt-1 text-xs text-slate-500">{source.source_type}</p></div>)}</div>
         </section>
+
+        <section id="ai-model-health" className={`${surface} mt-6 scroll-mt-6 p-6 sm:p-7`}>
+          <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><Activity className="h-5 w-5 text-violet-300" /><h2 className="text-xl font-bold text-white">AI model health and usage</h2></div><p className="mt-1 text-sm text-slate-500">Governed model registry state combined with persisted invocation telemetry. No prompts, completions or hidden reasoning are exposed.</p></div><Link href="/agents" className={`text-sm font-bold text-blue-300 ${focus}`}>Open AI operations →</Link></div>
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {aiModelHealth.length ? aiModelHealth.map(({system,version,events,p95,errors,inputTokens,outputTokens,cost,lastObserved}) => <article key={system.id} className={`${inset} p-4`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold text-slate-200">{system.name}</p><p className="mt-1 text-xs text-slate-500">{version?.provider??'Provider unavailable'} · {version?.model_name??'Model unavailable'} · {version?.risk_tier??'Risk tier N/A'}</p></div><span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusClass(system.lifecycle_status)}`}>{system.lifecycle_status}</span></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><div><p className="text-[10px] uppercase text-slate-600">Invocations</p><p className="mt-1 font-black text-white">{events.length}</p></div><div><p className="text-[10px] uppercase text-slate-600">Errors</p><p className={`mt-1 font-black ${errors?'text-rose-300':'text-emerald-300'}`}>{errors}</p></div><div><p className="text-[10px] uppercase text-slate-600">P95 latency</p><p className="mt-1 font-black text-white">{p95==null?'N/A':`${Math.round(p95)} ms`}</p></div><div><p className="text-[10px] uppercase text-slate-600">Token volume</p><p className="mt-1 font-black text-white">{(inputTokens+outputTokens).toLocaleString()}</p></div></div><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>Cost ${cost.toFixed(4)}</span><span>Oversight: {version?.human_oversight??'N/A'}</span><span>Last observed: {date(lastObserved)}</span></div></article>) : <p className={`${inset} p-5 text-sm text-slate-500 lg:col-span-2`}>No governed AI systems or invocation telemetry are visible for the current scope.</p>}
+          </div>
+        </section>
+
+        {infrastructureAdmin ? <section id="infrastructure-health" className={`${surface} mt-6 scroll-mt-6 p-6 sm:p-7`}><div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><Database className="h-5 w-5 text-cyan-300"/><h2 className="text-xl font-bold text-white">Connected infrastructure health</h2></div><p className="mt-1 text-sm text-slate-500">Read-only health summary for storage and the Cloudflare observability execution boundary. Secret values are never displayed.</p></div><Link href="/admin/infrastructure" className={`text-sm font-bold text-blue-300 ${focus}`}>Open infrastructure detail →</Link></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{['supabase','r2'].map(provider=>{const state=storageSummary.get(provider)??{objects:0,ready:0,bytes:0};return <article key={provider} className={`${inset} p-4`}><p className="text-xs font-black uppercase tracking-wide text-slate-500">{provider==='r2'?'Cloudflare R2':'Supabase Storage'}</p><p className="mt-2 text-2xl font-black text-white">{state.ready}/{state.objects}</p><p className="text-xs text-slate-500">objects ready</p></article>})}<article className={`${inset} p-4`}><p className="text-xs font-black uppercase tracking-wide text-slate-500">Cloudflare worker</p><p className={`mt-2 text-lg font-black ${cloudflareCanary?.enabled&&cloudflareCanary?.runtime_configured?'text-emerald-300':'text-amber-300'}`}>{cloudflareCanary?.enabled?'Enabled':'Not confirmed'}</p><p className="mt-1 text-xs text-slate-500">{cloudflareCanary?.cron_active?'Cron active':'Cron inactive or unavailable'}</p></article><article className={`${inset} p-4`}><p className="text-xs font-black uppercase tracking-wide text-slate-500">Canary jobs</p><p className="mt-2 text-2xl font-black text-white">{Number(cloudflareCanary?.running??0)}</p><p className="text-xs text-slate-500">running · {Number(cloudflareCanary?.failed??0)} failed</p></article></div></section> : null}
 
         <section id="dataset-health" className={`${surface} mt-6 scroll-mt-6 p-6 sm:p-7`}>
           <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><Gauge className="h-5 w-5 text-cyan-300" /><h2 className="text-xl font-bold text-white">Dataset health and change</h2></div><p className="mt-1 text-sm text-slate-500">Latest evidence compared with the immediately preceding completed profile for the same governed dataset.</p></div><Link href="/profiling/explorer" className={`inline-flex items-center gap-1 text-sm font-bold text-blue-300 ${focus}`}>Open profiling evidence <ArrowRight className="h-4 w-4" /></Link></div>
