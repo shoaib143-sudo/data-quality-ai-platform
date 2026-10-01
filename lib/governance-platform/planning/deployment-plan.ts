@@ -1,0 +1,62 @@
+import type { CanonicalGovernanceObject } from '../canonical/model'
+import type { GovernanceDesiredState,DesiredStateTarget } from '../desired-state/model'
+import { stableGovernanceFingerprint } from './fingerprint'
+import { buildGovernancePlan,type GovernancePlan } from './plan'
+import { expandGovernancePlanForProviders,type ProviderPlannedOperation } from './provider-plan'
+
+export type GovernanceTargetObservedState={
+ provider:string
+ connectionId:string
+ objects:CanonicalGovernanceObject[]
+ observedAt?:string
+}
+
+export type GovernanceTargetPlan={
+ target:DesiredStateTarget
+ observedAt:string|null
+ plan:GovernancePlan
+ operations:ProviderPlannedOperation[]
+}
+
+export type GovernanceDeploymentPlan={
+ deploymentId:string
+ deploymentFingerprint:string
+ desiredStateFingerprint:string
+ projectId:string
+ targets:GovernanceTargetPlan[]
+ operations:ProviderPlannedOperation[]
+}
+
+function targetKey(provider:string,connectionId:string){return `${provider.trim().toLowerCase()}::${connectionId.trim()}`}
+
+export function buildGovernanceDeploymentPlan(
+ desired:GovernanceDesiredState,
+ observedStates:GovernanceTargetObservedState[],
+):GovernanceDeploymentPlan{
+ const observedByTarget=new Map<string,GovernanceTargetObservedState>()
+ for(const observed of observedStates){
+  const key=targetKey(observed.provider,observed.connectionId)
+  if(observedByTarget.has(key))throw new Error(`Observed governance state duplicates target ${key}.`)
+  observedByTarget.set(key,observed)
+ }
+ const targets=desired.targets.map(target=>{
+  const key=targetKey(target.provider,target.connectionId)
+  const observed=observedByTarget.get(key)
+  if(!observed)throw new Error(`Observed governance state is required for target ${key}.`)
+  const targetDesired:GovernanceDesiredState={...desired,targets:[target]}
+  const plan=buildGovernancePlan(targetDesired,observed.objects)
+  return{target,observedAt:observed.observedAt??null,plan,operations:expandGovernancePlanForProviders(plan,targetDesired)}
+ })
+ const desiredStateFingerprint=stableGovernanceFingerprint(desired)
+ const deploymentFingerprint=stableGovernanceFingerprint({
+  projectId:desired.projectId,desiredStateFingerprint,
+  targets:targets.map(value=>({
+   provider:value.target.provider.trim().toLowerCase(),connectionId:value.target.connectionId,
+   planFingerprint:value.plan.planFingerprint,observedAt:value.observedAt,
+  })),
+ })
+ return{
+  deploymentId:deploymentFingerprint.slice(0,32),deploymentFingerprint,desiredStateFingerprint,
+  projectId:desired.projectId,targets,operations:targets.flatMap(value=>value.operations),
+ }
+}
