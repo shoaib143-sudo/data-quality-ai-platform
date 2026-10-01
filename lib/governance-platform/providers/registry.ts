@@ -1,5 +1,5 @@
-import type { GovernanceProvider } from './sdk/provider'
-import { assertProviderManifestConformance } from './conformance'
+import type { GovernanceProvider } from './sdk/provider.ts'
+import { assertProviderManifestConformance } from './conformance.ts'
 
 const providers = new Map<string, GovernanceProvider>()
 
