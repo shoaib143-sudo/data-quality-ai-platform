@@ -25,5 +25,6 @@ test('checkpoint claim suppresses completed idempotent replay',async()=>{
 
 test('MCP facade enforces DataNexus project identity boundary',()=>{
  assert.throws(()=>governanceMcpFacade.plan({projectId:'other',principalId:'user'},desired,[]),/not bound/)
- assert.equal(governanceMcpFacade.plan({projectId:'p',principalId:'user'},desired,[]).projectId,'p')
+ const observed=[{provider:'informatica',connectionId:'prod',objects:[]}]
+ assert.equal(governanceMcpFacade.plan({projectId:'p',principalId:'user'},desired,observed).projectId,'p')
 })
