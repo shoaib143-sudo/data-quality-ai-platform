@@ -194,3 +194,14 @@ test('discovery diagnostics expose published catalog revision deltas as incremen
   assert.match(panel,/Missing assets remain non-destructive evidence/)
   assert.match(panel,/change_type/)
 })
+
+
+test('lineage transformation changes create immutable version history without observation noise',()=>{
+  const migration=fs.readFileSync('supabase/migrations/20261001235500_lineage_transformation_version_history.sql','utf8')
+  const page=fs.readFileSync('app/lineage/evidence/page.tsx','utf8')
+  assert.match(migration,/lineage_transformation_history/)
+  assert.match(migration,/capture_lineage_transformation_history/)
+  assert.match(migration,/if not v_changed then return new/)
+  assert.match(migration,/old\.logic_hash is distinct from new\.logic_hash/)
+  assert.match(page,/Transformation version history/)
+})
