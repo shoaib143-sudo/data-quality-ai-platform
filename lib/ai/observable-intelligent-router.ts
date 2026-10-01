@@ -20,6 +20,7 @@ import type { TelemetryProvider, TelemetryTraceContext } from './telemetry-provi
 
 type ObservableReasoningContext = {
   projectId: string
+  signal?: AbortSignal
   executionCorrelationId?: string | null
   aiSystemId?: string | null
   aiSystemVersionId?: string | null
@@ -148,6 +149,10 @@ class ObservableReasoningProvider implements ReasoningProvider {
   }
 
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
+    // A caller may add cancellation but cannot replace the execution deadline.
+    const signals = [this.context.signal, request.signal].filter((signal): signal is AbortSignal => signal != null)
+    const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0]
+    if (signal) request = { ...request, signal }
     const startedAt = Date.now()
     let budgetEvidence = applyProjectOutputBudget(request, null)
     let admissions: AdmissionEvidence[] = []
@@ -174,6 +179,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
     }
 
     try {
+      signal?.throwIfAborted()
       let projectBudget: ProjectReasoningBudget | null = null
       if (this.budgetPolicy) {
         projectBudget = this.budgetPolicy.resolveBudget
@@ -214,6 +220,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
       invocationId = randomUUID()
       let result: ReasoningResult
       try {
+        signal?.throwIfAborted()
         result = await this.provider.generateJson(budgetEvidence.request)
       } finally {
         await releaseAdmissionLeases()
@@ -231,6 +238,8 @@ class ObservableReasoningProvider implements ReasoningProvider {
           observedAt: new Date().toISOString(),
         })
       }
+      // Account for a completed call even when cancellation races its response.
+      signal?.throwIfAborted()
 
       const primaryAdmission = admissions[0] ?? null
       try {
@@ -383,6 +392,7 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
       ...decision,
       provider: new ObservableReasoningProvider(decision.provider, this.telemetry, {
         projectId: context.projectId, executionCorrelationId: context.executionCorrelationId ?? null,
+        signal: context.signal,
         aiSystemId: decision.evidence?.aiSystemId ?? null,
         aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null,
         agentDefinitionId: context.agentDefinitionId ?? null,

@@ -15,7 +15,7 @@
     "verify:agent-memory-learning": "node scripts/verify-agent-memory-learning.mjs",
     "verify:agent-run-artifacts": "node scripts/verify-agent-run-artifacts.mjs",
     "verify:execution-recovery": "node scripts/verify-execution-recovery-agent.mjs && node --experimental-strip-types scripts/test-execution-recovery-closed-loop.mjs && node --experimental-strip-types scripts/test-execution-recovery-routing.mjs && node --experimental-strip-types scripts/test-execution-recovery-specialist-handlers.mjs",
-    "verify:reasoning-provider": "node scripts/verify-reasoning-provider.mjs && node --experimental-strip-types scripts/test-reasoning-provider.mjs",
+    "verify:reasoning-provider": "node scripts/verify-reasoning-provider.mjs && node --experimental-strip-types scripts/test-reasoning-provider.mjs && node --experimental-strip-types scripts/test-reasoning-cancellation.mjs && node --experimental-strip-types scripts/test-route-execution-cancellation.mjs",
     "verify:model-gateway": "node scripts/verify-model-gateway.mjs && node scripts/test-model-gateway.mjs",
     "verify:embedding-provider": "node scripts/verify-embedding-provider.mjs && node --experimental-strip-types scripts/test-embedding-provider.mjs",
     "verify:retrieval-provider": "node scripts/verify-retrieval-provider.mjs && node --experimental-strip-types scripts/test-retrieval-provider.mjs",
@@ -96,7 +96,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
-    "next": "16.3.3",
+    "next": "16.3.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.3.1",
@@ -113,3 +113,4 @@
     "typescript": "7.0.2"
   }
 }
+
