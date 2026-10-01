@@ -27,3 +27,9 @@ test('deployment planner requires observed state for every target and rejects du
   {provider:'INFORMATICA',connectionId:'prod',objects:[]},
  ]),/duplicates target/)
 })
+
+
+test('deployment fingerprint is stable across equivalent observation timestamps',()=>{
+ const state=time=>desired.targets.map(target=>({provider:target.provider,connectionId:target.connectionId,objects:[],observedAt:time}))
+ assert.equal(buildGovernanceDeploymentPlan(desired,state('2026-10-01T00:00:00.000Z')).deploymentFingerprint,buildGovernanceDeploymentPlan(desired,state('2026-10-01T00:01:00.000Z')).deploymentFingerprint)
+})
