@@ -66,9 +66,9 @@ async function callTool(request:Request,rpc:JsonRpcRequest){
  })
  let output:unknown
  if(name==='governance.status'){
-  const planId=text(args.planId)
-  if(!planId)return error(rpc.id,-32602,'planId is required.')
-  output=await governanceDeploymentStatusForPrincipal(principal.id,projectId,planId)
+  const deploymentId=text(args.deploymentId)
+  if(!deploymentId)return error(rpc.id,-32602,'deploymentId is required.')
+  output=await governanceDeploymentStatusForPrincipal(principal.id,projectId,deploymentId)
  }else{
   const {desired}=desiredFromArguments(args)
   if(name==='governance.plan')output=await planGovernanceDeploymentForPrincipal(principal.id,desired)
