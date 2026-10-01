@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireApiUser } from '@/lib/auth/require-api-user'
-import { authorizeProject,authorizationErrorResponse } from '@/lib/auth/authorize'
-import { SupabaseGovernanceEvidenceStore } from '@/lib/governance-platform/execution/supabase-store'
+import { authorizationErrorResponse } from '@/lib/auth/authorize'
+import { governanceDeploymentStatusForPrincipal } from '@/lib/governance-platform/runtime/service'
 
 export async function GET(request:Request){
  try{
@@ -10,9 +10,8 @@ export async function GET(request:Request){
   const projectId=url.searchParams.get('projectId')?.trim()
   const planId=url.searchParams.get('planId')?.trim()
   if(!projectId||!planId)return NextResponse.json({error:'projectId and planId are required.'},{status:400})
-  await authorizeProject(user.id,projectId,'execution.view_evidence')
-  const evidence=await new SupabaseGovernanceEvidenceStore().listByPlan(projectId,planId)
-  return NextResponse.json({projectId,planId,evidence},{headers:{'Cache-Control':'private, no-store'}})
+  const result=await governanceDeploymentStatusForPrincipal(user.id,projectId,planId)
+  return NextResponse.json(result,{headers:{'Cache-Control':'private, no-store'}})
  }catch(error){
   const authorization=authorizationErrorResponse(error)
   if(authorization)return NextResponse.json({error:authorization.error},{status:authorization.status})
