@@ -1,3 +1,9 @@
+import './governance-provider-planning.test.mjs'
+import './governance-provider-runtime.test.mjs'
+import './governance-provider-execution.test.mjs'
+import './governance-provider-assurance.test.mjs'
+import './governance-provider-failure-paths.test.mjs'
+
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
