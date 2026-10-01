@@ -269,6 +269,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
       } finally {
         await releaseAdmissionLeases()
       }
+      if (!providerResult) throw new Error('Reasoning provider returned no governed result')
       const result = providerResult
 
       if (this.costAccounting) {
@@ -364,6 +365,11 @@ class ObservableReasoningProvider implements ReasoningProvider {
             canonical_input_cost: costEvidence?.inputCost ?? null,
             canonical_output_cost: costEvidence?.outputCost ?? null,
             canonical_total_cost: costEvidence?.totalCost ?? null,
+            learning_evaluation_policy_id: this.context.learningEvaluationRuntime?.policyId ?? null,
+            learning_evaluation_candidate_id: this.context.learningEvaluationRuntime?.candidateId ?? null,
+            learning_evaluation_variant: this.context.learningEvaluationRuntime?.variant ?? null,
+            learning_runtime_reservation_id: learningReservation?.reservationId ?? null,
+            learning_runtime_pricing_version_id: learningReservation?.pricingVersionId ?? null,
             provider_request_id: result.providerRequestId ?? null, total_tokens: result.usage?.totalTokens ?? null,
             resilience_requested_provider: result.resilience?.requestedProvider ?? null,
             resilience_requested_model: result.resilience?.requestedModel ?? null,
@@ -434,6 +440,11 @@ class ObservableReasoningProvider implements ReasoningProvider {
             })),
             invocation_id: invocationId,
             cost_accounting_status: costEvidence?.accountingStatus ?? null,
+            learning_evaluation_policy_id: this.context.learningEvaluationRuntime?.policyId ?? null,
+            learning_evaluation_candidate_id: this.context.learningEvaluationRuntime?.candidateId ?? null,
+            learning_evaluation_variant: this.context.learningEvaluationRuntime?.variant ?? null,
+            learning_runtime_reservation_id: learningReservation?.reservationId ?? null,
+            learning_runtime_pricing_version_id: learningReservation?.pricingVersionId ?? null,
             error_name: error instanceof Error ? error.name : 'UnknownError',
             provider_http_status: providerHttpError?.status ?? null,
             provider_request_id: providerHttpError?.providerRequestId ?? null,
