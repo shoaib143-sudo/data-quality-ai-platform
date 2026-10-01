@@ -4,7 +4,6 @@ export type LearningExperimentTerminalStatus = 'SUCCEEDED' | 'FAILED' | 'CANCELL
 
 export type LearningExperimentCaseInput = {
   caseKey: string
-  sourceCaseRef: string
   inputArtifactRef: string
   inputArtifactHash: string
   payload: unknown
@@ -19,6 +18,7 @@ export type PreparedLearningExperimentAttempt = {
   executionCorrelationId: string
   attemptNumber: number
   reused: boolean
+  sourceCaseRef: string
   terminalResultId?: string | null
   terminalStatus?: LearningExperimentTerminalStatus | null
 }
@@ -112,6 +112,8 @@ export interface LearningExperimentArmExecutor {
     executionCorrelationId: string
     caseKey: string
     sourceCaseRef: string
+    inputArtifactRef: string
+    inputArtifactHash: string
     arm: LearningExperimentArm
     version: string
     executableArtifactRef: string
@@ -190,7 +192,6 @@ export class GovernedPairedLearningExperimentRunner {
     for (const item of input.cases) {
       if (!CASE_KEY.test(item.caseKey) || seen.has(item.caseKey)) throw new Error('case keys must be unique SHA-256 digests')
       seen.add(item.caseKey)
-      required(item.sourceCaseRef, 'sourceCaseRef')
       required(item.inputArtifactRef, 'inputArtifactRef')
       required(item.baselineExecutableArtifactRef, 'baselineExecutableArtifactRef')
       required(item.candidateExecutableArtifactRef, 'candidateExecutableArtifactRef')
@@ -212,6 +213,7 @@ export class GovernedPairedLearningExperimentRunner {
     for (const item of input.cases) {
       input.signal?.throwIfAborted()
       const results = new Map<LearningExperimentArm, string>()
+      let canonicalSourceCaseRef: string | null = null
 
       for (const arm of ['BASELINE', 'CANDIDATE'] as const) {
         input.signal?.throwIfAborted()
@@ -231,6 +233,8 @@ export class GovernedPairedLearningExperimentRunner {
           inputArtifactHash: item.inputArtifactHash,
         })
 
+        if (canonicalSourceCaseRef && canonicalSourceCaseRef !== attempt.sourceCaseRef) throw new Error('paired arm source-case identity mismatch')
+        canonicalSourceCaseRef = attempt.sourceCaseRef
         if (attempt.terminalResultId && attempt.terminalStatus) {
           results.set(arm, attempt.terminalResultId)
           if (attempt.terminalStatus !== 'SUCCEEDED') {
@@ -249,7 +253,9 @@ export class GovernedPairedLearningExperimentRunner {
             attemptId: attempt.attemptId,
             executionCorrelationId: attempt.executionCorrelationId,
             caseKey: item.caseKey,
-            sourceCaseRef: item.sourceCaseRef,
+            sourceCaseRef: attempt.sourceCaseRef,
+            inputArtifactRef: item.inputArtifactRef,
+            inputArtifactHash: item.inputArtifactHash,
             arm,
             version,
             executableArtifactRef,
@@ -289,7 +295,7 @@ export class GovernedPairedLearningExperimentRunner {
         candidateId,
         experimentRunId: runId,
         caseKey: item.caseKey,
-        sourceCaseRef: item.sourceCaseRef,
+        sourceCaseRef: canonicalSourceCaseRef ?? (() => { throw new Error('canonical source-case reference is missing') })(),
         baselineResultId,
         candidateResultId,
       })
