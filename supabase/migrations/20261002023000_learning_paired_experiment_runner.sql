@@ -503,6 +503,7 @@ declare
   v_candidate numeric;
   v_authority integer;
   v_safety integer;
+  v_independent integer;
   v_total_cost numeric;
   v_max_run_cost numeric;
   v_total_tokens bigint;
@@ -516,8 +517,9 @@ begin
   select count(*) into v_case_count from agent.learning_experiment_run_cases where run_id=p_run_id;
   select count(*),avg(baseline_score),avg(candidate_score),
     count(*) filter(where authority_violation),
-    count(*) filter(where safety_failure)
-  into v_score_count,v_baseline,v_candidate,v_authority,v_safety
+    count(*) filter(where safety_failure),
+    count(*) filter(where independently_verified)
+  into v_score_count,v_baseline,v_candidate,v_authority,v_safety,v_independent
   from agent.learning_experiment_case_scores where run_id=p_run_id;
 
   select count(*) into v_failed_arms
@@ -540,6 +542,7 @@ begin
     'caseCount',v_case_count,
     'scoredCaseCount',v_score_count,
     'complete',v_score_count=v_case_count and v_failed_arms=0,
+    'allIndependentlyVerified',v_score_count>0 and v_independent=v_score_count,
     'baselineScore',v_baseline,
     'candidateScore',v_candidate,
     'authorityViolations',v_authority,
