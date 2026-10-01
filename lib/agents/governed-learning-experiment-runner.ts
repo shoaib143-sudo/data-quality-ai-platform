@@ -146,11 +146,19 @@ function stopStatus(error: unknown): LearningExperimentTerminalStatus {
 }
 
 export class GovernedPairedLearningExperimentRunner {
+  private readonly store: LearningExperimentEvidenceStore
+  private readonly executor: LearningExperimentArmExecutor
+  private readonly scorer: LearningExperimentIndependentScorer
+
   constructor(
-    private readonly store: LearningExperimentEvidenceStore,
-    private readonly executor: LearningExperimentArmExecutor,
-    private readonly scorer: LearningExperimentIndependentScorer,
-  ) {}
+    store: LearningExperimentEvidenceStore,
+    executor: LearningExperimentArmExecutor,
+    scorer: LearningExperimentIndependentScorer,
+  ) {
+    this.store = store
+    this.executor = executor
+    this.scorer = scorer
+  }
 
   async run(input: {
     projectId: string
