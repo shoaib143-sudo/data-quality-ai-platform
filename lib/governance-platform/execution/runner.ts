@@ -1,10 +1,10 @@
-import { getGovernanceProvider } from '../providers/registry'
-import { resolveProviderCapability } from '../providers/capability-resolver'
-import type { CapabilityMode } from '../providers/sdk/capability'
-import type { ProviderPlannedOperation } from '../planning/provider-plan'
-import type { GovernedExecutionGateDependencies } from './governed-gate'
-import { evaluateGovernedExecutionGate } from './governed-gate'
-import { executeWithGovernanceRetry, type GovernanceRetryRuntime } from './retry-policy'
+import { getGovernanceProvider } from '../providers/registry.ts'
+import { resolveProviderCapability } from '../providers/capability-resolver.ts'
+import type { CapabilityMode } from '../providers/sdk/capability.ts'
+import type { ProviderPlannedOperation } from '../planning/provider-plan.ts'
+import type { GovernedExecutionGateDependencies } from './governed-gate.ts'
+import { evaluateGovernedExecutionGate } from './governed-gate.ts'
+import { executeWithGovernanceRetry, type GovernanceRetryRuntime } from './retry-policy.ts'
 
 const modeByKind:Record<string,CapabilityMode>={CREATE:'CREATE',UPDATE:'UPDATE',DELETE:'DELETE'}
 
