@@ -291,12 +291,15 @@ select agent.complete_learning_experiment_attempt_v2(
   'COMPLETED',:'artifact_2',:'reservation_id',:'cost_event_id',null
 );
 
-do $$
+do $
 begin
-  if (select status from agent.learning_experiment_attempts where id=:'attempt_2'::uuid) <> 'COMPLETED' then
+  if (select status from agent.learning_experiment_attempts
+      where policy_id='40000000-0000-4000-8000-000000000001'
+        and case_key='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+        and arm='BASELINE') <> 'COMPLETED' then
     raise exception 'accounted non-synthetic attempt did not complete';
   end if;
-end $$;
+end $;
 
 
 -- Delayed accounting resolves the same already-executed run without any re-dispatch.
@@ -332,16 +335,21 @@ select agent.complete_learning_experiment_attempt_v2(
   'COMPLETED',:'artifact_3',null,null,'ACCOUNTING_PENDING'
 );
 
-do $
+do $$
+declare v_attempt_id uuid;
 begin
-  if (select status from agent.learning_experiment_attempts where id=:'attempt_3'::uuid) <> 'RECONCILIATION_REQUIRED' then
+  select id into v_attempt_id from agent.learning_experiment_attempts
+    where policy_id='40000000-0000-4000-8000-000000000001'
+      and case_key='cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+      and arm='CANDIDATE';
+  if (select status from agent.learning_experiment_attempts where id=v_attempt_id) <> 'RECONCILIATION_REQUIRED' then
     raise exception 'missing accounting did not enter reconciliation-required state';
   end if;
   if (select count(*) from agent.learning_experiment_attempt_events
-      where attempt_id=:'attempt_3'::uuid and to_status='DISPATCHED') <> 1 then
+      where attempt_id=v_attempt_id and to_status='DISPATCHED') <> 1 then
     raise exception 'delayed accounting path unexpectedly changed dispatch cardinality';
   end if;
-end $;
+end $$;
 
 \set reservation_3 '60000000-0000-4000-8000-000000000003'
 \set cost_event_3 '70000000-0000-4000-8000-000000000003'
@@ -360,19 +368,24 @@ select agent.reconcile_learning_experiment_attempt(
   :'artifact_3',:'reservation_3',:'cost_event_3'
 );
 
-do $
+do $$
+declare v_attempt_id uuid;
 begin
-  if (select status from agent.learning_experiment_attempts where id=:'attempt_3'::uuid) <> 'COMPLETED' then
+  select id into v_attempt_id from agent.learning_experiment_attempts
+    where policy_id='40000000-0000-4000-8000-000000000001'
+      and case_key='cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+      and arm='CANDIDATE';
+  if (select status from agent.learning_experiment_attempts where id=v_attempt_id) <> 'COMPLETED' then
     raise exception 'delayed canonical accounting did not reconcile to completed';
   end if;
   if (select count(*) from agent.learning_experiment_attempt_events
-      where attempt_id=:'attempt_3'::uuid and from_status='RECONCILIATION_REQUIRED' and to_status='COMPLETED') <> 1 then
+      where attempt_id=v_attempt_id and from_status='RECONCILIATION_REQUIRED' and to_status='COMPLETED') <> 1 then
     raise exception 'reconciliation completion event is missing';
   end if;
   if (select count(*) from agent.learning_experiment_attempt_events
-      where attempt_id=:'attempt_3'::uuid and to_status='DISPATCHED') <> 1 then
+      where attempt_id=v_attempt_id and to_status='DISPATCHED') <> 1 then
     raise exception 'reconciliation unexpectedly caused provider redispatch evidence';
   end if;
-end $;
+end $$;
 
 \echo 'learning runner canonical agent-run/artifact evidence fixture passed'
