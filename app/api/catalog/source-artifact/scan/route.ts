@@ -36,7 +36,7 @@ export async function POST(request:Request){
       artifact_path:result.path,
       content_hash:result.contentHash,
       line_count:result.lineCount,
-      references:result.references,
+      reference_evidence:result.references,
       transformations:result.transformations,
       warnings:result.warnings,
       scanned_by:user.id,
