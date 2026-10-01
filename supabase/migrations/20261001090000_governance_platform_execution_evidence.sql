@@ -8,7 +8,10 @@ create table if not exists governance.platform_execution_checkpoints (
   idempotency_key text not null,
   status text not null check (status in ('PENDING','RUNNING','SUCCEEDED','FAILED','VERIFIED')),
   attempts integer not null default 0 check (attempts >= 0),
+  provider_object_id text,
   provider_job_id text,
+  execution_evidence jsonb not null default '{}'::jsonb,
+  verification_status text,
   updated_at timestamptz not null default now(),
   unique (project_id, idempotency_key)
 );
@@ -47,7 +50,7 @@ grant select, insert, update on governance.platform_execution_checkpoints to ser
 grant select, insert on governance.platform_execution_evidence to service_role;
 
 comment on table governance.platform_execution_checkpoints is
-  'Service-role-only durable checkpoints for idempotent provider-neutral governance execution.';
+  'Service-role-only durable checkpoints for idempotent provider-neutral governance execution and verification resume.';
 comment on table governance.platform_execution_evidence is
   'Append-only service-role evidence for governance provider execution and verification.';
 
