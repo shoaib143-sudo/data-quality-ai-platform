@@ -3,11 +3,13 @@ import test from 'node:test'
 import fs from 'node:fs'
 import { governancePlanApprovalParameters,assertGovernancePlanApprovalBinding } from '../lib/governance-platform/execution/approval-binding.ts'
 
-test('approval binding invalidates plan or desired-state changes',()=>{
- const parameters=governancePlanApprovalParameters({planId:'p1',desiredStateFingerprint:'f1'})
- assert.doesNotThrow(()=>assertGovernancePlanApprovalBinding(parameters,{planId:'p1',desiredStateFingerprint:'f1'}))
- assert.throws(()=>assertGovernancePlanApprovalBinding(parameters,{planId:'p2',desiredStateFingerprint:'f1'}),/does not match/)
- assert.throws(()=>assertGovernancePlanApprovalBinding(parameters,{planId:'p1',desiredStateFingerprint:'f2'}),/invalidated/)
+test('approval binding invalidates plan, plan fingerprint, or desired-state changes',()=>{
+ const current={planId:'p1',planFingerprint:'pf1',desiredStateFingerprint:'f1'}
+ const parameters=governancePlanApprovalParameters(current)
+ assert.doesNotThrow(()=>assertGovernancePlanApprovalBinding(parameters,current))
+ assert.throws(()=>assertGovernancePlanApprovalBinding(parameters,{...current,planId:'p2'}),/does not match/)
+ assert.throws(()=>assertGovernancePlanApprovalBinding(parameters,{...current,planFingerprint:'pf2'}),/execution plan changed/)
+ assert.throws(()=>assertGovernancePlanApprovalBinding(parameters,{...current,desiredStateFingerprint:'f2'}),/desired state changed/)
 })
 
 test('durable governance execution tables are service-role only and RLS protected',()=>{
