@@ -1,4 +1,4 @@
-import { GovernanceProviderError } from '../providers/sdk/errors'
+import { GovernanceProviderError } from '../providers/sdk/errors.ts'
 
 export type GovernanceRetryDecision={retry:boolean;reason:string}
 export type GovernanceRetryRuntime={
