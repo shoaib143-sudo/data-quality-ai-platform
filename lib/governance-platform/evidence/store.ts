@@ -1,4 +1,4 @@
-import type { GovernanceEvidenceRecord } from './model'
+import type { GovernanceEvidenceRecord } from './model.ts'
 export interface GovernanceEvidenceStore{append(record:GovernanceEvidenceRecord):Promise<void>;listByPlan(projectId:string,planId:string):Promise<GovernanceEvidenceRecord[]>}
 export class InMemoryGovernanceEvidenceStore implements GovernanceEvidenceStore{
  private records:GovernanceEvidenceRecord[]=[]
