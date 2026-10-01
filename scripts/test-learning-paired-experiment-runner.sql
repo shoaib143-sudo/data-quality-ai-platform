@@ -168,6 +168,33 @@ select agent.complete_learning_experiment_attempt(
   'COMPLETED','fixture:output:case1:candidate',null,null,null
 );
 
+-- Exact terminal retries are idempotent; changed terminal evidence is rejected.
+select agent.complete_learning_experiment_attempt(
+  :'project_id',:'attempt_1',
+  (select execution_key from agent.learning_experiment_attempts where id=:'attempt_1'::uuid),
+  'COMPLETED','fixture:output:case1:candidate',null,null,null
+);
+do $
+begin
+  begin
+    perform agent.complete_learning_experiment_attempt(
+      '10000000-0000-4000-8000-000000000001',
+      (select id from agent.learning_experiment_attempts
+        where policy_id='40000000-0000-4000-8000-000000000001'
+          and case_key='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+          and arm='CANDIDATE'),
+      (select execution_key from agent.learning_experiment_attempts
+        where policy_id='40000000-0000-4000-8000-000000000001'
+          and case_key='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+          and arm='CANDIDATE'),
+      'COMPLETED','fixture:output:DIFFERENT',null,null,null
+    );
+    raise exception 'conflicting terminal evidence unexpectedly succeeded';
+  exception when others then
+    if SQLERRM not like '%conflicts with existing immutable completion%' then raise; end if;
+  end;
+end $;
+
 -- Reusing the same case/arm with changed immutable context is rejected.
 do $$
 begin
