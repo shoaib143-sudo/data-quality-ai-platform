@@ -23,10 +23,10 @@ export async function verifyGovernanceDeploymentForPrincipal(principalId:string,
  return{status:planned.deployment.operations.length===0?'IN_SYNC' as const:'DRIFTED' as const,...planned}
 }
 
-export async function governanceDeploymentStatusForPrincipal(principalId:string,projectId:string,planId:string){
+export async function governanceDeploymentStatusForPrincipal(principalId:string,projectId:string,deploymentId:string){
  await authorizeProject(principalId,projectId,'execution.view_evidence')
- const evidence=await new SupabaseGovernanceEvidenceStore().listByPlan(projectId,planId)
- return{projectId,planId,evidence}
+ const evidence=await new SupabaseGovernanceEvidenceStore().listByDeployment(projectId,deploymentId)
+ return{projectId,deploymentId,evidence}
 }
 
 export async function applyGovernanceDeploymentForPrincipal(input:{
