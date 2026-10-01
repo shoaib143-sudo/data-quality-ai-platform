@@ -59,3 +59,24 @@ test('pending async work never replays mutation when provider has no status poll
  assert.equal(executes,1)
  clearGovernanceProvidersForTests()
 })
+
+
+test('pending async work resumes through provider status polling and verification without replay',async()=>{
+ clearGovernanceProvidersForTests()
+ let executes=0,polls=0,stored=null
+ registerGovernanceProvider({
+  manifest:()=>({provider:'fake',providerVersion:'1',canonicalSchemaVersion:'1.0',capabilities:[{capability:'catalog.asset.create',support:'FULL',modes:['CREATE'],consistency:'EVENTUAL',execution:'ASYNC',idempotency:'DATANEXUS_MANAGED',rollback:'NONE',verification:'JOB_STATUS'}]}),
+  capabilities:async function(){return this.manifest().capabilities},
+  discover:async()=>({objects:[],projections:[],observedAt:new Date().toISOString()}),
+  execute:async op=>{executes++;return{operationId:op.operationId,status:'PENDING',providerJobId:'job-1'}},
+  status:async op=>{polls++;return{operationId:op.operationId,status:'SUCCEEDED',providerJobId:'job-1',providerObjectId:'vendor-1'}},
+  verify:async op=>({operationId:op.operationId,status:'VERIFIED'}),
+ })
+ const checkpointStore={get:async()=>stored,put:async value=>{stored=structuredClone(value)}}
+ const evidenceStore=new InMemoryGovernanceEvidenceStore()
+ assert.equal((await executeGovernedProviderOperation(operation,dependencies(checkpointStore,evidenceStore))).status,'PENDING')
+ const resumed=await executeGovernedProviderOperation(operation,dependencies(checkpointStore,evidenceStore))
+ assert.equal(resumed.status,'VERIFIED');assert.equal(resumed.resumed,true)
+ assert.equal(executes,1);assert.equal(polls,1);assert.equal(stored.status,'VERIFIED')
+ clearGovernanceProvidersForTests()
+})
