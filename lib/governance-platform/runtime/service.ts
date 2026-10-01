@@ -1,14 +1,14 @@
-import { authorizeProject } from '../../auth/authorize'
-import { createGovernanceExecutionController } from '../../ai/governance-execution-controller'
-import { createGovernancePolicyDecisionProvider } from '../../governance/governance-policy-decision-provider'
-import type { GovernanceDesiredState } from '../desired-state/model'
-import { executeGovernedProviderOperation } from '../execution/runner'
-import { SupabaseGovernanceEvidenceStore } from '../execution/supabase-store'
-import { orderProviderGovernanceOperations } from '../planning/dependency-dag'
-import { buildGovernanceDeploymentPlan } from '../planning/deployment-plan'
-import { discoverGovernanceTargetStates } from '../planning/discovery'
-import { simulateGovernanceDeployment } from '../planning/simulation'
-import { ensureGovernanceProvidersRegistered } from '../providers/informatica/bootstrap'
+import { authorizeProject } from '../../auth/authorize.ts'
+import { createGovernanceExecutionController } from '../../ai/governance-execution-controller.ts'
+import { createGovernancePolicyDecisionProvider } from '../../governance/governance-policy-decision-provider.ts'
+import type { GovernanceDesiredState } from '../desired-state/model.ts'
+import { executeGovernedProviderOperation } from '../execution/runner.ts'
+import { SupabaseGovernanceCheckpointStore,SupabaseGovernanceEvidenceStore } from '../execution/supabase-store.ts'
+import { orderProviderGovernanceOperations } from '../planning/dependency-dag.ts'
+import { buildGovernanceDeploymentPlan } from '../planning/deployment-plan.ts'
+import { discoverGovernanceTargetStates } from '../planning/discovery.ts'
+import { simulateGovernanceDeployment } from '../planning/simulation.ts'
+import { ensureGovernanceProvidersRegistered } from '../providers/informatica/bootstrap.ts'
 
 export async function planGovernanceDeploymentForPrincipal(principalId:string,desired:GovernanceDesiredState){
  await authorizeProject(principalId,desired.projectId,'catalog.read')
@@ -49,7 +49,10 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
  const operations=orderProviderGovernanceOperations(deployment.operations)
  const results:Record<string,unknown>[]=[]
  const byOperation=new Map<string,Record<string,unknown>>()
+ const checkpointStore=new SupabaseGovernanceCheckpointStore(input.desired.projectId)
+ const evidenceStore=new SupabaseGovernanceEvidenceStore()
  const dependencies={
+  checkpointStore,evidenceStore,
   authorize:(projectId:string,capability:Parameters<typeof authorizeProject>[2])=>authorizeProject(input.principalId,projectId,capability).then(()=>undefined),
   executionController:createGovernanceExecutionController(),
   policyDecisionProvider:createGovernancePolicyDecisionProvider(),
