@@ -8,6 +8,10 @@ export type LearningExperimentCaseInput = {
   inputArtifactRef: string
   inputArtifactHash: string
   payload: unknown
+  baselineExecutableArtifactRef: string
+  baselineExecutableArtifactHash: string
+  candidateExecutableArtifactRef: string
+  candidateExecutableArtifactHash: string
 }
 
 export type PreparedLearningExperimentAttempt = {
@@ -70,6 +74,8 @@ export interface LearningExperimentEvidenceStore {
     arm: LearningExperimentArm
     version: string
     attemptKey: string
+    executableArtifactRef: string
+    executableArtifactHash: string
     inputArtifactRef: string
     inputArtifactHash: string
   }): Promise<PreparedLearningExperimentAttempt>
@@ -169,7 +175,12 @@ export class GovernedPairedLearningExperimentRunner {
       seen.add(item.caseKey)
       required(item.sourceCaseRef, 'sourceCaseRef')
       required(item.inputArtifactRef, 'inputArtifactRef')
+      required(item.baselineExecutableArtifactRef, 'baselineExecutableArtifactRef')
+      required(item.candidateExecutableArtifactRef, 'candidateExecutableArtifactRef')
       if (!SHA256.test(item.inputArtifactHash)) throw new Error('inputArtifactHash must be sha256')
+      if (!SHA256.test(item.baselineExecutableArtifactHash)) throw new Error('baselineExecutableArtifactHash must be sha256')
+      if (!SHA256.test(item.candidateExecutableArtifactHash)) throw new Error('candidateExecutableArtifactHash must be sha256')
+      if (item.baselineExecutableArtifactHash === item.candidateExecutableArtifactHash) throw new Error('baseline and candidate executable artifacts must differ')
     }
 
     const runId = await this.store.createRun({
@@ -187,6 +198,8 @@ export class GovernedPairedLearningExperimentRunner {
       for (const arm of ['BASELINE', 'CANDIDATE'] as const) {
         input.signal?.throwIfAborted()
         const version = arm === 'BASELINE' ? baselineVersion : candidateVersion
+        const executableArtifactRef = arm === 'BASELINE' ? item.baselineExecutableArtifactRef : item.candidateExecutableArtifactRef
+        const executableArtifactHash = arm === 'BASELINE' ? item.baselineExecutableArtifactHash : item.candidateExecutableArtifactHash
         const attempt = await this.store.prepareAttempt({
           projectId,
           runId,
@@ -194,6 +207,8 @@ export class GovernedPairedLearningExperimentRunner {
           arm,
           version,
           attemptKey: `${item.caseKey}:${arm}:1`,
+          executableArtifactRef,
+          executableArtifactHash,
           inputArtifactRef: item.inputArtifactRef,
           inputArtifactHash: item.inputArtifactHash,
         })
