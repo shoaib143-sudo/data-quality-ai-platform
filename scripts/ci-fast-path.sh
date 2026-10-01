@@ -15,6 +15,7 @@ node --experimental-strip-types --test tests/derived-state-rebuild.test.mjs
 node --experimental-strip-types --test tests/retention-policy-input.test.mjs
 node --experimental-strip-types --test tests/incident-resolution-integrity.test.mjs tests/remediation-verification-integrity.test.mjs
 node --experimental-strip-types --test scripts/test-*orchestrator*.mjs
+pnpm run verify:learning-experiment-runner
 pnpm run verify:agent-portfolio
 pnpm run verify:lineage-explorer
 pnpm exec tsc --noEmit
