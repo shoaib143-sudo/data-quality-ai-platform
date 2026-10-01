@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { executeGovernedProviderOperation } from '../lib/governance-platform/execution/runner.ts'
+import { executeGovernedProviderOperation,preflightGovernedProviderOperation } from '../lib/governance-platform/execution/runner.ts'
 import { InMemoryGovernanceEvidenceStore } from '../lib/governance-platform/evidence/store.ts'
 import { clearGovernanceProvidersForTests,registerGovernanceProvider } from '../lib/governance-platform/providers/registry.ts'
 
@@ -78,5 +78,21 @@ test('pending async work resumes through provider status polling and verificatio
  const resumed=await executeGovernedProviderOperation(operation,dependencies(checkpointStore,evidenceStore))
  assert.equal(resumed.status,'VERIFIED');assert.equal(resumed.resumed,true)
  assert.equal(executes,1);assert.equal(polls,1);assert.equal(stored.status,'VERIFIED')
+ clearGovernanceProvidersForTests()
+})
+
+
+test('deployment preflight can discover approval requirements without executing provider mutations',async()=>{
+ clearGovernanceProvidersForTests()
+ let executes=0
+ registerGovernanceProvider({
+  manifest:()=>({provider:'fake',providerVersion:'1',canonicalSchemaVersion:'1.0',capabilities:[{capability:'catalog.asset.create',support:'FULL',modes:['CREATE'],consistency:'STRONG',execution:'SYNC',idempotency:'DATANEXUS_MANAGED',rollback:'NONE',verification:'READ_BACK'}]}),
+  capabilities:async function(){return this.manifest().capabilities},discover:async()=>({objects:[],projections:[],observedAt:new Date().toISOString()}),
+  execute:async op=>{executes++;return{operationId:op.operationId,status:'SUCCEEDED'}},verify:async op=>({operationId:op.operationId,status:'VERIFIED'}),
+ })
+ const deps={authorize:async()=>{},executionController:{assertAllowed:async()=>({mode:'RUNNING'})},policyDecisionProvider:{decide:async input=>({decision:input.targetType==='BUSINESS_TERM'?'REQUIRE_APPROVAL':'ALLOW',reason:'test'})}}
+ const ready=await preflightGovernedProviderOperation(operation,deps)
+ const approval=await preflightGovernedProviderOperation({...operation,operationId:'op-2',object:{...operation.object,type:'BUSINESS_TERM'}},deps)
+ assert.equal(ready.status,'READY');assert.equal(approval.status,'APPROVAL_REQUIRED');assert.equal(executes,0)
  clearGovernanceProvidersForTests()
 })
