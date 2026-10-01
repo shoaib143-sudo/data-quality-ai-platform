@@ -43,3 +43,12 @@ test('provider capability endpoint is authenticated, project scoped, and exposes
  assert.match(source,/validateProviderManifest/)
  assert.match(source,/private, no-store/)
 })
+
+
+test('execution status uses the aggregate deployment id returned by apply',()=>{
+ const route=read('app/api/governance-platform/status/route.ts')
+ const service=read('lib/governance-platform/runtime/service.ts')
+ assert.match(route,/deploymentId/)
+ assert.doesNotMatch(route,/searchParams\.get\('planId'\)/)
+ assert.match(service,/listByDeployment\(projectId,deploymentId\)/)
+})
