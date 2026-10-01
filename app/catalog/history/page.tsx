@@ -6,7 +6,7 @@ import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { MetadataVersionCompare } from '@/components/catalog/metadata-version-compare'
 
-type PhysicalVersion={id:string;source_id:string;asset_key:string;asset_type:string;namespace:string|null;name:string;version_number:number;is_current:boolean;structure_hash:string|null;first_seen_at:string;last_seen_at:string;retired_at:string|null}
+type PhysicalVersion={id:string;source_id:string;asset_key:string;asset_type:string;namespace:string|null;name:string;columns:unknown[];version_number:number;is_current:boolean;structure_hash:string|null;first_seen_at:string;last_seen_at:string;retired_at:string|null}
 type AnnotationVersion={id:string;source_id:string;asset_key:string;version_number:number;is_current:boolean;annotation_hash:string;annotations:Record<string,unknown>;first_seen_at:string;last_seen_at:string}
 
 function short(value:string|null|undefined){return value?value.slice(0,12):'N/A'}
@@ -18,7 +18,7 @@ export default async function MetadataHistoryPage({searchParams}:{searchParams:P
   const query=(q??'').trim().toLowerCase().slice(0,120)
 
   const [physicalResult,annotationResult]=await Promise.all([
-    supabase.schema('catalog').from('discovered_asset_versions').select('id,source_id,asset_key,asset_type,namespace,name,version_number,is_current,structure_hash,first_seen_at,last_seen_at,retired_at').order('last_seen_at',{ascending:false}).limit(1000),
+    supabase.schema('catalog').from('discovered_asset_versions').select('id,source_id,asset_key,asset_type,namespace,name,columns,version_number,is_current,structure_hash,first_seen_at,last_seen_at,retired_at').order('last_seen_at',{ascending:false}).limit(1000),
     supabase.schema('catalog').from('source_annotation_versions').select('id,source_id,asset_key,version_number,is_current,annotation_hash,annotations,first_seen_at,last_seen_at').order('last_seen_at',{ascending:false}).limit(1000),
   ])
 
