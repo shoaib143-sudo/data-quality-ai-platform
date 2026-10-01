@@ -13,6 +13,8 @@ export type ReasoningRequest = {
   maxOutputTokens?: number
   /** Execution-owned cancellation/deadline. Aborting does not prove zero provider charges. */
   signal?: AbortSignal
+  /** Server experiment execution disables fallback so every paid attempt needs its own reservation. */
+  allowFallback?: boolean
 }
 
 export type ReasoningUsage = {

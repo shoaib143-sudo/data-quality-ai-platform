@@ -41,6 +41,12 @@ on:
       - 'app/admin/ai-command-center/page.tsx'
       - 'scripts/test-governed-learning-command-center.mjs'
       - 'scripts/test-pgcl-command-center-observability.mjs'
+      - 'lib/ai/learning-experiment-budget.ts'
+      - 'lib/ai/governance-learning-experiment-budget.ts'
+      - 'scripts/test-learning-experiment-budget-runtime.mjs'
+      - 'scripts/test-learning-experiment-budget.sql'
+      - 'scripts/run-learning-experiment-budget-fixture.sh'
+      - 'supabase/migrations/20261001004136_governed_learning_experiment_budget.sql'
       - 'lib/agents/learning-evaluation-policy.ts'
       - 'scripts/test-learning-evaluation-policy.mjs'
       - 'lib/agents/governed-learning-evaluation-service.ts'
@@ -134,6 +140,12 @@ on:
       - 'app/admin/ai-command-center/page.tsx'
       - 'scripts/test-governed-learning-command-center.mjs'
       - 'scripts/test-pgcl-command-center-observability.mjs'
+      - 'lib/ai/learning-experiment-budget.ts'
+      - 'lib/ai/governance-learning-experiment-budget.ts'
+      - 'scripts/test-learning-experiment-budget-runtime.mjs'
+      - 'scripts/test-learning-experiment-budget.sql'
+      - 'scripts/run-learning-experiment-budget-fixture.sh'
+      - 'supabase/migrations/20261001004136_governed_learning_experiment_budget.sql'
       - 'lib/agents/learning-evaluation-policy.ts'
       - 'scripts/test-learning-evaluation-policy.mjs'
       - 'lib/agents/governed-learning-evaluation-service.ts'
@@ -224,6 +236,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-supervisor.mjs
       - name: Run priority-agent PGCL hook tests
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs
+      - name: Run learning experiment runtime budget tests
+        run: node --experimental-strip-types scripts/test-learning-experiment-budget-runtime.mjs
       - name: Run prospective evaluation policy behavior tests
         run: node --experimental-strip-types scripts/test-learning-evaluation-policy.mjs
       - name: Run prospective evaluation release admission tests
@@ -288,3 +302,31 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-learning-benchmark-dataset-manifest.sql
+
+  learning-budget-database:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Execute isolated learning budget admission and concurrency fixture
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGDATABASE: postgres
+          PGPASSWORD: postgres
+        run: bash scripts/run-learning-experiment-budget-fixture.sh
