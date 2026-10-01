@@ -172,3 +172,15 @@ test('BI workbench can persist imported metadata through the governed lineage in
   assert.match(workbench,/integrationType:provider/)
   assert.match(workbench,/sourceKey:/)
 })
+
+
+test('catalog metadata approval workflow applies only approved proposals and records application',()=>{
+  const route=fs.readFileSync('app/api/catalog/[datasetId]/proposal/route.ts','utf8')
+  const ui=fs.readFileSync('components/catalog/dataset-metadata-history.tsx','utf8')
+  assert.match(route,/action==='APPLY'/)
+  assert.match(route,/instance\.status!=='APPROVED'/)
+  assert.match(route,/CATALOG_METADATA_CHANGE_APPLIED/)
+  assert.match(route,/applied_at/)
+  assert.match(ui,/Apply approved change/)
+  assert.match(ui,/action:'APPLY'/)
+})
