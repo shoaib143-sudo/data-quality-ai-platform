@@ -3,10 +3,12 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject,authorizationErrorResponse } from '@/lib/auth/authorize'
 import { listGovernanceProviders } from '@/lib/governance-platform/providers/registry'
 import { validateProviderManifest } from '@/lib/governance-platform/providers/conformance'
+import { ensureGovernanceProvidersRegistered } from '@/lib/governance-platform/providers/informatica/bootstrap'
 
 export async function GET(request:Request){
  try{
   const user=await requireApiUser()
+  ensureGovernanceProvidersRegistered()
   const projectId=new URL(request.url).searchParams.get('projectId')?.trim()
   if(!projectId)return NextResponse.json({error:'projectId is required.'},{status:400})
   await authorizeProject(user.id,projectId,'catalog.read')
