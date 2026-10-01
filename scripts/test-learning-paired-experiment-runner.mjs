@@ -148,7 +148,9 @@ for (const invariant of [
   'ambiguous prior experiment attempt has no terminal evidence',
   'synthetic experiment arm cannot bind paid runtime evidence',
   'live successful arm requires canonical accounted settlement',
-  'baseline and candidate', // migration has separate arm/version constraints and result binding
+  'baseline successful result not found',
+  'candidate successful result not found',
+  'case score arm/result binding mismatch',
   'derive_learning_experiment_summary',
   'bind_learning_experiment_decision',
   'synthetic experiment cannot bind a release-admission decision',
