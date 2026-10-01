@@ -21,6 +21,15 @@ test('reconciler reports drift then converges to in sync',()=>{
  assert.equal(reconcileGovernanceState(desired,[object]).status,'IN_SYNC')
 })
 
+test('drift modes distinguish report, recommendation, and governed auto reconcile intent',()=>{
+ const report=reconcileGovernanceState(desired,[],{mode:'REPORT'})
+ const recommend=reconcileGovernanceState(desired,[],{mode:'RECOMMEND'})
+ const automatic=reconcileGovernanceState(desired,[],{mode:'AUTO_RECONCILE'})
+ assert.equal(report.recommendation,null);assert.equal(report.autoReconcileRequested,false)
+ assert.equal(recommend.recommendation,'APPLY_PLAN');assert.equal(recommend.autoReconcileRequested,false)
+ assert.equal(automatic.recommendation,'APPLY_PLAN');assert.equal(automatic.autoReconcileRequested,true)
+})
+
 test('absence remains unmanaged rather than destructive',()=>{
  assert.equal(reconcileGovernanceState({...desired,objects:[]},[object]).status,'IN_SYNC')
 })
