@@ -11,7 +11,7 @@ export type GovernanceMcpToolDefinition={
 }
 
 function inputSchema(name:GovernanceMcpToolName):Record<string,unknown>{
- if(name==='governance.status')return{type:'object',properties:{projectId:projectSchema,planId:{type:'string',minLength:1}},required:['projectId','planId'],additionalProperties:false}
+ if(name==='governance.status')return{type:'object',properties:{projectId:projectSchema,deploymentId:{type:'string',minLength:1}},required:['projectId','deploymentId'],additionalProperties:false}
  if(name==='governance.apply')return{
   type:'object',
   properties:{
