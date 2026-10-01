@@ -7,13 +7,13 @@ const { GovernedPairedLearningExperimentRunner } = await import('../lib/agents/g
 const h = c => `sha256:${c.repeat(64)}`
 const cases = [
   {
-    caseKey: 'a'.repeat(64), sourceCaseRef: 'case:a', inputArtifactRef: 'artifact:input:a', inputArtifactHash: h('1'),
+    caseKey: 'a'.repeat(64), inputArtifactRef: 'artifact:input:a', inputArtifactHash: h('1'),
     baselineExecutableArtifactRef: 'artifact:baseline', baselineExecutableArtifactHash: h('2'),
     candidateExecutableArtifactRef: 'artifact:candidate', candidateExecutableArtifactHash: h('3'),
     payload: { id: 'a' },
   },
   {
-    caseKey: 'b'.repeat(64), sourceCaseRef: 'case:b', inputArtifactRef: 'artifact:input:b', inputArtifactHash: h('4'),
+    caseKey: 'b'.repeat(64), inputArtifactRef: 'artifact:input:b', inputArtifactHash: h('4'),
     baselineExecutableArtifactRef: 'artifact:baseline', baselineExecutableArtifactHash: h('2'),
     candidateExecutableArtifactRef: 'artifact:candidate', candidateExecutableArtifactHash: h('3'),
     payload: { id: 'b' },
@@ -33,6 +33,7 @@ function memoryStore() {
           if (!terminal) throw new Error('ambiguous existing experiment attempt has no terminal evidence')
           return {
             ...existing,
+            sourceCaseRef: existing.sourceCaseRef ?? `manifest:${input.caseKey}`,
             reused: true,
             terminalResultId: terminal.id,
             terminalStatus: terminal.execution.terminalStatus,
@@ -43,6 +44,7 @@ function memoryStore() {
           attemptId: `22222222-2222-4222-8222-${String(state.attempts.length + 1).padStart(12, '0')}`,
           executionCorrelationId: `33333333-3333-4333-8333-${String(state.attempts.length + 1).padStart(12, '0')}`,
           attemptNumber: 1,
+          sourceCaseRef: `manifest:${input.caseKey}`,
           reused: false,
         }
         state.attempts.push(item)
