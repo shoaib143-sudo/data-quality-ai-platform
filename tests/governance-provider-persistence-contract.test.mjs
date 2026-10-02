@@ -42,4 +42,5 @@ test('deployment evidence schema matches the runtime store and is database-immut
  assert.match(sql,/put_platform_execution_checkpoint/)
  assert.match(sql,/GOVERNANCE_CHECKPOINT_FENCED/)
  assert.match(sql,/and claim_generation = p_claim_generation/)
+ assert.match(sql,/revoke update on governance\.platform_execution_checkpoints from service_role/)
 })
