@@ -63,3 +63,47 @@ export function detectFederationConflicts(records:FederatedMetadataRecord[]){
     return [{key,records:items,descriptionConflict:descriptions.size>1,ownerVariants:[...owners],authorities:[...authorities]}]
   })
 }
+
+
+const authorityPriority:Record<FederationAuthority,number>={DATANEXUS:3,SOURCE:2,EXTERNAL_CATALOG:1}
+
+export type FederatedMetadataResolution={
+  key:string
+  selected:FederatedMetadataRecord
+  alternatives:FederatedMetadataRecord[]
+  reason:string
+  mergedTags:string[]
+  mergedClassifications:string[]
+}
+
+export function resolveFederatedMetadata(records:FederatedMetadataRecord[]):FederatedMetadataResolution[]{
+  const byKey=new Map<string,FederatedMetadataRecord[]>()
+  for(const item of records){
+    const key=federationConflictKey(item)
+    byKey.set(key,[...(byKey.get(key)??[]),item])
+  }
+  return [...byKey.entries()].map(([key,items])=>{
+    const ordered=[...items].sort((a,b)=>{
+      const authorityDelta=authorityPriority[b.authority]-authorityPriority[a.authority]
+      if(authorityDelta)return authorityDelta
+      const observedA=a.observedAt?Date.parse(a.observedAt):0
+      const observedB=b.observedAt?Date.parse(b.observedAt):0
+      if(observedB!==observedA)return observedB-observedA
+      return a.sourceCatalog.localeCompare(b.sourceCatalog)||a.externalId.localeCompare(b.externalId)
+    })
+    const selected=ordered[0]
+    const alternatives=ordered.slice(1)
+    const mergedTags=[...new Set(ordered.flatMap(item=>item.tags))].sort()
+    const mergedClassifications=[...new Set(ordered.flatMap(item=>item.classifications))].sort()
+    return {
+      key,
+      selected,
+      alternatives,
+      reason:alternatives.length
+        ? `Selected ${selected.authority} authority from ${selected.sourceCatalog}; lower-priority records remain preserved as provenance.`
+        : `Single authoritative record from ${selected.sourceCatalog}.`,
+      mergedTags,
+      mergedClassifications,
+    }
+  })
+}
