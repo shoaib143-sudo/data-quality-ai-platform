@@ -58,3 +58,12 @@ These are treated as explicit boundaries, not silently inferred PASS states.
 Post Implementation = COMPLETE only when every required item is PASS or has an explicit, justified, non-release-blocking NOT_APPLICABLE/DEFERRED state permitted by the governing contract.
 
 R3 authorization, governance truth, evidence integrity, and production provenance are never converted to PASS through waiver or assumption.
+
+
+## Double-check findings
+
+The closure audit found one structural evidence-wiring gap: AI Governance Program Certification, Recovery Assurance, and Governed Shadow Evaluation were contract-bound but were not guaranteed to run when only final closure artifacts changed. The adopted correction binds those workflows, and the consolidated Post Implementation Assurance workflow, to final closure-head changes.
+
+No release-blocking R3 authorization, governance-truth, or evidence-integrity exception has been accepted. No exception record matching the governing contract's required schema was identified. Production-only verification remains an explicit boundary and is not inferred from CI.
+
+The staged verification performed by the governed Vercel release workflow before production alias promotion is the canary-equivalent release validation for the Vercel path; it remains pending until explicit production deployment approval.
