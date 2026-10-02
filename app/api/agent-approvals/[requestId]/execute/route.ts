@@ -4,6 +4,8 @@ import { authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { currentExecutionFingerprint, validateApprovalForExecution } from '@/lib/governance/agent-approval-service'
 import { resumeGovernanceOrchestratorAfterApproval } from '@/lib/orchestration/governance-orchestrator-approval-service'
+import type { GovernanceDesiredState } from '@/lib/governance-platform/desired-state/model'
+import { applyGovernanceDeploymentForPrincipal } from '@/lib/governance-platform/runtime/service'
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -69,6 +71,20 @@ export async function POST(request: Request, context: { params: Promise<{ reques
         projectId: approval.project_id,
         approvalRequestId: approval.id,
       }
+    } else if (approval.action_key === 'APPLY_GOVERNANCE_DEPLOYMENT') {
+      const desiredState = record(parameters.desiredState) as unknown as GovernanceDesiredState
+      const expectedDeploymentFingerprint = String(parameters.expectedDeploymentFingerprint ?? '').trim()
+      if (!desiredState.projectId || String(desiredState.projectId) !== String(approval.project_id) || !expectedDeploymentFingerprint) {
+        return NextResponse.json({ error: 'Governance deployment approval payload is incomplete or no longer project-bound.' }, { status: 409 })
+      }
+      const result = await applyGovernanceDeploymentForPrincipal({
+        principalId: user.id,
+        desired: desiredState,
+        expectedDeploymentFingerprint,
+        confirmDestructive: parameters.confirmDestructive === true,
+        approvalRequestId: String(approval.id),
+      })
+      return NextResponse.json(result, { status: result.accepted ? 202 : 409 })
     } else {
       return NextResponse.json({ error: 'This requested action is not yet executable from the approval inbox.' }, { status: 409 })
     }
