@@ -10,6 +10,7 @@ export function isJevShadowRuntimeEnabled() {
 
 export type DecisionRuntimeStatus = {
   configured: boolean
+  shadowRuntimeEnabled: boolean
   providerId: string | null
   providerState: 'AVAILABLE' | 'BYPASSED'
   lifecycle: Record<BuiltinDecisionFamily, 'SHADOW' | 'ADVISORY' | 'ACTIVE' | 'DRAFT' | 'RETIRED'>
@@ -18,10 +19,12 @@ export type DecisionRuntimeStatus = {
 
 export function readDecisionRuntimeStatus(): DecisionRuntimeStatus {
   const provider = getJevDecisionProvider()
+  const shadowRuntimeEnabled = isJevShadowRuntimeEnabled()
   return {
     configured: Boolean(provider),
+    shadowRuntimeEnabled,
     providerId: provider?.id ?? null,
-    providerState: provider ? 'AVAILABLE' : 'BYPASSED',
+    providerState: provider && shadowRuntimeEnabled ? 'AVAILABLE' : 'BYPASSED',
     lifecycle: {
       TOOL_RISK: getDecisionDefinition('TOOL_RISK').lifecycle,
       PROMPT_SECURITY: getDecisionDefinition('PROMPT_SECURITY').lifecycle,
