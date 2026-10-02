@@ -44,6 +44,7 @@ create table agent.learning_evaluation_policies(
   candidate_version text not null,
   evaluator_actor_id text not null,
   manifest_hash text not null,
+  locked_at timestamptz not null,
   sample_size integer not null,
   created_at timestamptz not null default now(),
   unique(id,project_id),
@@ -69,10 +70,10 @@ insert into agent.learning_benchmark_dataset_cases(dataset_id,project_id,case_ke
 values(:'manifest_id',:'project_id',:'case_key','HELD_OUT','case://held-out-1');
 insert into agent.learning_evaluation_policies(
   id,project_id,candidate_id,dataset_manifest_id,baseline_version,candidate_version,
-  evaluator_actor_id,manifest_hash,sample_size,created_at
+  evaluator_actor_id,manifest_hash,locked_at,sample_size,created_at
 ) values(
   :'policy_id',:'project_id',:'candidate_id',:'manifest_id','baseline-v1','candidate-v2',
-  'independent-evaluator','sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',1,now()
+  'independent-evaluator','sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',now()-interval '1 minute',1,now()
 );
 
 select (agent.begin_learning_prospective_experiment(
@@ -148,11 +149,11 @@ insert into agent.learning_benchmark_dataset_cases(dataset_id,project_id,case_ke
 ('30000000-0000-4000-8000-000000000002',:'project_id','dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd','HELD_OUT','case://d');
 insert into agent.learning_evaluation_policies(
   id,project_id,candidate_id,dataset_manifest_id,baseline_version,candidate_version,
-  evaluator_actor_id,manifest_hash,sample_size,created_at
+  evaluator_actor_id,manifest_hash,locked_at,sample_size,created_at
 ) values(
   '40000000-0000-4000-8000-000000000002',:'project_id','20000000-0000-4000-8000-000000000002',
   '30000000-0000-4000-8000-000000000002','baseline-v1','candidate-v2','independent-evaluator',
-  'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',1,now()
+  'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',now()-interval '1 minute',1,now()
 );
 do $$
 begin
