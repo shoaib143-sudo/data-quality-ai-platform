@@ -3,6 +3,7 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeProject, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { publishGovernanceChangeAlert } from '@/lib/observability/governance-change-alert'
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 function text(v:unknown){return typeof v==='string'?v.trim():''}
@@ -89,13 +90,33 @@ export async function POST(request:Request){
       const context=record(instance.data.context)
       if(context.applied_at)return NextResponse.json({status:'APPLIED',reused:true,edgeId:context.applied_edge_id??null})
       const sourceId=text(context.source_asset_id),targetId=text(context.target_asset_id),relationship=text(context.relationship)
+      const assets=await admin.schema('governance').from('lineage_assets').select('id,name,dataset_id').eq('project_id',instance.data.project_id).in('id',[sourceId,targetId])
+      if(assets.error)throw new Error(assets.error.message)
       const applied=await admin.schema('governance').rpc('upsert_manual_lineage_edge',{p_project_id:instance.data.project_id,p_actor:user.id,p_source_type:'EXTERNAL_ASSET',p_source_id:sourceId,p_target_type:'EXTERNAL_ASSET',p_target_id:targetId,p_relationship:relationship,p_metadata:{correction_workflow_instance_id:instanceId,correction_id:instance.data.entity_id,correction_note:context.note??null,authority:'HUMAN_APPROVED_MANUAL'}})
       if(applied.error)throw new Error(applied.error.message)
       const result=record(applied.data)
       const updatedContext={...context,applied_at:new Date().toISOString(),applied_by:user.id,applied_edge_id:result.id??null,production_mutation_performed:true}
       const updated=await admin.schema('governance').from('workflow_instances').update({context:updatedContext}).eq('id',instanceId)
       if(updated.error)throw new Error(updated.error.message)
-      return NextResponse.json({status:'APPLIED',reused:false,edgeId:result.id??null})
+
+      const datasetIds=[...new Set((assets.data??[]).map(asset=>asset.dataset_id).filter((value):value is string=>typeof value==='string'&&Boolean(value)))]
+      const sourceName=String((assets.data??[]).find(asset=>asset.id===sourceId)?.name??sourceId)
+      const targetName=String((assets.data??[]).find(asset=>asset.id===targetId)?.name??targetId)
+      const changeAlerts=[]
+      for(const datasetId of datasetIds){
+        changeAlerts.push(await publishGovernanceChangeAlert({
+          projectId:instance.data.project_id,
+          datasetId,
+          category:'LINEAGE_CHANGE',
+          severity:'MEDIUM',
+          title:'Approved lineage correction applied',
+          description:`Approved manual lineage evidence changed ${sourceName} → ${targetName} (${relationship}).`,
+          fingerprint:`lineage-change:${datasetId}:${instanceId}`,
+          evidence:{workflow_instance_id:instanceId,source_asset_id:sourceId,target_asset_id:targetId,relationship,authority:'HUMAN_APPROVED_MANUAL'},
+          notificationsEnvKey:'LINEAGE_CHANGE_NOTIFICATIONS_ENABLED',
+        }))
+      }
+      return NextResponse.json({status:'APPLIED',reused:false,edgeId:result.id??null,changeAlerts})
     }
 
     return NextResponse.json({error:'action must be PROPOSE or APPLY.'},{status:400})
