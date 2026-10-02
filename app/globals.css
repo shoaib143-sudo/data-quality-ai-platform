@@ -589,6 +589,30 @@
   .dn-app-rail-menu-list svg { width: 18px; height: 18px; }
 }
 
+/* Dashboard V3 navigation hardening: explicit current state and comfortable target geometry. */
+.dn-app-rail-link[aria-current='page'] {
+  box-shadow: inset 0 0 0 1px #ffffff42, 0 7px 18px #24197a2b;
+}
+.dn-topbar-link.is-active,
+.dn-utility-link.is-active {
+  color: #5146bd !important;
+  background: #f0edff !important;
+  box-shadow: inset 0 0 0 1px #d9d3fb;
+}
+.dn-app-rail-menu-list [aria-current='page'] {
+  font-weight: 780;
+}
+@media (pointer: coarse) {
+  .dn-app-rail-link,
+  .dn-app-rail-menu summary,
+  .dn-app-rail-menu-list a,
+  .dn-topbar-link,
+  .dn-utility-link {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 /* Persona home retains its specialized navigation while sharing the violet wayfinding language. */
 .dn-persona-sidebar { border-color: #776aee70 !important; background: linear-gradient(165deg,#5040c6,#5c50db 58%,#4438ad) !important; box-shadow: 11px 12px 28px #1d166e30 !important; }
 .dn-persona-sidebar nav a { color: #e6e2ff; }

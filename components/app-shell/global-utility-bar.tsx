@@ -1,7 +1,11 @@
+'use client'
+
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { Activity, Bell, ClipboardCheck, Compass, Database, Layers3, Search, Settings, ShieldCheck, Sparkles } from 'lucide-react'
 import { SkipToContent } from '@/components/app-shell/skip-to-content'
 import { WorkspaceRail } from '@/components/app-shell/workspace-rail'
+import { isWorkspacePathActive, workspaceNavItems } from '@/components/app-shell/workspace-navigation'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-policy'
 import type { PersonaSlug } from '@/lib/governance/personas'
 
@@ -13,16 +17,16 @@ type Props = {
   organizationRole?: string | null
 }
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: Layers3 },
-  { href: '/catalog', label: 'Data', icon: Database },
-  { href: '/data-quality', label: 'Quality', icon: ShieldCheck },
-  { href: '/journeys', label: 'Governance', icon: Compass },
-  { href: '/agents', label: 'AI Agents', icon: Sparkles },
-  { href: '/monitoring', label: 'Monitor', icon: Activity },
-  { href: '/approvals', label: 'Approvals', icon: ClipboardCheck },
-  { href: '/admin', label: 'Admin', icon: Settings },
-]
+const icons = {
+  '/dashboard': Layers3,
+  '/catalog': Database,
+  '/data-quality': ShieldCheck,
+  '/journeys': Compass,
+  '/agents': Sparkles,
+  '/monitoring': Activity,
+  '/approvals': ClipboardCheck,
+  '/admin': Settings,
+} as const
 
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#050b17]'
 
@@ -33,8 +37,11 @@ export function GlobalUtilityBar({
   persona,
   organizationRole,
 }: Props) {
+  const pathname = usePathname()
   const resolvedHomeHref = homeHref ?? (persona && !canAccessWorkspaceHref(persona, '/dashboard', organizationRole) ? '/home' : '/dashboard')
-  const visibleNavItems = persona ? navItems.filter(item => canAccessWorkspaceHref(persona, item.href, organizationRole)) : navItems
+  const visibleNavItems = persona ? workspaceNavItems.filter(item => canAccessWorkspaceHref(persona, item.href, organizationRole)) : workspaceNavItems
+  const searchActive = isWorkspacePathActive(pathname, '/search')
+  const inboxActive = isWorkspacePathActive(pathname, '/inbox')
 
   return (
     <>
@@ -51,27 +58,33 @@ export function GlobalUtilityBar({
           </Link>
 
           <nav className="dn-topbar-primary order-3 flex w-full gap-0.5 overflow-x-auto sm:order-none sm:w-auto" aria-label="Primary">
-            {visibleNavItems.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-400 hover:bg-cyan-300/[0.06] hover:text-cyan-100 ${focus}`}
-              >
-                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                {label}
-              </Link>
-            ))}
+            {visibleNavItems.map(({ href, shortLabel }) => {
+              const Icon = icons[href]
+              const active = isWorkspacePathActive(pathname, href)
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? 'page' : undefined}
+                  data-workspace-current={active ? 'true' : undefined}
+                  className={`dn-topbar-link inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-400 hover:bg-cyan-300/[0.06] hover:text-cyan-100 ${active ? 'is-active' : ''} ${focus}`}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {shortLabel}
+                </Link>
+              )
+            })}
           </nav>
 
           <div className="flex items-center gap-1.5 pr-12">
             {(!persona || canAccessWorkspaceHref(persona, '/search', organizationRole)) ? (
-              <Link href="/search" className={`dn-control inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-cyan-100 ${focus}`} aria-label="Search DataNexus">
+              <Link href="/search" aria-current={searchActive ? 'page' : undefined} className={`dn-control dn-utility-link inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-cyan-100 ${searchActive ? 'is-active' : ''} ${focus}`} aria-label="Search DataNexus">
                 <Search className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="hidden lg:inline">Search</span>
               </Link>
             ) : null}
             {(!persona || canAccessWorkspaceHref(persona, '/inbox', organizationRole)) ? (
-              <Link href="/inbox" className={`dn-control inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-cyan-100 ${focus}`} aria-label="Open governance inbox">
+              <Link href="/inbox" aria-current={inboxActive ? 'page' : undefined} className={`dn-control dn-utility-link inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-cyan-100 ${inboxActive ? 'is-active' : ''} ${focus}`} aria-label="Open governance inbox">
                 <Bell className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="hidden lg:inline">Inbox</span>
               </Link>
