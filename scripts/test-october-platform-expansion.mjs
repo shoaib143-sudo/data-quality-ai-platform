@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { normalizeFederatedMetadata, detectFederationConflicts } from '../lib/catalog/metadata-federation.ts'
+import { normalizeFederatedMetadata, detectFederationConflicts, resolveFederatedMetadata } from '../lib/catalog/metadata-federation.ts'
 import { normalizeLineagePayload } from '../lib/governance/lineage-adapters.ts'
 import { scanSourceArtifact } from '../lib/connectors/source-artifact-scanner.ts'
 import { normalizeBiMetadata } from '../lib/connectors/bi-metadata.ts'
@@ -342,4 +342,19 @@ test('source connection validation persists bounded health evidence for observab
   assert.match(observability,/connection_metadata/)
   assert.match(observability,/Connection health/)
   assert.match(observability,/No persisted connection check/)
+})
+
+
+test('metadata federation resolves authority deterministically without deleting lower-priority provenance',()=>{
+  const records=normalizeFederatedMetadata({items:[
+    {id:'external',namespace:'sales',name:'customer',description:'External',authority:'EXTERNAL_CATALOG',tags:['external']},
+    {id:'source',namespace:'sales',name:'customer',description:'Source native',authority:'SOURCE',tags:['source']},
+    {id:'dn',namespace:'sales',name:'customer',description:'Governed',authority:'DATANEXUS',tags:['governed']},
+  ]},'catalog-a')
+  const resolved=resolveFederatedMetadata(records)
+  assert.equal(resolved.length,1)
+  assert.equal(resolved[0].selected.authority,'DATANEXUS')
+  assert.equal(resolved[0].alternatives.length,2)
+  assert.deepEqual(resolved[0].mergedTags,['external','governed','source'])
+  assert.match(resolved[0].reason,/lower-priority records remain preserved as provenance/)
 })
