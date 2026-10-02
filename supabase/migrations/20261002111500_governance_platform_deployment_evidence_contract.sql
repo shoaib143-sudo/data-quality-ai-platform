@@ -13,6 +13,10 @@ where deployment_id is null or btrim(deployment_id) = '';
 alter table governance.platform_execution_evidence
   alter column deployment_id set not null;
 
+alter table governance.platform_execution_checkpoints
+  add column if not exists claim_generation bigint not null default 0
+  check (claim_generation >= 0);
+
 create index if not exists platform_execution_evidence_deployment_idx
   on governance.platform_execution_evidence(project_id, deployment_id, recorded_at asc);
 
@@ -70,9 +74,9 @@ begin
 
   if not found then
     insert into governance.platform_execution_checkpoints (
-      project_id, plan_id, operation_id, idempotency_key, status, attempts, updated_at
+      project_id, plan_id, operation_id, idempotency_key, status, attempts, claim_generation, updated_at
     ) values (
-      p_project_id, p_plan_id, p_operation_id, p_idempotency_key, 'RUNNING', 1, v_now
+      p_project_id, p_plan_id, p_operation_id, p_idempotency_key, 'RUNNING', 1, 1, v_now
     )
     returning * into v_checkpoint;
     return jsonb_build_object('claimed', true, 'resume_action', 'EXECUTE', 'checkpoint', to_jsonb(v_checkpoint));
@@ -99,6 +103,7 @@ begin
   update governance.platform_execution_checkpoints
   set status = 'RUNNING',
       attempts = attempts + 1,
+      claim_generation = claim_generation + 1,
       updated_at = v_now
   where id = v_checkpoint.id
   returning * into v_checkpoint;
@@ -107,8 +112,59 @@ begin
 end;
 $function$;
 
+create or replace function governance.put_platform_execution_checkpoint(
+  p_project_id uuid,
+  p_idempotency_key text,
+  p_claim_generation bigint,
+  p_status text,
+  p_attempts integer,
+  p_provider_object_id text,
+  p_provider_job_id text,
+  p_execution_evidence jsonb,
+  p_verification_status text,
+  p_updated_at timestamptz
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_checkpoint governance.platform_execution_checkpoints%rowtype;
+begin
+  if p_claim_generation <= 0 then
+    raise exception 'Governance checkpoint write requires a positive claim generation.' using errcode = '22023';
+  end if;
+  if p_status not in ('PENDING','RUNNING','SUCCEEDED','FAILED','VERIFIED') then
+    raise exception 'Governance checkpoint status is invalid.' using errcode = '22023';
+  end if;
+
+  update governance.platform_execution_checkpoints
+  set status = p_status,
+      attempts = p_attempts,
+      provider_object_id = p_provider_object_id,
+      provider_job_id = p_provider_job_id,
+      execution_evidence = coalesce(p_execution_evidence, '{}'::jsonb),
+      verification_status = p_verification_status,
+      updated_at = coalesce(p_updated_at, now())
+  where project_id = p_project_id
+    and idempotency_key = p_idempotency_key
+    and claim_generation = p_claim_generation
+  returning * into v_checkpoint;
+
+  if not found then
+    raise exception 'GOVERNANCE_CHECKPOINT_FENCED: execution claim was superseded.';
+  end if;
+  return to_jsonb(v_checkpoint);
+end;
+$function$;
+
 revoke all on function governance.claim_platform_execution_checkpoint(uuid,text,text,text)
   from public, anon, authenticated;
+revoke all on function governance.put_platform_execution_checkpoint(uuid,text,bigint,text,integer,text,text,jsonb,text,timestamptz)
+  from public, anon, authenticated;
+grant execute on function governance.put_platform_execution_checkpoint(uuid,text,bigint,text,integer,text,text,jsonb,text,timestamptz)
+  to service_role;
 grant execute on function governance.claim_platform_execution_checkpoint(uuid,text,text,text)
   to service_role;
 
@@ -122,6 +178,11 @@ begin
       and is_nullable = 'NO'
   ) then
     raise exception 'Governance platform deployment evidence contract was not installed.';
+  end if;
+
+  if not has_function_privilege('service_role', 'governance.put_platform_execution_checkpoint(uuid,text,bigint,text,integer,text,text,jsonb,text,timestamptz)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'governance.put_platform_execution_checkpoint(uuid,text,bigint,text,integer,text,text,jsonb,text,timestamptz)', 'EXECUTE') then
+    raise exception 'Governance platform checkpoint write privilege boundary is incorrect.';
   end if;
 
   if not has_function_privilege('service_role', 'governance.claim_platform_execution_checkpoint(uuid,text,text,text)', 'EXECUTE')
