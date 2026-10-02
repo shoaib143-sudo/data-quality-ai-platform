@@ -14,6 +14,7 @@ import { OutputValidatedIntelligentRouter } from './output-validated-intelligent
 import { createReasoningProvider } from './reasoning-provider'
 import { evaluateModelAgainstRoutingPolicy } from './routing-policy'
 import { EvaluationAwareIntelligentRouter, type IntelligentModelRouter } from './intelligent-router'
+import { ShadowDecisionIntelligentRouter } from './model-routing-shadow'
 
 export function createGovernanceIntelligentRouter(options: { learningExperimentQuote?: LearningExperimentQuoteProvider } = {}): IntelligentModelRouter {
   const router = new EvaluationAwareIntelligentRouter({
@@ -25,7 +26,8 @@ export function createGovernanceIntelligentRouter(options: { learningExperimentQ
     resiliencePolicy: createGovernanceProviderResiliencePolicyProvider(),
   })
   const telemetry = createGovernanceTelemetryProvider()
-  const failClosedObservable = new FailClosedRouteTelemetryRouter(router, telemetry)
+  const shadowObserved = new ShadowDecisionIntelligentRouter(router)
+  const failClosedObservable = new FailClosedRouteTelemetryRouter(shadowObserved, telemetry)
   const observable = new ObservableIntelligentRouter(
     failClosedObservable,
     telemetry,

@@ -12,6 +12,8 @@ pnpm run verify:governance-maturity
 node scripts/verify-delegation-admin-policy.mjs
 node --test tests/public-auth-proxy-fast-path.test.mjs
 node --experimental-strip-types --test tests/derived-state-rebuild.test.mjs
+node --experimental-strip-types --test scripts/test-decision-layer.mjs
+node --test tests/decision-control-plane-ux.test.mjs
 node --experimental-strip-types --test tests/retention-policy-input.test.mjs
 node --experimental-strip-types --test tests/incident-resolution-integrity.test.mjs tests/remediation-verification-integrity.test.mjs
 node --experimental-strip-types --test scripts/test-*orchestrator*.mjs
