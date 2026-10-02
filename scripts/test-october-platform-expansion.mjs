@@ -377,3 +377,15 @@ test('approved metadata and lineage changes can notify impacted stakeholders thr
   assert.match(lineage,/LINEAGE_CHANGE_NOTIFICATIONS_ENABLED/)
   assert.match(lineage,/HUMAN_APPROVED_MANUAL/)
 })
+
+
+test('main Job Monitor includes authorized ad-hoc durable execution jobs',()=>{
+  const page=fs.readFileSync('app/monitoring/page.tsx','utf8')
+  const monitor=fs.readFileSync('app/monitoring/job-monitor.tsx','utf8')
+  assert.match(page,/job_queue/)
+  assert.match(page,/typedJobs/)
+  assert.match(page,/initialJobs=\{typedJobs\}/)
+  assert.match(monitor,/Ad-hoc execution queue/)
+  assert.match(monitor,/Discovery, profiling, quality and enrichment jobs/)
+  assert.match(monitor,/Attempt \{job\.attempts\}\/\{job\.max_attempts\}/)
+})
