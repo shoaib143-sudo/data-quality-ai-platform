@@ -5,7 +5,7 @@ import {
   type DecisionProviderState,
   type DecisionRequest,
   type DecisionResult,
-} from './decision-provider'
+} from './decision-provider.ts'
 
 type JevConfig = {
   apiKey: string
