@@ -1,7 +1,17 @@
 import { createAdminClient } from '../../supabase/admin.ts'
-import type { GovernanceCheckpoint,GovernanceCheckpointStore } from './checkpoint.ts'
+import type { GovernanceCheckpoint,GovernanceCheckpointStore,GovernanceResumeAction } from './checkpoint.ts'
 import type { GovernanceEvidenceRecord } from '../evidence/model.ts'
 import type { GovernanceEvidenceStore } from '../evidence/store.ts'
+
+function mapCheckpointRow(data:Record<string,unknown>):GovernanceCheckpoint{
+ return{
+  planId:String(data.plan_id),operationId:String(data.operation_id),idempotencyKey:String(data.idempotency_key),
+  status:data.status as GovernanceCheckpoint['status'],attempts:Number(data.attempts),
+  providerObjectId:data.provider_object_id?String(data.provider_object_id):null,providerJobId:data.provider_job_id?String(data.provider_job_id):null,
+  executionEvidence:(data.execution_evidence??{}) as Record<string,unknown>,verificationStatus:data.verification_status?String(data.verification_status):null,
+  updatedAt:String(data.updated_at),
+ }
+}
 
 export class SupabaseGovernanceCheckpointStore implements GovernanceCheckpointStore{
  private readonly projectId:string
@@ -13,13 +23,21 @@ export class SupabaseGovernanceCheckpointStore implements GovernanceCheckpointSt
    .eq('project_id',this.projectId).eq('idempotency_key',idempotencyKey).maybeSingle()
   if(error)throw new Error(`Unable to load governance execution checkpoint: ${error.message}`)
   if(!data)return null
-  return{
-   planId:String(data.plan_id),operationId:String(data.operation_id),idempotencyKey:String(data.idempotency_key),
-   status:data.status as GovernanceCheckpoint['status'],attempts:Number(data.attempts),
-   providerObjectId:data.provider_object_id?String(data.provider_object_id):null,providerJobId:data.provider_job_id?String(data.provider_job_id):null,
-   executionEvidence:(data.execution_evidence??{}) as Record<string,unknown>,verificationStatus:data.verification_status?String(data.verification_status):null,
-   updatedAt:String(data.updated_at),
+  return mapCheckpointRow(data as Record<string,unknown>)
+ }
+ async claim(input:Pick<GovernanceCheckpoint,'planId'|'operationId'|'idempotencyKey'>){
+  const admin=createAdminClient()
+  const {data,error}=await admin.schema('governance').rpc('claim_platform_execution_checkpoint',{
+   p_project_id:this.projectId,p_plan_id:input.planId,p_operation_id:input.operationId,p_idempotency_key:input.idempotencyKey,
+  })
+  if(error)throw new Error(`Unable to claim governance execution checkpoint: ${error.message}`)
+  const result=(data??{}) as Record<string,unknown>
+  const row=result.checkpoint
+  const resumeAction=String(result.resume_action??'') as GovernanceResumeAction
+  if(!row||typeof row!=='object'||!['EXECUTE','POLL','VERIFY','WAIT','COMPLETE'].includes(resumeAction)){
+   throw new Error('Governance checkpoint claim returned an invalid contract.')
   }
+  return{claimed:result.claimed===true,resumeAction,checkpoint:mapCheckpointRow(row as Record<string,unknown>)}
  }
  async put(checkpoint:GovernanceCheckpoint){
   const admin=createAdminClient()
