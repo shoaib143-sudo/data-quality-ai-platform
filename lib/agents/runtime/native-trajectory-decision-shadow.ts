@@ -1,4 +1,4 @@
-import { createGovernanceShadowDecisionGateway } from '@/lib/ai/governance-decision-runtime'
+import { isJevShadowRuntimeEnabled } from '@/lib/ai/decision-runtime'
 import { getDecisionDefinition } from '@/lib/ai/decision-registry.ts'
 
 export async function observeNativeTrajectoryDecisionShadow(input: {
@@ -7,6 +7,8 @@ export async function observeNativeTrajectoryDecisionShadow(input: {
   deterministicScore: number
   dimensions: Record<string, unknown>
 }) {
+  if (!isJevShadowRuntimeEnabled()) return null
+  const { createGovernanceShadowDecisionGateway } = await import('@/lib/ai/governance-decision-runtime' )
   const gateway = createGovernanceShadowDecisionGateway({
     projectId: input.projectId,
     agentRunId: input.agentRunId,
