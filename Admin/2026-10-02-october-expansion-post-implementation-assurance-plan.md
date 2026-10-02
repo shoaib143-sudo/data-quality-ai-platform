@@ -82,3 +82,24 @@ Connection-check evidence now receives an explicit freshness classification. HEA
 ## Closure rule
 
 PR #1103 remains Draft until all exact-head required gates pass. G1/G2/G3/G4/G6 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
+
+## Final showcase required in ChatGPT
+
+After implementation and exact-head assurance complete, present a closure report in the conversation containing:
+
+1. Final exact commit SHA and PR state.
+2. Implementation scope completed, grouped by the five workstreams.
+3. Required CI/gate matrix with run IDs and conclusions.
+4. Unit and integration test evidence summary.
+5. Negative/failure-path test matrix with actual outcomes.
+6. Independent adversarial audit findings, including attempted attacks and observed controls.
+7. Migration/revalidation evidence.
+8. Remaining gaps categorized as:
+   - resolved before closure;
+   - accepted follow-on implementation;
+   - credential/access boundary;
+   - production activation boundary.
+9. Any known limitations or claims that must not be overstated.
+10. Final recommendation on whether the branch is ready for review, while leaving merge/deployment as an explicit user approval boundary.
+
+The final showcase must distinguish code implemented on the feature branch from changes merged or activated in production.
