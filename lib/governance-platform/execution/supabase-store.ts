@@ -19,7 +19,7 @@ export class SupabaseGovernanceCheckpointStore implements GovernanceCheckpointSt
  async get(idempotencyKey:string){
   const admin=createAdminClient()
   const {data,error}=await admin.schema('governance').from('platform_execution_checkpoints')
-   .select('plan_id,operation_id,idempotency_key,status,attempts,provider_object_id,provider_job_id,execution_evidence,verification_status,updated_at')
+   .select('plan_id,operation_id,idempotency_key,status,attempts,claim_generation,provider_object_id,provider_job_id,execution_evidence,verification_status,updated_at')
    .eq('project_id',this.projectId).eq('idempotency_key',idempotencyKey).maybeSingle()
   if(error)throw new Error(`Unable to load governance execution checkpoint: ${error.message}`)
   if(!data)return null
