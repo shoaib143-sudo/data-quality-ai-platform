@@ -66,10 +66,13 @@ function parseUsage(value: unknown) {
   const usage = value as Record<string, unknown>
   const inputTokens = usage.input_tokens
   const outputTokens = usage.output_tokens
-  if (!Number.isInteger(inputTokens) || Number(inputTokens) < 0 || !Number.isInteger(outputTokens) || Number(outputTokens) < 0) {
+  if (
+    typeof inputTokens !== 'number' || !Number.isInteger(inputTokens) || inputTokens < 0 ||
+    typeof outputTokens !== 'number' || !Number.isInteger(outputTokens) || outputTokens < 0
+  ) {
     throw new Error('Jev returned invalid token usage.')
   }
-  return { inputTokens: Number(inputTokens), outputTokens: Number(outputTokens) }
+  return { inputTokens, outputTokens }
 }
 
 export class JevDecisionProvider implements DecisionProvider {
