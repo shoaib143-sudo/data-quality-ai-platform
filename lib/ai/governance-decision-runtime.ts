@@ -1,4 +1,5 @@
 import { createGovernanceTelemetryProvider } from './governance-telemetry-provider'
+import { createGovernanceModelCostAccountingProvider } from './governance-cost-accounting'
 import { DecisionGateway } from './decision-gateway.ts'
 import { DecisionPayloadBuilder } from './decision-payload-builder.ts'
 import { DecisionTelemetryReceiptSink } from './decision-telemetry.ts'
@@ -20,6 +21,7 @@ export function createGovernanceShadowDecisionGateway(input: {
     payloadBuilder: new DecisionPayloadBuilder(),
     receiptSink: new DecisionTelemetryReceiptSink({
       telemetry: createGovernanceTelemetryProvider(),
+      costAccounting: createGovernanceModelCostAccountingProvider(),
       projectId: input.projectId,
       agentRunId: input.agentRunId,
       aiSystemId: input.aiSystemId,
