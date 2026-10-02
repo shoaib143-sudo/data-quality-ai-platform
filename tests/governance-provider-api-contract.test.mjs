@@ -78,3 +78,12 @@ test('governance deployment approval is fingerprint bound and resumable from the
  assert.match(approvalRoute,/APPLY_GOVERNANCE_DEPLOYMENT/)
  assert.match(approvalRoute,/applyGovernanceDeploymentForPrincipal/)
 })
+
+
+test('provider inventory exposes documented compatibility without pretending an unconfigured adapter is registered',()=>{
+ const route=read('app/api/governance-platform/providers/route.ts')
+ assert.match(route,/listGovernanceProviders/)
+ assert.match(route,/listProviderCompatibility/)
+ assert.match(route,/bootstrap/)
+ assert.match(route,/private, no-store/)
+})
