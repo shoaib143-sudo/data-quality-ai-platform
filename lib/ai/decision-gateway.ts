@@ -32,7 +32,7 @@ function stableSerialize(value: unknown): string {
       .map(([key, child]) => `${JSON.stringify(key)}:${stableSerialize(child)}`)
       .join(',')}}`
   }
-  return JSON.stringify(value)
+  return JSON.stringify(value) ?? 'null'
 }
 
 export function decisionStateFingerprint(value: unknown) {
