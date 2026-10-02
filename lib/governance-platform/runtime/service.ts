@@ -62,10 +62,12 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
  const approvalRequestId=input.approvalRequestId?.trim()||null
  if(approvalRequestId){
   const currentFingerprint=await currentExecutionFingerprint({requestId:approvalRequestId,parameters:approvalParameters})
-  await validateApprovalForExecution({
+  const validatedApproval=await validateApprovalForExecution({
    requestId:approvalRequestId,executorUserId:input.principalId,currentFingerprint,
    expectedActionKey:'APPLY_GOVERNANCE_DEPLOYMENT',
   })
+  const humanApprovalRequired=validatedApproval.requires_business_approval===true||validatedApproval.requires_governance_approval===true
+  if(!humanApprovalRequired)throw new Error('A policy-required governance deployment cannot be resumed without human approval evidence.')
   approvalSatisfied=true
  }
  const dependencies={
