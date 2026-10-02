@@ -70,8 +70,8 @@ Connection health is persisted during registration/validation. There is no sched
 ### G4 — Column-level manual lineage correction (Medium)
 Manual correction is asset-level. Column mapping corrections remain ingestion/history driven.
 
-### G5 — Metadata restore approval semantics (High)
-Restore creates a new version but currently uses catalog.update directly rather than the metadata-change approval workflow. Restore is itself a metadata mutation and should follow the same approval boundary unless policy explicitly exempts it.
+### G5 — Metadata restore approval semantics (Resolved)
+Restore now starts the catalog metadata approval workflow and cannot call the restore RPC directly. Only an APPROVED workflow instance can apply the historic version, and the restore remains version-creating and auditable.
 
 ### G6 — Change notification activation (Operational)
 Metadata/lineage notifications are implemented but environment-controlled and disabled unless explicitly enabled and provider routes are configured.
@@ -81,4 +81,4 @@ Connection-check evidence has timestamps, but the UI has no explicit stale-after
 
 ## Closure rule
 
-PR #1103 remains Draft until G5 is resolved and all exact-head required gates pass. G1/G2/G3/G4/G6/G7 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
+PR #1103 remains Draft until all exact-head required gates pass. G1/G2/G3/G4/G6/G7 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
