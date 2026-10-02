@@ -9,6 +9,7 @@ export type AgentActionKey =
   | 'RETRY_EXECUTION'
   | 'CANCEL_EXECUTION'
   | 'APPLY_GOVERNED_MUTATION'
+  | 'APPLY_GOVERNANCE_DEPLOYMENT'
   | 'PROMOTE_LEARNING_CANDIDATE'
 
 export type AgentActionProfile = {
@@ -95,6 +96,17 @@ export const agentActionCatalog: Record<AgentActionKey, AgentActionProfile> = {
     capability: 'agent.execute',
     requestCapability: 'agent.recommend',
     target: 'DATASET',
+    materialProductionMutation: true,
+    financialImpact: 'HIGH',
+    productionScope: 'HIGH',
+    reversibility: 'PARTIALLY_REVERSIBLE',
+    computeCost: 'MEDIUM',
+  },
+  APPLY_GOVERNANCE_DEPLOYMENT: {
+    key: 'APPLY_GOVERNANCE_DEPLOYMENT',
+    capability: 'agent.execute',
+    requestCapability: 'agent.recommend',
+    target: 'PROJECT',
     materialProductionMutation: true,
     financialImpact: 'HIGH',
     productionScope: 'HIGH',
