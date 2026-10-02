@@ -87,7 +87,14 @@ export class JevDecisionProvider implements DecisionProvider {
   async evaluate(request: DecisionRequest): Promise<DecisionResult> {
     request.signal?.throwIfAborted()
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(new DOMException('Jev decision timed out.', 'TimeoutError')), this.config.timeoutMs)
+    const requestedTimeoutMs = request.timeoutMs
+    if (requestedTimeoutMs != null && (!Number.isFinite(requestedTimeoutMs) || requestedTimeoutMs < 100)) {
+      throw new Error('Decision timeoutMs must be at least 100ms.')
+    }
+    const effectiveTimeoutMs = requestedTimeoutMs == null
+      ? this.config.timeoutMs
+      : Math.min(this.config.timeoutMs, Math.round(requestedTimeoutMs))
+    const timeout = setTimeout(() => controller.abort(new DOMException('Jev decision timed out.', 'TimeoutError')), effectiveTimeoutMs)
     const relayAbort = () => controller.abort(request.signal?.reason)
     request.signal?.addEventListener('abort', relayAbort, { once: true })
     const startedAt = performance.now()
