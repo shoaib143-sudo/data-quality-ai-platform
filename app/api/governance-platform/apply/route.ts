@@ -7,13 +7,14 @@ import { applyGovernanceDeploymentForPrincipal } from '@/lib/governance-platform
 export async function POST(request:Request){
  try{
   const user=await requireApiUser()
-  const body=await request.json().catch(()=>null) as {desiredState?:GovernanceDesiredState;expectedDeploymentFingerprint?:string;confirmDestructive?:boolean}|null
+  const body=await request.json().catch(()=>null) as {desiredState?:GovernanceDesiredState;expectedDeploymentFingerprint?:string;confirmDestructive?:boolean;approvalRequestId?:string}|null
   const desired=body?.desiredState
   if(!desired||!desired.projectId)return NextResponse.json({error:'desiredState.projectId is required.'},{status:400})
   const result=await applyGovernanceDeploymentForPrincipal({
    principalId:user.id,desired,
    expectedDeploymentFingerprint:body?.expectedDeploymentFingerprint?.trim()??'',
    confirmDestructive:body?.confirmDestructive===true,
+   approvalRequestId:body?.approvalRequestId?.trim()||null,
   })
   if(!result.accepted)return NextResponse.json(result,{status:409,headers:{'Cache-Control':'private, no-store'}})
   return NextResponse.json(result,{status:202,headers:{'Cache-Control':'private, no-store'}})
