@@ -412,3 +412,12 @@ test('metadata history restore is approval-gated and applies only after workflow
   assert.match(ui,/Propose restore/)
   assert.match(ui,/Approval is required/)
 })
+
+
+test('source health evidence is freshness-classified instead of implying continuous liveness',()=>{
+  const page=fs.readFileSync('app/observability/page.tsx','utf8')
+  assert.match(page,/SOURCE_HEALTH_STALE_AFTER_HOURS/)
+  assert.match(page,/connectionStatusRaw/)
+  assert.match(page,/'STALE'/)
+  assert.match(page,/stale after/)
+})
