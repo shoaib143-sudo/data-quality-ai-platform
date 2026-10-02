@@ -17,6 +17,7 @@ export type DecisionRequest = {
   questions: Record<string, DecisionQuestion>
   model?: string | null
   signal?: AbortSignal
+  timeoutMs?: number
   correlationId?: string | null
 }
 
