@@ -1,4 +1,4 @@
-import { createGovernanceShadowDecisionGateway } from './governance-decision-runtime'
+import { isJevShadowRuntimeEnabled } from './decision-runtime.ts'
 import { getDecisionDefinition } from './decision-registry.ts'
 import type {
   IntelligentModelRouter,
