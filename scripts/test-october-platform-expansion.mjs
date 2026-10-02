@@ -35,10 +35,12 @@ test('runtime persona preview remains restricted to governance admin or organiza
   assert.match(page,/slug !== access\.persona && !canSwitchPersona/)
 })
 
-test('copilot has governed deterministic degradation instead of 503-only provider failure',()=>{
+test('copilot has governed deterministic degradation for unavailable and runtime-failing providers',()=>{
   const route=fs.readFileSync('app/api/ai/copilot/chat/route.ts','utf8')
   assert.match(route,/datanexus_governed_evidence_fallback/)
   assert.match(route,/degraded: true/)
+  assert.match(route,/PROVIDER_RUNTIME_ERROR/)
+  assert.match(route,/return fallbackResponse\(reason\)/)
   assert.doesNotMatch(route,/AI_PROVIDER_UNAVAILABLE[^\n]{0,300}status: 503/)
 })
 
