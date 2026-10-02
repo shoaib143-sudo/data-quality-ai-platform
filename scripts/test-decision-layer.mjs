@@ -292,3 +292,35 @@ test('prompt security shadow observer is inert unless explicitly activated', asy
     else process.env.JEV_SHADOW_RUNTIME_ENABLED = previousEnabled
   }
 })
+
+
+test('RAG grounding shadow requires an explicit claim and stays inert when disabled', async () => {
+  const previousKey = process.env.JEV_API_KEY
+  const previousEnabled = process.env.JEV_SHADOW_RUNTIME_ENABLED
+  delete process.env.JEV_API_KEY
+  delete process.env.JEV_SHADOW_RUNTIME_ENABLED
+  try {
+    const { observeRagGroundingShadow } = await import('../lib/ai/rag-grounding-shadow.ts')
+    await assert.rejects(
+      () => observeRagGroundingShadow({
+        projectId: '11111111-1111-1111-1111-111111111111',
+        claimId: 'claim-1',
+        claim: '   ',
+        evidence: [{ citationId: 'c1', authority: 'AUTHORITATIVE', content: 'evidence' }],
+      }),
+      /non-empty claim/,
+    )
+    const result = await observeRagGroundingShadow({
+      projectId: '11111111-1111-1111-1111-111111111111',
+      claimId: 'claim-1',
+      claim: 'The governed policy requires approval.',
+      evidence: [{ citationId: 'c1', authority: 'AUTHORITATIVE', content: 'Approval is required.' }],
+    })
+    assert.equal(result, null)
+  } finally {
+    if (previousKey == null) delete process.env.JEV_API_KEY
+    else process.env.JEV_API_KEY = previousKey
+    if (previousEnabled == null) delete process.env.JEV_SHADOW_RUNTIME_ENABLED
+    else process.env.JEV_SHADOW_RUNTIME_ENABLED = previousEnabled
+  }
+})
