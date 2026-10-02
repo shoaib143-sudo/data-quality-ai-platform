@@ -227,3 +227,23 @@ test('Jev adapter rejects malformed typed probabilities', async () => {
     globalThis.fetch = originalFetch
   }
 })
+
+
+test('routing shadow observer cannot change governed routing authority', async () => {
+  const { ShadowDecisionIntelligentRouter } = await import('../lib/ai/model-routing-shadow.ts')
+  const canonical = {
+    source: 'UNAVAILABLE',
+    reason: 'NO_REASONING_PROVIDER_AVAILABLE',
+    provider: null,
+    evidence: null,
+  }
+  const router = new ShadowDecisionIntelligentRouter(
+    { async route() { return canonical } },
+    async () => { throw new Error('shadow provider failed') },
+  )
+  const result = await router.route({
+    projectId: '11111111-1111-1111-1111-111111111111',
+    task: 'general',
+  })
+  assert.deepEqual(result, canonical)
+})
