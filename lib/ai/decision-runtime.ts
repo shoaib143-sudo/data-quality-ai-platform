@@ -4,6 +4,10 @@ import { getJevDecisionProvider } from './jev-decision-provider.ts'
 import type { BuiltinDecisionFamily } from './decision-registry.ts'
 import { getDecisionDefinition } from './decision-registry.ts'
 
+export function isJevShadowRuntimeEnabled() {
+  return process.env.JEV_SHADOW_RUNTIME_ENABLED?.trim().toLowerCase() === 'true'
+}
+
 export type DecisionRuntimeStatus = {
   configured: boolean
   providerId: string | null
@@ -34,6 +38,7 @@ export function readDecisionRuntimeStatus(): DecisionRuntimeStatus {
  * deterministic behavior in that case. This factory never enables enforcement.
  */
 export function createShadowDecisionGateway() {
+  if (!isJevShadowRuntimeEnabled()) return null
   const provider = getJevDecisionProvider()
   if (!provider) return null
   return new DecisionGateway({
