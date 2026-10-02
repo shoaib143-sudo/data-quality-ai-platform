@@ -204,6 +204,248 @@ Expected invariant:
 probabilistic output can never widen deterministic authority
 ```
 
+## Gap closure and optimized decision architecture
+
+The implementation plan must additionally close the following gaps before enforcement.
+
+### Vendor and data-boundary assessment
+
+Jev is an external provider and therefore requires an explicit enterprise data-processing review before sensitive production payloads are sent.
+
+The review must cover retention, deletion, training use, region, subprocessors, DPA, security attestations, incident handling, quotas and SLA.
+
+### Data minimization
+
+A `DecisionPayloadBuilder` should transform raw runtime state into the minimum state required by the decision family.
+
+Raw production data should never be sent simply because it is available.
+
+### Cascading decision pipeline
+
+The preferred execution pattern is:
+
+```text
+Request
+   |
+   v
+Deterministic pre-check
+   |
+   +--> obvious deterministic outcome
+   |
+   +--> semantic ambiguity
+             |
+             v
+           Jev
+             |
+        +----+----+
+        |         |
+    confident   uncertain
+        |         |
+        |         v
+        |    deeper reasoning
+        |    or human review
+        +---------+
+             |
+             v
+      deterministic
+      DataNexus policy
+```
+
+Jev is used where semantic judgment adds value, not as a replacement for cheap and exact rules.
+
+### Governed DecisionDefinition lifecycle
+
+Treat question wording as production configuration.
+
+```text
+DecisionDefinition
+  decision_family
+  question_schema
+  version
+  owner
+  provider_constraints
+  thresholds
+  benchmark_manifest
+  status: DRAFT | SHADOW | ADVISORY | ACTIVE | RETIRED
+  promoted_at
+  rollback_target
+```
+
+A material wording or schema change creates a new version and returns to SHADOW.
+
+### Calibration and enforcement promotion
+
+Every ACTIVE family needs measured acceptance criteria.
+
+Track:
+
+- precision and recall;
+- false-allow rate;
+- false-block rate;
+- calibration;
+- human override rate;
+- verified outcome agreement;
+- latency;
+- cost;
+- availability.
+
+No semantic decision family becomes enforcement-relevant solely because an API integration works.
+
+### Parallel decision composition
+
+When multiple questions are evaluated together, DataNexus must define:
+
+- veto rules;
+- precedence;
+- dependency ordering;
+- conflict resolution;
+- escalation behavior.
+
+A high-risk semantic result may force a conservative path but can never grant additional authority.
+
+### Model and provider drift
+
+Provider/model changes require version evidence and shadow re-evaluation before enforcement if behavior may change.
+
+### Human disagreement as evaluation evidence
+
+Store original decision, human override, override reason, final policy result and verified outcome.
+
+This evidence feeds calibration and evaluation only. It does not automatically modify production decision logic.
+
+### Performance and backpressure
+
+Each decision family must define:
+
+- synchronous or asynchronous execution;
+- latency SLO;
+- timeout;
+- concurrency limit;
+- batching eligibility;
+- queue behavior;
+- deduplication behavior.
+
+### Safe caching
+
+Cache only semantic decisions bound to immutable content and configuration fingerprints.
+
+Never treat a cached Jev result as cached authorization.
+
+### Cost governance
+
+Jev usage should consume the same DataNexus budget model as other AI/runtime providers, with request and spend ceilings by organization, project, agent and decision family.
+
+### Cross-tenant isolation
+
+Decision storage, queues, caches, observability and object-store references must retain current DataNexus organization/project isolation.
+
+### Sensitive evidence handling
+
+Store minimal decision receipts in Supabase. Store raw sensitive evidence only when justified, preferably in governed R2 with encryption, ACL, retention and legal-hold controls.
+
+### Degraded states
+
+Expose:
+
+```text
+AVAILABLE
+DEGRADED
+BYPASSED
+UNAVAILABLE
+FAIL_CLOSED
+```
+
+The runtime and UI must make provider degradation explicit.
+
+### Explainability separation
+
+Display semantic and authoritative results separately:
+
+```text
+semantic_decision
+semantic_confidence
+
+policy_result
+policy_reason
+authority_source
+```
+
+This prevents a probability from being interpreted as regulatory or authorization rationale.
+
+## Decision Control Plane
+
+Add a new Decision Control Plane inside the AI Command Center.
+
+It should provide:
+
+- decision-family inventory;
+- lifecycle state;
+- provider/model/version;
+- question-schema version;
+- threshold version;
+- false-allow and false-block rates;
+- calibration;
+- human override rate;
+- latency;
+- spend;
+- fallback rate;
+- provider health;
+- latest benchmark;
+- promotion and rollback history.
+
+## Revised foundation components
+
+The core foundation becomes:
+
+```text
+DecisionProvider
+DecisionRegistry
+DecisionPayloadBuilder
+DecisionPolicy / threshold engine
+DecisionReceipt
+DecisionEvaluation service
+Decision Control Plane
+```
+
+## DataNexus-specific benchmark corpus
+
+Before enforcement, create a representative sanitized benchmark from DataNexus evidence covering:
+
+- safe and dangerous tool calls;
+- actions requiring approval;
+- benign and injected documents;
+- supported, contradicted and unsupported RAG claims;
+- PII and sensitive-data cases;
+- structural and semantic drift;
+- model-routing cases;
+- successful, partial and failed agent executions.
+
+This corpus is the promotion gate for Jev question schemas and model/provider revisions.
+
+## Optimized promotion sequence
+
+```text
+DRAFT
+  |
+  v
+SHADOW
+  |
+  +--> benchmark insufficient -> remain SHADOW
+  |
+  v
+ADVISORY
+  |
+  +--> human disagreement / SLO failure -> rollback
+  |
+  v
+ACTIVE
+  |
+  +--> drift / provider change / regression -> SHADOW or RETIRED
+  |
+  v
+RETIRED
+```
+
 ## Product positioning
 
 The resulting layered model is:
@@ -223,4 +465,4 @@ This layered architecture is preferable to embedding Jev calls directly in agent
 
 ## Conclusion
 
-The recommendation remains to implement Jev, but as a replaceable governed semantic decision provider. This maximizes the speed and cost advantages of typed probabilistic decisions while preserving the strongest existing DataNexus characteristics: deterministic authorization, explicit evidence authority, human governance, provider resilience and verified-outcome learning.
+The recommendation remains to implement Jev, but as a replaceable governed semantic decision provider. The gap-closure controls, question governance, calibration lifecycle, Decision Control Plane and data-boundary assessment are required components of the implementation, not optional hardening work.
