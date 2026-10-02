@@ -324,3 +324,21 @@ test('RAG grounding shadow requires an explicit claim and stays inert when disab
     else process.env.JEV_SHADOW_RUNTIME_ENABLED = previousEnabled
   }
 })
+
+
+test('decision payload builder redacts embedded credentials from free text', () => {
+  const payload = new DecisionPayloadBuilder().build({
+    text: [
+      'Authorization: Bearer abc.def-123_xyz',
+      'token=supersecretvalue',
+      'eyJabcdefghijk.abcdefghijklmnop.abcdefghijklmnop',
+      '-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----',
+    ].join('\n'),
+  })
+  const serialized = JSON.stringify(payload)
+  assert.doesNotMatch(serialized, /abc\.def-123_xyz/)
+  assert.doesNotMatch(serialized, /supersecretvalue/)
+  assert.doesNotMatch(serialized, /eyJabcdefghijk/)
+  assert.doesNotMatch(serialized, /BEGIN PRIVATE KEY/)
+  assert.match(serialized, /REDACTED/)
+})
