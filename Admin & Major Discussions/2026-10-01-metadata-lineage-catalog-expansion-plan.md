@@ -276,3 +276,17 @@ Implement each through the same canonical discovery and lineage contracts so con
 - Keep secrets out of scanner payloads and persisted transformation logic.
 - Every connector must emit normalized evidence into shared contracts.
 - Every run must be traceable in Job Monitor.
+
+
+## AI observability implementation notes
+
+The observability expansion now follows a layered model inspired by current enterprise AI-governance and data-security tooling:
+
+- **Registry and governance posture:** provider, model/version, lifecycle state, intended use, risk tier and required human oversight.
+- **Operational health:** invocation volume, error count, success rate, P95 latency, token volume and cost.
+- **Traceability:** OpenTelemetry trace/span coverage from persisted AI telemetry, without exposing prompts, completions or hidden reasoning.
+- **Source/data posture:** connected source health, latest metadata-scan evidence, schema-change signals and governed classifications/ownership.
+- **Auditability:** governed evidence IDs, approvals, lineage, workflow state and immutable change history remain separate from raw model telemetry.
+- **Notification routing:** approved metadata and lineage changes can publish durable stakeholder alerts through existing Email, Slack or webhook routes when the corresponding notification flag is enabled.
+
+The implementation intentionally does not persist prompts, completions or private reasoning merely to increase observability coverage. DataNexus uses bounded operational and governance evidence instead.
