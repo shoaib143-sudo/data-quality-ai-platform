@@ -21,3 +21,16 @@ test('durable governance execution tables are service-role only and RLS protecte
  assert.match(sql,/unique \(project_id, idempotency_key\)/)
  assert.doesNotMatch(sql,/grant (?:select, )?(?:insert, )?(?:update, )?delete on governance\.platform_execution_evidence to service_role/i)
 })
+
+
+test('deployment evidence schema matches the runtime store and is database-immutable',()=>{
+ const sql=fs.readFileSync(new URL('../supabase/migrations/20261002111500_governance_platform_deployment_evidence_contract.sql',import.meta.url),'utf8')
+ const store=fs.readFileSync(new URL('../lib/governance-platform/execution/supabase-store.ts',import.meta.url),'utf8')
+ assert.match(store,/deployment_id:record\.deploymentId/)
+ assert.match(store,/\.eq\('deployment_id',deploymentId\)/)
+ assert.match(sql,/add column if not exists deployment_id text/)
+ assert.match(sql,/alter column deployment_id set not null/)
+ assert.match(sql,/platform_execution_evidence_deployment_idx/)
+ assert.match(sql,/platform_execution_evidence_immutable/)
+ assert.match(sql,/before update or delete/)
+})
