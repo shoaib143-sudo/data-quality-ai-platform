@@ -1,8 +1,8 @@
-import { DecisionGateway } from './decision-gateway'
-import { DecisionPayloadBuilder } from './decision-payload-builder'
-import { getJevDecisionProvider } from './jev-decision-provider'
-import type { BuiltinDecisionFamily } from './decision-registry'
-import { getDecisionDefinition } from './decision-registry'
+import { DecisionGateway } from './decision-gateway.ts'
+import { DecisionPayloadBuilder } from './decision-payload-builder.ts'
+import { getJevDecisionProvider } from './jev-decision-provider.ts'
+import type { BuiltinDecisionFamily } from './decision-registry.ts'
+import { getDecisionDefinition } from './decision-registry.ts'
 
 export type DecisionRuntimeStatus = {
   configured: boolean
