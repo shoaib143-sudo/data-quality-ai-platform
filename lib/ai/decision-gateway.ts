@@ -67,6 +67,7 @@ export class DecisionGateway {
       state: minimized,
       questions: input.definition.questions,
       signal: input.signal,
+      timeoutMs: input.definition.timeoutMs,
       correlationId: input.correlationId,
     })
     const policy = evaluateDecisionConfidence(input.definition, result)
