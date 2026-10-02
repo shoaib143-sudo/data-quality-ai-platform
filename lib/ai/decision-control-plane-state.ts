@@ -1,5 +1,5 @@
-import { BUILTIN_DECISION_DEFINITIONS } from './decision-registry'
-import { readDecisionRuntimeStatus } from './decision-runtime'
+import { BUILTIN_DECISION_DEFINITIONS } from './decision-registry.ts'
+import { readDecisionRuntimeStatus } from './decision-runtime.ts'
 
 export type DecisionControlPlaneFamily = {
   family: string
