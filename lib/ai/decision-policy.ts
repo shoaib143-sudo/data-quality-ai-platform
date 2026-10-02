@@ -1,5 +1,5 @@
-import type { DecisionAnswer, DecisionResult } from './decision-provider'
-import type { DecisionDefinition } from './decision-registry'
+import type { DecisionAnswer, DecisionResult } from './decision-provider.ts'
+import type { DecisionDefinition } from './decision-registry.ts'
 
 export type DecisionConfidenceBand = 'CONFIDENT' | 'UNCERTAIN'
 export type DecisionPolicyOutcome = {
