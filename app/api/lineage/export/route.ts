@@ -109,7 +109,7 @@ export async function GET() {
       ['Transformations', transformations.length],
       ['Assets', assets.length],
       ['Authority', 'Persisted governed lineage evidence visible to the authenticated user'],
-      ['Note', 'DataNexus does not infer missing lineage from matching names.'],
+      ['Note', 'Only persisted governed mappings are exported as authoritative lineage evidence.'],
     ]
 
     const businessRows = [
