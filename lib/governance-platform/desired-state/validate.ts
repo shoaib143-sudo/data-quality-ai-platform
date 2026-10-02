@@ -3,6 +3,12 @@ import {
   type GovernanceDesiredState,
 } from './model.ts'
 
+const CANONICAL_OBJECT_TYPES=new Set([
+ 'GOVERNANCE_DOMAIN','BUSINESS_TERM','TECHNICAL_ASSET','DATA_PRODUCT','CLASSIFICATION','POLICY','CONTROL',
+ 'OWNER','STEWARD','RELATIONSHIP','LINEAGE_EDGE','QUALITY_RULE','QUALITY_RESULT','CERTIFICATION','WORKFLOW','ISSUE','APPROVAL',
+])
+function isRecord(value:unknown):value is Record<string,unknown>{return Boolean(value)&&typeof value==='object'&&!Array.isArray(value)}
+
 export type DesiredStateValidationResult =
   | { ok: true; value: GovernanceDesiredState }
   | { ok: false; errors: string[] }
@@ -29,9 +35,22 @@ export function validateGovernanceDesiredState(input: unknown): DesiredStateVali
   const objectKeys = new Set<string>()
   for (const [index, object] of (value.objects ?? []).entries()) {
     if (!object?.id?.trim()) errors.push(`objects[${index}].id is required.`)
+    if (!CANONICAL_OBJECT_TYPES.has(String(object?.type ?? ''))) errors.push(`objects[${index}].type is unsupported.`)
     if (!object?.externalKey?.trim()) errors.push(`objects[${index}].externalKey is required.`)
     if (!object?.name?.trim()) errors.push(`objects[${index}].name is required.`)
     if (object?.projectId !== value.projectId) errors.push(`objects[${index}].projectId must match desired-state projectId.`)
+    if (!isRecord(object?.attributes)) errors.push(`objects[${index}].attributes must be an object.`)
+    if (!Number.isInteger(object?.version) || Number(object?.version) < 1) errors.push(`objects[${index}].version must be a positive integer.`)
+    if (object?.state !== undefined && object.state !== 'present' && object.state !== 'absent') errors.push(`objects[${index}].state is invalid.`)
+    if (!Array.isArray(object?.relationships)) errors.push(`objects[${index}].relationships must be an array.`)
+    else for (const [relationshipIndex,relationship] of object.relationships.entries()) {
+      if (!relationship || typeof relationship !== 'object' || Array.isArray(relationship)) {
+        errors.push(`objects[${index}].relationships[${relationshipIndex}] must be an object.`);continue
+      }
+      if (!relationship.type?.trim()) errors.push(`objects[${index}].relationships[${relationshipIndex}].type is required.`)
+      if (!relationship.targetId?.trim()) errors.push(`objects[${index}].relationships[${relationshipIndex}].targetId is required.`)
+      if (relationship.attributes !== undefined && !isRecord(relationship.attributes)) errors.push(`objects[${index}].relationships[${relationshipIndex}].attributes must be an object.`)
+    }
     const key = `${object?.type}:${object?.externalKey}`
     if (objectKeys.has(key)) errors.push(`objects[${index}] duplicates canonical key ${key}.`)
     objectKeys.add(key)
