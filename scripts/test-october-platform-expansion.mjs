@@ -321,3 +321,13 @@ test('lineage evidence supports immutable transformation version comparison incl
   assert.match(compare,/Expression/)
   assert.doesNotMatch(compare,/fetch\(|PATCH|POST|DELETE/)
 })
+
+
+test('global utility bar exposes admin-only persona presentation preview without changing authorization',()=>{
+  const bar=fs.readFileSync('components/app-shell/global-utility-bar.tsx','utf8')
+  assert.match(bar,/canPreviewPersonas/)
+  assert.match(bar,/persona === 'data-governance-admin'/)
+  assert.match(bar,/\^\(OWNER\|ADMIN\)\$/)
+  assert.match(bar,/Presentation preview only/)
+  assert.match(bar,/href=\{\`\/home\/\$\{item\.slug\}\`\}/)
+})
