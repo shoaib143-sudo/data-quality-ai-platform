@@ -158,6 +158,237 @@ The recommendation was revalidated against:
 
 No direct Jev integration should be merged into an authorization-critical path until the DecisionProvider contract, fail-safe behavior, audit receipt format, thresholds and negative/failure-path tests exist.
 
+## Mandatory pre-implementation additions
+
+Before any Jev decision family is allowed to affect runtime behavior, DataNexus must implement the following additional controls.
+
+### 1. Vendor and data-boundary due diligence
+
+Verify and document:
+
+- provider data retention and deletion behavior;
+- whether customer payloads are used for model training;
+- processing regions and data-residency options;
+- subprocessors and contractual terms;
+- DPA availability;
+- relevant security attestations and incident-response commitments;
+- API quotas, rate limits and operational SLA;
+- acceptable handling of PII, secrets, source code, contracts and regulated data.
+
+Until this review is complete, production-sensitive payloads must not be sent to Jev.
+
+### 2. Decision payload minimization
+
+Introduce a `DecisionPayloadBuilder` that constructs the smallest state necessary for each question.
+
+The default must be to send fingerprints, derived metadata, classifications and bounded context rather than unrestricted raw records.
+
+### 3. Cascading evaluation
+
+Prefer:
+
+```text
+deterministic pre-check
+  -> semantic ambiguity only
+  -> Jev
+  -> deeper reasoning or human review when uncertain
+  -> deterministic DataNexus policy
+```
+
+This reduces cost, latency and unnecessary data exposure.
+
+### 4. Governed question lifecycle
+
+Jev questions are production behavior and must be treated as versioned governed artifacts.
+
+Each decision definition must include:
+
+- stable decision-family ID;
+- question schema and version;
+- accountable owner;
+- provider/model constraints;
+- threshold configuration;
+- benchmark manifest;
+- lifecycle state: DRAFT, SHADOW, ADVISORY, ACTIVE or RETIRED;
+- promotion timestamp and approver;
+- rollback target.
+
+A material question change requires a new version and fresh shadow evaluation.
+
+### 5. Calibration lifecycle
+
+Thresholds must be versioned and recalibrated from verified DataNexus outcomes.
+
+Calibration evidence must include false-allow rate, false-block rate, precision, recall, confidence calibration, human disagreement and outcome accuracy.
+
+### 6. Decision-composition semantics
+
+Where multiple Jev decisions are evaluated in parallel, DataNexus must define:
+
+- veto precedence;
+- dependency relationships;
+- conflict handling;
+- escalation rules;
+- whether one high-risk decision can force a deterministic fail-closed path.
+
+### 7. Provider and model version governance
+
+Provider/model version changes must not silently change production behavior.
+
+Where pinning is unavailable, a detected version change must trigger shadow evaluation before ACTIVE enforcement resumes.
+
+### 8. Human override feedback
+
+Persist:
+
+- human override;
+- override reason;
+- original Jev decision;
+- final policy result;
+- verified downstream outcome.
+
+Overrides feed evaluation and calibration. They must not directly retrain or promote production behavior.
+
+### 9. Latency and backpressure controls
+
+Every decision family must define a latency budget and synchronous/asynchronous execution mode.
+
+High-volume workflows must support batching, concurrency limits, queueing, deduplication and admission controls.
+
+### 10. Cache safety
+
+Only cache semantic classification when bound to immutable:
+
+- input fingerprint;
+- question-schema version;
+- provider/model identity;
+- threshold version.
+
+Authorization decisions must never be cached from Jev results.
+
+### 11. Kill-switch granularity
+
+Support disabling by:
+
+- provider;
+- decision family;
+- organization/project;
+- agent;
+- environment.
+
+### 12. Enforcement promotion criteria
+
+SHADOW or ADVISORY decision families may move to ACTIVE only after meeting documented acceptance thresholds for:
+
+- false-allow rate;
+- false-block rate;
+- calibration;
+- latency;
+- availability;
+- cost;
+- human override rate;
+- regression results;
+- negative/failure-path tests.
+
+### 13. Decision quality ownership
+
+Every decision family requires an accountable owner for question wording, thresholds, benchmarks and false-positive/false-negative tradeoffs.
+
+### 14. Sensitive audit receipt handling
+
+Decision receipts should store minimal metadata and fingerprints by default.
+
+Sensitive payload snapshots should be stored only when required, in governed object storage with ACLs, encryption, retention and legal-hold controls.
+
+### 15. Cross-tenant isolation
+
+Explicitly test tenant and project isolation across:
+
+- decision persistence;
+- queues;
+- caches;
+- observability;
+- R2 evidence references;
+- retries and replay handling.
+
+### 16. Jev cost governance
+
+Add per-organization, project, agent and decision-family request/spend budgets. Jev itself must remain subject to DataNexus runtime cost governance.
+
+### 17. Degraded-mode contract
+
+Decision providers must expose explicit runtime state:
+
+```text
+AVAILABLE
+DEGRADED
+BYPASSED
+UNAVAILABLE
+FAIL_CLOSED
+```
+
+The product UI and Job Monitor should make degraded behavior visible.
+
+### 18. Explainability boundary
+
+Probability is not policy rationale.
+
+Audit and UI views must separately display:
+
+- semantic decision and confidence;
+- deterministic policy result;
+- policy reason;
+- authority source.
+
+### 19. DataNexus-specific benchmark corpus
+
+Build the enforcement benchmark from representative DataNexus history, including sanitized examples of:
+
+- safe and dangerous tool calls;
+- approval-requiring actions;
+- benign and injected documents;
+- correct and incorrect citations;
+- PII and sensitive-data cases;
+- schema-drift cases;
+- routing cases;
+- successful, partial and failed agent runs.
+
+## Decision Control Plane requirement
+
+Add a dedicated Decision Control Plane to the AI Command Center.
+
+It must expose at minimum:
+
+- decision families and lifecycle state;
+- provider/model/version;
+- question-schema version;
+- thresholds;
+- false-allow and false-block rates;
+- calibration;
+- human override rate;
+- latency;
+- spend;
+- fallback rate;
+- provider health;
+- last benchmark;
+- promotion and rollback history.
+
+## Revised foundation components
+
+The implementation foundation is therefore:
+
+```text
+1. DecisionProvider
+2. DecisionRegistry
+3. DecisionPayloadBuilder
+4. DecisionPolicy / threshold engine
+5. DecisionReceipt
+6. DecisionEvaluation service
+7. Decision Control Plane
+```
+
 ## Administrative conclusion
 
 Proceed with Jev as a governed semantic decision layer. Preserve DataNexus as System 0 authority, Jev as fast System 1 classification, and reasoning LLMs as System 2 investigation and generation.
+
+The additional controls above are mandatory parts of the implementation plan, not optional hardening work.
