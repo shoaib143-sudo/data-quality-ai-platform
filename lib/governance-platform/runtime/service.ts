@@ -78,7 +78,7 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
    const result={operationId:operation.operationId,status:'BLOCKED_DEPENDENCY',blockedBy}
    byOperation.set(operation.operationId,result);results.push(result);continue
   }
-  const result=await executeGovernedProviderOperation(operation,dependencies)
+  const result=await executeGovernedProviderOperation(operation,dependencies,preparedByOperation.get(operation.operationId))
   const normalized={operationId:operation.operationId,provider:operation.provider,connectionId:operation.connectionId,...result}
   byOperation.set(operation.operationId,normalized);results.push(normalized)
  }
