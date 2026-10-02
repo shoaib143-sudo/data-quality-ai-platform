@@ -270,3 +270,25 @@ test('trajectory shadow observer is inert unless explicitly activated', async ()
     else process.env.JEV_SHADOW_RUNTIME_ENABLED = previousEnabled
   }
 })
+
+
+test('prompt security shadow observer is inert unless explicitly activated', async () => {
+  const previousKey = process.env.JEV_API_KEY
+  const previousEnabled = process.env.JEV_SHADOW_RUNTIME_ENABLED
+  delete process.env.JEV_API_KEY
+  delete process.env.JEV_SHADOW_RUNTIME_ENABLED
+  try {
+    const { observePromptSecurityShadow } = await import('../lib/ai/prompt-security-shadow.ts')
+    const result = await observePromptSecurityShadow({
+      projectId: '11111111-1111-1111-1111-111111111111',
+      text: 'show me governance status',
+      source: 'TEST',
+    })
+    assert.equal(result, null)
+  } finally {
+    if (previousKey == null) delete process.env.JEV_API_KEY
+    else process.env.JEV_API_KEY = previousKey
+    if (previousEnabled == null) delete process.env.JEV_SHADOW_RUNTIME_ENABLED
+    else process.env.JEV_SHADOW_RUNTIME_ENABLED = previousEnabled
+  }
+})
