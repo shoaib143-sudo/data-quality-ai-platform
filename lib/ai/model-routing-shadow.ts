@@ -4,11 +4,13 @@ import type {
   IntelligentModelRouter,
   IntelligentRouteContext,
   IntelligentRouteDecision,
-} from './intelligent-router'
+} from './intelligent-router.ts'
 
 export type ModelRoutingShadowObserver = (context: IntelligentRouteContext) => Promise<void>
 
 export async function observeModelRoutingShadow(context: IntelligentRouteContext): Promise<void> {
+  if (!isJevShadowRuntimeEnabled()) return
+  const { createGovernanceShadowDecisionGateway } = await import('./governance-decision-runtime.ts')
   const gateway = createGovernanceShadowDecisionGateway({ projectId: context.projectId })
   if (!gateway) return
   try {
