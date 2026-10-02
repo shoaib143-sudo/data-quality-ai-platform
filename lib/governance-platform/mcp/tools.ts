@@ -18,6 +18,7 @@ function inputSchema(name:GovernanceMcpToolName):Record<string,unknown>{
    projectId:projectSchema,desiredState:desiredStateSchema,
    expectedDeploymentFingerprint:{type:'string',minLength:64,maxLength:64},
    confirmDestructive:{type:'boolean'},
+   approvalRequestId:{type:'string',minLength:1,description:'Optional DataNexus approval request used to resume the exact approved deployment.'},
   },
   required:['projectId','desiredState','expectedDeploymentFingerprint'],
   additionalProperties:false,
