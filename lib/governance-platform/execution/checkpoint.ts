@@ -12,9 +12,13 @@ export type GovernanceCheckpoint={
  updatedAt:string
 }
 
-export interface GovernanceCheckpointStore{get(idempotencyKey:string):Promise<GovernanceCheckpoint|null>;put(checkpoint:GovernanceCheckpoint):Promise<void>}
-
-export type GovernanceResumeAction='EXECUTE'|'POLL'|'VERIFY'|'COMPLETE'
+export type GovernanceResumeAction='EXECUTE'|'POLL'|'VERIFY'|'WAIT'|'COMPLETE'
+export type GovernanceClaimResult={claimed:boolean;resumeAction:GovernanceResumeAction;checkpoint:GovernanceCheckpoint}
+export interface GovernanceCheckpointStore{
+ get(idempotencyKey:string):Promise<GovernanceCheckpoint|null>
+ put(checkpoint:GovernanceCheckpoint):Promise<void>
+ claim?(input:Pick<GovernanceCheckpoint,'planId'|'operationId'|'idempotencyKey'>):Promise<GovernanceClaimResult>
+}
 
 export function governanceResumeAction(checkpoint:GovernanceCheckpoint|null):GovernanceResumeAction{
  if(!checkpoint)return'EXECUTE'
@@ -25,6 +29,7 @@ export function governanceResumeAction(checkpoint:GovernanceCheckpoint|null):Gov
 }
 
 export async function claimGovernanceOperation(store:GovernanceCheckpointStore,input:Pick<GovernanceCheckpoint,'planId'|'operationId'|'idempotencyKey'>){
+ if(store.claim)return store.claim(input)
  const existing=await store.get(input.idempotencyKey)
  const resumeAction=governanceResumeAction(existing)
  if(resumeAction==='COMPLETE'||resumeAction==='VERIFY'||resumeAction==='POLL')return{claimed:false as const,resumeAction,checkpoint:existing!}
