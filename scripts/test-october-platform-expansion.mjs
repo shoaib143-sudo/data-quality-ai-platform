@@ -52,12 +52,13 @@ test('embedded job monitor consumes durable discovery and DQ jobs',()=>{
   assert.match(panel,/Attempt \{job\.attempts\}/)
 })
 
-test('metadata proposal endpoint is workflow-only and does not apply direct mutation',()=>{
+test('metadata proposal starts approval workflow before any governed apply mutation',()=>{
   const route=fs.readFileSync('app/api/catalog/[datasetId]/proposal/route.ts','utf8')
   assert.match(route,/CATALOG_METADATA_CHANGE_APPROVAL/)
   assert.match(route,/start_workflow/)
   assert.match(route,/direct_mutation_performed:false/)
-  assert.doesNotMatch(route,/dataset_catalog'\)\.update|dataset_catalog'\)\.upsert/)
+  assert.match(route,/if\(instance\.status!=='APPROVED'\)/)
+  assert.ok(route.indexOf("if(action==='APPLY')") < route.indexOf("from('dataset_catalog').upsert"))
 })
 
 test('lineage explorer includes flow and mapping visualization modes',()=>{
