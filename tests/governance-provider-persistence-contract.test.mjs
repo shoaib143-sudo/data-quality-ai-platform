@@ -33,4 +33,8 @@ test('deployment evidence schema matches the runtime store and is database-immut
  assert.match(sql,/platform_execution_evidence_deployment_idx/)
  assert.match(sql,/platform_execution_evidence_immutable/)
  assert.match(sql,/before update or delete/)
+ assert.match(sql,/claim_platform_execution_checkpoint/)
+ assert.match(sql,/for update/)
+ assert.match(sql,/resume_action', 'WAIT'/)
+ assert.match(sql,/grant execute on function governance\.claim_platform_execution_checkpoint/)
 })
