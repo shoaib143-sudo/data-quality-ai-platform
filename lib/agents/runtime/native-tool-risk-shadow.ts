@@ -1,5 +1,5 @@
-import { isJevShadowRuntimeEnabled } from '@/lib/ai/decision-runtime'
-import { getDecisionDefinition } from '@/lib/ai/decision-registry.ts'
+import { isJevShadowRuntimeEnabled } from '../../ai/decision-runtime.ts'
+import { getDecisionDefinition } from '../../ai/decision-registry.ts'
 
 export async function observeNativeToolRiskShadow(input: {
   projectId: string
@@ -13,7 +13,7 @@ export async function observeNativeToolRiskShadow(input: {
   correlationId?: string | null
 }) {
   if (!isJevShadowRuntimeEnabled()) return null
-  const { createGovernanceShadowDecisionGateway } = await import('@/lib/ai/governance-decision-runtime' )
+  const { createGovernanceShadowDecisionGateway } = await import('../../ai/governance-decision-runtime.ts')
   const gateway = createGovernanceShadowDecisionGateway({
     projectId: input.projectId,
     agentRunId: input.agentRunId,
