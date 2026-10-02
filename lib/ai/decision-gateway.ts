@@ -9,6 +9,7 @@ export type DecisionReceipt = {
   schemaVersion: string
   provider: string
   model: string
+  providerRequestId: string | null
   stateFingerprint: string
   lifecycle: DecisionDefinition['lifecycle']
   answers: DecisionResult['answers']
@@ -79,6 +80,7 @@ export class DecisionGateway {
       schemaVersion: input.definition.schemaVersion,
       provider: result.provider,
       model: result.model,
+      providerRequestId: result.providerRequestId ?? null,
       stateFingerprint: decisionStateFingerprint(minimized),
       lifecycle: input.definition.lifecycle,
       answers: result.answers,
