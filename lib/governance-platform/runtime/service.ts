@@ -1,6 +1,7 @@
 import { authorizeProject } from '../../auth/authorize.ts'
 import { createGovernanceExecutionController } from '../../ai/governance-execution-controller.ts'
 import { createGovernancePolicyDecisionProvider } from '../../governance/governance-policy-decision-provider.ts'
+import { createAgentApprovalRequest,currentExecutionFingerprint,markApprovalExecuted,validateApprovalForExecution } from '../../governance/agent-approval-service.ts'
 import type { GovernanceDesiredState } from '../desired-state/model.ts'
 import { executeGovernedProviderOperation,preflightGovernedProviderOperation } from '../execution/runner.ts'
 import { SupabaseGovernanceCheckpointStore,SupabaseGovernanceEvidenceStore } from '../execution/supabase-store.ts'
@@ -34,6 +35,7 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
  desired:GovernanceDesiredState
  expectedDeploymentFingerprint:string
  confirmDestructive:boolean
+ approvalRequestId?:string|null
 }){
  await authorizeProject(input.principalId,input.desired.projectId,'agent.execute')
  ensureGovernanceProvidersRegistered()
@@ -51,8 +53,23 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
  const byOperation=new Map<string,Record<string,unknown>>()
  const checkpointStore=new SupabaseGovernanceCheckpointStore(input.desired.projectId)
  const evidenceStore=new SupabaseGovernanceEvidenceStore()
+ const approvalParameters={
+  desiredState:input.desired,
+  expectedDeploymentFingerprint:deployment.deploymentFingerprint,
+  confirmDestructive:input.confirmDestructive,
+ }
+ let approvalSatisfied=false
+ const approvalRequestId=input.approvalRequestId?.trim()||null
+ if(approvalRequestId){
+  const currentFingerprint=await currentExecutionFingerprint({requestId:approvalRequestId,parameters:approvalParameters})
+  await validateApprovalForExecution({
+   requestId:approvalRequestId,executorUserId:input.principalId,currentFingerprint,
+   expectedActionKey:'APPLY_GOVERNANCE_DEPLOYMENT',
+  })
+  approvalSatisfied=true
+ }
  const dependencies={
-  checkpointStore,evidenceStore,
+  checkpointStore,evidenceStore,approvalSatisfied,
   authorize:(projectId:string,capability:Parameters<typeof authorizeProject>[2])=>authorizeProject(input.principalId,projectId,capability).then(()=>undefined),
   executionController:createGovernanceExecutionController(),
   policyDecisionProvider:createGovernancePolicyDecisionProvider(),
@@ -64,11 +81,17 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
  }
  const approvalRequired=preflight.filter(value=>value.result.status==='APPROVAL_REQUIRED')
  const blocked=preflight.filter(value=>value.result.status!=='READY'&&value.result.status!=='APPROVAL_REQUIRED')
- if(approvalRequired.length||blocked.length){
+ if(blocked.length){
+  return{accepted:false as const,code:'GOVERNANCE_PREFLIGHT_BLOCKED' as const,deployment,simulation,preflight}
+ }
+ if(approvalRequired.length){
+  const requested=await createAgentApprovalRequest({
+   requestedBy:input.principalId,actionKey:'APPLY_GOVERNANCE_DEPLOYMENT',projectId:input.desired.projectId,
+   parameters:approvalParameters,
+  })
   return{
-   accepted:false as const,
-   code:approvalRequired.length?'GOVERNANCE_APPROVAL_REQUIRED' as const:'GOVERNANCE_PREFLIGHT_BLOCKED' as const,
-   deployment,simulation,preflight,
+   accepted:false as const,code:'GOVERNANCE_APPROVAL_REQUIRED' as const,deployment,simulation,preflight,
+   approvalRequestId:String(requested.approval.id),approvalStatus:String(requested.approval.status),
   }
  }
  const preparedByOperation=new Map(preflight.map(value=>[value.operationId,value.result]))
@@ -82,5 +105,7 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
   const normalized={operationId:operation.operationId,provider:operation.provider,connectionId:operation.connectionId,...result}
   byOperation.set(operation.operationId,normalized);results.push(normalized)
  }
- return{accepted:true as const,deploymentId:deployment.deploymentId,deploymentFingerprint:deployment.deploymentFingerprint,simulation,results}
+ const verified=results.length===operations.length&&results.every(result=>result.status==='VERIFIED')
+ if(approvalRequestId&&verified)await markApprovalExecuted(approvalRequestId)
+ return{accepted:true as const,deploymentId:deployment.deploymentId,deploymentFingerprint:deployment.deploymentFingerprint,simulation,results,approvalRequestId}
 }
