@@ -331,3 +331,15 @@ test('global utility bar exposes admin-only persona presentation preview without
   assert.match(bar,/Presentation preview only/)
   assert.match(bar,/href=\{\`\/home\/\$\{item\.slug\}\`\}/)
 })
+
+
+test('source connection validation persists bounded health evidence for observability',()=>{
+  const register=fs.readFileSync('app/api/datasets/source/register/route.ts','utf8')
+  const observability=fs.readFileSync('app/observability/page.tsx','utf8')
+  assert.match(register,/connection_health/)
+  assert.match(register,/status: 'HEALTHY'/)
+  assert.match(register,/checked_at/)
+  assert.match(observability,/connection_metadata/)
+  assert.match(observability,/Connection health/)
+  assert.match(observability,/No persisted connection check/)
+})
