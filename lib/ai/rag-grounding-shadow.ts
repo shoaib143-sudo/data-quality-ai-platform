@@ -1,4 +1,4 @@
-import { createGovernanceShadowDecisionGateway } from './governance-decision-runtime'
+import { isJevShadowRuntimeEnabled } from './decision-runtime.ts'
 import { getDecisionDefinition } from './decision-registry.ts'
 
 export type RagGroundingShadowEvidence = {
@@ -17,6 +17,8 @@ export async function observeRagGroundingShadow(input: {
   if (!input.claim.trim()) throw new Error('RAG grounding shadow requires a non-empty claim.')
   if (!input.evidence.length) return null
 
+  if (!isJevShadowRuntimeEnabled()) return null
+  const { createGovernanceShadowDecisionGateway } = await import('./governance-decision-runtime.ts' )
   const gateway = createGovernanceShadowDecisionGateway({ projectId: input.projectId })
   if (!gateway) return null
 
