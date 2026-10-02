@@ -64,3 +64,30 @@ test('unavailable provider fails closed for safety families', async () => {
     /fails closed/,
   )
 })
+
+
+test('runtime status is bypassed and non-enforcing when Jev is unconfigured', async () => {
+  const previous = process.env.JEV_API_KEY
+  delete process.env.JEV_API_KEY
+  const { readDecisionRuntimeStatus } = await import('../lib/ai/decision-runtime.ts')
+  const state = readDecisionRuntimeStatus()
+  assert.equal(state.configured, false)
+  assert.equal(state.providerState, 'BYPASSED')
+  assert.equal(state.enforcementEnabled, false)
+  if (previous == null) delete process.env.JEV_API_KEY
+  else process.env.JEV_API_KEY = previous
+})
+
+test('decision control plane exposes all P0 families with closed authority', async () => {
+  const { readDecisionControlPlaneState } = await import('../lib/ai/decision-control-plane-state.ts')
+  const state = readDecisionControlPlaneState()
+  assert.equal(state.counts.total, 5)
+  assert.equal(state.counts.shadow, 5)
+  assert.equal(state.counts.enforcementEligible, 0)
+  assert.deepEqual(state.authority, {
+    semanticMayGrantCapability: false,
+    semanticMayOverrideDeny: false,
+    semanticMayApproveMutation: false,
+    semanticMayPromoteEvidence: false,
+  })
+})
