@@ -75,6 +75,9 @@ export async function executeGovernedProviderOperation(operation:ProviderPlanned
  if(claim?.resumeAction==='COMPLETE'){
   return{status:'VERIFIED' as const,resumed:true,checkpoint:claim.checkpoint,gate,resolution}
  }
+ if(claim?.resumeAction==='WAIT'){
+  return{status:'PENDING' as const,resumed:true,resumeAction:'WAIT' as const,checkpoint:claim.checkpoint,gate,resolution}
+ }
 
  let result:ExecutionResult
  let attempts=0
