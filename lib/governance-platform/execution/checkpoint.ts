@@ -5,6 +5,7 @@ export type GovernanceCheckpoint={
  idempotencyKey:string
  status:GovernanceCheckpointStatus
  attempts:number
+ claimGeneration?:number
  providerObjectId:string|null
  providerJobId:string|null
  executionEvidence:Record<string,unknown>
