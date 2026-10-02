@@ -6,7 +6,7 @@ import type { GovernanceEvidenceStore } from '../evidence/store.ts'
 function mapCheckpointRow(data:Record<string,unknown>):GovernanceCheckpoint{
  return{
   planId:String(data.plan_id),operationId:String(data.operation_id),idempotencyKey:String(data.idempotency_key),
-  status:data.status as GovernanceCheckpoint['status'],attempts:Number(data.attempts),
+  status:data.status as GovernanceCheckpoint['status'],attempts:Number(data.attempts),claimGeneration:Number(data.claim_generation??0),
   providerObjectId:data.provider_object_id?String(data.provider_object_id):null,providerJobId:data.provider_job_id?String(data.provider_job_id):null,
   executionEvidence:(data.execution_evidence??{}) as Record<string,unknown>,verificationStatus:data.verification_status?String(data.verification_status):null,
   updatedAt:String(data.updated_at),
@@ -40,12 +40,15 @@ export class SupabaseGovernanceCheckpointStore implements GovernanceCheckpointSt
   return{claimed:result.claimed===true,resumeAction,checkpoint:mapCheckpointRow(row as Record<string,unknown>)}
  }
  async put(checkpoint:GovernanceCheckpoint){
+  const generation=checkpoint.claimGeneration??0
+  if(generation<=0)throw new Error('Governance checkpoint write requires an atomic claim generation.')
   const admin=createAdminClient()
-  const {error}=await admin.schema('governance').from('platform_execution_checkpoints').upsert({
-   project_id:this.projectId,plan_id:checkpoint.planId,operation_id:checkpoint.operationId,idempotency_key:checkpoint.idempotencyKey,
-   status:checkpoint.status,attempts:checkpoint.attempts,provider_object_id:checkpoint.providerObjectId,provider_job_id:checkpoint.providerJobId,
-   execution_evidence:checkpoint.executionEvidence,verification_status:checkpoint.verificationStatus,updated_at:checkpoint.updatedAt,
-  },{onConflict:'project_id,idempotency_key'})
+  const {error}=await admin.schema('governance').rpc('put_platform_execution_checkpoint',{
+   p_project_id:this.projectId,p_idempotency_key:checkpoint.idempotencyKey,p_claim_generation:generation,
+   p_status:checkpoint.status,p_attempts:checkpoint.attempts,p_provider_object_id:checkpoint.providerObjectId,
+   p_provider_job_id:checkpoint.providerJobId,p_execution_evidence:checkpoint.executionEvidence,
+   p_verification_status:checkpoint.verificationStatus,p_updated_at:checkpoint.updatedAt,
+  })
   if(error)throw new Error(`Unable to persist governance execution checkpoint: ${error.message}`)
  }
 }
