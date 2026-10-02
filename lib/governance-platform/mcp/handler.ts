@@ -77,6 +77,7 @@ async function callTool(request:Request,rpc:JsonRpcRequest){
    principalId:principal.id,desired,
    expectedDeploymentFingerprint:text(args.expectedDeploymentFingerprint),
    confirmDestructive:args.confirmDestructive===true,
+   approvalRequestId:text(args.approvalRequestId)||null,
   })
  }
  return response(rpc.id,{content:[{type:'text',text:JSON.stringify(output)}],structuredContent:output as Record<string,unknown>})
