@@ -1,0 +1,84 @@
+# October Platform Expansion — Post-Implementation Assurance Plan
+
+Date: 2026-10-02
+Scope: PR #1103 across metadata/catalog, lineage, observability, persona UX, AI fallback, job monitoring, BI/federation adapters, source-artifact scanning and notifications.
+
+## Completion definition
+
+Implementation is complete only when the same exact head passes: Quality Gate, Navigation Integrity, Persona Accessibility Acceptance, Persona Workspace Policy, Lineage Authority Integrity, Project Source Operational Readiness, CodeQL Security, Repository Governance, P0-P5 Revalidation, Post Implementation Assurance, Data Quality presentation contract, Job Monitor Domain Consistency and Production Security Posture. No Critical/High audit defect may remain.
+
+## Revalidation plan
+
+- Re-run all required CI on the final exact SHA; older-head evidence cannot close the change.
+- Revalidate Admin/Owner persona preview and verify ordinary users cannot expand authorization.
+- Revalidate DataNexus AI for missing route, provider timeout/error and malformed provider responses.
+- Revalidate discovery, profiling, DQ and lineage-enrichment jobs through monitoring.
+- Revalidate source connection health separately from metadata-scan health.
+- Revalidate metadata history, proposal approval, idempotent apply and version creation.
+- Revalidate lineage correction approval before mutation and human-approved evidence after apply.
+- Revalidate persona-gated XLSX export using persisted lineage only.
+- Revalidate federation conflict detection and deterministic authority resolution while preserving provenance.
+- Revalidate durable metadata/lineage stakeholder alerts when notification flags are enabled.
+
+## Independent adversarial audit
+
+Authorization attacks: cross-project projectId/datasetId/sourceId substitution; workflow/history ID substitution; APPLY before approval; non-admin persona URL switching; read-only persona mutation attempts.
+
+Lineage attacks: guessed name-based mappings; unapproved corrections; duplicate replay; stale transformation versions; unauthorized XLSX export; source==target corrections.
+
+Metadata attacks: direct mutation without approval; conflicting federation records; lower authority replacing DataNexus authority; stale restore; duplicate proposal replay; schema-drift alert duplication.
+
+AI/observability attacks: missing provider; provider runtime failure; malformed JSON; telemetry without trace context; sensitive prompt/reasoning leakage; stale source health represented as live; missing infrastructure evidence; notification provider outage.
+
+Queue attacks: duplicate idempotency key; retry exhaustion; dead/cancelled job; unknown job type; durable job without agent_run_id; stale polling response.
+
+## Unit and integration testing
+
+Unit: federation normalization/conflicts/authority resolution; BI provider normalization; source scanner patterns and false positives; schema diff; transformation diff; persona preview predicates; copilot fallback; notification categories; health normalization.
+
+Integration: proposal→approval→apply→history→alert; lineage proposal→approval→apply→alert; discovery→revision→schema signal→lineage-enrichment queue; source registration→health evidence→observability; durable queue→monitoring API→Job Monitor; BI import→catalog→lineage; authorized/unauthorized XLSX export.
+
+## Negative and failure cases
+
+1. Invalid UUID returns 400 with no mutation.
+2. Missing resource returns 404 without leakage.
+3. Cross-project access returns 403.
+4. APPLY before APPROVED returns 409.
+5. Duplicate APPLY remains idempotent.
+6. Provider outage returns degraded governed evidence rather than fabricated content.
+7. Incomplete discovery publishes no catalog revision.
+8. Unsupported connector returns explicit capability error.
+9. Notification failure remains durable/retryable.
+10. Source artifact above 5 MB returns 413.
+11. Unsupported provider/artifact returns 400.
+12. Empty federation payload returns 400.
+13. Lineage source==target returns 400.
+14. Unauthorized lineage export returns 403.
+15. Missing migration/table degrades explicitly where designed and fails closed otherwise.
+
+## Gap register from double-check
+
+### G1 — Live BI vendor extraction (Medium)
+Current capability imports exported Power BI/Tableau/Looker metadata. No live vendor API extraction is implemented. Adapter boundary exists; activation requires vendor credentials/API configuration.
+
+### G2 — Automated source-artifact acquisition (Medium)
+.NET, Node.js, VBA, Macro, Script and Log scanners parse supplied content, but no automated repository/file-system acquisition pipeline is connected yet.
+
+### G3 — Continuous source heartbeat (Medium)
+Connection health is persisted during registration/validation. There is no scheduled active heartbeat for every connected database.
+
+### G4 — Column-level manual lineage correction (Medium)
+Manual correction is asset-level. Column mapping corrections remain ingestion/history driven.
+
+### G5 — Metadata restore approval semantics (High)
+Restore creates a new version but currently uses catalog.update directly rather than the metadata-change approval workflow. Restore is itself a metadata mutation and should follow the same approval boundary unless policy explicitly exempts it.
+
+### G6 — Change notification activation (Operational)
+Metadata/lineage notifications are implemented but environment-controlled and disabled unless explicitly enabled and provider routes are configured.
+
+### G7 — Health evidence freshness (Low)
+Connection-check evidence has timestamps, but the UI has no explicit stale-after SLA classification.
+
+## Closure rule
+
+PR #1103 remains Draft until G5 is resolved and all exact-head required gates pass. G1/G2/G3/G4/G6/G7 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
