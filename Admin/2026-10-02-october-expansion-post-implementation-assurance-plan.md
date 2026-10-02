@@ -76,9 +76,9 @@ Restore now starts the catalog metadata approval workflow and cannot call the re
 ### G6 — Change notification activation (Operational)
 Metadata/lineage notifications are implemented but environment-controlled and disabled unless explicitly enabled and provider routes are configured.
 
-### G7 — Health evidence freshness (Low)
-Connection-check evidence has timestamps, but the UI has no explicit stale-after SLA classification.
+### G7 — Health evidence freshness (Resolved)
+Connection-check evidence now receives an explicit freshness classification. HEALTHY evidence becomes STALE after SOURCE_HEALTH_STALE_AFTER_HOURS (default 24h), preventing point-in-time validation from being presented as current liveness.
 
 ## Closure rule
 
-PR #1103 remains Draft until all exact-head required gates pass. G1/G2/G3/G4/G6/G7 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
+PR #1103 remains Draft until all exact-head required gates pass. G1/G2/G3/G4/G6 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
