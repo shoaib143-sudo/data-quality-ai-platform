@@ -91,3 +91,50 @@ test('decision control plane exposes all P0 families with closed authority', asy
     semanticMayPromoteEvidence: false,
   })
 })
+
+
+test('decision telemetry stores only normalized metadata, not raw semantic state', async () => {
+  const events = []
+  const { DecisionTelemetryReceiptSink } = await import('../lib/ai/decision-telemetry.ts')
+  const sink = new DecisionTelemetryReceiptSink({
+    projectId: '11111111-1111-1111-1111-111111111111',
+    telemetry: {
+      id: 'fake',
+      async record(event) {
+        events.push(event)
+        return { eventId: 'evt-1', persisted: true }
+      },
+    },
+  })
+
+  await sink.record({
+    decisionFamily: 'TOOL_RISK',
+    schemaVersion: 'tool-risk-v1',
+    provider: 'typesafe_jev',
+    model: 'jev-test',
+    stateFingerprint: 'abc123',
+    lifecycle: 'SHADOW',
+    answers: {
+      destructive_mutation: { type: 'noul', noul: 0.97 },
+    },
+    usage: { inputTokens: 12, outputTokens: 1 },
+    latencyMs: 25,
+    policy: {
+      band: 'CONFIDENT',
+      minimumObservedConfidence: 0.97,
+      enforcementEligible: false,
+      reason: 'shadow',
+    },
+    enforcementResult: 'SHADOW_ONLY',
+    correlationId: null,
+    createdAt: '2026-10-02T00:00:00.000Z',
+  })
+
+  assert.equal(events.length, 1)
+  assert.equal(events[0].eventType, 'SEMANTIC_DECISION')
+  assert.equal(events[0].operation, 'TOOL_RISK')
+  assert.equal(events[0].providerId, 'typesafe_jev')
+  assert.equal(events[0].attributes.stateFingerprint, 'abc123')
+  assert.equal('answers' in events[0].attributes, false)
+  assert.equal('state' in events[0].attributes, false)
+})
