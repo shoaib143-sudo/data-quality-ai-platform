@@ -41,6 +41,12 @@ on:
       - 'app/admin/ai-command-center/page.tsx'
       - 'scripts/test-governed-learning-command-center.mjs'
       - 'scripts/test-pgcl-command-center-observability.mjs'
+      - 'lib/agents/learning-experiment-runner*.ts'
+      - 'scripts/test-learning-experiment-runner*.mjs'
+      - 'scripts/fixtures/learning-runner-admin.mjs'
+      - 'scripts/test-learning-experiment-runner.sql'
+      - 'scripts/run-learning-experiment-runner-fixture.sh'
+      - 'supabase/migrations/*_learning_experiment_runner_evidence.sql'
       - 'lib/ai/learning-experiment-budget.ts'
       - 'lib/ai/governance-learning-experiment-budget.ts'
       - 'scripts/test-learning-experiment-budget-runtime.mjs'
@@ -140,6 +146,12 @@ on:
       - 'app/admin/ai-command-center/page.tsx'
       - 'scripts/test-governed-learning-command-center.mjs'
       - 'scripts/test-pgcl-command-center-observability.mjs'
+      - 'lib/agents/learning-experiment-runner*.ts'
+      - 'scripts/test-learning-experiment-runner*.mjs'
+      - 'scripts/fixtures/learning-runner-admin.mjs'
+      - 'scripts/test-learning-experiment-runner.sql'
+      - 'scripts/run-learning-experiment-runner-fixture.sh'
+      - 'supabase/migrations/*_learning_experiment_runner_evidence.sql'
       - 'lib/ai/learning-experiment-budget.ts'
       - 'lib/ai/governance-learning-experiment-budget.ts'
       - 'scripts/test-learning-experiment-budget-runtime.mjs'
@@ -236,6 +248,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-supervisor.mjs
       - name: Run priority-agent PGCL hook tests
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs
+      - name: Run paired experiment runner behavior and invocation tests
+        run: node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs
       - name: Run learning experiment runtime budget tests
         run: node --experimental-strip-types scripts/test-learning-experiment-budget-runtime.mjs
       - name: Run prospective evaluation policy behavior tests
@@ -330,3 +344,31 @@ jobs:
           PGDATABASE: postgres
           PGPASSWORD: postgres
         run: bash scripts/run-learning-experiment-budget-fixture.sh
+
+  learning-runner-database:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Execute isolated learning runner evidence and dispatch concurrency fixture
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGDATABASE: postgres
+          PGPASSWORD: postgres
+        run: bash scripts/run-learning-experiment-runner-fixture.sh
