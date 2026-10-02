@@ -89,3 +89,15 @@ At completion, record for each gate:
 Admin records operational run IDs, exact SHAs, artifacts, gate results, remaining blockers, and production provenance.
 
 Major Discussion records the assurance architecture, risk decisions, accepted boundaries, lessons learned, and deferred scope.
+
+
+## Gap register and residual-risk status
+
+Post-implementation double-check identified the following closure gaps and boundaries:
+
+1. Exact-head evidence wiring for AI Governance Program Certification, Recovery Assurance, and Governed Shadow Evaluation was incomplete because their path filters did not include closure-head changes. This is being corrected in the exact-head binding change so those controls execute on the final closure SHA.
+2. Governance OFF live baseline is configured on the isolated UI Regression Test Project and remains pending only until the protected-main live job completes.
+3. Production-only evidence remains intentionally pending until the governed exact-SHA Vercel deployment is explicitly approved and executed. This includes production build/deployment provenance, production runtime journey evidence, staged/canary promotion evidence, and final live persona acceptance.
+4. No accepted release exception record was identified during this audit. Therefore residual-risk exception governance is currently treated as NO_ACCEPTED_EXCEPTION_IDENTIFIED, not as a waived control. Any future exception must include riskId, riskTier, status, owner, rationale, compensatingControls, recordedAt, reviewDueAt, and closureCondition before it may be considered in closure.
+
+Post Implementation may be marked CERTIFIED only after all non-production exact-head controls are fresh PASS on the final SHA. PRODUCTION_VERIFIED remains separate and requires the production-only evidence classes.
