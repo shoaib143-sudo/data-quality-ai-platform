@@ -61,3 +61,20 @@ test('apply preflights every operation before entering the execution loop',()=>{
  const executeIndex=service.indexOf('executeGovernedProviderOperation(operation,dependencies,preparedByOperation.get(operation.operationId))')
  assert.ok(preflightIndex>=0&&blockedIndex>preflightIndex&&executeIndex>blockedIndex)
 })
+
+
+test('governance deployment approval is fingerprint bound and resumable from the existing approval inbox',()=>{
+ const service=read('lib/governance-platform/runtime/service.ts')
+ const apply=read('app/api/governance-platform/apply/route.ts')
+ const approvalRoute=read('app/api/agent-approvals/[requestId]/execute/route.ts')
+ const catalog=read('lib/governance/agent-action-catalog.ts')
+ assert.match(catalog,/APPLY_GOVERNANCE_DEPLOYMENT/)
+ assert.match(apply,/approvalRequestId/)
+ assert.match(service,/currentExecutionFingerprint/)
+ assert.match(service,/validateApprovalForExecution/)
+ assert.match(service,/expectedActionKey:'APPLY_GOVERNANCE_DEPLOYMENT'/)
+ assert.match(service,/createAgentApprovalRequest/)
+ assert.match(service,/markApprovalExecuted/)
+ assert.match(approvalRoute,/APPLY_GOVERNANCE_DEPLOYMENT/)
+ assert.match(approvalRoute,/applyGovernanceDeploymentForPrincipal/)
+})
