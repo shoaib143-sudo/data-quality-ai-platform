@@ -24,3 +24,4 @@ Do not store credentials, access tokens, secrets, private keys, or other sensiti
 ## Preservation rule
 
 Administrative decisions should be dated. Time-sensitive state must be marked as observed rather than permanent. Before executing a production action, operators must revalidate the live platform state and current repository HEAD.
+- [Governance provider post-implementation assurance plan](./2026-10-02-governance-provider-post-implementation-assurance-plan.md)
