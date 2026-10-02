@@ -389,3 +389,10 @@ test('main Job Monitor includes authorized ad-hoc durable execution jobs',()=>{
   assert.match(monitor,/Discovery, profiling, quality and enrichment jobs/)
   assert.match(monitor,/Attempt \{job\.attempts\}\/\{job\.max_attempts\}/)
 })
+
+
+test('notification routing UI exposes metadata and lineage change categories',()=>{
+  const ui=fs.readFileSync('app/observability/settings/observability-settings.tsx','utf8')
+  assert.match(ui,/METADATA_CHANGE/)
+  assert.match(ui,/LINEAGE_CHANGE/)
+})
