@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { observeNativeTrajectoryDecisionShadow } from '@/lib/agents/runtime/native-trajectory-decision-shadow'
 
 type SupervisorEvent = {
   event_type: string
@@ -143,5 +144,13 @@ export async function evaluateNativeSupervisorTrajectory(supervisorRunId: string
   if (evaluationError || !evaluation) {
     throw new Error(`Unable to persist native trajectory evaluation: ${evaluationError?.message ?? 'unknown error'}`)
   }
+
+  await observeNativeTrajectoryDecisionShadow({
+    projectId: run.project_id,
+    agentRunId: run.id,
+    deterministicScore: score,
+    dimensions,
+  })
+
   return evaluation
 }
