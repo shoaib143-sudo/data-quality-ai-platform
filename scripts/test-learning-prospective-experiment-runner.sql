@@ -128,7 +128,7 @@ do $$
 declare result jsonb;
 begin
   result := agent.claim_learning_prospective_attempt(
-    '10000000-0000-4000-8000-000000000001',:'recovery_run_id'::uuid,
+    '10000000-0000-4000-8000-000000000001',(select id from agent.learning_prospective_experiment_runs where project_id='10000000-0000-4000-8000-000000000001'::uuid and run_key='recovery-run'),
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     'BASELINE','baseline-v1',
     'sha256:3333333333333333333333333333333333333333333333333333333333333333'
@@ -173,7 +173,7 @@ do $$
 begin
   begin
     perform agent.record_learning_prospective_case_evaluation(
-      '10000000-0000-4000-8000-000000000001',:'recovery_run_id'::uuid,
+      '10000000-0000-4000-8000-000000000001',(select id from agent.learning_prospective_experiment_runs where project_id='10000000-0000-4000-8000-000000000001'::uuid and run_key='recovery-run'),
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','proposer',
       '50000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000002',
       0.5,0.7,false,false,now()
