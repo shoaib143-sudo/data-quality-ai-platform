@@ -3,6 +3,7 @@ import { DecisionGateway } from './decision-gateway.ts'
 import { DecisionPayloadBuilder } from './decision-payload-builder.ts'
 import { DecisionTelemetryReceiptSink } from './decision-telemetry.ts'
 import { getJevDecisionProvider } from './jev-decision-provider.ts'
+import { isJevShadowRuntimeEnabled } from './decision-runtime.ts'
 
 export function createGovernanceShadowDecisionGateway(input: {
   projectId: string
@@ -10,6 +11,7 @@ export function createGovernanceShadowDecisionGateway(input: {
   aiSystemId?: string | null
   aiSystemVersionId?: string | null
 }) {
+  if (!isJevShadowRuntimeEnabled()) return null
   const provider = getJevDecisionProvider()
   if (!provider) return null
 
