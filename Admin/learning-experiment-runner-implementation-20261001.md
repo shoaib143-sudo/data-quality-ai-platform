@@ -19,7 +19,7 @@ The existing logical policy key and the persisted policy record UUID are differe
 | `lib/agents/learning-experiment-runner-scoring.ts` | Complete paired score/accounting linkage and bounded Hoeffding recomputation; confirmation remains false and prospective writes disabled. |
 | `supabase/migrations/20261001152250_learning_experiment_runner_evidence.sql` | Immutable live claim/outcome schema, held-out case binding, output-byte digest and actual ACCOUNTED settlement/PRICED cost-event checks. Source migration presence does not imply deployment. |
 
-Independent local rerun of `node --experimental-strip-types scripts/test-learning-experiment-runner.mjs` passed 119 scenarios across the core, scoring and invocation boundaries. These are disposable fixture records, not live improvement evidence. The integrating workstream also executed the SQL behavior fixture against disposable PGlite successfully. PGlite verifies SQL behavior but does not demonstrate separate native PostgreSQL session concurrency. The native ten-session claim fixture and exact-head repository CI remain pending; their results must be reconciled before merge. Service-specific verification is tracked separately from the 119-scenario runner count.
+Independent local rerun of `node --experimental-strip-types scripts/test-learning-experiment-runner.mjs` passed 119 scenarios across the core, scoring and invocation boundaries. These are disposable fixture records, not live improvement evidence. The SQL behavior fixture passed in disposable PGlite; native PostgreSQL session contention was separately exercised by the PostgreSQL 16 CI fixture. Both the ten-session claim fixture and exact-head repository CI passed for source checkpoint `140e31de8a629cdf0f76698f2ac60bc4e446f85e`. Service-specific verification is tracked separately from the 119-scenario runner count. See the post-implementation record for current reruns.
 
 ## Essential verification
 
@@ -40,4 +40,4 @@ The migration and server composition exist in source only at this checkpoint. No
 
 Implementation and verification findings are recorded in [the independent review](../Major%20discussion/learning-experiment-runner-review-20261001.md).
 
-The direct server-service behavior suite also passed for canonical scope/currency/usage, missing or failed reads, and activation denials. Preparation and missing activation dependencies produced zero dispatch claims and zero provider calls in disposable fixtures. The final local production build passed.
+The direct server-service behavior suite also passed for canonical scope/currency/usage, missing or failed reads, and activation denials. Preparation and missing activation dependencies produced zero dispatch claims and zero provider calls in disposable fixtures. The final local production build passed. The [post-implementation plan and results](learning-experiment-runner-post-implementation-20261002.md) records exact-head CI, reruns and the adversarial case matrix.
