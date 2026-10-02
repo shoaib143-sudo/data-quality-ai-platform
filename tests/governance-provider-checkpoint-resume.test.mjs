@@ -18,3 +18,12 @@ test('checkpoint retains provider result needed for verification-only resume',as
  const result=await claimGovernanceOperation(store,{planId:'p',operationId:'o',idempotencyKey:'i'})
  assert.equal(result.resumeAction,'VERIFY');assert.equal(result.checkpoint.providerObjectId,'vendor-1');assert.deepEqual(result.checkpoint.executionEvidence,{receipt:'r1'})
 })
+
+
+test('active atomic claim waits instead of executing the provider twice',async()=>{
+ const checkpoint={planId:'p',operationId:'o',idempotencyKey:'k',status:'RUNNING',attempts:1,providerObjectId:null,providerJobId:null,executionEvidence:{},verificationStatus:null,updatedAt:new Date().toISOString()}
+ let gets=0,puts=0
+ const store={get:async()=>{gets++;return checkpoint},put:async()=>{puts++},claim:async()=>({claimed:false,resumeAction:'WAIT',checkpoint})}
+ const claim=await claimGovernanceOperation(store,{planId:'p',operationId:'o',idempotencyKey:'k'})
+ assert.equal(claim.claimed,false);assert.equal(claim.resumeAction,'WAIT');assert.equal(gets,0);assert.equal(puts,0)
+})
