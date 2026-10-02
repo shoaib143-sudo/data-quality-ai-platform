@@ -96,3 +96,20 @@ test('deployment preflight can discover approval requirements without executing 
  assert.equal(ready.status,'READY');assert.equal(approval.status,'APPROVAL_REQUIRED');assert.equal(executes,0)
  clearGovernanceProvidersForTests()
 })
+
+
+test('validated deployment approval satisfies policy approval without skipping RBAC or execution control',async()=>{
+ clearGovernanceProvidersForTests()
+ let authorization=0,controls=0,executes=0
+ registerGovernanceProvider({
+  manifest:()=>({provider:'fake',providerVersion:'1',canonicalSchemaVersion:'1.0',capabilities:[{capability:'catalog.asset.create',support:'FULL',modes:['CREATE'],consistency:'STRONG',execution:'SYNC',idempotency:'DATANEXUS_MANAGED',rollback:'NONE',verification:'READ_BACK'}]}),
+  capabilities:async function(){return this.manifest().capabilities},discover:async()=>({objects:[],projections:[],observedAt:new Date().toISOString()}),
+  execute:async op=>{executes++;return{operationId:op.operationId,status:'SUCCEEDED'}},verify:async op=>({operationId:op.operationId,status:'VERIFIED'}),
+ })
+ const deps={approvalSatisfied:true,authorize:async()=>{authorization++},executionController:{assertAllowed:async()=>{controls++;return{mode:'RUNNING'}}},policyDecisionProvider:{decide:async()=>({decision:'REQUIRE_APPROVAL',reason:'test'})}}
+ const preflight=await preflightGovernedProviderOperation(operation,deps)
+ assert.equal(preflight.status,'READY');assert.equal(preflight.approvalSatisfied,true)
+ await executeGovernedProviderOperation(operation,deps,preflight)
+ assert.equal(authorization,1);assert.equal(controls,1);assert.equal(executes,1)
+ clearGovernanceProvidersForTests()
+})
