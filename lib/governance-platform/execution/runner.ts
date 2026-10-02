@@ -17,6 +17,7 @@ export type GovernedProviderExecutionDependencies=GovernedExecutionGateDependenc
  retryRuntime?:GovernanceRetryRuntime
  checkpointStore?:GovernanceCheckpointStore
  evidenceStore?:GovernanceEvidenceStore
+ approvalSatisfied?:boolean
 }
 
 function checkpointResult(checkpoint:GovernanceCheckpoint):ExecutionResult{
@@ -56,8 +57,8 @@ export async function preflightGovernedProviderOperation(operation:ProviderPlann
   requiredCapability:operation.requiredCapability,riskLevel:operation.kind==='DELETE'?'HIGH':'MEDIUM',confidence:1,
  },dependencies)
  if(gate.denied)return{status:'DENIED' as const,gate,resolution,provider}
- if(gate.requiresApproval)return{status:'APPROVAL_REQUIRED' as const,gate,resolution,provider}
- return{status:'READY' as const,gate,resolution,provider}
+ if(gate.requiresApproval&&!dependencies.approvalSatisfied)return{status:'APPROVAL_REQUIRED' as const,gate,resolution,provider}
+ return{status:'READY' as const,gate,resolution,provider,approvalSatisfied:gate.requiresApproval&&dependencies.approvalSatisfied===true}
 }
 
 export type GovernanceOperationPreflight=Awaited<ReturnType<typeof preflightGovernedProviderOperation>>
