@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto'
 import type { DecisionReceipt, DecisionReceiptSink } from './decision-gateway.ts'
 import type { TelemetryProvider } from './telemetry-provider.ts'
+import type { ModelCostAccountingProvider } from './cost-accounting'
 
 export class DecisionTelemetryReceiptSink implements DecisionReceiptSink {
   private readonly telemetry: TelemetryProvider
+  private readonly costAccounting?: ModelCostAccountingProvider
   private readonly context: {
     projectId: string
     agentRunId?: string | null
@@ -12,12 +15,14 @@ export class DecisionTelemetryReceiptSink implements DecisionReceiptSink {
 
   constructor(input: {
     telemetry: TelemetryProvider
+    costAccounting?: ModelCostAccountingProvider
     projectId: string
     agentRunId?: string | null
     aiSystemId?: string | null
     aiSystemVersionId?: string | null
   }) {
     this.telemetry = input.telemetry
+    this.costAccounting = input.costAccounting
     this.context = {
       projectId: input.projectId.trim(),
       agentRunId: input.agentRunId ?? null,
@@ -28,6 +33,28 @@ export class DecisionTelemetryReceiptSink implements DecisionReceiptSink {
   }
 
   async record(receipt: DecisionReceipt): Promise<void> {
+    if (this.costAccounting) {
+      try {
+        await this.costAccounting.recordInvocation({
+          invocationId: randomUUID(),
+          projectId: this.context.projectId,
+          executionCorrelationId: receipt.correlationId,
+          providerRequestId: receipt.providerRequestId,
+          providerId: receipt.provider,
+          modelName: receipt.model,
+          usage: {
+            inputTokens: receipt.usage.inputTokens,
+            outputTokens: receipt.usage.outputTokens,
+            totalTokens: receipt.usage.inputTokens + receipt.usage.outputTokens,
+          },
+          observedAt: receipt.createdAt,
+        })
+      } catch {
+        // Shadow cost evidence is best effort. Cost-accounting failure cannot
+        // convert semantic observation into execution authority or block runtime.
+      }
+    }
+
     await this.telemetry.record({
       projectId: this.context.projectId,
       eventType: 'SEMANTIC_DECISION',
