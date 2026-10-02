@@ -1,4 +1,4 @@
-import { createGovernanceShadowDecisionGateway } from './governance-decision-runtime'
+import { isJevShadowRuntimeEnabled } from './decision-runtime.ts'
 import { getDecisionDefinition } from './decision-registry.ts'
 
 export async function observePromptSecurityShadow(input: {
@@ -7,6 +7,8 @@ export async function observePromptSecurityShadow(input: {
   source: string
   correlationId?: string | null
 }) {
+  if (!isJevShadowRuntimeEnabled()) return null
+  const { createGovernanceShadowDecisionGateway } = await import('./governance-decision-runtime.ts' )
   const gateway = createGovernanceShadowDecisionGateway({ projectId: input.projectId })
   if (!gateway) return null
 
