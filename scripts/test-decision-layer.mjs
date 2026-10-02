@@ -68,14 +68,19 @@ test('unavailable provider fails closed for safety families', async () => {
 
 test('runtime status is bypassed and non-enforcing when Jev is unconfigured', async () => {
   const previous = process.env.JEV_API_KEY
+  const previousEnabled = process.env.JEV_SHADOW_RUNTIME_ENABLED
   delete process.env.JEV_API_KEY
+  delete process.env.JEV_SHADOW_RUNTIME_ENABLED
   const { readDecisionRuntimeStatus } = await import('../lib/ai/decision-runtime.ts')
   const state = readDecisionRuntimeStatus()
   assert.equal(state.configured, false)
+  assert.equal(state.shadowRuntimeEnabled, false)
   assert.equal(state.providerState, 'BYPASSED')
   assert.equal(state.enforcementEnabled, false)
   if (previous == null) delete process.env.JEV_API_KEY
   else process.env.JEV_API_KEY = previous
+  if (previousEnabled == null) delete process.env.JEV_SHADOW_RUNTIME_ENABLED
+  else process.env.JEV_SHADOW_RUNTIME_ENABLED = previousEnabled
 })
 
 test('decision control plane exposes all P0 families with closed authority', async () => {
@@ -137,4 +142,88 @@ test('decision telemetry stores only normalized metadata, not raw semantic state
   assert.equal(events[0].attributes.stateFingerprint, 'abc123')
   assert.equal('answers' in events[0].attributes, false)
   assert.equal('state' in events[0].attributes, false)
+})
+
+
+test('Jev adapter follows the TypeSafe System One contract', async () => {
+  const originalFetch = globalThis.fetch
+  let observed
+  globalThis.fetch = async (url, init) => {
+    observed = { url: String(url), init }
+    return new Response(JSON.stringify({
+      model: 'jev-latest',
+      answers: {
+        risky: { type: 'noul', noul: 0.91 },
+        route: { type: 'choice', choice: 'LIGHT', confidence: 0.88, probabilities: { LIGHT: 0.88, DEEP: 0.12 } },
+        priority: { type: 'score', score: 1.4, confidence: 0.8, legend: { 0: 'low', 1: 'medium', 2: 'high' }, probabilities: { 0: 0.1, 1: 0.4, 2: 0.5 } },
+      },
+      usage: { input_tokens: 42, output_tokens: 7 },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'x-request-id': 'req-123' },
+    })
+  }
+  try {
+    const { JevDecisionProvider } = await import('../lib/ai/jev-decision-provider.ts')
+    const provider = new JevDecisionProvider({
+      apiKey: 'test-key',
+      baseUrl: 'https://api.typesafe.ai',
+      model: 'jev-latest',
+      timeoutMs: 1000,
+    })
+    const result = await provider.evaluate({
+      decisionFamily: 'TEST',
+      schemaVersion: 'test-v1',
+      state: { message: 'hello' },
+      questions: {
+        risky: { type: 'noul', instructions: 'Is this risky?' },
+        route: { type: 'choice', criteria: { LIGHT: 'small model', DEEP: 'large model' } },
+        priority: { type: 'score', criteria: ['low', 'medium', 'high'] },
+      },
+    })
+
+    assert.equal(observed.url, 'https://api.typesafe.ai/v1/systemone')
+    assert.equal(observed.init.method, 'POST')
+    assert.equal(observed.init.headers.authorization, 'Bearer test-key')
+    const body = JSON.parse(observed.init.body)
+    assert.equal(body.model, 'jev-latest')
+    assert.deepEqual(body.state, { message: 'hello' })
+    assert.equal(body.questions.risky.type, 'noul')
+    assert.equal(result.answers.risky.noul, 0.91)
+    assert.equal(result.answers.route.choice, 'LIGHT')
+    assert.equal(result.answers.priority.score, 1.4)
+    assert.deepEqual(result.usage, { inputTokens: 42, outputTokens: 7 })
+    assert.equal(result.providerRequestId, 'req-123')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('Jev adapter rejects malformed typed probabilities', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    model: 'jev-latest',
+    answers: { risky: { type: 'noul', noul: 1.5 } },
+    usage: { input_tokens: 1, output_tokens: 1 },
+  }), { status: 200, headers: { 'content-type': 'application/json' } })
+  try {
+    const { JevDecisionProvider } = await import('../lib/ai/jev-decision-provider.ts')
+    const provider = new JevDecisionProvider({
+      apiKey: 'test-key',
+      baseUrl: 'https://api.typesafe.ai',
+      model: 'jev-latest',
+      timeoutMs: 1000,
+    })
+    await assert.rejects(
+      () => provider.evaluate({
+        decisionFamily: 'TEST',
+        schemaVersion: 'test-v1',
+        state: 'x',
+        questions: { risky: { type: 'noul' } },
+      }),
+      /invalid probability/,
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 })
