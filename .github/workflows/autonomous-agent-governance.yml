@@ -1,6 +1,7 @@
 name: Autonomous Agent Governance
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, governed-autonomy-evidence]
     paths:
@@ -139,7 +140,7 @@ jobs:
           node --check scripts/run-governance-orchestrator-off-live.mjs
 
   live-off-baseline:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.GOVERNANCE_OFF_TEST_PROJECT_ID != '' && vars.GOVERNANCE_OFF_TEST_PROJECT_ID != '479813aa-72a4-4b12-b72a-74da8d2419ce'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: module14-contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -148,7 +149,7 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://tvjnavjxuehpesxcfvrx.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: e2e-service-runner-not-used
-      GOVERNANCE_E2E_PROJECT_ID: ${{ vars.GOVERNANCE_OFF_TEST_PROJECT_ID }}
+      GOVERNANCE_E2E_PROJECT_ID: ab595892-828f-4585-bafb-b6c657585ce5
       GOVERNANCE_E2E_PRIMARY_PROJECT_ID: 479813aa-72a4-4b12-b72a-74da8d2419ce
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
