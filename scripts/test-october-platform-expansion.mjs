@@ -358,3 +358,20 @@ test('metadata federation resolves authority deterministically without deleting 
   assert.deepEqual(resolved[0].mergedTags,['external','governed','source'])
   assert.match(resolved[0].reason,/lower-priority records remain preserved as provenance/)
 })
+
+
+test('approved metadata and lineage changes can notify impacted stakeholders through durable opt-in routes',()=>{
+  const migration=fs.readFileSync('supabase/migrations/20261002002000_governance_change_alert_categories.sql','utf8')
+  const helper=fs.readFileSync('lib/observability/governance-change-alert.ts','utf8')
+  const metadata=fs.readFileSync('app/api/catalog/[datasetId]/proposal/route.ts','utf8')
+  const lineage=fs.readFileSync('app/api/lineage/corrections/route.ts','utf8')
+  assert.match(migration,/METADATA_CHANGE/)
+  assert.match(migration,/LINEAGE_CHANGE/)
+  assert.match(helper,/queueAlertNotifications/)
+  assert.match(helper,/process\.env\[input\.notificationsEnvKey\]/)
+  assert.match(metadata,/instance\.status!=='APPROVED'/)
+  assert.match(metadata,/METADATA_CHANGE_NOTIFICATIONS_ENABLED/)
+  assert.match(lineage,/instance\.data\.status!=='APPROVED'/)
+  assert.match(lineage,/LINEAGE_CHANGE_NOTIFICATIONS_ENABLED/)
+  assert.match(lineage,/HUMAN_APPROVED_MANUAL/)
+})
