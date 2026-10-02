@@ -3,6 +3,7 @@ import { requireApiUser } from '@/lib/auth/require-api-user'
 import { authorizeDataset, authorizationErrorResponse } from '@/lib/auth/authorize'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
+import { publishGovernanceChangeAlert } from '@/lib/observability/governance-change-alert'
 
 const allowedLifecycleStatuses=new Set(['DRAFT','ACTIVE','DEPRECATED','RETIRED'])
 const allowedCriticalities=new Set(['LOW','MEDIUM','HIGH','CRITICAL'])
@@ -109,7 +110,18 @@ export async function POST(request:Request,{params}:{params:Promise<{datasetId:s
         entityType:'DATASET',entityId:datasetId,correlationId:instanceId,
         metadata:{workflow_instance_id:instanceId,approved:true,applied_fields:Object.keys(proposed)},
       })
-      return NextResponse.json({status:'APPLIED',reused:false,catalog})
+      const changeAlert=await publishGovernanceChangeAlert({
+        projectId:authorization.projectId,
+        datasetId,
+        category:'METADATA_CHANGE',
+        severity:['HIGH','CRITICAL'].includes(criticality)?'HIGH':'MEDIUM',
+        title:`Approved metadata change applied: ${dataset.name}`,
+        description:`An approved governed metadata proposal changed ${Object.keys(proposed).length} field(s) for ${dataset.name}.`,
+        fingerprint:`metadata-change:${datasetId}:${instanceId}`,
+        evidence:{workflow_instance_id:instanceId,applied_fields:Object.keys(proposed),criticality,authority:'APPROVED_GOVERNANCE_WORKFLOW'},
+        notificationsEnvKey:'METADATA_CHANGE_NOTIFICATIONS_ENABLED',
+      })
+      return NextResponse.json({status:'APPLIED',reused:false,catalog,changeAlert})
     }
 
     if(action!=='PROPOSE')return NextResponse.json({error:'action must be PROPOSE or APPLY.'},{status:400})
