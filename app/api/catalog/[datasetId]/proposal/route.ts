@@ -79,6 +79,32 @@ export async function POST(request:Request,{params}:{params:Promise<{datasetId:s
       if(instance.status!=='APPROVED')return NextResponse.json({error:'Metadata proposal must be approved before it can be applied.'},{status:409})
       const context=record(instance.context)
       if(context.applied_at)return NextResponse.json({status:'APPLIED',reused:true,catalog:context.applied_catalog??null})
+
+      const restoreHistoryId=text(context.restore_history_id)
+      if(context.source==='CATALOG_METADATA_HISTORY_RESTORE'){
+        if(!restoreHistoryId)return NextResponse.json({error:'Approved restore workflow is missing restore history evidence.'},{status:409})
+        const restored=await admin.schema('governance').rpc('restore_dataset_catalog_history',{p_history_id:restoreHistoryId,p_actor:user.id})
+        if(restored.error)throw new Error(restored.error.message)
+        const catalog=record(restored.data)
+        const appliedAt=new Date().toISOString()
+        const updatedContext={...context,applied_at:appliedAt,applied_by:user.id,direct_mutation_performed:true,applied_catalog:catalog}
+        const {error:updateError}=await admin.schema('governance').from('workflow_instances').update({context:updatedContext}).eq('id',instanceId)
+        if(updateError)throw new Error(updateError.message)
+        const criticality=(text(catalog.criticality)||'MEDIUM').toUpperCase()
+        const changeAlert=await publishGovernanceChangeAlert({
+          projectId:authorization.projectId,
+          datasetId,
+          category:'METADATA_CHANGE',
+          severity:['HIGH','CRITICAL'].includes(criticality)?'HIGH':'MEDIUM',
+          title:`Approved metadata restore applied: ${dataset.name}`,
+          description:`Approved metadata history restore applied version ${String(context.restore_version_number??'unknown')} for ${dataset.name}.`,
+          fingerprint:`metadata-restore:${datasetId}:${instanceId}`,
+          evidence:{workflow_instance_id:instanceId,restore_history_id:restoreHistoryId,restore_version_number:context.restore_version_number??null,authority:'APPROVED_GOVERNANCE_WORKFLOW'},
+          notificationsEnvKey:'METADATA_CHANGE_NOTIFICATIONS_ENABLED',
+        })
+        return NextResponse.json({status:'APPLIED',reused:false,catalog,restored:true,changeAlert})
+      }
+
       const proposed=record(context.proposed)
       const lifecycleStatus=(text(proposed.lifecycleStatus)||'ACTIVE').toUpperCase()
       const criticality=(text(proposed.criticality)||'MEDIUM').toUpperCase()
