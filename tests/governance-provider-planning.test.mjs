@@ -60,3 +60,17 @@ test('authorization mapping reuses DataNexus capability vocabulary', () => {
   assert.equal(resolveGovernanceAuthorizationCapability('LINEAGE_EDGE', 'NOOP'), 'lineage.read')
   assert.equal(resolveGovernanceAuthorizationCapability('TECHNICAL_ASSET', 'UPDATE'), 'catalog.update')
 })
+
+
+test('desired-state validation rejects malformed JSON that TypeScript types cannot protect',()=>{
+ const base={apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[{provider:'fake',connectionId:'c'}],objects:[{id:'o',type:'TECHNICAL_ASSET',externalKey:'x',name:'X',projectId:'p',attributes:{},relationships:[],version:1}]}
+ for(const object of [
+  {...base.objects[0],type:'NOT_A_CANONICAL_TYPE'},
+  {...base.objects[0],attributes:[]},
+  {...base.objects[0],relationships:'invalid'},
+  {...base.objects[0],relationships:[{type:'OWNS',targetId:''}]},
+  {...base.objects[0],version:0},
+  {...base.objects[0],state:'delete'},
+ ])assert.equal(validateGovernanceDesiredState({...base,objects:[object]}).ok,false)
+ assert.equal(validateGovernanceDesiredState(base).ok,true)
+})
