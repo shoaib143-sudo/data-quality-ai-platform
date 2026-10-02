@@ -342,3 +342,48 @@ test('decision payload builder redacts embedded credentials from free text', () 
   assert.doesNotMatch(serialized, /BEGIN PRIVATE KEY/)
   assert.match(serialized, /REDACTED/)
 })
+
+
+test('DecisionGateway forwards the governed family timeout', async () => {
+  let observedTimeout
+  const provider = {
+    id: 'fake_jev',
+    state: 'AVAILABLE',
+    async evaluate(request) {
+      observedTimeout = request.timeoutMs
+      return {
+        provider: 'fake_jev',
+        model: 'jev-test',
+        answers: Object.fromEntries(Object.keys(request.questions).map(name => [name, { type: 'noul', noul: 0.99 }])),
+        usage: { inputTokens: 1, outputTokens: 1 },
+        latencyMs: 1,
+      }
+    },
+  }
+  const gateway = new DecisionGateway({ provider })
+  await gateway.evaluate({
+    definition: BUILTIN_DECISION_DEFINITIONS.PROMPT_SECURITY,
+    state: { content: 'hello' },
+  })
+  assert.equal(observedTimeout, BUILTIN_DECISION_DEFINITIONS.PROMPT_SECURITY.timeoutMs)
+})
+
+test('Jev adapter rejects invalid per-request timeouts before network use', async () => {
+  const { JevDecisionProvider } = await import('../lib/ai/jev-decision-provider.ts')
+  const provider = new JevDecisionProvider({
+    apiKey: 'test-key',
+    baseUrl: 'https://api.typesafe.ai',
+    model: 'jev-latest',
+    timeoutMs: 1000,
+  })
+  await assert.rejects(
+    () => provider.evaluate({
+      decisionFamily: 'TEST',
+      schemaVersion: 'test-v1',
+      state: 'x',
+      questions: { risky: { type: 'noul' } },
+      timeoutMs: 10,
+    }),
+    /at least 100ms/,
+  )
+})
