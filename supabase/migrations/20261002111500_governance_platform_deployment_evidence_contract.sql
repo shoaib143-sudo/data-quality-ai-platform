@@ -165,6 +165,7 @@ revoke all on function governance.put_platform_execution_checkpoint(uuid,text,bi
   from public, anon, authenticated;
 grant execute on function governance.put_platform_execution_checkpoint(uuid,text,bigint,text,integer,text,text,jsonb,text,timestamptz)
   to service_role;
+revoke update on governance.platform_execution_checkpoints from service_role;
 grant execute on function governance.claim_platform_execution_checkpoint(uuid,text,text,text)
   to service_role;
 
