@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
-import type { DecisionProvider, DecisionResult } from './decision-provider'
-import type { DecisionDefinition } from './decision-registry'
-import { evaluateDecisionConfidence, type DecisionPolicyOutcome } from './decision-policy'
-import { DecisionPayloadBuilder } from './decision-payload-builder'
+import type { DecisionProvider, DecisionResult } from './decision-provider.ts'
+import type { DecisionDefinition } from './decision-registry.ts'
+import { evaluateDecisionConfidence, type DecisionPolicyOutcome } from './decision-policy.ts'
+import { DecisionPayloadBuilder } from './decision-payload-builder.ts'
 
 export type DecisionReceipt = {
   decisionFamily: string
