@@ -1,4 +1,4 @@
-import type { DecisionQuestion } from './decision-provider'
+import type { DecisionQuestion } from './decision-provider.ts'
 
 export type DecisionLifecycle = 'DRAFT' | 'SHADOW' | 'ADVISORY' | 'ACTIVE' | 'RETIRED'
 export type DecisionFailureMode = 'FAIL_CLOSED' | 'RULE_FALLBACK' | 'LLM_FALLBACK' | 'HUMAN_REVIEW' | 'ALLOW_WITHOUT_PROVIDER'
