@@ -36,3 +36,28 @@ test('Informatica client normalizes network failure without retrying locally',as
  await assert.rejects(()=>client.getJson('/x'),error=>error.code==='PROVIDER_UNAVAILABLE'&&error.retryable===true)
  assert.equal(calls,1)
 })
+
+
+test('Informatica client normalizes provider HTTP failure classes without local retry',async()=>{
+ const cases=[
+  [401,'AUTHENTICATION_FAILED',false],
+  [403,'AUTHORIZATION_DENIED',false],
+  [404,'NOT_FOUND',false],
+  [429,'RATE_LIMITED',true],
+  [408,'TRANSIENT_FAILURE',true],
+  [500,'TRANSIENT_FAILURE',true],
+  [502,'TRANSIENT_FAILURE',true],
+  [503,'TRANSIENT_FAILURE',true],
+  [504,'TRANSIENT_FAILURE',true],
+  [422,'VALIDATION_FAILED',false],
+ ]
+ for(const [status,code,retryable] of cases){
+  let calls=0
+  const client=new InformaticaApiClient({
+   baseUrl:'https://example.test',accessToken:async()=>'token',
+   fetchImpl:async()=>{calls++;return{ok:false,status,json:async()=>({})}},
+  })
+  await assert.rejects(()=>client.getJson('/x'),error=>error.code===code&&error.retryable===retryable)
+  assert.equal(calls,1)
+ }
+})
