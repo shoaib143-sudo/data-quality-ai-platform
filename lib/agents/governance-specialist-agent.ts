@@ -1,3 +1,4 @@
+import { proposeNegativeCaseFromFailedAgentRun } from './governed-negative-case-learning-runtime'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import {
@@ -491,6 +492,7 @@ export async function executeGovernanceSpecialistAgent(input: {
   }>
   existingAgentRunId?: string | null
   nativeAttempt?: number
+  learningRunMode?: 'SUPERVISED' | 'HANDSFREE'
 }) {
   const admin = createAdminClient()
   const suppliedQuestion = input.question?.trim().slice(0, 1000) || null
@@ -547,7 +549,7 @@ export async function executeGovernanceSpecialistAgent(input: {
     }
     const { error: startError } = await admin.schema('agent').from('agent_runs').update({
       status: 'RUNNING',
-      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'native_supervisor_specialist_read_only' },
+      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'native_supervisor_specialist_read_only', learningRunMode: input.learningRunMode ?? 'HANDSFREE' },
       started_at: new Date().toISOString(),
       completed_at: null,
       error_code: null,
@@ -560,7 +562,7 @@ export async function executeGovernanceSpecialistAgent(input: {
       agent_definition_id: definition.id,
       project_id: input.projectId,
       status: 'RUNNING',
-      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'deterministic_specialist_read_only' },
+      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'deterministic_specialist_read_only', learningRunMode: input.learningRunMode ?? 'SUPERVISED' },
       started_at: new Date().toISOString(),
     }).select('id').single()
     if (runError || !createdRun) throw new Error(`Unable to create specialist agent run: ${runError?.message ?? 'unknown error'}`)
@@ -855,6 +857,21 @@ export async function executeGovernanceSpecialistAgent(input: {
       error_message: message.slice(0, 2000),
       completed_at: new Date().toISOString(),
     }).eq('id', run.id)
+
+    try {
+      await proposeNegativeCaseFromFailedAgentRun({
+        projectId: input.projectId,
+        agentRunId: run.id,
+        failureSummary: message,
+        runMode: input.learningRunMode ?? (input.existingAgentRunId ? 'HANDSFREE' : 'SUPERVISED'),
+        actorUserId: input.actorUserId,
+      })
+    } catch (learningError) {
+      console.error(
+        '[governance-specialist-agent] specialist negative-case learning failed safely:',
+        learningError instanceof Error ? learningError.message : learningError,
+      )
+    }
 
     if (lifecycle && !lifecycleFinished) {
       try {
