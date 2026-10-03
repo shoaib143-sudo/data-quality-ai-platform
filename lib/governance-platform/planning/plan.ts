@@ -2,7 +2,7 @@ import type { CanonicalGovernanceObject } from '../canonical/model.ts'
 import type { GovernanceDesiredState } from '../desired-state/model.ts'
 import { validateGovernanceDesiredState } from '../desired-state/validate.ts'
 import { diffGovernanceState, type GovernanceDiffAction } from './diff.ts'
-import { stableGovernanceFingerprint } from './fingerprint.ts'
+import { governanceDesiredStateFingerprint,stableGovernanceFingerprint } from './fingerprint.ts'
 
 export type GovernancePlanOperation = {
   operationId: string
@@ -27,11 +27,11 @@ export function buildGovernancePlan(
   const validation = validateGovernanceDesiredState(desiredState)
   if (!validation.ok) throw new Error(`Invalid governance desired state: ${validation.errors.join(' ')}`)
 
-  const desiredStateFingerprint = stableGovernanceFingerprint(desiredState)
-  const diffs = diffGovernanceState(desiredState.objects, actual)
+  const desiredStateFingerprint = governanceDesiredStateFingerprint(desiredState)
+  const diffs = diffGovernanceState(desiredState.objects, actual).sort((a,b)=>`${a.desired.type}\u0000${a.desired.externalKey}\u0000${a.desired.id}`.localeCompare(`${b.desired.type}\u0000${b.desired.externalKey}\u0000${b.desired.id}`))
   const diffByActualKey=new Map(diffs.filter(diff=>diff.actual).map(diff=>[`${diff.actual!.type}:${diff.actual!.externalKey}`,diff]))
 
-  const operations = diffs.map((diff, index) => {
+  const operations = diffs.map(diff => {
     let dependencies:string[]
     if(diff.action==='DELETE'){
       const inbound=actual.filter(other=>other.id!==diff.desired.id&&other.relationships.some(relationship=>relationship.targetId===diff.desired.id))
@@ -52,7 +52,7 @@ export function buildGovernancePlan(
         action: diff.action,
         type: diff.desired.type,
         externalKey: diff.desired.externalKey,
-        index,
+        objectId: diff.desired.id,
       }).slice(0, 32),
       action: diff.action,
       canonicalKey: `${diff.desired.type}:${diff.desired.externalKey}`,
