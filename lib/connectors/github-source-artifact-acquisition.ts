@@ -67,7 +67,7 @@ export async function acquireGitHubSourceArtifacts(input:{repositoryUrl:string;r
   for(const item of candidates){
     if(totalBytes+item.size>MAX_TOTAL_BYTES)break
     const rawUrl=`https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${rawRef}/${item.path.split('/').map(encodeURIComponent).join('/')}`
-    const response=await fetch(rawUrl,{headers:{'user-agent':'DataNexus-source-artifact-scanner'},cache:'no-store'})
+    const response=await fetch(rawUrl,{headers:headers(),cache:'no-store'})
     if(!response.ok)continue
     const content=await response.text()
     const bytes=new TextEncoder().encode(content).length
