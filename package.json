@@ -89,7 +89,7 @@
     "verify:governance-maturity": "node --experimental-strip-types scripts/test-governance-maturity-scoring.mjs && node --experimental-strip-types scripts/test-governance-maturity-calibration.mjs && node --test tests/governance-maturity-framework.test.mjs tests/governance-maturity-schema.test.mjs tests/governance-maturity-api.test.mjs tests/governance-maturity-onboarding-ux.test.mjs tests/governance-maturity-observation.test.mjs tests/governance-maturity-health.test.mjs && pnpm exec tsc --noEmit",
     "verify:learning-evaluation-policy": "node --experimental-strip-types scripts/test-learning-evaluation-policy.mjs && node --experimental-strip-types scripts/test-learning-evaluation-release-admission.mjs && node --experimental-strip-types scripts/test-learning-evaluation-command-center.mjs && node --experimental-strip-types scripts/test-learning-evaluation-admission-behavior.mjs",
     "verify:learning-experiment-runner": "node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs",
-    "verify:governance-provider-platform": "node --experimental-strip-types --test tests/governance-provider-platform.test.mjs"
+    "verify:governance-provider-platform": "node --experimental-strip-types --test tests/governance-provider-*.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
