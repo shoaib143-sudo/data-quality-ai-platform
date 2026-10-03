@@ -81,7 +81,14 @@ The independent PR review identified three concrete concerns: the local fixture 
 
 The follow-up patch requires `DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM=I_ACCEPT_DESTRUCTIVE_FIXTURE` and a `datanexus_fixture_` database name in both SQL fixture scripts. Each CI database job now creates and targets a separately named fixture database. The boundary test rejects any uncommented `testing.` reference in runner/budget migrations, checks the testing-schema migration path appears in both `pull_request` and `push` filters, and verifies both scripts stop before connecting when the destructive opt-in is missing.
 
-Required re-validation on the updated head: runner behavior and service suites, boundary tests including the negative opt-in cases, budget behavior, TypeScript, the isolated runner and budget PostgreSQL concurrency fixtures, and all exact-head CI contexts. A fresh independent review must assess the follow-up patch itself. The previous review findings do not count as review of their fixes.
+### Completed follow-up evidence
+
+- Updated PR head: `36a1e27e39e252f5db4f498056e8d2863840e956`.
+- Fresh independent review confirmed the three prior findings are addressed and found no high-severity regression.
+- All 44 exact-head GitHub workflow runs completed successfully. Continuous Learning Governance passed all four jobs, including fresh disposable runner and budget PostgreSQL concurrency fixtures. Post Implementation Assurance, Release Governance, Quality Gate, CodeQL, and Repository Governance passed; production deploy/canary jobs were skipped.
+- Local runner behavior (119 scenarios), service, four schema-boundary assertions, budget (24 agent/mode cases), evaluation policy/admission, TypeScript, and `git diff --check` passed.
+
+Residual limitations remain explicit: a local hostname plus the `datanexus_fixture_` name and opt-in cannot prove that an operator has not pointed a local proxy at shared infrastructure. CI instead uses fresh isolated service containers. The SQL boundary detector is textual rather than a full SQL parser; current runner and budget migrations pass it and contain no `testing.` reference after comments are stripped. These limits are not hidden by the green CI result.
 
 ## Limits
 
