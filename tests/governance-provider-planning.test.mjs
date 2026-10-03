@@ -96,3 +96,11 @@ test('desired-state validation rejects malformed JSON that TypeScript types cann
  ])assert.equal(validateGovernanceDesiredState({...base,objects:[object]}).ok,false)
  assert.equal(validateGovernanceDesiredState(base).ok,true)
 })
+
+
+test('explicit delete fails closed when an unmanaged observed dependent still references the target',()=>{
+ const parent={id:'parent',type:'TECHNICAL_ASSET',externalKey:'parent',name:'Parent',projectId:'project-1',attributes:{},relationships:[],version:1}
+ const unmanaged={id:'external-child',type:'TECHNICAL_ASSET',externalKey:'external-child',name:'External child',projectId:'project-1',attributes:{},relationships:[{type:'DEPENDS_ON',targetId:'parent'}],version:1}
+ const desired={apiVersion:'datanexus.io/governance/v1',projectId:'project-1',targets:[{provider:'fake',connectionId:'c'}],objects:[{...parent,state:'absent'}]}
+ assert.throws(()=>buildGovernancePlan(desired,[parent,unmanaged]),/blocked because observed object TECHNICAL_ASSET:external-child still references it/)
+})
