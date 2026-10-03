@@ -62,7 +62,7 @@ jobs:
           node-version: 24
       - name: Migration and durability contract tests
         run: |
-          node --experimental-strip-types --test tests/governance-provider-persistence-contract.test.mjs
+          node --experimental-strip-types --test tests/governance-provider-persistence-contract.test.mjs tests/governance-provider-projections.test.mjs
           node --experimental-strip-types --test tests/governance-provider-checkpoint-resume.test.mjs tests/governance-provider-durable-runner.test.mjs
 
   provider-security-adversarial:
