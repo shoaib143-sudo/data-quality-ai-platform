@@ -5,6 +5,7 @@ import { normalizeFederatedMetadata, detectFederationConflicts, resolveFederated
 import { normalizeLineagePayload } from '../lib/governance/lineage-adapters.ts'
 import { scanSourceArtifact } from '../lib/connectors/source-artifact-scanner.ts'
 import { normalizeBiMetadata } from '../lib/connectors/bi-metadata.ts'
+import { parseGitHubRepositoryUrl, sourceArtifactKindForPath } from '../lib/connectors/github-source-artifact-acquisition.ts'
 
 test('metadata federation preserves provenance and detects competing descriptions',()=>{
   const records=normalizeFederatedMetadata({items:[
@@ -470,4 +471,16 @@ test('automated GitHub artifact acquisition is bounded, host-allowlisted and nev
   assert.match(route,/SOURCE_ARTIFACT_REPOSITORY_SCANNED/)
   assert.match(ui,/Automated GitHub acquisition/)
   assert.match(ui,/GITHUB_SOURCE_SCAN_TOKEN/)
+})
+
+
+test('GitHub artifact acquisition parser rejects non-GitHub hosts and infers supported artifact kinds',()=>{
+  assert.deepEqual(parseGitHubRepositoryUrl('https://github.com/example/repo.git'),{owner:'example',repo:'repo'})
+  assert.throws(()=>parseGitHubRepositoryUrl('https://example.com/example/repo'),/Only HTTPS github\.com/)
+  assert.equal(sourceArtifactKindForPath('src/LoadCustomer.cs'),'DOTNET')
+  assert.equal(sourceArtifactKindForPath('jobs/load.ts'),'NODEJS')
+  assert.equal(sourceArtifactKindForPath('macros/Module1.bas'),'VBA')
+  assert.equal(sourceArtifactKindForPath('scripts/load.sql'),'SCRIPT')
+  assert.equal(sourceArtifactKindForPath('logs/run.log'),'LOG')
+  assert.equal(sourceArtifactKindForPath('images/logo.png'),null)
 })
