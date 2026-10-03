@@ -53,3 +53,11 @@ test('forward checkpoint hardening makes failed and ambiguous pending work non-r
  assert.match(sql,/status = 'RUNNING'[\s\S]*interval '15 minutes'[\s\S]*resume_action', 'WAIT'/)
  assert.match(sql,/claim_generation = claim_generation \+ 1/)
 })
+
+
+test('stale claim recovery migration fences ownership without granting replay permission',()=>{
+ const sql=fs.readFileSync(new URL('../supabase/migrations/20261003020000_governance_platform_stale_claim_recovery.sql',import.meta.url),'utf8')
+ assert.match(sql,/claim_generation = claim_generation \+ 1/)
+ assert.match(sql,/resume_action', 'RECOVER'/)
+ assert.doesNotMatch(sql,/resume_action', 'EXECUTE'[\s\S]*stale/i)
+})
