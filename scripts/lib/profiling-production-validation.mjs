@@ -12,6 +12,9 @@ export function evaluateProfilingProductionSnapshot(snapshot) {
   const activeDatasetVersionsWithoutCompletedProfile = Array.isArray(snapshot.activeDatasetVersionsWithoutCompletedProfile)
     ? snapshot.activeDatasetVersionsWithoutCompletedProfile
     : []
+  const nonProfileableActiveSources = Array.isArray(snapshot.nonProfileableActiveSources)
+    ? snapshot.nonProfileableActiveSources
+    : []
 
   if (!Number.isFinite(snapshot.profileRuns) || snapshot.profileRuns < 1) failures.push('NO_PROFILE_RUNS')
   if (!Number.isFinite(snapshot.completedRuns) || snapshot.completedRuns < 1) failures.push('NO_COMPLETED_PROFILE_RUNS')
@@ -23,6 +26,11 @@ export function evaluateProfilingProductionSnapshot(snapshot) {
   }
   for (const datasetVersionId of activeDatasetVersionsWithoutCompletedProfile) {
     failures.push(`ACTIVE_SOURCE_WITHOUT_COMPLETED_PROFILE_${datasetVersionId}`)
+  }
+  for (const source of nonProfileableActiveSources) {
+    const datasetVersionId = source?.datasetVersionId ?? 'UNKNOWN'
+    const sourceType = String(source?.sourceType ?? 'UNKNOWN').toUpperCase()
+    warnings.push(`NON_PROFILEABLE_ACTIVE_SOURCE_${datasetVersionId}_${sourceType}`)
   }
 
   const completedFileRuns = latestRuns.filter((run) => String(run.sourceType ?? '').toUpperCase() === 'FILE').length
@@ -63,6 +71,7 @@ export function evaluateProfilingProductionSnapshot(snapshot) {
       activeJdbcSources: Number(sourceTypes.JDBC ?? 0),
       ambiguousActiveSourceDatasetVersions: ambiguousActiveSourceDatasetVersions.length,
       activeDatasetVersionsWithoutCompletedProfile: activeDatasetVersionsWithoutCompletedProfile.length,
+      nonProfileableActiveSources: nonProfileableActiveSources.length,
       latestCompletedFileProfiles: completedFileRuns,
       latestCompletedJdbcProfiles: completedJdbcRuns,
       latestRunsWithFindings: latestRuns.filter((run) => Number(run.findings ?? 0) > 0).length,

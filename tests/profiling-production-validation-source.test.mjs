@@ -20,9 +20,14 @@ test('live profiling contract validation uses bounded concurrency', () => {
 })
 
 test('retained profiling evidence excludes source credentials and connection details', () => {
-  for (const forbidden of ['source_uri', 'execution_config', 'credential_ref', 'jdbc_url']) {
+  for (const forbidden of ['source_uri', 'credential_ref', 'jdbc_url']) {
     assert.equal(source.toLowerCase().includes(forbidden), false, `live evidence source must not select or emit ${forbidden}`)
   }
+  assert.equal(/\.select\([^\n]*execution_config/i.test(source), false, 'execution_config must never be selected into retained evidence')
+  assert.ok(source.includes(".not('execution_config->>schema', 'is', null)"))
+  assert.ok(source.includes(".not('execution_config->>table', 'is', null)"))
+  assert.ok(source.includes(".select('dataset_version_id')"))
+  assert.ok(source.includes('nonProfileableActiveSources'))
 })
 
 

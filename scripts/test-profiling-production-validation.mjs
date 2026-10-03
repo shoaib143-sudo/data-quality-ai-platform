@@ -159,3 +159,27 @@ test('fails closed when an active execution source has never completed profiling
   assert.ok(result.failures.includes('ACTIVE_SOURCE_WITHOUT_COMPLETED_PROFILE_dataset-never-profiled'))
   assert.equal(result.summary.activeDatasetVersionsWithoutCompletedProfile, 1)
 })
+
+
+test('warns instead of failing for active non-profileable connection roots', () => {
+  const result = evaluateProfilingProductionSnapshot(validSnapshot({
+    nonProfileableActiveSources: [
+      { datasetVersionId: 'connection-root', sourceType: 'JDBC' },
+    ],
+  }))
+  assert.equal(result.valid, true)
+  assert.ok(result.warnings.includes('NON_PROFILEABLE_ACTIVE_SOURCE_connection-root_JDBC'))
+  assert.equal(result.summary.nonProfileableActiveSources, 1)
+})
+
+test('still fails for concrete profileable sources without a completed profile', () => {
+  const result = evaluateProfilingProductionSnapshot(validSnapshot({
+    nonProfileableActiveSources: [
+      { datasetVersionId: 'connection-root', sourceType: 'JDBC' },
+    ],
+    activeDatasetVersionsWithoutCompletedProfile: ['gold-table'],
+  }))
+  assert.equal(result.valid, false)
+  assert.ok(result.failures.includes('ACTIVE_SOURCE_WITHOUT_COMPLETED_PROFILE_gold-table'))
+  assert.equal(result.failures.some((failure) => failure.includes('connection-root')), false)
+})
