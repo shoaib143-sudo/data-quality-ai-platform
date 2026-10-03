@@ -44,6 +44,7 @@ on:
       - 'lib/agents/learning-experiment-runner*.ts'
       - 'scripts/test-learning-experiment-runner*.mjs'
       - 'scripts/test-learning-runner-schema-boundary.mjs'
+      - 'supabase/migrations/20260923193808_create_private_testing_schema_and_fixture_harness.sql'
       - 'scripts/fixtures/learning-runner-admin.mjs'
       - 'scripts/test-learning-experiment-runner.sql'
       - 'scripts/run-learning-experiment-runner-fixture.sh'
@@ -150,6 +151,7 @@ on:
       - 'lib/agents/learning-experiment-runner*.ts'
       - 'scripts/test-learning-experiment-runner*.mjs'
       - 'scripts/test-learning-runner-schema-boundary.mjs'
+      - 'supabase/migrations/20260923193808_create_private_testing_schema_and_fixture_harness.sql'
       - 'scripts/fixtures/learning-runner-admin.mjs'
       - 'scripts/test-learning-experiment-runner.sql'
       - 'scripts/run-learning-experiment-runner-fixture.sh'
@@ -338,13 +340,21 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Create disposable learning budget fixture database
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: createdb datanexus_fixture_learning_budget
       - name: Execute isolated learning budget admission and concurrency fixture
         env:
           PGHOST: 127.0.0.1
           PGPORT: '5432'
           PGUSER: postgres
-          PGDATABASE: postgres
+          PGDATABASE: datanexus_fixture_learning_budget
           PGPASSWORD: postgres
+          DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM: I_ACCEPT_DESTRUCTIVE_FIXTURE
         run: bash scripts/run-learning-experiment-budget-fixture.sh
 
   learning-runner-database:
@@ -366,11 +376,19 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Create disposable learning runner fixture database
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: createdb datanexus_fixture_learning_runner
       - name: Execute isolated learning runner evidence and dispatch concurrency fixture
         env:
           PGHOST: 127.0.0.1
           PGPORT: '5432'
           PGUSER: postgres
-          PGDATABASE: postgres
+          PGDATABASE: datanexus_fixture_learning_runner
           PGPASSWORD: postgres
+          DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM: I_ACCEPT_DESTRUCTIVE_FIXTURE
         run: bash scripts/run-learning-experiment-runner-fixture.sh
