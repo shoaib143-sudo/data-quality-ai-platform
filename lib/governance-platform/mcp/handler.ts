@@ -27,10 +27,11 @@ function error(id:JsonRpcId|null,code:number,message:string,status=200,data?:unk
 }
 function record(value:unknown):Record<string,unknown>{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{}}
 function text(value:unknown){return typeof value==='string'?value.trim():''}
+function isJsonContentType(value:string|null){return value?.split(';',1)[0]?.trim().toLowerCase()==='application/json'}
 
 function validateModernRequest(request:Request,body:unknown):{ok:true;rpc:JsonRpcRequest}|{ok:false;response:Response}{
  if(request.method!=='POST')return{ok:false,response:error(null,-32600,'MCP governance endpoint accepts POST only.',405)}
- if(!request.headers.get('content-type')?.toLowerCase().includes('application/json'))return{ok:false,response:error(null,-32600,'Content-Type must be application/json.',415)}
+ if(!isJsonContentType(request.headers.get('content-type')))return{ok:false,response:error(null,-32600,'Content-Type must be application/json.',415)}
  const rpc=record(body)
  const id=typeof rpc.id==='string'||typeof rpc.id==='number'?rpc.id:null
  if(rpc.jsonrpc!=='2.0'||id===null||typeof rpc.method!=='string')return{ok:false,response:error(id,-32600,'Invalid JSON-RPC request.',400)}

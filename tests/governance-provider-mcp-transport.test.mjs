@@ -35,3 +35,9 @@ test('Next MCP route is node runtime, dynamic, and POST only',()=>{
  assert.match(route,/export async function POST/)
  assert.doesNotMatch(route,/export async function GET/)
 })
+
+
+test('MCP modern request content type uses exact media-type validation',()=>{
+ assert.match(source,/split\(';',1\)\[0\]\?\.trim\(\)\.toLowerCase\(\)===\'application\/json\'/)
+ assert.doesNotMatch(source,/includes\('application\/json'\)/)
+})

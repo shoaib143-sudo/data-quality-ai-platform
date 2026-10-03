@@ -85,3 +85,8 @@ No source-review result overrides exact-head CI, behavioral migration validation
 ### Additional durability hardening
 
 The active checkpoint generation can no longer regress terminal state or decrease its attempt counter. Database-enforced transition guards make VERIFIED and FAILED terminal for that generation while preserving RUNNING recovery readback and normal PENDING/SUCCEEDED progression.
+
+
+### MCP 2026-07-28 transport conformance hardening
+
+The modern HTTP handler now validates the parsed Content-Type media type exactly as application/json instead of substring matching. This closes acceptance of misleading non-JSON media types that merely contain application/json in a parameter and aligns the custom transport boundary with the current official v2 SDK behavior. Official SDK interoperability remains a separate closure gate.
