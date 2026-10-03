@@ -1,5 +1,6 @@
 import type { CanonicalGovernanceObject } from '../canonical/model.ts'
 import type { DesiredGovernanceObject } from '../desired-state/model.ts'
+import { normalizeGovernanceRelationships,stableGovernanceFingerprint } from './fingerprint.ts'
 
 export type GovernanceDiffAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'NOOP'
 
@@ -10,13 +11,13 @@ export type GovernanceDiff = {
 }
 
 function comparable(value: CanonicalGovernanceObject | DesiredGovernanceObject) {
-  return JSON.stringify({
+  return stableGovernanceFingerprint({
     type: value.type,
     externalKey: value.externalKey,
     name: value.name,
     description: value.description ?? null,
     attributes: value.attributes,
-    relationships: value.relationships,
+    relationships: normalizeGovernanceRelationships(value.relationships),
   })
 }
 
