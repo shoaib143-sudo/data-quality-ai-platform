@@ -75,3 +75,13 @@ test('verified governed outcomes close the negative learning feedback loop', () 
   assert.match(negativeService, /usage_status', 'APPLIED'/)
   assert.match(governedOutcome, /reconcileNegativeLearningCaseUsagesFromGovernedOutcome/)
 })
+
+
+test('retrieval recording never downgrades terminal learning usage state', () => {
+  const positiveService = fs.readFileSync('lib/agents/proactive-governed-case-learning-service.ts', 'utf8')
+  const negativeService = fs.readFileSync('lib/agents/governed-negative-case-learning-service.ts', 'utf8')
+  for (const source of [positiveService, negativeService]) {
+    assert.match(source, /ignoreDuplicates: true/)
+    assert.match(source, /usage_status: 'RETRIEVED'/)
+  }
+})
