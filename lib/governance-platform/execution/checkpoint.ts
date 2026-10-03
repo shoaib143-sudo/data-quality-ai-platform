@@ -13,7 +13,7 @@ export type GovernanceCheckpoint={
  updatedAt:string
 }
 
-export type GovernanceResumeAction='EXECUTE'|'POLL'|'VERIFY'|'WAIT'|'FAILED'|'COMPLETE'
+export type GovernanceResumeAction='EXECUTE'|'POLL'|'VERIFY'|'RECOVER'|'WAIT'|'FAILED'|'COMPLETE'
 export type GovernanceClaimResult={claimed:boolean;resumeAction:GovernanceResumeAction;checkpoint:GovernanceCheckpoint}
 export interface GovernanceCheckpointStore{
  get(idempotencyKey:string):Promise<GovernanceCheckpoint|null>
