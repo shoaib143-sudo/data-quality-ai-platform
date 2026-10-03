@@ -55,6 +55,7 @@ type Props = {
   initialDatasets: MonitoringDataset[]
   initialProjects: MonitoringProject[]
   initialJobs: MonitoringJob[]
+  initialSteps?: MonitoringStep[]
   initialNow: string
   initialRunId?: string | null
   initialAgentId?: string | null
@@ -91,9 +92,9 @@ type DomainCell = {
 }
 
 const ACTIVE = new Set(['RUNNING', 'CREATED', 'PENDING'])
-const WAITING = new Set(['WAITING'])
+const WAITING = new Set(['WAITING', 'WAITING_APPROVAL', 'AWAITING_APPROVAL', 'BLOCKED'])
 const QUEUED = new Set(['QUEUED'])
-const COMPLETE = new Set(['SUCCEEDED', 'COMPLETED'])
+const COMPLETE = new Set(['SUCCEEDED', 'COMPLETED', 'PASSED', 'VERIFIED'])
 const TIME_FORMATTER = new Intl.DateTimeFormat('en-SG', { timeStyle: 'short', timeZone: 'Asia/Singapore' })
 
 const FEATURE_PRESENTATION: Record<string, FeaturePresentation> = {
@@ -282,6 +283,7 @@ function OrganicDomainCell({
   selected,
   onSelectDomain,
   onSelectAgent,
+  steps,
 }: {
   cell: DomainCell
   agents: Map<string, MonitoringAgent>
@@ -290,12 +292,19 @@ function OrganicDomainCell({
   selected: boolean
   onSelectDomain: () => void
   onSelectAgent: (agentId: string, runId: string | null) => void
+  steps: MonitoringStep[]
 }) {
   const meta = statusMeta(cell.status)
   const palette = domainPalette(cell.key)
   const visibleComponents = cell.components
   const denseNodes = visibleComponents.length > 8
   const featureProgress = cell.progressPercent
+  const stepsByRun = new Map<string, MonitoringStep[]>()
+  for (const step of steps) {
+    const current = stepsByRun.get(step.agent_run_id) ?? []
+    current.push(step)
+    stepsByRun.set(step.agent_run_id, current)
+  }
   const domainStyle = {
     '--domain-edge': palette.edge,
     '--domain-glow': palette.glow,
@@ -312,8 +321,15 @@ function OrganicDomainCell({
     <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full opacity-30">
       {visibleComponents.map((component, index) => {
         const position = organicNodePosition(index, visibleComponents.length)
-        const stroke = component.run ? palette.edge : 'rgba(100,116,139,.28)'
-        return <line key={component.agent.id} x1="50%" y1="53%" x2={`${position.left}%`} y2={`${position.top}%`} stroke={stroke} strokeWidth={component.run ? '1.15' : '0.65'} style={{ filter: component.run ? `drop-shadow(0 0 4px ${palette.edge})` : undefined }} />
+        const componentSteps = component.run ? stepsByRun.get(component.run.id) ?? [] : []
+        const runStatus = component.run ? normalizeRunStatus(component.run.status) : 'IDLE'
+        const hasRunningStep = componentSteps.some((step) => normalizeRunStatus(step.status) === 'RUNNING')
+        const hasFailedStep = componentSteps.some((step) => normalizeRunStatus(step.status) === 'FAILED')
+        const hasWaitingStep = componentSteps.some((step) => normalizeRunStatus(step.status) === 'WAITING')
+        const evidenceStatus: CellStatus = hasFailedStep ? 'FAILED' : hasRunningStep ? 'RUNNING' : hasWaitingStep ? 'WAITING' : runStatus
+        const illuminated = evidenceStatus !== 'IDLE'
+        const stroke = evidenceStatus === 'FAILED' ? '#e879f9' : evidenceStatus === 'WAITING' ? '#fcd34d' : evidenceStatus === 'COMPLETE' ? '#6ee7b7' : illuminated ? palette.edge : 'rgba(100,116,139,.28)'
+        return <line key={component.agent.id} x1="50%" y1="53%" x2={`${position.left}%`} y2={`${position.top}%`} stroke={stroke} strokeWidth={illuminated ? '1.35' : '0.65'} strokeDasharray={evidenceStatus === 'WAITING' ? '5 4' : undefined} className={evidenceStatus === 'RUNNING' ? 'motion-safe:animate-pulse' : undefined} style={{ filter: illuminated ? `drop-shadow(0 0 5px ${stroke})` : undefined }} />
       })}
     </svg>
 
@@ -369,6 +385,7 @@ export function JobMonitor({
   initialDatasets,
   initialProjects,
   initialJobs,
+  initialSteps = [],
   initialNow,
   initialRunId = null,
   initialAgentId = null,
@@ -377,6 +394,7 @@ export function JobMonitor({
 }: Props) {
   const [runs, setRuns] = useState(initialRuns)
   const [jobs, setJobs] = useState(initialJobs)
+  const [steps, setSteps] = useState(initialSteps)
   const initialSelectedRun = initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialAgentId ? null : initialRuns[0]?.id ?? null
   const [selectedRunId, setSelectedRunId] = useState<string | null>(initialSelectedRun)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(initialAgentId ?? (initialSelectedRun ? initialRuns.find((run) => run.id === initialSelectedRun)?.agent_definition_id ?? null : null))
@@ -395,9 +413,10 @@ export function JobMonitor({
     try {
       const response = await fetch('/api/monitoring/runs', { cache: 'no-store' })
       if (!response.ok) return
-      const payload = await response.json() as { runs?: MonitoringRun[]; jobs?: MonitoringJob[] }
+      const payload = await response.json() as { runs?: MonitoringRun[]; jobs?: MonitoringJob[]; steps?: MonitoringStep[] }
       setRuns(payload.runs ?? [])
       setJobs(payload.jobs ?? [])
+      setSteps(payload.steps ?? [])
       setLastUpdated(new Date())
     } finally {
       setRefreshing(false)
@@ -484,6 +503,16 @@ export function JobMonitor({
 
   const selectedCell = domainCells.find((cell) => cell.key === selectedDomainKey) ?? domainCells[0] ?? null
 
+  const selectedRunSteps = useMemo(() => {
+    if (!selectedRunId) return []
+    return steps
+      .filter((step) => step.agent_run_id === selectedRunId)
+      .sort((a, b) => a.step_order - b.step_order || a.attempt - b.attempt)
+  }, [steps, selectedRunId])
+  const selectedRunProgress = selectedRunSteps.length
+    ? Math.round((selectedRunSteps.filter((step) => normalizeRunStatus(step.status) === 'COMPLETE').length / selectedRunSteps.length) * 100)
+    : null
+
   const activeJobs = runs.filter((run) => ACTIVE.has(run.status)).length + jobs.filter(job => ACTIVE.has(job.status)).length
   const queuedJobs = runs.filter((run) => WAITING.has(run.status) || QUEUED.has(run.status)).length + jobs.filter(job => WAITING.has(job.status) || QUEUED.has(job.status)).length
   const completed24h = runs.filter((run) => {
@@ -540,6 +569,24 @@ export function JobMonitor({
       </div>
     </div>
 
+    {selectedRunId && selectedRunSteps.length > 0 ? <div className="border-b border-cyan-300/10 bg-cyan-300/[0.035] px-5 py-3" aria-label="Selected execution pulse">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200/70">Execution pulse</span>
+        {selectedRunSteps.map((step, index) => {
+          const status = normalizeRunStatus(step.status)
+          const meta = statusMeta(status)
+          return <span key={step.id} className="inline-flex items-center gap-2">
+            {index > 0 ? <span className={`h-px w-5 ${status === 'IDLE' ? 'bg-slate-700' : 'bg-cyan-300/60'}`} /> : null}
+            <span title={`${step.step_name} · ${meta.label} · attempt ${step.attempt}`} className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-bold ${meta.ring} ${meta.soft} ${meta.text}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${status === 'RUNNING' ? 'motion-safe:animate-pulse' : ''}`} />
+              {step.step_name}
+            </span>
+          </span>
+        })}
+        <span className="ml-auto text-[11px] font-black text-white">{selectedRunProgress}% evidence complete</span>
+      </div>
+    </div> : null}
+
     <div className="border-b border-white/[0.07] bg-[#051220] px-5 py-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative min-w-0 flex-1">
@@ -584,6 +631,7 @@ export function JobMonitor({
             selected={selectedCell?.key === cell.key}
             onSelectDomain={() => selectDomain(cell)}
             onSelectAgent={(agentId, runId) => selectAgent(cell, agentId, runId)}
+            steps={steps}
           />)}
         </div> : <div className="relative z-10 grid min-h-[480px] place-items-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02]">
           <div className="text-center">
