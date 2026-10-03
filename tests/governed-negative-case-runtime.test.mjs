@@ -85,3 +85,11 @@ test('retrieval recording never downgrades terminal learning usage state', () =>
     assert.match(source, /usage_status: 'RETRIEVED'/)
   }
 })
+
+
+test('unrelated failures do not collapse into one negative learning case', () => {
+  const contract = fs.readFileSync('lib/agents/governed-negative-case-learning.ts', 'utf8')
+  assert.match(contract, /negativeCaseSignature/)
+  assert.match(contract, /useCaseKey: \`\$\{input\.agentKey\}:\$\{skillKey\}:\$\{negativeCaseSignature\(problem\)\}\`/)
+  assert.doesNotMatch(contract, /useCaseKey: \`\$\{input\.agentKey\}:\$\{skillKey\}:failure-pattern\`/)
+})
