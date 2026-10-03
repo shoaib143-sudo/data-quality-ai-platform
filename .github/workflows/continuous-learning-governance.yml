@@ -43,6 +43,7 @@ on:
       - 'scripts/test-pgcl-command-center-observability.mjs'
       - 'lib/agents/learning-experiment-runner*.ts'
       - 'scripts/test-learning-experiment-runner*.mjs'
+      - 'scripts/test-learning-runner-schema-boundary.mjs'
       - 'scripts/fixtures/learning-runner-admin.mjs'
       - 'scripts/test-learning-experiment-runner.sql'
       - 'scripts/run-learning-experiment-runner-fixture.sh'
@@ -148,6 +149,7 @@ on:
       - 'scripts/test-pgcl-command-center-observability.mjs'
       - 'lib/agents/learning-experiment-runner*.ts'
       - 'scripts/test-learning-experiment-runner*.mjs'
+      - 'scripts/test-learning-runner-schema-boundary.mjs'
       - 'scripts/fixtures/learning-runner-admin.mjs'
       - 'scripts/test-learning-experiment-runner.sql'
       - 'scripts/run-learning-experiment-runner-fixture.sh'
@@ -249,7 +251,7 @@ jobs:
       - name: Run priority-agent PGCL hook tests
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs
       - name: Run paired experiment runner behavior and invocation tests
-        run: node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs
+        run: pnpm run verify:learning-experiment-runner
       - name: Run learning experiment runtime budget tests
         run: node --experimental-strip-types scripts/test-learning-experiment-budget-runtime.mjs
       - name: Run prospective evaluation policy behavior tests
