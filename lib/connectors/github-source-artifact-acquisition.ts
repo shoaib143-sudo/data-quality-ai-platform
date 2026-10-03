@@ -45,7 +45,11 @@ async function githubJson(url:string){
 
 export async function acquireGitHubSourceArtifacts(input:{repositoryUrl:string;ref?:string|null}){
   const {owner,repo}=parseGitHubRepositoryUrl(input.repositoryUrl)
-  const ref=(input.ref?.trim()||'HEAD')
+  let ref=input.ref?.trim()||''
+  if(!ref){
+    const metadata=await githubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`) as {default_branch?:string}
+    ref=typeof metadata.default_branch==='string'&&metadata.default_branch.trim()?metadata.default_branch.trim():'main'
+  }
   if(!safeRef(ref))throw new Error('GitHub ref contains unsupported characters.')
   const encodedRef=encodeURIComponent(ref)
   const rawRef=ref.split('/').map(encodeURIComponent).join('/')
