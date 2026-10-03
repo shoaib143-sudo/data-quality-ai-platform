@@ -1,6 +1,6 @@
 import type { CanonicalGovernanceObject } from '../canonical/model.ts'
 import type { GovernanceDesiredState,DesiredStateTarget } from '../desired-state/model.ts'
-import { stableGovernanceFingerprint } from './fingerprint.ts'
+import { governanceDesiredStateFingerprint,stableGovernanceFingerprint } from './fingerprint.ts'
 import { buildGovernancePlan,type GovernancePlan } from './plan.ts'
 import { expandGovernancePlanForProviders,type ProviderPlannedOperation } from './provider-plan.ts'
 
@@ -39,7 +39,7 @@ export function buildGovernanceDeploymentPlan(
   if(observedByTarget.has(key))throw new Error(`Observed governance state duplicates target ${key}.`)
   observedByTarget.set(key,observed)
  }
- const targets=desired.targets.map(target=>{
+ const targets=[...desired.targets].sort((a,b)=>targetKey(a.provider,a.connectionId).localeCompare(targetKey(b.provider,b.connectionId))).map(target=>{
   const key=targetKey(target.provider,target.connectionId)
   const observed=observedByTarget.get(key)
   if(!observed)throw new Error(`Observed governance state is required for target ${key}.`)
@@ -47,7 +47,7 @@ export function buildGovernanceDeploymentPlan(
   const plan=buildGovernancePlan(targetDesired,observed.objects)
   return{target,observedAt:observed.observedAt??null,plan,operations:expandGovernancePlanForProviders(plan,targetDesired)}
  })
- const desiredStateFingerprint=stableGovernanceFingerprint(desired)
+ const desiredStateFingerprint=governanceDesiredStateFingerprint(desired)
  const deploymentFingerprint=stableGovernanceFingerprint({
   projectId:desired.projectId,desiredStateFingerprint,
   targets:targets.map(value=>({
