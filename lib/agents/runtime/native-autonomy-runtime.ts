@@ -29,6 +29,7 @@ import {
   releaseNativeSupervisorExecution,
   renewNativeSupervisorExecution,
 } from '@/lib/agents/runtime/native-supervisor-resume'
+import { observeNativeToolRiskShadow } from '@/lib/agents/runtime/native-tool-risk-shadow'
 import {
   getNativePinnedToolContract,
   hashNativeRuntimeValue,
@@ -321,9 +322,19 @@ export async function executeNativeBoundRuntimePlan(input: {
         executeStep: async ({ step, stepOrder, attempt }) => {
           assertLeaseHealthy()
           await renewLease()
+          const binding = getBinding(step)
+          await observeNativeToolRiskShadow({
+            projectId: boundPlan.plan.projectId,
+            agentRunId: binding.agentRunId,
+            agentKey: binding.agentKey,
+            toolKey: step.toolKey,
+            stepId: step.id,
+            riskTier: step.riskTier,
+            toolInput: step.input,
+          })
           const output = await input.executeStep({
             step,
-            binding: getBinding(step),
+            binding,
             stepOrder,
             attempt,
           })

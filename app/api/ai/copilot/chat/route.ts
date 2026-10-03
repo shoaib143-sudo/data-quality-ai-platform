@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { AuthorizationError } from '@/lib/auth/authorize'
 import { requireApiUser } from '@/lib/auth/require-api-user'
 import { createGovernanceIntelligentRouter } from '@/lib/ai/governance-intelligent-router'
+import { observePromptSecurityShadow } from '@/lib/ai/prompt-security-shadow'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { personaAcceptanceTasks } from '@/lib/governance/persona-acceptance-tasks'
 import { personas } from '@/lib/governance/personas'
@@ -151,13 +152,22 @@ export async function POST(request: Request) {
     }
 
     const router = createGovernanceIntelligentRouter()
-    const decision = await router.route({
-      projectId,
-      task: 'governance_reasoning',
-      sensitivity: 'INTERNAL',
-      risk: 'LOW',
-      executionCorrelationId: crypto.randomUUID(),
-    })
+    const executionCorrelationId = crypto.randomUUID()
+    const [decision] = await Promise.all([
+      router.route({
+        projectId,
+        task: 'governance_reasoning',
+        sensitivity: 'INTERNAL',
+        risk: 'LOW',
+        executionCorrelationId,
+      }),
+      observePromptSecurityShadow({
+        projectId,
+        text: question,
+        source: 'DATANEXUS_AI_COPILOT',
+        correlationId: executionCorrelationId,
+      }),
+    ])
     if (!decision.provider) {
       return NextResponse.json({
         error: 'No governed reasoning route is currently available for DataNexus AI.',

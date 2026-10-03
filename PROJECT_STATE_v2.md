@@ -353,3 +353,28 @@ This bounded source checkpoint supplements the historical state above. It does n
 - Activation still requires a canonical plan/integrity loader, current project/agent/mode authority, replayable independent cases, concrete executable artifacts, verified pricing and approved spending bound, independent evaluator/calibration and actual confirmation evidence. Existing Vercel/Cloudflare parity hold and native release/canary/rollback authority remain effective.
 
 Details: [implementation checkpoint](Admin/learning-experiment-runner-implementation-20261001.md), [independent capability review](Major%20discussion/learning-experiment-runner-review-20261001.md), and [post-implementation plan and results](Admin/learning-experiment-runner-post-implementation-20261002.md).
+
+## 13. Jev Decision Layer v1
+
+Implementation branch: `feat/jev-decision-layer-v1`  
+Implementation PR: #1112  
+Documentation PR #1111 is superseded by the consolidated implementation PR.
+
+Current implementation state:
+
+- provider-neutral `DecisionProvider` contract implemented;
+- TypeSafe Jev `/v1/systemone` adapter implemented;
+- decision registry, lifecycle, thresholds, per-family timeout budgets and payload minimization implemented;
+- free-text and structured secret redaction implemented before external decision calls;
+- normalized decision receipts, AI telemetry evidence and canonical model-cost evidence integrated;
+- Decision Control Plane surfaced read-only in AI Command Center;
+- P0 decision families implemented: `TOOL_RISK`, `PROMPT_SECURITY`, `RAG_GROUNDING`, `MODEL_ROUTING`, `AGENT_TRACE_EVALUATION`;
+- native tool-risk, prompt-security, model-routing and native trajectory observers integrated in SHADOW mode;
+- RAG grounding observer implemented but intentionally not attached to non-citation copilot output;
+- all built-in decision families remain `SHADOW` with `enforcementEligible = false`;
+- live Jev runtime calls require both `JEV_API_KEY` and `JEV_SHADOW_RUNTIME_ENABLED=true`;
+- absence of Jev configuration preserves existing DataNexus behavior;
+- semantic decisions cannot grant capabilities, override DENY, approve mutations, widen model/provider authority, or promote inferred evidence to authoritative truth.
+
+Production activation remains separate from implementation completion. Before enabling live external shadow calls with sensitive enterprise data, complete provider contractual/data-processing review and configure credentials through approved secret management. Promotion beyond SHADOW requires calibrated benchmark evidence and an explicit governed lifecycle promotion.
+

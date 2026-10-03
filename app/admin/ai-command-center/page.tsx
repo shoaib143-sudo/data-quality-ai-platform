@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, Bot, LockKeyhole, ShieldCheck } from 'lucide-r
 
 import { authorizeProject } from '@/lib/auth/authorize'
 import { createGovernanceCommandCenterState } from '@/lib/ai/governance-command-center-state'
+import { readDecisionControlPlaneState } from '@/lib/ai/decision-control-plane-state'
 import { createGovernanceLearningEngine } from '@/lib/ai/governance-learning-engine'
 import { readGovernedLearningLifecycleCommandCenter } from '@/lib/ai/governed-learning-command-center-state'
 import { readPgclCommandCenterState } from '@/lib/ai/pgcl-command-center-state'
@@ -44,12 +45,13 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
       readGovernedLearningLifecycleCommandCenter(selectedProjectId),
       readPgclCommandCenterState(selectedProjectId, user.id),
     ])
-    return { state, learning, learningLifecycle, pgcl }
+    return { state, learning, learningLifecycle, pgcl, decisionControl: readDecisionControlPlaneState() }
   })() : null
   const state = control?.state ?? null
   const learning = control?.learning ?? null
   const learningLifecycle = control?.learningLifecycle ?? null
   const pgcl = control?.pgcl ?? null
+  const decisionControl = control?.decisionControl ?? null
 
   const systemName = new Map(state?.aiSystems.map((system) => [system.id, system.name]) ?? [])
   const versionLabel = new Map(state?.aiSystemVersions.map((version) => [version.id, `v${version.version_number}`]) ?? [])
@@ -68,7 +70,7 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
 
       <form method="get" className="dn-surface p-4"><label className="block text-sm font-semibold">Project<select name="projectId" defaultValue={selectedProjectId} className="mt-2 block w-full max-w-xl rounded-xl border bg-white px-3 py-2 font-normal">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><button type="submit" className="mt-3 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white">Load control state</button></form>
 
-      {!state || !learning || !learningLifecycle || !pgcl ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
+      {!state || !learning || !learningLifecycle || !pgcl || !decisionControl ? <section className="rounded-2xl border bg-white p-6 text-sm text-slate-600">No authorized project is available for this account.</section> : <>
         <section className="grid auto-rows-fr gap-3 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-5">
           <article className="dn-kpi min-w-0 p-4"><Bot className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.aiSystems}</p><p className="text-xs font-bold uppercase text-slate-500">AI systems</p></article>
           <article className="dn-kpi min-w-0 p-4"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{state.counts.aiSystemDecisions}</p><p className="text-xs font-bold uppercase text-slate-500">Human decisions</p></article>
@@ -83,6 +85,31 @@ export default async function AICommandCenterPage({ searchParams }: { searchPara
         </section>
 
         <section className="dn-inset p-5 text-white"><div className="flex items-center gap-3"><LockKeyhole className="h-5 w-5"/><h2 className="text-lg font-black">Mutation controls remain closed</h2></div><div className="mt-4 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4"><p>Autonomy expansion: disabled</p><p>Direct mutation: disabled</p><p>Emergency kill mutation: disabled</p><p>Policy mutation: disabled</p></div></section>
+
+        <section className="dn-surface p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-black">Decision Control Plane</h2>
+              <p className="mt-1 max-w-4xl text-sm text-slate-500">Read-only System One decision-layer posture. Semantic decisions remain evidence only and cannot widen deterministic DataNexus authority.</p>
+            </div>
+            <div className="text-right text-xs text-slate-500">
+              <p>{decisionControl.counts.shadow} shadow · {decisionControl.counts.advisory} advisory · {decisionControl.counts.active} active</p>
+              <p>{decisionControl.counts.enforcementEligible} enforcement eligible</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="rounded-xl border p-4"><p className="text-xs font-bold uppercase text-slate-500">Provider</p><p className="mt-2 font-bold">{decisionControl.provider.providerId ?? 'Not configured'}</p><p className="text-xs text-slate-500">{decisionControl.provider.providerState} · shadow runtime {decisionControl.provider.shadowRuntimeEnabled ? 'enabled' : 'disabled'}</p></article>
+            <article className="rounded-xl border p-4"><p className="text-xs font-bold uppercase text-slate-500">Semantic authority</p><p className="mt-2 font-bold">Closed</p><p className="text-xs text-slate-500">Cannot grant capability or override DENY</p></article>
+            <article className="rounded-xl border p-4"><p className="text-xs font-bold uppercase text-slate-500">Mutation approval</p><p className="mt-2 font-bold">Deterministic only</p><p className="text-xs text-slate-500">Semantic decisions cannot approve mutations</p></article>
+            <article className="rounded-xl border p-4"><p className="text-xs font-bold uppercase text-slate-500">Evidence promotion</p><p className="mt-2 font-bold">Governed only</p><p className="text-xs text-slate-500">Semantic confidence cannot promote enterprise truth</p></article>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Family</th><th className="p-3">Schema</th><th className="p-3">Lifecycle</th><th className="p-3">Threshold</th><th className="p-3">Failure mode</th><th className="p-3">Owner</th></tr></thead>
+              <tbody>{decisionControl.families.map((family) => <tr key={family.family} className="border-b last:border-0"><td className="p-3 font-bold">{family.family}</td><td className="p-3 font-mono text-xs">{family.schemaVersion}</td><td className="p-3"><Badge value={family.lifecycle}/></td><td className="p-3">{family.minimumConfidence.toFixed(2)}</td><td className="p-3">{family.failureMode}</td><td className="p-3">{family.owner}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </section>
 
         <section className="dn-surface p-5"><h2 className="text-xl font-black">Safety findings</h2><p className="mt-1 text-sm text-slate-500">Visibility derived from canonical evidence; findings are not automatic governance decisions.</p><div className="mt-4 space-y-2">{state.findings.length ? state.findings.map((finding) => <article key={`${finding.source}:${finding.recordId}:${finding.code}`} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border p-4"><div><p className="font-bold">{finding.code}</p><p className="mt-1 text-sm text-slate-600">{finding.message}</p><p className="mt-2 font-mono text-[11px] text-slate-400">{finding.source} · {finding.recordId}</p></div><Badge value={finding.severity}/></article>) : <p className="text-sm text-slate-500">No control-state findings.</p>}</div></section>
 
