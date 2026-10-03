@@ -1,6 +1,27 @@
 name: Recovery Assurance
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/recovery-assurance.yml'
+      - '.github/workflows/native-compensation-post-implementation-assurance.yml'
+      - 'Admin/2026-09-29-post-implementation-assurance-plan.md'
+      - 'Major discussion/2026-09-29-post-implementation-assurance-decision.md'
+      - 'scripts/recovery-drill.mjs'
+      - 'scripts/recovery/**'
+      - 'scripts/verify-recovery-assurance.mjs'
+      - 'scripts/verify-recovery-source-authority.mjs'
+      - 'scripts/verify-portable-recovery.mjs'
+      - 'scripts/verify-full-platform-recovery-scopes.mjs'
+      - 'lib/orchestration/governance-recovery*.ts'
+      - 'lib/orchestration/execution-recovery*.ts'
+      - 'lib/agents/runtime/governed-handoff*.ts'
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - 'infra/**'
+      - 'vercel.json'
   pull_request:
     paths:
       - 'scripts/recovery-drill.mjs'
