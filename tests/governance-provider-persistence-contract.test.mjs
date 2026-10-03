@@ -61,3 +61,13 @@ test('stale claim recovery migration fences ownership without granting replay pe
  assert.match(sql,/resume_action', 'RECOVER'/)
  assert.doesNotMatch(sql,/resume_action', 'EXECUTE'[\s\S]*stale/i)
 })
+
+
+test('initial checkpoint claim race resolves through conflict-safe durable lookup',()=>{
+ const sql=fs.readFileSync(new URL('../supabase/migrations/20261003100000_governance_platform_atomic_initial_claim.sql',import.meta.url),'utf8')
+ assert.match(sql,/on conflict \(project_id, idempotency_key\) do nothing/)
+ assert.match(sql,/if found then[\s\S]*resume_action', 'EXECUTE'/)
+ assert.match(sql,/select \* into v_checkpoint[\s\S]*for update/)
+ assert.match(sql,/resume_action', 'WAIT'/)
+ assert.match(sql,/resume_action', 'RECOVER'/)
+})
