@@ -14,10 +14,13 @@ import { startNativeAgentLifecycle } from '@/lib/agents/runtime/native-agent-lif
 import { hashNativeRuntimeValue } from '@/lib/agents/runtime/native-tool-contracts'
 import { evaluateNativeSupervisorTrajectory } from '@/lib/agents/runtime/native-trajectory-evaluation'
 import { proposePgclCasesFromVerifiedSupervisorRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
+import { proposeNegativeCaseFromFailedAgentRun } from '@/lib/agents/governed-negative-case-learning-runtime'
 import type { PgclRunMode } from '@/lib/agents/proactive-governed-case-learning'
 import {
   loadApprovedPgclPrecedents,
+  loadApprovedPgclAvoidanceCases,
   type AppliedPgclPrecedent,
+  type AppliedPgclAvoidanceCase,
 } from '@/lib/agents/pgcl-approved-precedent'
 import {
   createGovernedHandoffEnvelope,
@@ -345,6 +348,7 @@ export async function runNativeSpecialistSupervisor(input: {
         })
 
         let pgclPrecedents: AppliedPgclPrecedent[] = []
+        let pgclAvoidanceCases: AppliedPgclAvoidanceCase[] = []
         try {
           pgclPrecedents = await loadApprovedPgclPrecedents({
             projectId,
@@ -354,6 +358,17 @@ export async function runNativeSpecialistSupervisor(input: {
               worker.agentKey,
               worker.question ?? '',
               'governance specialist verified precedent',
+            ].join(' '),
+            limit: 5,
+          })
+          pgclAvoidanceCases = await loadApprovedPgclAvoidanceCases({
+            projectId,
+            agentDefinitionId: worker.agentDefinitionId,
+            agentRunId: binding.agentRunId,
+            query: [
+              worker.agentKey,
+              worker.question ?? '',
+              'governance specialist verified avoidance precedent',
             ].join(' '),
             limit: 5,
           })
@@ -378,9 +393,19 @@ export async function runNativeSpecialistSupervisor(input: {
             relevance: learningCase.relevance,
             evidence: learningCase.evidence,
           })),
+          negativeLearningCases: pgclAvoidanceCases.map((learningCase) => ({
+            id: learningCase.learningCaseId,
+            candidateId: learningCase.candidateId,
+            caseKey: learningCase.caseKey,
+            problemType: learningCase.problemType,
+            avoidLesson: learningCase.avoidLesson,
+            relevance: learningCase.relevance,
+            evidence: learningCase.evidence,
+          })),
           handoffRefs,
           existingAgentRunId: binding.agentRunId,
           nativeAttempt: attempt,
+          learningRunMode: input.learningRunMode ?? 'HANDSFREE',
         })
         if (executed.runId !== binding.agentRunId) throw new Error(`${step.id}: specialist executor returned an unexpected child run`)
 
@@ -460,6 +485,22 @@ export async function runNativeSpecialistSupervisor(input: {
     }
 
     const trajectoryEvaluation = await evaluateNativeSupervisorTrajectory(supervisorRun.id)
+    for (const childRunId of childRunIds) {
+      try {
+        await proposeNegativeCaseFromFailedAgentRun({
+          projectId,
+          agentRunId: childRunId,
+          failureSummary: `Native supervisor stopped at ${result.stepId ?? 'plan'} with ${result.code}.`,
+          runMode: input.learningRunMode ?? 'HANDSFREE',
+          actorUserId,
+        })
+      } catch (learningError) {
+        console.error(
+          '[native-supervisor] negative-case learning failed safely:',
+          learningError instanceof Error ? learningError.message : learningError,
+        )
+      }
+    }
     await updateSupervisorRun({
       supervisorRunId: supervisorRun.id,
       status: 'FAILED',
@@ -479,6 +520,22 @@ export async function runNativeSpecialistSupervisor(input: {
         }).in('id', childRunIds).in('status', ['QUEUED', 'RUNNING'])
       } catch {
         // Preserve the original supervisor failure if child cleanup also fails.
+      }
+      for (const childRunId of childRunIds) {
+        try {
+          await proposeNegativeCaseFromFailedAgentRun({
+            projectId,
+            agentRunId: childRunId,
+            failureSummary: error instanceof Error ? error.message : String(error),
+            runMode: input.learningRunMode ?? 'HANDSFREE',
+            actorUserId,
+          })
+        } catch (learningError) {
+          console.error(
+            '[native-supervisor] aborted-child negative-case learning failed safely:',
+            learningError instanceof Error ? learningError.message : learningError,
+          )
+        }
       }
     }
     try {

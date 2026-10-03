@@ -90,7 +90,7 @@ export default async function LearningGovernancePage({
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">Phase 11 governed learning</p>
             <h1 className="text-3xl font-black">Learning Governance</h1>
-            <p className="mt-2 max-w-4xl text-sm text-slate-600">Read-only visibility across learning candidates, benchmark gates, human approval, controlled release, proactive positive cases, and reuse outcomes. This view exposes no review, approval, promotion, activation, rollback, tool-authority, or mutation action.</p>
+            <p className="mt-2 max-w-4xl text-sm text-slate-600">Read-only visibility across learning candidates, benchmark gates, human approval, controlled release, proactive positive cases, governed negative cases, and reuse outcomes. This view exposes no review, approval, promotion, activation, rollback, tool-authority, or mutation action.</p>
           </div>
         </div>
       </header>
@@ -109,8 +109,10 @@ export default async function LearningGovernancePage({
           <p className="font-black">Production learning provenance schema pending</p>
           <p className="mt-1">The connected database does not expose the PGCL production-provenance columns yet. Positive cases remain visible but are treated as non-production or unclassified until migration <span className="font-mono">20260920016000_pgcl_production_learning_provenance</span> is reconciled.</p>
         </section>}
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-10">
           <article className="rounded-2xl border bg-white p-5"><BookOpenCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.total}</p><p className="text-xs font-bold uppercase text-slate-500">Lifecycle candidates</p></article>
+          <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.negativeCases}</p><p className="text-xs font-bold uppercase text-slate-500">Negative cases</p></article>
+          <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.negativeUsageEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Avoidance reuse</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{lifecycle.counts.active}</p><p className="text-xs font-bold uppercase text-slate-500">Active releases</p></article>
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.total}</p><p className="text-xs font-bold uppercase text-slate-500">Positive cases</p></article>
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.pendingReview + pgcl.counts.deferred}</p><p className="text-xs font-bold uppercase text-slate-500">Awaiting review</p></article>
@@ -212,6 +214,19 @@ export default async function LearningGovernancePage({
         </section>
 
         <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-xl font-black">Learning cost and token impact</h2><p className="mt-1 text-sm text-slate-500">Observed model usage linked to source agent runs for the current learning candidates. Missing usage remains zero rather than being estimated.</p></div>
+            <p className="text-xs text-slate-500">Canonical telemetry only</p>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.inputTokens.toLocaleString()}</p><p className="text-xs font-bold uppercase text-slate-500">Input tokens</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.outputTokens.toLocaleString()}</p><p className="text-xs font-bold uppercase text-slate-500">Output tokens</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.totalTokens.toLocaleString()}</p><p className="text-xs font-bold uppercase text-slate-500">Total tokens</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">${lifecycle.counts.costUsd.toFixed(4)}</p><p className="text-xs font-bold uppercase text-slate-500">Observed cost</p></article>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6">
           <h2 className="text-xl font-black">Authority boundaries</h2>
           <p className="mt-1 text-sm text-slate-500">Learning evidence remains context and evaluation evidence. It does not create action authority.</p>
           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -223,6 +238,19 @@ export default async function LearningGovernancePage({
             <p>Action authorization: {pgcl.authority.mayAuthorizeAction ? 'allowed' : 'prohibited'}</p>
             <p>Positive-case review: {pgcl.authority.adminReviewRequired ? 'required before reuse' : 'not required'}</p>
             <p>Current policy: {pgcl.authority.currentPolicyReevaluationRequired ? 're-evaluated for every action' : 'not required'}</p>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-xl font-black">Governed learning coverage by agent</h2><p className="mt-1 text-sm text-slate-500">Cross-type coverage across skill improvements, approved positive precedent, and negative avoidance cases.</p></div>
+            <p className="text-xs text-slate-500">{lifecycle.agentCoverage.length} agents represented</p>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            {lifecycle.agentCoverage.length ? <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent</th><th className="p-3">Total</th><th className="p-3">Skill improvements</th><th className="p-3">Positive cases</th><th className="p-3">Negative cases</th><th className="p-3">Active</th><th className="p-3">Rolled back</th></tr></thead>
+              <tbody>{lifecycle.agentCoverage.map((agent) => <tr key={agent.agentKey} className="border-b last:border-0"><td className="p-3 font-bold">{agent.agentKey}</td><td className="p-3">{agent.total}</td><td className="p-3">{agent.skillImprovements}</td><td className="p-3">{agent.positiveCases}</td><td className="p-3">{agent.negativeCases}</td><td className="p-3">{agent.active}</td><td className="p-3">{agent.rolledBack}</td></tr>)}</tbody>
+            </table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No governed learning candidates are recorded for this project.</p>}
           </div>
         </section>
 
@@ -261,11 +289,24 @@ export default async function LearningGovernancePage({
         </section>
 
         <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-xl font-black">Regression monitor</h2><p className="mt-1 text-sm text-slate-500">Fail-closed signals from controlled learning. Canary failures and rollbacks require review before any further promotion.</p></div>
+            <Badge value={lifecycle.counts.canaryFailures + lifecycle.counts.rolledBack > 0 ? 'REVIEW_REQUIRED' : 'VERIFIED'} />
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.canaryFailures}</p><p className="text-xs font-bold uppercase text-slate-500">Canary failures</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.rolledBack}</p><p className="text-xs font-bold uppercase text-slate-500">Rollbacks</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.notReadyOrRejected}</p><p className="text-xs font-bold uppercase text-slate-500">Not ready / rejected</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{lifecycle.counts.canaryEvidenceEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Shadow evidence</p></article>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-white p-6">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">Controlled learning lifecycle</h2><p className="mt-1 text-sm text-slate-500">Canonical proposal, benchmark, approval, canary, activation and rollback state with transition and canary evidence counts.</p></div><p className="text-xs text-slate-500">{lifecycle.counts.transitionEvents} transitions · {lifecycle.counts.canaryEvidenceEvents} canary evidence rows · {lifecycle.counts.rolledBack} rolled back</p></div>
           <div className="mt-5 overflow-x-auto">
             {lifecycle.candidates.length ? <table className="w-full min-w-[1050px] text-left text-sm">
-              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent / skill</th><th className="p-3">Candidate</th><th className="p-3">Lifecycle</th><th className="p-3">Transition evidence</th><th className="p-3">Benchmark</th><th className="p-3">Canary evidence</th><th className="p-3">Approval</th><th className="p-3">Release</th></tr></thead>
-              <tbody>{lifecycle.candidates.map((candidate) => <tr key={candidate.id} className="border-b last:border-0"><td className="p-3"><p className="font-bold">{candidate.agentKey}</p><p className="text-xs text-slate-400">{candidate.skillKey}</p></td><td className="p-3"><p className="font-semibold">{candidate.title}</p><p className="text-xs text-slate-400">{candidate.baselineVersion} → {candidate.candidateVersion}</p></td><td className="p-3"><Badge value={candidate.status}/></td><td className="p-3"><p>{candidate.transitionCount} transitions</p><p className="mt-1 text-xs text-slate-400">{candidate.latestTransition ?? 'No transition recorded'}</p></td><td className="p-3">{candidate.benchmarkStatus ? <Badge value={candidate.benchmarkStatus}/> : <span className="text-slate-400">Not recorded</span>}</td><td className="p-3"><p>{candidate.canaryEvidenceCount} cases</p><p className="mt-1 text-xs text-slate-500">{candidate.canaryPassCount} pass · {candidate.canaryFailureCount} fail</p><p className="mt-1 text-xs text-slate-400">Avg: {candidate.canaryAverageScore == null ? 'n/a' : candidate.canaryAverageScore.toFixed(3)}</p></td><td className="p-3">{candidate.approvalRequestId ? <span className="font-mono text-xs">{candidate.approvalRequestId}</span> : <span className="text-slate-400">Not requested</span>}</td><td className="p-3">{candidate.releaseStatus ? <Badge value={candidate.releaseStatus}/> : <span className="text-slate-400">Not released</span>}</td></tr>)}</tbody>
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent / skill</th><th className="p-3">Type</th><th className="p-3">Candidate</th><th className="p-3">Lifecycle</th><th className="p-3">Transition evidence</th><th className="p-3">Benchmark</th><th className="p-3">Canary evidence</th><th className="p-3">Approval</th><th className="p-3">Release</th></tr></thead>
+              <tbody>{lifecycle.candidates.map((candidate) => <tr key={candidate.id} className="border-b last:border-0"><td className="p-3"><p className="font-bold">{candidate.agentKey}</p><p className="text-xs text-slate-400">{candidate.skillKey}</p></td><td className="p-3"><Badge value={candidate.candidateType}/></td><td className="p-3"><p className="font-semibold">{candidate.title}</p><p className="text-xs text-slate-400">{candidate.baselineVersion} → {candidate.candidateVersion}</p></td><td className="p-3"><Badge value={candidate.status}/></td><td className="p-3"><p>{candidate.transitionCount} transitions</p><p className="mt-1 text-xs text-slate-400">{candidate.latestTransition ?? 'No transition recorded'}</p></td><td className="p-3">{candidate.benchmarkStatus ? <Badge value={candidate.benchmarkStatus}/> : <span className="text-slate-400">Not recorded</span>}</td><td className="p-3"><p>{candidate.canaryEvidenceCount} cases</p><p className="mt-1 text-xs text-slate-500">{candidate.canaryPassCount} pass · {candidate.canaryFailureCount} fail</p><p className="mt-1 text-xs text-slate-400">Avg: {candidate.canaryAverageScore == null ? 'n/a' : candidate.canaryAverageScore.toFixed(3)}</p></td><td className="p-3">{candidate.approvalRequestId ? <span className="font-mono text-xs">{candidate.approvalRequestId}</span> : <span className="text-slate-400">Not requested</span>}</td><td className="p-3">{candidate.releaseStatus ? <Badge value={candidate.releaseStatus}/> : <span className="text-slate-400">Not released</span>}</td></tr>)}</tbody>
             </table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No durable governed learning lifecycle candidates are recorded for this project.</p>}
           </div>
         </section>

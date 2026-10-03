@@ -3,6 +3,10 @@ import {
   recordPositiveLearningCaseOutcome,
   recordPositiveLearningCaseRetrievals,
 } from '@/lib/agents/proactive-governed-case-learning-service'
+import {
+  recordNegativeLearningCaseOutcome,
+  recordNegativeLearningCaseRetrievals,
+} from '@/lib/agents/governed-negative-case-learning-service'
 
 export type AppliedPgclPrecedent = {
   learningCaseId: string
@@ -10,6 +14,16 @@ export type AppliedPgclPrecedent = {
   caseKey: string
   problemType: string
   reusableLesson: string
+  relevance: number
+  evidence: Record<string, unknown>
+}
+
+export type AppliedPgclAvoidanceCase = {
+  learningCaseId: string
+  candidateId: string
+  caseKey: string
+  problemType: string
+  avoidLesson: string
   relevance: number
   evidence: Record<string, unknown>
 }
@@ -68,6 +82,51 @@ export async function loadApprovedPgclPrecedents(input: {
   return cases
 }
 
+
+export async function loadApprovedPgclAvoidanceCases(input: {
+  projectId: string
+  agentDefinitionId: string
+  agentRunId: string
+  query: string
+  limit?: number
+}): Promise<AppliedPgclAvoidanceCase[]> {
+  const context = await retrieveGovernedLearningContext({
+    projectId: input.projectId,
+    agentDefinitionId: input.agentDefinitionId,
+    query: input.query,
+    limit: input.limit ?? 5,
+  })
+
+  const cases = context.approvedNegativeCases.flatMap((learningCase) => {
+    const recommendation = record(learningCase.recommendation)
+    const avoidLesson = text(recommendation.avoid_lesson)
+    const candidateId = text(learningCase.candidate_id)
+    if (!candidateId || !avoidLesson || learningCase.relevance <= 0) return []
+
+    return [{
+      learningCaseId: String(learningCase.id),
+      candidateId,
+      caseKey: String(learningCase.case_key),
+      problemType: String(learningCase.problem_type),
+      avoidLesson,
+      relevance: Number(learningCase.relevance),
+      evidence: record(learningCase.evidence),
+    }]
+  })
+
+  await recordNegativeLearningCaseRetrievals({
+    projectId: input.projectId,
+    consumerAgentRunId: input.agentRunId,
+    cases: cases.map((learningCase) => ({
+      candidateId: learningCase.candidateId,
+      learningCaseId: learningCase.learningCaseId,
+      relevance: learningCase.relevance,
+    })),
+  })
+
+  return cases
+}
+
 export async function markPgclPrecedentsApplied(input: {
   projectId: string
   agentRunId: string
@@ -82,6 +141,29 @@ export async function markPgclPrecedentsApplied(input: {
       status: 'APPLIED',
       outcome: {
         attribution: 'CONTEXT_ONLY_EXECUTION',
+        execution_surface: input.executionSurface,
+        current_authorization_still_required: true,
+        current_policy_still_required: true,
+      },
+    })
+  }
+}
+
+
+export async function markPgclAvoidanceCasesApplied(input: {
+  projectId: string
+  agentRunId: string
+  cases: readonly AppliedPgclAvoidanceCase[]
+  executionSurface: 'PROFILING_INVESTIGATION' | 'DATA_QUALITY_INVESTIGATION' | 'SUPERVISOR_SPECIALIST' | 'DIRECT_SPECIALIST'
+}) {
+  for (const learningCase of input.cases) {
+    await recordNegativeLearningCaseOutcome({
+      projectId: input.projectId,
+      candidateId: learningCase.candidateId,
+      consumerAgentRunId: input.agentRunId,
+      status: 'APPLIED',
+      outcome: {
+        attribution: 'CONTEXT_ONLY_AVOIDANCE',
         execution_surface: input.executionSurface,
         current_authorization_still_required: true,
         current_policy_still_required: true,

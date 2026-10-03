@@ -1,3 +1,4 @@
+import { proposeNegativeCaseFromFailedAgentRun } from './governed-negative-case-learning-runtime'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import {
@@ -475,6 +476,15 @@ export async function executeGovernanceSpecialistAgent(input: {
     relevance: number
     evidence: Record<string, unknown>
   }>
+  negativeLearningCases?: Array<{
+    id: string
+    candidateId: string
+    caseKey: string
+    problemType: string
+    avoidLesson: string
+    relevance: number
+    evidence: Record<string, unknown>
+  }>
   handoffRefs?: Array<{
     sourceStepId: string
     sourceAgentKey: GovernanceReadAgentKey
@@ -482,6 +492,7 @@ export async function executeGovernanceSpecialistAgent(input: {
   }>
   existingAgentRunId?: string | null
   nativeAttempt?: number
+  learningRunMode?: 'SUPERVISED' | 'HANDSFREE'
 }) {
   const admin = createAdminClient()
   const suppliedQuestion = input.question?.trim().slice(0, 1000) || null
@@ -512,6 +523,14 @@ export async function executeGovernanceSpecialistAgent(input: {
       && learningCase.relevance > 0)
     .sort((left, right) => right.relevance - left.relevance)
     .slice(0, 5)
+  const negativeLearningCases = (input.negativeLearningCases ?? [])
+    .filter((learningCase) =>
+      learningCase.candidateId.trim()
+      && learningCase.avoidLesson.trim()
+      && Number.isFinite(learningCase.relevance)
+      && learningCase.relevance > 0)
+    .sort((left, right) => right.relevance - left.relevance)
+    .slice(0, 5)
 
   let run: { id: string }
   if (input.existingAgentRunId) {
@@ -530,7 +549,7 @@ export async function executeGovernanceSpecialistAgent(input: {
     }
     const { error: startError } = await admin.schema('agent').from('agent_runs').update({
       status: 'RUNNING',
-      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'native_supervisor_specialist_read_only' },
+      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'native_supervisor_specialist_read_only', learningRunMode: input.learningRunMode ?? 'HANDSFREE' },
       started_at: new Date().toISOString(),
       completed_at: null,
       error_code: null,
@@ -543,7 +562,7 @@ export async function executeGovernanceSpecialistAgent(input: {
       agent_definition_id: definition.id,
       project_id: input.projectId,
       status: 'RUNNING',
-      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'deterministic_specialist_read_only' },
+      input: { question: suppliedQuestion, evidence_query: query, execution_mode: 'deterministic_specialist_read_only', learningRunMode: input.learningRunMode ?? 'SUPERVISED' },
       started_at: new Date().toISOString(),
     }).select('id').single()
     if (runError || !createdRun) throw new Error(`Unable to create specialist agent run: ${runError?.message ?? 'unknown error'}`)
@@ -667,10 +686,21 @@ export async function executeGovernanceSpecialistAgent(input: {
       relevance: learningCase.relevance,
       authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
     }))
+    const avoidanceRecommendations = negativeLearningCases.map((learningCase) => ({
+      priority: 'LEARNED_AVOIDANCE',
+      action: `Avoid: ${learningCase.avoidLesson}`,
+      evidence: [learningCase.id],
+      source: 'PGCL_NEGATIVE_CASE',
+      candidateId: learningCase.candidateId,
+      caseKey: learningCase.caseKey,
+      priorProblemType: learningCase.problemType,
+      relevance: learningCase.relevance,
+      authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+    }))
     const baseRecommendations = Array.isArray((specialized as any).recommendations)
       ? (specialized as any).recommendations
       : []
-    const evidenceCount = knowledgeMatches.length + graph.edges.length + ctx.alerts.length + ctx.ruleRuns.length + ctx.issues.length + ctx.incidents.length + ctx.lineageTransformations.length + ctx.lineageColumnMappings.length + ctx.lineageTransformationEdges.length + positiveLearningCases.length
+    const evidenceCount = knowledgeMatches.length + graph.edges.length + ctx.alerts.length + ctx.ruleRuns.length + ctx.issues.length + ctx.incidents.length + ctx.lineageTransformations.length + ctx.lineageColumnMappings.length + ctx.lineageTransformationEdges.length + positiveLearningCases.length + negativeLearningCases.length
     const confidence = Math.max(0.45, Math.min(0.98, 0.55 + Math.min(0.25, evidenceCount / 200) + (graph.edges.length ? 0.08 : 0) + (knowledgeMatches.length ? 0.08 : 0)))
 
     const output = {
@@ -696,6 +726,7 @@ export async function executeGovernanceSpecialistAgent(input: {
           lineageColumnMappings: ctx.lineageColumnMappings.length,
           lineageTransformationEdges: ctx.lineageTransformationEdges.length,
           approvedPositiveCases: positiveLearningCases.length,
+          approvedNegativeCases: negativeLearningCases.length,
         },
       },
       learnedPositiveCases: positiveLearningCases.map((learningCase) => ({
@@ -708,10 +739,20 @@ export async function executeGovernanceSpecialistAgent(input: {
         authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
         evidence: learningCase.evidence,
       })),
-      // Listing a precedent as context is not evidence that it shaped this answer.
+      learnedNegativeCases: negativeLearningCases.map((learningCase) => ({
+        learningCaseId: learningCase.id,
+        candidateId: learningCase.candidateId,
+        caseKey: learningCase.caseKey,
+        problemType: learningCase.problemType,
+        avoidLesson: learningCase.avoidLesson,
+        relevance: learningCase.relevance,
+        authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+        evidence: learningCase.evidence,
+      })),
       appliedPositiveCaseIds: [],
+      appliedNegativeCaseIds: [],
       observations: (specialized as any).observations ?? [],
-      recommendations: [...baseRecommendations, ...precedentRecommendations],
+      recommendations: [...baseRecommendations, ...precedentRecommendations, ...avoidanceRecommendations],
       hypotheses: (specialized as any).hypotheses ?? [],
       priorities: (specialized as any).priorities ?? [],
       specialist: specialized,
@@ -726,6 +767,7 @@ export async function executeGovernanceSpecialistAgent(input: {
         ...evidenceSources,
         'governed_investigation.contract.v1',
         ...(positiveLearningCases.length ? ['agent.agent_learning_cases:PGCL_POSITIVE_CASE'] : []),
+        ...(negativeLearningCases.length ? ['agent.agent_learning_cases:PGCL_NEGATIVE_CASE'] : []),
       ],
       approval_status: 'NOT_APPLICABLE_READ_ONLY',
       limitations: [
@@ -815,6 +857,21 @@ export async function executeGovernanceSpecialistAgent(input: {
       error_message: message.slice(0, 2000),
       completed_at: new Date().toISOString(),
     }).eq('id', run.id)
+
+    try {
+      await proposeNegativeCaseFromFailedAgentRun({
+        projectId: input.projectId,
+        agentRunId: run.id,
+        failureSummary: message,
+        runMode: input.learningRunMode ?? (input.existingAgentRunId ? 'HANDSFREE' : 'SUPERVISED'),
+        actorUserId: input.actorUserId,
+      })
+    } catch (learningError) {
+      console.error(
+        '[governance-specialist-agent] specialist negative-case learning failed safely:',
+        learningError instanceof Error ? learningError.message : learningError,
+      )
+    }
 
     if (lifecycle && !lifecycleFinished) {
       try {

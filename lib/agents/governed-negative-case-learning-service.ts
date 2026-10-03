@@ -1,17 +1,25 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import type {
-  PgclAdminDecision,
-  ProactiveGovernedCaseLearningCandidate,
-} from './proactive-governed-case-learning'
+import type { GovernedLearningCaseDraft } from './governed-learning-case-registry'
 
-export async function persistProactiveGovernedCaseLearningCandidate(input: {
-  candidate: ProactiveGovernedCaseLearningCandidate
+export const NEGATIVE_CASE_ADMIN_DECISIONS = [
+  'APPROVE_NEGATIVE_CASE',
+  'REJECT',
+  'DEFER',
+  'MARK_ONE_OFF',
+] as const
+
+export type NegativeCaseAdminDecision = typeof NEGATIVE_CASE_ADMIN_DECISIONS[number]
+
+export async function persistGovernedNegativeLearningCase(input: {
+  candidate: GovernedLearningCaseDraft
   actorUserId?: string | null
 }) {
-  const admin = createAdminClient()
+  if (input.candidate.candidateType !== 'NEGATIVE_CASE') {
+    throw new Error('persistGovernedNegativeLearningCase requires NEGATIVE_CASE')
+  }
   const candidate = input.candidate
-
-  const { data, error } = await admin.schema('agent').rpc('create_positive_learning_case', {
+  const admin = createAdminClient()
+  const { data, error } = await admin.schema('agent').rpc('create_negative_learning_case', {
     p_project_id: candidate.projectId,
     p_candidate_key: candidate.candidateKey,
     p_agent_key: candidate.agentKey,
@@ -20,64 +28,45 @@ export async function persistProactiveGovernedCaseLearningCandidate(input: {
     p_run_mode: candidate.runMode,
     p_use_case_key: candidate.useCaseKey,
     p_problem_signature: candidate.problemSignature,
-    p_result_summary: candidate.resultSummary,
-    p_reusable_lesson: candidate.reusableLesson,
-    p_applicability_conditions: candidate.applicabilityConditions,
-    p_exclusion_conditions: candidate.exclusionConditions,
+    p_failure_summary: candidate.summary,
+    p_avoid_lesson: candidate.reusableLesson,
     p_evidence_refs: candidate.evidenceRefs,
     p_verification_evidence_refs: candidate.verificationEvidenceRefs,
-    p_significance_signals: candidate.significanceSignals,
     p_actor_user_id: input.actorUserId ?? null,
   })
-
   if (error || !data) {
-    throw new Error(`Unable to persist proactive governed positive case: ${error?.message ?? 'no candidate id returned'}`)
+    throw new Error(`Unable to persist governed negative case: ${error?.message ?? 'no candidate id returned'}`)
   }
   return String(data)
 }
 
-export async function reviewProactiveGovernedCaseLearningCandidate(input: {
+export async function reviewGovernedNegativeLearningCase(input: {
   projectId: string
   candidateId: string
   actorUserId: string
-  decision: PgclAdminDecision
+  decision: NegativeCaseAdminDecision
   reason: string
-  edits?: Record<string, unknown>
 }) {
-  if (!input.actorUserId.trim()) {
-    throw new Error('Data Governance Admin actorUserId is required')
+  if (!NEGATIVE_CASE_ADMIN_DECISIONS.includes(input.decision)) {
+    throw new Error('unsupported negative-case admin decision')
   }
-  if (!input.reason.trim()) {
-    throw new Error('PGCL review reason is required')
-  }
-
-  const edits = input.edits ?? {}
-  if (input.decision === 'APPROVE_WITH_EDITS') {
-    const reusableLesson = edits.reusableLesson
-    if (typeof reusableLesson !== 'string' || !reusableLesson.trim()) {
-      throw new Error('APPROVE_WITH_EDITS requires a revised reusable lesson')
-    }
-    edits.reusableLesson = reusableLesson.trim()
-  }
-
+  if (!input.reason.trim()) throw new Error('negative-case review reason is required')
   const admin = createAdminClient()
-  const { data, error } = await admin.schema('agent').rpc('review_positive_learning_case', {
+  const { data, error } = await admin.schema('agent').rpc('review_negative_learning_case', {
     p_project_id: input.projectId,
     p_candidate_id: input.candidateId,
     p_actor_user_id: input.actorUserId,
     p_decision: input.decision,
     p_reason: input.reason.trim(),
-    p_edits: edits,
   })
-
   if (error || !data) {
-    throw new Error(`Unable to review proactive governed positive case: ${error?.message ?? 'no candidate id returned'}`)
+    throw new Error(`Unable to review governed negative case: ${error?.message ?? 'no candidate id returned'}`)
   }
   return String(data)
 }
 
 
-export async function recordPositiveLearningCaseRetrievals(input: {
+export async function recordNegativeLearningCaseRetrievals(input: {
   projectId: string
   consumerAgentRunId: string
   cases: Array<{
@@ -99,16 +88,13 @@ export async function recordPositiveLearningCaseRetrievals(input: {
     updated_at: now,
   }))
 
-  const { error } = await admin
-    .schema('agent')
-    .from('positive_learning_case_usages')
+  const { error } = await admin.schema('agent').from('negative_learning_case_usages')
     .upsert(rows, { onConflict: 'project_id,candidate_id,consumer_agent_run_id', ignoreDuplicates: true })
-
-  if (error) throw new Error(`Unable to record PGCL case retrieval: ${error.message}`)
+  if (error) throw new Error(`Unable to record negative learning case retrieval: ${error.message}`)
   return rows.length
 }
 
-export async function recordPositiveLearningCaseOutcome(input: {
+export async function recordNegativeLearningCaseOutcome(input: {
   projectId: string
   candidateId: string
   consumerAgentRunId: string
@@ -116,9 +102,7 @@ export async function recordPositiveLearningCaseOutcome(input: {
   outcome?: Record<string, unknown>
 }) {
   const admin = createAdminClient()
-  const { data, error } = await admin
-    .schema('agent')
-    .from('positive_learning_case_usages')
+  const { data, error } = await admin.schema('agent').from('negative_learning_case_usages')
     .update({
       usage_status: input.status,
       outcome: input.outcome ?? {},
@@ -129,14 +113,13 @@ export async function recordPositiveLearningCaseOutcome(input: {
     .eq('consumer_agent_run_id', input.consumerAgentRunId)
     .select('id')
     .maybeSingle()
-
-  if (error) throw new Error(`Unable to record PGCL case outcome: ${error.message}`)
-  if (!data) throw new Error('PGCL case usage was not found for outcome recording')
+  if (error) throw new Error(`Unable to record negative learning case outcome: ${error.message}`)
+  if (!data) throw new Error('negative learning case usage was not found for outcome recording')
   return String(data.id)
 }
 
 
-export async function reconcilePositiveLearningCaseUsagesFromGovernedOutcome(input: {
+export async function reconcileNegativeLearningCaseUsagesFromGovernedOutcome(input: {
   projectId: string
   consumerAgentRunId: string
   governedOutcomeId: string
@@ -147,15 +130,14 @@ export async function reconcilePositiveLearningCaseUsagesFromGovernedOutcome(inp
   if (input.verificationState !== 'VERIFIED') return 0
 
   const admin = createAdminClient()
-  const { data: usages, error } = await admin
-    .schema('agent')
-    .from('positive_learning_case_usages')
+  const { data: usages, error } = await admin.schema('agent')
+    .from('negative_learning_case_usages')
     .select('candidate_id,outcome')
     .eq('project_id', input.projectId)
     .eq('consumer_agent_run_id', input.consumerAgentRunId)
     .eq('usage_status', 'APPLIED')
 
-  if (error) throw new Error(`Unable to resolve applied PGCL usages: ${error.message}`)
+  if (error) throw new Error(`Unable to resolve applied negative-case usages: ${error.message}`)
   if (!usages?.length) return 0
 
   const terminalStatus =
@@ -166,7 +148,7 @@ export async function reconcilePositiveLearningCaseUsagesFromGovernedOutcome(inp
         : 'APPLIED' as const
 
   for (const usage of usages) {
-    await recordPositiveLearningCaseOutcome({
+    await recordNegativeLearningCaseOutcome({
       projectId: input.projectId,
       candidateId: String(usage.candidate_id),
       consumerAgentRunId: input.consumerAgentRunId,

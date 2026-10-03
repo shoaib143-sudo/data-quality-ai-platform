@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { reconcilePositiveLearningCaseUsagesFromGovernedOutcome } from '@/lib/agents/proactive-governed-case-learning-service'
+import { reconcileNegativeLearningCaseUsagesFromGovernedOutcome } from '@/lib/agents/governed-negative-case-learning-service'
 
 export type GovernedOutcomeVerificationState = 'VERIFIED' | 'FAILED' | 'INCONCLUSIVE'
 export type GovernedOutcomeType = 'EFFECTIVE' | 'INEFFECTIVE' | 'PARTIAL' | 'ROLLED_BACK' | 'REJECTED' | 'POLICY_BLOCKED' | 'FAILED' | 'UNKNOWN'
@@ -97,6 +98,14 @@ export async function recordGovernedActionOutcome(input: RecordGovernedActionOut
     if (evaluationError) throw new Error(`Unable to persist governed outcome evaluation: ${evaluationError.message}`)
 
     await reconcilePositiveLearningCaseUsagesFromGovernedOutcome({
+      projectId: input.projectId,
+      consumerAgentRunId: String(outcome.source_agent_run_id),
+      governedOutcomeId: String(outcome.id),
+      verificationState: outcome.verification_state as GovernedOutcomeVerificationState,
+      outcomeType: outcome.outcome_type as GovernedOutcomeType,
+      effectiveness: outcome.effectiveness == null ? null : Number(outcome.effectiveness),
+    })
+    await reconcileNegativeLearningCaseUsagesFromGovernedOutcome({
       projectId: input.projectId,
       consumerAgentRunId: String(outcome.source_agent_run_id),
       governedOutcomeId: String(outcome.id),

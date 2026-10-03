@@ -2,7 +2,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import {
   loadApprovedPgclPrecedents,
+  loadApprovedPgclAvoidanceCases,
   type AppliedPgclPrecedent,
+  type AppliedPgclAvoidanceCase,
 } from '@/lib/agents/pgcl-approved-precedent'
 
 type Severity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -310,6 +312,7 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
 
   let pgclStatus: 'AVAILABLE' | 'NO_MATCH' | 'UNAVAILABLE' = agentRun.agent_definition_id ? 'NO_MATCH' : 'UNAVAILABLE'
   let pgclPrecedents: AppliedPgclPrecedent[] = []
+  let pgclAvoidanceCases: AppliedPgclAvoidanceCase[] = []
   if (agentRun.agent_definition_id) {
     try {
       const precedentQuery = [
@@ -324,7 +327,14 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
         query: precedentQuery,
         limit: 5,
       })
-      pgclStatus = pgclPrecedents.length ? 'AVAILABLE' : 'NO_MATCH'
+      pgclAvoidanceCases = await loadApprovedPgclAvoidanceCases({
+        projectId: String(agentRun.project_id),
+        agentDefinitionId: String(agentRun.agent_definition_id),
+        agentRunId: input.agentRunId,
+        query: precedentQuery,
+        limit: 5,
+      })
+      pgclStatus = pgclPrecedents.length || pgclAvoidanceCases.length ? 'AVAILABLE' : 'NO_MATCH'
     } catch (error) {
       pgclStatus = 'UNAVAILABLE'
       console.error('[data-quality-investigation] approved PGCL precedent retrieval failed safely:', error)
@@ -383,7 +393,23 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
         evidence: learningCase.evidence,
       })),
     },
+    approved_negative_case_learning: {
+      status: pgclStatus,
+      matches: pgclAvoidanceCases.length,
+      authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+      cases: pgclAvoidanceCases.map((learningCase) => ({
+        learning_case_id: learningCase.learningCaseId,
+        candidate_id: learningCase.candidateId,
+        case_key: learningCase.caseKey,
+        problem_type: learningCase.problemType,
+        avoid_lesson: learningCase.avoidLesson,
+        relevance: learningCase.relevance,
+        evidence: learningCase.evidence,
+      })),
+    },
+    avoidance_guidance: pgclAvoidanceCases.map((learningCase) => learningCase.avoidLesson),
     applied_positive_case_ids: [],
+    applied_negative_case_ids: [],
     failed_rules: failedRules.map(({ rule, runs }) => ({
       rule_definition_id: rule.id,
       rule_key: rule.rule_key,
@@ -482,10 +508,11 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
       approval_required: approvalRequired,
       workflow_instance_id: workflow?.instanceId ?? null,
       approved_positive_case_matches: pgclPrecedents.length,
+      approved_negative_case_matches: pgclAvoidanceCases.length,
       approved_positive_case_authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+      approved_negative_case_authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
     },
   })
-
 
   return {
     investigationId: investigation.id,
@@ -503,6 +530,12 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
       status: pgclStatus,
       matches: pgclPrecedents.length,
       appliedCandidateIds: [],
+      authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
+    },
+    approvedNegativeCaseLearning: {
+      status: pgclStatus,
+      matches: pgclAvoidanceCases.length,
+      appliedCandidateIds: pgclAvoidanceCases.map((learningCase) => learningCase.candidateId),
       authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
     },
     workflow,

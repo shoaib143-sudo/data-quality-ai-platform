@@ -207,6 +207,28 @@ export async function POST(request: Request) {
         evidence,
       }]
     })
+
+    const approvedNegativeCases = preExecutionLearning.approvedNegativeCases.flatMap((learningCase) => {
+      const evidence = learningCase.evidence && typeof learningCase.evidence === 'object' && !Array.isArray(learningCase.evidence)
+        ? learningCase.evidence as Record<string, unknown>
+        : {}
+      const recommendation = learningCase.recommendation && typeof learningCase.recommendation === 'object' && !Array.isArray(learningCase.recommendation)
+        ? learningCase.recommendation as Record<string, unknown>
+        : {}
+      const candidateId = typeof learningCase.candidate_id === 'string' ? learningCase.candidate_id : ''
+      const avoidLesson = typeof recommendation.avoid_lesson === 'string' ? recommendation.avoid_lesson.trim() : ''
+      if (!candidateId || !avoidLesson) return []
+      return [{
+        id: String(learningCase.id),
+        candidateId,
+        caseKey: String(learningCase.case_key),
+        problemType: String(learningCase.problem_type),
+        avoidLesson,
+        relevance: Number(learningCase.relevance ?? 0),
+        evidence,
+      }]
+    })
+
     await recordStage({
       telemetry,
       traceContext,
@@ -216,6 +238,7 @@ export async function POST(request: Request) {
       attributes: {
         agent_definition_id: agentDefinitionId,
         approved_positive_case_count: approvedPositiveCases.length,
+        approved_negative_case_count: approvedNegativeCases.length,
         authority_effect: 'CONTEXT_ONLY',
       },
     })
@@ -227,6 +250,7 @@ export async function POST(request: Request) {
       actorUserId: user.id,
       question: question || null,
       positiveLearningCases: approvedPositiveCases,
+      negativeLearningCases: approvedNegativeCases,
     })
     await recordStage({
       telemetry,
