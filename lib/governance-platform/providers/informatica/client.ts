@@ -4,12 +4,14 @@ export type InformaticaClientConfig = {
   baseUrl: string
   accessToken: () => Promise<string>
   fetchImpl?: typeof fetch
+  timeoutMs?: number
 }
 
 export class InformaticaApiClient {
   private readonly baseUrl: string
   private readonly accessToken: () => Promise<string>
   private readonly fetchImpl: typeof fetch
+  private readonly timeoutMs: number
 
   constructor(config: InformaticaClientConfig) {
     let parsed: URL
@@ -18,9 +20,12 @@ export class InformaticaApiClient {
       throw new GovernanceProviderError('VALIDATION_FAILED', 'Informatica base URL must use HTTPS.')
     }
     if (parsed.username || parsed.password) throw new GovernanceProviderError('VALIDATION_FAILED', 'Informatica base URL must not contain embedded credentials.')
+    const timeoutMs=config.timeoutMs??15_000
+    if(!Number.isFinite(timeoutMs)||timeoutMs<=0||timeoutMs>60_000)throw new GovernanceProviderError('VALIDATION_FAILED','Informatica request timeout must be between 1 and 60000 milliseconds.')
     this.baseUrl = parsed.toString().replace(/\/$/, '')
     this.accessToken = config.accessToken
     this.fetchImpl = config.fetchImpl ?? fetch
+    this.timeoutMs = Math.floor(timeoutMs)
   }
 
   async getJson(path: string): Promise<unknown> {
@@ -35,12 +40,13 @@ export class InformaticaApiClient {
       response = await this.fetchImpl(`${this.baseUrl}/${path.replace(/^\//, '')}`, {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(this.timeoutMs),
       })
     } catch (error) {
       const name = error instanceof Error ? error.name : ''
       throw new GovernanceProviderError(
-        name === 'AbortError' ? 'TRANSIENT_FAILURE' : 'PROVIDER_UNAVAILABLE',
-        name === 'AbortError' ? 'Informatica request timed out.' : 'Informatica provider is unavailable.',
+        name === 'AbortError' || name === 'TimeoutError' ? 'TRANSIENT_FAILURE' : 'PROVIDER_UNAVAILABLE',
+        name === 'AbortError' || name === 'TimeoutError' ? 'Informatica request timed out.' : 'Informatica provider is unavailable.',
         { details: { cause: error instanceof Error ? error.message : String(error) } },
       )
     }
