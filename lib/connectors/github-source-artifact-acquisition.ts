@@ -48,6 +48,7 @@ export async function acquireGitHubSourceArtifacts(input:{repositoryUrl:string;r
   const ref=(input.ref?.trim()||'HEAD')
   if(!safeRef(ref))throw new Error('GitHub ref contains unsupported characters.')
   const encodedRef=encodeURIComponent(ref)
+  const rawRef=ref.split('/').map(encodeURIComponent).join('/')
   const tree=await githubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodedRef}?recursive=1`) as {tree?:Array<{path?:string;type?:string;size?:number}>;truncated?:boolean}
   if(tree.truncated)throw new Error('GitHub repository tree is truncated. Narrow the repository/ref before scanning.')
 
@@ -65,7 +66,7 @@ export async function acquireGitHubSourceArtifacts(input:{repositoryUrl:string;r
   let totalBytes=0
   for(const item of candidates){
     if(totalBytes+item.size>MAX_TOTAL_BYTES)break
-    const rawUrl=`https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodedRef}/${item.path.split('/').map(encodeURIComponent).join('/')}`
+    const rawUrl=`https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${rawRef}/${item.path.split('/').map(encodeURIComponent).join('/')}`
     const response=await fetch(rawUrl,{headers:{'user-agent':'DataNexus-source-artifact-scanner'},cache:'no-store'})
     if(!response.ok)continue
     const content=await response.text()
