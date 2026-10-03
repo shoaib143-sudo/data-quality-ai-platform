@@ -3,6 +3,7 @@ import fs from 'node:fs'
 
 const files = {
   shell: fs.readFileSync('components/app-shell/global-utility-bar.tsx', 'utf8'),
+  workspaceNavigation: fs.readFileSync('components/app-shell/workspace-navigation.ts', 'utf8'),
   datasetActions: fs.readFileSync('app/datasets/dataset-actions.tsx', 'utf8'),
   registration: fs.readFileSync('app/datasets/register-dataset-form.tsx', 'utf8'),
   journeyOverview: fs.readFileSync('app/journeys/page.tsx', 'utf8'),
@@ -11,7 +12,8 @@ const files = {
 }
 
 const expected = {
-  shell: ['Dashboard', 'Data', 'Quality', 'Governance', 'AI Agents', 'Monitor', 'Approvals', 'Admin', 'Search', 'Inbox'],
+  shell: ['Search', 'Inbox'],
+  workspaceNavigation: ['Dashboard', 'Data', 'Quality', 'Governance', 'AI Agents', 'Monitor', 'Approvals', 'Admin'],
   datasetActions: ['Dataset 360', 'Fix manually', 'Ask AI to repair', 'Run profiling'],
   registration: ['Create project', 'Cancel', 'Register dataset', 'Run profiling', 'Open Dataset 360'],
   journeyOverview: ['Open Governance Run'],
@@ -69,6 +71,7 @@ assert.ok(files.datasetActions.includes('disabled={busy || readinessLoading}'), 
 assert.ok(files.registration.includes('disabled={busy}'), 'registration inputs and submit CTA must guard busy state')
 assert.ok(files.remediation.includes('disabled={busy !== null}'), 'remediation mutation CTAs must suppress double submission')
 assert.ok(files.shell.includes('focus-visible:ring-2'), 'global nav CTAs must retain keyboard focus styling')
+assert.ok(files.shell.includes('workspaceNavItems'), 'global shell must render the canonical workspace navigation registry')
 assert.ok(files.governanceRun.includes('hover:border-cyan-300/30'), 'Governance Run stage CTAs must retain interactive affordance')
 assert.ok(files.registration.includes('role="status"'), 'registration outcome messaging must be exposed as status')
 assert.ok(files.datasetActions.includes('role="status"'), 'dataset readiness/execution messaging must be exposed as status')
