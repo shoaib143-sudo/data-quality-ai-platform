@@ -13,7 +13,7 @@ export type GovernanceCheckpoint={
  updatedAt:string
 }
 
-export type GovernanceResumeAction='EXECUTE'|'POLL'|'VERIFY'|'WAIT'|'COMPLETE'
+export type GovernanceResumeAction='EXECUTE'|'POLL'|'VERIFY'|'WAIT'|'FAILED'|'COMPLETE'
 export type GovernanceClaimResult={claimed:boolean;resumeAction:GovernanceResumeAction;checkpoint:GovernanceCheckpoint}
 export interface GovernanceCheckpointStore{
  get(idempotencyKey:string):Promise<GovernanceCheckpoint|null>
@@ -25,20 +25,21 @@ export function governanceResumeAction(checkpoint:GovernanceCheckpoint|null):Gov
  if(!checkpoint)return'EXECUTE'
  if(checkpoint.status==='VERIFIED')return'COMPLETE'
  if(checkpoint.status==='SUCCEEDED')return'VERIFY'
- if(checkpoint.status==='PENDING'||checkpoint.status==='RUNNING')return checkpoint.providerJobId?'POLL':'EXECUTE'
- return'EXECUTE'
+ if(checkpoint.status==='FAILED')return'FAILED'
+ if(checkpoint.status==='PENDING'||checkpoint.status==='RUNNING')return checkpoint.providerJobId?'POLL':'WAIT'
+ return'WAIT'
 }
 
 export async function claimGovernanceOperation(store:GovernanceCheckpointStore,input:Pick<GovernanceCheckpoint,'planId'|'operationId'|'idempotencyKey'>){
  if(store.claim)return store.claim(input)
  const existing=await store.get(input.idempotencyKey)
  const resumeAction=governanceResumeAction(existing)
- if(resumeAction==='COMPLETE'||resumeAction==='VERIFY'||resumeAction==='POLL')return{claimed:false as const,resumeAction,checkpoint:existing!}
+ if(existing&&resumeAction!=='EXECUTE')return{claimed:false as const,resumeAction,checkpoint:existing}
  const checkpoint:GovernanceCheckpoint={
-  ...input,status:'RUNNING',attempts:(existing?.attempts??0)+1,
-  providerObjectId:existing?.providerObjectId??null,providerJobId:existing?.providerJobId??null,
-  executionEvidence:existing?.executionEvidence??{},verificationStatus:existing?.verificationStatus??null,
+  ...input,status:'RUNNING',attempts:1,
+  providerObjectId:null,providerJobId:null,
+  executionEvidence:{},verificationStatus:null,
   updatedAt:new Date().toISOString(),
  }
- await store.put(checkpoint);return{claimed:true as const,resumeAction,checkpoint}
+ await store.put(checkpoint);return{claimed:true as const,resumeAction:'EXECUTE' as const,checkpoint}
 }
