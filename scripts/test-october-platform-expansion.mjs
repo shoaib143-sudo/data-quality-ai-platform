@@ -454,3 +454,20 @@ test('recurring source health uses opt-in durable observability jobs and redacte
   assert.match(worker,/checkSourceConnectionHealth/)
   assert.match(service,/enqueueRecurringSourceHealthChecks/)
 })
+
+
+test('automated GitHub artifact acquisition is bounded, host-allowlisted and never persists source content',()=>{
+  const acquisition=fs.readFileSync('lib/connectors/github-source-artifact-acquisition.ts','utf8')
+  const route=fs.readFileSync('app/api/catalog/source-artifact/github/route.ts','utf8')
+  const ui=fs.readFileSync('components/catalog/source-artifact-scan-workbench.tsx','utf8')
+  assert.match(acquisition,/hostname\.toLowerCase\(\)!=='github\.com'/)
+  assert.match(acquisition,/MAX_FILES=100/)
+  assert.match(acquisition,/MAX_FILE_BYTES=512_000/)
+  assert.match(acquisition,/MAX_TOTAL_BYTES=5_000_000/)
+  assert.match(acquisition,/sourceArtifactKindForPath/)
+  assert.match(route,/authorizeProject\(user\.id,projectId,'source\.manage'\)/)
+  assert.match(route,/source_content_persisted:false/)
+  assert.match(route,/SOURCE_ARTIFACT_REPOSITORY_SCANNED/)
+  assert.match(ui,/Automated GitHub acquisition/)
+  assert.match(ui,/GITHUB_SOURCE_SCAN_TOKEN/)
+})
