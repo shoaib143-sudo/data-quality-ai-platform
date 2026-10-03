@@ -63,3 +63,20 @@ No production-readiness statement should be issued from source review alone.
 | Production Supabase migration application | Controlled activation boundary | No production migration is applied by this PR takeover. |
 
 The exact-head closure audit must still re-run after the implementation head is frozen. Any subsequent code fix invalidates earlier exact-head evidence and requires the affected gates to run again.
+
+
+## Final pre-freeze adversarial disposition
+
+| Finding | Severity | Final code-level disposition |
+| --- | --- | --- |
+| Explicit delete could miss an unmanaged inbound dependent because discovery was scoped to desired keys | High | Fixed. Any explicit delete requests broad provider discovery and planning blocks unresolved unmanaged inbound references. |
+| Stale RUNNING reclaim could replay a provider mutation after an ambiguous crash window | High | Fixed. Stale reclaim returns RECOVER, increments the fence generation, performs readback and never automatically replays unresolved work. |
+| PARTIAL provider mutation could execute without explicit semantic-loss consent | High | Fixed fail-closed. PARTIAL mutation is non-executable until an explicit semantic-loss acceptance contract exists. |
+| Mutation capability with idempotency NONE could enter automatic retry/execution | High | Fixed fail-closed. Non-idempotent mutation capability is non-executable. |
+| Persistence invariants were previously proven primarily by static SQL contracts | High release gate | Fixed in assurance design. Isolated Supabase behavioral fixture now exercises claim/recovery/fencing/evidence immutability. |
+| Provider Golden Path was not explicit in the provider-specific assurance workflow | Medium release gate | Fixed. Added governed provider Golden Path and upstream Golden Path handoff execution. |
+| Official MCP 2026-07-28 SDK/conformance interoperability | Medium closure gate | Awaiting authenticated test identity/runtime execution. Authentication remains mandatory. |
+| Informatica live conformance and mutation activation | High activation gate | External credential/activation boundary. Mutations remain disabled. |
+| Durable provider projection source-of-truth mapping | Medium activation limitation | Still intentionally deferred and blocks mutation activation where provider-object identity persistence is required. |
+
+No source-review result overrides exact-head CI, behavioral migration validation, authenticated MCP interoperability, or live Informatica conformance evidence.
