@@ -22,7 +22,7 @@ The audit starts from the exact PR diff, public interfaces, database migrations 
 | Branch can move behind main during long implementation | Medium | Exact-head sync/freeze required at closure |
 | Informatica live endpoint conformance is not proven without tenant credentials | High activation gate | Keep mutation support disabled; run read-only conformance when credentials are available |
 | Official MCP SDK interoperability is not yet proven end-to-end | Medium | Mandatory post-implementation interoperability gate |
-| Provider projections are normalized but not yet treated as a durable source-of-truth mapping | Medium | Validate whether durable projection persistence is required before mutation activation |
+| Provider projections are normalized but not yet treated as a durable source-of-truth mapping | Medium | Addressed on PR branch with project/provider/connection-scoped durable projection persistence; isolated migration replay and collision tests remain required before closure |
 | Stale RUNNING checkpoint reclaim needs fencing proof against a late original worker | High | Adversarial concurrency test required; live mutation activation blocked until proven |
 | Production Supabase migration has not been applied | Controlled activation boundary | Apply only through approved infrastructure change after isolated validation |
 
