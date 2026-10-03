@@ -2,9 +2,20 @@
 begin;
 
 -- This fixture runs only against the isolated CI Supabase database.
--- Temporarily suppress FK triggers so the checkpoint/evidence contracts can be
--- exercised with an isolated synthetic project identifier and no application seed.
-select set_config('session_replication_role','replica',true);
+-- Create a legitimate synthetic organization/project inside the transaction so
+-- persistence behavior is tested with real foreign keys and without trigger bypasses.
+insert into app.organizations(id,name,slug)
+values('00000000-0000-4000-8000-000000000108','Governance Provider Assurance','governance-provider-assurance')
+on conflict (id) do nothing;
+
+insert into app.projects(id,organization_id,name,slug)
+values(
+ '00000000-0000-4000-8000-000000000109',
+ '00000000-0000-4000-8000-000000000108',
+ 'Governance Provider Assurance',
+ 'governance-provider-assurance'
+)
+on conflict (id) do nothing;
 
 do $block$
 declare
@@ -22,8 +33,6 @@ begin
   assert (first_claim->'checkpoint'->>'claim_generation')::bigint = 1, 'async fixture claim generation must be 1';
 end;
 $block$;
-
-select set_config('session_replication_role','origin',true);
 
 do $block$
 declare
@@ -82,7 +91,6 @@ begin
 end;
 $block$;
 
-select set_config('session_replication_role','replica',true);
 insert into governance.platform_execution_evidence(
   project_id,plan_id,deployment_id,operation_id,provider,connection_id,idempotency_key,
   desired_state_fingerprint,execution_status,verification_status,details
@@ -90,8 +98,6 @@ insert into governance.platform_execution_evidence(
   '00000000-0000-4000-8000-000000000109','plan-1','deployment-1','op-1','fixture','conn','idem-1',
   repeat('a',64),'SUCCEEDED','VERIFIED','{}'::jsonb
 );
-select set_config('session_replication_role','origin',true);
-
 do $block$
 declare
   blocked_update boolean := false;
@@ -117,7 +123,6 @@ $block$;
 
 -- Durable provider projection mapping must preserve both canonical and provider
 -- identity within a project/provider/connection boundary.
-select set_config('session_replication_role','replica',true);
 do $block$
 declare
   v_project_id uuid := '00000000-0000-4000-8000-000000000109';
@@ -179,6 +184,4 @@ begin
   assert collision_rejected, 'one provider object must not map to two canonical identities in the same target';
 end;
 $block$;
-select set_config('session_replication_role','origin',true);
-
 rollback;
