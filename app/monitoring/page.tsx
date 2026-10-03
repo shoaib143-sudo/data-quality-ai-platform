@@ -79,6 +79,7 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
           initialDatasets={typedDatasets}
           initialProjects={typedProjects}
           initialJobs={typedJobs}
+          initialSteps={typedSteps}
           initialNow={new Date().toISOString()}
           initialRunId={selectedRunId}
           initialAgentId={requestedAgentId ?? null}
