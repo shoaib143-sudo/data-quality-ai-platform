@@ -16,6 +16,14 @@ test('MCP transport rejects unlisted hosts and cross-origin browser requests',()
  assert.equal(validateGovernanceMcpTransportSecurity(badOrigin,env).status,403)
 })
 
+test('MCP transport rejects same-host requests from a different origin port or scheme',()=>{
+ const env={MCP_ALLOWED_HOSTS:'mcp.example.com'}
+ const wrongPort=new Request('https://mcp.example.com:8443/api/mcp/governance',{headers:{host:'mcp.example.com:8443',origin:'https://mcp.example.com:9443'}})
+ assert.equal(validateGovernanceMcpTransportSecurity(wrongPort,env).status,403)
+ const wrongScheme=new Request('https://mcp.example.com/api/mcp/governance',{headers:{host:'mcp.example.com',origin:'http://mcp.example.com'}})
+ assert.equal(validateGovernanceMcpTransportSecurity(wrongScheme,env).status,403)
+})
+
 test('MCP transport allows non-browser clients only on an allowed host',()=>{
  const env={MCP_ALLOWED_HOSTS:'mcp.example.com'}
  const request=new Request('https://mcp.example.com/api/mcp/governance',{headers:{host:'mcp.example.com'}})
