@@ -92,4 +92,5 @@ test('unrelated failures do not collapse into one negative learning case', () =>
   assert.match(contract, /negativeCaseSignature/)
   assert.match(contract, /useCaseKey: \`\$\{input\.agentKey\}:\$\{skillKey\}:\$\{negativeCaseSignature\(problem\)\}\`/)
   assert.doesNotMatch(contract, /useCaseKey: \`\$\{input\.agentKey\}:\$\{skillKey\}:failure-pattern\`/)
+  assert.match(migration, /nc\.problem_signature = btrim\(p_problem_signature\)/)
 })
