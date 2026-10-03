@@ -125,6 +125,8 @@ for (const invariant of [
   'PGCL_NEGATIVE_CASE',
   'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
   'Data Governance Admin-approved positive cases are historical precedent only',
+  'proposeNegativeCaseFromFailedAgentRun',
+  'specialist negative-case learning failed safely',
 ]) {
   assert.ok(specialist.includes(invariant), `missing specialist learning-context boundary: ${invariant}`)
 }
@@ -140,6 +142,7 @@ for (const invariant of [
   'loadApprovedPgclAvoidanceCases',
   'positiveLearningCases: pgclPrecedents.map',
   'negativeLearningCases: pgclAvoidanceCases.map',
+  "learningRunMode: input.learningRunMode ?? 'HANDSFREE'",
 ]) {
   assert.ok(supervisor.includes(invariant), `missing supervisor PGCL integration: ${invariant}`)
 }
