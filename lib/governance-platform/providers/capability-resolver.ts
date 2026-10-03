@@ -30,6 +30,9 @@ export function resolveProviderCapability(
   if (candidate.support === 'PARTIAL' && mode !== 'READ') {
     return { capability, mode, semanticLoss: 'APPROXIMATED', providerCapability: candidate, executable: false, reason: 'Partial provider mutation requires an explicit semantic-loss acceptance contract.' }
   }
+  if (mode !== 'READ' && candidate.idempotency === 'NONE') {
+    return { capability, mode, semanticLoss: candidate.support === 'PARTIAL' ? 'APPROXIMATED' : 'EXACT', providerCapability: candidate, executable: false, reason: 'Provider mutation has no idempotency guarantee and cannot use governed automatic execution.' }
+  }
   return {
     capability,
     mode,
