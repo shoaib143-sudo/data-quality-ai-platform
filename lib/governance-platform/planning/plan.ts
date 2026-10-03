@@ -28,19 +28,29 @@ export function buildGovernancePlan(
   if (!validation.ok) throw new Error(`Invalid governance desired state: ${validation.errors.join(' ')}`)
 
   const desiredStateFingerprint = stableGovernanceFingerprint(desiredState)
-  const operations = diffGovernanceState(desiredState.objects, actual).map((diff, index) => ({
-    operationId: stableGovernanceFingerprint({
-      desiredStateFingerprint,
+  const diffs = diffGovernanceState(desiredState.objects, actual)
+  const operations = diffs.map((diff, index) => {
+    const dependencies = diff.action === 'DELETE'
+      ? diffs
+          .filter(other => other !== diff && other.action !== 'NOOP' && other.actual?.relationships.some(relationship => relationship.targetId === diff.desired.id))
+          .map(other => other.desired.id)
+          .sort()
+      : diff.desired.relationships.map(relationship => relationship.targetId).sort()
+
+    return {
+      operationId: stableGovernanceFingerprint({
+        desiredStateFingerprint,
+        action: diff.action,
+        type: diff.desired.type,
+        externalKey: diff.desired.externalKey,
+        index,
+      }).slice(0, 32),
       action: diff.action,
-      type: diff.desired.type,
-      externalKey: diff.desired.externalKey,
-      index,
-    }).slice(0, 32),
-    action: diff.action,
-    canonicalKey: `${diff.desired.type}:${diff.desired.externalKey}`,
-    objectId: diff.desired.id,
-    dependencies: diff.desired.relationships.map(relationship => relationship.targetId).sort(),
-  }))
+      canonicalKey: `${diff.desired.type}:${diff.desired.externalKey}`,
+      objectId: diff.desired.id,
+      dependencies,
+    }
+  })
 
   const planFingerprint = stableGovernanceFingerprint({
     projectId: desiredState.projectId,
