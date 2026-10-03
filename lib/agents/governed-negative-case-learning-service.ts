@@ -89,7 +89,7 @@ export async function recordNegativeLearningCaseRetrievals(input: {
   }))
 
   const { error } = await admin.schema('agent').from('negative_learning_case_usages')
-    .upsert(rows, { onConflict: 'project_id,candidate_id,consumer_agent_run_id' })
+    .upsert(rows, { onConflict: 'project_id,candidate_id,consumer_agent_run_id', ignoreDuplicates: true })
   if (error) throw new Error(`Unable to record negative learning case retrieval: ${error.message}`)
   return rows.length
 }
