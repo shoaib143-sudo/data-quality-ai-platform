@@ -101,4 +101,71 @@ begin
 end;
 $block$;
 
+
+-- Durable provider projection mapping must preserve both canonical and provider
+-- identity within a project/provider/connection boundary.
+select set_config('session_replication_role','replica',true);
+do $block$
+declare
+  v_project_id uuid := '00000000-0000-4000-8000-000000000109';
+  count_written integer;
+  collision_rejected boolean := false;
+begin
+  count_written := governance.upsert_provider_projection_observations(
+    v_project_id,
+    jsonb_build_array(jsonb_build_object(
+      'provider','informatica',
+      'connection_id','conn',
+      'canonical_object_id','technical-asset:customer',
+      'provider_object_id','provider-customer',
+      'provider_version','1',
+      'last_observed_fingerprint',repeat('b',64),
+      'last_observed_at',now(),
+      'sync_state','IN_SYNC'
+    ))
+  );
+  assert count_written = 1, 'provider projection observation must be persisted';
+
+  count_written := governance.upsert_provider_projection_observations(
+    v_project_id,
+    jsonb_build_array(jsonb_build_object(
+      'provider','INFORMATICA',
+      'connection_id','conn',
+      'canonical_object_id','technical-asset:customer',
+      'provider_object_id','provider-customer',
+      'provider_version','2',
+      'last_observed_fingerprint',repeat('c',64),
+      'last_observed_at',now(),
+      'sync_state','DRIFTED'
+    ))
+  );
+  assert count_written = 1, 'existing canonical projection observation must update';
+  assert (
+    select provider_version='2' and sync_state='DRIFTED'
+    from governance.provider_projections
+    where project_id=v_project_id and provider='informatica' and connection_id='conn'
+      and canonical_object_id='technical-asset:customer'
+  ), 'projection observation update must preserve normalized target identity';
+
+  begin
+    perform governance.upsert_provider_projection_observations(
+      v_project_id,
+      jsonb_build_array(jsonb_build_object(
+        'provider','informatica',
+        'connection_id','conn',
+        'canonical_object_id','technical-asset:other',
+        'provider_object_id','provider-customer',
+        'last_observed_fingerprint',repeat('d',64),
+        'last_observed_at',now(),
+        'sync_state','IN_SYNC'
+      ))
+    );
+  exception when unique_violation then
+    collision_rejected := true;
+  end;
+  assert collision_rejected, 'one provider object must not map to two canonical identities in the same target';
+end;
+$block$;
+select set_config('session_replication_role','origin',true);
+
 rollback;
