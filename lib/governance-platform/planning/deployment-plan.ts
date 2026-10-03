@@ -1,4 +1,4 @@
-import type { CanonicalGovernanceObject } from '../canonical/model.ts'
+import type { CanonicalGovernanceObject,ProviderProjection } from '../canonical/model.ts'
 import type { GovernanceDesiredState,DesiredStateTarget } from '../desired-state/model.ts'
 import { governanceDesiredStateFingerprint,normalizeGovernanceDesiredState,stableGovernanceFingerprint } from './fingerprint.ts'
 import { buildGovernancePlan,type GovernancePlan } from './plan.ts'
@@ -8,6 +8,7 @@ export type GovernanceTargetObservedState={
  provider:string
  connectionId:string
  objects:CanonicalGovernanceObject[]
+ projections?:ProviderProjection[]
  observedAt?:string
 }
 
