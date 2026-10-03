@@ -75,6 +75,14 @@ For each failure, verify the system stops before an unauthorized side effect, re
 - [ ] Re-run unit, integration, negative, failure, adversarial, and exact-head CI checks; attach evidence to the integration commit.
 - [ ] Obtain a fresh independent review of the real evidence chain. Preserve human approval and activation as a separate gate.
 
+## PR #1122 independent audit follow-up
+
+The independent PR review identified three concrete concerns: the local fixture scripts trusted localhost and a nonempty database name without an explicit destructive opt-in; the testing-schema migration was absent from both workflow path filters; and the schema-boundary check only recognized a narrow set of `testing.*` DDL forms.
+
+The follow-up patch requires `DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM=I_ACCEPT_DESTRUCTIVE_FIXTURE` and a `datanexus_fixture_` database name in both SQL fixture scripts. Each CI database job now creates and targets a separately named fixture database. The boundary test rejects any uncommented `testing.` reference in runner/budget migrations, checks the testing-schema migration path appears in both `pull_request` and `push` filters, and verifies both scripts stop before connecting when the destructive opt-in is missing.
+
+Required re-validation on the updated head: runner behavior and service suites, boundary tests including the negative opt-in cases, budget behavior, TypeScript, the isolated runner and budget PostgreSQL concurrency fixtures, and all exact-head CI contexts. A fresh independent review must assess the follow-up patch itself. The previous review findings do not count as review of their fixes.
+
 ## Limits
 
 This review did not modify production, trigger profiling, retry GitHub Actions, apply a migration, call a paid provider, or create prospective learning rows. The four version IDs and orphaned attempt finding reflect the workflow snapshot generated on 2026-10-02, not a claim that the records remain unchanged on 2026-10-03. Verify the current estate through an authorized fresh read before any corrective action.
