@@ -40,6 +40,7 @@ export function validateGovernanceDesiredState(input: unknown): DesiredStateVali
   }
 
   const objectKeys = new Set<string>()
+  const objectIds = new Set<string>()
   for (const [index, objectValue] of objects.entries()) {
     if(!isRecord(objectValue)){errors.push(`objects[${index}] must be an object.`);continue}
     const id=objectValue.id
@@ -47,6 +48,8 @@ export function validateGovernanceDesiredState(input: unknown): DesiredStateVali
     const externalKey=objectValue.externalKey
     const name=objectValue.name
     if (!nonEmptyString(id)) errors.push(`objects[${index}].id is required.`)
+    else if(objectIds.has(id)) errors.push(`objects[${index}] duplicates canonical id ${id}.`)
+    else objectIds.add(id)
     if (typeof type!=='string'||!CANONICAL_OBJECT_TYPES.has(type)) errors.push(`objects[${index}].type is unsupported.`)
     if (!nonEmptyString(externalKey)) errors.push(`objects[${index}].externalKey is required.`)
     if (!nonEmptyString(name)) errors.push(`objects[${index}].name is required.`)
