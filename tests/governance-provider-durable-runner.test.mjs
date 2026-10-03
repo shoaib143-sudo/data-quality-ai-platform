@@ -113,3 +113,53 @@ test('validated deployment approval satisfies policy approval without skipping R
  assert.equal(authorization,1);assert.equal(controls,1);assert.equal(executes,1)
  clearGovernanceProvidersForTests()
 })
+
+
+test('stale reclaimed work performs recovery readback and never replays provider mutation',async()=>{
+ clearGovernanceProvidersForTests()
+ let executes=0,verifies=0,stored={
+  ...operation,status:'RUNNING',attempts:2,claimGeneration:2,
+  providerObjectId:null,providerJobId:null,executionEvidence:{},verificationStatus:null,updatedAt:new Date().toISOString(),
+ }
+ registerGovernanceProvider({
+  manifest:()=>({provider:'fake',providerVersion:'1',canonicalSchemaVersion:'1.0',capabilities:[{capability:'catalog.asset.create',support:'FULL',modes:['CREATE'],consistency:'STRONG',execution:'SYNC',idempotency:'DATANEXUS_MANAGED',rollback:'NONE',verification:'READ_BACK'}]}),
+  capabilities:async function(){return this.manifest().capabilities},
+  discover:async()=>({objects:[],projections:[],observedAt:new Date().toISOString()}),
+  execute:async op=>{executes++;return{operationId:op.operationId,status:'SUCCEEDED'}},
+  verify:async op=>{verifies++;return{operationId:op.operationId,status:'VERIFIED',observed:op.object}},
+ })
+ const checkpointStore={
+  get:async()=>stored,
+  claim:async()=>({claimed:true,resumeAction:'RECOVER',checkpoint:structuredClone(stored)}),
+  put:async value=>{stored=structuredClone(value)},
+ }
+ const evidenceStore=new InMemoryGovernanceEvidenceStore()
+ const result=await executeGovernedProviderOperation(operation,dependencies(checkpointStore,evidenceStore))
+ assert.equal(result.status,'VERIFIED')
+ assert.equal(result.recovered,true)
+ assert.equal(executes,0)
+ assert.equal(verifies,1)
+ assert.equal(stored.status,'VERIFIED')
+ const evidence=await evidenceStore.listByPlan('project','plan')
+ assert.deepEqual(evidence.map(value=>value.details.phase),['RECOVERY_READBACK'])
+ clearGovernanceProvidersForTests()
+})
+
+test('unresolved stale recovery fails closed without replaying mutation',async()=>{
+ clearGovernanceProvidersForTests()
+ let executes=0
+ const checkpoint={planId:'plan',operationId:'op',idempotencyKey:'idem',status:'RUNNING',attempts:2,claimGeneration:2,providerObjectId:null,providerJobId:null,executionEvidence:{},verificationStatus:null,updatedAt:new Date().toISOString()}
+ registerGovernanceProvider({
+  manifest:()=>({provider:'fake',providerVersion:'1',canonicalSchemaVersion:'1.0',capabilities:[{capability:'catalog.asset.create',support:'FULL',modes:['CREATE'],consistency:'STRONG',execution:'SYNC',idempotency:'DATANEXUS_MANAGED',rollback:'NONE',verification:'READ_BACK'}]}),
+  capabilities:async function(){return this.manifest().capabilities},
+  discover:async()=>({objects:[],projections:[],observedAt:new Date().toISOString()}),
+  execute:async op=>{executes++;return{operationId:op.operationId,status:'SUCCEEDED'}},
+  verify:async op=>({operationId:op.operationId,status:'MISMATCH'}),
+ })
+ const checkpointStore={claim:async()=>({claimed:true,resumeAction:'RECOVER',checkpoint}),get:async()=>checkpoint,put:async()=>{}}
+ const result=await executeGovernedProviderOperation(operation,dependencies(checkpointStore,new InMemoryGovernanceEvidenceStore()))
+ assert.equal(result.status,'RECOVERY_REQUIRED')
+ assert.equal(result.recovered,false)
+ assert.equal(executes,0)
+ clearGovernanceProvidersForTests()
+})
