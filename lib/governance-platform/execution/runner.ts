@@ -115,6 +115,7 @@ export async function executeGovernedProviderOperation(operation:ProviderPlanned
    providerJobId:result.providerJobId??checkpoint?.providerJobId??null,
    executionEvidence:result.evidence??checkpoint?.executionEvidence??{},
   })??checkpoint
+  await appendEvidence(dependencies.evidenceStore,operation,result,null,{phase:'PROVIDER_STATUS'})
  }else if(claim?.resumeAction==='VERIFY'){
   result=checkpointResult(claim.checkpoint)
  }else{
