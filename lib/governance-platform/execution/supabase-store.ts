@@ -34,7 +34,7 @@ export class SupabaseGovernanceCheckpointStore implements GovernanceCheckpointSt
   const result=(data??{}) as Record<string,unknown>
   const row=result.checkpoint
   const resumeAction=String(result.resume_action??'') as GovernanceResumeAction
-  if(!row||typeof row!=='object'||!['EXECUTE','POLL','VERIFY','WAIT','FAILED','COMPLETE'].includes(resumeAction)){
+  if(!row||typeof row!=='object'||!['EXECUTE','POLL','VERIFY','RECOVER','WAIT','FAILED','COMPLETE'].includes(resumeAction)){
    throw new Error('Governance checkpoint claim returned an invalid contract.')
   }
   return{claimed:result.claimed===true,resumeAction,checkpoint:mapCheckpointRow(row as Record<string,unknown>)}
