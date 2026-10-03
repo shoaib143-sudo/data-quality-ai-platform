@@ -60,10 +60,14 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 24
-      - name: Migration and durability contract tests
-        run: |
-          node --experimental-strip-types --test tests/governance-provider-persistence-contract.test.mjs tests/governance-provider-projections.test.mjs
-          node --experimental-strip-types --test tests/governance-provider-checkpoint-resume.test.mjs tests/governance-provider-durable-runner.test.mjs
+      - name: Provider projection contract tests
+        run: node --experimental-strip-types --test tests/governance-provider-projections.test.mjs
+      - name: Persistence migration contract tests
+        run: node --experimental-strip-types --test tests/governance-provider-persistence-contract.test.mjs
+      - name: Checkpoint resume contract tests
+        run: node --experimental-strip-types --test tests/governance-provider-checkpoint-resume.test.mjs
+      - name: Durable runner contract tests
+        run: node --experimental-strip-types --test tests/governance-provider-durable-runner.test.mjs
 
   provider-security-adversarial:
     name: provider-security-adversarial
