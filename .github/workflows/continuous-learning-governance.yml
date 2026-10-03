@@ -55,6 +55,11 @@ on:
       - 'scripts/test-learning-experiment-budget.sql'
       - 'scripts/run-learning-experiment-budget-fixture.sh'
       - 'supabase/migrations/20261001004136_governed_learning_experiment_budget.sql'
+      - 'lib/agents/governed-learning-paired-experiment-runner.ts'
+      - 'scripts/fixtures/learning-experiment-runner-admin.mjs'
+      - 'scripts/test-learning-paired-experiment-runner.mjs'
+      - 'scripts/test-learning-paired-experiment-runner.sql'
+      - 'supabase/migrations/20261001151000_learning_paired_experiment_runner_core.sql'
       - 'lib/agents/learning-evaluation-policy.ts'
       - 'scripts/test-learning-evaluation-policy.mjs'
       - 'lib/agents/governed-learning-evaluation-service.ts'
@@ -162,6 +167,11 @@ on:
       - 'scripts/test-learning-experiment-budget.sql'
       - 'scripts/run-learning-experiment-budget-fixture.sh'
       - 'supabase/migrations/20261001004136_governed_learning_experiment_budget.sql'
+      - 'lib/agents/governed-learning-paired-experiment-runner.ts'
+      - 'scripts/fixtures/learning-experiment-runner-admin.mjs'
+      - 'scripts/test-learning-paired-experiment-runner.mjs'
+      - 'scripts/test-learning-paired-experiment-runner.sql'
+      - 'supabase/migrations/20261001151000_learning_paired_experiment_runner_core.sql'
       - 'lib/agents/learning-evaluation-policy.ts'
       - 'scripts/test-learning-evaluation-policy.mjs'
       - 'lib/agents/governed-learning-evaluation-service.ts'
@@ -256,6 +266,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs && node scripts/test-learning-runner-schema-boundary.mjs
       - name: Run learning experiment runtime budget tests
         run: node --experimental-strip-types scripts/test-learning-experiment-budget-runtime.mjs
+      - name: Run paired experiment runner orchestration tests
+        run: node --experimental-strip-types scripts/test-learning-paired-experiment-runner.mjs
       - name: Run prospective evaluation policy behavior tests
         run: node --experimental-strip-types scripts/test-learning-evaluation-policy.mjs
       - name: Run prospective evaluation release admission tests
@@ -320,6 +332,30 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-learning-benchmark-dataset-manifest.sql
+
+  learning-runner-database:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Execute isolated paired experiment runner fixture
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-learning-paired-experiment-runner.sql
 
   learning-budget-database:
     runs-on: ubuntu-24.04

@@ -18,11 +18,11 @@ The last live read-only inspection on 2026-09-30 found zero coverage rows and ze
 | Phase | Concrete work | Deliverable | Completion gate | Current status |
 | --- | --- | --- | --- | --- |
 | 0. Inventory | Inspect project membership, dataset access, currently supported runtime modes, deployed agent/skill versions and existing evaluation APIs | Exact activation inventory with evidence references | Every scope/version/mode is traceable; unavailable values remain explicit | Agent inventory done; project/candidate/evaluator binding pending |
-| 1. Register experiment | Reuse existing experiment/version records where compatible; implement a typed activation record and fail-closed validation for uncovered fields | Immutable versioned evaluation specification and authorized review surface | Reject missing scope, unchanged candidate, unauthorized dataset, unsupported mode, self-evaluator and missing rollback/budgets | Planned |
+| 1. Register experiment | Reuse existing experiment/version records where compatible; implement a typed activation record and fail-closed validation for uncovered fields | Immutable versioned evaluation specification and authorized review surface | Reject missing scope, unchanged candidate, unauthorized dataset, unsupported mode, self-evaluator and missing rollback/budgets | PARTIAL — immutable policy exists; durable case/arm runner identity added, live activation binding still pending |
 | 2. Collect baseline | Observe new normal authorized GUIDED workloads; correlate terminal coverage, provenance and independently VERIFIED outcomes | Per-agent/mode baseline report with pending/excluded/negative counts | Source evidence complete; no synthetic row or historical relabeling counted | Runtime collection implemented; live evidence pending |
 | 3. Create candidate | Derive a narrow prompt/skill change from verified failures; keep model/tool/policy identities frozen except declared change | Versioned proposal with diff, failure evidence and rollback reference | No authority expansion, registry self-mutation, source-data remediation or self-promotion | Proposal/gate implemented; exact candidate pending |
 | 4. Evaluate offline | Bind independent scores to immutable held-out manifest cases; lock analysis before candidate results | Paired baseline/candidate evaluation evidence | Leakage, duplicate, missing side, mismatched aggregate, safety and adversarial checks reject invalid claims | Ledger/fixtures implemented; real cases/evaluator pending |
-| 5. Controlled prospective evaluation | Use existing controlled-release path for approved agent/skill/project/mode; monitor budgets and stop conditions | Real candidate outcomes and contemporaneous baseline comparison | Bound scope, approval and accounting verified; rollback available | Pending activation record |
+| 5. Controlled prospective evaluation | Use existing controlled-release path for approved agent/skill/project/mode; monitor budgets and stop conditions | Real candidate outcomes and contemporaneous baseline comparison | Bound scope, approval and accounting verified; rollback available | PARTIAL — durable budget guard + paired runner core implemented; no live executor/evaluator adapter |
 | 6. Decide and retain evidence | Calculate predeclared quality gain, uncertainty, safety, cost, latency and evidence completeness per agent/mode | IMPROVED / REGRESSED / INCONCLUSIVE decision with immutable evidence | Positive sustained gain under locked policy; independent review before promotion | Planned |
 | 7. Repeat | Retain failures and approved positive cases; propose the next bounded change | Auditable next cycle linked to predecessor | Fresh authorization and held-out separation each cycle | Pending first measured cycle |
 
@@ -95,6 +95,12 @@ Reuse the existing tests listed in the prospective evidence runbook. Add behavio
 Use the existing Dev/Test/Prod environment. Private testing schema is for disposable synthetic fixtures; isolated GitHub CI database is for migration rehearsal. Keep test flags/provenance explicit. Neither substitutes for real production outcomes.
 
 No paid Supabase branch, new hosting service or repeated deployment is required for this preparation. Additional external evaluation spend remains zero until concrete caps are bound. Existing normal workloads may already incur provider costs; observing them is not proof that execution is free. Inspect actual provider accounting before launching additional workloads.
+
+## 2026-10-01 runner-core update
+
+The zero-spend readiness review found that candidate, policy, benchmark and budget services were not joined by a server-owned prospective runner. The focused runner-core implementation now adds durable case/arm/run preparation, pre-provider DISPATCHED commitment, ambiguous-resume blocking, append-only state transitions, and exact budget/cost binding before non-synthetic completion.
+
+This does not complete a live experiment path. Provider execution, input replay, output artifact persistence, independent scoring and aggregate decision derivation remain separate implementation slices. Synthetic fixtures must stay segregated from canonical live evidence.
 
 ## Next executable actions
 
