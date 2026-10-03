@@ -8,6 +8,7 @@ import { correlateObservabilityIncidents } from '@/lib/observability/cross-datas
 import { evaluateObservabilitySignals } from '@/lib/observability/evaluate'
 import { investigateObservabilityIncident } from '@/lib/observability/incident-intelligence'
 import { deliverNotificationJob } from '@/lib/observability/notifications'
+import { checkSourceConnectionHealth } from '@/lib/observability/source-health'
 import { executeMetadataDiscovery } from '@/lib/catalog/discovery'
 import { executeLineageEnrichment } from '@/lib/catalog/lineage-enrichment'
 import { enrichObservabilityIncidentWithLineageImpact } from '@/lib/governance/lineage-impact'
@@ -447,6 +448,13 @@ export async function executeDurableJob(job: DurableJob) {
   }
 
   if (job.job_type === 'OBSERVABILITY') {
+    const trigger = text(payload.trigger)
+    if (trigger === 'SOURCE_HEALTH_CHECK') {
+      const sourceId = text(payload.sourceId) || text(job.entity_id)
+      if (!sourceId) throw new Error('Source health observability job is missing sourceId.')
+      await checkSourceConnectionHealth(sourceId)
+      return
+    }
     const datasetVersionId = text(payload.datasetVersionId)
     const profileRunId = text(payload.profileRunId)
     const userId = text(payload.userId)

@@ -1,4 +1,5 @@
 import { evaluateIncidentSlaEscalations } from '@/lib/observability/incident-sla'
+import { enqueueRecurringSourceHealthChecks } from '@/lib/observability/source-health'
 import { enqueueDueSchedules } from '@/lib/orchestration/schedules'
 import { claimOutboxEvents, processOutboxEvents } from '@/lib/orchestration/outbox'
 import { runOutboxLane, skippedOutboxLane, type OutboxLaneResult } from '@/lib/orchestration/outbox-lane'
@@ -104,11 +105,12 @@ export async function runScheduledWorkerCycle(workerId: string) {
   const scheduled = await enqueueDueSchedules(20)
   const dispatch = await dispatchAdaptiveRounds(workerId)
   const eventLane = await executeOutboxLane(workerId)
-  const [incidentEscalations, projections, semanticIndexScheduling, objectRetention] = await Promise.all([
+  const [incidentEscalations, projections, semanticIndexScheduling, objectRetention, sourceHealthScheduling] = await Promise.all([
     evaluateIncidentSlaEscalations(50),
     runProjectionWorker({ projectLimit: 10, batchSize: 200 }),
     enqueueDailySemanticIndexJobs(100),
     cleanupExpiredObjectArtifacts(25),
+    enqueueRecurringSourceHealthChecks(100),
   ])
   const approvalSla = await evaluateAgentApprovalSlaEscalations(100)
   const approvalNotifications = await processApprovalNotificationOutbox(25)
@@ -127,6 +129,7 @@ export async function runScheduledWorkerCycle(workerId: string) {
     semanticResults: dispatch.semanticResults,
     governanceAgentResults: dispatch.governanceAgentResults,
     semanticIndexScheduling,
+    sourceHealthScheduling,
     objectRetention,
     approvalSla,
     approvalNotifications,

@@ -62,7 +62,7 @@ Ask → evidence → recommend → approve → execute → observe → learn; ag
 | `app/ai-capabilities/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/ai-insights/page.tsx` | Global modernized foundation + family-specific revalidation |
 
-### Governance workflow & evidence (9)
+### Governance workflow & evidence (10)
 
 Decision journey, approvals, evidence and verification in one flow; clear pending/blocked/completed states and accountable actor.
 
@@ -74,20 +74,27 @@ Decision journey, approvals, evidence and verification in one flow; clear pendin
 | `app/journeys/[projectId]/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/journeys/governance-maturity/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/journeys/page.tsx` | Global modernized foundation + family-specific revalidation |
+| `app/reports/executive-summary/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/reports/experience/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/reports/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/workflows/page.tsx` | Global modernized foundation + family-specific revalidation |
 
-### Sources, datasets & catalog (7)
+### Sources, datasets & catalog (13)
 
 Search-first discovery; compact list/grid toggle patterns; quick preview; object-centered Data 360; contextual next actions.
 
 | Route file | Coverage |
 |---|---|
+| `app/catalog/bi-integrations/page.tsx` | Global modernized foundation + family-specific revalidation |
+| `app/catalog/connectors/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/catalog/dataset/[datasetId]/page.tsx` | Global modernized foundation + family-specific revalidation |
+| `app/catalog/discovery/history/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/catalog/discovery/page.tsx` | Global modernized foundation + family-specific revalidation |
+| `app/catalog/federation/page.tsx` | Global modernized foundation + family-specific revalidation |
+| `app/catalog/history/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/catalog/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/catalog/physical-assets/page.tsx` | Global modernized foundation + family-specific revalidation |
+| `app/catalog/source-artifact-scan/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/datasets/dataset/[datasetId]/edit/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/datasets/edit/[sourceId]/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/datasets/page.tsx` | Global modernized foundation + family-specific revalidation |
@@ -151,12 +158,14 @@ Timeline/change-first investigation; impact radius; owner/action/verification sp
 | `app/recovery/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/schedules/page.tsx` | Global modernized foundation + family-specific revalidation |
 
-### Lineage & impact (4)
+### Lineage & impact (6)
 
 Graph-first progressive expansion; context drawer; upstream/downstream impact summaries; never infer missing lineage.
 
 | Route file | Coverage |
 |---|---|
+| `app/lineage/corrections/page.tsx` | Global modernized foundation + family-specific revalidation |
+| `app/lineage/evidence/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/lineage/impact/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/lineage/ingest/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/lineage/page.tsx` | Global modernized foundation + family-specific revalidation |
@@ -185,4 +194,4 @@ Architecture/health overview with restrained visual hierarchy, environment conte
 11. Reduced motion and sticky-focus behavior are validated: nonessential transitions collapse under `prefers-reduced-motion`, and root scroll padding protects focused/anchored content from sticky navigation.
 12. Route shells avoid legacy near-black canvas tokens, premature 6+ column grids, and oversized 2rem page padding unless an explicit exception is documented.
 
-Total routes covered: **80**.
+Total routes covered: **89**.

@@ -150,6 +150,36 @@ export async function POST(request: Request) {
       }, { status: 503 })
     }
 
+    const fallbackResponse = (reason:string) => {
+      const topIssues = unresolvedIssues.slice(0, 3).map(issue => issue.title).filter(Boolean)
+      const evidenceSummary = [
+        'I can still answer from governed DataNexus evidence while external reasoning is unavailable.',
+        `Current scope: ${selectedDataset?.name ?? selectedDomain ?? 'All Data Domains'}.`,
+        `Visible datasets: ${scopedDatasets.length}. Unresolved issues: ${unresolvedIssues.length}.`,
+        topIssues.length ? `Highest-priority visible issues include: ${topIssues.join('; ')}.` : 'No unresolved issue titles are available in the current governed scope.',
+        `Open the ${workspace} workspace for the underlying evidence and actions.`,
+      ]
+      const fallbackRoutes = persona.nav.map(item => item.href).filter(route => route.startsWith('/')).slice(0, 4)
+      return NextResponse.json({
+        answer: evidenceSummary.join(' '),
+        suggestedFollowUps: [
+          'What needs my attention today?',
+          'Show the unresolved issues in this scope.',
+          'Where should I go next?',
+        ],
+        sourceRoutes: fallbackRoutes,
+        persona: persona.title,
+        scope: selectedDataset?.name ?? selectedDomain ?? 'All Data Domains',
+        workspace,
+        provider: 'datanexus_governed_evidence_fallback',
+        model: 'deterministic',
+        degraded: true,
+        routeReason: reason,
+      }, {
+        headers: { 'cache-control': 'no-store' },
+      })
+    }
+
     const router = createGovernanceIntelligentRouter()
     const decision = await router.route({
       projectId,
@@ -158,15 +188,11 @@ export async function POST(request: Request) {
       risk: 'LOW',
       executionCorrelationId: crypto.randomUUID(),
     })
-    if (!decision.provider) {
-      return NextResponse.json({
-        error: 'No governed reasoning route is currently available for DataNexus AI.',
-        code: 'AI_PROVIDER_UNAVAILABLE',
-        reason: decision.reason,
-      }, { status: 503 })
-    }
+    if (!decision.provider) return fallbackResponse(decision.reason)
 
-    const result = await decision.provider.generateJson({
+    let result
+    try {
+      result = await decision.provider.generateJson({
       task: 'governance_reasoning',
       temperature: 0.1,
       maxOutputTokens: 700,
@@ -206,6 +232,11 @@ export async function POST(request: Request) {
         allowedRoutes: persona.nav.map(item => item.href),
       },
     })
+    } catch (providerError) {
+      const reason = providerError instanceof Error ? `PROVIDER_RUNTIME_ERROR: ${providerError.message.slice(0, 240)}` : 'PROVIDER_RUNTIME_ERROR'
+      console.error('[datanexus-ai-provider-fallback]', reason)
+      return fallbackResponse(reason)
+    }
 
     const answer = text(result.result.answer, 6000)
     const suggestedFollowUps = Array.isArray(result.result.suggestedFollowUps)

@@ -11,7 +11,7 @@ import { canonicalRoutes } from '@/lib/platform/canonical-routes'
 export type JdbcProjectOption = { id: string; name: string }
 export type JdbcOrganizationOption = { id: string; name: string }
 type SavedDatabricksConnection = { id: string; name: string; host: string; httpPath: string; catalog?: string; schemaScope?: 'all' | 'selected'; schemas?: string[]; credentialRef: string }
-type ConnectionKind = 'csv' | 'file' | 'postgresql' | 'mssql' | 'mysql' | 'databricks' | 'jdbc'
+type ConnectionKind = 'csv' | 'file' | 'postgresql' | 'mssql' | 'oracle' | 'mysql' | 'databricks' | 'jdbc'
 type ConnectionOption = { id: ConnectionKind; label: string; description: string; placeholder: string; tips: string[] }
 const CREATE_PROJECT = '__create_project__'
 const CONNECTIONS: ConnectionOption[] = [
@@ -19,6 +19,7 @@ const CONNECTIONS: ConnectionOption[] = [
   { id: 'file', label: 'Unstructured File', description: 'Text, JSON, JSONL, documents, images, or other file metadata', placeholder: 'https://host/path/document.txt or bucket/path/document.pdf', tips: ['Catalog discovery publishes factual object metadata without waiting for document extraction or AI.', 'Content extraction, classification and semantic enrichment are asynchronous.', 'Files can be read from HTTPS URLs or Supabase Storage bucket/path locations.'] },
   { id: 'postgresql', label: 'PostgreSQL', description: 'PostgreSQL or Supabase database', placeholder: 'jdbc:postgresql://host:5432/database', tips: ['Connect to the database first; DataNexus reads PostgreSQL native schemas, objects, columns and stable catalog identifiers where exposed.', 'The hierarchy is reported by PostgreSQL metadata rather than invented by DataNexus.', 'Use parent includes for dynamic scope and explicit exclusions to carve out subtrees.'] },
   { id: 'mssql', label: 'Microsoft SQL Server', description: 'SQL Server or Azure SQL', placeholder: 'jdbc:sqlserver://host:1433;databaseName=database', tips: ['Connect to the target database using SQL Server connection semantics.', 'DataNexus preserves the database → schema → native object hierarchy returned by the driver.', 'Dynamic parent includes inherit future children; explicit exclusions always win.'] },
+  { id: 'oracle', label: 'Oracle Database', description: 'Oracle Database through the governed JDBC bridge', placeholder: 'jdbc:oracle:thin:@//host:1521/serviceName', tips: ['Use an Oracle service name or a full credential-free JDBC URL.', 'DataNexus reads the hierarchy reported by the Oracle JDBC driver and preserves native schema/object terminology.', 'Oracle requires the governed JDBC bridge and an installed Oracle JDBC driver; credentials are stored separately from the URL.'] },
   { id: 'mysql', label: 'MySQL', description: 'MySQL compatible database', placeholder: 'jdbc:mysql://host:3306/database', tips: ['MySQL database/schema semantics are preserved as reported by the driver.', 'DataNexus does not create an extra schema layer when the product does not have one.', 'Dynamic parent includes inherit future children; explicit exclusions always win.'] },
   { id: 'databricks', label: 'Databricks Unity Catalog', description: 'Databricks SQL warehouse and Unity Catalog', placeholder: 'jdbc:databricks://host:443/default;transportMode=http;ssl=1;AuthMech=3;httpPath=/sql/1.0/warehouses/...', tips: ['Enter only workspace connection details; do not preselect a catalog or schema in the JDBC URL.', 'DataNexus discovers Unity Catalog catalogs, schemas, tables/views, fields and stable table IDs where Databricks exposes them.', 'Large selected scopes are checkpointed by catalog and only complete manifests can publish a catalog revision.'] },
   { id: 'jdbc', label: 'Generic JDBC', description: 'Supported JDBC driver endpoint', placeholder: 'jdbc:<driver>://host:port/database', tips: ['Use a JDBC URL without embedded credentials.', 'DataNexus asks the JDBC driver for its native catalog/schema terminology and hierarchy.', 'Provider capabilities are shown after connection so unsupported guarantees are never implied.'] },
@@ -115,6 +116,11 @@ export function JdbcSourceForm({ projects, organizations, initialSource, canOpen
       if (!host.trim() || !database.trim()) return ''
       const trustServerCertificate = ssl === 'verify-full' || ssl === 'verify-ca' ? 'false' : 'true'
       return `jdbc:sqlserver://${host.trim()}:${port.trim() || '1433'};databaseName=${database.trim()};encrypt=true;trustServerCertificate=${trustServerCertificate}`
+    }
+    if (connectionKind === 'oracle') {
+      if (jdbcUrl.trim()) return jdbcUrl.trim()
+      if (!host.trim() || !database.trim()) return ''
+      return `jdbc:oracle:thin:@//${host.trim()}:${port.trim() || '1521'}/${database.trim()}`
     }
     if (connectionKind === 'mysql') {
       if (jdbcUrl.trim()) return jdbcUrl.trim()

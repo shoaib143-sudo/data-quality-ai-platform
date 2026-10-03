@@ -48,7 +48,7 @@ const access: Record<PersonaSlug, readonly WorkspaceKey[]> = {
   'data-custodian': ['account', 'approvals', 'catalog', 'discovery', 'datasets', 'lineage', 'lineage-manage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'profiling', 'agents', 'ai-capabilities', 'contracts', 'documents', 'workflows', 'search', 'inbox', 'journeys'],
   'source-system-owner': ['account', 'approvals', 'agents', 'catalog', 'datasets', 'lineage', 'issues', 'data-quality', 'schedules', 'monitoring', 'observability', 'observability-manage', 'profiling', 'contracts', 'workflows', 'search', 'inbox', 'journeys'],
   'metadata-analyst': ['account', 'approvals', 'agents', 'monitoring', 'catalog', 'glossary', 'lineage', 'classification', 'issues', 'data-quality', 'audit', 'reports', 'ai-capabilities', 'profiling', 'contracts', 'documents', 'scorecards', 'search', 'inbox', 'journeys'],
-  'data-quality-analyst': ['account', 'approvals', 'catalog', 'issues', 'data-quality', 'observability', 'audit', 'reports', 'ai-capabilities', 'profiling', 'agents', 'monitoring', 'contracts', 'documents', 'scorecards', 'workflows', 'search', 'inbox', 'journeys'],
+  'data-quality-analyst': ['account', 'approvals', 'catalog', 'lineage', 'issues', 'data-quality', 'observability', 'audit', 'reports', 'ai-capabilities', 'profiling', 'agents', 'monitoring', 'contracts', 'documents', 'scorecards', 'workflows', 'search', 'inbox', 'journeys'],
 }
 
 export const workspacePrefixes: readonly [string, WorkspaceKey][] = [
@@ -59,6 +59,7 @@ export const workspacePrefixes: readonly [string, WorkspaceKey][] = [
   ['/catalog/discovery', 'discovery'],
   ['/lineage/ingest', 'lineage-manage'],
   ['/lineage/suggestions', 'lineage-manage'],
+  ['/lineage/corrections', 'lineage-manage'],
   ['/observability/settings', 'observability-manage'],
   ['/ai-capabilities', 'ai-capabilities'],
   ['/data-quality', 'data-quality'],
