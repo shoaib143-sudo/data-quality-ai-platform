@@ -110,7 +110,7 @@ test('validated deployment approval satisfies policy approval without skipping R
  const preflight=await preflightGovernedProviderOperation(operation,deps)
  assert.equal(preflight.status,'READY');assert.equal(preflight.approvalSatisfied,true)
  await executeGovernedProviderOperation(operation,deps,preflight)
- assert.equal(authorization,1);assert.equal(controls,1);assert.equal(executes,1)
+ assert.equal(authorization,2);assert.equal(controls,2);assert.equal(executes,1)
  clearGovernanceProvidersForTests()
 })
 
@@ -160,6 +160,42 @@ test('unresolved stale recovery fails closed without replaying mutation',async()
  const result=await executeGovernedProviderOperation(operation,dependencies(checkpointStore,new InMemoryGovernanceEvidenceStore()))
  assert.equal(result.status,'RECOVERY_REQUIRED')
  assert.equal(result.recovered,false)
+ assert.equal(executes,0)
+ clearGovernanceProvidersForTests()
+})
+
+
+test('prepared deployment preflight cannot bypass a just-in-time PAUSE or PDP denial',async()=>{
+ clearGovernanceProvidersForTests()
+ let executes=0,checks=0
+ registerGovernanceProvider({
+  manifest:()=>({provider:'fake',providerVersion:'1',canonicalSchemaVersion:'1.0',capabilities:[{capability:'catalog.asset.create',support:'FULL',modes:['CREATE'],consistency:'STRONG',execution:'SYNC',idempotency:'DATANEXUS_MANAGED',rollback:'NONE',verification:'READ_BACK'}]}),
+  capabilities:async function(){return this.manifest().capabilities},
+  discover:async()=>({objects:[],projections:[],observedAt:new Date().toISOString()}),
+  execute:async op=>{executes++;return{operationId:op.operationId,status:'SUCCEEDED'}},
+  verify:async op=>({operationId:op.operationId,status:'VERIFIED'}),
+ })
+ const deps={
+  authorize:async()=>{},
+  executionController:{assertAllowed:async()=>{checks++;if(checks>1)throw new Error('Execution blocked by PAUSE');return{mode:'RUNNING'}}},
+  policyDecisionProvider:{decide:async()=>({decision:'ALLOW',reason:'test'})},
+ }
+ const prepared=await preflightGovernedProviderOperation(operation,deps)
+ assert.equal(prepared.status,'READY')
+ await assert.rejects(()=>executeGovernedProviderOperation(operation,deps,prepared),/PAUSE/)
+ assert.equal(executes,0)
+
+ checks=0
+ let decisions=0
+ const denyDeps={
+  ...deps,
+  executionController:{assertAllowed:async()=>{checks++;return{mode:'RUNNING'}}},
+  policyDecisionProvider:{decide:async()=>({decision:++decisions>1?'DENY':'ALLOW',reason:'dynamic'})},
+ }
+ const preparedAllow=await preflightGovernedProviderOperation(operation,denyDeps)
+ const denied=await executeGovernedProviderOperation(operation,denyDeps,preparedAllow)
+ assert.equal(denied.status,'DENIED')
+ assert.equal(denied.revalidated,true)
  assert.equal(executes,0)
  clearGovernanceProvidersForTests()
 })
