@@ -55,6 +55,22 @@ Therefore, the prior instruction to “apply the migration to the approved testi
 6. Re-run unit, integration, SQL security, concurrency, negative and failure-path tests on the integration commit. Keep synthetic fixtures and live evidence separate.
 7. Obtain the required independent evidence review and only then consider a separate activation decision. Production migration, provider spend, candidate promotion, source remediation, and release remain outside this plan's authorization.
 
+## Adapter contracts prepared by the five workstreams
+
+The repository now has implementation contracts for the production integrations that the audit found missing. These are specifications, not implemented adapters or production evidence:
+
+- [Immutable executable artifact storage](learning-agent-artifact-storage-contract-20261003.md): canonical bytes, content hashes, artifact role, candidate/version bindings, server APIs, access controls, and integrity failures.
+- [Held-out replay source](learning-benchmark-held-out-replay-source-contract-20261003.md): sealed project/case/version to bytes bindings, deterministic reads, privacy limits, and stale, missing, or tampered input handling.
+- [Trusted proposer and independent evaluator identity](learning-runner-identity-independent-review-contract-20261003.md): authenticated actor binding, evaluator assignment authority, independence evidence, migration and API requirements, and conflict failures.
+
+The evaluator authorization capability remains an implementation choice. Use an existing capability only if its governance meaning explicitly covers independent evaluation; otherwise add a narrow `agent.learning.evaluate` capability and include it in every authorization catalog and policy test. Do not treat two distinct text IDs as proof of independence.
+
+## Adversarial follow-up on the PR #1122 change
+
+An independent review of the PR #1122 head found two test-harness gaps and one coverage weakness. The follow-up implementation adds the testing-schema migration to both workflow path filters, expands the boundary test to reject any uncommented `testing.` reference in the runner/budget migrations, and requires an explicit destructive-fixture opt-in plus the `datanexus_fixture_` database name for both local SQL fixtures. CI creates separate named fixture databases for the runner and budget jobs. The boundary test exercises missing-opt-in rejection for both scripts.
+
+These changes close the identified coverage gaps in the follow-up code. They do not prove a local PostgreSQL endpoint is disposable by itself: the explicit opt-in and dedicated database name reduce accidental targeting, while CI uses fresh isolated service containers. Re-run both database jobs on the exact updated PR head before merging.
+
 ## Revalidation, unit, negative, and failure-case checklist
 
 ### Revalidation
