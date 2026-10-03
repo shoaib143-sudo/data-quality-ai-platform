@@ -405,6 +405,7 @@ export async function runNativeSpecialistSupervisor(input: {
           handoffRefs,
           existingAgentRunId: binding.agentRunId,
           nativeAttempt: attempt,
+          learningRunMode: input.learningRunMode ?? 'HANDSFREE',
         })
         if (executed.runId !== binding.agentRunId) throw new Error(`${step.id}: specialist executor returned an unexpected child run`)
 
