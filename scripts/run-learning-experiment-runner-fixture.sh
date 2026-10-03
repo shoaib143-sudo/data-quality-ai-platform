@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Owns disposable local schemas. Never use against shared infrastructure.
+# Destructive SQL fixture. Use only a deliberately created disposable database.
 case "${PGHOST:-}" in
   127.0.0.1|localhost|::1) ;;
-  *) echo 'PGHOST must identify an isolated local PostgreSQL fixture.' >&2; exit 2 ;;
+  *) echo 'PGHOST must identify a local PostgreSQL fixture endpoint.' >&2; exit 2 ;;
 esac
-: "${PGDATABASE:?PGDATABASE must identify a disposable database}"
+: "${DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM:?Set DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM=I_ACCEPT_DESTRUCTIVE_FIXTURE only for a disposable database}"
+if [[ "$DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM" != 'I_ACCEPT_DESTRUCTIVE_FIXTURE' ]]; then
+  echo 'DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM must explicitly acknowledge destructive fixture SQL.' >&2
+  exit 2
+fi
+case "${PGDATABASE:-}" in
+  datanexus_fixture_*) ;;
+  *) echo 'PGDATABASE must use the dedicated datanexus_fixture_ prefix.' >&2; exit 2 ;;
+esac
 : "${PGUSER:?PGUSER must identify the fixture administrator}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fixture_output="$(mktemp -d)"
