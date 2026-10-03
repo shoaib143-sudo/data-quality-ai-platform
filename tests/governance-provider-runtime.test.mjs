@@ -48,3 +48,11 @@ test('partial provider semantics are readable but cannot mutate without explicit
  assert.equal(resolution.executable,false)
  assert.match(resolution.reason,/semantic-loss acceptance/)
 })
+
+
+test('mutation capability without idempotency guarantee is never automatically executable',()=>{
+ const unsafe={...full,capability:'catalog.asset.create',modes:['CREATE'],idempotency:'NONE'}
+ const resolution=resolveProviderCapability([unsafe],'catalog.asset.create','CREATE')
+ assert.equal(resolution.executable,false)
+ assert.match(resolution.reason,/no idempotency guarantee/)
+})
