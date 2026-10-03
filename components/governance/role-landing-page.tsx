@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { LandingRecentlyViewed } from '@/components/governance/landing-recently-viewed'
-import type { PersonaDefinition } from '@/lib/governance/personas'
+import { personas, type PersonaDefinition } from '@/lib/governance/personas'
 import { buildPersonaPresentationPlan } from '@/lib/governance/persona-presentation'
 import {
   buildRoleLandingPresentation,
@@ -95,6 +95,20 @@ const button = `inline-flex min-h-11 items-center justify-center gap-2 rounded-x
 
 function pct(value: number | null) { return value === null || !Number.isFinite(value) ? 'N/A' : `${Math.round(value * 100)}%` }
 function numeric(value: number | null) { return value === null || !Number.isFinite(value) ? 'N/A' : `${Math.round(value * 100)}%` }
+function workspaceIcon(href:string) {
+  if (href.startsWith('/catalog')) return <Database className="h-5 w-5"/>
+  if (href.startsWith('/data-quality') || href.startsWith('/profiling')) return <Gauge className="h-5 w-5"/>
+  if (href.startsWith('/lineage')) return <GitBranch className="h-5 w-5"/>
+  if (href.startsWith('/issues') || href.startsWith('/approvals')) return <AlertTriangle className="h-5 w-5"/>
+  if (href.startsWith('/glossary')) return <BookOpen className="h-5 w-5"/>
+  if (href.startsWith('/classification')) return <Tag className="h-5 w-5"/>
+  if (href.startsWith('/stewardship')) return <Users className="h-5 w-5"/>
+  if (href.startsWith('/reports')) return <ClipboardCheck className="h-5 w-5"/>
+  if (href.startsWith('/agents') || href.startsWith('/ai-')) return <Sparkles className="h-5 w-5"/>
+  if (href.startsWith('/monitoring') || href.startsWith('/observability')) return <Activity className="h-5 w-5"/>
+  return <Layers3 className="h-5 w-5"/>
+}
+
 function metricIcon(kind: PresentationMetricIcon) {
   if (kind === 'database') return <Database className="h-5 w-5" />
   if (kind === 'alert') return <AlertTriangle className="h-5 w-5" />
@@ -126,16 +140,20 @@ function EvidenceTile({ href, icon, label, value, detail }: { href: string; icon
   return <Link href={href} data-track-recent="true" data-recent-label={label} className={`${inset} ${interactive} block p-4`}><div className="flex items-start justify-between gap-3"><span className="text-cyan-300">{icon}</span><ArrowRight className="h-4 w-4 text-slate-500" /></div><p className="mt-3 text-xl font-black text-white">{value}</p><p className="mt-1 text-sm font-bold text-slate-200">{label}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></Link>
 }
 
-export function RoleLandingPage({ persona, data, userLabel, canAdmin=false }: { persona: PersonaDefinition; data: RoleLandingData; userLabel: string; canAdmin?: boolean }) {
+export function RoleLandingPage({ persona, data, userLabel, canAdmin=false, canSwitchPersona=false }: { persona: PersonaDefinition; data: RoleLandingData; userLabel: string; canAdmin?: boolean; canSwitchPersona?: boolean }) {
   const orgRole = canAdmin ? 'ADMIN' : null
   const homeHref = `/home/${persona.slug}`
   const safeHref = (href: string, fallback='/catalog') => canAccessWorkspaceHref(persona.slug, href, orgRole) ? href : canAccessWorkspaceHref(persona.slug, fallback, orgRole) ? fallback : homeHref
   const plan = buildPersonaPresentationPlan(persona.slug)
   const view = buildRoleLandingPresentation(plan, data)
   const personaNav = persona.nav.filter(item => canAccessWorkspaceHref(persona.slug, item.href, orgRole))
-  const visibleNav = canAccessWorkspaceHref(persona.slug, '/agents', orgRole) && !personaNav.some(item => item.href === '/agents')
+  const agentNav = canAccessWorkspaceHref(persona.slug, '/agents', orgRole) && !personaNav.some(item => item.href === '/agents')
     ? [...personaNav, { label: 'AI Agents', href: '/agents' }]
     : personaNav
+  const summaryPersonas = new Set(['senior-leadership','business-user','data-owner','data-product-owner','data-governance-specialist'])
+  const visibleNav = summaryPersonas.has(persona.slug) && canAccessWorkspaceHref(persona.slug, '/reports/executive-summary', orgRole)
+    ? [...agentNav, { label: 'Executive Summary', href: '/reports/executive-summary' }]
+    : agentNav
   const metrics = view.metrics.map(item => ({ ...item, href: safeHref(item.href) }))
   const findings = data.topFindings.slice(0,3).map(item => ({ ...item, href: safeHref(item.href, '/issues') }))
   const activity = data.activity.map(item => ({ ...item, href: safeHref(item.href, '/issues') }))
@@ -159,12 +177,16 @@ export function RoleLandingPage({ persona, data, userLabel, canAdmin=false }: { 
     <section className="min-w-0">
       <nav className="mb-4 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm" aria-label="Persona workspace">
         {visibleNav.map(item=><Link key={item.href} href={item.href} data-track-recent="true" data-recent-label={item.label} className={`inline-flex min-h-11 shrink-0 items-center rounded-xl px-3 py-2.5 text-sm font-semibold ${focus} ${item.href===homeHref?'bg-violet-100 text-violet-800':'text-slate-600 hover:bg-violet-50 hover:text-violet-800'}`} aria-current={item.href===homeHref?'page':undefined}>{item.label}</Link>)}
+        {canSwitchPersona?<details className="relative shrink-0"><summary className={`inline-flex min-h-11 cursor-pointer list-none items-center rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm font-bold text-violet-800 hover:bg-violet-100 ${focus}`}>View as: {persona.title}</summary><div className="absolute right-0 z-50 mt-2 max-h-[420px] w-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">{Object.values(personas).map(item=><Link key={item.slug} href={`/home/${item.slug}`} className={`block rounded-xl px-3 py-2.5 text-sm font-semibold ${item.slug===persona.slug?'bg-violet-100 text-violet-800':'text-slate-600 hover:bg-slate-50 hover:text-violet-800'}`}>{item.title}</Link>)}</div></details>:null}
         {canAdmin?<Link href="/admin" className={`inline-flex min-h-11 shrink-0 items-center rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-violet-50 ${focus}`}>Organization administration</Link>:null}
       </nav>
       <div className="mb-4"><LandingRecentlyViewed /></div>
+      <section aria-label="Workspace shortcuts" className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        {visibleNav.slice(0,6).map(item=><Link key={`shortcut:${item.href}`} href={item.href} data-track-recent="true" data-recent-label={item.label} className={`${inset} ${interactive} flex min-h-20 items-center gap-3 p-3`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-500/20 to-cyan-400/10 text-cyan-300">{workspaceIcon(item.href)}</span><span className="min-w-0"><span className="block truncate text-sm font-black text-slate-200">{item.label}</span><span className="mt-0.5 block text-[10px] leading-4 text-slate-500">Open governed workspace</span></span></Link>)}
+      </section>
       <header className="flex flex-wrap items-start justify-between gap-4 px-2 py-2"><div><p className="text-sm font-semibold text-cyan-300">{persona.title}</p><h1 className="mt-1 text-3xl font-black text-white sm:text-4xl">Good day, {userLabel}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{persona.primaryQuestion}</p></div><form action="/catalog" method="get" className="flex min-w-[280px] max-w-md flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-[#08182b] px-3 py-2 sm:flex-none"><Search className="h-4 w-4 text-slate-500"/><input name="q" aria-label="Search DataNexus catalog" placeholder="Search governed data..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-600"/><button type="submit" className={`rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white ${focus}`}>Search</button></form></header>
 
-      <section className={`${surface} mt-4 grid gap-6 p-5 xl:grid-cols-[minmax(430px,1fr)_minmax(0,1.25fr)] xl:p-6`}><Link href={safeHref('/data-quality', evidenceHref)} className={`${interactive} flex items-center gap-5 rounded-2xl p-2`}><div className="grid h-32 w-32 shrink-0 place-items-center rounded-full bg-[conic-gradient(#6454d3_var(--score),#e6e7ef_0)] p-3" style={{'--score':data.confidence===null?'0%':`${Math.round(data.confidence*100)}%`} as CSSProperties}><div className="grid h-full w-full place-items-center rounded-full bg-white text-center"><div><p className="text-4xl font-black text-white">{pct(data.confidence)}</p><p className="mt-1 max-w-20 text-[10px] font-bold leading-4 text-slate-400">{persona.labels.confidence}</p></div></div></div><div><p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">Current governed evidence</p><p className="mt-2 text-xl font-black text-white">{view.heroTitle}</p><p className="mt-2 text-sm leading-6 text-slate-400">{view.heroDetail}</p><p className="mt-2 text-[11px] text-slate-600">Presentation changes by persona; governed evidence does not.</p>{delta===null?<p className="mt-2 text-xs text-slate-500">Trend will appear as comparable scored evidence accumulates.</p>:<p className={`mt-2 text-xs font-bold ${delta>=0?'text-emerald-300':'text-rose-300'}`}>{delta>=0?'+':''}{Math.round(delta*100)} pts across the selected trend window</p>}</div></Link><div className="grid gap-3 sm:grid-cols-2">{metrics.map(item=><KpiLink key={item.label} item={item}/>)}</div></section>
+      <section className={`${surface} mt-4 grid gap-6 p-5 xl:grid-cols-[minmax(430px,1fr)_minmax(0,1.25fr)] xl:p-6`}><Link href={safeHref('/data-quality', evidenceHref)} className={`${interactive} flex items-center gap-5 rounded-2xl p-2`}><div className="grid h-32 w-32 shrink-0 place-items-center rounded-full bg-[conic-gradient(#6454d3_var(--score),#e6e7ef_0)] p-3" style={{'--score':data.confidence===null?'0%':`${Math.round(data.confidence*100)}%`} as CSSProperties}><div className="grid h-full w-full place-items-center rounded-full bg-[#07182a] text-center"><div><p className="text-4xl font-black text-white">{pct(data.confidence)}</p><p className="mt-1 max-w-20 text-[10px] font-bold leading-4 text-slate-400">{persona.labels.confidence}</p></div></div></div><div><p className="text-xs font-black uppercase tracking-[0.15em] text-cyan-300">Current governed evidence</p><p className="mt-2 text-xl font-black text-white">{view.heroTitle}</p><p className="mt-2 text-sm leading-6 text-slate-400">{view.heroDetail}</p><p className="mt-2 text-[11px] text-slate-600">Presentation changes by persona; governed evidence does not.</p>{delta===null?<p className="mt-2 text-xs text-slate-500">Trend will appear as comparable scored evidence accumulates.</p>:<p className={`mt-2 text-xs font-bold ${delta>=0?'text-emerald-300':'text-rose-300'}`}>{delta>=0?'+':''}{Math.round(delta*100)} pts across the selected trend window</p>}</div></Link><div className="grid gap-3 sm:grid-cols-2">{metrics.map(item=><KpiLink key={item.label} item={item}/>)}</div></section>
 
       {hasScopedFilter ? <p className="mt-3 px-1 text-[11px] leading-5 text-slate-500">Dataset-linked evidence reflects <span className="font-bold text-slate-300">{scopeLabel}</span>. Platform, source and control evidence remains project-wide where the underlying governed record has no Data Domain binding.</p> : null}
       <section className="mt-5 grid gap-5 xl:grid-cols-[1.05fr_.95fr]"><article className={`${surface} p-5`}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-300">Trend</p><h2 className="mt-1 text-lg font-black text-white">{view.trendTitle}</h2><p className="mt-1 text-xs text-slate-500">Scope: {scopeLabel} · {data.trend.length} observed {data.trend.length===1?'period':'periods'} in this window</p></div><form method="get" action={homeHref} className="flex flex-wrap items-center gap-2"><select name="domain" defaultValue={data.selectedDomain} aria-label="Data Domain" className={`rounded-xl border border-white/10 bg-[#07182a] px-3 py-2 text-xs font-semibold ${focus}`}><option value="overall">All Data Domains</option>{data.availableDomains.map(domain=><option key={domain.name} value={domain.name}>{domain.name}</option>)}</select>{datasetFilters?<select name="datasetId" defaultValue={data.selectedDatasetId} aria-label="Dataset" className={`max-w-[190px] rounded-xl border border-white/10 bg-[#07182a] px-3 py-2 text-xs font-semibold ${focus}`}><option value="">All datasets</option>{data.datasets.map(dataset=><option key={dataset.id} value={dataset.id}>{dataset.name}</option>)}</select>:null}{dimensionFilters?<select name="dimension" defaultValue={data.selectedDimension} aria-label="Quality dimension" className={`rounded-xl border border-white/10 bg-[#07182a] px-3 py-2 text-xs font-semibold ${focus}`}><option value="overall">Overall</option><option value="completeness">Completeness</option><option value="validity">Validity</option><option value="accuracy">Accuracy</option><option value="uniqueness">Uniqueness</option></select>:null}<select name="range" defaultValue={data.selectedRange} aria-label="Time range" className={`rounded-xl border border-white/10 bg-[#07182a] px-3 py-2 text-xs font-semibold ${focus}`}><option value="30d">30 days</option><option value="90d">90 days</option><option value="180d">6 months</option><option value="365d">12 months</option></select><button type="submit" className={`rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white ${focus}`}>Apply</button></form></div><div className="mt-4"><TrendChart points={data.trend}/></div></article>

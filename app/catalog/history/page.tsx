@@ -1,0 +1,45 @@
+import Link from 'next/link'
+import { Clock3, Database, GitCompareArrows, Tags } from 'lucide-react'
+import { requireUser } from '@/lib/supabase/auth'
+import { createClient } from '@/lib/supabase/server'
+import { resolveLandingAccess } from '@/lib/governance/landing-access'
+import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { MetadataVersionCompare } from '@/components/catalog/metadata-version-compare'
+
+type PhysicalVersion={id:string;source_id:string;asset_key:string;asset_type:string;namespace:string|null;name:string;columns:unknown[];version_number:number;is_current:boolean;structure_hash:string|null;first_seen_at:string;last_seen_at:string;retired_at:string|null}
+type AnnotationVersion={id:string;source_id:string;asset_key:string;version_number:number;is_current:boolean;annotation_hash:string;annotations:Record<string,unknown>;first_seen_at:string;last_seen_at:string}
+
+function short(value:string|null|undefined){return value?value.slice(0,12):'N/A'}
+function when(value:string|null|undefined){return value?new Date(value).toLocaleString('en-SG',{timeZone:'Asia/Singapore'}):'N/A'}
+
+export default async function MetadataHistoryPage({searchParams}:{searchParams:Promise<{q?:string}>}) {
+  const user=await requireUser()
+  const [{q},supabase,landing]=await Promise.all([searchParams,createClient(),resolveLandingAccess(user.id)])
+  const query=(q??'').trim().toLowerCase().slice(0,120)
+
+  const [physicalResult,annotationResult]=await Promise.all([
+    supabase.schema('catalog').from('discovered_asset_versions').select('id,source_id,asset_key,asset_type,namespace,name,columns,version_number,is_current,structure_hash,first_seen_at,last_seen_at,retired_at').order('last_seen_at',{ascending:false}).limit(1000),
+    supabase.schema('catalog').from('source_annotation_versions').select('id,source_id,asset_key,version_number,is_current,annotation_hash,annotations,first_seen_at,last_seen_at').order('last_seen_at',{ascending:false}).limit(1000),
+  ])
+
+  const physical=(physicalResult.error?[]:physicalResult.data??[]) as PhysicalVersion[]
+  const annotations=(annotationResult.error?[]:annotationResult.data??[]) as AnnotationVersion[]
+  const visiblePhysical=query?physical.filter(row=>[row.asset_key,row.name,row.namespace,row.asset_type].join(' ').toLowerCase().includes(query)):physical
+  const visibleAnnotations=query?annotations.filter(row=>[row.asset_key,JSON.stringify(row.annotations)].join(' ').toLowerCase().includes(query)):annotations
+  const physicalGroups=new Map<string,PhysicalVersion[]>()
+  for(const row of visiblePhysical) physicalGroups.set(row.asset_key,[...(physicalGroups.get(row.asset_key)??[]),row])
+  const annotationGroups=new Map<string,AnnotationVersion[]>()
+  for(const row of visibleAnnotations) annotationGroups.set(row.asset_key,[...(annotationGroups.get(row.asset_key)??[]),row])
+
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-[#0b1422] text-slate-100"><div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Metadata History" contextLabel="Versioned physical and business metadata evidence" homeHref="/home"/>
+    <nav className="mb-6 mt-4 flex flex-wrap justify-end gap-2 rounded-2xl border border-white/10 bg-[#102036] px-4 py-3"><Link href="/catalog" className="rounded-xl px-3 py-2 text-sm font-bold text-blue-300 hover:bg-white/[0.05]">Catalog</Link><Link href="/lineage" className="rounded-xl px-3 py-2 text-sm font-bold text-violet-300 hover:bg-white/[0.05]">Lineage</Link></nav>
+    <header className="rounded-3xl border border-white/10 bg-[#102036] p-7"><p className="text-xs font-black uppercase tracking-[.16em] text-cyan-300">Version control</p><h1 className="mt-2 text-3xl font-black">Metadata change history</h1><p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">Physical schema versions and source-native annotation versions are retained separately. Historical evidence is immutable, while current versions remain clearly identified.</p><form className="mt-5 flex max-w-xl gap-2"><input name="q" defaultValue={q??''} placeholder="Search asset, namespace, type or annotation…" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#0d1c30] px-4 py-2.5 text-sm text-white outline-none"/><button className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold">Search</button></form></header>
+
+    <section className="mt-5 grid gap-4 sm:grid-cols-3"><article className="rounded-2xl border border-white/10 bg-[#102036] p-5"><Database className="h-5 w-5 text-cyan-300"/><p className="mt-3 text-2xl font-black">{physicalGroups.size}</p><p className="text-xs text-slate-500">Versioned physical assets</p></article><article className="rounded-2xl border border-white/10 bg-[#102036] p-5"><GitCompareArrows className="h-5 w-5 text-violet-300"/><p className="mt-3 text-2xl font-black">{physical.length}</p><p className="text-xs text-slate-500">Physical metadata versions</p></article><article className="rounded-2xl border border-white/10 bg-[#102036] p-5"><Tags className="h-5 w-5 text-emerald-300"/><p className="mt-3 text-2xl font-black">{annotations.length}</p><p className="text-xs text-slate-500">Source annotation versions</p></article></section>
+
+    <section className="mt-5 rounded-3xl border border-white/10 bg-[#102036] p-6"><h2 className="text-xl font-black">Physical metadata timeline</h2><p className="mt-1 text-sm text-slate-500">Schema and structural changes create a new physical metadata version.</p><div className="mt-5 space-y-4">{[...physicalGroups.entries()].slice(0,100).map(([assetKey,rows])=><article key={assetKey} className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-bold text-white">{assetKey}</p><p className="text-xs text-slate-500">{rows[0]?.asset_type} · {rows.length} version{rows.length===1?'':'s'}</p></div><span className="rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-300">{rows.find(row=>row.is_current)?.version_number?'Current v'+rows.find(row=>row.is_current)?.version_number:'Historical'}</span></div><MetadataVersionCompare assetKey={assetKey} versions={rows}/><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="text-slate-600"><tr><th className="px-2 py-2">Version</th><th className="px-2 py-2">State</th><th className="px-2 py-2">Structure hash</th><th className="px-2 py-2">First seen</th><th className="px-2 py-2">Last seen</th><th className="px-2 py-2">Retired</th></tr></thead><tbody>{rows.sort((a,b)=>b.version_number-a.version_number).map(row=><tr key={row.id} className="border-t border-white/[0.05]"><td className="px-2 py-2 font-bold text-slate-200">v{row.version_number}</td><td className="px-2 py-2"><span className={row.is_current?'text-emerald-300':'text-slate-500'}>{row.is_current?'CURRENT':'HISTORICAL'}</span></td><td className="px-2 py-2 font-mono text-slate-500">{short(row.structure_hash)}</td><td className="px-2 py-2 text-slate-500">{when(row.first_seen_at)}</td><td className="px-2 py-2 text-slate-500">{when(row.last_seen_at)}</td><td className="px-2 py-2 text-slate-500">{when(row.retired_at)}</td></tr>)}</tbody></table></div></article>)}{physicalGroups.size===0?<p className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-500">No physical metadata versions match the current scope.</p>:null}</div></section>
+
+    <section className="mt-5 rounded-3xl border border-white/10 bg-[#102036] p-6"><div className="flex items-center gap-2"><Clock3 className="h-5 w-5 text-emerald-300"/><h2 className="text-xl font-black">Business/source annotation timeline</h2></div><p className="mt-1 text-sm text-slate-500">Source-native owner, comments, descriptions, tags and column annotations are versioned independently of physical schema.</p><div className="mt-5 grid gap-3 lg:grid-cols-2">{[...annotationGroups.entries()].slice(0,100).map(([assetKey,rows])=><article key={assetKey} className="rounded-2xl border border-white/[0.07] bg-[#0d1c30] p-4"><p className="font-bold text-white">{assetKey}</p><div className="mt-3 space-y-2">{rows.sort((a,b)=>b.version_number-a.version_number).slice(0,8).map(row=><div key={row.id} className="rounded-xl border border-white/[0.05] bg-[#0b1422] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-black text-slate-300">v{row.version_number}</span><span className={row.is_current?'text-[10px] font-black text-emerald-300':'text-[10px] text-slate-600'}>{row.is_current?'CURRENT':'HISTORICAL'}</span></div><p className="mt-1 text-[11px] text-slate-500">{when(row.last_seen_at)} · {short(row.annotation_hash)}</p></div>)}</div></article>)}{annotationGroups.size===0?<p className="text-sm text-slate-500">No source annotation history matches the current scope.</p>:null}</div></section>
+  </div></main>
+}

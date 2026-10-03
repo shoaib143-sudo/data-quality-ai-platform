@@ -47,13 +47,15 @@ export type MonitoringStep = {
 export type MonitoringAgent = { id: string; name: string; version: string; agent_key: string }
 export type MonitoringDataset = { id: string; name: string; business_domain: string | null }
 export type MonitoringProject = { id: string; name: string; description: string | null }
+export type MonitoringJob = { id:string; project_id:string; job_type:string; entity_id:string|null; agent_run_id:string|null; status:string; attempts:number; max_attempts:number; last_error:string|null; created_at:string; started_at:string|null; completed_at:string|null }
 
 type Props = {
   initialRuns: MonitoringRun[]
-  initialSteps?: MonitoringStep[]
   initialAgents: MonitoringAgent[]
   initialDatasets: MonitoringDataset[]
   initialProjects: MonitoringProject[]
+  initialJobs: MonitoringJob[]
+  initialSteps?: MonitoringStep[]
   initialNow: string
   initialRunId?: string | null
   initialAgentId?: string | null
@@ -379,10 +381,11 @@ function OrganicDomainCell({
 
 export function JobMonitor({
   initialRuns,
-  initialSteps = [],
   initialAgents,
   initialDatasets,
   initialProjects,
+  initialJobs,
+  initialSteps = [],
   initialNow,
   initialRunId = null,
   initialAgentId = null,
@@ -390,6 +393,7 @@ export function JobMonitor({
   userId: _userId,
 }: Props) {
   const [runs, setRuns] = useState(initialRuns)
+  const [jobs, setJobs] = useState(initialJobs)
   const [steps, setSteps] = useState(initialSteps)
   const initialSelectedRun = initialRunId && initialRuns.some((run) => run.id === initialRunId) ? initialRunId : initialAgentId ? null : initialRuns[0]?.id ?? null
   const [selectedRunId, setSelectedRunId] = useState<string | null>(initialSelectedRun)
@@ -409,8 +413,9 @@ export function JobMonitor({
     try {
       const response = await fetch('/api/monitoring/runs', { cache: 'no-store' })
       if (!response.ok) return
-      const payload = await response.json() as { runs?: MonitoringRun[]; steps?: MonitoringStep[] }
+      const payload = await response.json() as { runs?: MonitoringRun[]; jobs?: MonitoringJob[]; steps?: MonitoringStep[] }
       setRuns(payload.runs ?? [])
+      setJobs(payload.jobs ?? [])
       setSteps(payload.steps ?? [])
       setLastUpdated(new Date())
     } finally {
@@ -482,7 +487,22 @@ export function JobMonitor({
     })
   }, [domainCells, statusFilter, search, agents, datasets])
 
+  const durableJobs = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return jobs
+      .filter(job => !job.agent_run_id || !runs.some(run => run.id === job.agent_run_id))
+      .filter(job => {
+        const normalized = normalizeRunStatus(job.status)
+        const matchesStatus = statusFilter === 'ALL' || normalized === statusFilter
+        const projectName = projects.get(job.project_id)?.name ?? ''
+        const matchesSearch = !q || `${job.job_type} ${job.status} ${job.id} ${projectName} ${job.entity_id ?? ''}`.toLowerCase().includes(q)
+        return matchesStatus && matchesSearch
+      })
+      .slice(0, 24)
+  }, [jobs, runs, search, statusFilter, projects])
+
   const selectedCell = domainCells.find((cell) => cell.key === selectedDomainKey) ?? domainCells[0] ?? null
+
   const selectedRunSteps = useMemo(() => {
     if (!selectedRunId) return []
     return steps
@@ -493,8 +513,8 @@ export function JobMonitor({
     ? Math.round((selectedRunSteps.filter((step) => normalizeRunStatus(step.status) === 'COMPLETE').length / selectedRunSteps.length) * 100)
     : null
 
-  const activeJobs = runs.filter((run) => ACTIVE.has(run.status)).length
-  const queuedJobs = runs.filter((run) => WAITING.has(run.status) || QUEUED.has(run.status)).length
+  const activeJobs = runs.filter((run) => ACTIVE.has(run.status)).length + jobs.filter(job => ACTIVE.has(job.status)).length
+  const queuedJobs = runs.filter((run) => WAITING.has(run.status) || QUEUED.has(run.status)).length + jobs.filter(job => WAITING.has(job.status) || QUEUED.has(job.status)).length
   const completed24h = runs.filter((run) => {
     if (!COMPLETE.has(run.status)) return false
     const at = new Date(run.completed_at ?? run.created_at).getTime()
@@ -530,7 +550,7 @@ export function JobMonitor({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {[
             ['Active jobs', activeJobs, 'text-cyan-200'],
-            ['Running', runs.filter((run) => ACTIVE.has(run.status)).length, 'text-emerald-300'],
+            ['Running', runs.filter((run) => ACTIVE.has(run.status)).length + jobs.filter(job => ACTIVE.has(job.status)).length, 'text-emerald-300'],
             ['Queued', queuedJobs, 'text-amber-200'],
             ['Completed (24h)', completed24h, 'text-emerald-300'],
             ['Failed (24h)', failed24h, 'text-rose-300'],
@@ -546,24 +566,6 @@ export function JobMonitor({
             Refresh
           </button>
         </div>
-      </div>
-    </div>
-
-    <div className="border-b border-white/[0.07] bg-[#051220] px-5 py-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search data domains, DG/AI features, datasets, or run IDs…" className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-300/35" />
-        </div>
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CellStatus | 'ALL')} className="rounded-xl border border-white/10 bg-[#07182a] px-3 py-2.5 text-sm text-slate-200">
-          <option value="ALL">All statuses</option>
-          <option value="RUNNING">Running</option>
-          <option value="WAITING">Waiting</option>
-          <option value="QUEUED">Queued</option>
-          <option value="FAILED">Failed</option>
-          <option value="COMPLETE">Complete</option>
-        </select>
-        <div className="rounded-xl border border-cyan-300/25 bg-cyan-300/8 px-3 py-2.5 text-sm font-bold text-cyan-100">Domain Cells</div>
       </div>
     </div>
 
@@ -584,6 +586,26 @@ export function JobMonitor({
         <span className="ml-auto text-[11px] font-black text-white">{selectedRunProgress}% evidence complete</span>
       </div>
     </div> : null}
+
+    <div className="border-b border-white/[0.07] bg-[#051220] px-5 py-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search data domains, DG/AI features, datasets, or run IDs…" className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-300/35" />
+        </div>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CellStatus | 'ALL')} className="rounded-xl border border-white/10 bg-[#07182a] px-3 py-2.5 text-sm text-slate-200">
+          <option value="ALL">All statuses</option>
+          <option value="RUNNING">Running</option>
+          <option value="WAITING">Waiting</option>
+          <option value="QUEUED">Queued</option>
+          <option value="FAILED">Failed</option>
+          <option value="COMPLETE">Complete</option>
+        </select>
+        <div className="rounded-xl border border-cyan-300/25 bg-cyan-300/8 px-3 py-2.5 text-sm font-bold text-cyan-100">Domain Cells</div>
+      </div>
+    </div>
+
+    {durableJobs.length ? <div className="border-b border-white/[0.07] bg-[#061426] px-5 py-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-300">Ad-hoc execution queue</p><h2 className="mt-1 text-lg font-black text-white">Discovery, profiling, quality and enrichment jobs</h2></div><span className="text-xs text-slate-500">{durableJobs.length} visible job{durableJobs.length===1?'':'s'}</span></div><div className="mt-4 grid gap-2 lg:grid-cols-2">{durableJobs.map(job=>{const project=projects.get(job.project_id);const normalized=normalizeRunStatus(job.status);const complete=normalized==='COMPLETE';const failed=normalized==='FAILED';const progress=complete?100:failed?Math.min(95,Math.max(10,Math.round((job.attempts/Math.max(1,job.max_attempts))*100))):job.started_at?55:15;return <article key={job.id} className="rounded-2xl border border-white/[0.07] bg-[#08182b] p-4"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${failed?'border-rose-400/20 bg-rose-400/10 text-rose-300':complete?'border-emerald-400/20 bg-emerald-400/10 text-emerald-300':'border-cyan-400/20 bg-cyan-400/10 text-cyan-200'}`}>{job.status}</span><span className="rounded-full bg-violet-400/10 px-2.5 py-1 text-[10px] font-black text-violet-300">{job.job_type}</span><span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-200">{project?.name??`Scope ${job.project_id.slice(0,8)}`}</span><span className="text-xs text-slate-500">{progress}%</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-cyan-400 transition-[width]" style={{width:`${progress}%`}}/></div><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>Job {job.id.slice(0,8)}</span><span>Attempt {job.attempts}/{job.max_attempts}</span><span>{job.started_at?`Started ${TIME_FORMATTER.format(new Date(job.started_at))}`:'Queued'}</span>{job.last_error?<span className="max-w-full truncate text-rose-300">{job.last_error}</span>:null}</div></article>})}</div></div> : null}
 
     <div className="min-h-[720px]">
       <div className="relative overflow-hidden bg-[#03101d] p-5 sm:p-7">

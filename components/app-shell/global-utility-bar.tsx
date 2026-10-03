@@ -3,7 +3,7 @@ import { Activity, Bell, ClipboardCheck, Compass, Database, Layers3, Search, Set
 import { SkipToContent } from '@/components/app-shell/skip-to-content'
 import { WorkspaceRail } from '@/components/app-shell/workspace-rail'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-policy'
-import type { PersonaSlug } from '@/lib/governance/personas'
+import { personas, type PersonaSlug } from '@/lib/governance/personas'
 
 type Props = {
   roleLabel?: string
@@ -35,6 +35,7 @@ export function GlobalUtilityBar({
 }: Props) {
   const resolvedHomeHref = homeHref ?? (persona && !canAccessWorkspaceHref(persona, '/dashboard', organizationRole) ? '/home' : '/dashboard')
   const visibleNavItems = persona ? navItems.filter(item => canAccessWorkspaceHref(persona, item.href, organizationRole)) : navItems
+  const canPreviewPersonas = persona === 'data-governance-admin' || Boolean(organizationRole && /^(OWNER|ADMIN)$/i.test(organizationRole))
 
   return (
     <>
@@ -75,6 +76,21 @@ export function GlobalUtilityBar({
                 <Bell className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="hidden lg:inline">Inbox</span>
               </Link>
+            ) : null}
+            {canPreviewPersonas ? (
+              <details className="relative">
+                <summary className={`dn-control inline-flex cursor-pointer list-none items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-violet-200 hover:text-white ${focus}`} aria-label="Preview another persona">
+                  View as
+                </summary>
+                <div className="absolute right-0 z-[120] mt-2 max-h-[420px] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-[#102036]/98 p-2 shadow-2xl backdrop-blur-xl">
+                  <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">Presentation preview only</p>
+                  {Object.values(personas).map(item => (
+                    <Link key={item.slug} href={`/home/${item.slug}`} className={`block rounded-xl px-3 py-2 text-sm font-semibold ${item.slug===persona?'bg-violet-500/15 text-violet-200':'text-slate-300 hover:bg-white/[0.05] hover:text-white'}`}>
+                      {item.title}
+                    </Link>
+                  ))}
+                </div>
+              </details>
             ) : null}
             {roleLabel ? <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-bold text-slate-300">{roleLabel}</span> : null}
           </div>

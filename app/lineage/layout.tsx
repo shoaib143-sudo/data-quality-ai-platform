@@ -15,7 +15,7 @@ export default async function LineageLayout({children}:{children:ReactNode}){
 
   const projects=(data??[]).map(project=>({id:String(project.id),name:String(project.name)}))
   return <>
-    {!canManageLineage?<style>{'a[href="/lineage/ingest"],a[href="/lineage/suggestions"]{display:none!important}'}</style>:null}
+    {!canManageLineage?<style>{'a[href="/lineage/ingest"],a[href="/lineage/suggestions"],a[href="/lineage/corrections"]{display:none!important}'}</style>:null}
     {children}
     <BoundedFieldLineageNavigator projects={projects}/>
     <BoundedLineageNavigator projects={projects}/>
