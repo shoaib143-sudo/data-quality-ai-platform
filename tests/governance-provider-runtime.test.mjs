@@ -37,3 +37,14 @@ test('informatica provider discovers and normalizes without retries or mutations
   assert.equal(result.objects[0].externalKey,'1')
   await assert.rejects(()=>provider.execute({}), /not enabled/)
 })
+
+
+test('partial provider semantics are readable but cannot mutate without explicit semantic-loss acceptance',()=>{
+ const partialRead={...full,support:'PARTIAL'}
+ assert.equal(resolveProviderCapability([partialRead],'catalog.asset.read','READ').executable,true)
+ const partialMutation={...full,capability:'catalog.asset.update',support:'PARTIAL',modes:['UPDATE']}
+ const resolution=resolveProviderCapability([partialMutation],'catalog.asset.update','UPDATE')
+ assert.equal(resolution.semanticLoss,'APPROXIMATED')
+ assert.equal(resolution.executable,false)
+ assert.match(resolution.reason,/semantic-loss acceptance/)
+})
