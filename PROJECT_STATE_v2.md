@@ -340,3 +340,16 @@ At the start of a future session:
 3. Inspect relevant migrations and runtime contracts.
 4. Continue from the current Runtime v2 phase/workstream, not from historical placeholder-era assumptions.
 5. Reconcile documentation whenever runtime evidence has moved ahead of the checkpoint.
+
+
+## 15. Learning experiment runner implementation checkpoint, 2026-10-01
+
+This bounded source checkpoint supplements the historical state above. It does not revise live deployment identity or certify the full Runtime v2 program.
+
+- Native runner source binds policy record UUID, sealed executable/input bytes, held-out cases and immutable case/arm attempts. Ambiguous side-effect re-entry stops rather than silently dispatching again.
+- Server composition supplies canonical reservation, ACCOUNTED settlement and PRICED USD cost-event loading alongside the existing quote/budget guard and model accounting. Stored-plan verification and current execution authority remain concrete server integration requirements.
+- Independent disposable runner verification passed 119 scenarios. Disposable PGlite SQL behavior and privilege validation, native PostgreSQL 16 ten-session concurrency, targeted budget and evaluation regressions, TypeScript checks, and exact-head protected CI passed for the implementation checkpoint. The post-implementation record captures reruns and independent adversarial findings. No source-test count is live improvement evidence.
+- Source migration presence does not establish a live runner-schema deployment. No real provider call, paid activation, positive prospective result, promotion, remediation or application release occurred as part of this checkpoint.
+- Activation still requires a canonical plan/integrity loader, current project/agent/mode authority, replayable independent cases, concrete executable artifacts, verified pricing and approved spending bound, independent evaluator/calibration and actual confirmation evidence. Existing Vercel/Cloudflare parity hold and native release/canary/rollback authority remain effective.
+
+Details: [implementation checkpoint](Admin/learning-experiment-runner-implementation-20261001.md), [independent capability review](Major%20discussion/learning-experiment-runner-review-20261001.md), and [post-implementation plan and results](Admin/learning-experiment-runner-post-implementation-20261002.md).
