@@ -18,6 +18,25 @@ export async function discoverGovernanceTargetStates(desired:GovernanceDesiredSt
   })
   const observedValidation=validateGovernanceDesiredState({...desired,objects:discovery.objects})
   if(!observedValidation.ok)throw new Error(`Governance provider "${target.provider}" returned invalid canonical discovery state: ${observedValidation.errors.join(' ')}`)
+
+  const objectIds=new Set(discovery.objects.map(object=>object.id))
+  const canonicalProjectionIds=new Set<string>()
+  const providerProjectionIds=new Set<string>()
+  const projections=(discovery.projections??[]).map(projection=>{
+   const normalized=validateGovernanceProjectionObservation({
+    projectId:desired.projectId,
+    provider:target.provider,
+    connectionId:target.connectionId,
+    projection,
+   }).projection
+   if(!objectIds.has(normalized.canonicalObjectId))throw new Error(`Governance provider "${target.provider}" returned a projection for an undiscovered canonical object.`)
+   if(canonicalProjectionIds.has(normalized.canonicalObjectId))throw new Error(`Governance provider "${target.provider}" returned duplicate canonical projection identity.`)
+   if(providerProjectionIds.has(normalized.providerObjectId))throw new Error(`Governance provider "${target.provider}" returned duplicate provider projection identity.`)
+   canonicalProjectionIds.add(normalized.canonicalObjectId)
+   providerProjectionIds.add(normalized.providerObjectId)
+   return normalized
+  })
+
   states.push({
    provider:target.provider.trim().toLowerCase(),
    connectionId:target.connectionId,
