@@ -1,4 +1,5 @@
 import type { GovernanceDesiredState } from '../desired-state/model.ts'
+import { validateGovernanceDesiredState } from '../desired-state/validate.ts'
 import { getGovernanceProvider } from '../providers/registry.ts'
 import type { GovernanceTargetObservedState } from './deployment-plan.ts'
 
@@ -14,6 +15,8 @@ export async function discoverGovernanceTargetStates(desired:GovernanceDesiredSt
    objectTypes:hasExplicitDelete?undefined:[...new Set(desired.objects.map(object=>object.type))],
    externalKeys:hasExplicitDelete?undefined:[...new Set(desired.objects.map(object=>object.externalKey))],
   })
+  const observedValidation=validateGovernanceDesiredState({...desired,objects:discovery.objects})
+  if(!observedValidation.ok)throw new Error(`Governance provider "${target.provider}" returned invalid canonical discovery state: ${observedValidation.errors.join(' ')}`)
   states.push({
    provider:target.provider.trim().toLowerCase(),
    connectionId:target.connectionId,
