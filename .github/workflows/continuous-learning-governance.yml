@@ -73,6 +73,8 @@ on:
       - 'lib/governance/agent-action-catalog.ts'
       - 'scripts/test-governed-learning-release-approval.mjs'
       - 'supabase/migrations/20260920012000_governed_learning_release_approval.sql'
+      - 'supabase/migrations/20261001090000_learning_promotion_approval_authority_action.sql'
+      - 'scripts/test-learning-promotion-authority-contract.mjs'
       - 'lib/agents/governed-learning-benchmarks.ts'
       - 'lib/agents/governed-learning-benchmark-service.ts'
       - 'scripts/test-governed-learning-benchmarks.mjs'
@@ -180,6 +182,8 @@ on:
       - 'lib/governance/agent-action-catalog.ts'
       - 'scripts/test-governed-learning-release-approval.mjs'
       - 'supabase/migrations/20260920012000_governed_learning_release_approval.sql'
+      - 'supabase/migrations/20261001090000_learning_promotion_approval_authority_action.sql'
+      - 'scripts/test-learning-promotion-authority-contract.mjs'
       - 'lib/agents/governed-learning-benchmarks.ts'
       - 'lib/agents/governed-learning-benchmark-service.ts'
       - 'scripts/test-governed-learning-benchmarks.mjs'
@@ -286,6 +290,8 @@ jobs:
         run: node scripts/test-prospective-learning-command-center.mjs
       - name: Run governed learning release approval tests
         run: node --experimental-strip-types scripts/test-governed-learning-release-approval.mjs
+      - name: Verify explicit learning promotion authority contract
+        run: node scripts/test-learning-promotion-authority-contract.mjs
       - name: Run governed learning controlled release tests
         run: node --experimental-strip-types scripts/test-governed-learning-controlled-release.mjs
       - name: Run governed learning Command Center tests
