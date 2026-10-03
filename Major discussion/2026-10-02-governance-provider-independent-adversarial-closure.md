@@ -45,3 +45,21 @@ A successful audit must demonstrate:
 The final closure report will include exact head SHA, main SHA, workflow/check results, test counts, migration validation, adversarial findings and resolutions, provider conformance result, MCP interoperability result, residual risks and activation boundaries.
 
 No production-readiness statement should be issued from source review alone.
+
+## Takeover adversarial findings — 2026-10-03
+
+| Finding | Severity | Disposition |
+| --- | --- | --- |
+| Public plan API accepted caller-supplied observed provider state, allowing forged actual-state planning | High | Fixed. The route now delegates only to authoritative runtime discovery. |
+| Desired-state deep validation was not guaranteed at the shared apply runtime boundary before authorization/discovery | High | Fixed. Shared runtime validates before apply authorization and provider discovery. |
+| Ambiguous non-atomic RUNNING/PENDING resume could replay provider mutation | High | Fixed. Generic resume now fails closed; durable RPC retains stale-worker reclaim only through fenced generation. |
+| FAILED checkpoint could automatically re-enter execution without retryability evidence | High | Fixed. FAILED is terminal for automatic resume; retryable exceptions remain owned by the bounded execution retry layer. |
+| Same-host browser Origin on a different scheme/port could pass MCP transport validation | Medium | Fixed. Origin authority must now match request scheme, host and effective port. |
+| Informatica timeout normalization existed without an actual client timeout | Medium | Fixed. Bounded AbortSignal timeout added and covered by tests. |
+| DELETE dependency ordering could remove a referenced object before its dependent/update | High | Fixed. Delete dependencies use observed inbound relationships and contradictory explicit absence is rejected. |
+| Governance-provider post-implementation requirements were documented but not represented by a dedicated CI workflow | High release gate | Fixed. Added Governance Provider Assurance workflow plus independent adversarial script. |
+| Provider projections are not durable source-of-truth mappings | Medium activation limitation | Explicitly accepted for the read-only foundation. Mutation enablement remains blocked until durable projection/provider-object binding is designed, migrated, and conformance-tested. |
+| Informatica live endpoint conformance | High activation gate | External credential boundary remains. Mutations stay disabled. |
+| Production Supabase migration application | Controlled activation boundary | No production migration is applied by this PR takeover. |
+
+The exact-head closure audit must still re-run after the implementation head is frozen. Any subsequent code fix invalidates earlier exact-head evidence and requires the affected gates to run again.
