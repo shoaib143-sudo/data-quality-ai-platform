@@ -14,6 +14,7 @@ const informaticaManifest=read('lib/governance-platform/providers/informatica/ma
 const durability=read('supabase/migrations/20261002111500_governance_platform_deployment_evidence_contract.sql')
 const resumeHardening=read('supabase/migrations/20261003013000_governance_platform_checkpoint_resume_hardening.sql')
 const staleRecovery=read('supabase/migrations/20261003020000_governance_platform_stale_claim_recovery.sql')
+const atomicInitialClaim=read('supabase/migrations/20261003100000_governance_platform_atomic_initial_claim.sql')
 const projectionStore=read('lib/governance-platform/projections/store.ts')
 const projectionPersistence=read('supabase/migrations/20261003094500_governance_platform_provider_projections.sql')
 
@@ -39,6 +40,8 @@ assert.match(checkpoint,/status==='PENDING'\|\|checkpoint\.status==='RUNNING'[\s
 assert.match(resumeHardening,/status = 'FAILED'[\s\S]*resume_action', 'FAILED'/)
 assert.match(resumeHardening,/status = 'PENDING'[\s\S]*resume_action', 'WAIT'/)
 assert.match(staleRecovery,/resume_action', 'RECOVER'/)
+assert.match(atomicInitialClaim,/on conflict \(project_id, idempotency_key\) do nothing/)
+assert.match(atomicInitialClaim,/for update/)
 assert.match(runner,/resumeAction==='RECOVER'/)
 assert.match(runner,/phase:'RECOVERY_READBACK'/)
 assert.match(durability,/GOVERNANCE_CHECKPOINT_FENCED/)
