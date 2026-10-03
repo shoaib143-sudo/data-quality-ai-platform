@@ -11,6 +11,14 @@ import { buildGovernanceDeploymentPlan } from '../planning/deployment-plan.ts'
 import { discoverGovernanceTargetStates } from '../planning/discovery.ts'
 import { simulateGovernanceDeployment } from '../planning/simulation.ts'
 import { ensureGovernanceProvidersRegistered } from '../providers/informatica/bootstrap.ts'
+import { SupabaseGovernanceProjectionStore } from '../projections/store.ts'
+
+async function persistDiscoveredGovernanceProjections(projectId:string,observedTargets:Awaited<ReturnType<typeof discoverGovernanceTargetStates>>){
+ const observations=observedTargets.flatMap(target=>(target.projections??[]).map(projection=>({
+  projectId,provider:target.provider,connectionId:target.connectionId,projection,
+ })))
+ await new SupabaseGovernanceProjectionStore().upsertObservations(observations)
+}
 
 function requireGovernanceDesiredState(input:unknown):GovernanceDesiredState{
  const validated=validateGovernanceDesiredState(input)
@@ -23,6 +31,7 @@ export async function planGovernanceDeploymentForPrincipal(principalId:string,de
  await authorizeProject(principalId,desiredState.projectId,'catalog.read')
  ensureGovernanceProvidersRegistered()
  const observedTargets=await discoverGovernanceTargetStates(desiredState)
+ await persistDiscoveredGovernanceProjections(desiredState.projectId,observedTargets)
  const deployment=buildGovernanceDeploymentPlan(desiredState,observedTargets)
  return{deployment,simulation:simulateGovernanceDeployment(deployment),observedStateSource:'DISCOVERED' as const}
 }
@@ -49,6 +58,7 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
  await authorizeProject(input.principalId,desired.projectId,'agent.execute')
  ensureGovernanceProvidersRegistered()
  const observedTargets=await discoverGovernanceTargetStates(desired)
+ await persistDiscoveredGovernanceProjections(desired.projectId,observedTargets)
  const deployment=buildGovernanceDeploymentPlan(desired,observedTargets)
  const simulation=simulateGovernanceDeployment(deployment)
  if(!input.expectedDeploymentFingerprint||input.expectedDeploymentFingerprint!==deployment.deploymentFingerprint){
