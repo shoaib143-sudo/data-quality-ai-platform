@@ -29,13 +29,22 @@ export function buildGovernancePlan(
 
   const desiredStateFingerprint = stableGovernanceFingerprint(desiredState)
   const diffs = diffGovernanceState(desiredState.objects, actual)
+  const diffByActualKey=new Map(diffs.filter(diff=>diff.actual).map(diff=>[`${diff.actual!.type}:${diff.actual!.externalKey}`,diff]))
+
   const operations = diffs.map((diff, index) => {
-    const dependencies = diff.action === 'DELETE'
-      ? diffs
-          .filter(other => other !== diff && other.action !== 'NOOP' && other.actual?.relationships.some(relationship => relationship.targetId === diff.desired.id))
-          .map(other => other.desired.id)
-          .sort()
-      : diff.desired.relationships.map(relationship => relationship.targetId).sort()
+    let dependencies:string[]
+    if(diff.action==='DELETE'){
+      const inbound=actual.filter(other=>other.id!==diff.desired.id&&other.relationships.some(relationship=>relationship.targetId===diff.desired.id))
+      dependencies=inbound.map(other=>{
+        const dependent=diffByActualKey.get(`${other.type}:${other.externalKey}`)
+        if(!dependent||dependent.action==='NOOP'){
+          throw new Error(`Governance delete of ${diff.desired.type}:${diff.desired.externalKey} is blocked because observed object ${other.type}:${other.externalKey} still references it and is not being updated or deleted.`)
+        }
+        return dependent.desired.id
+      }).sort()
+    }else{
+      dependencies=diff.desired.relationships.map(relationship => relationship.targetId).sort()
+    }
 
     return {
       operationId: stableGovernanceFingerprint({
