@@ -95,3 +95,8 @@ The modern HTTP handler now validates the parsed Content-Type media type exactly
 ### Post-implementation database fixture finding
 
 The exact-head isolated persistence gate exposed a test-fixture defect after checkpoint transition guards were hardened: the fixture attempted to move the same checkpoint from terminal FAILED back to PENDING. The database correctly rejected that regression. The fixture now uses separate idempotency keys for terminal failure and asynchronous PENDING/POLL/VERIFY/COMPLETE progression, preserving the terminal-state invariant while still behaviorally testing every resume path.
+
+
+### Isolated persistence fixture privilege hardening
+
+The behavioral replay originally attempted to set `session_replication_role` to bypass foreign keys for a synthetic project. The isolated Supabase CI role correctly rejected that privilege escalation. The fixture now creates a legitimate temporary organization and project inside the transaction and executes checkpoint, evidence, projection, fencing, immutability and transition tests with normal FK and trigger enforcement. No replication-role bypass remains.
