@@ -166,3 +166,21 @@ The independent static adversarial entry point is:
 Provider projection records remain discovery identity evidence in the read-only Informatica foundation. They are not promoted to a durable canonical source of truth by this change. Durable projection persistence and provider-object mutation binding remain required before any Informatica mutation capability can be enabled.
 
 Production Supabase migration application and live Informatica mutation activation remain explicit user-controlled boundaries.
+
+
+## Final takeover hardening before exact-head freeze
+
+Additional assurance work completed after the initial takeover review:
+
+- Explicit DELETE now forces broad provider discovery instead of filtering discovery to the desired-state keys. Planning fails closed when any observed unmanaged object still references the delete target.
+- Stale RUNNING checkpoint reclaim no longer grants permission to execute the provider mutation again. Ownership is fenced with a new claim generation and returns RECOVER. The runtime performs provider readback first. VERIFIED readback closes the operation without mutation; unresolved readback returns RECOVERY_REQUIRED.
+- Provider capabilities declaring PARTIAL mutation semantics are non-executable until DataNexus has an explicit semantic-loss acceptance contract. PARTIAL reads remain supported.
+- Provider mutation capabilities declaring idempotency NONE are non-executable through governed automatic execution.
+- Provider HTTP negative coverage now includes 401, 403, 404, 408, 429, 5xx, invalid JSON, timeout and network failure normalization.
+- The Governance Provider Assurance workflow now reconstructs an isolated local Supabase database and behaviorally proves claim ownership, WAIT/POLL/VERIFY/COMPLETE transitions, stale claim recovery, generation fencing and append-only evidence.
+- A provider Golden Path test now exercises desired state → discovery → deployment plan → simulation → governed preflight → provider execution → verification → evidence → reconciliation, and the workflow also executes the existing upstream Golden Path handoff contract.
+- Official MCP 2026-07-28 interoperability remains an authenticated closure gate. DataNexus authentication will not be weakened to make a conformance client pass. Full tools/list and tools/call interoperability must use an authorized synthetic/test identity or approved bearer token.
+
+### Candidate-freeze rule
+
+After this documentation update, no implementation or documentation mutation should be made during the exact-head assurance run unless a gate exposes a defect. Any defect fix creates a new candidate SHA and restarts affected exact-head gates.
