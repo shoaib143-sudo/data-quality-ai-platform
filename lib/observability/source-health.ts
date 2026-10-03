@@ -42,8 +42,8 @@ export async function checkSourceConnectionHealth(sourceId:string){
         hierarchy_truncated:hierarchy.truncated,
       }
     }else if(sourceType==='FILE'||sourceType==='CSV'){
-      const {data:dataset,datasetError}=await admin.schema('catalog').from('datasets')
-        .select('id,source_identifier').eq('data_source_id',source.id).order('created_at').limit(1).maybeSingle() as any
+      const {data:dataset,error:datasetError}=await admin.schema('catalog').from('datasets')
+        .select('id,source_identifier').eq('data_source_id',source.id).order('created_at').limit(1).maybeSingle()
       if(datasetError)throw new Error(datasetError.message)
       if(!dataset?.source_identifier){
         health={status:'NO_TARGET',checked_at:checkedAt,check_type:'SCHEDULED_HEARTBEAT',reason:'No bound dataset source identifier is available for validation.'}
