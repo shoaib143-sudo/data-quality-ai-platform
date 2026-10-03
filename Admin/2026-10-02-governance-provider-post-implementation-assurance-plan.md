@@ -132,3 +132,37 @@ Closure requires:
 - residual limitations documented;
 - production/live activation boundaries explicitly separated from code completion.
 
+
+## Takeover implementation amendments — 2026-10-03
+
+The takeover review converted the governance-provider closure plan into executable repository gates and fixed additional trust-boundary defects before the exact-head freeze.
+
+### New executable assurance gate
+
+`.github/workflows/governance-provider-assurance.yml` now runs the governance-provider-specific closure suite with three independent jobs:
+
+1. provider contract, unit, negative and TypeScript revalidation;
+2. migration/checkpoint durability contracts;
+3. MCP, authorization, failure-path, trust-boundary and independent adversarial audit.
+
+`pnpm run verify:governance-provider-platform` now runs every `tests/governance-provider-*.test.mjs` test rather than a single foundation test.
+
+The independent static adversarial entry point is:
+
+`scripts/audit-governance-provider-adversarial.mjs`
+
+### Additional takeover findings closed
+
+- Public planning could accept caller-supplied observed provider state. This was removed so planning always discovers authoritative provider state through the DataNexus runtime.
+- Deep desired-state validation existed but was not enforced at the shared runtime trust boundary before apply authorization/discovery. Runtime validation now precedes those operations.
+- Ambiguous RUNNING/PENDING checkpoints and terminal FAILED checkpoints could fall through to automatic re-execution in non-atomic fallback semantics. Resume is now fail-closed; FAILED is terminal for automatic replay, and a forward migration enforces matching durable RPC behavior.
+- MCP Origin validation compared hostnames only. Browser requests now require the same scheme, host and effective port.
+- Informatica classified timeout errors but did not create an actual timeout signal. Provider reads now have a bounded configurable timeout, with a 60-second maximum.
+- DELETE planning used create-style relationship ordering. Destructive operations now depend on observed inbound dependents so relationship-removal updates/dependent deletes run first.
+- Desired state now rejects a present relationship to an object explicitly declared absent.
+
+### Activation boundary retained
+
+Provider projection records remain discovery identity evidence in the read-only Informatica foundation. They are not promoted to a durable canonical source of truth by this change. Durable projection persistence and provider-object mutation binding remain required before any Informatica mutation capability can be enabled.
+
+Production Supabase migration application and live Informatica mutation activation remain explicit user-controlled boundaries.
