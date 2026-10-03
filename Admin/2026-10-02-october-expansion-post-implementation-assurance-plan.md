@@ -64,8 +64,8 @@ Current capability imports exported Power BI/Tableau/Looker metadata. No live ve
 ### G2 — Automated source-artifact acquisition (Medium)
 .NET, Node.js, VBA, Macro, Script and Log scanners parse supplied content, but no automated repository/file-system acquisition pipeline is connected yet.
 
-### G3 — Continuous source heartbeat (Medium)
-Connection health is persisted during registration/validation. There is no scheduled active heartbeat for every connected database.
+### G3 — Continuous source heartbeat (Resolved implementation / activation controlled)
+The scheduled worker can now enqueue idempotent hourly OBSERVABILITY heartbeats for ACTIVE/CONFIGURED sources. JDBC checks use governed credential references; FILE/CSV checks reuse governed source validation; failures persist redacted health evidence. Execution is opt-in through SOURCE_HEALTH_CHECKS_ENABLED to avoid unexpected external-system load or cost.
 
 ### G4 — Column-level manual lineage correction (Resolved)
 Manual corrections now optionally capture source column, target column and transformation expression. The same approval workflow gates both the asset edge and the persisted column mapping, with project-scoped capability checks, idempotent identity and HUMAN_APPROVED_MANUAL authority.
@@ -81,7 +81,7 @@ Connection-check evidence now receives an explicit freshness classification. HEA
 
 ## Closure rule
 
-PR #1103 remains Draft until all exact-head required gates pass. G1/G2/G3/G6 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
+PR #1103 remains Draft until all exact-head required gates pass. G1/G2/G6 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
 
 ## Final showcase required in ChatGPT
 
