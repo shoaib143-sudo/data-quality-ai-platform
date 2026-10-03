@@ -18,6 +18,7 @@ import { buildDatasetPresentationPlan, type DatasetMetricKey, type DatasetSectio
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 import { buildDataProductContext } from '@/lib/governance/data-product-context'
 import { canonicalRoutes } from '@/lib/platform/canonical-routes'
+import { cardTransitionName } from '@/lib/navigation/view-transition'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -218,7 +219,7 @@ export default async function GovernedDatasetPage({params}:{params:Promise<{data
     <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Dataset 360" contextLabel={dataset.name} homeHref="/home" />
     <nav className={`${surface} mt-4 flex items-center justify-between gap-3 overflow-x-auto px-5 py-3`}><Link href="/catalog" className={`inline-flex shrink-0 items-center gap-2 text-sm font-bold text-slate-300 hover:text-white ${focus}`}><ArrowLeft className="h-4 w-4"/>Data Catalog</Link><div className="flex shrink-0 gap-2">{canProfiling&&run?<Link href={profilingHref} className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Profiling evidence</Link>:null}{canLineage?<Link href={lineageHref} className={`rounded-xl px-3 py-2 text-sm font-semibold text-violet-300 hover:bg-white/[0.05] ${focus}`}>Lineage</Link>:null}{canContracts?<Link href="/contracts" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Contracts</Link>:null}{canObservability?<Link href="/observability" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Observability</Link>:null}{canAgents?<Link href="/agents" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Agents</Link>:null}{canIssues?<Link href="/issues" className={`rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/[0.05] ${focus}`}>Issues</Link>:null}{canJourneys?<Link href={canonicalRoutes.governanceRun(dataset.project_id)} className={`rounded-xl px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-white/[0.05] ${focus}`}>Governance Run</Link>:null}</div></nav>
 
-    <header id="summary" className={`${surface} mt-5 scroll-mt-28 p-6 sm:p-7`}>
+    <header id="summary" data-card-page-target={cardTransitionName('dataset',dataset.id)} style={{viewTransitionName:cardTransitionName('dataset',dataset.id)}} className={`${surface} mt-5 scroll-mt-28 p-6 sm:p-7`}>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div>
           <div className="flex flex-wrap items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-400/10 text-blue-300"><Database className="h-5 w-5"/></span><div><p className="text-xs font-black uppercase tracking-[.15em] text-cyan-300">{presentation.lensLabel}</p><h1 className="mt-1 text-3xl font-black text-white">{dataset.name}</h1></div></div>
