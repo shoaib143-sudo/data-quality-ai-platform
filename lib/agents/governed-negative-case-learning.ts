@@ -18,6 +18,15 @@ function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function negativeCaseSignature(value: string) {
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 96)
+  return normalized || 'failure-pattern'
+}
+
 export function deriveNegativeLearningCaseFromFailedRun(input: {
   run: FailedGovernedRunSnapshot
   agentKey: GovernedAgentKey
@@ -45,7 +54,7 @@ export function deriveNegativeLearningCaseFromFailedRun(input: {
     agentKey: input.agentKey,
     skillKey,
     runMode: input.runMode,
-    useCaseKey: `${input.agentKey}:${skillKey}:failure-pattern`,
+    useCaseKey: `${input.agentKey}:${skillKey}:${negativeCaseSignature(problem)}`,
     problemSignature: problem,
     summary: failureSummary,
     reusableLesson: `Avoid repeating the failed execution pattern from run ${input.run.id}; re-evaluate current evidence, authorization, tool contracts, and failure conditions before retrying.`,
