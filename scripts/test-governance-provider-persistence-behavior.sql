@@ -35,8 +35,8 @@ begin
    where project_id = v_project_id and idempotency_key = 'idem-1';
 
   result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-1','op-1','idem-1');
-  assert result->>'resume_action' = 'EXECUTE', 'stale RUNNING claim must be reclaimed';
-  assert (result->>'claimed')::boolean, 'stale RUNNING claim must be acquired';
+  assert result->>'resume_action' = 'RECOVER', 'stale RUNNING claim must enter recovery readback';
+  assert (result->>'claimed')::boolean, 'stale RUNNING recovery claim must be acquired';
   assert (result->'checkpoint'->>'claim_generation')::bigint = 2, 'stale reclaim must increment generation';
 
   begin
