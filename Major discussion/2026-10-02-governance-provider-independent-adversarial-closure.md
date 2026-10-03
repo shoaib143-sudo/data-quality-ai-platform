@@ -16,7 +16,7 @@ The audit starts from the exact PR diff, public interfaces, database migrations 
 | Gap | Severity | Current disposition |
 | --- | --- | --- |
 | Evidence store referenced deployment_id absent from original migration | High | Fixed with forward migration; clean-install and upgrade tests required |
-| Checkpoint claim used read then upsert and could race concurrent workers | High | Atomic database claim added; concurrency/fencing validation remains mandatory |
+| Checkpoint claim used read then upsert and could race concurrent workers | High | Atomic database claim added and initial insert race hardened with conflict-safe lookup; concurrency/fencing validation remains mandatory |
 | Desired-state JSON validation relied too heavily on TypeScript shapes | High | Deep runtime validation added; fuzz/negative coverage required |
 | Latest exact head has not yet completed the full CI matrix | High release gate | Must be green before closure |
 | Branch can move behind main during long implementation | Medium | Exact-head sync/freeze required at closure |
