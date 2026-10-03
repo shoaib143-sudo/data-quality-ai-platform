@@ -67,8 +67,8 @@ Current capability imports exported Power BI/Tableau/Looker metadata. No live ve
 ### G3 — Continuous source heartbeat (Medium)
 Connection health is persisted during registration/validation. There is no scheduled active heartbeat for every connected database.
 
-### G4 — Column-level manual lineage correction (Medium)
-Manual correction is asset-level. Column mapping corrections remain ingestion/history driven.
+### G4 — Column-level manual lineage correction (Resolved)
+Manual corrections now optionally capture source column, target column and transformation expression. The same approval workflow gates both the asset edge and the persisted column mapping, with project-scoped capability checks, idempotent identity and HUMAN_APPROVED_MANUAL authority.
 
 ### G5 — Metadata restore approval semantics (Resolved)
 Restore now starts the catalog metadata approval workflow and cannot call the restore RPC directly. Only an APPROVED workflow instance can apply the historic version, and the restore remains version-creating and auditable.
@@ -81,7 +81,7 @@ Connection-check evidence now receives an explicit freshness classification. HEA
 
 ## Closure rule
 
-PR #1103 remains Draft until all exact-head required gates pass. G1/G2/G3/G4/G6 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
+PR #1103 remains Draft until all exact-head required gates pass. G1/G2/G3/G6 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
 
 ## Final showcase required in ChatGPT
 
