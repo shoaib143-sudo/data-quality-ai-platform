@@ -115,6 +115,23 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
   const result=await executeGovernedProviderOperation(operation,dependencies,preparedByOperation.get(operation.operationId))
   const normalized={operationId:operation.operationId,provider:operation.provider,connectionId:operation.connectionId,...result}
   byOperation.set(operation.operationId,normalized);results.push(normalized)
+  if(result.status==='APPROVAL_REQUIRED'){
+   const requested=await createAgentApprovalRequest({
+    requestedBy:input.principalId,actionKey:'APPLY_GOVERNANCE_DEPLOYMENT',projectId:desired.projectId,
+    parameters:approvalParameters,
+   })
+   return{
+    accepted:false as const,code:'GOVERNANCE_APPROVAL_REQUIRED_DURING_EXECUTION' as const,
+    deployment,simulation,preflight,results,
+    approvalRequestId:String(requested.approval.id),approvalStatus:String(requested.approval.status),
+   }
+  }
+  if(result.status==='DENIED'||result.status==='BLOCKED_CAPABILITY'){
+   return{
+    accepted:false as const,code:'GOVERNANCE_EXECUTION_REVALIDATION_BLOCKED' as const,
+    deployment,simulation,preflight,results,
+   }
+  }
  }
  const verified=results.length===operations.length&&results.every(result=>result.status==='VERIFIED')
  if(approvalRequestId&&verified)await markApprovalExecuted(approvalRequestId)
