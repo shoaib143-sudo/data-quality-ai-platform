@@ -1,6 +1,7 @@
 import type { GovernanceDesiredState } from '../desired-state/model.ts'
 import { validateGovernanceDesiredState } from '../desired-state/validate.ts'
 import { getGovernanceProvider } from '../providers/registry.ts'
+import { validateGovernanceProjectionObservation } from '../projections/store.ts'
 import type { GovernanceTargetObservedState } from './deployment-plan.ts'
 
 export async function discoverGovernanceTargetStates(desired:GovernanceDesiredState):Promise<GovernanceTargetObservedState[]>{
@@ -21,6 +22,7 @@ export async function discoverGovernanceTargetStates(desired:GovernanceDesiredSt
    provider:target.provider.trim().toLowerCase(),
    connectionId:target.connectionId,
    objects:discovery.objects,
+   projections,
    observedAt:discovery.observedAt,
   })
  }
