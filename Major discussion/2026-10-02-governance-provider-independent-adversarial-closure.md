@@ -90,3 +90,8 @@ The active checkpoint generation can no longer regress terminal state or decreas
 ### MCP 2026-07-28 transport conformance hardening
 
 The modern HTTP handler now validates the parsed Content-Type media type exactly as application/json instead of substring matching. This closes acceptance of misleading non-JSON media types that merely contain application/json in a parameter and aligns the custom transport boundary with the current official v2 SDK behavior. Official SDK interoperability remains a separate closure gate.
+
+
+### Post-implementation database fixture finding
+
+The exact-head isolated persistence gate exposed a test-fixture defect after checkpoint transition guards were hardened: the fixture attempted to move the same checkpoint from terminal FAILED back to PENDING. The database correctly rejected that regression. The fixture now uses separate idempotency keys for terminal failure and asynchronous PENDING/POLL/VERIFY/COMPLETE progression, preserving the terminal-state invariant while still behaviorally testing every resume path.
