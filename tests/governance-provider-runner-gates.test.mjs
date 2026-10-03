@@ -39,3 +39,19 @@ test('runner owns retry authority and retries only normalized transient failures
  const result=await executeGovernedProviderOperation(operation,{...deps(),retryRuntime:{maxAttempts:3,sleep:async()=>{},random:()=>0}})
  assert.equal(result.status,'VERIFIED');assert.equal(result.attempts,3);assert.equal(calls,3)
 })
+
+
+test('runner fails closed on PAUSE and KILL execution controls before provider mutation',async()=>{
+ for(const control of ['PAUSE','KILL']){
+  clearGovernanceProvidersForTests()
+  const p=provider({operationId:'o',status:'SUCCEEDED'})
+  registerGovernanceProvider(p)
+  const blocked={
+   ...deps(),
+   executionController:{assertAllowed:async()=>{throw new Error(`Execution blocked by ${control}`)}},
+  }
+  await assert.rejects(()=>executeGovernedProviderOperation(operation,blocked),new RegExp(control))
+  assert.deepEqual(p.counts(),{execute:0,verify:0})
+ }
+ clearGovernanceProvidersForTests()
+})
