@@ -71,3 +71,13 @@ test('initial checkpoint claim race resolves through conflict-safe durable looku
  assert.match(sql,/resume_action', 'WAIT'/)
  assert.match(sql,/resume_action', 'RECOVER'/)
 })
+
+
+test('checkpoint persistence enforces monotonic terminal state transitions',()=>{
+ const sql=fs.readFileSync(new URL('../supabase/migrations/20261003103000_governance_platform_checkpoint_transition_guards.sql',import.meta.url),'utf8')
+ assert.match(sql,/attempts cannot decrease/)
+ assert.match(sql,/status = 'VERIFIED' and p_status = 'VERIFIED'/)
+ assert.match(sql,/status = 'FAILED' and p_status = 'FAILED'/)
+ assert.match(sql,/GOVERNANCE_CHECKPOINT_INVALID_TRANSITION/)
+ assert.match(sql,/for update/)
+})

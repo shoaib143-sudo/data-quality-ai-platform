@@ -58,7 +58,7 @@ No production-readiness statement should be issued from source review alone.
 | Informatica timeout normalization existed without an actual client timeout | Medium | Fixed. Bounded AbortSignal timeout added and covered by tests. |
 | DELETE dependency ordering could remove a referenced object before its dependent/update | High | Fixed. Delete dependencies use observed inbound relationships and contradictory explicit absence is rejected. |
 | Governance-provider post-implementation requirements were documented but not represented by a dedicated CI workflow | High release gate | Fixed. Added Governance Provider Assurance workflow plus independent adversarial script. |
-| Provider projections are not durable source-of-truth mappings | Medium activation limitation | Explicitly accepted for the read-only foundation. Mutation enablement remains blocked until durable projection/provider-object binding is designed, migrated, and conformance-tested. |
+| Provider projections are not durable source-of-truth mappings | Medium activation limitation | Fixed at code level with project/provider/connection-scoped durable mappings, dual identity uniqueness, service-role-only writes, and isolated collision tests. Migration replay remains a closure gate. |
 | Informatica live endpoint conformance | High activation gate | External credential boundary remains. Mutations stay disabled. |
 | Production Supabase migration application | Controlled activation boundary | No production migration is applied by this PR takeover. |
 
@@ -77,6 +77,11 @@ The exact-head closure audit must still re-run after the implementation head is 
 | Provider Golden Path was not explicit in the provider-specific assurance workflow | Medium release gate | Fixed. Added governed provider Golden Path and upstream Golden Path handoff execution. |
 | Official MCP 2026-07-28 SDK/conformance interoperability | Medium closure gate | Awaiting authenticated test identity/runtime execution. Authentication remains mandatory. |
 | Informatica live conformance and mutation activation | High activation gate | External credential/activation boundary. Mutations remain disabled. |
-| Durable provider projection source-of-truth mapping | Medium activation limitation | Still intentionally deferred and blocks mutation activation where provider-object identity persistence is required. |
+| Durable provider projection source-of-truth mapping | Medium activation limitation | Implemented at code level. Mutation activation still requires isolated migration replay plus live provider conformance before relying on the mapping operationally. |
 
 No source-review result overrides exact-head CI, behavioral migration validation, authenticated MCP interoperability, or live Informatica conformance evidence.
+
+
+### Additional durability hardening
+
+The active checkpoint generation can no longer regress terminal state or decrease its attempt counter. Database-enforced transition guards make VERIFIED and FAILED terminal for that generation while preserving RUNNING recovery readback and normal PENDING/SUCCEEDED progression.

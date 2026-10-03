@@ -66,6 +66,14 @@ begin
   perform governance.put_platform_execution_checkpoint(v_project_id,'idem-1',2,'VERIFIED',2,'provider-1','job-1','{}'::jsonb,'VERIFIED',now());
   result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-1','op-1','idem-1');
   assert result->>'resume_action' = 'COMPLETE', 'VERIFIED checkpoint must suppress duplicate mutation';
+
+  failed := false;
+  begin
+    perform governance.put_platform_execution_checkpoint(v_project_id,'idem-1',2,'RUNNING',2,'provider-1','job-1','{}'::jsonb,'VERIFIED',now());
+  exception when others then
+    failed := position('GOVERNANCE_CHECKPOINT_INVALID_TRANSITION' in sqlerrm) > 0;
+  end;
+  assert failed, 'VERIFIED checkpoint must be terminal and reject regression';
 end;
 $block$;
 
