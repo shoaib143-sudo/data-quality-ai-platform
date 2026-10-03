@@ -56,5 +56,16 @@ export function validateGovernanceDesiredState(input: unknown): DesiredStateVali
     objectKeys.add(key)
   }
 
+  const objects=(value.objects??[]).filter(isRecord)
+  const explicitlyAbsentIds=new Set(objects.filter(object=>object.state==='absent'&&typeof object.id==='string').map(object=>String(object.id)))
+  for(const [index,object] of objects.entries()){
+    if(object.state==='absent'||!Array.isArray(object.relationships))continue
+    for(const relationship of object.relationships){
+      if(isRecord(relationship)&&typeof relationship.targetId==='string'&&explicitlyAbsentIds.has(relationship.targetId)){
+        errors.push(`objects[${index}] cannot reference explicitly absent object ${relationship.targetId}.`)
+      }
+    }
+  }
+
   return errors.length ? { ok: false, errors } : { ok: true, value: value as GovernanceDesiredState }
 }
