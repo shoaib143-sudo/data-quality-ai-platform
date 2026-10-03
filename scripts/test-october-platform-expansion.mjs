@@ -439,3 +439,18 @@ test('manual column lineage correction is approval-gated, idempotent and project
   assert.match(migration,/on conflict\(project_id,transformation_id,source_asset_id,source_column,target_asset_id,target_column\)/)
   assert.match(migration,/revoke all on function governance\.upsert_manual_lineage_column_mapping/)
 })
+
+
+test('recurring source health uses opt-in durable observability jobs and redacted persisted evidence',()=>{
+  const health=fs.readFileSync('lib/observability/source-health.ts','utf8')
+  const worker=fs.readFileSync('lib/orchestration/worker.ts','utf8')
+  const service=fs.readFileSync('lib/orchestration/worker-service.ts','utf8')
+  assert.match(health,/SOURCE_HEALTH_CHECKS_ENABLED/)
+  assert.match(health,/jobType:'OBSERVABILITY'/)
+  assert.match(health,/idempotencyKey:\`source-health:/)
+  assert.match(health,/SCHEDULED_HEARTBEAT/)
+  assert.match(health,/\[REDACTED\]/)
+  assert.match(worker,/trigger === 'SOURCE_HEALTH_CHECK'/)
+  assert.match(worker,/checkSourceConnectionHealth/)
+  assert.match(service,/enqueueRecurringSourceHealthChecks/)
+})
