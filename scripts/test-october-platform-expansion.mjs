@@ -421,3 +421,21 @@ test('source health evidence is freshness-classified instead of implying continu
   assert.match(page,/'STALE'/)
   assert.match(page,/stale after/)
 })
+
+
+test('manual column lineage correction is approval-gated, idempotent and project-scoped',()=>{
+  const route=fs.readFileSync('app/api/lineage/corrections/route.ts','utf8')
+  const ui=fs.readFileSync('components/lineage/lineage-correction-manager.tsx','utf8')
+  const migration=fs.readFileSync('supabase/migrations/20261003010000_manual_column_lineage_corrections.sql','utf8')
+  assert.match(route,/sourceColumn and targetColumn must be provided together/)
+  assert.match(route,/instance\.data\.status!=='APPROVED'/)
+  assert.match(route,/upsert_manual_lineage_column_mapping/)
+  assert.match(route,/HUMAN_APPROVED_MANUAL/)
+  assert.match(ui,/Source column \(optional\)/)
+  assert.match(ui,/Target column \(optional\)/)
+  assert.match(ui,/Transformation expression \(optional\)/)
+  assert.match(migration,/has_project_capability\(p_project_id,p_actor,'lineage\.manage'\)/)
+  assert.match(migration,/lineage_column_mappings_manual_identity_idx/)
+  assert.match(migration,/on conflict\(project_id,transformation_id,source_asset_id,source_column,target_asset_id,target_column\)/)
+  assert.match(migration,/revoke all on function governance\.upsert_manual_lineage_column_mapping/)
+})
