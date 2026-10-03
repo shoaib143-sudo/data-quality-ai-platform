@@ -287,7 +287,7 @@ export async function readGovernedLearningLifecycleCommandCenter(
       approvedForControlledRelease: statuses.filter((status) => status === 'APPROVED_FOR_CONTROLLED_RELEASE').length,
       canary: statuses.filter((status) => status === 'CANARY').length,
       verified: statuses.filter((status) => status === 'VERIFIED').length,
-      active: statuses.filter((status) => status === 'ACTIVE').length,
+      active: candidates.filter((candidate) => candidate.candidateType === 'SKILL_IMPROVEMENT' && candidate.status === 'ACTIVE').length,
       rolledBack: statuses.filter((status) => status === 'ROLLED_BACK').length,
       notReadyOrRejected: statuses.filter((status) => status === 'NOT_READY' || status === 'REJECTED').length,
       transitionEvents: candidates.reduce((sum, candidate) => sum + candidate.transitionCount, 0),
