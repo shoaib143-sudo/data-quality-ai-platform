@@ -99,3 +99,14 @@ test('provider inventory exposes documented compatibility without pretending an 
  assert.match(route,/bootstrap/)
  assert.match(route,/private, no-store/)
 })
+
+
+test('dynamic execution revalidation stops the deployment on policy or approval changes',()=>{
+ const service=read('lib/governance-platform/runtime/service.ts')
+ const executeIndex=service.indexOf('executeGovernedProviderOperation(operation,dependencies,preparedByOperation.get(operation.operationId))')
+ const dynamicApprovalIndex=service.indexOf("GOVERNANCE_APPROVAL_REQUIRED_DURING_EXECUTION")
+ const dynamicBlockIndex=service.indexOf("GOVERNANCE_EXECUTION_REVALIDATION_BLOCKED")
+ assert.ok(executeIndex>=0&&dynamicApprovalIndex>executeIndex&&dynamicBlockIndex>executeIndex)
+ assert.match(service,/result\.status==='APPROVAL_REQUIRED'/)
+ assert.match(service,/result\.status==='DENIED'\|\|result\.status==='BLOCKED_CAPABILITY'/)
+})
