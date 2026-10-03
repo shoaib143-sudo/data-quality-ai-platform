@@ -139,11 +139,12 @@ The takeover review converted the governance-provider closure plan into executab
 
 ### New executable assurance gate
 
-`.github/workflows/governance-provider-assurance.yml` now runs the governance-provider-specific closure suite with three independent jobs:
+`.github/workflows/governance-provider-assurance.yml` now runs the governance-provider-specific closure suite with four independent jobs:
 
-1. provider contract, unit, negative and TypeScript revalidation;
-2. migration/checkpoint durability contracts;
-3. MCP, authorization, failure-path, trust-boundary and independent adversarial audit.
+1. provider contract, aggregate unit/negative, Golden Path and TypeScript revalidation;
+2. projection, migration, checkpoint-resume and durable-runner contract tests;
+3. MCP, authorization, failure-path, trust-boundary and independent adversarial audit;
+4. isolated Supabase reconstruction and behavioral persistence validation.
 
 `pnpm run verify:governance-provider-platform` now runs every `tests/governance-provider-*.test.mjs` test rather than a single foundation test.
 
@@ -163,7 +164,7 @@ The independent static adversarial entry point is:
 
 ### Activation boundary retained
 
-Provider projection records remain discovery identity evidence in the read-only Informatica foundation. They are not promoted to a durable canonical source of truth by this change. Durable projection persistence and provider-object mutation binding remain required before any Informatica mutation capability can be enabled.
+Provider projection records now have a durable project/provider/connection-scoped mapping with dual canonical/provider identity uniqueness and service-role-only persistence. This mapping is still not activation evidence by itself. Isolated migration replay and live provider conformance must pass before any Informatica mutation capability can rely on it operationally.
 
 Production Supabase migration application and live Informatica mutation activation remain explicit user-controlled boundaries.
 
@@ -184,3 +185,19 @@ Additional assurance work completed after the initial takeover review:
 ### Candidate-freeze rule
 
 After this documentation update, no implementation or documentation mutation should be made during the exact-head assurance run unless a gate exposes a defect. Any defect fix creates a new candidate SHA and restarts affected exact-head gates.
+
+
+## Final post-implementation closure execution
+
+The final closure sequence is:
+
+1. freeze one exact PR head synchronized with main;
+2. require Repository Governance, Quality Gate, P0-P5 Revalidation, Recovery Assurance, CodeQL, Post Implementation Assurance and Governance Provider Assurance to complete on that exact head;
+3. require the governance-provider aggregate unit/integration/negative suite to pass;
+4. require projection, persistence, checkpoint-resume and durable-runner contracts to pass independently;
+5. require isolated Supabase reconstruction plus behavioral claim, fencing, evidence immutability, projection collision and checkpoint transition tests to pass;
+6. require the independent adversarial audit and MCP/failure trust-boundary campaign to pass;
+7. run provider Golden Path and upstream Golden Path handoff tests;
+8. record all residual external gates separately: official MCP SDK interoperability, Informatica live read-only conformance, and production migration/mutation activation.
+
+Any implementation or documentation fix creates a new candidate SHA and invalidates exact-head closure evidence from the prior candidate.
