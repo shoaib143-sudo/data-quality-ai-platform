@@ -4,6 +4,8 @@ import { Activity, BookOpenCheck, ShieldCheck } from 'lucide-react'
 import { authorizeProject } from '@/lib/auth/authorize'
 import { readGovernedLearningLifecycleCommandCenter } from '@/lib/ai/governed-learning-command-center-state'
 import { readPgclCommandCenterState } from '@/lib/ai/pgcl-command-center-state'
+import { readProspectiveLearningCommandCenterState } from '@/lib/ai/prospective-learning-command-center-state'
+import { readLearningEvaluationCommandCenterState } from '@/lib/ai/learning-evaluation-command-center-state'
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
@@ -43,17 +45,38 @@ export default async function LearningGovernancePage({
 
   const control = selectedProjectId ? await (async () => {
     await authorizeProject(user.id, selectedProjectId, 'admin.manage')
-    const [lifecycle, pgcl] = await Promise.all([
+    const [lifecycle, pgcl, prospective, evaluation] = await Promise.all([
       readGovernedLearningLifecycleCommandCenter(selectedProjectId),
       readPgclCommandCenterState(selectedProjectId, user.id),
+      (async () => {
+        try {
+          return await readProspectiveLearningCommandCenterState(selectedProjectId, user.id)
+        } catch (error) {
+          // A preview may precede the migration. Surface other read failures.
+          const message = error instanceof Error ? error.message : String(error)
+          if (!/PGRST202|42883|summarize_learning_prospective_outcomes.*(not found|does not exist|schema cache)/i.test(message)) throw error
+          return null
+        }
+      })(),
+      (async () => {
+        try {
+          return await readLearningEvaluationCommandCenterState(selectedProjectId, user.id)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (!/PGRST205|42P01|learning_evaluation_(policies|results).*(not found|does not exist|schema cache)/i.test(message)) throw error
+          return null
+        }
+      })(),
     ])
-    return { lifecycle, pgcl }
+    return { lifecycle, pgcl, prospective, evaluation }
   })() : null
 
   const lifecycle = control?.lifecycle ?? null
   const pgcl = control?.pgcl ?? null
+  const prospective = control?.prospective ?? null
+  const evaluation = control?.evaluation ?? null
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-5 sm:p-6">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 p-5 sm:p-6">
     <div className="mx-auto max-w-7xl space-y-7">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Learning Governance" contextLabel="Governed AI learning evidence" homeHref="/home" />
       {canAdminWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3">
@@ -98,6 +121,82 @@ export default async function LearningGovernancePage({
           <article className="rounded-2xl border bg-white p-5"><Activity className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.usageEvents}</p><p className="text-xs font-bold uppercase text-slate-500">Reuse records</p></article>
           <article className="rounded-2xl border bg-white p-5"><ShieldCheck className="h-5 w-5"/><p className="mt-3 text-3xl font-black">{pgcl.counts.succeeded}</p><p className="text-xs font-bold uppercase text-slate-500">Successful reuse</p></article>
         </section>
+
+        {!evaluation && <section className="rounded-2xl border bg-white p-6" role="status">
+          <h2 className="text-xl font-black">Prospective evaluation decisions</h2>
+          <p className="mt-1 text-sm text-slate-500">Awaiting the governed evaluation policy migration. No candidate can use prospective evaluation evidence for release review on this environment yet.</p>
+        </section>}
+
+        {evaluation && <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-black">Prospective evaluation decisions</h2>
+              <p className="mt-1 max-w-4xl text-sm text-slate-500">Read-only evidence for the locked evaluation policy that controls candidate release-review admission. An IMPROVED result still requires the existing human approval and controlled shadow-canary path.</p>
+            </div>
+            <div className="text-right text-xs text-slate-500">
+              <p>{evaluation.counts.policies} locked policies · {evaluation.counts.decisions} decisions</p>
+              <p>Automatic promotion: {evaluation.authority.automaticPromotionAllowed ? 'enabled' : 'disabled'} · Human release review: {evaluation.authority.humanReleaseReviewRequired ? 'required' : 'not required'}</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black text-emerald-700">{evaluation.counts.improved}</p><p className="text-xs font-bold uppercase text-slate-500">Improved</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black text-red-700">{evaluation.counts.regressed}</p><p className="text-xs font-bold uppercase text-slate-500">Regressed</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black text-amber-700">{evaluation.counts.inconclusive}</p><p className="text-xs font-bold uppercase text-slate-500">Inconclusive</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{evaluation.counts.stopped}</p><p className="text-xs font-bold uppercase text-slate-500">Stopped</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{evaluation.counts.rejected}</p><p className="text-xs font-bold uppercase text-slate-500">Rejected</p></article>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            {evaluation.decisions.length ? <table className="w-full min-w-[1500px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500">
+                <tr><th className="p-3">Observed</th><th className="p-3">Agent / mode</th><th className="p-3">Policy / manifest</th><th className="p-3">Decision</th><th className="p-3">Score change</th><th className="p-3">Evidence</th><th className="p-3">Safety</th><th className="p-3">Budget evidence</th></tr>
+              </thead>
+              <tbody>{evaluation.decisions.map((decision) => {
+                const policy = evaluation.policies.find((item) => item.id === decision.policyId)
+                return <tr key={decision.id} className="border-b align-top last:border-0">
+                  <td className="p-3 text-xs">{new Date(decision.observedAt).toLocaleString()}</td>
+                  <td className="p-3"><p className="font-bold">{policy?.agentKey ?? 'Unknown agent'}</p><p className="text-xs text-slate-400">{policy?.skillKey ?? 'Unknown skill'} · {policy?.mode ?? 'Unknown mode'}</p></td>
+                  <td className="p-3"><p className="font-mono text-xs">{policy?.policyKey ?? decision.policyId}</p><p className="mt-1 font-mono text-[11px] text-slate-400">Manifest: {policy?.datasetManifestId ?? 'Unavailable'}</p><p className="mt-1 font-mono text-[11px] text-slate-400">{policy?.manifestHash ? policy.manifestHash.slice(0, 20) + '…' : 'Manifest hash unavailable'}</p><p className="mt-1 text-[11px] text-slate-400">Evaluator: {policy?.evaluatorActorId ?? 'Unavailable'}</p></td>
+                  <td className="p-3"><Badge value={decision.quality}/><div className="mt-1"><Badge value={decision.disposition}/></div><p className="mt-1 max-w-xs text-[11px] text-slate-400">{decision.reasons.join(', ')}</p></td>
+                  <td className="p-3"><p>{decision.baselineScore == null || decision.candidateScore == null ? 'Not measured' : `${decision.baselineScore.toFixed(3)} → ${decision.candidateScore.toFixed(3)}`}</p><p className="mt-1 text-xs text-slate-400">Lower confidence bound: {decision.gainLowerConfidenceBound == null ? 'not available' : decision.gainLowerConfidenceBound.toFixed(3)}</p><p className="mt-1 text-xs text-slate-400">Samples: {decision.sampleCount}</p></td>
+                  <td className="p-3 text-xs"><p>Independent: {decision.independentlyVerified ? 'yes' : 'no'}</p><p>Complete: {decision.evidenceComplete ? 'yes' : 'no'}</p><p>Confirmed: {decision.confirmationWindowPassed ? 'yes' : 'no'}</p></td>
+                  <td className="p-3 text-xs"><p>Authority violations: {decision.authorityViolations}</p><p>Safety failures: {decision.safetyFailures}</p></td>
+                  <td className="p-3 text-xs"><p>Accounting: {decision.accountingComplete ? 'complete' : 'incomplete'}</p><p>Cost: {decision.totalCost.toFixed(4)} total · {decision.maxRunCost.toFixed(4)} max run</p><p>Tokens: {decision.totalTokens} total · {decision.maxRunTokens} max run</p><p>Latency: {decision.maxLatencyMs} ms max</p></td>
+                </tr>
+              })}</tbody>
+            </table> : <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No prospective evaluation decisions are recorded. Absence means no candidate has demonstrated release-review-eligible improvement.</p>}
+          </div>
+        </section>}
+
+        {!prospective && <section className="rounded-2xl border bg-white p-6" role="status">
+          <h2 className="text-xl font-black">Prospective results</h2>
+          <p className="mt-1 text-sm text-slate-500">Awaiting the prospective outcome database migration. No improvement evidence is available on this environment.</p>
+        </section>}
+
+        {prospective && <section className="rounded-2xl border bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-xl font-black">Prospective results by agent and run mode</h2><p className="mt-1 text-sm text-slate-500">Verified production outcomes only. Missing agents or modes remain explicitly unmeasured and cannot be interpreted as success.</p></div>
+            <p className="text-xs text-slate-500">{prospective.counts.observedOutcomes} outcomes · {prospective.counts.measuredModes} measured modes</p>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black">{prospective.counts.agentsWithEvidence}/8</p><p className="text-xs font-bold uppercase text-slate-500">Agents with evidence</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black text-emerald-700">{prospective.counts.effective}</p><p className="text-xs font-bold uppercase text-slate-500">Effective</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black text-red-700">{prospective.counts.ineffective}</p><p className="text-xs font-bold uppercase text-slate-500">Ineffective</p></article>
+            <article className="rounded-xl border p-4"><p className="text-2xl font-black text-amber-700">{prospective.counts.partial + prospective.counts.other}</p><p className="text-xs font-bold uppercase text-slate-500">Partial or unresolved</p></article>
+          </div>
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent</th><th className="p-3">Verified outcomes</th><th className="p-3">Effective</th><th className="p-3">Ineffective</th><th className="p-3">Partial / unresolved</th><th className="p-3">Measured modes</th><th className="p-3">Last verified</th></tr></thead>
+              <tbody>{prospective.agentCoverage.map((agent) => <tr key={agent.agentKey} className="border-b last:border-0"><td className="p-3 font-bold">{agent.agentKey}</td><td className="p-3">{agent.sampleCount}</td><td className="p-3">{agent.effectiveCount}</td><td className="p-3">{agent.ineffectiveCount}</td><td className="p-3">{agent.partialCount + agent.otherCount}</td><td className="p-3">{agent.measuredModes.join(', ') || 'No evidence yet'}</td><td className="p-3 text-xs text-slate-500">{agent.lastVerifiedAt ? new Date(agent.lastVerifiedAt).toLocaleString() : 'Not measured'}</td></tr>)}</tbody>
+            </table>
+          </div>
+          <h3 className="mt-6 font-bold">Measured agent versions and run modes</h3>
+          {prospective.summaries.length === 0 ? <p className="mt-2 text-sm text-slate-500">No verified production outcomes yet.</p> : <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Agent</th><th className="p-3">Version</th><th className="p-3">Run mode</th><th className="p-3">Outcomes</th><th className="p-3">Effective</th><th className="p-3">Ineffective</th><th className="p-3">Partial / unresolved</th></tr></thead>
+              <tbody>{prospective.summaries.map((row) => <tr key={`${row.agentKey}:${row.agentVersion}:${row.runMode}`} className="border-b last:border-0"><td className="p-3 font-bold">{row.agentKey}</td><td className="p-3">{row.agentVersion}</td><td className="p-3">{row.runMode}</td><td className="p-3">{row.sampleCount}</td><td className="p-3">{row.effectiveCount}</td><td className="p-3">{row.ineffectiveCount}</td><td className="p-3">{row.partialCount + row.otherCount}</td></tr>)}</tbody>
+            </table>
+          </div>}
+        </section>}
 
         <section className="rounded-2xl border bg-white p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">

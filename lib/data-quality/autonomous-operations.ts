@@ -3,8 +3,6 @@ import { writeGovernanceAudit } from '@/lib/governance/audit'
 import {
   loadApprovedPgclPrecedents,
   loadApprovedPgclAvoidanceCases,
-  markPgclAvoidanceCasesApplied,
-  markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
   type AppliedPgclAvoidanceCase,
 } from '@/lib/agents/pgcl-approved-precedent'
@@ -410,8 +408,8 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
       })),
     },
     avoidance_guidance: pgclAvoidanceCases.map((learningCase) => learningCase.avoidLesson),
-    applied_positive_case_ids: pgclPrecedents.map((learningCase) => learningCase.candidateId),
-    applied_negative_case_ids: pgclAvoidanceCases.map((learningCase) => learningCase.candidateId),
+    applied_positive_case_ids: [],
+    applied_negative_case_ids: [],
     failed_rules: failedRules.map(({ rule, runs }) => ({
       rule_definition_id: rule.id,
       rule_key: rule.rule_key,
@@ -516,31 +514,6 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
     },
   })
 
-  if (pgclPrecedents.length) {
-    try {
-      await markPgclPrecedentsApplied({
-        projectId: String(agentRun.project_id),
-        agentRunId: input.agentRunId,
-        cases: pgclPrecedents,
-        executionSurface: 'DATA_QUALITY_INVESTIGATION',
-      })
-    } catch (error) {
-      console.error('[data-quality-investigation] approved PGCL precedent attribution failed safely:', error)
-    }
-  }
-  if (pgclAvoidanceCases.length) {
-    try {
-      await markPgclAvoidanceCasesApplied({
-        projectId: String(agentRun.project_id),
-        agentRunId: input.agentRunId,
-        cases: pgclAvoidanceCases,
-        executionSurface: 'DATA_QUALITY_INVESTIGATION',
-      })
-    } catch (error) {
-      console.error('[data-quality-investigation] approved negative-case attribution failed safely:', error)
-    }
-  }
-
   return {
     investigationId: investigation.id,
     agentRunId: input.agentRunId,
@@ -556,7 +529,7 @@ export async function investigateDataQualityRun(input: { agentRunId: string; use
     approvedPositiveCaseLearning: {
       status: pgclStatus,
       matches: pgclPrecedents.length,
-      appliedCandidateIds: pgclPrecedents.map((learningCase) => learningCase.candidateId),
+      appliedCandidateIds: [],
       authority: 'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
     },
     approvedNegativeCaseLearning: {

@@ -7,6 +7,9 @@ on:
       - 'scripts/test-governed-shadow-evaluation.mjs'
       - 'scripts/audit-governed-shadow-evaluation-adversarial.mjs'
       - '.github/workflows/governed-shadow-evaluation.yml'
+      - 'Admin/2026-09-29-post-implementation-assurance-plan.md'
+      - 'Major discussion/2026-09-29-post-implementation-assurance-decision.md'
+      - '.github/workflows/native-compensation-post-implementation-assurance.yml'
   push:
     branches: [main]
     paths:
@@ -14,6 +17,9 @@ on:
       - 'scripts/test-governed-shadow-evaluation.mjs'
       - 'scripts/audit-governed-shadow-evaluation-adversarial.mjs'
       - '.github/workflows/governed-shadow-evaluation.yml'
+      - 'Admin/2026-09-29-post-implementation-assurance-plan.md'
+      - 'Major discussion/2026-09-29-post-implementation-assurance-decision.md'
+      - '.github/workflows/native-compensation-post-implementation-assurance.yml'
 
 permissions:
   contents: read

@@ -128,6 +128,8 @@ for (const invariant of [
 ]) {
   assert.ok(specialist.includes(invariant), `missing specialist learning-context boundary: ${invariant}`)
 }
+assert.ok(specialist.includes('appliedPositiveCaseIds: []'))
+assert.ok(specialist.includes('appliedNegativeCaseIds: []'))
 
 const supervisor = fs.readFileSync('lib/agents/runtime/native-supervisor-service.ts', 'utf8')
 for (const invariant of [
@@ -138,11 +140,11 @@ for (const invariant of [
   'loadApprovedPgclAvoidanceCases',
   'positiveLearningCases: pgclPrecedents.map',
   'negativeLearningCases: pgclAvoidanceCases.map',
-  'markPgclPrecedentsApplied',
-  "executionSurface: 'SUPERVISOR_SPECIALIST'",
 ]) {
   assert.ok(supervisor.includes(invariant), `missing supervisor PGCL integration: ${invariant}`)
 }
+assert.equal(supervisor.includes('markPgclPrecedentsApplied({'), false, 'supervisor retrieval alone cannot establish application')
+assert.equal(supervisor.includes('markPgclAvoidanceCasesApplied({'), false, 'supervisor avoidance retrieval alone cannot establish application')
 
 const profilingJob = fs.readFileSync('lib/agents/run-profiling-job.ts', 'utf8')
 assert.ok(profilingJob.includes('proposePgclCaseFromVerifiedAgentRun'))
@@ -155,11 +157,13 @@ for (const invariant of [
   'appliedPositiveCaseIds',
   'appliedNegativeCaseIds',
   'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
-  'markPgclPrecedentsApplied',
-  "executionSurface: 'PROFILING_INVESTIGATION'",
 ]) {
   assert.ok(profilingInvestigation.includes(invariant), `missing Profiling approved-case reuse invariant: ${invariant}`)
 }
+assert.ok(profilingInvestigation.includes('appliedPositiveCaseIds: []'))
+assert.ok(profilingInvestigation.includes('appliedNegativeCaseIds: []'))
+assert.equal(profilingInvestigation.includes('markPgclPrecedentsApplied({'), false, 'profiling retrieval alone cannot establish application')
+assert.equal(profilingInvestigation.includes('markPgclAvoidanceCasesApplied({'), false, 'profiling avoidance retrieval alone cannot establish application')
 
 const dqWorker = fs.readFileSync('lib/orchestration/worker.ts', 'utf8')
 assert.ok(dqWorker.includes('proposePgclCaseFromVerifiedAgentRun'))
@@ -172,11 +176,13 @@ for (const invariant of [
   'applied_positive_case_ids',
   'applied_negative_case_ids',
   'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
-  'markPgclPrecedentsApplied',
-  "executionSurface: 'DATA_QUALITY_INVESTIGATION'",
 ]) {
   assert.ok(dqInvestigation.includes(invariant), `missing Data Quality approved-case reuse invariant: ${invariant}`)
 }
+assert.ok(dqInvestigation.includes('applied_positive_case_ids: []'))
+assert.ok(dqInvestigation.includes('applied_negative_case_ids: []'))
+assert.equal(dqInvestigation.includes('markPgclPrecedentsApplied({'), false, 'quality retrieval alone cannot establish application')
+assert.equal(dqInvestigation.includes('markPgclAvoidanceCasesApplied({'), false, 'quality avoidance retrieval alone cannot establish application')
 
 const sharedAdapter = fs.readFileSync('lib/agents/pgcl-approved-precedent.ts', 'utf8')
 for (const invariant of [

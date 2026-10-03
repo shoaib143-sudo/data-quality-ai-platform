@@ -161,7 +161,7 @@ export default async function JourneysPage() {
   })
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 text-slate-950">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel={persona.title} contextLabel="Guided governance journeys" homeHref="/home" />
 
@@ -169,6 +169,11 @@ export default async function JourneysPage() {
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] text-blue-700"><Compass className="h-4 w-4" /> Guided journey</div>
           <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-5xl">{persona.title} workflow and governed evidence.</h1>
           <p className="mt-4 max-w-4xl text-base leading-7 text-slate-600">Your role workflow comes from the canonical DataNexus persona contract. Platform evidence is shown separately so technical lifecycle progress is never presented as if it were your personal responsibility.</p>
+          <div className="mt-5">
+            <Link href="/journeys/governance-maturity" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+              Assess organization maturity <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         </header>
 
         <section className="mt-6 rounded-3xl border border-blue-100 bg-white p-6 shadow-sm sm:p-7" aria-labelledby="role-workflow-title">

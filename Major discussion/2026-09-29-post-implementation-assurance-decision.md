@@ -1,0 +1,69 @@
+# Post-Implementation Assurance and Closure Decision
+
+Date: 2026-09-29
+Decision status: ADOPTED
+
+## Decision
+
+DataNexus completion is not established by implementation success alone. The final implementation must pass a separate post-implementation assurance cycle based on the repository's existing fail-closed certification contract.
+
+The final closure sequence is:
+
+implementation convergence -> post-implementation exact-head revalidation -> independent adversarial/negative/failure evidence -> integrated persona/journey evidence -> frozen final main SHA -> governed exact-SHA production deployment -> production certification/provenance -> evidence freeze.
+
+## Why this sequence
+
+This order prevents four recurring failure modes:
+
+1. A change passes local or component tests but breaks an integrated workflow.
+2. Positive-path success hides an authorization, isolation, retry, or degraded-mode defect.
+3. Production runs a different commit from the one that passed CI.
+4. Documentation or cleanup changes advance main after a release candidate was already certified.
+
+For that reason, all planned closure documentation is merged before the final production deployment.
+
+## Assurance authority
+
+The controlling repository artifact is:
+`infra/platform-assurance/post-implementation-certification-contract.json`
+
+It requires normal, unauthorized-adversarial, and degraded-failure acceptance paths; independent assurance evidence; exact-head validation; reconstruction, recovery, concurrency, negative/failure, AI red-team, and production-binding controls.
+
+## Independent assurance principle
+
+Implementation and assurance must be logically independent. Repository adversarial suites and dedicated GitHub assurance workflows act as an independent gate producer rather than accepting implementation-path success as proof.
+
+An assurance failure is not repaired by weakening the assertion, authorization boundary, denial expectation, provenance requirement, or failure-path contract.
+
+## Production claim boundary
+
+CI success, static source verification, preview behavior, and synthetic evidence do not independently prove production.
+
+A PRODUCTION_VERIFIED claim additionally requires exact source/build/deployment binding and live production runtime evidence. Until those bindings exist, the correct state is implemented/certified readiness with explicit production verification pending.
+
+## Current decision snapshot
+
+At adoption, main `0d8ac47db98eb246ff91ff366100b4be1eabe3cf` had green exact-head CI across the major quality/security/operational gates and a successful 13-persona live-browser run with an uploaded evidence artifact. On 2026-10-01 the closure branch was rebuilt from then-current main `bc7f684c0b1a4fa353336af5e4d9dc5951691bef` to eliminate stale-branch drift.
+
+The remaining material release boundaries are:
+- protected-main Governance OFF live-baseline execution; configuration is complete on the isolated UI Regression Test Project (`ab595892-828f-4585-bafb-b6c657585ce5`) with an explicit disabled OFF policy
+- final exact-head governed Vercel production deployment
+- final Vercel production certification/provenance
+- any specifically named live integrated journey not yet represented by direct runtime evidence
+
+These are treated as explicit boundaries, not silently inferred PASS states.
+
+## Closure rule
+
+Post Implementation = COMPLETE only when every required item is PASS or has an explicit, justified, non-release-blocking NOT_APPLICABLE/DEFERRED state permitted by the governing contract.
+
+R3 authorization, governance truth, evidence integrity, and production provenance are never converted to PASS through waiver or assumption.
+
+
+## Double-check findings
+
+The closure audit found one structural evidence-wiring gap: AI Governance Program Certification, Recovery Assurance, and Governed Shadow Evaluation were contract-bound but were not guaranteed to run when only final closure artifacts changed. The adopted correction binds those workflows, and the consolidated Post Implementation Assurance workflow, to final closure-head changes.
+
+No release-blocking R3 authorization, governance-truth, or evidence-integrity exception has been accepted. No exception record matching the governing contract's required schema was identified. Production-only verification remains an explicit boundary and is not inferred from CI.
+
+The staged verification performed by the governed Vercel release workflow before production alias promotion is the canary-equivalent release validation for the Vercel path; it remains pending until explicit production deployment approval.

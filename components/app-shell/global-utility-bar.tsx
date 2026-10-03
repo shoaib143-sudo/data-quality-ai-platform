@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Activity, Bell, ClipboardCheck, Compass, Database, Layers3, Search, Settings, ShieldCheck, Sparkles } from 'lucide-react'
 import { SkipToContent } from '@/components/app-shell/skip-to-content'
+import { WorkspaceRail } from '@/components/app-shell/workspace-rail'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-policy'
 import type { PersonaSlug } from '@/lib/governance/personas'
 
@@ -38,6 +39,7 @@ export function GlobalUtilityBar({
   return (
     <>
       <SkipToContent targetId="workspace-content-start" />
+      <WorkspaceRail allowedHrefs={visibleNavItems.map(item => item.href)} homeHref={resolvedHomeHref} />
       <header className="dn-topbar sticky top-2 z-50 mb-3 px-3 py-2 sm:px-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link href={resolvedHomeHref} className={`flex min-w-0 items-center gap-2 rounded-lg ${focus}`} aria-label="DataNexus home">
@@ -48,7 +50,7 @@ export function GlobalUtilityBar({
             </span>
           </Link>
 
-          <nav className="order-3 flex w-full gap-0.5 overflow-x-auto sm:order-none sm:w-auto" aria-label="Primary">
+          <nav className="dn-topbar-primary order-3 flex w-full gap-0.5 overflow-x-auto sm:order-none sm:w-auto" aria-label="Primary">
             {visibleNavItems.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}

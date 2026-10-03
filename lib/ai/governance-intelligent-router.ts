@@ -1,4 +1,6 @@
 import { EnvironmentModelGateway } from './model-gateway'
+import { createGovernanceLearningExperimentBudgetAdmission } from './governance-learning-experiment-budget'
+import type { LearningExperimentQuoteProvider } from './learning-experiment-budget'
 import { createGovernanceModelCostAccountingProvider } from './governance-cost-accounting'
 import { createGovernanceModelRegistry } from './governance-model-registry'
 import { createGovernanceProviderResiliencePolicyProvider } from './governance-provider-resilience'
@@ -13,7 +15,7 @@ import { createReasoningProvider } from './reasoning-provider'
 import { evaluateModelAgainstRoutingPolicy } from './routing-policy'
 import { EvaluationAwareIntelligentRouter, type IntelligentModelRouter } from './intelligent-router'
 
-export function createGovernanceIntelligentRouter(): IntelligentModelRouter {
+export function createGovernanceIntelligentRouter(options: { learningExperimentQuote?: LearningExperimentQuoteProvider } = {}): IntelligentModelRouter {
   const router = new EvaluationAwareIntelligentRouter({
     registry: createGovernanceModelRegistry(),
     routingPolicy: createGovernanceRoutingPolicyProvider(),
@@ -30,6 +32,7 @@ export function createGovernanceIntelligentRouter(): IntelligentModelRouter {
     createGovernanceReasoningBudgetPolicyProvider(),
     createGovernanceProjectBudgetAdmissionProvider(),
     createGovernanceModelCostAccountingProvider(),
+    options.learningExperimentQuote ? { admission: createGovernanceLearningExperimentBudgetAdmission(), quote: options.learningExperimentQuote } : undefined,
   )
 
   // All governed reasoning exits through task-specific output validation after

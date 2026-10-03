@@ -27,7 +27,7 @@ export default async function LearningCasesPage() {
   const repeatedCases = items.filter(item => item.occurrenceCount > 1).length
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-50 p-6 text-slate-950">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-slate-50 p-6 text-slate-950">
       <div className="mx-auto max-w-7xl space-y-6">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Learning Governance" contextLabel="Positive case review" homeHref="/home" />
         <div className="flex flex-wrap justify-end gap-2 text-sm">

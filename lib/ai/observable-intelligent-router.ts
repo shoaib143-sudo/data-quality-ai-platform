@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { executeLearningExperimentInvocation, type LearningExperimentBudgetAdmission, type LearningExperimentQuoteProvider, type LearningExperimentScope } from './learning-experiment-budget.ts'
 import type {
   IntelligentModelRouter,
   IntelligentRouteContext,
@@ -20,6 +21,8 @@ import type { TelemetryProvider, TelemetryTraceContext } from './telemetry-provi
 
 type ObservableReasoningContext = {
   projectId: string
+  signal?: AbortSignal
+  learningExperiment?: Omit<LearningExperimentScope, 'projectId'>
   executionCorrelationId?: string | null
   aiSystemId?: string | null
   aiSystemVersionId?: string | null
@@ -129,6 +132,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
   private readonly budgetPolicy?: ReasoningBudgetPolicyProvider
   private readonly budgetAdmission?: ProjectBudgetAdmissionProvider
   private readonly costAccounting?: ModelCostAccountingProvider
+  private readonly learningBudget?: { admission: LearningExperimentBudgetAdmission; quote: LearningExperimentQuoteProvider }
 
   constructor(
     provider: ReasoningProvider,
@@ -137,6 +141,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
     budgetPolicy?: ReasoningBudgetPolicyProvider,
     budgetAdmission?: ProjectBudgetAdmissionProvider,
     costAccounting?: ModelCostAccountingProvider,
+    learningBudget?: { admission: LearningExperimentBudgetAdmission; quote: LearningExperimentQuoteProvider },
   ) {
     this.provider = provider
     this.telemetry = telemetry
@@ -144,10 +149,15 @@ class ObservableReasoningProvider implements ReasoningProvider {
     this.budgetPolicy = budgetPolicy
     this.budgetAdmission = budgetAdmission
     this.costAccounting = costAccounting
+    this.learningBudget = learningBudget
     this.id = provider.id
   }
 
   async generateJson(request: ReasoningRequest): Promise<ReasoningResult> {
+    // A caller may add cancellation but cannot replace the execution deadline.
+    const signals = [this.context.signal, request.signal].filter((signal): signal is AbortSignal => signal != null)
+    const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0]
+    if (signal) request = { ...request, signal }
     const startedAt = Date.now()
     let budgetEvidence = applyProjectOutputBudget(request, null)
     let admissions: AdmissionEvidence[] = []
@@ -174,6 +184,7 @@ class ObservableReasoningProvider implements ReasoningProvider {
     }
 
     try {
+      signal?.throwIfAborted()
       let projectBudget: ProjectReasoningBudget | null = null
       if (this.budgetPolicy) {
         projectBudget = this.budgetPolicy.resolveBudget
@@ -214,12 +225,24 @@ class ObservableReasoningProvider implements ReasoningProvider {
       invocationId = randomUUID()
       let result: ReasoningResult
       try {
-        result = await this.provider.generateJson(budgetEvidence.request)
+        signal?.throwIfAborted()
+        if (this.context.learningExperiment) {
+          if (this.context.learningExperiment.runId !== this.context.executionCorrelationId) throw new Error('Learning experiment run must match canonical execution correlation')
+          if (!this.learningBudget || !this.costAccounting || !this.context.modelName) throw new Error('Verified learning experiment budget dependencies and governed model identity are required')
+          result = await executeLearningExperimentInvocation({
+            scope: { ...this.context.learningExperiment, projectId: this.context.projectId },
+            request: budgetEvidence.request, provider: this.provider, expectedModelName: this.context.modelName,
+            admission: this.learningBudget.admission, quote: this.learningBudget.quote, costAccounting: this.costAccounting,
+            onAccounting: (record) => { costEvidence = record; invocationId = record.invocationId },
+          })
+        } else {
+          result = await this.provider.generateJson(budgetEvidence.request)
+        }
       } finally {
         await releaseAdmissionLeases()
       }
 
-      if (this.costAccounting) {
+      if (this.costAccounting && !this.context.learningExperiment) {
         costEvidence = await this.costAccounting.recordInvocation({
           invocationId,
           projectId: this.context.projectId,
@@ -231,6 +254,8 @@ class ObservableReasoningProvider implements ReasoningProvider {
           observedAt: new Date().toISOString(),
         })
       }
+      // Account for a completed call even when cancellation races its response.
+      signal?.throwIfAborted()
 
       const primaryAdmission = admissions[0] ?? null
       try {
@@ -264,6 +289,8 @@ class ObservableReasoningProvider implements ReasoningProvider {
               lease_id: entry.leaseId,
             })),
             invocation_id: invocationId,
+            learning_evaluation_policy_id: this.context.learningExperiment?.policyId ?? null,
+            learning_experiment_run_id: this.context.learningExperiment?.runId ?? null,
             cost_accounting_status: costEvidence?.accountingStatus ?? null,
             cost_pricing_version_id: costEvidence?.pricingVersionId ?? null,
             cost_currency: costEvidence?.currency ?? null,
@@ -337,6 +364,7 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
   private readonly budgetPolicy?: ReasoningBudgetPolicyProvider
   private readonly budgetAdmission?: ProjectBudgetAdmissionProvider
   private readonly costAccounting?: ModelCostAccountingProvider
+  private readonly learningBudget?: { admission: LearningExperimentBudgetAdmission; quote: LearningExperimentQuoteProvider }
 
   constructor(
     router: IntelligentModelRouter,
@@ -344,16 +372,19 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
     budgetPolicy?: ReasoningBudgetPolicyProvider,
     budgetAdmission?: ProjectBudgetAdmissionProvider,
     costAccounting?: ModelCostAccountingProvider,
+    learningBudget?: { admission: LearningExperimentBudgetAdmission; quote: LearningExperimentQuoteProvider },
   ) {
     this.router = router
     this.telemetry = telemetry
     this.budgetPolicy = budgetPolicy
     this.budgetAdmission = budgetAdmission
     this.costAccounting = costAccounting
+    this.learningBudget = learningBudget
   }
 
   async route(context: IntelligentRouteContext): Promise<IntelligentRouteDecision> {
     const startedAt = Date.now()
+    const learningExperiment = context.learningExperiment ? Object.freeze({ ...context.learningExperiment }) : undefined
     const decision = await this.router.route(context)
     try {
       await this.telemetry.record({
@@ -383,13 +414,15 @@ export class ObservableIntelligentRouter implements IntelligentModelRouter {
       ...decision,
       provider: new ObservableReasoningProvider(decision.provider, this.telemetry, {
         projectId: context.projectId, executionCorrelationId: context.executionCorrelationId ?? null,
+        signal: context.signal,
+        learningExperiment,
         aiSystemId: decision.evidence?.aiSystemId ?? null,
         aiSystemVersionId: decision.evidence?.aiSystemVersionId ?? null,
         agentDefinitionId: context.agentDefinitionId ?? null,
         modelName: decision.evidence?.modelName ?? null,
         routingPolicyId: decision.evidence?.routingPolicyId ?? null, routingPolicyReason: decision.evidence?.routingPolicyReason ?? null,
         traceContext: context.traceContext ?? null, routeSource: decision.source, routeReason: decision.reason,
-      }, this.budgetPolicy, this.budgetAdmission, this.costAccounting),
+      }, this.budgetPolicy, this.budgetAdmission, this.costAccounting, this.learningBudget),
     }
   }
 }

@@ -4,8 +4,6 @@ import { loadRecommendationEffectiveness } from '@/lib/profiling/recommendation-
 import {
   loadApprovedPgclPrecedents,
   loadApprovedPgclAvoidanceCases,
-  markPgclAvoidanceCasesApplied,
-  markPgclPrecedentsApplied,
   type AppliedPgclPrecedent,
   type AppliedPgclAvoidanceCase,
 } from '@/lib/agents/pgcl-approved-precedent'
@@ -328,8 +326,8 @@ export async function investigateProfilingRun(
       })),
     },
     avoidance_guidance: pgclAvoidanceCases.map((learningCase) => learningCase.avoidLesson),
-    appliedPositiveCaseIds: pgclPrecedents.map((learningCase) => learningCase.candidateId),
-    appliedNegativeCaseIds: pgclAvoidanceCases.map((learningCase) => learningCase.candidateId),
+    appliedPositiveCaseIds: [],
+    appliedNegativeCaseIds: [],
     approval_required: recommendations.some((recommendation) => recommendation.approval_required === true),
     confidence: investigationConfidence,
     evidence,
@@ -390,31 +388,6 @@ export async function investigateProfilingRun(
   if (persistError) throw new Error(`Unable to persist profiling investigation: ${persistError.message}`)
   if (!persistedRun) {
     throw new Error(`Profiling run ${profilingRunId} was cancelled or changed before investigation persistence completed.`)
-  }
-
-  if (projectId && profileRun.agent_run_id && pgclPrecedents.length) {
-    try {
-      await markPgclPrecedentsApplied({
-        projectId,
-        agentRunId: String(profileRun.agent_run_id),
-        cases: pgclPrecedents,
-        executionSurface: 'PROFILING_INVESTIGATION',
-      })
-    } catch (error) {
-      console.error('[profiling-investigation] approved PGCL precedent attribution failed safely:', error)
-    }
-  }
-  if (projectId && profileRun.agent_run_id && pgclAvoidanceCases.length) {
-    try {
-      await markPgclAvoidanceCasesApplied({
-        projectId,
-        agentRunId: String(profileRun.agent_run_id),
-        cases: pgclAvoidanceCases,
-        executionSurface: 'PROFILING_INVESTIGATION',
-      })
-    } catch (error) {
-      console.error('[profiling-investigation] approved negative-case attribution failed safely:', error)
-    }
   }
 
   return investigation

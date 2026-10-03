@@ -1,11 +1,14 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { SkillBenchmarkEvidence } from './governed-skill-promotion-gate'
 import { governedLearningPolicy, type LearningRiskClass } from './governed-learning-policy'
+import { validatePairedLearningBenchmark, type PairedLearningCase } from './governed-learning-paired-benchmark'
 
 export async function recordGovernedLearningCandidateBenchmark(input: {
   projectId: string
   candidateId: string
   benchmark: SkillBenchmarkEvidence
+  pairedCases: readonly PairedLearningCase[]
+  trainingCaseKeys: readonly string[]
   rollbackRef: string
   minimumCaseCount?: number
   minimumCandidateScore?: number
@@ -19,6 +22,11 @@ export async function recordGovernedLearningCandidateBenchmark(input: {
     throw new Error('privileged or destructive learning cannot enter benchmark promotion')
   }
   const minimumCaseCount = Math.max(input.minimumCaseCount ?? 20, policy.minimumEvidenceCount)
+  validatePairedLearningBenchmark({
+    benchmark,
+    cases: input.pairedCases,
+    trainingCaseKeys: input.trainingCaseKeys,
+  })
   const { data, error } = await admin.schema('agent').rpc('record_learning_candidate_benchmark', {
     p_project_id: input.projectId,
     p_candidate_id: input.candidateId,

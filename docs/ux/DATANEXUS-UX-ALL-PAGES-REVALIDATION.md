@@ -62,7 +62,7 @@ Ask → evidence → recommend → approve → execute → observe → learn; ag
 | `app/ai-capabilities/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/ai-insights/page.tsx` | Global modernized foundation + family-specific revalidation |
 
-### Governance workflow & evidence (8)
+### Governance workflow & evidence (9)
 
 Decision journey, approvals, evidence and verification in one flow; clear pending/blocked/completed states and accountable actor.
 
@@ -72,6 +72,7 @@ Decision journey, approvals, evidence and verification in one flow; clear pendin
 | `app/approvals/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/audit/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/journeys/[projectId]/page.tsx` | Global modernized foundation + family-specific revalidation |
+| `app/journeys/governance-maturity/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/journeys/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/reports/experience/page.tsx` | Global modernized foundation + family-specific revalidation |
 | `app/reports/page.tsx` | Global modernized foundation + family-specific revalidation |
@@ -184,4 +185,4 @@ Architecture/health overview with restrained visual hierarchy, environment conte
 11. Reduced motion and sticky-focus behavior are validated: nonessential transitions collapse under `prefers-reduced-motion`, and root scroll padding protects focused/anchored content from sticky navigation.
 12. Route shells avoid legacy near-black canvas tokens, premature 6+ column grids, and oversized 2rem page padding unless an explicit exception is documented.
 
-Total routes covered: **79**.
+Total routes covered: **80**.

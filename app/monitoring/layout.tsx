@@ -1,3 +1,4 @@
+import './operations-v3.css'
 import type { ReactNode } from 'react'
 import { requireWorkspaceAccess } from '@/lib/governance/workspace-access'
 import './job-monitor-radial-topology.css'

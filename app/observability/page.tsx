@@ -131,7 +131,7 @@ export default async function ObservabilityPage() {
   ]
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#0b1422] text-slate-100">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace dn-operations-v3 min-h-screen bg-[#0b1422] text-slate-100">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Observability" contextLabel="Operational governance health" homeHref="/home" />
         <nav className={`${surface} mb-6 mt-4 flex flex-wrap items-center justify-end gap-4 px-5 py-3`}>

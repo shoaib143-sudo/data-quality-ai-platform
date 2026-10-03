@@ -242,17 +242,16 @@ for (const invariant of [
   assert.ok(pgclPrecedentCode.includes(invariant), `PGCL approved-precedent adapter missing: ${invariant}`)
 }
 
-for (const [label, source, surface] of [
-  ['profiling', profilingInvestigationCode, 'PROFILING_INVESTIGATION'],
-  ['data quality', dataQualityInvestigationCode, 'DATA_QUALITY_INVESTIGATION'],
+for (const [label, source, field] of [
+  ['profiling', profilingInvestigationCode, 'appliedPositiveCaseIds: []'],
+  ['data quality', dataQualityInvestigationCode, 'applied_positive_case_ids: []'],
 ]) {
   for (const invariant of [
     'loadApprovedPgclPrecedents',
     'loadApprovedPgclAvoidanceCases',
     'approved_negative_case_learning',
-    'markPgclPrecedentsApplied',
+    field,
     'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
-    surface,
   ]) {
     assert.ok(source.includes(invariant), `${label} approved-case consumption missing: ${invariant}`)
   }
@@ -263,10 +262,11 @@ for (const invariant of [
   'loadApprovedPgclAvoidanceCases',
   'positiveLearningCases: pgclPrecedents.map',
   'negativeLearningCases: pgclAvoidanceCases.map',
-  'markPgclPrecedentsApplied',
-  'SUPERVISOR_SPECIALIST',
 ]) {
   assert.ok(nativeSupervisorCode.includes(invariant), `native supervisor approved-case consumption missing: ${invariant}`)
+}
+for (const source of [profilingInvestigationCode, dataQualityInvestigationCode, nativeSupervisorCode]) {
+  assert.equal(source.includes('markPgclPrecedentsApplied({'), false, 'retrieval alone must not count as application')
 }
 
 for (const invariant of [

@@ -23,7 +23,7 @@ export default async function IdentityAdminPage() {
   const roleByOrganization = new Map((memberships ?? []).map((row) => [row.organization_id, String(row.role) as 'OWNER' | 'ADMIN']))
   const rows = (organizations ?? []).map((organization) => ({ id: organization.id, name: organization.name, currentRole: roleByOrganization.get(organization.id) ?? 'ADMIN' as const }))
 
-  return <main id="main-content" tabIndex={-1} className="min-h-screen bg-[radial-gradient(circle_at_5%_0%,_rgba(219,234,254,0.85),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_55%,_#f8fafc_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+  return <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen bg-[radial-gradient(circle_at_5%_0%,_rgba(219,234,254,0.85),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_55%,_#f8fafc_100%)] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
     <div className="mx-auto max-w-7xl">
       <GlobalUtilityBar persona={landing.persona} organizationRole={landing.organizationRole} roleLabel="Enterprise Identity" contextLabel="SSO and SCIM" homeHref="/home" />
       {canAdminWorkspace ? <div className="mb-6 mt-4 flex flex-wrap justify-end gap-2 text-sm"><Link href="/admin" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-blue-50">Organization Admin</Link><Link href="/admin/project-roles" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-blue-50">Project Roles</Link><Link href="/admin/landing-pages" className="rounded-xl px-3 py-2 font-semibold text-slate-600 hover:bg-blue-50">Landing Pages</Link></div> : null}

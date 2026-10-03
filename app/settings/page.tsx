@@ -24,7 +24,7 @@ export default async function SettingsPage() {
   if (agentsError) throw new Error(`Unable to load enabled agents for preferences: ${agentsError.message}`)
 
   return (
-    <main id="main-content" tabIndex={-1} className="min-h-screen px-4 py-5 text-slate-100 sm:px-6">
+    <main id="main-content" tabIndex={-1} className="dn-light-workspace min-h-screen px-4 py-5 text-slate-100 sm:px-6">
       <div className="mx-auto max-w-5xl"><GlobalUtilityBar persona={access.persona} organizationRole={access.organizationRole} roleLabel="Settings" contextLabel="Account preferences" homeHref="/home" /></div>
       <section className="dn-surface mx-auto mt-4 max-w-3xl p-5 sm:p-6">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-300">Account</p>
