@@ -64,8 +64,10 @@ export async function preflightGovernedProviderOperation(operation:ProviderPlann
 export type GovernanceOperationPreflight=Awaited<ReturnType<typeof preflightGovernedProviderOperation>>
 
 export async function executeGovernedProviderOperation(operation:ProviderPlannedOperation,dependencies:GovernedProviderExecutionDependencies,prepared?:GovernanceOperationPreflight){
- const preflight=prepared??await preflightGovernedProviderOperation(operation,dependencies)
- if(preflight.status!=='READY')return preflight
+ const initialPreflight=prepared??await preflightGovernedProviderOperation(operation,dependencies)
+ if(initialPreflight.status!=='READY')return initialPreflight
+ const preflight=prepared?await preflightGovernedProviderOperation(operation,dependencies):initialPreflight
+ if(preflight.status!=='READY')return{...preflight,revalidated:true as const}
  const {provider,gate,resolution}=preflight
 
  const claim=dependencies.checkpointStore
