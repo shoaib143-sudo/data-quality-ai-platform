@@ -15,6 +15,11 @@ begin
   assert first_claim->>'resume_action' = 'EXECUTE', 'first claim must execute';
   assert (first_claim->>'claimed')::boolean, 'first claim must be acquired';
   assert (first_claim->'checkpoint'->>'claim_generation')::bigint = 1, 'first claim generation must be 1';
+
+  first_claim := governance.claim_platform_execution_checkpoint(v_project_id,'plan-async','op-async','idem-async');
+  assert first_claim->>'resume_action' = 'EXECUTE', 'async fixture first claim must execute';
+  assert (first_claim->>'claimed')::boolean, 'async fixture claim must be acquired';
+  assert (first_claim->'checkpoint'->>'claim_generation')::bigint = 1, 'async fixture claim generation must be 1';
 end;
 $block$;
 
@@ -51,25 +56,25 @@ begin
   assert result->>'resume_action' = 'FAILED', 'FAILED checkpoint must be terminal for automatic replay';
   assert not (result->>'claimed')::boolean, 'FAILED checkpoint must not be reclaimed';
 
-  perform governance.put_platform_execution_checkpoint(v_project_id,'idem-1',2,'PENDING',2,null,null,'{}'::jsonb,null,now());
-  result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-1','op-1','idem-1');
+  perform governance.put_platform_execution_checkpoint(v_project_id,'idem-async',1,'PENDING',1,null,null,'{}'::jsonb,null,now());
+  result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-async','op-async','idem-async');
   assert result->>'resume_action' = 'WAIT', 'PENDING without provider job must wait';
 
-  perform governance.put_platform_execution_checkpoint(v_project_id,'idem-1',2,'PENDING',2,null,'job-1','{}'::jsonb,null,now());
-  result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-1','op-1','idem-1');
+  perform governance.put_platform_execution_checkpoint(v_project_id,'idem-async',1,'PENDING',1,null,'job-1','{}'::jsonb,null,now());
+  result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-async','op-async','idem-async');
   assert result->>'resume_action' = 'POLL', 'PENDING provider job must poll';
 
-  perform governance.put_platform_execution_checkpoint(v_project_id,'idem-1',2,'SUCCEEDED',2,'provider-1','job-1','{}'::jsonb,null,now());
-  result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-1','op-1','idem-1');
+  perform governance.put_platform_execution_checkpoint(v_project_id,'idem-async',1,'SUCCEEDED',1,'provider-1','job-1','{}'::jsonb,null,now());
+  result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-async','op-async','idem-async');
   assert result->>'resume_action' = 'VERIFY', 'SUCCEEDED checkpoint must verify without replay';
 
-  perform governance.put_platform_execution_checkpoint(v_project_id,'idem-1',2,'VERIFIED',2,'provider-1','job-1','{}'::jsonb,'VERIFIED',now());
-  result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-1','op-1','idem-1');
+  perform governance.put_platform_execution_checkpoint(v_project_id,'idem-async',1,'VERIFIED',1,'provider-1','job-1','{}'::jsonb,'VERIFIED',now());
+  result := governance.claim_platform_execution_checkpoint(v_project_id,'plan-async','op-async','idem-async');
   assert result->>'resume_action' = 'COMPLETE', 'VERIFIED checkpoint must suppress duplicate mutation';
 
   failed := false;
   begin
-    perform governance.put_platform_execution_checkpoint(v_project_id,'idem-1',2,'RUNNING',2,'provider-1','job-1','{}'::jsonb,'VERIFIED',now());
+    perform governance.put_platform_execution_checkpoint(v_project_id,'idem-async',1,'RUNNING',1,'provider-1','job-1','{}'::jsonb,'VERIFIED',now());
   exception when others then
     failed := position('GOVERNANCE_CHECKPOINT_INVALID_TRANSITION' in sqlerrm) > 0;
   end;
