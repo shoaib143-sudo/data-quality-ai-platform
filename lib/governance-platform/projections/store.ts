@@ -1,4 +1,3 @@
-import { createAdminClient } from '../../supabase/admin.ts'
 import type { ProviderProjection } from '../canonical/model.ts'
 
 export type GovernanceProjectionObservation = {
@@ -37,6 +36,7 @@ export class SupabaseGovernanceProjectionStore implements GovernanceProjectionSt
   const normalized=observations.map(validateGovernanceProjectionObservation)
   const projectIds=new Set(normalized.map(value=>value.projectId))
   if(projectIds.size!==1)throw new Error('Governance projection batch must belong to exactly one project.')
+  const {createAdminClient}=await import('../../supabase/admin.ts')
   const admin=createAdminClient()
   const {error}=await admin.schema('governance').rpc('upsert_provider_projection_observations',{
    p_project_id:normalized[0].projectId,
