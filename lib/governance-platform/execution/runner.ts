@@ -81,6 +81,22 @@ export async function executeGovernedProviderOperation(operation:ProviderPlanned
  if(claim?.resumeAction==='WAIT'){
   return{status:'PENDING' as const,resumed:true,resumeAction:'WAIT' as const,checkpoint:claim.checkpoint,gate,resolution}
  }
+ if(claim?.resumeAction==='RECOVER'){
+  const recoveryResult:ExecutionResult={
+   operationId:operation.operationId,status:'SUCCEEDED',
+   providerObjectId:claim.checkpoint.providerObjectId??undefined,
+   providerJobId:claim.checkpoint.providerJobId??undefined,
+   evidence:claim.checkpoint.executionEvidence,
+  }
+  const recoveryVerification=await provider.verify(operation,recoveryResult)
+  const recovered=recoveryVerification.status==='VERIFIED'
+  const recoveredCheckpoint=await persistCheckpoint(dependencies.checkpointStore,claim.checkpoint,{
+   status:recovered?'VERIFIED':'RUNNING',verificationStatus:recoveryVerification.status,
+  })??claim.checkpoint
+  await appendEvidence(dependencies.evidenceStore,operation,recoveryResult,recoveryVerification.status,{phase:'RECOVERY_READBACK',verification:recoveryVerification})
+  if(recovered)return{status:'VERIFIED' as const,resumed:true,recovered:true,verification:recoveryVerification,checkpoint:recoveredCheckpoint,gate,resolution}
+  return{status:'RECOVERY_REQUIRED' as const,resumed:true,recovered:false,verification:recoveryVerification,checkpoint:recoveredCheckpoint,gate,resolution}
+ }
 
  let result:ExecutionResult
  let attempts=0
