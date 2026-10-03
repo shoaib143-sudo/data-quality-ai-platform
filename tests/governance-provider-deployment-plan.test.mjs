@@ -34,3 +34,20 @@ test('deployment fingerprint is stable across equivalent observation timestamps'
  const state=time=>desired.targets.map(target=>({provider:target.provider,connectionId:target.connectionId,objects:[],observedAt:time}))
  assert.equal(buildGovernanceDeploymentPlan(desired,state('2026-10-01T00:00:00.000Z')).deploymentFingerprint,buildGovernanceDeploymentPlan(desired,state('2026-10-01T00:01:00.000Z')).deploymentFingerprint)
 })
+
+
+test('deployment identity is stable across equivalent target and object ordering',()=>{
+ const second={id:'term-b',type:'BUSINESS_TERM',externalKey:'b',name:'B',projectId:'p',attributes:{},relationships:[],version:1}
+ const a={...desired,objects:[object,second]}
+ const b={...desired,targets:[...desired.targets].reverse(),objects:[second,object]}
+ const observed=[
+  {provider:'informatica',connectionId:'prod',objects:[]},
+  {provider:'collibra',connectionId:'prod',objects:[]},
+ ]
+ const first=buildGovernanceDeploymentPlan(a,observed)
+ const reordered=buildGovernanceDeploymentPlan(b,[...observed].reverse())
+ assert.equal(first.desiredStateFingerprint,reordered.desiredStateFingerprint)
+ assert.equal(first.deploymentFingerprint,reordered.deploymentFingerprint)
+ assert.equal(first.deploymentId,reordered.deploymentId)
+ assert.deepEqual(first.operations.map(value=>value.idempotencyKey),reordered.operations.map(value=>value.idempotencyKey))
+})
