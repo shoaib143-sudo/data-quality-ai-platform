@@ -104,3 +104,19 @@ test('explicit delete fails closed when an unmanaged observed dependent still re
  const desired={apiVersion:'datanexus.io/governance/v1',projectId:'project-1',targets:[{provider:'fake',connectionId:'c'}],objects:[{...parent,state:'absent'}]}
  assert.throws(()=>buildGovernancePlan(desired,[parent,unmanaged]),/blocked because observed object TECHNICAL_ASSET:external-child still references it/)
 })
+
+
+test('desired-state validator is total over hostile JSON shapes',()=>{
+ const malformed=[
+  {apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:'not-an-array',objects:[]},
+  {apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[42],objects:[]},
+  {apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[{provider:{trim:true},connectionId:'c'}],objects:[]},
+  {apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[{provider:'fake',connectionId:'c'}],objects:'not-an-array'},
+  {apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[{provider:'fake',connectionId:'c'}],objects:[42]},
+  {apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[{provider:'fake',connectionId:'c'}],objects:[{id:{trim:true},type:'TECHNICAL_ASSET',externalKey:'x',name:'X',projectId:'p',attributes:{},relationships:[],version:1}]},
+ ]
+ for(const input of malformed){
+  assert.doesNotThrow(()=>validateGovernanceDesiredState(input))
+  assert.equal(validateGovernanceDesiredState(input).ok,false)
+ }
+})
