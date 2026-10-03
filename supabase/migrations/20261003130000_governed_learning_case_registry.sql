@@ -211,6 +211,7 @@ begin
     and lc.agent_key = p_agent_key
     and lc.skill_key = p_skill_key
     and nc.use_case_key = btrim(p_use_case_key)
+    and nc.problem_signature = btrim(p_problem_signature)
     and nc.review_status in ('PENDING_REVIEW','APPROVED','DEFERRED')
   order by lc.created_at desc
   limit 1;
