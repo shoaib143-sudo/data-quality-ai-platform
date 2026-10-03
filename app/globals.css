@@ -607,3 +607,24 @@
 .dn-page main:has(.dn-app-rail) .dn-topbar .dn-control { border-color: #e5e4f0; background: #f8f8fc; box-shadow: none; }
 .dn-page main:has(.dn-app-rail) .dn-topbar .dn-control:hover { border-color: #c7c0ee; background: #f0edff; }
 .dn-page main:has(.dn-app-rail) .dn-topbar .bg-gradient-to-br.text-white { color: white; }
+
+
+/* Native card-to-page navigation. Progressive enhancement: normal Next.js navigation remains authoritative. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(.2, .8, .2, 1);
+}
+
+[data-card-page-source],
+[data-card-page-target] {
+  contain: paint;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.001ms !important;
+  }
+}
