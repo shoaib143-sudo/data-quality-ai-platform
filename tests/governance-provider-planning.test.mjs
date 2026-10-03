@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { stableGovernanceFingerprint } from '../lib/governance-platform/planning/fingerprint.ts'
+import { governanceDesiredStateFingerprint,stableGovernanceFingerprint } from '../lib/governance-platform/planning/fingerprint.ts'
 import { buildGovernancePlan } from '../lib/governance-platform/planning/plan.ts'
 import { validateGovernanceDesiredState } from '../lib/governance-platform/desired-state/validate.ts'
 import { resolveGovernanceAuthorizationCapability } from '../lib/governance-platform/authorization/capabilities.ts'
@@ -128,4 +128,21 @@ test('desired-state validation rejects duplicate canonical object ids',()=>{
  const result=validateGovernanceDesiredState({apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[{provider:'fake',connectionId:'c'}],objects:[first,second]})
  assert.equal(result.ok,false)
  assert.match(result.errors.join(' '),/duplicates canonical id same/)
+})
+
+
+test('semantic desired-state reordering preserves fingerprint, plan identity, and relationship equality',()=>{
+ const parent={id:'parent',type:'TECHNICAL_ASSET',externalKey:'parent',name:'Parent',projectId:'p',attributes:{z:1,a:2},relationships:[],version:1}
+ const child={id:'child',type:'TECHNICAL_ASSET',externalKey:'child',name:'Child',projectId:'p',attributes:{},relationships:[{type:'B',targetId:'parent'},{type:'A',targetId:'parent'}],version:1}
+ const desiredA={apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[{provider:'Fake',connectionId:' two '},{provider:'fake',connectionId:'one'}],objects:[child,parent]}
+ const desiredB={...desiredA,targets:[{provider:'FAKE',connectionId:'one'},{provider:'fake',connectionId:'two'}],objects:[parent,{...child,state:'present',relationships:[...child.relationships].reverse()}]}
+ assert.equal(governanceDesiredStateFingerprint(desiredA),governanceDesiredStateFingerprint(desiredB))
+ const planA=buildGovernancePlan({...desiredA,targets:[desiredA.targets[0]]},[])
+ const planB=buildGovernancePlan({...desiredB,targets:[desiredB.targets[1]]},[])
+ assert.equal(planA.planId,planB.planId)
+ assert.deepEqual(planA.operations.map(value=>value.operationId),planB.operations.map(value=>value.operationId))
+
+ const observed=[parent,{...child,relationships:[...child.relationships].reverse()}]
+ const inSync=buildGovernancePlan({...desiredA,targets:[{provider:'fake',connectionId:'one'}],objects:[parent,child]},observed)
+ assert.ok(inSync.operations.every(value=>value.action==='NOOP'))
 })
