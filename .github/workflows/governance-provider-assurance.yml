@@ -1,0 +1,134 @@
+name: Governance Provider Assurance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/governance-platform/**'
+      - 'app/api/governance-platform/**'
+      - 'app/api/mcp/governance/**'
+      - 'app/api/agent-approvals/**'
+      - 'lib/governance/agent-approval-service.ts'
+      - 'lib/governance/agent-action-catalog.ts'
+      - 'supabase/migrations/**governance_platform*.sql'
+      - 'tests/governance-provider-*.test.mjs'
+      - 'scripts/test-governance-provider-persistence-behavior.sql'
+      - 'scripts/audit-governance-provider-adversarial.mjs'
+      - 'Admin/2026-10-02-governance-provider-post-implementation-assurance-plan.md'
+      - 'Major discussion/2026-10-02-governance-provider-independent-adversarial-closure.md'
+      - '.github/workflows/governance-provider-assurance.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provider-contract-unit-negative:
+    name: provider-contract-unit-negative
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Governance provider aggregate verification
+        run: pnpm run verify:governance-provider-platform
+      - name: Provider Golden Path
+        run: node --experimental-strip-types --test tests/governance-provider-golden-path.test.mjs
+      - name: Upstream Golden Path handoff contract
+        run: node scripts/test-golden-path-handoff.mjs
+      - name: TypeScript revalidation
+        run: pnpm exec tsc --noEmit
+
+  provider-migration-contract:
+    name: provider-migration-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Provider projection contract tests
+        run: node --experimental-strip-types --test tests/governance-provider-projections.test.mjs
+      - name: Persistence migration contract tests
+        run: node --experimental-strip-types --test tests/governance-provider-persistence-contract.test.mjs
+      - name: Checkpoint resume contract tests
+        run: node --experimental-strip-types --test tests/governance-provider-checkpoint-resume.test.mjs
+      - name: Durable runner contract tests
+        run: node --experimental-strip-types --test tests/governance-provider-durable-runner.test.mjs
+
+  provider-security-adversarial:
+    name: provider-security-adversarial
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Independent governance-provider adversarial audit
+        run: node scripts/audit-governance-provider-adversarial.mjs
+      - name: MCP, authorization, failure and trust-boundary campaign
+        run: |
+          node --experimental-strip-types --test tests/governance-provider-mcp-security.test.mjs tests/governance-provider-mcp-transport.test.mjs
+          node --experimental-strip-types --test tests/governance-provider-runner-gates.test.mjs tests/governance-provider-failure-paths.test.mjs
+          node --experimental-strip-types --test tests/governance-provider-api-contract.test.mjs tests/governance-provider-planning.test.mjs
+
+
+  provider-persistence-behavior:
+    name: provider-persistence-behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Reconstruct isolated Supabase database
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE"
+          WORK="$RUNNER_TEMP/datanexus-governance-provider-assurance"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
+          cd "$WORK"
+          pnpm dlx supabase@2.117.0 init
+          SOURCE_MIGRATION_DIR="$ROOT/supabase/migrations" TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-migration-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-agent-status-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-audit-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-jdbc-fixture-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-observability-incident-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-lineage-legacy-constraint-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-remediation-knowledge-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-intelligence-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-policy-boundary-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-governance-operational-policy-boundary-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-control-evidence-syntax-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-catalog-reconcile-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-membership-helper-acl-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-synthetic-suite-rollback-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-analysis-evidence-envelope-replay.mjs"
+          TARGET_MIGRATION_DIR="$WORK/supabase/migrations" node "$ROOT/scripts/prepare-clean-security-definer-acl-replay.mjs"
+          pnpm dlx supabase@2.117.0 start
+          trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
+          pnpm dlx supabase@2.117.0 db reset --local
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f "$ROOT/scripts/test-governance-provider-persistence-behavior.sql"
