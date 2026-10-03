@@ -60,3 +60,9 @@ test('negative learning evidence uses least-privilege reads', () => {
   assert.match(migration, /grant select \(project_id,candidate_id,usage_status,updated_at\)/)
   assert.match(migration, /on agent\.negative_learning_case_usages to authenticated/)
 })
+
+
+test('active release metric excludes case-memory candidates', () => {
+  assert.match(commandCenterState, /candidateType === 'SKILL_IMPROVEMENT' && candidate\.status === 'ACTIVE'/)
+  assert.match(learningPage, /Active releases/)
+})
