@@ -44,3 +44,12 @@ test('deployment evidence schema matches the runtime store and is database-immut
  assert.match(sql,/and claim_generation = p_claim_generation/)
  assert.match(sql,/revoke update on governance\.platform_execution_checkpoints from service_role/)
 })
+
+
+test('forward checkpoint hardening makes failed and ambiguous pending work non-replayable',()=>{
+ const sql=fs.readFileSync(new URL('../supabase/migrations/20261003013000_governance_platform_checkpoint_resume_hardening.sql',import.meta.url),'utf8')
+ assert.match(sql,/status = 'FAILED'[\s\S]*resume_action', 'FAILED'/)
+ assert.match(sql,/status = 'PENDING'[\s\S]*resume_action', 'WAIT'/)
+ assert.match(sql,/status = 'RUNNING'[\s\S]*interval '15 minutes'[\s\S]*resume_action', 'WAIT'/)
+ assert.match(sql,/claim_generation = claim_generation \+ 1/)
+})
