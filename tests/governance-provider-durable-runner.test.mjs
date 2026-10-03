@@ -78,6 +78,8 @@ test('pending async work resumes through provider status polling and verificatio
  const resumed=await executeGovernedProviderOperation(operation,dependencies(checkpointStore,evidenceStore))
  assert.equal(resumed.status,'VERIFIED');assert.equal(resumed.resumed,true)
  assert.equal(executes,1);assert.equal(polls,1);assert.equal(stored.status,'VERIFIED')
+ const evidence=await evidenceStore.listByPlan('project','plan')
+ assert.deepEqual(evidence.map(value=>value.details.phase),['EXECUTE','PROVIDER_STATUS','VERIFY'])
  clearGovernanceProvidersForTests()
 })
 
