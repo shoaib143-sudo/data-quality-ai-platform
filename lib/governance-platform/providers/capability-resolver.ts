@@ -27,6 +27,9 @@ export function resolveProviderCapability(
   if (candidate.support === 'READ_ONLY' && mode !== 'READ') {
     return { capability, mode, semanticLoss: 'UNSUPPORTED', providerCapability: candidate, executable: false, reason: 'Provider capability is read only.' }
   }
+  if (candidate.support === 'PARTIAL' && mode !== 'READ') {
+    return { capability, mode, semanticLoss: 'APPROXIMATED', providerCapability: candidate, executable: false, reason: 'Partial provider mutation requires an explicit semantic-loss acceptance contract.' }
+  }
   return {
     capability,
     mode,
