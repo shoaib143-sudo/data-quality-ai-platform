@@ -60,16 +60,20 @@ export async function POST(request:Request){
       const targetAssetId=text(body.targetAssetId)
       const relationship=(text(body.relationship)||'TRANSFORMS_TO').toUpperCase().slice(0,100)
       const note=text(body.note).slice(0,1000)
+      const sourceColumn=text(body.sourceColumn).slice(0,512)
+      const targetColumn=text(body.targetColumn).slice(0,512)
+      const expression=text(body.expression).slice(0,20000)
       if(!UUID.test(projectId)||!UUID.test(sourceAssetId)||!UUID.test(targetAssetId))return NextResponse.json({error:'Valid project and lineage asset IDs are required.'},{status:400})
       if(sourceAssetId===targetAssetId)return NextResponse.json({error:'Source and target lineage assets must differ.'},{status:400})
       if(!note)return NextResponse.json({error:'A correction rationale is required.'},{status:400})
+      if(Boolean(sourceColumn)!==Boolean(targetColumn))return NextResponse.json({error:'sourceColumn and targetColumn must be provided together.'},{status:400})
       await authorizeProject(user.id,projectId,'lineage.manage')
       const assets=await admin.schema('governance').from('lineage_assets').select('id,name,namespace').eq('project_id',projectId).in('id',[sourceAssetId,targetAssetId])
       if(assets.error)throw new Error(assets.error.message)
       if((assets.data??[]).length!==2)return NextResponse.json({error:'Source or target lineage asset is outside this project.'},{status:400})
       const def=await definitionFor(admin,projectId,user.id)
       const correctionId=crypto.randomUUID()
-      const context={source:'MANUAL_LINEAGE_CORRECTION',source_asset_id:sourceAssetId,target_asset_id:targetAssetId,relationship,note,requested_by:user.id,applied_at:null,production_mutation_performed:false}
+      const context={source:'MANUAL_LINEAGE_CORRECTION',source_asset_id:sourceAssetId,target_asset_id:targetAssetId,source_column:sourceColumn||null,target_column:targetColumn||null,expression:expression||null,relationship,note,requested_by:user.id,applied_at:null,production_mutation_performed:false}
       const started=await admin.schema('governance').rpc('start_workflow',{p_definition_id:def.id,p_entity_type:'LINEAGE_CORRECTION',p_entity_id:correctionId,p_started_by:user.id,p_context:context})
       if(started.error||!started.data)throw new Error(started.error?.message??'Unable to start correction approval workflow.')
       await writeGovernanceAudit({projectId,actorUserId:user.id,eventType:'LINEAGE_MANUAL_CORRECTION_PROPOSED',entityType:'LINEAGE_CORRECTION',entityId:correctionId,correlationId:String(started.data),metadata:{workflow_instance_id:started.data,source_asset_id:sourceAssetId,target_asset_id:targetAssetId,relationship,production_mutation_performed:false}})
@@ -95,7 +99,26 @@ export async function POST(request:Request){
       const applied=await admin.schema('governance').rpc('upsert_manual_lineage_edge',{p_project_id:instance.data.project_id,p_actor:user.id,p_source_type:'EXTERNAL_ASSET',p_source_id:sourceId,p_target_type:'EXTERNAL_ASSET',p_target_id:targetId,p_relationship:relationship,p_metadata:{correction_workflow_instance_id:instanceId,correction_id:instance.data.entity_id,correction_note:context.note??null,authority:'HUMAN_APPROVED_MANUAL'}})
       if(applied.error)throw new Error(applied.error.message)
       const result=record(applied.data)
-      const updatedContext={...context,applied_at:new Date().toISOString(),applied_by:user.id,applied_edge_id:result.id??null,production_mutation_performed:true}
+      const sourceColumn=text(context.source_column)
+      const targetColumn=text(context.target_column)
+      let columnMapping:Record<string,unknown>|null=null
+      if(sourceColumn&&targetColumn){
+        const mapped=await admin.schema('governance').rpc('upsert_manual_lineage_column_mapping',{
+          p_project_id:instance.data.project_id,
+          p_actor:user.id,
+          p_workflow_instance_id:instanceId,
+          p_source_asset_id:sourceId,
+          p_source_column:sourceColumn,
+          p_target_asset_id:targetId,
+          p_target_column:targetColumn,
+          p_operation:relationship,
+          p_expression:text(context.expression)||null,
+          p_metadata:{correction_id:instance.data.entity_id,correction_note:context.note??null,authority:'HUMAN_APPROVED_MANUAL'},
+        })
+        if(mapped.error)throw new Error(mapped.error.message)
+        columnMapping=record(mapped.data)
+      }
+      const updatedContext={...context,applied_at:new Date().toISOString(),applied_by:user.id,applied_edge_id:result.id??null,applied_column_mapping_id:columnMapping?.mapping_id??null,production_mutation_performed:true}
       const updated=await admin.schema('governance').from('workflow_instances').update({context:updatedContext}).eq('id',instanceId)
       if(updated.error)throw new Error(updated.error.message)
 
@@ -116,7 +139,7 @@ export async function POST(request:Request){
           notificationsEnvKey:'LINEAGE_CHANGE_NOTIFICATIONS_ENABLED',
         }))
       }
-      return NextResponse.json({status:'APPLIED',reused:false,edgeId:result.id??null,changeAlerts})
+      return NextResponse.json({status:'APPLIED',reused:false,edgeId:result.id??null,columnMapping,changeAlerts})
     }
 
     return NextResponse.json({error:'action must be PROPOSE or APPLY.'},{status:400})
