@@ -3,6 +3,7 @@ import { createGovernanceExecutionController } from '../../ai/governance-executi
 import { createGovernancePolicyDecisionProvider } from '../../governance/governance-policy-decision-provider.ts'
 import { createAgentApprovalRequest,currentExecutionFingerprint,markApprovalExecuted,validateApprovalForExecution } from '../../governance/agent-approval-service.ts'
 import type { GovernanceDesiredState } from '../desired-state/model.ts'
+import { validateGovernanceDesiredState } from '../desired-state/validate.ts'
 import { executeGovernedProviderOperation,preflightGovernedProviderOperation } from '../execution/runner.ts'
 import { SupabaseGovernanceCheckpointStore,SupabaseGovernanceEvidenceStore } from '../execution/supabase-store.ts'
 import { orderProviderGovernanceOperations } from '../planning/dependency-dag.ts'
@@ -11,11 +12,18 @@ import { discoverGovernanceTargetStates } from '../planning/discovery.ts'
 import { simulateGovernanceDeployment } from '../planning/simulation.ts'
 import { ensureGovernanceProvidersRegistered } from '../providers/informatica/bootstrap.ts'
 
+function requireGovernanceDesiredState(input:unknown):GovernanceDesiredState{
+ const validated=validateGovernanceDesiredState(input)
+ if(!validated.ok)throw new Error(`Invalid governance desired state: ${validated.errors.join(' ')}`)
+ return validated.value
+}
+
 export async function planGovernanceDeploymentForPrincipal(principalId:string,desired:GovernanceDesiredState){
- await authorizeProject(principalId,desired.projectId,'catalog.read')
+ const desiredState=requireGovernanceDesiredState(desired)
+ await authorizeProject(principalId,desiredState.projectId,'catalog.read')
  ensureGovernanceProvidersRegistered()
- const observedTargets=await discoverGovernanceTargetStates(desired)
- const deployment=buildGovernanceDeploymentPlan(desired,observedTargets)
+ const observedTargets=await discoverGovernanceTargetStates(desiredState)
+ const deployment=buildGovernanceDeploymentPlan(desiredState,observedTargets)
  return{deployment,simulation:simulateGovernanceDeployment(deployment),observedStateSource:'DISCOVERED' as const}
 }
 
@@ -37,10 +45,11 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
  confirmDestructive:boolean
  approvalRequestId?:string|null
 }){
- await authorizeProject(input.principalId,input.desired.projectId,'agent.execute')
+ const desired=requireGovernanceDesiredState(input.desired)
+ await authorizeProject(input.principalId,desired.projectId,'agent.execute')
  ensureGovernanceProvidersRegistered()
- const observedTargets=await discoverGovernanceTargetStates(input.desired)
- const deployment=buildGovernanceDeploymentPlan(input.desired,observedTargets)
+ const observedTargets=await discoverGovernanceTargetStates(desired)
+ const deployment=buildGovernanceDeploymentPlan(desired,observedTargets)
  const simulation=simulateGovernanceDeployment(deployment)
  if(!input.expectedDeploymentFingerprint||input.expectedDeploymentFingerprint!==deployment.deploymentFingerprint){
   return{accepted:false as const,code:'GOVERNANCE_DEPLOYMENT_FINGERPRINT_MISMATCH' as const,deployment,simulation}
@@ -51,10 +60,10 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
  const operations=orderProviderGovernanceOperations(deployment.operations)
  const results:Record<string,unknown>[]=[]
  const byOperation=new Map<string,Record<string,unknown>>()
- const checkpointStore=new SupabaseGovernanceCheckpointStore(input.desired.projectId)
+ const checkpointStore=new SupabaseGovernanceCheckpointStore(desired.projectId)
  const evidenceStore=new SupabaseGovernanceEvidenceStore()
  const approvalParameters={
-  desiredState:input.desired,
+  desiredState:desired,
   expectedDeploymentFingerprint:deployment.deploymentFingerprint,
   confirmDestructive:input.confirmDestructive,
  }
@@ -88,7 +97,7 @@ export async function applyGovernanceDeploymentForPrincipal(input:{
  }
  if(approvalRequired.length){
   const requested=await createAgentApprovalRequest({
-   requestedBy:input.principalId,actionKey:'APPLY_GOVERNANCE_DEPLOYMENT',projectId:input.desired.projectId,
+   requestedBy:input.principalId,actionKey:'APPLY_GOVERNANCE_DEPLOYMENT',projectId:desired.projectId,
    parameters:approvalParameters,
   })
   return{
