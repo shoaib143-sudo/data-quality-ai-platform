@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import test from 'node:test'
 
 const contract = fs.readFileSync('lib/agents/governed-learning-case-registry.ts', 'utf8')
-const migration = fs.readFileSync('supabase/migrations/20260929090000_governed_learning_case_registry.sql', 'utf8')
+const migration = fs.readFileSync('supabase/migrations/20261003130000_governed_learning_case_registry.sql', 'utf8')
 
 test('governed case contract supports positive and negative evidence without self-promotion', () => {
   assert.match(contract, /'POSITIVE_CASE', 'NEGATIVE_CASE'/)

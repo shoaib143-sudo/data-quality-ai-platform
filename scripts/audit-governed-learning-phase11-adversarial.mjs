@@ -11,7 +11,7 @@ const pgclMigration = read('supabase/migrations/20260920014000_proactive_governe
 const pgclForwardMigration = read('supabase/migrations/20260920015000_reconcile_proactive_governed_case_learning.sql')
 const pgclTriggerAcl = read('supabase/migrations/20260920015500_restrict_pgcl_trigger_function_execute.sql')
 const pgclProvenanceMigration = read('supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql')
-const negativeCaseMigration = read('supabase/migrations/20260929090000_governed_learning_case_registry.sql')
+const negativeCaseMigration = read('supabase/migrations/20261003130000_governed_learning_case_registry.sql')
 
 const candidateCode = read('lib/agents/governed-learning-candidates.ts')
 const benchmarkCode = read('lib/agents/governed-learning-benchmarks.ts')
