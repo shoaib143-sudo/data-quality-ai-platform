@@ -120,3 +120,12 @@ test('desired-state validator is total over hostile JSON shapes',()=>{
   assert.equal(validateGovernanceDesiredState(input).ok,false)
  }
 })
+
+
+test('desired-state validation rejects duplicate canonical object ids',()=>{
+ const first={id:'same',type:'TECHNICAL_ASSET',externalKey:'a',name:'A',projectId:'p',attributes:{},relationships:[],version:1}
+ const second={id:'same',type:'BUSINESS_TERM',externalKey:'b',name:'B',projectId:'p',attributes:{},relationships:[],version:1}
+ const result=validateGovernanceDesiredState({apiVersion:'datanexus.io/governance/v1',projectId:'p',targets:[{provider:'fake',connectionId:'c'}],objects:[first,second]})
+ assert.equal(result.ok,false)
+ assert.match(result.errors.join(' '),/duplicates canonical id same/)
+})
