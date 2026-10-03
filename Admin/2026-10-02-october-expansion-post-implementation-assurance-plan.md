@@ -61,8 +61,8 @@ Integration: proposal→approval→apply→history→alert; lineage proposal→a
 ### G1 — Live BI vendor extraction (Medium)
 Current capability imports exported Power BI/Tableau/Looker metadata. No live vendor API extraction is implemented. Adapter boundary exists; activation requires vendor credentials/API configuration.
 
-### G2 — Automated source-artifact acquisition (Medium)
-.NET, Node.js, VBA, Macro, Script and Log scanners parse supplied content, but no automated repository/file-system acquisition pipeline is connected yet.
+### G2 — Automated source-artifact acquisition (Resolved for GitHub / private-repo credential boundary)
+The source-artifact workbench now supports bounded automated GitHub repository acquisition with artifact-type inference for .NET, Node.js, VBA, Macro, Script and Log files. Scans are capped by file count, per-file bytes and aggregate bytes; only github.com/raw.githubusercontent.com are used; source content is never persisted. Public repositories require no credential. Private repository scanning requires the server-managed GITHUB_SOURCE_SCAN_TOKEN.
 
 ### G3 — Continuous source heartbeat (Resolved implementation / activation controlled)
 The scheduled worker can now enqueue idempotent hourly OBSERVABILITY heartbeats for ACTIVE/CONFIGURED sources. JDBC checks use governed credential references; FILE/CSV checks reuse governed source validation; failures persist redacted health evidence. Execution is opt-in through SOURCE_HEALTH_CHECKS_ENABLED to avoid unexpected external-system load or cost.
@@ -81,7 +81,7 @@ Connection-check evidence now receives an explicit freshness classification. HEA
 
 ## Closure rule
 
-PR #1103 remains Draft until all exact-head required gates pass. G1/G2/G6 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
+PR #1103 remains Draft until all exact-head required gates pass. G1/G6 may remain documented follow-on scope only if UI and documentation do not overstate those capabilities.
 
 ## Final showcase required in ChatGPT
 
