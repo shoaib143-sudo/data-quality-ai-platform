@@ -12,10 +12,10 @@ test('governance apply endpoint delegates immutable preflight and durable execut
  assert.match(route,/confirmDestructive/)
  assert.doesNotMatch(route,/body\?\.actual/)
  assert.doesNotMatch(route,/body\?\.observedTargets/)
- assert.match(service,/discoverGovernanceTargetStates\(input\.desired\)/)
+ assert.match(service,/discoverGovernanceTargetStates\(desired\)/)
  assert.match(service,/GOVERNANCE_DEPLOYMENT_FINGERPRINT_MISMATCH/)
  assert.match(service,/GOVERNANCE_DESTRUCTIVE_CONFIRMATION_REQUIRED/)
- assert.match(service,/authorizeProject\(input\.principalId,input\.desired\.projectId,'agent\.execute'\)/)
+ assert.match(service,/authorizeProject\(input\.principalId,desired\.projectId,'agent\.execute'\)/)
  assert.match(service,/SupabaseGovernanceCheckpointStore/)
  assert.match(service,/SupabaseGovernanceEvidenceStore/)
 })
@@ -26,14 +26,27 @@ test('governance verification discovers authoritative provider state instead of 
  assert.match(route,/verifyGovernanceDeploymentForPrincipal/)
  assert.doesNotMatch(route,/body\?\.actual/)
  assert.match(service,/planGovernanceDeploymentForPrincipal/)
- assert.match(service,/discoverGovernanceTargetStates\(desired\)/)
+ assert.match(service,/discoverGovernanceTargetStates\(desiredState\)/)
 })
 
-test('governance planning can discover authoritative state while retaining explicit offline simulation input',()=>{
- const source=read('app/api/governance-platform/plan/route.ts')
- assert.match(source,/discoverGovernanceTargetStates\(desired\)/)
- assert.match(source,/observedStateSource:supplied\?'SUPPLIED':'DISCOVERED'/)
- assert.match(source,/authorizeProject\(user\.id,desired\.projectId,'catalog\.read'\)/)
+test('governance planning always uses authoritative provider discovery',()=>{
+ const route=read('app/api/governance-platform/plan/route.ts')
+ const service=read('lib/governance-platform/runtime/service.ts')
+ assert.match(route,/planGovernanceDeploymentForPrincipal/)
+ assert.doesNotMatch(route,/observedTargets/)
+ assert.doesNotMatch(route,/observedStateSource:supplied/)
+ assert.match(service,/observedStateSource:'DISCOVERED'/)
+ assert.match(service,/discoverGovernanceTargetStates\(desiredState\)/)
+})
+
+test('shared runtime validates untrusted desired state before authorization, discovery, or planning',()=>{
+ const service=read('lib/governance-platform/runtime/service.ts')
+ const validationIndex=service.indexOf('const desired=requireGovernanceDesiredState(input.desired)')
+ const authorizeIndex=service.indexOf("authorizeProject(input.principalId,desired.projectId,'agent.execute')")
+ const discoveryIndex=service.indexOf('discoverGovernanceTargetStates(desired)')
+ assert.ok(validationIndex>=0&&authorizeIndex>validationIndex&&discoveryIndex>authorizeIndex)
+ assert.match(service,/validateGovernanceDesiredState/)
+ assert.match(service,/Invalid governance desired state/)
 })
 
 test('provider capability endpoint is authenticated, project scoped, and exposes conformance',()=>{
@@ -44,7 +57,6 @@ test('provider capability endpoint is authenticated, project scoped, and exposes
  assert.match(source,/private, no-store/)
 })
 
-
 test('execution status uses the aggregate deployment id returned by apply',()=>{
  const route=read('app/api/governance-platform/status/route.ts')
  const service=read('lib/governance-platform/runtime/service.ts')
@@ -53,7 +65,6 @@ test('execution status uses the aggregate deployment id returned by apply',()=>{
  assert.match(service,/listByDeployment\(projectId,deploymentId\)/)
 })
 
-
 test('apply preflights every operation before entering the execution loop',()=>{
  const service=read('lib/governance-platform/runtime/service.ts')
  const preflightIndex=service.indexOf('preflightGovernedProviderOperation(operation,dependencies)')
@@ -61,7 +72,6 @@ test('apply preflights every operation before entering the execution loop',()=>{
  const executeIndex=service.indexOf('executeGovernedProviderOperation(operation,dependencies,preparedByOperation.get(operation.operationId))')
  assert.ok(preflightIndex>=0&&blockedIndex>preflightIndex&&executeIndex>blockedIndex)
 })
-
 
 test('governance deployment approval is fingerprint bound and resumable from the existing approval inbox',()=>{
  const service=read('lib/governance-platform/runtime/service.ts')
@@ -81,7 +91,6 @@ test('governance deployment approval is fingerprint bound and resumable from the
  assert.match(approvalRoute,/APPLY_GOVERNANCE_DEPLOYMENT/)
  assert.match(approvalRoute,/applyGovernanceDeploymentForPrincipal/)
 })
-
 
 test('provider inventory exposes documented compatibility without pretending an unconfigured adapter is registered',()=>{
  const route=read('app/api/governance-platform/providers/route.ts')
