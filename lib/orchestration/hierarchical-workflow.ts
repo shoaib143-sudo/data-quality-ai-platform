@@ -69,6 +69,7 @@ export function validateWorkflowDefinition(definition: WorkflowDefinition): stri
   if (!Number.isInteger(definition.maxTaskDepth) || definition.maxTaskDepth < 1) errors.push('maxTaskDepth must be an integer >= 1.')
   if (!Number.isInteger(definition.maxTaskCount) || definition.maxTaskCount < 1) errors.push('maxTaskCount must be an integer >= 1.')
   if (!Number.isFinite(definition.maxRuntimeMs) || definition.maxRuntimeMs <= 0) errors.push('maxRuntimeMs must be finite and > 0.')
+  if (definition.tasks.length === 0) errors.push('Workflow must contain at least one task.')
   if (definition.tasks.length > definition.maxTaskCount) errors.push('Workflow exceeds maxTaskCount.')
 
   const taskKeys = new Set(definition.tasks.map(task => task.key))
@@ -80,6 +81,9 @@ export function validateWorkflowDefinition(definition: WorkflowDefinition): stri
     required(task.inputSchemaRef, `${task.key || '<blank>'}: inputSchemaRef`, errors)
     required(task.outputSchemaRef, `${task.key || '<blank>'}: outputSchemaRef`, errors)
     if (!Number.isFinite(task.timeoutMs) || task.timeoutMs <= 0) errors.push(`${task.key}: timeoutMs must be finite and > 0.`)
+    if (task.timeoutMs > definition.maxRuntimeMs) errors.push(`${task.key}: timeoutMs cannot exceed workflow maxRuntimeMs.`)
+    if (task.resourceScopes.length === 0) errors.push(`${task.key}: at least one resourceScope is required.`)
+    if (task.evidenceRequirements.length === 0) errors.push(`${task.key}: at least one evidence requirement is required.`)
     if (task.type === 'AGENT' && !task.agentKey?.trim()) errors.push(`${task.key}: AGENT task requires agentKey.`)
     if (task.type === 'MCP' && !task.mcpServerKey?.trim()) errors.push(`${task.key}: MCP task requires mcpServerKey.`)
     if (task.type === 'APPROVAL' && !task.approvalPolicyKey?.trim()) errors.push(`${task.key}: APPROVAL task requires approvalPolicyKey.`)
@@ -95,7 +99,10 @@ export function validateWorkflowDefinition(definition: WorkflowDefinition): stri
   const byKey = new Map(definition.tasks.map(task => [task.key, task]))
   const depth = (key: string): number => {
     if (depthMemo.has(key)) return depthMemo.get(key)!
-    if (visiting.has(key)) return definition.maxTaskDepth + 1
+    if (visiting.has(key)) {
+      errors.push(`${key}: workflow dependency cycle detected.`)
+      return definition.maxTaskDepth + 1
+    }
     visiting.add(key)
     const task = byKey.get(key)
     const value = 1 + Math.max(0, ...(task?.dependencies.filter(dep => byKey.has(dep)).map(depth) ?? []))
