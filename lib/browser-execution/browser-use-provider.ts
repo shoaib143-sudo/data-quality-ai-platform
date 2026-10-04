@@ -48,7 +48,7 @@ export class BrowserUseProvider implements BrowserExecutionProvider {
     return {
       provider: this.key,
       sessionId: taskId,
-      status: 'SUCCEEDED',
+      status: 'RUNNING',
       liveViewUrl: null,
       finalUrl: null,
       summary: null,
