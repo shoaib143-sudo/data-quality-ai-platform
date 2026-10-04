@@ -21,7 +21,7 @@ export type BrowserExecutionEvidence = {
 export type BrowserExecutionResult = {
   provider: string
   sessionId: string
-  status: 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
+  status: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
   liveViewUrl: string | null
   finalUrl: string | null
   summary: string | null
