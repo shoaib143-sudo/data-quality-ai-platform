@@ -118,6 +118,7 @@ export function LineageExplorer({fields,mappings,stats,initialQuery=''}:Props){
   const [search,setSearch]=useState(initialQuery)
   const [lowQualityOnly,setLowQualityOnly]=useState(false)
   const [governedOnly,setGovernedOnly]=useState(false)
+  const [viewMode,setViewMode]=useState<'mapping'|'flow'>('flow')
   const fieldByKey=useMemo(()=>new Map(fields.map(field=>[field.key,field])),[fields])
   const selected=selectedKey?fieldByKey.get(selectedKey)??null:null
 
@@ -158,6 +159,17 @@ export function LineageExplorer({fields,mappings,stats,initialQuery=''}:Props){
     })
   },[mappings,fieldByKey,search,lowQualityOnly,governedOnly])
 
+  const transformationGroups=useMemo(()=>{
+    const groups=new Map<string,{name:string;system:string|null;language:string|null;mappings:FieldMapping[]}>()
+    for(const mapping of visibleMappings){
+      const key=[mapping.sourceSystem??'UNKNOWN',mapping.transformationName??mapping.operation??'Direct mapping',mapping.logicLanguage??''].join('::')
+      const current=groups.get(key)??{name:mapping.transformationName??mapping.operation??'Direct mapping',system:mapping.sourceSystem,language:mapping.logicLanguage,mappings:[]}
+      current.mappings.push(mapping)
+      groups.set(key,current)
+    }
+    return [...groups.values()]
+  },[visibleMappings])
+
   function toggleOverlay(key:OverlayKey){
     setActiveOverlays(current=>current.includes(key)?current.filter(item=>item!==key):[...current,key])
   }
@@ -176,6 +188,7 @@ export function LineageExplorer({fields,mappings,stats,initialQuery=''}:Props){
         <div className="relative w-full min-w-0 sm:min-w-[260px] sm:flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search dataset, field, term or transformation" className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-violet-300"/></div>
         <button type="button" onClick={()=>setLowQualityOnly(value=>!value)} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold ${lowQualityOnly?'border-red-300 bg-red-50 text-red-700':'border-slate-200 text-slate-600'}`}><Filter className="h-4 w-4"/>DQ &lt; 80</button>
         <button type="button" onClick={()=>setGovernedOnly(value=>!value)} className={`rounded-xl border px-3 py-2.5 text-sm font-bold ${governedOnly?'border-violet-300 bg-violet-50 text-violet-700':'border-slate-200 text-slate-600'}`}>Governed fields only</button>
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1"><button type="button" onClick={()=>setViewMode('flow')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${viewMode==='flow'?'bg-white text-violet-700 shadow-sm':'text-slate-500'}`}>Flow view</button><button type="button" onClick={()=>setViewMode('mapping')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${viewMode==='mapping'?'bg-white text-violet-700 shadow-sm':'text-slate-500'}`}>Mapping view</button></div>
         <span className="text-xs font-semibold text-slate-400">{visibleMappings.length} mappings · {visibleFields.length} fields visible</span>
       </div>
     </section>
@@ -184,7 +197,9 @@ export function LineageExplorer({fields,mappings,stats,initialQuery=''}:Props){
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3"><div><h2 className="text-xl font-black">Field lineage explorer</h2><p className="mt-1 text-sm text-slate-500">Select any field to inspect its complete governance context.</p></div><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">Field level</span></div>
 
-        {visibleMappings.length?<div className="mt-5 space-y-4">{visibleMappings.map(mapping=>{
+        {viewMode==='flow' && visibleMappings.length?<div className="mt-5 space-y-4">{transformationGroups.map((group,index)=>{const sourceAssets=[...new Map(group.mappings.map(mapping=>{const field=fieldByKey.get(mapping.sourceFieldKey)!;return [field.assetName,field] as const})).values()];const targetAssets=[...new Map(group.mappings.map(mapping=>{const field=fieldByKey.get(mapping.targetFieldKey)!;return [field.assetName,field] as const})).values()];return <article key={`${group.name}:${index}`} className="overflow-hidden rounded-2xl border border-violet-100 bg-gradient-to-r from-slate-50 via-violet-50/50 to-blue-50/50 p-4"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wide text-violet-600">{group.system??'Persisted lineage'}{group.language?` · ${group.language}`:''}</p><h3 className="mt-1 font-black text-slate-900">{group.name}</h3></div><span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-sm">{group.mappings.length} field mapping{group.mappings.length===1?'':'s'}</span></div><div className="mb-4 overflow-x-auto"><div className="grid min-w-[720px] grid-cols-[1fr_80px_1fr_80px_1fr] items-center gap-2 rounded-2xl border border-white bg-white/80 p-3 shadow-sm"><div><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Sources</p><div className="mt-2 space-y-1">{sourceAssets.slice(0,5).map(field=><button key={field.key} type="button" onClick={()=>setSelectedKey(field.key)} className="block w-full truncate rounded-lg bg-slate-50 px-2 py-1.5 text-left text-xs font-bold text-slate-700 hover:bg-violet-50">{field.assetName}</button>)}</div></div><ArrowRight className="mx-auto h-5 w-5 text-violet-400"/><div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-center"><GitBranch className="mx-auto h-5 w-5 text-violet-600"/><p className="mt-2 text-xs font-black text-violet-800">{group.name}</p><p className="mt-1 text-[10px] text-violet-500">{group.language??group.system??'TRANSFORMATION'}</p></div><ArrowRight className="mx-auto h-5 w-5 text-violet-400"/><div><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Targets</p><div className="mt-2 space-y-1">{targetAssets.slice(0,5).map(field=><button key={field.key} type="button" onClick={()=>setSelectedKey(field.key)} className="block w-full truncate rounded-lg bg-blue-50 px-2 py-1.5 text-left text-xs font-bold text-blue-800 hover:bg-violet-50">{field.assetName}</button>)}</div></div></div></div><div className="overflow-x-auto pb-2"><div className="flex min-w-max items-stretch gap-3">{group.mappings.slice(0,12).map(mapping=>{const source=fieldByKey.get(mapping.sourceFieldKey)!;const target=fieldByKey.get(mapping.targetFieldKey)!;return <div key={mapping.id} className="flex items-center gap-3"><div className="w-56"><FieldCard field={source} overlays={activeOverlays} selected={selectedKey===source.key} onSelect={()=>setSelectedKey(source.key)}/></div><div className="w-44 rounded-xl border border-violet-200 bg-white p-3 text-center shadow-sm"><ArrowRight className="mx-auto h-5 w-5 text-violet-500"/><p className="mt-2 text-xs font-black text-slate-700">{mapping.operation??'MAP'}</p>{mapping.expression?<p className="mt-1 line-clamp-3 break-all font-mono text-[10px] leading-4 text-slate-500">{mapping.expression}</p>:<p className="mt-1 text-[10px] text-slate-400">Persisted mapping</p>}</div><div className="w-56"><FieldCard field={target} overlays={activeOverlays} selected={selectedKey===target.key} onSelect={()=>setSelectedKey(target.key)}/></div></div>})}</div></div></article>})}</div>:null}
+
+        {viewMode==='mapping' && visibleMappings.length?<div className="mt-5 space-y-4">{visibleMappings.map(mapping=>{
           const source=fieldByKey.get(mapping.sourceFieldKey)!
           const target=fieldByKey.get(mapping.targetFieldKey)!
           return <article key={mapping.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">

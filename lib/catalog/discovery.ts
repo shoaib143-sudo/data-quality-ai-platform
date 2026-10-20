@@ -2,6 +2,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { discoverJdbcFromNativeHierarchy, type NativeDiscoveryCheckpointAdapter } from '@/lib/catalog/native-jdbc-discovery'
 import { discoverFileMetadata } from '@/lib/catalog/file-metadata-discovery'
 import { enqueueDurableJob } from '@/lib/orchestration/queue'
+import { queueAlertNotifications } from '@/lib/observability/notifications'
+import { writeGovernanceAudit } from '@/lib/governance/audit'
 
 type Source = {
   id: string
@@ -293,6 +295,82 @@ async function markIncomplete(runId: string, manifest: DiscoveryManifest, messag
   }).eq('id', runId)
 }
 
+async function publishSchemaChangeSignals(input:{
+  source:Source
+  discoveryRunId:string
+  publication:Record<string,unknown>
+  observedAt:string
+  actorUserId?:string|null
+}){
+  const added=integer(input.publication.objects_added,0)
+  const changed=integer(input.publication.objects_changed,0)
+  const missing=integer(input.publication.objects_missing,0)
+  const removed=integer(input.publication.objects_removed,0)
+  const material=added+changed+missing+removed
+  if(material===0)return {alerts:0,notificationsQueued:0}
+
+  const severity=removed>0||missing>0?'HIGH':changed>0?'MEDIUM':'LOW'
+  const admin=createAdminClient()
+  const {data:datasets,error:datasetError}=await admin.schema('catalog').from('datasets').select('id,name').eq('data_source_id',input.source.id)
+  if(datasetError)throw new Error(`Unable to resolve schema-change datasets: ${datasetError.message}`)
+
+  const alertIds:string[]=[]
+  for(const dataset of datasets??[]){
+    const fingerprint=`metadata-schema-drift:${input.source.id}:${dataset.id}`
+    const description=`Metadata discovery detected ${added} added, ${changed} changed, ${missing} missing, and ${removed} removed objects for source ${input.source.name}.`
+    const {data:alert,error}=await admin.schema('profiling').from('observability_alerts').upsert({
+      project_id:input.source.project_id,
+      dataset_id:dataset.id,
+      profile_run_id:null,
+      category:'SCHEMA_DRIFT',
+      severity,
+      title:`Metadata schema change detected: ${input.source.name}`,
+      description,
+      fingerprint,
+      evidence:{
+        source_id:input.source.id,
+        source_name:input.source.name,
+        discovery_run_id:input.discoveryRunId,
+        objects_added:added,
+        objects_changed:changed,
+        objects_missing:missing,
+        objects_removed:removed,
+        authority:'METADATA_DISCOVERY',
+      },
+      status:'OPEN',
+      last_observed_at:input.observedAt,
+      resolved_at:null,
+      updated_at:input.observedAt,
+    },{onConflict:'project_id,fingerprint'}).select('id').single()
+    if(error||!alert)throw new Error(`Unable to publish schema-change alert: ${error?.message??'unknown error'}`)
+    alertIds.push(String(alert.id))
+  }
+
+  await writeGovernanceAudit({
+    projectId:input.source.project_id,
+    actorUserId:input.actorUserId?.trim()||null,
+    actorType:input.actorUserId?.trim()?'USER':'SYSTEM',
+    eventType:'METADATA_SCHEMA_CHANGE_DETECTED',
+    entityType:'DATA_SOURCE',
+    entityId:input.source.id,
+    correlationId:input.discoveryRunId,
+    metadata:{objects_added:added,objects_changed:changed,objects_missing:missing,objects_removed:removed,severity,alerts_created:alertIds.length},
+  })
+
+  let notificationsQueued=0
+  if(process.env.METADATA_CHANGE_NOTIFICATIONS_ENABLED?.trim().toLowerCase()==='true'){
+    for(const alertId of alertIds){
+      try{
+        const queued=await queueAlertNotifications(alertId)
+        notificationsQueued+=queued.filter(item=>item.status!=='SUPPRESSED').length
+      }catch(error){
+        console.error('[metadata-schema-change-notification]',error instanceof Error?error.message:error)
+      }
+    }
+  }
+  return {alerts:alertIds.length,notificationsQueued}
+}
+
 async function queueLineageEnrichment(input: {
   source: Source
   discoveryRunId: string
@@ -401,6 +479,13 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
 
     const publication = record(publicationData)
     const catalogRevisionId = stringField(publication, ['revision_id'])
+    const schemaChangeSignals = await publishSchemaChangeSignals({
+      source:typedSource,
+      discoveryRunId:runId,
+      publication,
+      observedAt:observedTo,
+      actorUserId,
+    })
     const lineage = await queueLineageEnrichment({
       source: typedSource,
       discoveryRunId: runId,
@@ -433,6 +518,7 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
       },
       enrichments: {
         lineage,
+        schema_change_signals:schemaChangeSignals,
         ai_semantics: 'DEFERRED',
         classification: 'DEFERRED',
         business_domain: 'DEFERRED',
@@ -462,6 +548,7 @@ export async function executeMetadataDiscovery(sourceId: string, actorUserId?: s
       objectsUnchanged: integer(publication.objects_unchanged, 0),
       consistencyMode: manifest.consistency_mode,
       lineage,
+      schemaChangeSignals,
       snapshot: finalSnapshot,
     }
   } catch (error) {

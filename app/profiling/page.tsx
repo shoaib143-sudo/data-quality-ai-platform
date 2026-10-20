@@ -9,6 +9,7 @@ import {
 import { requireUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { RecentJobMonitor } from '@/components/monitoring/recent-job-monitor'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspaceHref } from '@/lib/governance/workspace-access'
 
@@ -172,7 +173,7 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
     documentResult.data?.file_name ?? null,
   ].filter(Boolean)
 
-  return <ProfilingDashboard
+  return <><ProfilingDashboard
     run={run}
     datasetName={datasetResult.data.name}
     datasetSubtitle={subtitleParts.length ? subtitleParts.join(' · ') : datasetResult.data.description}
@@ -187,4 +188,5 @@ export default async function ProfilingPage({ searchParams }: { searchParams: Se
     canQuality={canQuality}
     canExplorer={canExplorer}
   />
+  {canMonitoring ? <div className="mx-auto max-w-7xl px-4 pb-8 sm:px-6 lg:px-8"><RecentJobMonitor title="Profiling and discovery jobs" /></div> : null}</>
 }

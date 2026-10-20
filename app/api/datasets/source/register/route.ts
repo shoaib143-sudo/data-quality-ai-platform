@@ -188,12 +188,21 @@ async function nativeConnectionMetadata(input: {
   }
 
   const capabilities = record(hierarchy.details.capabilities)
+  const observedAt = new Date().toISOString()
   return {
     jdbc_url: input.jdbcUrl,
     connection_kind: input.connectionKind,
     credential_ref: input.credentialRef,
     hierarchy_selection: selection,
     connector_capabilities: capabilities,
+    connection_health: {
+      status: 'HEALTHY',
+      checked_at: observedAt,
+      database_product: hierarchy.databaseProduct,
+      database_version: hierarchy.databaseVersion,
+      hierarchy_node_count: hierarchy.nodes.length,
+      hierarchy_truncated: hierarchy.truncated,
+    },
     native_hierarchy: {
       database_product: hierarchy.databaseProduct,
       database_version: hierarchy.databaseVersion,
@@ -203,7 +212,7 @@ async function nativeConnectionMetadata(input: {
       hierarchy_truncated: hierarchy.truncated,
       warnings: hierarchy.warnings,
       details: hierarchy.details,
-      discovered_at: new Date().toISOString(),
+      discovered_at: observedAt,
     },
   } satisfies Record<string, unknown>
 }
@@ -268,13 +277,31 @@ export async function POST(request: Request) {
       const validation = await validateJdbcConnection({ jdbcUrl, credentialRef, schema, table, catalog: catalogName || undefined })
       if (!validation.valid) return NextResponse.json({ error: 'JDBC source validation failed.', validation }, { status: 422 })
       const resolvedCatalog = catalogName || (typeof validation.details.catalog === 'string' ? validation.details.catalog.trim() : '')
-      connectionMetadata = { jdbc_url: jdbcUrl, credential_ref: credentialRef, schema, table, connection_kind: connectionKind }
+      connectionMetadata = {
+        jdbc_url: jdbcUrl,
+        credential_ref: credentialRef,
+        schema,
+        table,
+        connection_kind: connectionKind,
+        connection_health: {
+          status: 'HEALTHY',
+          checked_at: new Date().toISOString(),
+          validation_details: validation.details,
+        },
+      }
       if (resolvedCatalog) connectionMetadata.catalog = resolvedCatalog
     } else {
       const metadata: Record<string, unknown> = fileConnectionMetadata(sourceUri, projectId)
       const validation = await validateDataSourceForProfiling(admin, { id: crypto.randomUUID(), project_id: projectId, source_type: sourceType, connection_metadata: metadata }, sourceUri)
       if (!validation.valid) return NextResponse.json({ error: 'CSV/FILE source validation failed.', validation }, { status: 422 })
-      connectionMetadata = metadata
+      connectionMetadata = {
+        ...metadata,
+        connection_health: {
+          status: 'HEALTHY',
+          checked_at: new Date().toISOString(),
+          validation_details: validation.details,
+        },
+      }
     }
 
     const { data: existing } = await admin.schema('catalog').from('data_sources').select('id, status').eq('project_id', projectId).eq('name', name).maybeSingle()

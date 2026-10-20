@@ -4,7 +4,7 @@ import { requireUser } from '@/lib/supabase/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { filterAuthorizedExecutionRuns } from '@/lib/governance/resource-authorization'
 import { MONITORING_RUN_WINDOW } from '@/lib/monitoring/run-window'
-import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type MonitoringProject, type MonitoringRun, type MonitoringStep } from './job-monitor'
+import { JobMonitor, type MonitoringAgent, type MonitoringDataset, type MonitoringJob, type MonitoringProject, type MonitoringRun, type MonitoringStep } from './job-monitor'
 import { JobHealth } from './job-health'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
@@ -17,18 +17,27 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
     resolveLandingAccess(user.id),
   ])
   const admin = createAdminClient()
-  const { data: runs, error: runsError } = await admin
-    .schema('agent')
-    .from('agent_runs')
-    .select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message')
-    .order('created_at', { ascending: false })
-    .limit(MONITORING_RUN_WINDOW)
+  const [{ data: runs, error: runsError }, { data: jobs, error: jobsError }] = await Promise.all([
+    admin.schema('agent').from('agent_runs')
+      .select('id, agent_definition_id, project_id, dataset_id, dataset_version_id, status, created_at, started_at, completed_at, error_code, error_message')
+      .order('created_at', { ascending: false })
+      .limit(MONITORING_RUN_WINDOW),
+    admin.schema('orchestration').from('job_queue')
+      .select('id,project_id,job_type,entity_id,agent_run_id,status,attempts,max_attempts,last_error,created_at,started_at,completed_at')
+      .in('job_type',['DISCOVERY','PROFILING','DATA_QUALITY','LINEAGE_ENRICHMENT','EXPORT','GOVERNANCE_AGENT'])
+      .order('created_at',{ascending:false})
+      .limit(MONITORING_RUN_WINDOW),
+  ])
   if (runsError) throw new Error(`Unable to load agent runs: ${runsError.message}`)
+  if (jobsError) throw new Error(`Unable to load durable jobs: ${jobsError.message}`)
 
   const typedRuns = await filterAuthorizedExecutionRuns(user.id, (runs ?? []) as MonitoringRun[])
+  const authorizedJobScopes = await filterAuthorizedExecutionRuns(user.id, (jobs ?? []).map(job => ({ ...job, dataset_id: null })))
+  const authorizedJobIds = new Set(authorizedJobScopes.map(job => job.id))
+  const typedJobs = (jobs ?? []).filter(job => authorizedJobIds.has(job.id)) as MonitoringJob[]
   const selectedRunId = requestedRunId && typedRuns.some((run) => run.id === requestedRunId) ? requestedRunId : null
   const datasetIds = [...new Set(typedRuns.flatMap((run) => run.dataset_id ? [run.dataset_id] : []))]
-  const projectIds = [...new Set(typedRuns.map((run) => run.project_id))]
+  const projectIds = [...new Set([...typedRuns.map((run) => run.project_id), ...typedJobs.map(job => job.project_id)])]
   const runIds = typedRuns.map((run) => run.id)
 
   const [agentsResult, datasetsResult, projectsResult, stepsResult] = await Promise.all([
@@ -66,10 +75,11 @@ export default async function MonitoringPage({ searchParams }: { searchParams: P
       <div className={`${styles.monitoringStage} mt-5`}>
         <JobMonitor
           initialRuns={typedRuns}
-          initialSteps={typedSteps}
           initialAgents={typedAgents}
           initialDatasets={typedDatasets}
           initialProjects={typedProjects}
+          initialJobs={typedJobs}
+          initialSteps={typedSteps}
           initialNow={new Date().toISOString()}
           initialRunId={selectedRunId}
           initialAgentId={requestedAgentId ?? null}

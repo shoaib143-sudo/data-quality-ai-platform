@@ -74,6 +74,6 @@ test('all thirteen real DataNexus personas have route coverage and enforced land
 
   const personaPage = fs.readFileSync(path.join(process.cwd(), 'app/home/[persona]/page.tsx'), 'utf8')
   assert.match(personaPage, /if \(!isPersonaSlug\(slug\)\) notFound\(\)/, 'Unknown persona must 404')
-  assert.match(personaPage, /if \(slug !== access\.persona\) redirect\('\/home'\)/, 'Cross-persona URL must redirect')
+  assert.match(personaPage, /if \(slug !== access\.persona && !canSwitchPersona\) redirect\('\/home'\)/, 'Cross-persona URL must redirect unless governed admin preview is authorized')
   assert.match(personaPage, /if \(!enabled\) redirect\('\/home\/unavailable'\)/, 'Disabled persona must redirect')
 })

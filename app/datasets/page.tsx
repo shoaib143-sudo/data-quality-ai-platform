@@ -8,6 +8,7 @@ import { SourceActions } from './source-actions'
 import { DatasetActions } from './dataset-actions'
 import { dataGovernanceSuperAdminOrganizationIds } from '@/lib/auth/data-governance-super-admin'
 import { GlobalUtilityBar } from '@/components/app-shell/global-utility-bar'
+import { RecentJobMonitor } from '@/components/monitoring/recent-job-monitor'
 import { resolveLandingAccess } from '@/lib/governance/landing-access'
 import { canAccessWorkspace } from '@/lib/governance/workspace-access'
 
@@ -195,6 +196,8 @@ export default async function DatasetsPage() {
             </article>
           })}</div>}
         </section>
+
+        <RecentJobMonitor title="Discovery, metadata scan and profiling jobs" />
 
         <section className="mt-7 overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-6 text-white shadow-lg shadow-blue-200/40 sm:p-7"><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2 text-sm font-semibold text-blue-100"><Sparkles className="h-4 w-4" /> Ready for data insights</div><h2 className="mt-1 text-xl font-bold">Your shortest path to quality intelligence</h2><p className="mt-1 max-w-2xl text-sm text-blue-100">Configure a source, establish discovery evidence, bind a dataset, then let the profiling agent discover schema, metrics, findings, and quality signals.</p></div><Link href="/profiling" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50">Open profiling workspace <ArrowRight className="h-4 w-4" /></Link></div></section>
       </div>

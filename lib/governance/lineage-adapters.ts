@@ -318,7 +318,14 @@ function relationshipEvents(body: Record<string, unknown>, sourceSystem: string)
         externalId,
         name: row.name ?? row.path,
         operation: row.operation ?? row.operator ?? sqlOperation(logic),
-        logicLanguage: row.logic_language ?? (sourceSystem === 'POWER_BI' && row.dax ? 'DAX' : sourceSystem === 'POWER_BI' && row.m_expression ? 'M' : logic ? 'SQL' : null),
+        logicLanguage: row.logic_language
+          ?? (sourceSystem === 'POWER_BI' && row.dax ? 'DAX'
+            : sourceSystem === 'POWER_BI' && row.m_expression ? 'M'
+            : sourceSystem === 'VBA' ? 'VBA'
+            : sourceSystem === 'NODEJS' ? 'JAVASCRIPT'
+            : sourceSystem === 'DOTNET' ? 'CSHARP'
+            : sourceSystem === 'SSIS' ? 'SSIS_EXPRESSION'
+            : logic ? 'SQL' : null),
         logic,
         metadata: row,
         columnMappings: row.column_mappings ?? row.columnMappings,
@@ -332,7 +339,7 @@ export function normalizeLineagePayload(body: Record<string, unknown>): { source
   let events: NormalizedLineageEvent[]
   if (integrationType === 'DBT') events = dbtEvents(body)
   else if (integrationType === 'AIRFLOW') events = airflowEvents(body)
-  else if (['DATABRICKS', 'SNOWFLAKE', 'POWER_BI', 'POWERBI', 'TABLEAU', 'GITHUB_SQL', 'JDBC', 'SQL_SERVER', 'MYSQL', 'MARIADB', 'POSTGRESQL', 'REDSHIFT', 'ORACLE'].includes(integrationType)) {
+  else if (['DATABRICKS', 'SNOWFLAKE', 'POWER_BI', 'POWERBI', 'TABLEAU', 'LOOKER', 'GITHUB_SQL', 'JDBC', 'SQL_SERVER', 'MYSQL', 'MARIADB', 'POSTGRESQL', 'REDSHIFT', 'ORACLE', 'INFORMATICA', 'BOOMI', 'DATAMAGIC', 'WEBOTX', 'AXWAY', 'AGILE_REPORTER', 'SSIS', 'NODEJS', 'DOTNET', 'VBA', 'SCRIPT', 'LOG'].includes(integrationType)) {
     const normalizedSystem = integrationType === 'POWERBI' ? 'POWER_BI' : integrationType
     events = relationshipEvents(body, normalizedSystem)
     if (!events.length) events = [genericEvent(body, normalizedSystem)]

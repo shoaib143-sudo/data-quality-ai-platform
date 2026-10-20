@@ -69,7 +69,9 @@ export default async function PersonaHomePage({ params, searchParams }: { params
 
   const user = await requireUser()
   const access = await resolveLandingAccess(user.id)
-  if (slug !== access.persona) redirect('/home')
+  const canSwitchPersona = access.persona === 'data-governance-admin'
+    || Boolean(access.organizationRole && /^(OWNER|ADMIN)$/i.test(access.organizationRole))
+  if (slug !== access.persona && !canSwitchPersona) redirect('/home')
   const enabled = await isLandingPageEnabled(access.organizationId, slug)
   if (!enabled) redirect('/home/unavailable')
 
@@ -337,5 +339,5 @@ export default async function PersonaHomePage({ params, searchParams }: { params
   const userLabel = email ? email.split('@')[0].split(/[._-]/).filter(Boolean).map(part => part[0]?.toUpperCase() + part.slice(1)).join(' ') : 'there'
   const canAdmin = Boolean(access.organizationRole && /^(OWNER|ADMIN)$/i.test(access.organizationRole))
 
-  return <RoleLandingPage persona={personas[slug]} data={data} userLabel={userLabel} canAdmin={canAdmin} />
+  return <RoleLandingPage persona={personas[slug]} data={data} userLabel={userLabel} canAdmin={canAdmin} canSwitchPersona={canSwitchPersona} />
 }

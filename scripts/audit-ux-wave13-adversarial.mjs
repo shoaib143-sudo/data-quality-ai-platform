@@ -35,7 +35,7 @@ assert.ok(!admin.includes('<nav className='), 'adversarial: Administration must 
 const roleLanding=fs.readFileSync('components/governance/role-landing-page.tsx','utf8')
 assert.ok(roleLanding.includes("const safeHref = (href: string, fallback='/catalog') => canAccessWorkspaceHref"), 'adversarial: persona-home route generation must remain fail-closed')
 assert.ok(roleLanding.includes('const personaNav = persona.nav.filter(item => canAccessWorkspaceHref'), 'adversarial: persona-home base navigation must remain policy filtered')
-assert.ok(roleLanding.includes("const visibleNav = canAccessWorkspaceHref(persona.slug, '/agents', orgRole)"), 'adversarial: AI Agents augmentation must remain policy filtered')
+assert.ok(roleLanding.includes("const agentNav = canAccessWorkspaceHref(persona.slug, '/agents', orgRole)") && roleLanding.includes("const visibleNav = summaryPersonas.has(persona.slug) && canAccessWorkspaceHref(persona.slug, '/reports/executive-summary', orgRole)"), 'adversarial: augmented persona navigation must remain policy filtered')
 assert.equal((roleLanding.match(/<GlobalUtilityBar\b/g)||[]).length,1, 'adversarial: persona home must render one shared shell without duplicate global navigation')
 assert.ok(/<main\b[^>]*className="[^"]*\bdn-light-workspace\b/.test(roleLanding), 'adversarial: persona home must retain the shared light workspace surface')
 assert.ok(roleLanding.includes('aria-label="Persona workspace"') && roleLanding.includes('visibleNav.map'), 'adversarial: shared persona shell must preserve the filtered persona task navigation')

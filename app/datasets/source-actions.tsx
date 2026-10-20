@@ -26,6 +26,29 @@ export function SourceActions({ projectId, sourceId, status }: { projectId: stri
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [setupRequired, setSetupRequired] = useState(false)
+  const [scanBusy, setScanBusy] = useState(false)
+
+  async function rescan() {
+    if (scanBusy) return
+    setScanBusy(true)
+    setMessage('Queueing metadata rescan…')
+    setSetupRequired(false)
+    try {
+      const response = await fetch('/api/catalog/discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'Metadata rescan could not be queued.')
+      setMessage(payload.alreadyActive ? 'A metadata scan is already active for this source. Track it in Job Monitor.' : 'Metadata rescan queued. Track progress in Job Monitor.')
+      router.refresh()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Metadata rescan could not be queued.')
+    } finally {
+      setScanBusy(false)
+    }
+  }
 
   async function validate() {
     if (busy) return
@@ -63,6 +86,10 @@ export function SourceActions({ projectId, sourceId, status }: { projectId: stri
       <button type="button" onClick={() => void validate()} disabled={busy} className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${ready ? 'border border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
         {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
         {busy ? 'Checking…' : ready ? 'Check connection' : 'Make ready'}
+      </button>
+      <button type="button" onClick={() => void rescan()} disabled={scanBusy} className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-semibold text-violet-700 shadow-sm transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50">
+        <RefreshCw className={`h-3.5 w-3.5 ${scanBusy ? 'animate-spin' : ''}`} />
+        {scanBusy ? 'Queueing scan…' : 'Rescan metadata'}
       </button>
       {message ? <span className={`inline-flex items-center gap-1.5 text-xs ${setupRequired ? 'text-amber-700' : 'text-slate-500'}`} role="status">{setupRequired ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> : null}{message}</span> : null}
     </div>
