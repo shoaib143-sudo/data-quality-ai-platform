@@ -39,8 +39,9 @@ export function validatePairedLearningBenchmark(input: {
       throw new Error('paired benchmark scores must be between 0 and 1')
     }
     for (const ref of [item.baselineEvidenceRef, item.candidateEvidenceRef]) {
-      if (!UUID_REFERENCE.test(ref.trim()) || refs.has(ref.trim())) throw new Error('paired benchmark evidence references must be UUIDs and unique')
-      refs.add(ref.trim())
+      const normalizedRef = ref.trim().toLowerCase()
+      if (!UUID_REFERENCE.test(normalizedRef) || refs.has(normalizedRef)) throw new Error('paired benchmark evidence references must be UUIDs and unique')
+      refs.add(normalizedRef)
     }
     baselineTotal += item.baselineScore
     candidateTotal += item.candidateScore
@@ -56,7 +57,7 @@ export function validatePairedLearningBenchmark(input: {
     throw new Error('paired benchmark safety counts do not match aggregate counts')
   }
   if (refs.size !== benchmark.evidenceRefs.length
-    || benchmark.evidenceRefs.some((ref) => !refs.has(ref))) {
+    || benchmark.evidenceRefs.some((ref) => !refs.has(ref.trim().toLowerCase()))) {
     throw new Error('paired benchmark evidence references do not match aggregate evidence')
   }
   return { caseCount: cases.length, baselineScore: baselineTotal / cases.length, candidateScore: candidateTotal / cases.length }
