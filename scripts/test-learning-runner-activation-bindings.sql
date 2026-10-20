@@ -79,7 +79,7 @@ begin
       )) <> 3 then raise exception 'activation immutability triggers are incomplete'; end if;
 
   foreach v_function in array array[
-    to_regprocedure('agent.register_learning_artifact_manifest(uuid,text,text,uuid,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid)'),
+    to_regprocedure('agent.register_learning_artifact_manifest(uuid,text,text,uuid,text,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid)'),
     to_regprocedure('agent.register_learning_runtime_binding(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,text,text)'),
     to_regprocedure('agent.register_learning_evaluator_assignment(uuid,uuid,uuid,uuid,uuid,uuid,text,timestamp with time zone)')
   ] loop
