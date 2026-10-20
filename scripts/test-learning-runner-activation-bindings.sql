@@ -49,7 +49,6 @@ begin
   foreach v_index in array array[
     'learning_artifact_executable_role_uq',
     'learning_artifact_held_out_case_uq',
-    'learning_artifact_object_lifecycle_fk_idx',
     'learning_artifact_definition_fk_idx',
     'learning_artifact_candidate_fk_idx',
     'learning_artifact_case_fk_idx',
