@@ -54,6 +54,7 @@ on:
       - 'lib/agents/learning-experiment-runner*.ts'
       - 'lib/agents/learning-runner-*.ts'
       - 'scripts/test-learning-runner-synthetic-activation.mjs'
+      - 'scripts/test-learning-runner-postmerge-failure-paths.mjs'
       - 'scripts/test-learning-evaluator-capability-boundary.mjs'
       - 'lib/auth/authorize.ts'
       - 'scripts/audit-learning-runner-activation-bindings.mjs'
@@ -291,7 +292,7 @@ jobs:
       - name: Run paired experiment runner behavior and invocation tests
         run: node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs && node scripts/test-learning-runner-schema-boundary.mjs
       - name: Run zero-cost activation binding tests
-        run: node --experimental-strip-types scripts/test-learning-runner-canonical.mjs && node --experimental-strip-types scripts/test-learning-runner-synthetic-activation.mjs && node scripts/audit-learning-runner-activation-bindings.mjs && node scripts/test-learning-evaluator-capability-boundary.mjs
+        run: node --experimental-strip-types scripts/test-learning-runner-canonical.mjs && node --experimental-strip-types scripts/test-learning-runner-synthetic-activation.mjs && node scripts/test-learning-runner-postmerge-failure-paths.mjs && node scripts/audit-learning-runner-activation-bindings.mjs && node scripts/test-learning-evaluator-capability-boundary.mjs
       - name: Run learning experiment runtime budget tests
         run: node --experimental-strip-types scripts/test-learning-experiment-budget-runtime.mjs
       - name: Run prospective evaluation policy behavior tests
