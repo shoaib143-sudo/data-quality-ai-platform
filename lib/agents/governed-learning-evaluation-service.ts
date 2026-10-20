@@ -1,4 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { authorizeProject } from '@/lib/auth/authorize'
+import { assertAuthenticatedLearningEvaluator } from './learning-evaluation-authorization'
 import {
   assertLearningEvaluationEligibleForReleaseReview,
   classifyLearningEvaluation,
@@ -25,6 +27,42 @@ function latestUnambiguousRow<T extends { created_at: string }>(rows: T[] | null
   }
   return rows[0]
 }
+
+function learningPolicyFromRow(row: any): LearningEvaluationPolicy {
+  return {
+    policyId: String(row.policy_key),
+    projectId: String(row.project_id),
+    candidateId: String(row.candidate_id),
+    agentKey: row.agent_key,
+    skillKey: row.skill_key,
+    mode: row.mode,
+    datasetVersionIds: [...row.dataset_version_ids],
+    datasetManifestId: String(row.dataset_manifest_id),
+    baselineVersion: String(row.baseline_version),
+    candidateVersion: String(row.candidate_version),
+    rollbackRef: String(row.rollback_ref),
+    evaluatorActorId: String(row.evaluator_actor_id),
+    proposerActorId: String(row.proposer_actor_id),
+    rubricRef: String(row.rubric_ref),
+    calibrationRef: String(row.calibration_ref),
+    manifestHash: String(row.manifest_hash),
+    lockedAt: String(row.locked_at),
+    primaryMetric: String(row.primary_metric),
+    analysisPlanRef: String(row.analysis_plan_ref),
+    sampleSize: Number(row.sample_size),
+    minimumGain: Number(row.minimum_gain),
+    minimumScore: Number(row.minimum_score),
+    budget: {
+      totalCost: Number(row.total_cost_budget),
+      perRunCost: Number(row.per_run_cost_budget),
+      totalTokens: Number(row.total_token_budget),
+      perRunTokens: Number(row.per_run_token_budget),
+      latencyMs: Number(row.latency_ms_budget),
+    },
+  }
+}
+
+const learningEvaluationPolicyColumns = 'id,created_at,policy_key,project_id,candidate_id,dataset_manifest_id,agent_key,skill_key,mode,dataset_version_ids,baseline_version,candidate_version,rollback_ref,evaluator_actor_id,proposer_actor_id,rubric_ref,calibration_ref,manifest_hash,locked_at,primary_metric,analysis_plan_ref,sample_size,minimum_gain,minimum_score,total_cost_budget,per_run_cost_budget,total_token_budget,per_run_token_budget,latency_ms_budget'
 
 export async function registerLearningEvaluationPolicy(policy: LearningEvaluationPolicy) {
   validateLearningEvaluationPolicy(policy)
@@ -63,18 +101,33 @@ export async function registerLearningEvaluationPolicy(policy: LearningEvaluatio
 }
 
 export async function recordLearningEvaluationDecision(input: {
-  policy: LearningEvaluationPolicy
   policyRecordId: string
   result: LearningEvaluationResult
-  recordedBy: string
 }) {
-  validateLearningEvaluationPolicy(input.policy)
-  const decision = classifyLearningEvaluation(input.policy, input.result)
+  const { requireApiUser } = await import('@/lib/auth/require-api-user')
+  const authenticatedUser = await requireApiUser()
   const admin = createAdminClient()
+  const policyRecordId = requiredText(input.policyRecordId, 'policyRecordId')
+  const { data: persistedPolicy, error: policyError } = await admin.schema('agent')
+    .from('learning_evaluation_policies')
+    .select(learningEvaluationPolicyColumns)
+    .eq('id', policyRecordId)
+    .maybeSingle()
+  if (policyError) throw new Error(`Unable to load locked learning evaluation policy: ${policyError.message}`)
+  if (!persistedPolicy) throw new Error('A persisted locked learning evaluation policy is required before recording a result.')
+  const policy = learningPolicyFromRow(persistedPolicy)
+  validateLearningEvaluationPolicy(policy)
+  assertAuthenticatedLearningEvaluator({
+    authenticatedUserId: authenticatedUser.id,
+    policyEvaluatorActorId: policy.evaluatorActorId,
+    resultEvaluatorActorId: input.result.evaluatorActorId,
+  })
+  await authorizeProject(authenticatedUser.id, policy.projectId, 'agent.learning.evaluate')
+  const decision = classifyLearningEvaluation(policy, input.result)
   const { data, error } = await admin.schema('agent').rpc('record_learning_evaluation_result', {
-    p_project_id: input.policy.projectId,
-    p_policy_id: requiredText(input.policyRecordId, 'policyRecordId'),
-    p_candidate_id: input.policy.candidateId,
+    p_project_id: policy.projectId,
+    p_policy_id: policyRecordId,
+    p_candidate_id: policy.candidateId,
     p_observed_at: input.result.observedAt,
     p_sample_count: input.result.sampleCount,
     p_baseline_score: input.result.baselineScore,
@@ -94,7 +147,7 @@ export async function recordLearningEvaluationDecision(input: {
     p_disposition: decision.disposition,
     p_quality: decision.quality,
     p_reasons: decision.reasons,
-    p_recorded_by: requiredText(input.recordedBy, 'recordedBy'),
+    p_recorded_by: authenticatedUser.id,
   })
   if (error || !data) throw new Error(`Unable to persist learning evaluation result: ${error?.message ?? 'no result id returned'}`)
   return { resultId: String(data), decision }
@@ -132,37 +185,7 @@ export async function loadLearningReleaseAdmission(input: {
     throw new Error('The latest prospective evaluation decision is not eligible for release review.')
   }
 
-  const policy: LearningEvaluationPolicy = {
-    policyId: String(persistedPolicy.policy_key),
-    projectId: String(persistedPolicy.project_id),
-    candidateId: String(persistedPolicy.candidate_id),
-    agentKey: persistedPolicy.agent_key,
-    skillKey: persistedPolicy.skill_key,
-    mode: persistedPolicy.mode,
-    datasetVersionIds: [...persistedPolicy.dataset_version_ids],
-    datasetManifestId: String(persistedPolicy.dataset_manifest_id),
-    baselineVersion: String(persistedPolicy.baseline_version),
-    candidateVersion: String(persistedPolicy.candidate_version),
-    rollbackRef: String(persistedPolicy.rollback_ref),
-    evaluatorActorId: String(persistedPolicy.evaluator_actor_id),
-    proposerActorId: String(persistedPolicy.proposer_actor_id),
-    rubricRef: String(persistedPolicy.rubric_ref),
-    calibrationRef: String(persistedPolicy.calibration_ref),
-    manifestHash: String(persistedPolicy.manifest_hash),
-    lockedAt: String(persistedPolicy.locked_at),
-    primaryMetric: String(persistedPolicy.primary_metric),
-    analysisPlanRef: String(persistedPolicy.analysis_plan_ref),
-    sampleSize: Number(persistedPolicy.sample_size),
-    minimumGain: Number(persistedPolicy.minimum_gain),
-    minimumScore: Number(persistedPolicy.minimum_score),
-    budget: {
-      totalCost: Number(persistedPolicy.total_cost_budget),
-      perRunCost: Number(persistedPolicy.per_run_cost_budget),
-      totalTokens: Number(persistedPolicy.total_token_budget),
-      perRunTokens: Number(persistedPolicy.per_run_token_budget),
-      latencyMs: Number(persistedPolicy.latency_ms_budget),
-    },
-  }
+  const policy = learningPolicyFromRow(persistedPolicy)
   const result: LearningEvaluationResult = {
     policyId: policy.policyId,
     projectId: policy.projectId,
