@@ -7,6 +7,7 @@ import type { ToolExecutionContext } from '@/lib/agents/types'
 import { syncProfileClassifications } from '@/lib/governance/classification'
 import { tryReuseProfileEvidence } from '@/lib/profiling/evidence-reuse'
 import { proposePgclCaseFromVerifiedAgentRun } from '@/lib/agents/proactive-governed-case-learning-runtime'
+import { proposeNegativeCaseFromFailedAgentRun } from '@/lib/agents/governed-negative-case-learning-runtime'
 
 const TERMINATED_ERROR_CODE = 'TERMINATED_BY_USER'
 
@@ -319,6 +320,17 @@ export async function executePreparedProfilingJob(input: {
     if (stepId) await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', stepId).eq('status', 'RUNNING'), 'fail current step')
     await safeUpdate(admin.schema('agent').from('agent_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', agentRunId).in('status', ['QUEUED','RUNNING']), 'fail agent run')
     await safeUpdate(admin.schema('profiling').from('profile_runs').update({ status: 'FAILED', error_code: 'PROFILING_EXECUTION_FAILED', error_message: message, completed_at: completedAt }).eq('id', profilingRunId).eq('status', 'RUNNING'), 'fail profiling run')
+    try {
+      await proposeNegativeCaseFromFailedAgentRun({
+        projectId,
+        agentRunId,
+        failureSummary: message,
+        runMode: requestInput.learningRunMode === 'HANDSFREE' ? 'HANDSFREE' : 'SUPERVISED',
+        actorUserId: userId,
+      })
+    } catch (learningError) {
+      console.error(`[profiling-job] negative-case learning failed safely: ${errorMessage(learningError, 'unknown learning error')}`)
+    }
     try {
       await recordProfileFailureAlert(datasetVersionId, profilingRunId, message)
     } catch (alertError) {
