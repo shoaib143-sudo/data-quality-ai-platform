@@ -12,6 +12,8 @@ export type ApprovedPositiveLearningCase = {
   updated_at: string
 }
 
+export type ApprovedNegativeLearningCase = ApprovedPositiveLearningCase
+
 function terms(value: string) {
   return value.trim().toLowerCase().split(/\s+/).filter((term) => term.length > 2)
 }
@@ -64,34 +66,54 @@ export async function retrieveGovernedLearningContext(input: {
     ? await memoryProvider.retrieve({ projectId: input.projectId, classes: ['episodic'], limit: Math.min(limit * 3, 100) })
     : []
 
-  const { data: positiveCases, error: positiveCaseError } = input.agentDefinitionId && query
-    ? await admin.schema('agent').rpc('list_approved_positive_learning_cases', {
-        p_project_id: input.projectId,
-        p_agent_definition_id: input.agentDefinitionId,
-        p_limit: Math.min(limit * 5, 100),
+  const [positiveCaseResult, negativeCaseResult] = input.agentDefinitionId && query
+    ? await Promise.all([
+        admin.schema('agent').rpc('list_approved_positive_learning_cases', {
+          p_project_id: input.projectId,
+          p_agent_definition_id: input.agentDefinitionId,
+          p_limit: Math.min(limit * 5, 100),
+        }),
+        admin.schema('agent').rpc('list_approved_negative_learning_cases', {
+          p_project_id: input.projectId,
+          p_agent_definition_id: input.agentDefinitionId,
+          p_limit: Math.min(limit * 5, 100),
+        }),
+      ])
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+      ]
+
+  if (positiveCaseResult.error) {
+    throw new Error(`Unable to retrieve approved positive learning cases: ${positiveCaseResult.error.message}`)
+  }
+  if (negativeCaseResult.error) {
+    throw new Error(`Unable to retrieve approved negative learning cases: ${negativeCaseResult.error.message}`)
+  }
+
+  function rankCases<T extends ApprovedPositiveLearningCase>(cases: T[]) {
+    return cases
+      .map((learningCase) => {
+        const searchable = [
+          learningCase.case_key,
+          learningCase.problem_type,
+          JSON.stringify(learningCase.context),
+          JSON.stringify(learningCase.recommendation),
+          JSON.stringify(learningCase.evidence),
+        ].join(' ').toLowerCase()
+        const matches = queryTerms.filter((term) => searchable.includes(term)).length
+        const relevance = queryTerms.length ? matches / queryTerms.length : 0
+        return { ...learningCase, relevance }
       })
-    : { data: [], error: null }
+      .filter((learningCase) => learningCase.relevance > 0)
+      .sort((left, right) =>
+        right.relevance - left.relevance
+        || String(right.updated_at).localeCompare(String(left.updated_at)))
+      .slice(0, limit)
+  }
 
-  if (positiveCaseError) throw new Error(`Unable to retrieve approved positive learning cases: ${positiveCaseError.message}`)
-
-  const approvedPositiveCases = ((positiveCases ?? []) as ApprovedPositiveLearningCase[])
-    .map((learningCase) => {
-      const searchable = [
-        learningCase.case_key,
-        learningCase.problem_type,
-        JSON.stringify(learningCase.context),
-        JSON.stringify(learningCase.recommendation),
-        JSON.stringify(learningCase.evidence),
-      ].join(' ').toLowerCase()
-      const matches = queryTerms.filter((term) => searchable.includes(term)).length
-      const relevance = queryTerms.length ? matches / queryTerms.length : 0
-      return { ...learningCase, relevance }
-    })
-    .filter((learningCase) => learningCase.relevance > 0)
-    .sort((left, right) =>
-      right.relevance - left.relevance
-      || String(right.updated_at).localeCompare(String(left.updated_at)))
-    .slice(0, limit)
+  const approvedPositiveCases = rankCases((positiveCaseResult.data ?? []) as ApprovedPositiveLearningCase[])
+  const approvedNegativeCases = rankCases((negativeCaseResult.data ?? []) as ApprovedNegativeLearningCase[])
 
   const rankedEpisodes = episodes
     .map((episode) => {
@@ -108,5 +130,6 @@ export async function retrieveGovernedLearningContext(input: {
     memories: rankedMemories,
     verifiedEpisodes: rankedEpisodes,
     approvedPositiveCases,
+    approvedNegativeCases,
   }
 }

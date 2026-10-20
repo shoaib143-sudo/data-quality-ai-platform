@@ -31,6 +31,16 @@ on:
       - 'scripts/test-pgcl-production-learning-provenance.mjs'
       - 'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'lib/agents/governed-learning-case-registry.ts'
+      - 'lib/agents/governed-negative-case-learning.ts'
+      - 'lib/agents/governed-negative-case-learning-service.ts'
+      - 'lib/agents/governed-negative-case-learning-admin.ts'
+      - 'lib/agents/governed-negative-case-learning-runtime.ts'
+      - 'lib/agents/governed-learning-policy.ts'
+      - 'supabase/migrations/20261003130000_governed_learning_case_registry.sql'
+      - 'tests/governed-learning-case-registry.test.mjs'
+      - 'tests/governed-learning-promotion-boundary.test.mjs'
+      - 'tests/governed-negative-case-runtime.test.mjs'
       - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'scripts/verify-governed-learning-golden-journey.mjs'
       - 'lib/agents/governed-learning-production-readiness.ts'
@@ -43,6 +53,8 @@ on:
       - 'scripts/test-pgcl-command-center-observability.mjs'
       - 'lib/agents/learning-experiment-runner*.ts'
       - 'scripts/test-learning-experiment-runner*.mjs'
+      - 'scripts/test-learning-runner-schema-boundary.mjs'
+      - 'supabase/migrations/20260923193808_create_private_testing_schema_and_fixture_harness.sql'
       - 'scripts/fixtures/learning-runner-admin.mjs'
       - 'scripts/test-learning-experiment-runner.sql'
       - 'scripts/run-learning-experiment-runner-fixture.sh'
@@ -136,6 +148,16 @@ on:
       - 'scripts/test-pgcl-production-learning-provenance.mjs'
       - 'supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql'
       - 'lib/agents/proactive-governed-case-learning.ts'
+      - 'lib/agents/governed-learning-case-registry.ts'
+      - 'lib/agents/governed-negative-case-learning.ts'
+      - 'lib/agents/governed-negative-case-learning-service.ts'
+      - 'lib/agents/governed-negative-case-learning-admin.ts'
+      - 'lib/agents/governed-negative-case-learning-runtime.ts'
+      - 'lib/agents/governed-learning-policy.ts'
+      - 'supabase/migrations/20261003130000_governed_learning_case_registry.sql'
+      - 'tests/governed-learning-case-registry.test.mjs'
+      - 'tests/governed-learning-promotion-boundary.test.mjs'
+      - 'tests/governed-negative-case-runtime.test.mjs'
       - 'scripts/test-proactive-governed-case-learning.mjs'
       - 'scripts/verify-governed-learning-golden-journey.mjs'
       - 'lib/agents/governed-learning-production-readiness.ts'
@@ -148,6 +170,8 @@ on:
       - 'scripts/test-pgcl-command-center-observability.mjs'
       - 'lib/agents/learning-experiment-runner*.ts'
       - 'scripts/test-learning-experiment-runner*.mjs'
+      - 'scripts/test-learning-runner-schema-boundary.mjs'
+      - 'supabase/migrations/20260923193808_create_private_testing_schema_and_fixture_harness.sql'
       - 'scripts/fixtures/learning-runner-admin.mjs'
       - 'scripts/test-learning-experiment-runner.sql'
       - 'scripts/run-learning-experiment-runner-fixture.sh'
@@ -249,7 +273,7 @@ jobs:
       - name: Run priority-agent PGCL hook tests
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs
       - name: Run paired experiment runner behavior and invocation tests
-        run: node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs
+        run: node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs && node scripts/test-learning-runner-schema-boundary.mjs
       - name: Run learning experiment runtime budget tests
         run: node --experimental-strip-types scripts/test-learning-experiment-budget-runtime.mjs
       - name: Run prospective evaluation policy behavior tests
@@ -288,6 +312,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-governed-learning-command-center.mjs
       - name: Run PGCL Command Center observability tests
         run: node scripts/test-pgcl-command-center-observability.mjs
+      - name: Run governed positive and negative case tests
+        run: node --test tests/governed-learning-case-registry.test.mjs tests/governed-learning-promotion-boundary.test.mjs tests/governed-negative-case-runtime.test.mjs
       - name: Run continuous learning governance tests
         run: node --experimental-strip-types --test scripts/test-continuous-learning-governance.mjs
       - name: Run independent continuous learning governance adversarial audit
@@ -336,13 +362,21 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Create disposable learning budget fixture database
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: createdb datanexus_fixture_learning_budget
       - name: Execute isolated learning budget admission and concurrency fixture
         env:
           PGHOST: 127.0.0.1
           PGPORT: '5432'
           PGUSER: postgres
-          PGDATABASE: postgres
+          PGDATABASE: datanexus_fixture_learning_budget
           PGPASSWORD: postgres
+          DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM: I_ACCEPT_DESTRUCTIVE_FIXTURE
         run: bash scripts/run-learning-experiment-budget-fixture.sh
 
   learning-runner-database:
@@ -364,11 +398,19 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client
+      - name: Create disposable learning runner fixture database
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: createdb datanexus_fixture_learning_runner
       - name: Execute isolated learning runner evidence and dispatch concurrency fixture
         env:
           PGHOST: 127.0.0.1
           PGPORT: '5432'
           PGUSER: postgres
-          PGDATABASE: postgres
+          PGDATABASE: datanexus_fixture_learning_runner
           PGPASSWORD: postgres
+          DATANEXUS_DISPOSABLE_FIXTURE_CONFIRM: I_ACCEPT_DESTRUCTIVE_FIXTURE
         run: bash scripts/run-learning-experiment-runner-fixture.sh
