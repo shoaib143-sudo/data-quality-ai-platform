@@ -149,7 +149,7 @@ export async function executePreparedProfilingJob(input: {
     const activeProfileStepId = profileStep.id
 
     const context = { agentRunId, stepId: activeProfileStepId, projectId, agentDefinitionId, agentVersion } satisfies ToolExecutionContext
-    const profileResult = await executeProfilingExecutor('profile_dataset', { ...requestInput, datasetVersionId, profilingRunId }, context)
+    const profileResult = await executeProfilingExecutor('profile_dataset', { datasetVersionId, profilingRunId }, context)
     if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeProfileStepId); return }
     await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: profileResult, completed_at: new Date().toISOString() }).eq('id', activeProfileStepId).eq('status', 'RUNNING'), 'complete profile step')
 
@@ -245,7 +245,7 @@ export async function executePreparedProfilingJob(input: {
     stepId = metricStep.id
     const activeMetricStepId = metricStep.id
 
-    const metricResult = await executeProfilingExecutor('execute_metrics', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId: activeMetricStepId })
+    const metricResult = await executeProfilingExecutor('execute_metrics', { datasetVersionId, profilingRunId }, { ...context, stepId: activeMetricStepId })
     if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeMetricStepId); return }
     await safeUpdate(admin.schema('agent').from('agent_run_steps').update({ status: 'SUCCEEDED', output: metricResult, completed_at: new Date().toISOString() }).eq('id', activeMetricStepId).eq('status', 'RUNNING'), 'complete metric step')
 
@@ -260,7 +260,7 @@ export async function executePreparedProfilingJob(input: {
     stepId = investigationStep.id
     const activeInvestigationStepId = investigationStep.id
 
-    const investigationResult = await executeProfilingExecutor('investigate_profile', { ...requestInput, datasetVersionId, profilingRunId }, { ...context, stepId: activeInvestigationStepId })
+    const investigationResult = await executeProfilingExecutor('investigate_profile', { datasetVersionId, profilingRunId }, { ...context, stepId: activeInvestigationStepId })
     if (await isRunCancelled(agentRunId)) { await preserveCancellation(agentRunId, profilingRunId, activeInvestigationStepId); return }
 
     const validation = await validateProfilingRun(profilingRunId, userId)
