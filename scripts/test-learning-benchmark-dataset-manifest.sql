@@ -66,6 +66,7 @@ returns trigger language plpgsql as $$ begin raise exception 'fixture evidence i
 
 \ir ../supabase/migrations/20260929000100_learning_benchmark_case_bindings.sql
 \ir ../supabase/migrations/20260929000300_learning_benchmark_dataset_manifest.sql
+\ir ../supabase/migrations/20261020045825_bind_learning_case_payload_hashes.sql
 
 \set project_id '10000000-0000-4000-8000-000000000001'
 \set candidate_id '20000000-0000-4000-8000-000000000001'
@@ -75,16 +76,25 @@ insert into app.projects(id) values (:'project_id'::uuid);
 insert into agent.learning_candidates(id, project_id, agent_key, skill_key, evidence_cutoff_at)
 values (:'candidate_id'::uuid, :'project_id'::uuid, 'profiling_agent', 'profile_evidence_analysis', now() - interval '2 hours');
 
-select encode(extensions.digest('manifest-case-training','sha256'),'hex') as training_case_key,
-       encode(extensions.digest('manifest-case-held-out','sha256'),'hex') as held_out_case_key
+select repeat('0',64) as training_case_key,
+       repeat('f',64) as held_out_case_key,
+       'sha256:' || encode(extensions.digest('fixture-training-payload','sha256'),'hex') as training_payload_hash,
+       'sha256:' || encode(extensions.digest('fixture-held-out-payload','sha256'),'hex') as held_out_payload_hash
 \gset
-select 'sha256:' || encode(extensions.digest(
-  (select string_agg(case_key || ':' || split || ':' || source_ref, '|' order by case_key)
-   from (values
-     (:'training_case_key', 'TRAINING', 'fixture-training-source'),
-     (:'held_out_case_key', 'HELD_OUT', 'fixture-held-out-source')
-   ) as cases(case_key, split, source_ref)), 'sha256'), 'hex') as manifest_hash
+select jsonb_build_array(
+  jsonb_build_object('case_key', :'training_case_key', 'split', 'TRAINING', 'source_case_ref', 'learning/10000000-0000-4000-8000-000000000001/fixture/replay_input/v1/träining:|case', 'payload_hash', :'training_payload_hash'),
+  jsonb_build_object('case_key', :'held_out_case_key', 'split', 'HELD_OUT', 'source_case_ref', 'learning/10000000-0000-4000-8000-000000000001/fixture/replay_input/v1/fixture-held-out', 'payload_hash', :'held_out_payload_hash')
+) as manifest_cases
 \gset
+select agent.learning_benchmark_manifest_digest(:'project_id'::uuid, 'fixture-snapshot-1', :'manifest_cases'::jsonb) as manifest_hash
+\gset
+select :'manifest_hash' = 'sha256:8f2b7763204ef943094d611643950b10fde27aef9b649d23037a5728fff9e342' as digest_matches_typescript
+\gset
+\if :digest_matches_typescript
+\else
+  \echo 'SQL/TypeScript manifest digest mismatch'
+  \quit 1
+\endif
 select agent.register_learning_benchmark_dataset(
   :'project_id'::uuid,
   'fixture-dataset-v1',
@@ -93,10 +103,7 @@ select agent.register_learning_benchmark_dataset(
   'fixture-seed-1',
   :'manifest_hash',
   now() - interval '2 hours',
-  jsonb_build_array(
-    jsonb_build_object('case_key', :'training_case_key', 'split', 'TRAINING', 'source_case_ref', 'fixture-training-source'),
-    jsonb_build_object('case_key', :'held_out_case_key', 'split', 'HELD_OUT', 'source_case_ref', 'fixture-held-out-source')
-  )) as dataset_id
+  :'manifest_cases'::jsonb) as dataset_id
 \gset
 
 -- Persist baseline and candidate evaluations independently, then bind them

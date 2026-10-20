@@ -41,43 +41,40 @@ export type ResolvedHeldOutCase = {
 const SHA256 = /^sha256:[a-f0-9]{64}$/
 const CASE_KEY = /^[a-f0-9]{64}$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const DATASET_VERSION = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
 
 function hashBytes(bytes: string): string {
   return `sha256:${createHash('sha256').update(bytes, 'utf8').digest('hex')}`
 }
 
-/** Content hash for this resolver contract; a canonical reader must authenticate the expected value. */
+/** Must remain byte-for-byte aligned with agent.learning_benchmark_manifest_digest. */
 export function computeReplayManifestHash(manifest: Omit<ReplayManifestSnapshot, 'manifestHash'>): string {
-  const canonical = JSON.stringify({
-    projectId: manifest.projectId,
-    manifestId: manifest.manifestId,
-    datasetVersionId: manifest.datasetVersionId,
-    evidenceCutoffAt: manifest.evidenceCutoffAt,
-    cases: [...manifest.cases]
-      .map(({ caseKey, split, sourceCaseRef, payloadHash }) => ({ caseKey, split, sourceCaseRef, payloadHash }))
-      .sort((left, right) => left.caseKey.localeCompare(right.caseKey)),
-  })
+  const fields = [manifest.projectId, manifest.datasetVersionId, String(manifest.cases.length)]
+  for (const item of [...manifest.cases].sort((left, right) => left.caseKey < right.caseKey ? -1 : left.caseKey > right.caseKey ? 1 : 0)) {
+    fields.push(item.caseKey, item.split, item.sourceCaseRef, item.payloadHash)
+  }
+  const encoder = new TextEncoder()
+  const canonical = fields.map(field => `${encoder.encode(field).byteLength}:${field}`).join('')
   return hashBytes(canonical)
 }
 
 /**
  * Resolve exact, pinned held-out bytes before a runner may dispatch.
- * This pure adapter fails closed. The current dataset manifest schema does not
- * persist payloadHash, so production composition must supply a reviewed schema
- * extension and canonical reader before using this resolver for live runs.
+ * This pure adapter fails closed. Live use still requires a trusted server-side
+ * loader and a reviewed runner composition that invokes it before dispatch.
  */
 export async function resolveHeldOutReplayBytes(input: {
   manifest: ReplayManifestSnapshot
-  expected: { projectId: string; manifestId: string; datasetVersionId: string; manifestHash: string }
+  expected: { projectId: string; manifestId: string; datasetVersionId: string; evidenceCutoffAt: string; manifestHash: string }
   expectedCaseKeys: readonly string[]
   trainingCaseKeys: readonly string[]
   reader: HeldOutReplayReader
 }): Promise<ResolvedHeldOutCase[]> {
   const { manifest, expected } = input
-  if (!UUID.test(expected.projectId) || !UUID.test(expected.manifestId) || !UUID.test(expected.datasetVersionId)
+  if (!UUID.test(expected.projectId) || !UUID.test(expected.manifestId) || !DATASET_VERSION.test(expected.datasetVersionId)
     || !SHA256.test(expected.manifestHash)) throw new Error('REPLAY_EXPECTED_SCOPE_INVALID')
   if (manifest.projectId !== expected.projectId || manifest.manifestId !== expected.manifestId
-    || manifest.datasetVersionId !== expected.datasetVersionId) throw new Error('REPLAY_MANIFEST_SCOPE_MISMATCH')
+    || manifest.datasetVersionId !== expected.datasetVersionId || manifest.evidenceCutoffAt !== expected.evidenceCutoffAt) throw new Error('REPLAY_MANIFEST_SCOPE_MISMATCH')
   if (manifest.manifestHash !== expected.manifestHash || !SHA256.test(manifest.manifestHash)) throw new Error('REPLAY_MANIFEST_STALE')
   if (manifest.cases.some((item) => !SHA256.test(item.payloadHash))) throw new Error('REPLAY_PAYLOAD_HASH_MISSING')
   if (computeReplayManifestHash(manifest) !== manifest.manifestHash) throw new Error('REPLAY_MANIFEST_CONTENT_HASH_MISMATCH')
