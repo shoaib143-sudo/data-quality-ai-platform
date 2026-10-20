@@ -52,7 +52,7 @@ export async function recordIndependentPairedEvaluations(input: IndependentPaire
     score(item.baselineScore, 'baselineScore')
     score(item.candidateScore, 'candidateScore')
     for (const ref of [item.baselineEvidenceRef, item.candidateEvidenceRef]) {
-      const normalizedRef = ref.trim()
+      const normalizedRef = ref.trim().toLowerCase()
       if (!UUID_EVIDENCE_REF.test(normalizedRef) || evidenceRefs.has(normalizedRef)) {
         throw new Error('evaluation evidence references must be UUIDs and unique')
       }
