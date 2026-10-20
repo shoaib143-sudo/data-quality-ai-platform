@@ -1,6 +1,7 @@
 import type { PairedLearningCase } from './governed-learning-paired-benchmark'
 
 const SHA256_CASE_KEY = /^[a-f0-9]{64}$/
+const UUID_EVIDENCE_REF = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i
 
 export type IndependentPairedEvaluationInput = {
   projectId: string
@@ -43,12 +44,20 @@ export async function recordIndependentPairedEvaluations(input: IndependentPaire
   if (!Number.isFinite(Date.parse(input.observedAt))) throw new Error('observedAt must be a valid timestamp')
   if (!input.cases.length) throw new Error('paired evaluation cases are required')
   const caseKeys = new Set<string>()
+  const evidenceRefs = new Set<string>()
   for (const item of input.cases) {
     const caseKey = item.caseKey.trim()
     if (!SHA256_CASE_KEY.test(caseKey) || caseKeys.has(caseKey)) throw new Error('case keys must be unique SHA-256 digests')
     caseKeys.add(caseKey)
     score(item.baselineScore, 'baselineScore')
     score(item.candidateScore, 'candidateScore')
+    for (const ref of [item.baselineEvidenceRef, item.candidateEvidenceRef]) {
+      const normalizedRef = ref.trim()
+      if (!UUID_EVIDENCE_REF.test(normalizedRef) || evidenceRefs.has(normalizedRef)) {
+        throw new Error('evaluation evidence references must be UUIDs and unique')
+      }
+      evidenceRefs.add(normalizedRef)
+    }
   }
 
   const rows = input.cases.flatMap((item) => [
