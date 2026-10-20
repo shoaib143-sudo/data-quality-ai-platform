@@ -36,12 +36,13 @@ const assignmentFor = row => ({
   id: `assignment-${row.id}`, policy_id: row.id, project_id: row.project_id, candidate_id: row.candidate_id,
   proposer_user_id: row.proposer_actor_id, evaluator_user_id: row.evaluator_actor_id,
   assigned_by_user_id: row.proposer_actor_id, scope_digest: `sha256:${'b'.repeat(64)}`,
+  assigned_at: '2026-09-30T01:30:00Z',
 })
 const acknowledgementFor = assignment => ({
   id: `ack-${assignment.id}`, assignment_id: assignment.id, policy_id: assignment.policy_id,
   project_id: assignment.project_id, candidate_id: assignment.candidate_id,
   evaluator_user_id: assignment.evaluator_user_id, acknowledged_by_user_id: assignment.evaluator_user_id,
-  scope_digest: assignment.scope_digest,
+  scope_digest: assignment.scope_digest, acknowledged_at: '2026-09-30T02:00:00Z',
 })
 const admissionResponses = (policies, results) => {
   const assignment = Array.isArray(policies) && policies[0] ? assignmentFor(policies[0]) : null
@@ -52,6 +53,10 @@ setResponses(admissionResponses([policy], [result]))
 const admission = await load()
 assert.equal(admission.evaluationResultId, 'decision')
 assert.equal(admission.decision.quality, 'IMPROVED')
+const lateAcknowledgement = acknowledgementFor(assignmentFor(policy))
+lateAcknowledgement.acknowledged_at = '2026-09-30T04:00:00Z'
+setResponses([data([policy]), data(assignmentFor(policy)), data(lateAcknowledgement), data([result])])
+await assert.rejects(load, /must postdate evaluator acknowledgement/)
 const calls = getCalls()
 assert.deepEqual(calls.filter(c => c.limit).map(c => c.limit), [2, 2])
 assert.ok(calls.every(c => c.filters.some(([key, value]) => key === 'project_id' && value === 'project')))
