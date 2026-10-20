@@ -106,6 +106,7 @@ jobs:
           pnpm dlx supabase@2.117.0 start
           trap 'pnpm dlx supabase@2.117.0 stop --no-backup || true' EXIT
           pnpm dlx supabase@2.117.0 db reset --local
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -v ON_ERROR_STOP=1 -f "$ROOT/scripts/test-learning-runner-activation-bindings.sql"
           bash "$ROOT/scripts/test-native-compensation-reclaim-fencing-adversarial.sh"
           bash "$ROOT/scripts/test-native-compensation-lease-timing.sh"
 
