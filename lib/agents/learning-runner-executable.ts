@@ -99,7 +99,7 @@ export async function buildCanonicalLearningExecutable(input:{
     contentType:'application/json',serializationVersion:'learning-executable-v1',
     runtimeVersion,definitionHash:runtimeEvidence.definitionHash,toolContractSetHash:runtimeEvidence.semanticToolContractSetHash,
     sourceRef:`agent-definition:${input.agentDefinitionId}`,createdBy:input.createdBy??null,
-    agentDefinitionId:input.agentDefinitionId,candidateId:input.role==='CANDIDATE'?input.candidateId??null:null,
+    agentDefinitionId:input.agentDefinitionId,skillKey:input.skillKey,candidateId:input.role==='CANDIDATE'?input.candidateId??null:null,
   })
   return {...staged,runtimeHash:staged.sha256,bundle}
 }
