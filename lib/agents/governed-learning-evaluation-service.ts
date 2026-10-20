@@ -90,48 +90,41 @@ export async function registerLearningEvaluationPolicy(input: Omit<LearningEvalu
     throw new Error(`Unable to resolve evaluator account: ${evaluatorLookupError?.message ?? 'user not found'}`)
   }
   await authorizeProject(assignment.evaluatorUserId, policy.projectId, 'agent.learning.evaluate')
-  const { data, error } = await admin.schema('agent').rpc('record_learning_evaluation_policy', {
-    p_project_id: policy.projectId,
-    p_candidate_id: policy.candidateId,
-    p_policy_key: policy.policyId,
-    p_agent_key: policy.agentKey,
-    p_skill_key: policy.skillKey,
-    p_mode: policy.mode,
-    p_dataset_version_ids: policy.datasetVersionIds,
-    p_dataset_manifest_id: policy.datasetManifestId,
-    p_baseline_version: policy.baselineVersion,
-    p_candidate_version: policy.candidateVersion,
-    p_rollback_ref: policy.rollbackRef,
-    p_evaluator_actor_id: policy.evaluatorActorId,
-    p_proposer_actor_id: policy.proposerActorId,
-    p_rubric_ref: policy.rubricRef,
-    p_calibration_ref: policy.calibrationRef,
-    p_manifest_hash: policy.manifestHash,
-    p_locked_at: policy.lockedAt,
-    p_primary_metric: policy.primaryMetric,
-    p_analysis_plan_ref: policy.analysisPlanRef,
-    p_sample_size: policy.sampleSize,
-    p_minimum_gain: policy.minimumGain,
-    p_minimum_score: policy.minimumScore,
-    p_total_cost_budget: policy.budget.totalCost,
-    p_per_run_cost_budget: policy.budget.perRunCost,
-    p_total_token_budget: policy.budget.totalTokens,
-    p_per_run_token_budget: policy.budget.perRunTokens,
-    p_latency_ms_budget: policy.budget.latencyMs,
-  })
-  if (error || !data) throw new Error(`Unable to persist learning evaluation policy: ${error?.message ?? 'no policy id returned'}`)
-  const policyRecordId = String(data)
-  const { data: assignmentId, error: assignmentError } = await admin.schema('agent').rpc('record_learning_evaluation_assignment', {
-    p_policy_id: policyRecordId,
-    p_project_id: policy.projectId,
-    p_candidate_id: policy.candidateId,
+  const { data, error } = await admin.schema('agent').rpc('record_learning_evaluation_policy_with_assignment', {
+    p_policy_input: {
+      p_project_id: policy.projectId,
+      p_candidate_id: policy.candidateId,
+      p_policy_key: policy.policyId,
+      p_agent_key: policy.agentKey,
+      p_skill_key: policy.skillKey,
+      p_mode: policy.mode,
+      p_dataset_version_ids: policy.datasetVersionIds,
+      p_dataset_manifest_id: policy.datasetManifestId,
+      p_baseline_version: policy.baselineVersion,
+      p_candidate_version: policy.candidateVersion,
+      p_rollback_ref: policy.rollbackRef,
+      p_evaluator_actor_id: policy.evaluatorActorId,
+      p_proposer_actor_id: policy.proposerActorId,
+      p_rubric_ref: policy.rubricRef,
+      p_calibration_ref: policy.calibrationRef,
+      p_manifest_hash: policy.manifestHash,
+      p_locked_at: policy.lockedAt,
+      p_primary_metric: policy.primaryMetric,
+      p_analysis_plan_ref: policy.analysisPlanRef,
+      p_sample_size: policy.sampleSize,
+      p_minimum_gain: policy.minimumGain,
+      p_minimum_score: policy.minimumScore,
+      p_total_cost_budget: policy.budget.totalCost,
+      p_per_run_cost_budget: policy.budget.perRunCost,
+      p_total_token_budget: policy.budget.totalTokens,
+      p_per_run_token_budget: policy.budget.perRunTokens,
+      p_latency_ms_budget: policy.budget.latencyMs,
+    },
     p_proposer_user_id: assignment.proposerUserId,
     p_evaluator_user_id: assignment.evaluatorUserId,
-    p_assigned_by_user_id: assignment.proposerUserId,
   })
-  if (assignmentError || !assignmentId) {
-    throw new Error(`Unable to persist trusted evaluator assignment: ${assignmentError?.message ?? 'no assignment id returned'}`)
-  }
+  if (error || !data) throw new Error(`Unable to atomically persist learning evaluation policy and evaluator assignment: ${error?.message ?? 'no policy id returned'}`)
+  const policyRecordId = String(data)
   return policyRecordId
 }
 
@@ -142,7 +135,7 @@ async function requireAcknowledgedLearningEvaluatorAssignment(
 ) {
   const { data: assignment, error: assignmentError } = await admin.schema('agent')
     .from('learning_evaluation_assignments')
-    .select('id,project_id,policy_id,candidate_id,proposer_user_id,evaluator_user_id,assigned_by_user_id,scope_digest')
+    .select('id,project_id,policy_id,candidate_id,proposer_user_id,evaluator_user_id,assigned_by_user_id,scope_digest,assigned_at')
     .eq('policy_id', policyRecordId)
     .eq('project_id', policy.projectId)
     .eq('candidate_id', policy.candidateId)
@@ -153,13 +146,14 @@ async function requireAcknowledgedLearningEvaluatorAssignment(
     || String(assignment.proposer_user_id).toLowerCase() !== policy.proposerActorId.toLowerCase()
     || String(assignment.evaluator_user_id).toLowerCase() !== policy.evaluatorActorId.toLowerCase()
     || String(assignment.assigned_by_user_id).toLowerCase() !== policy.proposerActorId.toLowerCase()
+    || !Number.isFinite(Date.parse(String(assignment.assigned_at)))
     || !/^sha256:[0-9a-f]{64}$/.test(String(assignment.scope_digest))) {
     throw new Error('A matching immutable evaluator assignment is required.')
   }
 
   const { data: acknowledgement, error: acknowledgementError } = await admin.schema('agent')
     .from('learning_evaluation_assignment_acknowledgements')
-    .select('id,assignment_id,policy_id,project_id,candidate_id,evaluator_user_id,scope_digest,acknowledged_by_user_id')
+    .select('id,assignment_id,policy_id,project_id,candidate_id,evaluator_user_id,scope_digest,acknowledged_by_user_id,acknowledged_at')
     .eq('policy_id', policyRecordId)
     .eq('assignment_id', assignment.id)
     .eq('project_id', policy.projectId)
@@ -171,6 +165,7 @@ async function requireAcknowledgedLearningEvaluatorAssignment(
     || acknowledgement.candidate_id !== policy.candidateId
     || String(acknowledgement.evaluator_user_id).toLowerCase() !== policy.evaluatorActorId.toLowerCase()
     || String(acknowledgement.acknowledged_by_user_id).toLowerCase() !== policy.evaluatorActorId.toLowerCase()
+    || !Number.isFinite(Date.parse(String(acknowledgement.acknowledged_at)))
     || acknowledgement.scope_digest !== assignment.scope_digest) {
     throw new Error('A matching evaluator acknowledgement is required before learning evaluation.')
   }
@@ -231,7 +226,12 @@ export async function recordLearningEvaluationDecision(input: {
     resultEvaluatorActorId: input.result.evaluatorActorId,
   })
   await authorizeProject(authenticatedUser.id, policy.projectId, 'agent.learning.evaluate')
-  await requireAcknowledgedLearningEvaluatorAssignment(admin, policyRecordId, policy)
+  const { assignment, acknowledgement } = await requireAcknowledgedLearningEvaluatorAssignment(admin, policyRecordId, policy)
+  const observedAt = Date.parse(input.result.observedAt)
+  const evidenceStart = Math.max(Date.parse(String(assignment.assigned_at)), Date.parse(String(acknowledgement.acknowledged_at)))
+  if (!Number.isFinite(observedAt) || observedAt < evidenceStart || observedAt > Date.now()) {
+    throw new Error('Learning evaluation observations must occur after evaluator acknowledgement and cannot be future-dated.')
+  }
   const decision = classifyLearningEvaluation(policy, input.result)
   const { data, error } = await admin.schema('agent').rpc('record_learning_evaluation_result', {
     p_project_id: policy.projectId,
@@ -280,7 +280,7 @@ export async function loadLearningReleaseAdmission(input: {
   if (!persistedPolicy) throw new Error('A locked prospective evaluation policy is required before release review.')
   const policy = learningPolicyFromRow(persistedPolicy)
   validateLearningEvaluationPolicy(policy)
-  await requireAcknowledgedLearningEvaluatorAssignment(admin, String(persistedPolicy.id), policy)
+  const assignmentEvidence = await requireAcknowledgedLearningEvaluatorAssignment(admin, String(persistedPolicy.id), policy)
 
   const { data: rows, error } = await admin.schema('agent')
     .from('learning_evaluation_results')
@@ -293,6 +293,12 @@ export async function loadLearningReleaseAdmission(input: {
   if (error) throw new Error(`Unable to load latest learning evaluation decision: ${error.message}`)
   const row = latestUnambiguousRow(rows, 'Evaluation decision')
   if (!row) throw new Error('The latest prospective evaluation policy has no recorded decision.')
+  const resultObservedAt = Date.parse(String(row.observed_at))
+  const evaluatorAcknowledgedAt = Date.parse(String(assignmentEvidence.acknowledgement.acknowledged_at))
+  if (!Number.isFinite(resultObservedAt) || !Number.isFinite(evaluatorAcknowledgedAt)
+    || resultObservedAt < evaluatorAcknowledgedAt || resultObservedAt > Date.now()) {
+    throw new Error('Evaluation evidence must postdate evaluator acknowledgement and cannot be future-dated for release review.')
+  }
   if (String(row.disposition) !== 'REVIEW_REQUIRED' || String(row.quality) !== 'IMPROVED' || row.automatic_promotion_allowed !== false) {
     throw new Error('The latest prospective evaluation decision is not eligible for release review.')
   }
