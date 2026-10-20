@@ -57,3 +57,22 @@ assert.match(executorSource, /executeProfilingMetrics\(datasetVersionId, profili
 assert.doesNotMatch(executorSource, /executeProfilingMetrics\(datasetVersionId, profilingRunId, input\)/)
 
 console.log('Profiling request input trust-boundary checks passed.')
+
+
+const profilingJobSource = await readFile(new URL('../lib/agents/run-profiling-job.ts', import.meta.url), 'utf8')
+assert.match(
+  profilingJobSource,
+  /executeProfilingExecutor\('profile_dataset', \{ datasetVersionId, profilingRunId \}, context\)/,
+)
+assert.match(
+  profilingJobSource,
+  /executeProfilingExecutor\('execute_metrics', \{ datasetVersionId, profilingRunId \}/,
+)
+assert.match(
+  profilingJobSource,
+  /executeProfilingExecutor\('investigate_profile', \{ datasetVersionId, profilingRunId \}/,
+)
+assert.doesNotMatch(
+  profilingJobSource,
+  /executeProfilingExecutor\([^\n]+\{ \.\.\.requestInput, datasetVersionId, profilingRunId \}/,
+)
