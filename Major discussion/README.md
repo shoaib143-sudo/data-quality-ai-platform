@@ -107,3 +107,4 @@ At this checkpoint:
 New discussions should be added as dated Markdown files. Older ideas must not be deleted when direction changes. Mark them as superseded, rejected, deferred, or replaced and append the newer decision with its context.
 
 New architecture or implementation decisions with strategic significance should also be cross referenced from the Architecture repository.
+- [Governance provider independent adversarial closure](./2026-10-02-governance-provider-independent-adversarial-closure.md)
