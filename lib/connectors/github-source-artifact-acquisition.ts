@@ -74,11 +74,11 @@ export async function acquireGitHubSourceArtifacts(input:{repositoryUrl:string;r
     const blob=await githubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs/${item.sha}`) as {encoding?:string;content?:string;size?:number}
     if(blob.encoding!=='base64'||typeof blob.content!=='string')continue
     if(typeof blob.size==='number'&&blob.size>MAX_FILE_BYTES)continue
-    const bytesBuffer=Buffer.from(blob.content.replace(/\\s/g,''),'base64')
+    const bytesBuffer=Buffer.from(blob.content.replace(/\s/g,''),'base64')
     const bytes=bytesBuffer.length
     if(bytes===0||bytes>MAX_FILE_BYTES||totalBytes+bytes>MAX_TOTAL_BYTES)continue
     const content=bytesBuffer.toString('utf8')
-    if(content.includes('\\u0000'))continue
+    if(content.includes('\u0000'))continue
     totalBytes+=bytes
     artifacts.push({path:item.path,kind:item.kind,content,size:bytes})
   }
