@@ -175,6 +175,7 @@ create table if not exists agent.learning_evaluator_assignments (
   constraint learning_evaluator_independent_ck check (
     proposer_user_id <> evaluator_user_id
     and assigned_by <> evaluator_user_id
+    and assigned_by <> proposer_user_id
   )
 );
 
@@ -588,7 +589,10 @@ begin
   then
     raise exception 'Canonical evaluator identities and acknowledgement are required';
   end if;
-  if p_proposer_user_id=p_evaluator_user_id or p_assigned_by=p_evaluator_user_id then
+  if p_proposer_user_id=p_evaluator_user_id
+    or p_assigned_by=p_evaluator_user_id
+    or p_assigned_by=p_proposer_user_id
+  then
     raise exception 'Independent evaluator separation is required';
   end if;
   if v_policy.proposer_actor_id<>p_proposer_user_id::text
