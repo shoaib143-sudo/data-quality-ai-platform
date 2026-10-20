@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { assertAuthenticatedLearningEvaluator } from '../lib/agents/learning-evaluation-authorization.ts'
+import {
+  assertAuthenticatedLearningEvaluator,
+  assertLearningEvaluatorAssignment,
+} from '../lib/agents/learning-evaluation-authorization.ts'
 
 const authorization = fs.readFileSync('lib/auth/authorize.ts', 'utf8')
 const migration = fs.readFileSync('supabase/migrations/20261020100000_agent_learning_evaluate_capability.sql', 'utf8')
@@ -44,10 +47,28 @@ assert.throws(() => assertAuthenticatedLearningEvaluator({
   policyEvaluatorActorId: reviewer,
   resultEvaluatorActorId: 'caller-claimed-reviewer',
 }), /canonical UUID/)
+assert.deepEqual(assertLearningEvaluatorAssignment({
+  proposerUserId: 'b1234567-89ab-4cde-8fab-123456789abc',
+  evaluatorUserId: reviewer.toUpperCase(),
+}), { proposerUserId: 'b1234567-89ab-4cde-8fab-123456789abc', evaluatorUserId: reviewer })
+assert.throws(() => assertLearningEvaluatorAssignment({
+  proposerUserId: reviewer,
+  evaluatorUserId: reviewer.toUpperCase(),
+}), /must be different/)
 
 assert.ok(!genericPolicy.includes('agent.learning.evaluate'), 'evaluation review must not become a generic execution action')
 assert.ok(!genericMap.includes('agent.learning.evaluate'), 'evaluation review must not inherit generic agent action routing')
 
+const registerStart = service.indexOf('export async function registerLearningEvaluationPolicy')
+const registerEnd = service.indexOf('\nexport async function recordLearningEvaluationDecision', registerStart)
+const registerBody = service.slice(registerStart, registerEnd)
+assert.match(registerBody, /const proposer = await requireApiUser\(\)/)
+assert.match(registerBody, /proposerUserId: proposer\.id/)
+assert.match(registerBody, /authorizeProject\(assignment\.proposerUserId, policy\.projectId, 'agent\.admin'\)/)
+assert.match(registerBody, /admin\.auth\.admin\.getUserById\(assignment\.evaluatorUserId\)/)
+assert.match(registerBody, /authorizeProject\(assignment\.evaluatorUserId, policy\.projectId, 'agent\.learning\.evaluate'\)/)
+
 console.log('PASS evaluator capability is catalogued, narrowly role-assigned, and checked before evaluation writes')
 console.log('PASS forged, mismatched and malformed evaluator identities are rejected against the persisted policy')
+console.log('PASS proposer and evaluator assignments require distinct canonical user UUIDs')
 console.log('PASS evaluator capability is not exposed as a generic agent execution action')
