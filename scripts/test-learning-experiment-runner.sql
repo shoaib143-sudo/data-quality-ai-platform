@@ -6,6 +6,7 @@ alter table agent.learning_evaluation_policies add column dataset_version_ids te
 create table agent.learning_benchmark_dataset_cases(project_id uuid,dataset_id uuid,case_key text,split text,unique(project_id,dataset_id,case_key));
 grant select on agent.learning_benchmark_dataset_cases to service_role;
 \ir ../supabase/migrations/20261001152250_learning_experiment_runner_evidence.sql
+\ir ../supabase/migrations/20261020070000_terminalize_learning_experiment_dispatch.sql
 insert into agent.learning_candidates values('20000000-0000-4000-8000-000000000099','10000000-0000-4000-8000-000000000001');
 insert into agent.learning_evaluation_policies(id,project_id,candidate_id,agent_key,mode,dataset_manifest_id,dataset_version_ids)
 values('30000000-0000-4000-8000-000000000099','10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000099','profiling_agent','GUIDED','40000000-0000-4000-8000-000000000099',array['version-99']);
@@ -72,7 +73,18 @@ begin
  assert denied,'terminal substitution denied';
  response:=agent.claim_learning_experiment_dispatch(identity||jsonb_build_object('arm','candidate','artifactHash','sha256:'||repeat('f',64)),'sha256:'||repeat('d',64));
  assert response->>'status'='acquired','second arm distinct claim';
- assert agent.fail_learning_experiment_dispatch((response->>'claimId')::uuid,'fixture failure'),'terminal failure recorded';
+ claim := (response->>'claimId')::uuid;
+ assert agent.terminalize_learning_experiment_dispatch(claim,'failed','fixture failure'),'terminal failure recorded';
+ assert agent.terminalize_learning_experiment_dispatch(claim,'failed','fixture failure'),'identical terminalization idempotent';
+ denied:=false;
+ begin perform agent.terminalize_learning_experiment_dispatch(claim,'cancelled','fixture failure'); exception when others then denied:=sqlerrm='TERMINAL_EVIDENCE_CONFLICT'; end;
+ assert denied,'conflicting terminal status denied';
+ denied:=false;
+ begin perform agent.terminalize_learning_experiment_dispatch(claim,'failed','  '); exception when others then denied:=sqlerrm='INVALID_TERMINAL_DISPATCH'; end;
+ assert denied,'empty terminal reason denied';
+ denied:=false;
+ begin perform agent.terminalize_learning_experiment_dispatch(gen_random_uuid(),'failed','missing claim'); exception when others then denied:=sqlerrm='CLAIM_NOT_FOUND'; end;
+ assert denied,'missing claim terminalization denied';
  response:=agent.claim_learning_experiment_dispatch(identity||jsonb_build_object('arm','candidate','artifactHash','sha256:'||repeat('f',64)),'sha256:'||repeat('d',64));
  assert response->>'status'='failed','failed attempt cannot redispatch';
  raise notice 'Learning runner SQL behavior assertions passed';
@@ -86,6 +98,6 @@ do $$ begin
  assert not has_table_privilege('service_role','agent.learning_experiment_dispatch_outcomes','INSERT'),'service direct outcome insert denied';
  assert not has_table_privilege('service_role','agent.learning_experiment_dispatch_claims','UPDATE'),'service cannot mutate claims';
  assert not has_table_privilege('service_role','agent.learning_experiment_dispatch_outcomes','DELETE'),'service cannot delete outcomes';
- assert (select count(*)=3 from pg_proc where oid in ('agent.claim_learning_experiment_dispatch(jsonb,text)'::regprocedure,'agent.complete_learning_experiment_dispatch(uuid,jsonb,uuid,uuid)'::regprocedure,'agent.fail_learning_experiment_dispatch(uuid,text)'::regprocedure) and prosecdef),'dispatch write RPCs run with definer privileges';
+ assert (select count(*)=4 from pg_proc where oid in ('agent.claim_learning_experiment_dispatch(jsonb,text)'::regprocedure,'agent.complete_learning_experiment_dispatch(uuid,jsonb,uuid,uuid)'::regprocedure,'agent.fail_learning_experiment_dispatch(uuid,text)'::regprocedure,'agent.terminalize_learning_experiment_dispatch(uuid,text,text)'::regprocedure) and prosecdef),'dispatch write RPCs run with definer privileges';
  assert (select count(*)=2 from pg_class where oid in ('agent.learning_experiment_dispatch_claims'::regclass,'agent.learning_experiment_dispatch_outcomes'::regclass) and relrowsecurity),'RLS enabled';
 end $$;

@@ -121,7 +121,9 @@ export type LearningEvidenceReconciliation = {
 }
 
 const HASH = /^sha256:[a-f0-9]{64}$/
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+// PostgreSQL emits UUIDs in lowercase canonical form. Reject alternate casing
+// so duplicate detection and foreign-key-like joins cannot treat one UUID as two.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d+)?$/
 
 function fail(message: string): never { throw new Error(`LEARNING_EVIDENCE_${message}`) }
@@ -130,6 +132,20 @@ function decimalParts(value: string, label: string): { whole: string; fraction: 
   if (!DECIMAL.test(value)) fail(`${label}_INVALID`)
   const [whole, fraction = ''] = value.split('.')
   return { whole, fraction }
+}
+function decimalFromNumber(value: number, label: string): string {
+  if (!Number.isFinite(value) || value < 0) fail(`${label}_INVALID`)
+  const text = String(value)
+  const match = /^([0-9]+)(?:\.([0-9]+))?(?:e([+-]?\d+))?$/i.exec(text)
+  if (!match) fail(`${label}_INVALID`)
+  const whole = match[1]
+  const fraction = match[2] ?? ''
+  const exponent = Number(match[3] ?? 0)
+  const digits = `${whole}${fraction}`
+  const point = whole.length + exponent
+  if (point <= 0) return `0.${'0'.repeat(-point)}${digits}`.replace(/0+$/, '').replace(/\.$/, '') || '0'
+  if (point >= digits.length) return `${digits}${'0'.repeat(point - digits.length)}`
+  return `${digits.slice(0, point)}.${digits.slice(point)}`.replace(/0+$/, '').replace(/\.$/, '')
 }
 function decimalScale(values: readonly string[]): number { return Math.max(0, ...values.map(value => value.split('.')[1]?.length ?? 0)) }
 function scaledDecimal(value: string, scale: number, label: string): string {
@@ -204,7 +220,7 @@ export function reconcileLearningEvidence(input: LearningEvidenceReconciliationI
     const expectedArtifact = dispatch.arm === 'baseline' ? sealed.baselineArtifactHash
       : dispatch.arm === 'candidate' ? sealed.candidateArtifactHash : null
     if (!expectedArtifact || dispatch.artifactHash !== expectedArtifact) fail('DISPATCH_ARM_OR_ARTIFACT_MISMATCH')
-    if (!dispatch.outputRef?.trim() || !dispatch.outputBytes || !HASH.test(dispatch.outputHash ?? '')
+    if (!dispatch.outputRef?.trim() || dispatch.outputBytes === null || !HASH.test(dispatch.outputHash ?? '')
       || digest(dispatch.outputBytes) !== dispatch.outputHash) fail('OUTPUT_BYTES_MISMATCH')
     if (!UUID.test(dispatch.invocationId ?? '') || !UUID.test(dispatch.reservationId ?? '')
       || !UUID.test(dispatch.settlementId ?? '') || !UUID.test(dispatch.costEventId ?? '')
@@ -278,15 +294,15 @@ export function reconcileLearningEvidence(input: LearningEvidenceReconciliationI
   const totalTokens = input.dispatches.reduce((sum, item) => sum + item.tokens!, 0)
   const maxRunTokens = Math.max(...input.dispatches.map(item => item.tokens!))
   const maxLatencyMs = Math.max(...input.dispatches.map(item => item.latencyMs!))
-  if (!Number.isSafeInteger(totalTokens) || totalCostUsd === '' || compareDecimals(totalCostUsd, String(policy.budget.totalCost)) > 0
-    || compareDecimals(maxRunCostUsd, String(policy.budget.perRunCost)) > 0 || totalTokens > policy.budget.totalTokens
+  if (!Number.isSafeInteger(totalTokens) || totalCostUsd === '' || compareDecimals(totalCostUsd, decimalFromNumber(policy.budget.totalCost, 'TOTAL_BUDGET')) > 0
+    || compareDecimals(maxRunCostUsd, decimalFromNumber(policy.budget.perRunCost, 'PER_RUN_BUDGET')) > 0 || totalTokens > policy.budget.totalTokens
     || maxRunTokens > policy.budget.perRunTokens || maxLatencyMs > policy.budget.latencyMs) fail('BUDGET_EXCEEDED')
 
   const evidence = {
     policyId: policy.policyId, policyRecordId: input.policyRecordId, projectId: policy.projectId,
     candidateId: policy.candidateId, runId: input.runId, mode: policy.mode, manifestHash: policy.manifestHash,
     executionManifestHash: input.executionManifestHash, finalizedAt: input.finalizedAt,
-    sealedCases: [...input.sealedCases].sort((a, b) => a.caseKey.localeCompare(b.caseKey)),
+    sealedCases: [...input.sealedCases].sort((a, b) => a.caseKey.localeCompare(b.caseKey) || a.datasetVersionId.localeCompare(b.datasetVersionId)),
     dispatches: [...input.dispatches].sort((a, b) => a.claimId.localeCompare(b.claimId)),
     scores: [...input.scores].sort((a, b) => a.scoreId.localeCompare(b.scoreId)),
     settlements: [...input.settlements].sort((a, b) => a.id.localeCompare(b.id)),

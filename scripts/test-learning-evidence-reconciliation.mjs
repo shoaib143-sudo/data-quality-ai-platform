@@ -51,6 +51,23 @@ assert.equal(reconciliation.candidateMeanScore, 0.9)
 assert.equal(reconciliation.totalCostUsd, '0')
 assert.match(reconciliation.evidenceDigest, /^sha256:[a-f0-9]{64}$/)
 assert.equal(reconcileLearningEvidence({ ...base, dispatches: [...dispatches].reverse(), scores: [...scores].reverse() }).evidenceDigest, reconciliation.evidenceDigest)
+const repeatedCaseKey = structuredClone(base)
+repeatedCaseKey.policy.datasetVersionIds.push('dataset-v2')
+const replacedKey = repeatedCaseKey.sealedCases[1].caseKey
+repeatedCaseKey.sealedCases[1].caseKey = repeatedCaseKey.sealedCases[0].caseKey
+repeatedCaseKey.sealedCases[1].datasetVersionId = 'dataset-v2'
+for (const dispatch of repeatedCaseKey.dispatches.filter(item => item.caseKey === replacedKey)) {
+  dispatch.caseKey = repeatedCaseKey.sealedCases[0].caseKey
+  dispatch.datasetVersionId = 'dataset-v2'
+  dispatch.inputHash = repeatedCaseKey.sealedCases[1].inputHash
+}
+const repeatedCaseDigest = reconcileLearningEvidence(repeatedCaseKey).evidenceDigest
+assert.equal(reconcileLearningEvidence({ ...repeatedCaseKey, sealedCases: [...repeatedCaseKey.sealedCases].reverse() }).evidenceDigest, repeatedCaseDigest)
+const emptyOutput = structuredClone(base)
+emptyOutput.dispatches[0].outputBytes = ''
+emptyOutput.dispatches[0].outputHash = hash('')
+emptyOutput.scores[0].outputHash = hash('')
+assert.equal(reconcileLearningEvidence(emptyOutput).structurallyComplete, true)
 const priced = structuredClone(base)
 priced.policy.budget.totalCost = 0.4
 priced.policy.budget.perRunCost = 0.1
@@ -58,6 +75,13 @@ priced.dispatches.forEach(item => { item.costUsd = '0.1' })
 priced.settlements.forEach(item => { item.costUsd = '0.10' })
 priced.costEvents.forEach(item => { item.costUsd = '0.100' })
 assert.equal(reconcileLearningEvidence(priced).totalCostUsd, '0.4')
+const scientificBudget = structuredClone(base)
+scientificBudget.policy.budget.totalCost = 2e-7
+scientificBudget.policy.budget.perRunCost = 5e-8
+scientificBudget.dispatches.forEach(item => { item.costUsd = '0.00000005' })
+scientificBudget.settlements.forEach(item => { item.costUsd = '0.000000050' })
+scientificBudget.costEvents.forEach(item => { item.costUsd = '0.00000005' })
+assert.equal(reconcileLearningEvidence(scientificBudget).totalCostUsd, '0.0000002')
 
 const broken = (mutate, pattern) => {
   const copy = structuredClone(base)
@@ -69,6 +93,7 @@ broken(x => { x.dispatches[0].outputBytes = 'tampered' }, /OUTPUT_BYTES_MISMATCH
 broken(x => { x.dispatches[0].status = 'failed' }, /DISPATCH_NOT_COMPLETE_OR_UNSEALED/)
 broken(x => { x.dispatches[0].artifactHash = hash('forged artifact') }, /DISPATCH_ARM_OR_ARTIFACT_MISMATCH/)
 broken(x => { x.dispatches[1].invocationId = x.dispatches[0].invocationId }, /INVOCATION_DUPLICATE/)
+broken(x => { x.dispatches[1].claimId = x.dispatches[0].claimId.toUpperCase() }, /CLAIM_DUPLICATE_OR_INVALID/)
 broken(x => { x.scores[0].outputHash = hash('different output') }, /SCORE_SCOPE_OR_AUTHENTICITY_MISMATCH/)
 broken(x => { x.scores[0].evaluatorActorId = policy.proposerActorId }, /SCORE_SCOPE_OR_AUTHENTICITY_MISMATCH/)
 broken(x => { x.scores[0].score = 1.1 }, /SCORE_SCOPE_OR_AUTHENTICITY_MISMATCH/)
@@ -77,5 +102,13 @@ broken(x => { x.settlements[0].costUsd = '0.01'; x.costEvents[0].costUsd = '0.01
 broken(x => { x.dispatches[0].inputHash = hash('different input') }, /DISPATCH_NOT_COMPLETE_OR_UNSEALED/)
 broken(x => { x.scores.push(structuredClone(x.scores[0])) }, /SCORE_DUPLICATE_OR_INVALID/)
 broken(x => { x.costEvents[0].currency = 'EUR' }, /COST_EVENT_UNPRICED_OR_MISMATCHED/)
+broken(x => { x.dispatches[0].projectId = uuid(99) }, /DISPATCH_SCOPE_MISMATCH/)
+broken(x => { x.dispatches[0].policyRecordId = uuid(99) }, /DISPATCH_SCOPE_MISMATCH/)
+broken(x => { x.dispatches[0].candidateId = uuid(99) }, /DISPATCH_SCOPE_MISMATCH/)
+broken(x => { x.dispatches[0].runId = uuid(99) }, /DISPATCH_SCOPE_MISMATCH/)
+broken(x => { x.sealedCases[1] = structuredClone(x.sealedCases[0]) }, /SEALED_CASE_INVALID/)
+broken(x => { x.settlements[0].costUsd = '-0.01' }, /SETTLEMENT_COST_INVALID/)
+broken(x => { x.costEvents.pop() }, /CANONICAL_ACCOUNTING_LINK_MISMATCH/)
+broken(x => { x.settlements.push(structuredClone(x.settlements[0])) }, /SETTLEMENT_DUPLICATE_OR_INVALID/)
 
 console.log('PASS evidence reconciler enforces exact pair coverage, byte hashes, evaluator scope, canonical accounting, zero budget and stable digest; it does not produce an attestation or learning decision')

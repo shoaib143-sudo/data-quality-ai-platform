@@ -44,6 +44,7 @@ export type LearningEvaluationDecisionSummary = {
   maxLatencyMs: number
   disposition: string
   quality: string
+  attestationStatus: 'UNATTESTED' | 'ATTESTED'
   reasons: string[]
   automaticPromotionAllowed: false
 }
@@ -153,6 +154,9 @@ export async function readLearningEvaluationCommandCenterState(
     maxLatencyMs: finiteNumber(row.max_latency_ms),
     disposition: String(row.disposition),
     quality: String(row.quality),
+    // No server-owned attestation column/row exists yet. Treat historical
+    // aggregate IMPROVED labels as untrusted until a persisted attestation joins.
+    attestationStatus: 'UNATTESTED',
     reasons: textArray(row.reasons),
     automaticPromotionAllowed: false,
   }))
@@ -163,7 +167,7 @@ export async function readLearningEvaluationCommandCenterState(
     counts: {
       policies: policies.length,
       decisions: decisions.length,
-      improved: decisions.filter((row) => row.quality === 'IMPROVED').length,
+      improved: decisions.filter((row) => row.quality === 'IMPROVED' && row.attestationStatus === 'ATTESTED').length,
       regressed: decisions.filter((row) => row.quality === 'REGRESSED').length,
       inconclusive: decisions.filter((row) => row.quality === 'INCONCLUSIVE').length,
       stopped: decisions.filter((row) => row.disposition === 'STOPPED').length,
