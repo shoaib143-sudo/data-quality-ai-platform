@@ -63,7 +63,7 @@ The repository now has implementation contracts for the production integrations 
 - [Held-out replay source](learning-benchmark-held-out-replay-source-contract-20261003.md): sealed project/case/version to bytes bindings, deterministic reads, privacy limits, and stale, missing, or tampered input handling.
 - [Trusted proposer and independent evaluator identity](learning-runner-identity-independent-review-contract-20261003.md): authenticated actor binding, evaluator assignment authority, independence evidence, migration and API requirements, and conflict failures.
 
-The evaluator authorization capability remains an implementation choice. Use an existing capability only if its governance meaning explicitly covers independent evaluation; otherwise add a narrow `agent.learning.evaluate` capability and include it in every authorization catalog and policy test. Do not treat two distinct text IDs as proof of independence.
+The narrow `agent.learning.evaluate` capability is now catalogued, granted only to `DATA_GOVERNANCE_ADMIN`, guarded by a forward migration, and required by the evaluation-result service before its service-role write. The authenticated evaluator UUID must match both the locked policy evaluator and recorder. This does not replace the remaining work to bind evidence to a trusted assignment and server-derived attestation. Do not treat two distinct text IDs as proof of independence.
 
 ## Adversarial follow-up on the PR #1122 change
 
