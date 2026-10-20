@@ -99,9 +99,9 @@ The audit is separate from the dynamic runner test and checks for:
 
 ## Residual policy boundary
 
-The exact evaluator capability remains intentionally unresolved. The server authorization factory requires an explicit trusted `AuthorizationCapability` for the evaluator. This branch does not silently treat `policy.approve`, `agent.admin`, or another broad capability as independent-evaluation authority.
+The evaluator operation now uses the narrow `agent.learning.evaluate` capability. This branch intentionally grants that capability to **no role**. Both evaluator assignment and experiment execution re-check it through the existing project authorization service.
 
-Choosing an existing capability or introducing a narrow `agent.learning.evaluate` capability is a governance/business-policy decision.
+The remaining governance/business-policy decision is **who, if anyone, should receive `agent.learning.evaluate`** and which capability may assign an evaluator. This branch does not silently reuse `policy.approve`, `agent.admin`, or another broad capability, and it does not assign either authority.
 
 ## Exit criteria
 
