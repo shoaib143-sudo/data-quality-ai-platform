@@ -135,21 +135,39 @@ export async function stageImmutableLearningArtifact(input:LearningArtifactRegis
     p_created_by:input.createdBy ?? null,
   })
   if(error || !id) {
+    const {data:registered,error:lookupError}=await admin.schema('agent').from('learning_artifact_manifests')
+      .select('id,object_artifact_id,artifact_kind,artifact_role,agent_definition_id,skill_key,candidate_id,dataset_manifest_id,case_key,dataset_version_id,content_type,size_bytes,sha256,serialization_version,runtime_version,definition_hash,tool_contract_set_hash,source_ref')
+      .eq('project_id',input.projectId).eq('provider_key','supabase').eq('bucket',bucket).eq('object_key',key)
+      .maybeSingle()
+    if(!lookupError && registered) {
+      const exact=registered.object_artifact_id===lifecycle.row.id
+        && registered.artifact_kind===input.kind
+        && registered.artifact_role===input.role
+        && registered.agent_definition_id===(input.agentDefinitionId??null)
+        && registered.skill_key===(input.skillKey?.trim()||null)
+        && registered.candidate_id===(input.candidateId??null)
+        && registered.dataset_manifest_id===(input.datasetManifestId??null)
+        && registered.case_key===(input.caseKey??null)
+        && registered.dataset_version_id===(input.datasetVersionId??null)
+        && registered.content_type===contentType
+        && Number(registered.size_bytes)===input.bytes.byteLength
+        && registered.sha256===sha256
+        && registered.serialization_version===normalized(input.serializationVersion,'serializationVersion')
+        && registered.runtime_version===(input.runtimeVersion?.trim()||null)
+        && registered.definition_hash===(input.definitionHash??null)
+        && registered.tool_contract_set_hash===(input.toolContractSetHash??null)
+        && registered.source_ref===normalized(input.sourceRef,'sourceRef')
+      if(exact) return {id:String(registered.id),sha256,sizeBytes:input.bytes.byteLength,objectKey:key,bucket}
+      throw new Error('LEARNING_ARTIFACT_CONCURRENT_REGISTRATION_CONFLICT')
+    }
+
+    // Clean up only resources created by this invocation and only when canonical
+    // persistence proves no manifest won a concurrent registration race.
     if(lifecycle.created) {
       await admin.schema('orchestration').from('object_artifacts').delete().eq('id',lifecycle.row.id).catch(()=>undefined)
     }
-    if(createdNewObject && lifecycle.created) {
-      const {data:registered,error:lookupError}=await admin.schema('agent').from('learning_artifact_manifests')
-        .select('id,sha256,size_bytes')
-        .eq('project_id',input.projectId).eq('provider_key','supabase').eq('bucket',bucket).eq('object_key',key)
-        .maybeSingle()
-      // Delete only when canonical persistence proves nobody won the concurrent registration race.
-      // If the lookup itself is unavailable, preserve the object for reconciliation rather than
-      // risk deleting bytes referenced by another committed manifest.
-      if(!lookupError && !registered) await admin.storage.from(bucket).remove([key]).catch(()=>undefined)
-      if(registered && (registered.sha256!==sha256 || Number(registered.size_bytes)!==input.bytes.byteLength)) {
-        throw new Error('LEARNING_ARTIFACT_CONCURRENT_REGISTRATION_CONFLICT')
-      }
+    if(createdNewObject && lifecycle.created && !lookupError && !registered) {
+      await admin.storage.from(bucket).remove([key]).catch(()=>undefined)
     }
     throw new Error(`LEARNING_ARTIFACT_REGISTRATION_FAILED: ${error?.message ?? 'missing id'}`)
   }
