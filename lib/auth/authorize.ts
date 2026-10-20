@@ -35,6 +35,7 @@ export type AuthorizationCapability =
   | 'execution.approve'
   | 'agent.admin'
   | 'agent.learning.evaluate'
+  | 'agent.learning.assign_evaluator'
   | 'glossary.read'
   | 'glossary.manage'
   | 'lineage.read'
