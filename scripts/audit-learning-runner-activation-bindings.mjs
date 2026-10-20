@@ -18,6 +18,7 @@ for(const pattern of [
   /Candidate executable does not match candidate agent\/version/,
   /Candidate baseline\/candidate runtime version mismatch/,
   /Runtime hashes must equal immutable executable artifact digests/,
+  /Rollback runtime does not match locked policy rollback reference/,
   /Replay artifact must bind a held-out case/,
   /Replay artifact dataset version must match the sealed manifest/,
   /Independent evaluator separation is required/,
