@@ -82,7 +82,10 @@ do $$ begin
  assert not has_table_privilege('anon','agent.learning_experiment_dispatch_claims','SELECT'),'anon denied';
  assert not has_table_privilege('authenticated','agent.learning_experiment_dispatch_outcomes','INSERT'),'browser insert denied';
  assert not has_function_privilege('authenticated','agent.claim_learning_experiment_dispatch(jsonb,text)','EXECUTE'),'browser RPC denied';
+ assert not has_table_privilege('service_role','agent.learning_experiment_dispatch_claims','INSERT'),'service direct claim insert denied';
+ assert not has_table_privilege('service_role','agent.learning_experiment_dispatch_outcomes','INSERT'),'service direct outcome insert denied';
  assert not has_table_privilege('service_role','agent.learning_experiment_dispatch_claims','UPDATE'),'service cannot mutate claims';
  assert not has_table_privilege('service_role','agent.learning_experiment_dispatch_outcomes','DELETE'),'service cannot delete outcomes';
+ assert (select count(*)=3 from pg_proc where oid in ('agent.claim_learning_experiment_dispatch(jsonb,text)'::regprocedure,'agent.complete_learning_experiment_dispatch(uuid,jsonb,uuid,uuid)'::regprocedure,'agent.fail_learning_experiment_dispatch(uuid,text)'::regprocedure) and prosecdef),'dispatch write RPCs run with definer privileges';
  assert (select count(*)=2 from pg_class where oid in ('agent.learning_experiment_dispatch_claims'::regclass,'agent.learning_experiment_dispatch_outcomes'::regclass) and relrowsecurity),'RLS enabled';
 end $$;

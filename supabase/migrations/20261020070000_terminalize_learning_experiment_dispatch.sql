@@ -7,7 +7,7 @@ create or replace function agent.terminalize_learning_experiment_dispatch(
 )
 returns boolean
 language plpgsql
-security invoker
+security definer
 set search_path = pg_catalog, agent
 as $function$
 declare

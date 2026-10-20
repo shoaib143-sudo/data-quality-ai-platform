@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const migration = fs.readFileSync('supabase/migrations/20261020070000_terminalize_learning_experiment_dispatch.sql', 'utf8')
+const runnerMigration = fs.readFileSync('supabase/migrations/20261001152250_learning_experiment_runner_evidence.sql', 'utf8')
 const runner = fs.readFileSync('lib/agents/learning-experiment-runner.ts', 'utf8')
 const store = fs.readFileSync('lib/agents/learning-experiment-runner-store.ts', 'utf8')
 
@@ -9,7 +10,12 @@ assert.match(migration, /p_status not in \('failed', 'cancelled'\)/i)
 assert.match(migration, /pg_advisory_xact_lock\(hashtextextended\(p_claim_id::text, 0\)\)/i)
 assert.match(migration, /v_existing\.status = p_status and v_existing\.failure_reason = left\(btrim\(p_reason\), 240\)/i)
 assert.match(migration, /insert into agent\.learning_experiment_dispatch_outcomes\(claim_id, status, failure_reason\)/i)
+assert.match(migration, /security definer[\s\S]*?set search_path = pg_catalog, agent/i)
 assert.match(migration, /grant execute on function agent\.terminalize_learning_experiment_dispatch\(uuid, text, text\)\s+to service_role/i)
+assert.match(runnerMigration, /revoke all on agent\.learning_experiment_dispatch_claims,agent\.learning_experiment_dispatch_outcomes from public,anon,authenticated,service_role/i)
+assert.doesNotMatch(runnerMigration, /grant select,insert on agent\.learning_experiment_dispatch_claims/i)
+assert.match(runnerMigration, /grant select on agent\.learning_experiment_dispatch_claims,agent\.learning_experiment_dispatch_outcomes to service_role/i)
+assert.equal((runnerMigration.match(/language plpgsql security definer set search_path=pg_catalog,agent as \$\$/gi) ?? []).length, 3)
 assert.match(runner, /terminalizeDispatch\(claimId: string, status: 'failed' \| 'cancelled'/)
 assert.match(runner, /pendingTerminal = \{ status: 'cancelled', reason: 'RUNNER_CANCELLED_AFTER_CLAIM' \}[\s\S]*?terminalizeDispatch\(claim\.claimId, pendingTerminal\.status, pendingTerminal\.reason\)/)
 assert.match(runner, /terminalizeDispatch\(activeClaimId, terminalStatus, terminalReason\)/)

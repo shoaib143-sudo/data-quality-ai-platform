@@ -121,6 +121,16 @@ for (const failurePoint of ['execute', 'verify', 'complete']) {
   const first = await f.run(); assert.equal(first.status, 'STOPPED'); assert.equal(count(f, 'execute'), 1)
   const second = await f.run(); assert.equal(second.reason, 'RUNNER_PRIOR_FAILED'); assert.equal(count(f, 'execute'), 1); assertions++
 }
+{
+  const f = fixture(), execute = f.ports.execute
+  f.ports.execute = async input => { f.events.push('provider-accepted'); return execute(input) }
+  f.ports.store.completeDispatch = async () => { f.events.push('complete-unavailable'); throw new Error('completion write unavailable') }
+  f.ports.store.terminalizeDispatch = async () => { f.events.push('terminal-write-unavailable'); throw new Error('terminalization unavailable') }
+  const first = await f.run()
+  assert.equal(first.status, 'STOPPED'); assert.equal(first.outcomes.length, 0)
+  assert.equal((await f.run()).reason, 'RUNNER_PRIOR_AMBIGUOUS')
+  assert.equal(count(f, 'provider-accepted'), 1); assert.equal(count(f, 'execute'), 1); assertions++
+}
 for (const mutation of [
   outcome => { outcome.identity.projectId = id(99) }, outcome => { outcome.identity.caseKey = digest('other case') },
   outcome => { outcome.identity.arm = 'candidate' }, outcome => { outcome.identity.artifactHash = runnerHash('other-version') },

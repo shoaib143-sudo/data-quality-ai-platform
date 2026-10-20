@@ -130,6 +130,17 @@ for (const invariant of [
 assert.equal(migration.includes("v_target_status := 'ACTIVE'"), false)
 assert.equal(migration.includes("v_target_status := 'APPROVED_FOR_CONTROLLED_RELEASE'"), false)
 
+const benchmarkWriter = fs.readFileSync('lib/agents/governed-learning-benchmark-service.ts', 'utf8')
+assert.match(benchmarkWriter, /Governed learning benchmark writes are disabled until server-owned output, evaluator, and accounting evidence can be attested/i)
+assert.equal(benchmarkWriter.includes("rpc('record_learning_candidate_benchmark'"), false, 'legacy application benchmark writer must not call aggregate RPC')
+
+const disabledLegacyRpc = fs.readFileSync('supabase/migrations/20261020080000_disable_unattested_legacy_benchmark_writes.sql', 'utf8')
+assert.match(disabledLegacyRpc, /create or replace function agent\.record_learning_candidate_benchmark/i)
+assert.match(disabledLegacyRpc, /security definer[\s\S]*?set search_path = pg_catalog/i)
+assert.match(disabledLegacyRpc, /legacy aggregate benchmark writes are disabled until server-owned evidence attestation is available/i)
+assert.match(disabledLegacyRpc, /errcode = '55000'/i)
+assert.match(disabledLegacyRpc, /uuid,uuid,text,text,text,timestamptz,integer,numeric,numeric,integer,integer,text\[\],text,integer,numeric,uuid/i)
+
 const temporalMigration = fs.readFileSync('supabase/migrations/20260928010000_learning_benchmark_temporal_integrity.sql', 'utf8')
 assert.match(temporalMigration, /new\.observed_at < v_cutoff/)
 assert.match(temporalMigration, /before insert on agent\.learning_candidate_benchmarks/)

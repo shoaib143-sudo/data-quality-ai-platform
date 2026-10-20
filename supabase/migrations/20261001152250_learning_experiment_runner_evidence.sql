@@ -30,12 +30,15 @@ create table agent.learning_experiment_dispatch_outcomes (
 alter table agent.learning_experiment_dispatch_claims enable row level security;
 alter table agent.learning_experiment_dispatch_outcomes enable row level security;
 revoke all on agent.learning_experiment_dispatch_claims,agent.learning_experiment_dispatch_outcomes from public,anon,authenticated,service_role;
-grant select,insert on agent.learning_experiment_dispatch_claims,agent.learning_experiment_dispatch_outcomes to service_role;
+-- Dispatch writes must pass through the validating RPCs. SECURITY DEFINER on
+-- those functions supplies owner privileges without granting service_role
+-- direct INSERT access to immutable evidence tables.
+grant select on agent.learning_experiment_dispatch_claims,agent.learning_experiment_dispatch_outcomes to service_role;
 create trigger learning_dispatch_claims_immutable before update or delete on agent.learning_experiment_dispatch_claims for each row execute function agent.reject_learning_candidate_evidence_mutation();
 create trigger learning_dispatch_outcomes_immutable before update or delete on agent.learning_experiment_dispatch_outcomes for each row execute function agent.reject_learning_candidate_evidence_mutation();
 
 create function agent.claim_learning_experiment_dispatch(p_identity jsonb,p_input_hash text)
-returns jsonb language plpgsql security invoker set search_path=pg_catalog,agent as $$
+returns jsonb language plpgsql security definer set search_path=pg_catalog,agent as $$
 declare p agent.learning_evaluation_policies%rowtype; c agent.learning_experiment_dispatch_claims%rowtype; o agent.learning_experiment_dispatch_outcomes%rowtype; acquired uuid;
 begin
  select * into p from agent.learning_evaluation_policies where id=(p_identity->>'policyId')::uuid and project_id=(p_identity->>'projectId')::uuid;
@@ -60,7 +63,7 @@ begin
 end $$;
 
 create function agent.complete_learning_experiment_dispatch(p_claim_id uuid,p_outcome jsonb,p_reservation_id uuid,p_cost_event_id uuid)
-returns boolean language plpgsql security invoker set search_path=pg_catalog,agent as $$
+returns boolean language plpgsql security definer set search_path=pg_catalog,agent as $$
 declare c agent.learning_experiment_dispatch_claims%rowtype; old agent.learning_experiment_dispatch_outcomes%rowtype;
 begin
  -- Serialize terminal writes without requiring mutation rights on immutable claims.
@@ -91,7 +94,7 @@ begin
  return true;
 end $$;
 create function agent.fail_learning_experiment_dispatch(p_claim_id uuid,p_reason text)
-returns boolean language plpgsql security invoker set search_path=pg_catalog,agent as $$
+returns boolean language plpgsql security definer set search_path=pg_catalog,agent as $$
 declare old agent.learning_experiment_dispatch_outcomes%rowtype;
 begin
  perform pg_advisory_xact_lock(hashtextextended(p_claim_id::text,0));
