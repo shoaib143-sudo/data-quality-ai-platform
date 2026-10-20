@@ -168,10 +168,13 @@ export async function registerLearningEvaluatorAssignment(input:{
   for(const value of [input.projectId,input.policyRecordId,input.candidateId,input.proposerUserId,input.evaluatorUserId,input.assignedBy]) {
     if(!UUID.test(value)) throw new Error('LEARNING_EVALUATOR_ASSIGNMENT_IDENTITY_INVALID')
   }
-  if(input.proposerUserId===input.evaluatorUserId||input.assignedBy===input.evaluatorUserId) {
+  if(input.proposerUserId===input.evaluatorUserId
+    || input.assignedBy===input.evaluatorUserId
+    || input.assignedBy===input.proposerUserId) {
     throw new Error('LEARNING_EVALUATOR_NOT_INDEPENDENT')
   }
   if(!Number.isFinite(Date.parse(input.acknowledgedAt))) throw new Error('LEARNING_EVALUATOR_ACK_INVALID')
+  await authorizeProject(input.assignedBy,input.projectId,'agent.learning.assign_evaluator')
   const admin=createAdminClient()
   const {data:policy,error:policyError}=await admin.schema('agent').from('learning_evaluation_policies')
     .select('id,project_id,candidate_id,proposer_actor_id,evaluator_actor_id,manifest_hash,rubric_ref,calibration_ref,locked_at')
