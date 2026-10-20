@@ -11,6 +11,7 @@ const pgclMigration = read('supabase/migrations/20260920014000_proactive_governe
 const pgclForwardMigration = read('supabase/migrations/20260920015000_reconcile_proactive_governed_case_learning.sql')
 const pgclTriggerAcl = read('supabase/migrations/20260920015500_restrict_pgcl_trigger_function_execute.sql')
 const pgclProvenanceMigration = read('supabase/migrations/20260920016000_pgcl_production_learning_provenance.sql')
+const negativeCaseMigration = read('supabase/migrations/20261003130000_governed_learning_case_registry.sql')
 
 const candidateCode = read('lib/agents/governed-learning-candidates.ts')
 const benchmarkCode = read('lib/agents/governed-learning-benchmarks.ts')
@@ -20,6 +21,12 @@ const pgclCode = read('lib/agents/proactive-governed-case-learning.ts')
 const pgclRuntime = read('lib/agents/proactive-governed-case-learning-runtime.ts')
 const pgclProvenanceCode = read('lib/agents/pgcl-run-learning-provenance.ts')
 const memoryCode = read('lib/agents/agent-memory-learning.ts')
+const negativeCaseCode = read('lib/agents/governed-negative-case-learning.ts')
+const caseRegistryCode = read('lib/agents/governed-learning-case-registry.ts')
+const negativeRuntimeCode = read('lib/agents/governed-negative-case-learning-runtime.ts')
+const learningPolicyCode = read('lib/agents/governed-learning-policy.ts')
+const learningContextCode = read('lib/agents/governed-learning-context.ts')
+const precedentCode = read('lib/agents/pgcl-approved-precedent.ts')
 
 const candidateTests = read('scripts/test-governed-learning-candidates.mjs')
 const benchmarkTests = read('scripts/test-governed-learning-benchmarks.mjs')
@@ -253,6 +260,51 @@ assert.equal(
   false,
   'legacy or unclassified positive cases must fail closed',
 )
+requireAll('negative case persistence', negativeCaseMigration, [
+  'create table if not exists agent.negative_learning_cases',
+  'create table if not exists agent.negative_learning_case_reviews',
+  'negative learning cases require a terminal failed or cancelled agent run',
+  'negative learning case agent identity does not match source run',
+  'negative learning evidence must bind the exact source agent run',
+  "b.role_key = 'DATA_GOVERNANCE_ADMIN'",
+  'Data Governance Admin authority is required to review a negative learning case',
+  "'PGCL_NEGATIVE_CASE'",
+  'list_approved_negative_learning_cases',
+  'revoke all on function agent.create_negative_learning_case',
+  'revoke all on function agent.review_negative_learning_case',
+  'to service_role',
+])
+requireAll('negative case derivation', negativeCaseCode, [
+  "['FAILED', 'CANCELLED'].includes(input.run.status)",
+  "caseType: 'NEGATIVE_CASE'",
+])
+requireAll('negative case authority contract', caseRegistryCode, [
+  'requiresHumanReview: true',
+  'mayAutoApply: false',
+  'maySelfPromote: false',
+  'mayExpandToolAuthority: false',
+  'mayChangeMutationBoundary: false',
+])
+requireAll('negative case runtime', negativeRuntimeCode, [
+  'deriveNegativeLearningCaseFromFailedRun',
+  'persistGovernedNegativeLearningCase',
+  'isGovernedAgentKey',
+])
+requireAll('risk-sensitive learning policy', learningPolicyCode, [
+  'automaticPromotionAllowed: false',
+  'authority regression blocks learning promotion',
+  'adversarial regression blocks learning promotion',
+  'privileged or destructive learning cannot auto-promote',
+])
+requireAll('negative context authority', learningContextCode, [
+  'approvedNegativeCases',
+  'list_approved_negative_learning_cases',
+])
+requireAll('negative precedent adapter', precedentCode, [
+  'loadApprovedPgclAvoidanceCases',
+  'approvedNegativeCases',
+])
+
 requireAll('PGCL production provenance adapter', pgclProvenanceCode, [
   "rpc('record_pgcl_run_learning_provenance'",
   "result.classification !== 'PRODUCTION_ELIGIBLE'",
@@ -300,7 +352,7 @@ requireAll('PGCL retrieval tests', pgclRetrievalTests, [
   'Learned cases cannot authorize, approve, execute, or promote a new governance action',
 ])
 requireAll('eight-agent conformance', eightAgentTests, [
-  'All eight canonical agents share the same governed positive-case learning contract',
+  'All eight canonical agents share governed positive and negative learning contracts',
   'PGCL runtime must not special-case',
   'CONTEXT_ONLY_REQUIRES_CURRENT_POLICY',
 ])
@@ -313,10 +365,16 @@ for (const source of [
   pgclCode,
   pgclRuntime,
   pgclProvenanceCode,
+  negativeCaseCode,
+  caseRegistryCode,
+  negativeRuntimeCode,
+  learningPolicyCode,
+  learningContextCode,
+  precedentCode,
   memoryCode,
 ]) {
   assert.equal(/chain[-_ ]?of[-_ ]?thought/i.test(source), false, 'Phase 11 source must not persist or expose chain-of-thought')
   assert.equal(/hidden[-_ ]?reasoning/i.test(source), false, 'Phase 11 source must not persist or expose hidden reasoning')
 }
 
-console.log('Phase 11 governed learning adversarial audit passed: cross-project, synthetic, self-promotion, stale-approval, canary-provenance, rollback, PGCL-review, and learned-authority bypasses remain fail-closed.')
+console.log('Phase 11 governed learning adversarial audit passed: positive and negative case learning, cross-project evidence, synthetic input, self-promotion, stale approval, shadow provenance, rollback, review, and learned-authority bypasses remain fail-closed.')

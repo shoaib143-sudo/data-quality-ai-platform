@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { executeGovernanceSpecialistAgent } from '@/lib/agents/governance-specialist-agent'
 import { enrichGovernedAgentWithMemory } from '@/lib/agents/agent-memory-learning'
+import { retrieveGovernedLearningContext } from '@/lib/agents/governed-learning-context'
 import { persistGovernedAgentMemoryAndEvaluation } from '@/lib/agents/agent-memory'
 import { enrichGovernedOutputWithSkillPlan } from '@/lib/agents/governed-skill-plan-output'
 import { enrichInvestigatorOutputWithBoundedRca } from '@/lib/agents/investigator-rca-output-enrichment'
@@ -12,6 +13,7 @@ import { createGovernancePolicyDecisionProvider } from '@/lib/governance/governa
 import { writeGovernanceAudit } from '@/lib/governance/audit'
 import { createGovernanceExecutionController } from '@/lib/ai/governance-execution-controller'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { proposeNegativeCaseFromFailedAgentRun } from '@/lib/agents/governed-negative-case-learning-runtime'
 import {
   markDurableJobFailed,
   markDurableJobSucceeded,
@@ -226,6 +228,45 @@ async function executeGovernanceAgentJob(job: DurableJob) {
       ].filter(Boolean).join(' ').slice(0, 1000)
     : question
 
+  const preExecutionLearning = await retrieveGovernedLearningContext({
+    projectId,
+    agentDefinitionId,
+    query: effectiveQuestion || 'governance quality risk stewardship',
+    limit: 5,
+  })
+  const approvedPositiveCases = preExecutionLearning.approvedPositiveCases.flatMap((learningCase) => {
+    const evidence = record(learningCase.evidence) ?? {}
+    const recommendation = record(learningCase.recommendation) ?? {}
+    const candidateId = text(evidence.pgcl_candidate_id)
+    const reusableLesson = text(recommendation.reusable_lesson)
+    if (!candidateId || !reusableLesson) return []
+    return [{
+      id: String(learningCase.id),
+      candidateId,
+      caseKey: String(learningCase.case_key),
+      problemType: String(learningCase.problem_type),
+      reusableLesson,
+      relevance: Number(learningCase.relevance ?? 0),
+      evidence,
+    }]
+  })
+  const approvedNegativeCases = preExecutionLearning.approvedNegativeCases.flatMap((learningCase) => {
+    const evidence = record(learningCase.evidence) ?? {}
+    const recommendation = record(learningCase.recommendation) ?? {}
+    const candidateId = text(learningCase.candidate_id)
+    const avoidLesson = text(recommendation.avoid_lesson)
+    if (!candidateId || !avoidLesson) return []
+    return [{
+      id: String(learningCase.id),
+      candidateId,
+      caseKey: String(learningCase.case_key),
+      problemType: String(learningCase.problem_type),
+      avoidLesson,
+      relevance: Number(learningCase.relevance ?? 0),
+      evidence,
+    }]
+  })
+
   let result = await loadReusableSucceededRun(job, agentDefinitionId)
   if (!result) {
     const executed = await executeGovernanceSpecialistAgent({
@@ -233,6 +274,8 @@ async function executeGovernanceAgentJob(job: DurableJob) {
       agentDefinitionId,
       actorUserId,
       question: effectiveQuestion || null,
+      positiveLearningCases: approvedPositiveCases,
+      negativeLearningCases: approvedNegativeCases,
     })
     result = { runId: executed.runId, output: executed.output as Record<string, unknown> }
     await attachAgentRunToJob(job.id, result.runId)
@@ -270,6 +313,7 @@ async function executeGovernanceAgentJob(job: DurableJob) {
     agentRunId: result.runId,
     question: effectiveQuestion || null,
     output: specialistOutput,
+    preloadedLearningContext: preExecutionLearning,
   })
   await persistRunOutput(result.runId, output)
 
@@ -315,6 +359,19 @@ export async function processGovernanceAgentJobs(jobs: DurableJob[]) {
       results.push(result)
     } catch (error) {
       await markDurableJobFailed(job, error)
+      const failedRunId = text(job.agent_run_id) || text(job.payload?.agentRunId)
+      if (failedRunId && job.attempts >= job.max_attempts) {
+        try {
+          await proposeNegativeCaseFromFailedAgentRun({
+            projectId: job.project_id,
+            agentRunId: failedRunId,
+            failureSummary: error instanceof Error ? error.message : 'Durable governance agent job failed.',
+            actorUserId: text(job.payload?.userId) || text(job.payload?.actorUserId) || null,
+          })
+        } catch (learningError) {
+          console.error('[governed-learning] unable to propose negative case from failed run', learningError)
+        }
+      }
       results.push({
         jobId: job.id,
         agentRunId: job.agent_run_id,
