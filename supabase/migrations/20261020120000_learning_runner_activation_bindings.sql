@@ -231,7 +231,8 @@ begin
   if exists(select 1 from agent.learning_artifact_manifests m where m.object_artifact_id=old.id) then
     raise exception 'Referenced learning artifact lifecycle is immutable' using errcode='55000';
   end if;
-  return coalesce(new,old);
+  if tg_op='DELETE' then return old; end if;
+  return new;
 end
 $;
 revoke all on function agent.protect_learning_artifact_object_lifecycle() from public,anon,authenticated,service_role;
@@ -277,6 +278,367 @@ declare
   v_object orchestration.object_artifacts%rowtype;
 begin
   if p_project_id is null or p_object_artifact_id is null or p_size_bytes < 0 or p_sha256 !~ '^sha256:[a-f0-9]{64}
+    or nullif(btrim(coalesce(p_bucket,'')),'') is null
+    or nullif(btrim(coalesce(p_object_key,'')),'') is null
+    or nullif(btrim(coalesce(p_content_type,'')),'') is null
+    or nullif(btrim(coalesce(p_serialization_version,'')),'') is null
+    or nullif(btrim(coalesce(p_source_ref,'')),'') is null
+  then
+    raise exception 'Artifact storage metadata is required';
+  end if;
+
+  select * into v_object from orchestration.object_artifacts
+  where id=p_object_artifact_id and project_id=p_project_id;
+  if not found
+    or v_object.provider_key<>btrim(p_provider_key)
+    or v_object.bucket<>btrim(p_bucket)
+    or v_object.object_key<>btrim(p_object_key)
+    or v_object.content_type is distinct from btrim(p_content_type)
+    or v_object.size_bytes is distinct from p_size_bytes
+    or v_object.lifecycle_status<>'ACTIVE'
+    or coalesce(v_object.metadata->>'sha256','')<>p_sha256
+    or coalesce(v_object.metadata->>'immutableLearningArtifact','false')<>'true'
+  then
+    raise exception 'Learning artifact lifecycle registry binding mismatch';
+  end if;
+
+  if btrim(p_provider_key)<>'supabase' then
+    raise exception 'Learning artifacts must use the governed Supabase object provider';
+  end if;
+  if btrim(p_content_type)<>'application/json' then
+    raise exception 'Learning artifacts must use canonical JSON content';
+  end if;
+  if btrim(p_object_key)<>(
+    'projects/'||p_project_id::text||'/learning/'||lower(p_artifact_kind)||'/'||substr(p_sha256,8)
+  ) then
+    raise exception 'Learning artifact object key is not content-addressed to its project, kind and digest';
+  end if;
+
+  if p_artifact_kind='EXECUTABLE' then
+    select d.id,d.agent_key,d.version,l.lifecycle_state into v_agent
+    from agent.agent_definitions d
+    join agent.agent_version_lifecycle l on l.agent_definition_id=d.id
+    where d.id=p_agent_definition_id;
+    if not found then raise exception 'Executable agent definition lifecycle not found'; end if;
+    if nullif(btrim(coalesce(p_skill_key,'')),'') is null
+      or nullif(btrim(coalesce(p_runtime_version,'')),'') is null
+      or p_definition_hash !~ '^sha256:[a-f0-9]{64}$'
+      or p_tool_contract_set_hash !~ '^sha256:[a-f0-9]{64}$'
+    then
+      raise exception 'Executable runtime/tool contract evidence is required';
+    end if;
+
+    if btrim(p_source_ref)<>('agent-definition:'||p_agent_definition_id::text) then
+      raise exception 'Executable artifact source reference mismatch';
+    end if;
+    if p_artifact_role='BASELINE' then
+      if p_candidate_id is not null then raise exception 'Baseline executable cannot be candidate-owned'; end if;
+      if v_agent.lifecycle_state not in ('ACTIVE','DEPRECATED') then
+        raise exception 'Baseline executable lifecycle is not evaluable';
+      end if;
+    elsif p_artifact_role='CANDIDATE' then
+      select * into v_candidate
+      from agent.learning_candidates
+      where id=p_candidate_id and project_id=p_project_id;
+      if not found then raise exception 'Candidate executable owner not found'; end if;
+      if v_candidate.agent_key<>v_agent.agent_key
+        or v_candidate.skill_key<>btrim(p_skill_key)
+        or v_candidate.candidate_version<>v_agent.version
+      then
+        raise exception 'Candidate executable does not match candidate agent/skill/version';
+      end if;
+      if v_agent.lifecycle_state not in ('VALIDATED','CANDIDATE') then
+        raise exception 'Candidate executable lifecycle is not evaluable';
+      end if;
+    else
+      raise exception 'Unsupported executable role';
+    end if;
+  elsif p_artifact_kind='HELD_OUT_INPUT' and p_artifact_role='HELD_OUT_INPUT' then
+    select * into v_case
+    from agent.learning_benchmark_dataset_cases
+    where project_id=p_project_id
+      and dataset_id=p_dataset_manifest_id
+      and case_key=p_case_key;
+    if not found or v_case.split<>'HELD_OUT' then
+      raise exception 'Replay artifact must bind a held-out case';
+    end if;
+
+    select * into v_manifest
+    from agent.learning_benchmark_dataset_manifests
+    where id=p_dataset_manifest_id
+      and project_id=p_project_id
+      and status='SEALED';
+    if not found or v_manifest.dataset_version<>p_dataset_version_id then
+      raise exception 'Replay artifact dataset version must match the sealed manifest';
+    end if;
+    if v_case.source_case_ref<>p_source_ref then
+      raise exception 'Replay artifact source reference mismatch';
+    end if;
+  else
+    raise exception 'Unsupported learning artifact kind/role';
+  end if;
+
+  insert into agent.learning_artifact_manifests(
+    project_id,object_artifact_id,artifact_kind,artifact_role,agent_definition_id,skill_key,candidate_id,
+    dataset_manifest_id,case_key,dataset_version_id,
+    provider_key,bucket,object_key,content_type,size_bytes,sha256,
+    serialization_version,runtime_version,definition_hash,tool_contract_set_hash,
+    source_ref,created_by
+  ) values (
+    p_project_id,p_object_artifact_id,p_artifact_kind,p_artifact_role,p_agent_definition_id,nullif(btrim(coalesce(p_skill_key,'')),''),p_candidate_id,
+    p_dataset_manifest_id,p_case_key,p_dataset_version_id,
+    btrim(p_provider_key),btrim(p_bucket),btrim(p_object_key),btrim(p_content_type),
+    p_size_bytes,p_sha256,btrim(p_serialization_version),
+    nullif(btrim(coalesce(p_runtime_version,'')),''),
+    p_definition_hash,p_tool_contract_set_hash,btrim(p_source_ref),p_created_by
+  )
+  returning id into v_id;
+
+  return v_id;
+end
+$$;
+
+revoke all on function agent.register_learning_artifact_manifest(
+  uuid,uuid,text,text,uuid,text,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid
+) from public,anon,authenticated;
+grant execute on function agent.register_learning_artifact_manifest(
+  uuid,uuid,text,text,uuid,text,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid
+) to service_role;
+
+create or replace function agent.register_learning_runtime_binding(
+  p_project_id uuid,
+  p_policy_id uuid,
+  p_candidate_id uuid,
+  p_baseline_agent_definition_id uuid,
+  p_candidate_agent_definition_id uuid,
+  p_rollback_agent_definition_id uuid,
+  p_baseline_artifact_id uuid,
+  p_candidate_artifact_id uuid,
+  p_baseline_runtime_hash text,
+  p_candidate_runtime_hash text,
+  p_binding_hash text
+) returns uuid
+language plpgsql
+security definer
+set search_path=pg_catalog,agent
+as $$
+declare
+  v_policy agent.learning_evaluation_policies%rowtype;
+  v_candidate agent.learning_candidates%rowtype;
+  v_base record;
+  v_cand record;
+  v_rollback record;
+  v_base_art agent.learning_artifact_manifests%rowtype;
+  v_cand_art agent.learning_artifact_manifests%rowtype;
+  v_expected text;
+  v_id uuid;
+begin
+  select * into v_policy
+  from agent.learning_evaluation_policies
+  where id=p_policy_id and project_id=p_project_id and candidate_id=p_candidate_id;
+  if not found then raise exception 'Locked policy not found for runtime binding'; end if;
+
+  select * into v_candidate
+  from agent.learning_candidates
+  where id=p_candidate_id and project_id=p_project_id;
+  if not found then raise exception 'Learning candidate not found for runtime binding'; end if;
+
+  select d.id,d.agent_key,d.version,l.lifecycle_state into v_base
+  from agent.agent_definitions d
+  join agent.agent_version_lifecycle l on l.agent_definition_id=d.id
+  where d.id=p_baseline_agent_definition_id;
+
+  select d.id,d.agent_key,d.version,l.lifecycle_state into v_cand
+  from agent.agent_definitions d
+  join agent.agent_version_lifecycle l on l.agent_definition_id=d.id
+  where d.id=p_candidate_agent_definition_id;
+
+  select d.id,d.agent_key,d.version,l.lifecycle_state into v_rollback
+  from agent.agent_definitions d
+  join agent.agent_version_lifecycle l on l.agent_definition_id=d.id
+  where d.id=p_rollback_agent_definition_id;
+
+  if v_base.id is null or v_cand.id is null or v_rollback.id is null then
+    raise exception 'Runtime definition binding is incomplete';
+  end if;
+  if v_base.agent_key<>v_policy.agent_key
+    or v_cand.agent_key<>v_policy.agent_key
+    or v_rollback.agent_key<>v_policy.agent_key
+  then
+    raise exception 'Runtime definitions do not match policy agent';
+  end if;
+  if v_base.version<>v_policy.baseline_version or v_cand.version<>v_policy.candidate_version then
+    raise exception 'Runtime definitions do not match locked policy versions';
+  end if;
+  if v_candidate.baseline_version<>v_base.version or v_candidate.candidate_version<>v_cand.version then
+    raise exception 'Candidate baseline/candidate runtime version mismatch';
+  end if;
+  if v_base.lifecycle_state not in ('ACTIVE','DEPRECATED')
+    or v_cand.lifecycle_state not in ('VALIDATED','CANDIDATE')
+  then
+    raise exception 'Runtime lifecycle is not eligible for evaluation';
+  end if;
+  if v_rollback.lifecycle_state not in ('ACTIVE','DEPRECATED') then
+    raise exception 'Rollback runtime is not recoverable';
+  end if;
+  if v_policy.rollback_ref<>('agent-definition:'||p_rollback_agent_definition_id::text) then
+    raise exception 'Rollback runtime does not match locked policy rollback reference';
+  end if;
+
+  select * into v_base_art
+  from agent.learning_artifact_manifests
+  where id=p_baseline_artifact_id and project_id=p_project_id;
+
+  select * into v_cand_art
+  from agent.learning_artifact_manifests
+  where id=p_candidate_artifact_id and project_id=p_project_id;
+
+  if v_base_art.agent_definition_id<>p_baseline_agent_definition_id
+    or v_base_art.skill_key<>v_policy.skill_key
+    or v_base_art.artifact_role<>'BASELINE'
+  then
+    raise exception 'Baseline executable artifact binding mismatch';
+  end if;
+  if v_cand_art.agent_definition_id<>p_candidate_agent_definition_id
+    or v_cand_art.skill_key<>v_policy.skill_key
+    or v_cand_art.candidate_id<>p_candidate_id
+    or v_cand_art.artifact_role<>'CANDIDATE'
+  then
+    raise exception 'Candidate executable artifact binding mismatch';
+  end if;
+  if p_baseline_runtime_hash<>v_base_art.sha256 or p_candidate_runtime_hash<>v_cand_art.sha256 then
+    raise exception 'Runtime hashes must equal immutable executable artifact digests';
+  end if;
+  if v_base_art.runtime_version<>v_cand_art.runtime_version then
+    raise exception 'Baseline and candidate must use the same runtime version';
+  end if;
+  if v_base_art.tool_contract_set_hash<>v_cand_art.tool_contract_set_hash then
+    raise exception 'Baseline and candidate tool contracts must be identical';
+  end if;
+
+  v_expected := 'sha256:'||encode(
+    extensions.digest(
+      concat_ws('|',
+        p_project_id::text,p_policy_id::text,p_candidate_id::text,
+        p_baseline_agent_definition_id::text,p_candidate_agent_definition_id::text,
+        p_rollback_agent_definition_id::text,p_baseline_artifact_id::text,
+        p_candidate_artifact_id::text,p_baseline_runtime_hash,p_candidate_runtime_hash
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+  if p_binding_hash<>v_expected then raise exception 'Runtime binding hash mismatch'; end if;
+
+  insert into agent.learning_evaluation_runtime_bindings(
+    project_id,policy_id,candidate_id,
+    baseline_agent_definition_id,candidate_agent_definition_id,rollback_agent_definition_id,
+    baseline_artifact_id,candidate_artifact_id,
+    baseline_runtime_hash,candidate_runtime_hash,binding_hash
+  ) values (
+    p_project_id,p_policy_id,p_candidate_id,
+    p_baseline_agent_definition_id,p_candidate_agent_definition_id,p_rollback_agent_definition_id,
+    p_baseline_artifact_id,p_candidate_artifact_id,
+    p_baseline_runtime_hash,p_candidate_runtime_hash,p_binding_hash
+  )
+  returning id into v_id;
+
+  return v_id;
+end
+$$;
+
+revoke all on function agent.register_learning_runtime_binding(
+  uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,text,text
+) from public,anon,authenticated;
+grant execute on function agent.register_learning_runtime_binding(
+  uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,text,text
+) to service_role;
+
+create or replace function agent.register_learning_evaluator_assignment(
+  p_project_id uuid,
+  p_policy_id uuid,
+  p_candidate_id uuid,
+  p_proposer_user_id uuid,
+  p_evaluator_user_id uuid,
+  p_assigned_by uuid,
+  p_scope_hash text,
+  p_acknowledged_at timestamptz
+) returns uuid
+language plpgsql
+security definer
+set search_path=pg_catalog,agent
+as $$
+declare
+  v_policy agent.learning_evaluation_policies%rowtype;
+  v_expected text;
+  v_id uuid;
+begin
+  select * into v_policy
+  from agent.learning_evaluation_policies
+  where id=p_policy_id and project_id=p_project_id and candidate_id=p_candidate_id;
+  if not found then raise exception 'Locked policy not found for evaluator assignment'; end if;
+
+  if p_proposer_user_id is null
+    or p_evaluator_user_id is null
+    or p_assigned_by is null
+    or p_acknowledged_at is null
+  then
+    raise exception 'Canonical evaluator identities and acknowledgement are required';
+  end if;
+  if p_proposer_user_id=p_evaluator_user_id or p_assigned_by=p_evaluator_user_id then
+    raise exception 'Independent evaluator separation is required';
+  end if;
+  if v_policy.proposer_actor_id<>p_proposer_user_id::text
+    or v_policy.evaluator_actor_id<>p_evaluator_user_id::text
+  then
+    raise exception 'Evaluator assignment does not match locked policy actor identities';
+  end if;
+  if p_acknowledged_at < v_policy.locked_at then
+    raise exception 'Evaluator acknowledgement predates locked policy';
+  end if;
+
+  v_expected := 'sha256:'||encode(
+    extensions.digest(
+      concat_ws('|',
+        p_project_id::text,p_policy_id::text,p_candidate_id::text,
+        p_proposer_user_id::text,p_evaluator_user_id::text,
+        v_policy.manifest_hash,v_policy.rubric_ref,v_policy.calibration_ref
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+  if p_scope_hash<>v_expected then raise exception 'Evaluator assignment scope hash mismatch'; end if;
+
+  insert into agent.learning_evaluator_assignments(
+    project_id,policy_id,candidate_id,
+    proposer_user_id,evaluator_user_id,assigned_by,scope_hash,acknowledged_at
+  ) values (
+    p_project_id,p_policy_id,p_candidate_id,
+    p_proposer_user_id,p_evaluator_user_id,p_assigned_by,p_scope_hash,p_acknowledged_at
+  )
+  returning id into v_id;
+
+  return v_id;
+end
+$$;
+
+revoke all on function agent.register_learning_evaluator_assignment(
+  uuid,uuid,uuid,uuid,uuid,uuid,text,timestamptz
+) from public,anon,authenticated;
+grant execute on function agent.register_learning_evaluator_assignment(
+  uuid,uuid,uuid,uuid,uuid,uuid,text,timestamptz
+) to service_role;
+
+comment on table agent.learning_artifact_manifests is
+  'Append-only exact-byte manifests for governed learning executable artifacts and held-out replay inputs.';
+comment on table agent.learning_evaluation_runtime_bindings is
+  'Immutable binding from locked evaluation policy arms to exact executable agent definitions/artifacts/runtime hashes and rollback identity.';
+comment on table agent.learning_evaluator_assignments is
+  'Immutable canonical proposer/evaluator identity and independent-review attestation for a locked learning policy.';
+ then
+    raise exception 'Invalid immutable artifact identity';
+  end if;
   if nullif(btrim(coalesce(p_provider_key,'')),'') is null
     or nullif(btrim(coalesce(p_bucket,'')),'') is null
     or nullif(btrim(coalesce(p_object_key,'')),'') is null
