@@ -10,6 +10,8 @@ export type PairedLearningCase = {
   adversarialFailure: boolean
 }
 
+const UUID_REFERENCE = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i
+
 /** Validate that aggregate benchmark claims are backed by the same held-out cases. */
 export function validatePairedLearningBenchmark(input: {
   benchmark: SkillBenchmarkEvidence
@@ -37,7 +39,7 @@ export function validatePairedLearningBenchmark(input: {
       throw new Error('paired benchmark scores must be between 0 and 1')
     }
     for (const ref of [item.baselineEvidenceRef, item.candidateEvidenceRef]) {
-      if (!/^[a-f0-9-]{36}$/.test(ref.trim()) || refs.has(ref.trim())) throw new Error('paired benchmark evidence references must be UUIDs and unique')
+      if (!UUID_REFERENCE.test(ref.trim()) || refs.has(ref.trim())) throw new Error('paired benchmark evidence references must be UUIDs and unique')
       refs.add(ref.trim())
     }
     baselineTotal += item.baselineScore
