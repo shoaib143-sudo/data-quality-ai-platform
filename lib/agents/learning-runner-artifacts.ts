@@ -23,6 +23,47 @@ function objectKey(input:{projectId:string;kind:'EXECUTABLE'|'HELD_OUT_INPUT';sh
   return `projects/${input.projectId}/learning/${input.kind.toLowerCase()}/${suffix}`
 }
 
+
+async function ensureObjectLifecycle(input:{
+  projectId:string;bucket:string;objectKey:string;contentType:string;sizeBytes:number;sha256:string
+}){
+  const admin=createAdminClient()
+  const payload={
+    project_id:input.projectId,
+    provider_key:'supabase',
+    bucket:input.bucket,
+    object_key:input.objectKey,
+    content_type:input.contentType,
+    size_bytes:input.sizeBytes,
+    retention_until:null,
+    lifecycle_status:'ACTIVE',
+    metadata:{immutableLearningArtifact:true,sha256:input.sha256},
+    updated_at:new Date().toISOString(),
+    deleted_at:null,
+    last_error:null,
+  }
+  const {data:created,error:createError}=await admin.schema('orchestration').from('object_artifacts')
+    .insert(payload).select('id,project_id,provider_key,bucket,object_key,content_type,size_bytes,lifecycle_status,metadata').maybeSingle()
+  if(!createError&&created) return {row:created,created:true}
+  if(createError&&!/duplicate|unique/i.test(createError.message)) {
+    throw new Error(`LEARNING_ARTIFACT_LIFECYCLE_REGISTRATION_FAILED: ${createError.message}`)
+  }
+  const {data:existing,error:lookupError}=await admin.schema('orchestration').from('object_artifacts')
+    .select('id,project_id,provider_key,bucket,object_key,content_type,size_bytes,lifecycle_status,metadata')
+    .eq('project_id',input.projectId).eq('provider_key','supabase').eq('bucket',input.bucket).eq('object_key',input.objectKey)
+    .maybeSingle()
+  if(lookupError||!existing) throw new Error('LEARNING_ARTIFACT_LIFECYCLE_LOOKUP_FAILED')
+  const metadata=existing.metadata as Record<string,unknown>|null
+  if(existing.content_type!==input.contentType
+    || Number(existing.size_bytes)!==input.sizeBytes
+    || existing.lifecycle_status!=='ACTIVE'
+    || metadata?.immutableLearningArtifact!==true
+    || metadata?.sha256!==input.sha256) {
+    throw new Error('LEARNING_ARTIFACT_LIFECYCLE_CONFLICT')
+  }
+  return {row:existing,created:false}
+}
+
 export type LearningArtifactRegistration = {
   projectId:string
   kind:'EXECUTABLE'|'HELD_OUT_INPUT'
@@ -65,8 +106,13 @@ export async function stageImmutableLearningArtifact(input:LearningArtifactRegis
     throw new Error('LEARNING_ARTIFACT_READBACK_INTEGRITY')
   }
 
+  const lifecycle=await ensureObjectLifecycle({
+    projectId:input.projectId,bucket,objectKey:key,contentType,sizeBytes:input.bytes.byteLength,sha256,
+  })
+
   const {data:id,error}=await admin.schema('agent').rpc('register_learning_artifact_manifest',{
     p_project_id:input.projectId,
+    p_object_artifact_id:lifecycle.row.id,
     p_artifact_kind:input.kind,
     p_artifact_role:input.role,
     p_agent_definition_id:input.agentDefinitionId ?? null,
@@ -89,6 +135,9 @@ export async function stageImmutableLearningArtifact(input:LearningArtifactRegis
     p_created_by:input.createdBy ?? null,
   })
   if(error || !id) {
+    if(lifecycle.created) {
+      await admin.schema('orchestration').from('object_artifacts').delete().eq('id',lifecycle.row.id).catch(()=>undefined)
+    }
     if(createdNewObject) {
       const {data:registered,error:lookupError}=await admin.schema('agent').from('learning_artifact_manifests')
         .select('id,sha256,size_bytes')
@@ -120,7 +169,7 @@ export async function resolveLearningArtifact(input:{
 }):Promise<RunnerArtifact> {
   const admin=createAdminClient()
   const {data:row,error}=await admin.schema('agent').from('learning_artifact_manifests')
-    .select('id,project_id,artifact_kind,artifact_role,agent_definition_id,candidate_id,dataset_manifest_id,case_key,dataset_version_id,provider_key,bucket,object_key,size_bytes,sha256')
+    .select('id,project_id,object_artifact_id,artifact_kind,artifact_role,agent_definition_id,skill_key,candidate_id,dataset_manifest_id,case_key,dataset_version_id,provider_key,bucket,object_key,content_type,size_bytes,sha256')
     .eq('id',input.artifactId).eq('project_id',input.projectId).maybeSingle()
   if(error) throw new Error(`LEARNING_ARTIFACT_LOOKUP_FAILED: ${error.message}`)
   if(!row) throw new Error('LEARNING_ARTIFACT_NOT_FOUND')
@@ -134,6 +183,17 @@ export async function resolveLearningArtifact(input:{
   }
   if(row.provider_key!=='supabase' || row.bucket!==bucketName() || !SHA.test(String(row.sha256))) {
     throw new Error('LEARNING_ARTIFACT_STORAGE_BINDING_INVALID')
+  }
+  const {data:lifecycle,error:lifecycleError}=await admin.schema('orchestration').from('object_artifacts')
+    .select('id,project_id,provider_key,bucket,object_key,content_type,size_bytes,lifecycle_status,metadata')
+    .eq('id',row.object_artifact_id).eq('project_id',input.projectId).maybeSingle()
+  const lifecycleMetadata=lifecycle?.metadata as Record<string,unknown>|null|undefined
+  if(lifecycleError||!lifecycle
+    || lifecycle.provider_key!==row.provider_key||lifecycle.bucket!==row.bucket||lifecycle.object_key!==row.object_key
+    || lifecycle.content_type!==row.content_type||Number(lifecycle.size_bytes)!==Number(row.size_bytes)
+    || lifecycle.lifecycle_status!=='ACTIVE'||lifecycleMetadata?.immutableLearningArtifact!==true
+    || lifecycleMetadata?.sha256!==row.sha256) {
+    throw new Error('LEARNING_ARTIFACT_LIFECYCLE_BINDING_INVALID')
   }
   const {data,error:downloadError}=await admin.storage.from(row.bucket).download(row.object_key)
   if(downloadError || !data) throw new Error('LEARNING_ARTIFACT_BYTES_UNAVAILABLE')
