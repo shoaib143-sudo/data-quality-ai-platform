@@ -138,7 +138,7 @@ export async function stageImmutableLearningArtifact(input:LearningArtifactRegis
     if(lifecycle.created) {
       await admin.schema('orchestration').from('object_artifacts').delete().eq('id',lifecycle.row.id).catch(()=>undefined)
     }
-    if(createdNewObject) {
+    if(createdNewObject && lifecycle.created) {
       const {data:registered,error:lookupError}=await admin.schema('agent').from('learning_artifact_manifests')
         .select('id,sha256,size_bytes')
         .eq('project_id',input.projectId).eq('provider_key','supabase').eq('bucket',bucket).eq('object_key',key)
