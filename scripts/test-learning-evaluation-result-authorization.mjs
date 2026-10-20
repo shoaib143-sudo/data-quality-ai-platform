@@ -17,6 +17,7 @@ const {
   registerLearningEvaluationPolicy,
 } = await import('../lib/agents/governed-learning-evaluation-service.ts')
 
+const minutesAgo = minutes => new Date(Date.now() - minutes * 60_000).toISOString()
 const evaluator = 'a1234567-89ab-4cde-8fab-123456789abc'
 const policyRow = {
   id: 'locked-policy-row', created_at: '2026-10-20T09:00:00Z', policy_key: 'policy-1',
@@ -25,7 +26,7 @@ const policyRow = {
   dataset_version_ids: ['version-1'], baseline_version: 'v1', candidate_version: 'v2', rollback_ref: 'rollback:v1',
   evaluator_actor_id: evaluator, proposer_actor_id: 'b1234567-89ab-4cde-8fab-123456789abc',
   rubric_ref: 'rubric-1', calibration_ref: 'calibration-1', manifest_hash: `sha256:${'a'.repeat(64)}`,
-  locked_at: '2026-10-20T08:00:00Z', primary_metric: 'quality', analysis_plan_ref: 'analysis-1',
+  locked_at: minutesAgo(30), primary_metric: 'quality', analysis_plan_ref: 'analysis-1',
   sample_size: 2, minimum_gain: 0.05, minimum_score: 0.8,
   total_cost_budget: 0, per_run_cost_budget: 0, total_token_budget: 0, per_run_token_budget: 0, latency_ms_budget: 1000,
 }
@@ -33,18 +34,18 @@ const assignmentRow = {
   id: 'assignment-1', policy_id: policyRow.id, project_id: policyRow.project_id,
   candidate_id: policyRow.candidate_id, proposer_user_id: policyRow.proposer_actor_id,
   evaluator_user_id: evaluator, assigned_by_user_id: policyRow.proposer_actor_id,
-  scope_digest: `sha256:${'b'.repeat(64)}`,
+  scope_digest: `sha256:${'b'.repeat(64)}`, assigned_at: minutesAgo(20),
 }
 const acknowledgementRow = {
   id: 'ack-1', assignment_id: assignmentRow.id, policy_id: policyRow.id,
   project_id: policyRow.project_id, candidate_id: policyRow.candidate_id,
   evaluator_user_id: evaluator, acknowledged_by_user_id: evaluator,
-  scope_digest: assignmentRow.scope_digest,
+  scope_digest: assignmentRow.scope_digest, acknowledged_at: minutesAgo(10),
 }
 const result = {
   policyId: 'policy-1', projectId: 'project-1', candidateId: 'candidate-1', baselineVersion: 'v1', candidateVersion: 'v2',
   mode: 'GUIDED', datasetManifestId: 'manifest-1', manifestHash: `sha256:${'a'.repeat(64)}`, evaluatorActorId: evaluator,
-  observedAt: '2026-10-20T09:10:00Z', sampleCount: 2, baselineScore: 0.7, candidateScore: 0.9,
+  observedAt: minutesAgo(5), sampleCount: 2, baselineScore: 0.7, candidateScore: 0.9,
   gainLowerConfidenceBound: 0.1, independentlyVerified: true, evidenceComplete: true, confirmationWindowPassed: true,
   authorityViolations: 0, safetyFailures: 0, accountingComplete: true, totalCost: 0, maxRunCost: 0,
   totalTokens: 0, maxRunTokens: 0, maxLatencyMs: 100,
@@ -76,6 +77,14 @@ assert.deepEqual(calls.find(item => item.type === 'authorize'), {
   type: 'authorize', userId: evaluator, projectId: 'project-1', capability: 'agent.learning.evaluate',
 })
 assert.equal(calls.find(item => item.type === 'rpc').args.p_recorded_by, evaluator)
+
+fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow })
+await assert.rejects(call({ result: { ...result, observedAt: minutesAgo(15) } }), /must occur after evaluator acknowledgement/)
+assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'))
+
+fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow })
+await assert.rejects(call({ result: { ...result, observedAt: '2099-10-20T09:10:00Z' } }), /cannot be future-dated/)
+assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'))
 
 fixture.configure({ userId: 'c1234567-89ab-4cde-8fab-123456789abc', policyRow, assignmentRow, acknowledgementRow })
 await assert.rejects(call(), /must match/)
@@ -110,10 +119,16 @@ assert.deepEqual(calls.filter(item => item.type === 'authorize').map(item => [it
   [proposer, 'project-1', 'agent.admin'],
   [evaluator, 'project-1', 'agent.learning.evaluate'],
 ])
-assert.equal(calls.find(item => item.type === 'rpc').args.p_proposer_actor_id, proposer)
-assert.equal(calls.find(item => item.type === 'rpc').args.p_evaluator_actor_id, evaluator)
-assert.equal(calls.filter(item => item.type === 'rpc').length, 2)
-assert.equal(calls.filter(item => item.type === 'rpc')[1].name, 'record_learning_evaluation_assignment')
+assert.equal(calls.find(item => item.type === 'rpc').args.p_policy_input.p_proposer_actor_id, proposer)
+assert.equal(calls.find(item => item.type === 'rpc').args.p_policy_input.p_evaluator_actor_id, evaluator)
+assert.equal(calls.find(item => item.type === 'rpc').args.p_proposer_user_id, proposer)
+assert.equal(calls.find(item => item.type === 'rpc').args.p_evaluator_user_id, evaluator)
+assert.equal(calls.filter(item => item.type === 'rpc').length, 1)
+assert.equal(calls.find(item => item.type === 'rpc').name, 'record_learning_evaluation_policy_with_assignment')
+
+fixture.configure({ userId: proposer, authUsers: [evaluator], rpcResponse: { data: null, error: { message: 'assignment transaction failed' } } })
+await assert.rejects(registerLearningEvaluationPolicy(registrationPolicy), /Unable to atomically persist learning evaluation policy and evaluator assignment: assignment transaction failed/)
+assert.equal(fixture.getCalls().filter(item => item.type === 'rpc').length, 1)
 
 fixture.configure({ userId: proposer, authUsers: [] })
 await assert.rejects(registerLearningEvaluationPolicy(registrationPolicy), /Unable to resolve evaluator account/)
