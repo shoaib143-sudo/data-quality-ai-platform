@@ -24,6 +24,8 @@ The current result API accepts caller-provided aggregates and verification flags
 
 Validation added: regression coverage verifies each caller-supplied positive claim stops before persistence, that an unverified observation is inconclusive, and that the database migration blocks an unattested positive insert. SQL validation here is static only. Do not run or deploy this migration until it has been reviewed and applied in the designated test schema under the existing $0 constraint.
 
+The runner now also records failed or cancelled terminal outcomes after a durable dispatch claim is acquired. A failure to persist that terminal marker leaves the claim ambiguous, which still blocks retries and positive evaluation. This does not settle unknown provider usage or release its reservation; canonical accounting remains required.
+
 Still intentionally external to this implementation:
 - real project/dataset selection and independent evaluator assignment;
 - independently computed confidence/statistical evidence;

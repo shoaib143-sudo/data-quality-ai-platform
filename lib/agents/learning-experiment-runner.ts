@@ -23,6 +23,8 @@ export interface LearningExperimentRunnerStore {
   claimDispatch(identity: RunnerAttemptIdentity, inputHash: string): Promise<RunnerAttemptClaim>
   /** Atomically persist terminal evidence, binding the exact immutable claim. */
   completeDispatch(claimId: string, outcome: RunnerArmOutcome): Promise<void>
+  /** Persist a terminal failed/cancelled marker after a claim is acquired. */
+  terminalizeDispatch(claimId: string, status: 'failed' | 'cancelled', reason: string): Promise<void>
   isCancelled(runId: string): Promise<boolean>
 }
 export type LearningExperimentRunnerPlan = {
@@ -112,6 +114,8 @@ export async function runLearningExperiment(input: {
     accounting.forEach(ref => accountingRefs.add(ref)); outcomes.push(outcome)
   }
   const result = (status: LearningExperimentRunnerResult['status'], reason: string): LearningExperimentRunnerResult => ({ status, reason, outcomes, automaticPromotionAllowed: false })
+  let activeClaimId: string | null = null
+  let pendingTerminal: { status: 'failed' | 'cancelled'; reason: string } | null = null
   try {
     if (!UUID.test(input.runId)) throw new Error('RUNNER_RUN_ID_INVALID')
     const plan = immutable(structuredClone(await input.ports.loadServerPlan(input.runId)))
@@ -143,8 +147,15 @@ export async function runLearningExperiment(input: {
         remember(saved); continue
       }
       if (!UUID.test(claim.claimId)) throw new Error('RUNNER_CLAIM_INVALID')
+      activeClaimId = claim.claimId
       // Never reclaim this dispatch after this point. Even an abort can hide an accepted provider call.
-      if (await cancelled()) return result('CANCELLED', 'RUNNER_CANCELLED_AFTER_CLAIM')
+      if (await cancelled()) {
+        pendingTerminal = { status: 'cancelled', reason: 'RUNNER_CANCELLED_AFTER_CLAIM' }
+        await input.ports.store.terminalizeDispatch(claim.claimId, pendingTerminal.status, pendingTerminal.reason)
+        activeClaimId = null
+        pendingTerminal = null
+        return result('CANCELLED', 'RUNNER_CANCELLED_AFTER_CLAIM')
+      }
       await authorized()
       const outcome = immutable(structuredClone(await input.ports.execute({ identity, input: item.input, executable, provenance: plan.provenance, signal: input.signal })))
       validateOutcome(outcome, identity, item.input.hash, plan.provenance)
@@ -152,11 +163,23 @@ export async function runLearningExperiment(input: {
       if (invocations.has(outcome.invocationId) || outputRefs.has(outcome.output.ref) || [outcome.reservationId, outcome.settlementId, outcome.costEventId].some(ref => ref !== null && accountingRefs.has(ref))) throw new Error('RUNNER_DUPLICATE_EVIDENCE')
       // Preserve known accounting even when cancellation arrived during execution.
       await input.ports.store.completeDispatch(claim.claimId, outcome)
+      activeClaimId = null
       remember(outcome)
       if (await cancelled()) return result('CANCELLED', 'RUNNER_CANCELLED_AFTER_EXECUTION')
     }
     return result('COMPLETED', 'RUNNER_PAIRED_OUTPUTS_COMPLETE')
   } catch (error) {
-    return result(input.signal?.aborted ? 'CANCELLED' : 'STOPPED', error instanceof Error ? error.message : 'RUNNER_UNKNOWN_FAILURE')
+    if (activeClaimId && !pendingTerminal) {
+      const terminalStatus = input.signal?.aborted ? 'cancelled' : 'failed'
+      const terminalReason = input.signal?.aborted ? 'RUNNER_CANCELLED_AFTER_CLAIM' : 'RUNNER_STOPPED_AFTER_CLAIM'
+      try {
+        await input.ports.store.terminalizeDispatch(activeClaimId, terminalStatus, terminalReason)
+      } catch {
+        // Preserve the original failure. A failed terminal write leaves the
+        // claim ambiguous, which still blocks retries and positive decisions.
+      }
+    }
+    const cancelledAfterClaim = pendingTerminal?.status === 'cancelled'
+    return result(input.signal?.aborted || cancelledAfterClaim ? 'CANCELLED' : 'STOPPED', error instanceof Error ? error.message : 'RUNNER_UNKNOWN_FAILURE')
   }
 }

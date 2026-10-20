@@ -37,6 +37,7 @@ function fixture(provenance = 'synthetic') {
         if (old) {
           assert.deepEqual(old.identity, identity, 'immutable claim identity')
           assert.equal(old.inputHash, inputHash, 'immutable claim input')
+          if (old.terminalStatus) return { status: old.terminalStatus }
           return old.outcome ? { status: 'completed', outcome: structuredClone(old.outcome) } : { status: 'ambiguous' }
         }
         const claimId = randomUUID(); claims.set(k, { claimId, identity: structuredClone(identity), inputHash })
@@ -47,6 +48,13 @@ function fixture(provenance = 'synthetic') {
         assert.ok(old); assert.deepEqual(old.identity, outcome.identity); assert.equal(old.inputHash, outcome.inputHash)
         assert.equal(old.outcome, undefined, 'terminal output cannot be overwritten')
         old.outcome = structuredClone(outcome)
+      },
+      async terminalizeDispatch(claimId, status, reason) {
+        events.push('terminalize')
+        const old = [...claims.values()].find(c => c.claimId === claimId)
+        assert.ok(old); assert.ok(['failed', 'cancelled'].includes(status)); assert.ok(reason)
+        if (old.outcome) throw new Error('terminal conflict')
+        old.terminalStatus = status
       },
     },
     async execute(input) {
@@ -111,7 +119,7 @@ for (const failurePoint of ['execute', 'verify', 'complete']) {
   if (failurePoint === 'verify') f.ports.verifyCanonicalOutcome = async () => false
   if (failurePoint === 'complete') f.ports.store.completeDispatch = async () => { throw new Error('persistence unavailable') }
   const first = await f.run(); assert.equal(first.status, 'STOPPED'); assert.equal(count(f, 'execute'), 1)
-  const second = await f.run(); assert.equal(second.reason, 'RUNNER_PRIOR_AMBIGUOUS'); assert.equal(count(f, 'execute'), 1); assertions++
+  const second = await f.run(); assert.equal(second.reason, 'RUNNER_PRIOR_FAILED'); assert.equal(count(f, 'execute'), 1); assertions++
 }
 for (const mutation of [
   outcome => { outcome.identity.projectId = id(99) }, outcome => { outcome.identity.caseKey = digest('other case') },
@@ -142,7 +150,8 @@ for (const mutation of [
   const f = fixture(), claim = f.ports.store.claimDispatch
   f.ports.store.claimDispatch = async (...args) => { const result = await claim(...args); f.state.cancelled = true; return result }
   const result = await f.run(); assert.equal(result.reason, 'RUNNER_CANCELLED_AFTER_CLAIM'); assert.equal(count(f, 'execute'), 0)
-  f.state.cancelled = false; assert.equal((await f.run()).reason, 'RUNNER_PRIOR_AMBIGUOUS'); assertions++
+  assert.equal(count(f, 'terminalize'), 1)
+  f.state.cancelled = false; assert.equal((await f.run()).reason, 'RUNNER_PRIOR_CANCELLED'); assertions++
 }
 {
   const f = fixture(), execute = f.ports.execute
@@ -157,7 +166,45 @@ for (const mutation of [
   const f = fixture(), authorize = f.ports.authorize
   f.ports.authorize = async p => ({ ...await authorize(p), executeAllowed: count(f, 'authorize') < 3 })
   const result = await f.run(); assert.match(result.reason, /AUTHORIZATION_DENIED/); assert.equal(count(f, 'execute'), 0)
-  f.ports.authorize = authorize; assert.equal((await f.run()).reason, 'RUNNER_PRIOR_AMBIGUOUS'); assertions++
+  f.ports.authorize = authorize; assert.equal((await f.run()).reason, 'RUNNER_PRIOR_FAILED'); assertions++
+}
+{
+  const f = fixture()
+  f.ports.execute = async () => { f.events.push('execute'); throw new Error('provider outcome unavailable') }
+  f.ports.store.terminalizeDispatch = async () => { throw new Error('terminal write unavailable') }
+  assert.equal((await f.run()).status, 'STOPPED')
+  assert.equal((await f.run()).reason, 'RUNNER_PRIOR_AMBIGUOUS')
+  assert.equal(count(f, 'execute'), 1); assertions++
+}
+{
+  const f = fixture()
+  f.ports.execute = async () => { f.events.push('execute'); throw new Error('provider outcome unavailable') }
+  const terminalize = f.ports.store.terminalizeDispatch
+  f.ports.store.terminalizeDispatch = async (...args) => { await terminalize(...args); throw new Error('terminal response lost') }
+  assert.equal((await f.run()).status, 'STOPPED')
+  assert.equal((await f.run()).reason, 'RUNNER_PRIOR_FAILED')
+  assert.equal(count(f, 'execute'), 1); assertions++
+}
+{
+  const f = fixture(), claim = f.ports.store.claimDispatch, terminalize = f.ports.store.terminalizeDispatch
+  f.ports.store.claimDispatch = async (...args) => { const result = await claim(...args); f.state.cancelled = true; return result }
+  f.ports.store.terminalizeDispatch = async (...args) => { await terminalize(...args); throw new Error('cancel response lost') }
+  const result = await f.run()
+  assert.equal(result.status, 'CANCELLED'); assert.equal(count(f, 'terminalize'), 1)
+  f.state.cancelled = false
+  assert.equal((await f.run()).reason, 'RUNNER_PRIOR_CANCELLED'); assert.equal(count(f, 'execute'), 0); assertions++
+}
+{
+  const f = fixture(), complete = f.ports.store.completeDispatch
+  let loseResponse = true
+  f.ports.store.completeDispatch = async (...args) => {
+    await complete(...args)
+    if (loseResponse) { loseResponse = false; throw new Error('completion response lost') }
+  }
+  assert.equal((await f.run()).status, 'STOPPED')
+  const replay = await f.run()
+  assert.equal(replay.reason, 'RUNNER_PAIRED_OUTPUTS_COMPLETE')
+  assert.equal(count(f, 'execute'), 4); assertions++
 }
 
 for (const accountingKey of ['invocationId', 'reservationId', 'settlementId', 'costEventId']) {

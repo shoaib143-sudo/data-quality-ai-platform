@@ -31,5 +31,12 @@ export function createLearningExperimentRunnerStore(input: {
       if (error) throw new Error(`Learning dispatch outcome failed: ${error.message}`)
       if (data !== true) throw new Error('Invalid durable learning dispatch completion')
     },
+    async terminalizeDispatch(claimId, status, reason) {
+      const { data, error } = await admin.schema('agent').rpc('terminalize_learning_experiment_dispatch', {
+        p_claim_id: claimId, p_status: status, p_reason: reason,
+      })
+      if (error) throw new Error(`Learning dispatch terminalization failed: ${error.message}`)
+      if (data !== true) throw new Error('Invalid durable learning dispatch terminalization')
+    },
   }
 }

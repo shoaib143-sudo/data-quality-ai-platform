@@ -91,7 +91,7 @@
     "verify:agent-learning-evaluate-capability": "node --experimental-strip-types scripts/test-agent-learning-evaluate-capability.mjs && node --experimental-strip-types scripts/test-learning-evaluation-result-authorization.mjs && node scripts/test-learning-evaluation-assignment-migration.mjs && node scripts/test-learning-evaluation-attestation-gate.mjs",
     "verify:immutable-learning-artifact-storage-adapter": "node --experimental-strip-types scripts/test-immutable-learning-artifact-storage-adapter.mjs && node --experimental-strip-types scripts/test-immutable-learning-artifact-store.mjs",
     "verify:learning-replay-bytes": "node --experimental-strip-types scripts/test-held-out-replay-byte-resolver.mjs && node --experimental-strip-types scripts/test-supabase-held-out-replay-reader.mjs && node scripts/test-learning-benchmark-dataset-manifest.mjs",
-    "verify:learning-experiment-runner": "node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs && node scripts/test-learning-runner-schema-boundary.mjs"
+    "verify:learning-experiment-runner": "node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs && node scripts/test-learning-runner-schema-boundary.mjs && node scripts/test-learning-dispatch-terminalization.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
