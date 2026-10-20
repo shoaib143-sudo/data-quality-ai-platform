@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 const sql = fs.readFileSync('supabase/migrations/20261020043616_learning_evaluation_trusted_assignments.sql', 'utf8')
+const atomicSql = fs.readFileSync('supabase/migrations/20261020044301_atomically_register_learning_evaluation_assignment.sql', 'utf8')
 
 assert.match(sql, /create table if not exists agent\.learning_evaluation_assignments/i)
 assert.match(sql, /proposer_user_id uuid not null references auth\.users\(id\) on delete restrict/i)
@@ -21,7 +22,15 @@ assert.match(sql, /acknowledged evaluator assignment is required before result r
 assert.match(sql, /alter table agent\.learning_evaluation_assignments enable row level security/i)
 assert.match(sql, /alter table agent\.learning_evaluation_assignment_acknowledgements enable row level security/i)
 assert.doesNotMatch(sql, /grant (?:insert|update|delete|all) on agent\.learning_evaluation_(?:assignments|assignment_acknowledgements) to (?:public|anon|authenticated)/i)
+assert.match(atomicSql, /create or replace function agent\.record_learning_evaluation_policy_with_assignment\(\s*p_policy_input jsonb,\s*p_proposer_user_id uuid,\s*p_evaluator_user_id uuid/is)
+assert.match(atomicSql, /v_policy_id := agent\.record_learning_evaluation_policy\(/i)
+assert.match(atomicSql, /perform agent\.record_learning_evaluation_assignment\(/i)
+assert.match(atomicSql, /grant execute on function agent\.record_learning_evaluation_policy_with_assignment\(jsonb,uuid,uuid\)\s+to service_role/i)
+assert.doesNotMatch(atomicSql, /grant execute on function agent\.record_learning_evaluation_policy_with_assignment\([^;]+\)\s+to authenticated/i)
+assert.match(atomicSql, /legacy unassigned evaluation policies cannot be retroactively trusted/i)
+assert.match(sql, /new\.observed_at is null or new\.observed_at < v_ack\.acknowledged_at[\s\S]*?new\.observed_at > statement_timestamp\(\)/i)
 
 console.log('PASS migration contract binds immutable UUID-backed assignments and acknowledgements to policy scope')
+console.log('PASS policy and evaluator assignment are wrapped in one service-role-only transaction')
 console.log('PASS evaluator result writes require acknowledgement and assignment RPCs are service-role-only')
 console.log('NOTE SQL was statically checked only. No PostgreSQL or Supabase migration was run.')
