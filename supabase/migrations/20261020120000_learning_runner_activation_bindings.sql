@@ -9,6 +9,7 @@ create table if not exists agent.learning_artifact_manifests (
   artifact_kind text not null check (artifact_kind in ('EXECUTABLE','HELD_OUT_INPUT')),
   artifact_role text not null check (artifact_role in ('BASELINE','CANDIDATE','HELD_OUT_INPUT')),
   agent_definition_id uuid references agent.agent_definitions(id) on delete restrict,
+  skill_key text,
   candidate_id uuid,
   dataset_manifest_id uuid,
   case_key text,
@@ -39,6 +40,7 @@ create table if not exists agent.learning_artifact_manifests (
       artifact_kind='EXECUTABLE'
       and artifact_role in ('BASELINE','CANDIDATE')
       and agent_definition_id is not null
+      and skill_key is not null and length(btrim(skill_key)) > 0
       and runtime_version is not null and length(btrim(runtime_version)) > 0
       and definition_hash ~ '^sha256:[a-f0-9]{64}$'
       and tool_contract_set_hash ~ '^sha256:[a-f0-9]{64}$'
@@ -48,7 +50,7 @@ create table if not exists agent.learning_artifact_manifests (
     (
       artifact_kind='HELD_OUT_INPUT'
       and artifact_role='HELD_OUT_INPUT'
-      and agent_definition_id is null and candidate_id is null
+      and agent_definition_id is null and skill_key is null and candidate_id is null
       and runtime_version is null and definition_hash is null and tool_contract_set_hash is null
       and dataset_manifest_id is not null and case_key is not null
       and dataset_version_id is not null
@@ -222,6 +224,7 @@ create or replace function agent.register_learning_artifact_manifest(
   p_artifact_kind text,
   p_artifact_role text,
   p_agent_definition_id uuid,
+  p_skill_key text,
   p_candidate_id uuid,
   p_dataset_manifest_id uuid,
   p_case_key text,
@@ -281,7 +284,8 @@ begin
     join agent.agent_version_lifecycle l on l.agent_definition_id=d.id
     where d.id=p_agent_definition_id;
     if not found then raise exception 'Executable agent definition lifecycle not found'; end if;
-    if nullif(btrim(coalesce(p_runtime_version,'')),'') is null
+    if nullif(btrim(coalesce(p_skill_key,'')),'') is null
+      or nullif(btrim(coalesce(p_runtime_version,'')),'') is null
       or p_definition_hash !~ '^sha256:[a-f0-9]{64}$'
       or p_tool_contract_set_hash !~ '^sha256:[a-f0-9]{64}$'
     then
@@ -301,8 +305,11 @@ begin
       from agent.learning_candidates
       where id=p_candidate_id and project_id=p_project_id;
       if not found then raise exception 'Candidate executable owner not found'; end if;
-      if v_candidate.agent_key<>v_agent.agent_key or v_candidate.candidate_version<>v_agent.version then
-        raise exception 'Candidate executable does not match candidate agent/version';
+      if v_candidate.agent_key<>v_agent.agent_key
+        or v_candidate.skill_key<>btrim(p_skill_key)
+        or v_candidate.candidate_version<>v_agent.version
+      then
+        raise exception 'Candidate executable does not match candidate agent/skill/version';
       end if;
       if v_agent.lifecycle_state not in ('VALIDATED','CANDIDATE') then
         raise exception 'Candidate executable lifecycle is not evaluable';
@@ -336,13 +343,13 @@ begin
   end if;
 
   insert into agent.learning_artifact_manifests(
-    project_id,artifact_kind,artifact_role,agent_definition_id,candidate_id,
+    project_id,artifact_kind,artifact_role,agent_definition_id,skill_key,candidate_id,
     dataset_manifest_id,case_key,dataset_version_id,
     provider_key,bucket,object_key,content_type,size_bytes,sha256,
     serialization_version,runtime_version,definition_hash,tool_contract_set_hash,
     source_ref,created_by
   ) values (
-    p_project_id,p_artifact_kind,p_artifact_role,p_agent_definition_id,p_candidate_id,
+    p_project_id,p_artifact_kind,p_artifact_role,p_agent_definition_id,nullif(btrim(coalesce(p_skill_key,'')),''),p_candidate_id,
     p_dataset_manifest_id,p_case_key,p_dataset_version_id,
     btrim(p_provider_key),btrim(p_bucket),btrim(p_object_key),btrim(p_content_type),
     p_size_bytes,p_sha256,btrim(p_serialization_version),
@@ -356,10 +363,10 @@ end
 $$;
 
 revoke all on function agent.register_learning_artifact_manifest(
-  uuid,text,text,uuid,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid
+  uuid,text,text,uuid,text,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid
 ) from public,anon,authenticated;
 grant execute on function agent.register_learning_artifact_manifest(
-  uuid,text,text,uuid,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid
+  uuid,text,text,uuid,text,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid
 ) to service_role;
 
 create or replace function agent.register_learning_runtime_binding(
@@ -451,11 +458,13 @@ begin
   where id=p_candidate_artifact_id and project_id=p_project_id;
 
   if v_base_art.agent_definition_id<>p_baseline_agent_definition_id
+    or v_base_art.skill_key<>v_policy.skill_key
     or v_base_art.artifact_role<>'BASELINE'
   then
     raise exception 'Baseline executable artifact binding mismatch';
   end if;
   if v_cand_art.agent_definition_id<>p_candidate_agent_definition_id
+    or v_cand_art.skill_key<>v_policy.skill_key
     or v_cand_art.candidate_id<>p_candidate_id
     or v_cand_art.artifact_role<>'CANDIDATE'
   then
