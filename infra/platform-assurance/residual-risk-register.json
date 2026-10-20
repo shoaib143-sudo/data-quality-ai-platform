@@ -18,10 +18,26 @@
         "runtime manifest persistence is service-side privileged code only",
         "any future authenticated grant requires project-scoped RLS plus adversarial tests"
       ],
-      "recordedAt": "2026-09-12T00:00:00Z",
-      "reviewDueAt": "2026-10-12T00:00:00Z",
+      "recordedAt": "2026-10-20T00:00:00Z",
+      "reviewDueAt": "2026-11-19T00:00:00Z",
       "closureCondition": "Close only when the advisor condition can be removed without broadening client access, or replace the locked-table posture with an explicitly tested project-scoped RLS design.",
-      "evidenceRefs": ["docs/platform-assurance/supabase-security-exceptions.md"]
+      "evidenceRefs": [
+        "docs/platform-assurance/supabase-security-exceptions.md"
+      ],
+      "originalRecordedAt": "2026-09-12T00:00:00Z",
+      "lastReviewedAt": "2026-10-20T00:00:00Z",
+      "reviewDecision": "RENEWED_AFTER_FRESH_EVIDENCE_REVIEW",
+      "reviewEvidence": {
+        "sourceCommit": "f78c9d7c2218245df810024f87ef713dd58fbc7f",
+        "workflowRuns": {
+          "supabaseAdvisorHardening": 39365109348,
+          "securityDefinerAllowlist": 39365109183,
+          "productionSecurityPosture": 39365109360,
+          "aiProductionBoundaries": 39365109162,
+          "sourceProjectBoundary": 39365109325,
+          "autonomousAgentGovernance": 39365109310
+        }
+      }
     },
     {
       "riskId": "PA-RISK-002",
@@ -35,10 +51,26 @@
         "member and non-member behavior is subject to live authorization validation",
         "changes require security review"
       ],
-      "recordedAt": "2026-09-12T00:00:00Z",
-      "reviewDueAt": "2026-10-12T00:00:00Z",
+      "recordedAt": "2026-10-20T00:00:00Z",
+      "reviewDueAt": "2026-11-19T00:00:00Z",
       "closureCondition": "Close if the helpers can move to an equally safe SECURITY INVOKER or non-exposed design without breaking recursive RLS authorization; otherwise renew only with fresh live positive and negative evidence.",
-      "evidenceRefs": ["docs/platform-assurance/supabase-security-exceptions.md"]
+      "evidenceRefs": [
+        "docs/platform-assurance/supabase-security-exceptions.md"
+      ],
+      "originalRecordedAt": "2026-09-12T00:00:00Z",
+      "lastReviewedAt": "2026-10-20T00:00:00Z",
+      "reviewDecision": "RENEWED_AFTER_FRESH_EVIDENCE_REVIEW",
+      "reviewEvidence": {
+        "sourceCommit": "f78c9d7c2218245df810024f87ef713dd58fbc7f",
+        "workflowRuns": {
+          "supabaseAdvisorHardening": 39365109348,
+          "securityDefinerAllowlist": 39365109183,
+          "productionSecurityPosture": 39365109360,
+          "aiProductionBoundaries": 39365109162,
+          "sourceProjectBoundary": 39365109325,
+          "autonomousAgentGovernance": 39365109310
+        }
+      }
     },
     {
       "riskId": "PA-RISK-003",
@@ -53,13 +85,27 @@
         "timeout and cancellation automation remain service-role only",
         "live hostile-user and authorized-user rollback tests leave zero residue"
       ],
-      "recordedAt": "2026-09-12T00:00:00Z",
-      "reviewDueAt": "2026-10-12T00:00:00Z",
+      "recordedAt": "2026-10-20T00:00:00Z",
+      "reviewDueAt": "2026-11-19T00:00:00Z",
       "closureCondition": "Close if the RPC can be replaced by an equivalently safe invoker or non-exposed boundary; otherwise renew only with current advisor review and adversarial authorization evidence.",
       "evidenceRefs": [
         "docs/platform-assurance/supabase-security-exceptions.md",
         "supabase/migrations/20260912054005_harden_runtime_interrupt_authorization_order.sql"
-      ]
+      ],
+      "originalRecordedAt": "2026-09-12T00:00:00Z",
+      "lastReviewedAt": "2026-10-20T00:00:00Z",
+      "reviewDecision": "RENEWED_AFTER_FRESH_EVIDENCE_REVIEW",
+      "reviewEvidence": {
+        "sourceCommit": "f78c9d7c2218245df810024f87ef713dd58fbc7f",
+        "workflowRuns": {
+          "supabaseAdvisorHardening": 39365109348,
+          "securityDefinerAllowlist": 39365109183,
+          "productionSecurityPosture": 39365109360,
+          "aiProductionBoundaries": 39365109162,
+          "sourceProjectBoundary": 39365109325,
+          "autonomousAgentGovernance": 39365109310
+        }
+      }
     },
     {
       "riskId": "PA-RISK-004",
@@ -74,10 +120,26 @@
         "authentication monitoring",
         "upgrade decision required before higher-risk production use"
       ],
-      "recordedAt": "2026-09-12T00:00:00Z",
-      "reviewDueAt": "2026-10-12T00:00:00Z",
+      "recordedAt": "2026-10-20T00:00:00Z",
+      "reviewDueAt": "2026-11-19T00:00:00Z",
       "closureCondition": "Enable leaked-password protection on a supported plan and re-run the live Supabase security advisor before claiming closure.",
-      "evidenceRefs": ["docs/platform-assurance/supabase-security-exceptions.md"]
+      "evidenceRefs": [
+        "docs/platform-assurance/supabase-security-exceptions.md"
+      ],
+      "originalRecordedAt": "2026-09-12T00:00:00Z",
+      "lastReviewedAt": "2026-10-20T00:00:00Z",
+      "reviewDecision": "OPEN_GAP_RECONFIRMED_NO_EXCEPTION_GRANTED",
+      "reviewEvidence": {
+        "sourceCommit": "f78c9d7c2218245df810024f87ef713dd58fbc7f",
+        "workflowRuns": {
+          "supabaseAdvisorHardening": 39365109348,
+          "securityDefinerAllowlist": 39365109183,
+          "productionSecurityPosture": 39365109360,
+          "aiProductionBoundaries": 39365109162,
+          "sourceProjectBoundary": 39365109325,
+          "autonomousAgentGovernance": 39365109310
+        }
+      }
     }
   ]
 }
