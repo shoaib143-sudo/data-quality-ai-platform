@@ -98,7 +98,7 @@ create index if not exists learning_artifact_created_by_fk_idx
 
 alter table agent.learning_artifact_manifests enable row level security;
 revoke all on agent.learning_artifact_manifests from public,anon,authenticated,service_role;
-grant select,insert on agent.learning_artifact_manifests to service_role;
+grant select on agent.learning_artifact_manifests to service_role;
 create policy learning_artifact_manifests_authenticated_deny
   on agent.learning_artifact_manifests for all to authenticated
   using (false) with check (false);
@@ -151,7 +151,7 @@ create index if not exists learning_runtime_binding_candidate_artifact_fk_idx
 
 alter table agent.learning_evaluation_runtime_bindings enable row level security;
 revoke all on agent.learning_evaluation_runtime_bindings from public,anon,authenticated,service_role;
-grant select,insert on agent.learning_evaluation_runtime_bindings to service_role;
+grant select on agent.learning_evaluation_runtime_bindings to service_role;
 create policy learning_runtime_bindings_authenticated_deny
   on agent.learning_evaluation_runtime_bindings for all to authenticated
   using (false) with check (false);
@@ -193,7 +193,7 @@ create index if not exists learning_evaluator_assigned_by_fk_idx
 
 alter table agent.learning_evaluator_assignments enable row level security;
 revoke all on agent.learning_evaluator_assignments from public,anon,authenticated,service_role;
-grant select,insert on agent.learning_evaluator_assignments to service_role;
+grant select on agent.learning_evaluator_assignments to service_role;
 create policy learning_evaluator_assignments_authenticated_deny
   on agent.learning_evaluator_assignments for all to authenticated
   using (false) with check (false);
