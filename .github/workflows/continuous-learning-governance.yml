@@ -52,6 +52,12 @@ on:
       - 'scripts/test-governed-learning-command-center.mjs'
       - 'scripts/test-pgcl-command-center-observability.mjs'
       - 'lib/agents/learning-experiment-runner*.ts'
+      - 'lib/agents/learning-runner-*.ts'
+      - 'scripts/test-learning-runner-synthetic-activation.mjs'
+      - 'scripts/test-learning-evaluator-capability-boundary.mjs'
+      - 'lib/auth/authorize.ts'
+      - 'scripts/audit-learning-runner-activation-bindings.mjs'
+      - 'supabase/migrations/20261020120000_learning_runner_activation_bindings.sql'
       - 'scripts/test-learning-experiment-runner*.mjs'
       - 'scripts/test-learning-runner-schema-boundary.mjs'
       - 'supabase/migrations/20260923193808_create_private_testing_schema_and_fixture_harness.sql'
@@ -171,6 +177,12 @@ on:
       - 'scripts/test-governed-learning-command-center.mjs'
       - 'scripts/test-pgcl-command-center-observability.mjs'
       - 'lib/agents/learning-experiment-runner*.ts'
+      - 'lib/agents/learning-runner-*.ts'
+      - 'scripts/test-learning-runner-synthetic-activation.mjs'
+      - 'scripts/test-learning-evaluator-capability-boundary.mjs'
+      - 'lib/auth/authorize.ts'
+      - 'scripts/audit-learning-runner-activation-bindings.mjs'
+      - 'supabase/migrations/20261020120000_learning_runner_activation_bindings.sql'
       - 'scripts/test-learning-experiment-runner*.mjs'
       - 'scripts/test-learning-runner-schema-boundary.mjs'
       - 'supabase/migrations/20260923193808_create_private_testing_schema_and_fixture_harness.sql'
@@ -278,6 +290,8 @@ jobs:
         run: node --experimental-strip-types scripts/test-proactive-governed-case-learning-priority-agents.mjs
       - name: Run paired experiment runner behavior and invocation tests
         run: node --experimental-strip-types scripts/test-learning-experiment-runner.mjs && node --experimental-strip-types scripts/test-learning-experiment-runner-service.mjs && node scripts/test-learning-runner-schema-boundary.mjs
+      - name: Run zero-cost activation binding tests
+        run: node --experimental-strip-types scripts/test-learning-runner-canonical.mjs && node --experimental-strip-types scripts/test-learning-runner-synthetic-activation.mjs && node scripts/audit-learning-runner-activation-bindings.mjs && node scripts/test-learning-evaluator-capability-boundary.mjs
       - name: Run learning experiment runtime budget tests
         run: node --experimental-strip-types scripts/test-learning-experiment-budget-runtime.mjs
       - name: Run prospective evaluation policy behavior tests
