@@ -169,7 +169,7 @@ jobs:
         run: node --experimental-strip-types --experimental-loader ./scripts/node-ts-alias-loader.mjs scripts/run-governance-orchestrator-off-live.mjs
       - name: Upload OFF-mode baseline evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: governance-orchestrator-off-${{ github.sha }}
           path: ${{ runner.temp }}/governance-orchestrator-off-live.json
