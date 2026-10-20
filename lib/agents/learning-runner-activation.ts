@@ -163,6 +163,8 @@ export async function registerLearningRuntimeBinding(input:{
 export async function registerLearningEvaluatorAssignment(input:{
   projectId:string;policyRecordId:string;candidateId:string
   proposerUserId:string;evaluatorUserId:string;assignedBy:string;acknowledgedAt:string
+  assignmentCapability:AuthorizationCapability
+  evaluatorCapability:AuthorizationCapability
 }){
   for(const value of [input.projectId,input.policyRecordId,input.candidateId,input.proposerUserId,input.evaluatorUserId,input.assignedBy]) {
     if(!UUID.test(value)) throw new Error('LEARNING_EVALUATOR_ASSIGNMENT_IDENTITY_INVALID')
@@ -180,6 +182,11 @@ export async function registerLearningEvaluatorAssignment(input:{
     throw new Error('LEARNING_EVALUATOR_POLICY_IDENTITY_MISMATCH')
   }
   if(Date.parse(input.acknowledgedAt)<Date.parse(policy.locked_at)) throw new Error('LEARNING_EVALUATOR_ACK_PREDATES_POLICY')
+  await Promise.all([
+    authorizeProject(input.proposerUserId,input.projectId,'agent.execute'),
+    authorizeProject(input.assignedBy,input.projectId,input.assignmentCapability),
+    authorizeProject(input.evaluatorUserId,input.projectId,input.evaluatorCapability),
+  ])
   const scopeHash=sha([
     input.projectId,input.policyRecordId,input.candidateId,input.proposerUserId,input.evaluatorUserId,
     String(policy.manifest_hash),String(policy.rubric_ref),String(policy.calibration_ref),
