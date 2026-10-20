@@ -36,6 +36,7 @@ export type LearningArtifactRegistration = {
   sourceRef:string
   createdBy:string|null
   agentDefinitionId?:string|null
+  skillKey?:string|null
   candidateId?:string|null
   datasetManifestId?:string|null
   caseKey?:string|null
@@ -69,6 +70,7 @@ export async function stageImmutableLearningArtifact(input:LearningArtifactRegis
     p_artifact_kind:input.kind,
     p_artifact_role:input.role,
     p_agent_definition_id:input.agentDefinitionId ?? null,
+    p_skill_key:input.skillKey?.trim()||null,
     p_candidate_id:input.candidateId ?? null,
     p_dataset_manifest_id:input.datasetManifestId ?? null,
     p_case_key:input.caseKey ?? null,
