@@ -11,7 +11,7 @@ This change closes the remaining non-production technical gaps between the merge
 2. append-only HELD_OUT replay input manifests bound to sealed benchmark cases;
 3. create-only private object writes with immediate byte readback, SHA-256 and size verification, generic object-lifecycle registration and deletion/update fencing while referenced;
 4. exact BASELINE/CANDIDATE/rollback runtime-definition bindings to one locked evaluation policy, including immutable skill identity and equivalent runtime/semantic tool contracts across arms;
-5. canonical proposer/evaluator UUID assignment and immutable scope attestation;
+5. canonical proposer/evaluator UUID assignment, three-party assigner separation, immutable scope attestation, and current assignment-authority recheck;
 6. server-owned plan construction from canonical policy, runtime binding, sealed manifest and verified bytes;
 7. current project authorization recheck through the existing authorization service;
 8. deterministic $0 synthetic runner executor that refuses prospective provenance and emits no accounting artifacts;
