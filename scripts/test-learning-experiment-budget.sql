@@ -34,7 +34,7 @@ alter table agent.learning_evaluation_policies disable trigger policy_immutable;
 update agent.learning_evaluation_policies set candidate_id=id;
 alter table agent.learning_evaluation_policies enable trigger policy_immutable;
 insert into agent.learning_candidates select id,project_id from agent.learning_evaluation_policies;
--- Policy 12 proves the configured $0 cost cap denies a positive verified quote.
+-- Policy 12 proves the configured $0 cost cap denies a positive reservation estimate.
 insert into agent.learning_candidates values('20000000-0000-4000-8000-000000000012','10000000-0000-4000-8000-000000000001');
 insert into agent.learning_evaluation_policies(id,project_id,candidate_id,agent_key,mode,total_cost_budget,per_run_cost_budget)
 values('30000000-0000-4000-8000-000000000012','10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000012','profiling_agent','GUIDED',0,0);
@@ -74,9 +74,9 @@ begin
  a:=agent.reserve_learning_experiment_budget(p,policy,policy,run,inv,'profiling_agent','GUIDED',40,.4,'fixture-provider','fixture-model','90000000-0000-4000-8000-000000000001');
  assert (a->>'admitted')::boolean,'first bounded call admitted'; reservation:=(a->>'reservation_id')::uuid;
  policy:='30000000-0000-4000-8000-000000000012';
- b:=agent.reserve_learning_experiment_budget(p,policy,policy,gen_random_uuid(),gen_random_uuid(),'profiling_agent','GUIDED',20,.000001,'fixture-provider','fixture-model','90000000-0000-4000-8000-000000000001');
- assert b->>'reason'='RUN_BUDGET_EXCEEDED','strict $0 cap denies positive verified quote before provider dispatch';
- assert not exists(select 1 from agent.learning_experiment_budget_reservations where policy_id=policy),'zero-cost policy creates no reservation for positive quote';
+ b:=agent.reserve_learning_experiment_budget(p,policy,'20000000-0000-4000-8000-000000000012',gen_random_uuid(),gen_random_uuid(),'profiling_agent','GUIDED',20,.000001,'fixture-provider','fixture-model','90000000-0000-4000-8000-000000000001');
+ assert b->>'reason'='RUN_BUDGET_EXCEEDED','strict $0 cap denies positive reservation estimate';
+ assert not exists(select 1 from agent.learning_experiment_budget_reservations where policy_id=policy),'zero-cost policy creates no reservation for positive estimate';
  policy:='30000000-0000-4000-8000-000000000001';
  b:=agent.reserve_learning_experiment_budget(p,policy,policy,run,inv,'profiling_agent','GUIDED',40,.4,'fixture-provider','fixture-model','90000000-0000-4000-8000-000000000001');
  assert b->>'reason'='INVOCATION_ALREADY_RESERVED','duplicate execution denied';
