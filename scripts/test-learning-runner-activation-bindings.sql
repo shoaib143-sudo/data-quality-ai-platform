@@ -27,17 +27,13 @@ begin
     if exists(
       select 1 from information_schema.role_table_grants
       where table_schema='agent' and table_name=v_table
-        and grantee='service_role' and privilege_type not in ('SELECT','INSERT')
-    ) then raise exception 'service_role has excessive table privilege on agent.%',v_table; end if;
+        and grantee='service_role' and privilege_type <> 'SELECT'
+    ) then raise exception 'service_role has direct mutation privilege on agent.%',v_table; end if;
     if not exists(
       select 1 from information_schema.role_table_grants
       where table_schema='agent' and table_name=v_table
         and grantee='service_role' and privilege_type='SELECT'
-    ) or not exists(
-      select 1 from information_schema.role_table_grants
-      where table_schema='agent' and table_name=v_table
-        and grantee='service_role' and privilege_type='INSERT'
-    ) then raise exception 'service_role minimal table privileges missing on agent.%',v_table; end if;
+    ) then raise exception 'service_role read privilege missing on agent.%',v_table; end if;
   end loop;
 
   foreach v_policy in array array[
@@ -53,6 +49,7 @@ begin
   foreach v_index in array array[
     'learning_artifact_executable_role_uq',
     'learning_artifact_held_out_case_uq',
+    'learning_artifact_object_lifecycle_fk_idx',
     'learning_artifact_definition_fk_idx',
     'learning_artifact_candidate_fk_idx',
     'learning_artifact_case_fk_idx',
@@ -77,9 +74,14 @@ begin
       where n.nspname='agent' and not t.tgisinternal and t.tgname in (
         'learning_artifact_manifests_immutable','learning_runtime_bindings_immutable','learning_evaluator_assignments_immutable'
       )) <> 3 then raise exception 'activation immutability triggers are incomplete'; end if;
+  if not exists(
+    select 1 from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='orchestration' and c.relname='object_artifacts'
+      and not t.tgisinternal and t.tgname='protect_learning_artifact_object_lifecycle'
+  ) then raise exception 'learning artifact object lifecycle fence is missing'; end if;
 
   foreach v_function in array array[
-    to_regprocedure('agent.register_learning_artifact_manifest(uuid,text,text,uuid,text,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid)'),
+    to_regprocedure('agent.register_learning_artifact_manifest(uuid,uuid,text,text,uuid,text,uuid,uuid,text,text,text,text,text,text,bigint,text,text,text,text,text,text,uuid)'),
     to_regprocedure('agent.register_learning_runtime_binding(uuid,uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,text,text)'),
     to_regprocedure('agent.register_learning_evaluator_assignment(uuid,uuid,uuid,uuid,uuid,uuid,text,timestamp with time zone)')
   ] loop
