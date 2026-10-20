@@ -232,7 +232,21 @@ export async function recordLearningEvaluationDecision(input: {
   if (!Number.isFinite(observedAt) || observedAt < evidenceStart || observedAt > Date.now()) {
     throw new Error('Learning evaluation observations must occur after evaluator acknowledgement and cannot be future-dated.')
   }
+  if (
+    input.result.independentlyVerified
+    || input.result.evidenceComplete
+    || input.result.confirmationWindowPassed
+    || input.result.accountingComplete
+  ) {
+    throw new Error('Caller-supplied verification claims are not accepted; a server-derived evidence attestation is required.')
+  }
   const decision = classifyLearningEvaluation(policy, input.result)
+  // The current result contract receives aggregates from its caller. Until a
+  // server-owned evidence loader and persisted attestation exist, those values
+  // must never produce a positive learning decision or reach the result RPC.
+  if (decision.quality === 'IMPROVED') {
+    throw new Error('A server-derived evidence attestation is required before recording an improved learning evaluation.')
+  }
   const { data, error } = await admin.schema('agent').rpc('record_learning_evaluation_result', {
     p_project_id: policy.projectId,
     p_policy_id: policyRecordId,

@@ -18,6 +18,12 @@ Implemented:
 
 The existing canonical project runtime cost enforcement remains authoritative for provider execution. PR #1091 does not introduce a second resource-control plane. Its locked experiment budget is checked against recorded evaluation evidence. Admission and post-run accounting checks do not prove that experiment-specific limits interrupt an in-flight provider request; that execution-boundary integration remains to be demonstrated.
 
+## Fail-closed attestation gate added 2026-10-20
+
+The current result API accepts caller-provided aggregates and verification flags. Until a server-owned evidence loader and persisted attestation are implemented, caller claims for independent verification, evidence completeness, confirmation-window completion, or accounting completeness are rejected before the result RPC. The database also blocks every `IMPROVED` insert through a trigger. This intentionally prevents positive learning decisions, including legitimate ones, until the result writer can bind its decision to server-derived attestation evidence. Unverified observations may still be recorded as `INCONCLUSIVE` for prospective evidence collection.
+
+Validation added: regression coverage verifies each caller-supplied positive claim stops before persistence, that an unverified observation is inconclusive, and that the database migration blocks an unattested positive insert. SQL validation here is static only. Do not run or deploy this migration until it has been reviewed and applied in the designated test schema under the existing $0 constraint.
+
 Still intentionally external to this implementation:
 - real project/dataset selection and independent evaluator assignment;
 - independently computed confidence/statistical evidence;

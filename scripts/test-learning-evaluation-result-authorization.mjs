@@ -69,14 +69,36 @@ const call = (patch = {}) => recordLearningEvaluationDecision({
 })
 
 fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow })
-const written = await call()
+const unverifiedResult = {
+  ...result,
+  independentlyVerified: false,
+  evidenceComplete: false,
+  confirmationWindowPassed: false,
+  accountingComplete: false,
+}
+const written = await call({ result: unverifiedResult })
 assert.equal(written.resultId, 'evaluation-result-id')
+assert.equal(written.decision.quality, 'INCONCLUSIVE')
 let calls = fixture.getCalls()
 assert.deepEqual(calls.map(item => item.type), ['auth', 'select', 'maybeSingle', 'authorize', 'select', 'maybeSingle', 'select', 'maybeSingle', 'rpc'])
 assert.deepEqual(calls.find(item => item.type === 'authorize'), {
   type: 'authorize', userId: evaluator, projectId: 'project-1', capability: 'agent.learning.evaluate',
 })
 assert.equal(calls.find(item => item.type === 'rpc').args.p_recorded_by, evaluator)
+assert.equal(calls.find(item => item.type === 'rpc').args.p_independently_verified, false)
+assert.equal(calls.find(item => item.type === 'rpc').args.p_evidence_complete, false)
+assert.equal(calls.find(item => item.type === 'rpc').args.p_confirmation_window_passed, false)
+assert.equal(calls.find(item => item.type === 'rpc').args.p_accounting_complete, false)
+
+fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow })
+await assert.rejects(call(), /Caller-supplied verification claims are not accepted/)
+assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'))
+
+for (const claim of ['independentlyVerified', 'evidenceComplete', 'confirmationWindowPassed', 'accountingComplete']) {
+  fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow })
+  await assert.rejects(call({ result: { ...unverifiedResult, [claim]: true } }), /Caller-supplied verification claims are not accepted/)
+  assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'), `${claim} must not reach result RPC`)
+}
 
 fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow })
 await assert.rejects(call({ result: { ...result, observedAt: minutesAgo(15) } }), /must occur after evaluator acknowledgement/)
@@ -108,7 +130,7 @@ await assert.rejects(call(), /session unavailable/)
 assert.deepEqual(fixture.getCalls().map(item => item.type), ['auth'])
 
 fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow, rpcResponse: { data: null, error: { message: 'write unavailable' } } })
-await assert.rejects(call(), /Unable to persist learning evaluation result: write unavailable/)
+await assert.rejects(call({ result: unverifiedResult }), /Unable to persist learning evaluation result: write unavailable/)
 assert.equal(fixture.getCalls().filter(item => item.type === 'rpc').length, 1)
 
 const proposer = 'b1234567-89ab-4cde-8fab-123456789abc'
@@ -161,5 +183,6 @@ await assert.rejects(acknowledgeLearningEvaluationPolicyAssignment(policyRow.id)
 assert.ok(!fixture.getCalls().some(item => item.type === 'authorize' || item.type === 'rpc'))
 
 console.log('PASS result writes require a session, persisted evaluator binding, current capability, and matching evaluator acknowledgement')
+console.log('PASS caller-supplied positive aggregates cannot be recorded as improved without a server-derived attestation')
 console.log('PASS forged evaluator, missing policy/assignment/acknowledgement, scope mismatch, read outage, authorization denial, auth outage, and write failure are fail-closed')
 console.log('PASS policy registration derives proposer from session, requires distinct existing evaluator, checks both capabilities, and persists assignment')
