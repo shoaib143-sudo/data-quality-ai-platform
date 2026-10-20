@@ -11,7 +11,7 @@ The $0 spend cap is in force. This work used local synthetic fixtures and source
 
 DataNexus has a governed, fail-closed learning foundation, but the agents are not yet proven to improve themselves in production. The runner and policy tests show that an experiment can be prepared and unsafe or over-budget paths can be rejected. They do not show prospective improvement for any agent.
 
-This branch adds two narrow, zero-cost guard improvements:
+This branch adds zero-cost implementation and guard improvements:
 
 1. Paired benchmark and evaluation-ledger evidence references now require UUID text and compare uniqueness case-insensitively. The evaluation ledger rejects malformed or reused references before persistence. This is a format check, not proof that a stored evidence row exists or is bound to the cited case.
 2. A pure immutable-artifact store port verifies SHA-256, readback, scope and create-only behavior against an injected backend. It has no production storage integration.
