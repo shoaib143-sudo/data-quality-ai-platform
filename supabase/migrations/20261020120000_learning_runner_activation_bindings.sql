@@ -280,6 +280,7 @@ begin
   if p_project_id is null or p_object_artifact_id is null or p_size_bytes < 0 or p_sha256 !~ '^sha256:[a-f0-9]{64}$' then
     raise exception 'Invalid immutable artifact identity';
   end if;
+  if nullif(btrim(coalesce(p_provider_key,'')),'') is null
     or nullif(btrim(coalesce(p_bucket,'')),'') is null
     or nullif(btrim(coalesce(p_object_key,'')),'') is null
     or nullif(btrim(coalesce(p_content_type,'')),'') is null
