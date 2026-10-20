@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeProject } from '@/lib/auth/authorize'
 import {
@@ -200,6 +201,104 @@ export async function acknowledgeLearningEvaluationPolicyAssignment(policyRecord
   if (acknowledgementError || !data) {
     throw new Error(`Unable to record evaluator assignment acknowledgement: ${acknowledgementError?.message ?? 'no acknowledgement id returned'}`)
   }
+  return String(data)
+}
+
+/**
+ * Persist one assigned evaluator's score against a canonical completed dispatch.
+ * This records evidence only. It does not compute or persist a learning decision.
+ * Rubric and calibration digests remain evaluator assertions until a trusted
+ * server loader resolves and verifies the immutable rubric/calibration bytes.
+ */
+export async function recordLearningExperimentAttemptScore(input: {
+  policyRecordId: string
+  claimId: string
+  outputHash: string
+  rubricDigest: string
+  calibrationDigest: string
+  criterionScores: Array<{ key: string; score: number }>
+  overallScore: number
+}) {
+  const { requireApiUser } = await import('@/lib/auth/require-api-user')
+  const authenticatedUser = await requireApiUser()
+  const policyRecordId = requiredText(input.policyRecordId, 'policyRecordId')
+  const claimId = requiredText(input.claimId, 'claimId')
+  const digestPattern = /^sha256:[0-9a-f]{64}$/
+  if (!digestPattern.test(input.outputHash) || !digestPattern.test(input.rubricDigest)
+    || !digestPattern.test(input.calibrationDigest)) {
+    throw new Error('Output, rubric, and calibration digests must be canonical SHA-256 values.')
+  }
+  if (!Array.isArray(input.criterionScores) || input.criterionScores.length === 0
+    || input.criterionScores.length > 50
+    || new Set(input.criterionScores.map(item => item?.key)).size !== input.criterionScores.length
+    || input.criterionScores.some(item => !item || typeof item.key !== 'string' || !item.key.trim() || item.key.trim().length > 100
+      || !Number.isFinite(item.score) || item.score < 0 || item.score > 1)
+    || !Number.isFinite(input.overallScore) || input.overallScore < 0 || input.overallScore > 1) {
+    throw new Error('Evaluator scores must contain distinct criteria with names of at most 100 characters and values between zero and one.')
+  }
+
+  const admin = createAdminClient()
+  const { data: claim, error: claimError } = await admin.schema('agent')
+    .from('learning_experiment_dispatch_claims')
+    .select('id,project_id,policy_id,candidate_id,run_id,input_hash,artifact_hash,execution_manifest_hash,attempt')
+    .eq('id', claimId)
+    .maybeSingle()
+  if (claimError) throw new Error(`Unable to load canonical evaluator target: ${claimError.message}`)
+  if (!claim || String(claim.policy_id) !== policyRecordId) {
+    throw new Error('The evaluator target must be an attempt within the selected locked policy.')
+  }
+
+  const { data: persistedPolicy, error: policyError } = await admin.schema('agent')
+    .from('learning_evaluation_policies')
+    .select(learningEvaluationPolicyColumns)
+    .eq('id', policyRecordId)
+    .eq('project_id', String(claim.project_id))
+    .eq('candidate_id', String(claim.candidate_id))
+    .maybeSingle()
+  if (policyError) throw new Error(`Unable to load locked score policy: ${policyError.message}`)
+  if (!persistedPolicy) throw new Error('A matching locked evaluation policy is required for evaluator scoring.')
+  const policy = learningPolicyFromRow(persistedPolicy)
+  validateLearningEvaluationPolicy(policy)
+  assertAuthenticatedLearningEvaluator({
+    authenticatedUserId: authenticatedUser.id,
+    policyEvaluatorActorId: policy.evaluatorActorId,
+    resultEvaluatorActorId: authenticatedUser.id,
+  })
+  await authorizeProject(authenticatedUser.id, policy.projectId, 'agent.learning.evaluate')
+  const { assignment, acknowledgement } = await requireAcknowledgedLearningEvaluatorAssignment(admin, policyRecordId, policy)
+
+  const { data: dispatchOutcome, error: outcomeError } = await admin.schema('agent')
+    .from('learning_experiment_dispatch_outcomes')
+    .select('claim_id,status,outcome')
+    .eq('claim_id', claimId)
+    .maybeSingle()
+  if (outcomeError) throw new Error(`Unable to load completed evaluator target: ${outcomeError.message}`)
+  const output = dispatchOutcome?.outcome?.output
+  if (dispatchOutcome?.status !== 'completed' || dispatchOutcome.claim_id !== claimId
+    || typeof output?.bytes !== 'string' || typeof output?.hash !== 'string') {
+    throw new Error('Only a canonically completed dispatch with stored output bytes can be scored.')
+  }
+  const canonicalOutputHash = `sha256:${createHash('sha256').update(output.bytes, 'utf8').digest('hex')}`
+  if (canonicalOutputHash !== output.hash || canonicalOutputHash !== input.outputHash) {
+    throw new Error('Evaluator score output hash does not match the canonical completed output bytes.')
+  }
+  const observedAt = Date.parse(String(acknowledgement.acknowledged_at))
+  if (!Number.isFinite(observedAt) || observedAt > Date.now()) {
+    throw new Error('A valid evaluator acknowledgement timestamp is required before scoring.')
+  }
+
+  const { data, error } = await admin.schema('agent').rpc('record_learning_experiment_attempt_score', {
+    p_claim_id: claimId,
+    p_evaluator_user_id: authenticatedUser.id,
+    p_assignment_id: assignment.id,
+    p_acknowledgement_id: acknowledgement.id,
+    p_output_hash: canonicalOutputHash,
+    p_rubric_digest: input.rubricDigest,
+    p_calibration_digest: input.calibrationDigest,
+    p_criterion_scores: input.criterionScores,
+    p_overall_score: input.overallScore,
+  })
+  if (error || !data) throw new Error(`Unable to persist immutable evaluator score: ${error?.message ?? 'no score id returned'}`)
   return String(data)
 }
 

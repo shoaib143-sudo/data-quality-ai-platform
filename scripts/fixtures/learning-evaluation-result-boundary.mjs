@@ -4,6 +4,8 @@ let policyRow = null
 let policyFailure = null
 let assignmentRow = null
 let acknowledgementRow = null
+let dispatchClaimRow = null
+let dispatchOutcomeRow = null
 let assignmentFailure = null
 let acknowledgementFailure = null
 let authorizationAllowed = true
@@ -19,6 +21,8 @@ export function configure(input = {}) {
   policyFailure = input.policyFailure ?? null
   assignmentRow = structuredClone(input.assignmentRow ?? null)
   acknowledgementRow = structuredClone(input.acknowledgementRow ?? null)
+  dispatchClaimRow = structuredClone(input.dispatchClaimRow ?? null)
+  dispatchOutcomeRow = structuredClone(input.dispatchOutcomeRow ?? null)
   assignmentFailure = input.assignmentFailure ?? null
   acknowledgementFailure = input.acknowledgementFailure ?? null
   authorizationAllowed = input.authorizationAllowed ?? true
@@ -71,6 +75,10 @@ export function createAdminClient() {
                   ? assignmentRow
                   : tableName === 'learning_evaluation_assignment_acknowledgements'
                     ? acknowledgementRow
+                    : tableName === 'learning_experiment_dispatch_claims'
+                      ? dispatchClaimRow
+                      : tableName === 'learning_experiment_dispatch_outcomes'
+                        ? dispatchOutcomeRow
                     : null
               const failure = tableName === 'learning_evaluation_policies'
                 ? policyFailure

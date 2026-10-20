@@ -1,5 +1,6 @@
 import './lib/register-typescript-resolution.mjs'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { registerHooks } from 'node:module'
 
 const fixtureUrl = new URL('./fixtures/learning-evaluation-result-boundary.mjs', import.meta.url).href
@@ -13,6 +14,7 @@ registerHooks({ resolve(specifier, context, next) {
 const fixture = await import('./fixtures/learning-evaluation-result-boundary.mjs')
 const {
   acknowledgeLearningEvaluationPolicyAssignment,
+  recordLearningExperimentAttemptScore,
   recordLearningEvaluationDecision,
   registerLearningEvaluationPolicy,
 } = await import('../lib/agents/governed-learning-evaluation-service.ts')
@@ -67,6 +69,32 @@ const call = (patch = {}) => recordLearningEvaluationDecision({
   result: { ...result },
   ...patch,
 })
+const storedOutputBytes = '{"answer":"verified fixture"}'
+const storedOutputHash = `sha256:${createHash('sha256').update(storedOutputBytes, 'utf8').digest('hex')}`
+const scoreInput = {
+  policyRecordId: policyRow.id,
+  claimId: 'claim-1',
+  outputHash: storedOutputHash,
+  rubricDigest: `sha256:${'c'.repeat(64)}`,
+  calibrationDigest: `sha256:${'d'.repeat(64)}`,
+  criterionScores: [{ key: 'accuracy', score: 0.9 }, { key: 'safety', score: 1 }],
+  overallScore: 0.95,
+}
+const scoreFixture = {
+  userId: evaluator,
+  policyRow,
+  assignmentRow,
+  acknowledgementRow,
+  dispatchClaimRow: {
+    id: scoreInput.claimId, project_id: policyRow.project_id, policy_id: policyRow.id,
+    candidate_id: policyRow.candidate_id, run_id: 'run-1', input_hash: `sha256:${'e'.repeat(64)}`,
+    artifact_hash: `sha256:${'f'.repeat(64)}`, execution_manifest_hash: `sha256:${'9'.repeat(64)}`, attempt: 1,
+  },
+  dispatchOutcomeRow: {
+    claim_id: scoreInput.claimId, status: 'completed',
+    outcome: { output: { bytes: storedOutputBytes, hash: storedOutputHash } },
+  },
+}
 
 fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow })
 const unverifiedResult = {
@@ -186,7 +214,42 @@ fixture.configure({ userId: proposer, policyRow })
 await assert.rejects(acknowledgeLearningEvaluationPolicyAssignment(policyRow.id), /must match/)
 assert.ok(!fixture.getCalls().some(item => item.type === 'authorize' || item.type === 'rpc'))
 
+fixture.configure(scoreFixture)
+assert.equal(await recordLearningExperimentAttemptScore(scoreInput), 'evaluation-result-id')
+calls = fixture.getCalls()
+assert.deepEqual(calls.filter(item => item.type === 'authorize').map(item => [item.userId, item.projectId, item.capability]), [
+  [evaluator, policyRow.project_id, 'agent.learning.evaluate'],
+])
+assert.equal(calls.find(item => item.type === 'rpc').name, 'record_learning_experiment_attempt_score')
+assert.equal(calls.find(item => item.type === 'rpc').args.p_output_hash, storedOutputHash)
+assert.equal(calls.find(item => item.type === 'rpc').args.p_evaluator_user_id, evaluator)
+
+fixture.configure(scoreFixture)
+await assert.rejects(recordLearningExperimentAttemptScore({ ...scoreInput, outputHash: `sha256:${'0'.repeat(64)}` }), /does not match the canonical completed output bytes/)
+assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'))
+
+fixture.configure({ ...scoreFixture, userId: 'c1234567-89ab-4cde-8fab-123456789abc' })
+await assert.rejects(recordLearningExperimentAttemptScore(scoreInput), /must match/)
+assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'))
+
+fixture.configure({ ...scoreFixture, authorizationAllowed: false })
+await assert.rejects(recordLearningExperimentAttemptScore(scoreInput), /permission/)
+assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'))
+
+fixture.configure({ ...scoreFixture, dispatchOutcomeRow: { ...scoreFixture.dispatchOutcomeRow, status: 'failed' } })
+await assert.rejects(recordLearningExperimentAttemptScore(scoreInput), /Only a canonically completed dispatch/)
+assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'))
+
+fixture.configure(scoreFixture)
+await assert.rejects(recordLearningExperimentAttemptScore({ ...scoreInput, criterionScores: [{ key: 'x', score: 2 }] }), /between zero and one/)
+assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'))
+
+fixture.configure(scoreFixture)
+await assert.rejects(recordLearningExperimentAttemptScore({ ...scoreInput, criterionScores: [{ key: 'k'.repeat(101), score: 0.5 }] }), /between zero and one/)
+assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'))
+
 console.log('PASS result writes require a session, persisted evaluator binding, current capability, and matching evaluator acknowledgement')
 console.log('PASS caller-supplied positive and non-positive aggregates cannot enter the canonical ledger without server-derived evidence attestation')
 console.log('PASS forged evaluator, missing policy/assignment/acknowledgement, scope mismatch, read outage, authorization denial, auth outage, and disabled write path are fail-closed')
 console.log('PASS policy registration derives proposer from session, requires distinct existing evaluator, checks both capabilities, and persists assignment')
+console.log('PASS evaluator attempt scores require the assigned authenticated evaluator, current capability, acknowledged policy, and exact completed output bytes')
