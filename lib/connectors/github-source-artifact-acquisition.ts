@@ -38,9 +38,28 @@ function headers(){
 }
 
 async function githubJson(url:string){
-  const response=await fetch(url,{headers:headers(),cache:'no-store'})
+  // Refuse redirects so authorization headers never reach an unintended origin.
+  // Bound response bodies before JSON parsing, including unexpected repository trees.
+  const response=await fetch(url,{headers:headers(),cache:'no-store',redirect:'error',signal:AbortSignal.timeout(15_000)})
   if(!response.ok)throw new Error(`GitHub source acquisition failed with HTTP ${response.status}.`)
-  return response.json()
+  const maxResponseBytes=10_000_000
+  const length=Number(response.headers.get('content-length')??0)
+  if(length>maxResponseBytes)throw new Error('GitHub source acquisition response exceeds the size limit.')
+  const reader=response.body?.getReader()
+  if(!reader)throw new Error('GitHub source acquisition returned an empty response body.')
+  const chunks:Uint8Array[]=[]
+  let bytes=0
+  try{
+    while(true){
+      const {done,value}=await reader.read()
+      if(done)break
+      bytes+=value.byteLength
+      if(bytes>maxResponseBytes)throw new Error('GitHub source acquisition response exceeds the size limit.')
+      chunks.push(value)
+    }
+  }finally{await reader.cancel().catch(()=>{})}
+  const body=Buffer.concat(chunks).toString('utf8')
+  return JSON.parse(body)
 }
 
 export async function acquireGitHubSourceArtifacts(input:{repositoryUrl:string;ref?:string|null}){
