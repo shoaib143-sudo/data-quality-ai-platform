@@ -5,7 +5,7 @@ import { normalizeFederatedMetadata, detectFederationConflicts, resolveFederated
 import { normalizeLineagePayload } from '../lib/governance/lineage-adapters.ts'
 import { scanSourceArtifact } from '../lib/connectors/source-artifact-scanner.ts'
 import { normalizeBiMetadata } from '../lib/connectors/bi-metadata.ts'
-import { parseGitHubRepositoryUrl, sourceArtifactKindForPath } from '../lib/connectors/github-source-artifact-acquisition.ts'
+import { acquireGitHubSourceArtifacts, parseGitHubRepositoryUrl, sourceArtifactKindForPath } from '../lib/connectors/github-source-artifact-acquisition.ts'
 
 test('metadata federation preserves provenance and detects competing descriptions',()=>{
   const records=normalizeFederatedMetadata({items:[
@@ -483,4 +483,36 @@ test('GitHub artifact acquisition parser rejects non-GitHub hosts and infers sup
   assert.equal(sourceArtifactKindForPath('scripts/load.sql'),'SCRIPT')
   assert.equal(sourceArtifactKindForPath('logs/run.log'),'LOG')
   assert.equal(sourceArtifactKindForPath('images/logo.png'),null)
+})
+
+test('GitHub source scan keeps private repository credentials on the API origin', async () => {
+  const originalFetch = globalThis.fetch
+  const originalToken = process.env.GITHUB_SOURCE_SCAN_TOKEN
+  const seen = []
+  const sha = 'a'.repeat(40)
+  process.env.GITHUB_SOURCE_SCAN_TOKEN = 'scanner-test-secret'
+  globalThis.fetch = async (url, options = {}) => {
+    const target = String(url)
+    seen.push({target, authorization: options.headers?.authorization})
+    assert.equal(new URL(target).origin, 'https://api.github.com')
+    if (target.includes('/git/trees/')) {
+      return new Response(JSON.stringify({tree:[{path:'job.js',type:'blob',size:20,sha}]}),{status:200})
+    }
+    if (target.includes('/git/blobs/')) {
+      return new Response(JSON.stringify({encoding:'base64',size:20,content:Buffer.from('console.log("test")').toString('base64')}),{status:200})
+    }
+    throw new Error('Unexpected GitHub API endpoint')
+  }
+  try {
+    const result = await acquireGitHubSourceArtifacts({repositoryUrl:'https://github.com/acme/private',ref:'main'})
+    assert.equal(result.artifacts.length, 1)
+    assert.equal(result.artifacts[0].path, 'job.js')
+    assert.equal(result.artifacts[0].content, 'console.log("test")')
+    assert.equal(seen.length, 2)
+    assert.ok(seen.every(call => call.authorization === 'Bearer scanner-test-secret'))
+  } finally {
+    globalThis.fetch = originalFetch
+    if (originalToken === undefined) delete process.env.GITHUB_SOURCE_SCAN_TOKEN
+    else process.env.GITHUB_SOURCE_SCAN_TOKEN = originalToken
+  }
 })
