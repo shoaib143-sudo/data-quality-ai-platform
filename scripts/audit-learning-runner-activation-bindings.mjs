@@ -139,3 +139,7 @@ assert.match(migration,/protect_learning_artifact_object_lifecycle/)
 assert.match(migration,/Referenced learning artifact lifecycle is immutable/)
 assert.match(artifacts,/LEARNING_ARTIFACT_LIFECYCLE_BINDING_INVALID/)
 assert.match(artifacts,/LEARNING_ARTIFACT_LIFECYCLE_CONFLICT/)
+
+assert.match(artifacts,/const exact=registered\.object_artifact_id===lifecycle\.row\.id/)
+assert.match(artifacts,/if\(exact\) return \{id:String\(registered\.id\)/)
+assert.match(artifacts,/createdNewObject && lifecycle\.created && !lookupError && !registered/)
