@@ -164,7 +164,6 @@ export async function registerLearningEvaluatorAssignment(input:{
   projectId:string;policyRecordId:string;candidateId:string
   proposerUserId:string;evaluatorUserId:string;assignedBy:string;acknowledgedAt:string
   assignmentCapability:AuthorizationCapability
-  evaluatorCapability:AuthorizationCapability
 }){
   for(const value of [input.projectId,input.policyRecordId,input.candidateId,input.proposerUserId,input.evaluatorUserId,input.assignedBy]) {
     if(!UUID.test(value)) throw new Error('LEARNING_EVALUATOR_ASSIGNMENT_IDENTITY_INVALID')
@@ -185,7 +184,7 @@ export async function registerLearningEvaluatorAssignment(input:{
   await Promise.all([
     authorizeProject(input.proposerUserId,input.projectId,'agent.execute'),
     authorizeProject(input.assignedBy,input.projectId,input.assignmentCapability),
-    authorizeProject(input.evaluatorUserId,input.projectId,input.evaluatorCapability),
+    authorizeProject(input.evaluatorUserId,input.projectId,'agent.learning.evaluate'),
   ])
   const scopeHash=sha([
     input.projectId,input.policyRecordId,input.candidateId,input.proposerUserId,input.evaluatorUserId,
@@ -200,9 +199,7 @@ export async function registerLearningEvaluatorAssignment(input:{
   return {id:String(data),scopeHash}
 }
 
-export function createLearningRunnerAuthorizationResolver(input:{
-  evaluatorCapability:AuthorizationCapability
-}){
+export function createLearningRunnerAuthorizationResolver(){
   return async (plan:Readonly<LearningExperimentRunnerPlan>):Promise<RunnerAuthorization>=>{
     const activation=await loadLearningRunnerActivation({
       projectId:plan.policy.projectId,policyRecordId:plan.policyRecordId,candidateId:plan.policy.candidateId,
@@ -217,7 +214,7 @@ export function createLearningRunnerAuthorizationResolver(input:{
     if(expectedScope!==activation.evaluatorScopeHash) throw new Error('LEARNING_EVALUATOR_SCOPE_MISMATCH')
     await Promise.all([
       authorizeProject(activation.proposerUserId,plan.policy.projectId,'agent.execute'),
-      authorizeProject(activation.evaluatorUserId,plan.policy.projectId,input.evaluatorCapability),
+      authorizeProject(activation.evaluatorUserId,plan.policy.projectId,'agent.learning.evaluate'),
     ])
     return {
       projectId:plan.policy.projectId,policyId:plan.policy.policyId,
