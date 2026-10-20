@@ -24,6 +24,7 @@ for(const pattern of [
   /Replay artifact must bind a held-out case/,
   /Replay artifact dataset version must match the sealed manifest/,
   /Independent evaluator separation is required/,
+  /assigned_by <> proposer_user_id/,
 ]) assert.match(migration,pattern)
 
 assert.match(migration,/revoke all on agent\.learning_artifact_manifests from public,anon,authenticated,service_role/)
@@ -45,6 +46,7 @@ assert.doesNotMatch(artifacts,/NEXT_PUBLIC_/)
 
 assert.match(activation,/authorizeProject\(activation\.proposerUserId,plan\.policy\.projectId,'agent\.execute'\)/)
 assert.match(activation,/authorizeProject\(activation\.evaluatorUserId,plan\.policy\.projectId,'agent\.learning\.evaluate'\)/)
+assert.match(activation,/authorizeProject\(input\.assignedBy,input\.projectId,'agent\.learning\.assign_evaluator'\)/)
 assert.match(activation,/authorizeProject\(input\.proposerUserId,input\.projectId,'agent\.execute'\)/)
 assert.match(activation,/authorizeProject\(input\.assignedBy,input\.projectId,input\.assignmentCapability\)/)
 assert.match(activation,/authorizeProject\(input\.evaluatorUserId,input\.projectId,'agent\.learning\.evaluate'\)/)
