@@ -15,9 +15,11 @@ for(const pattern of [
   /before update or delete/,
   /baseline_agent_definition_id <> candidate_agent_definition_id/,
   /Runtime definitions do not match locked policy versions/,
-  /Candidate executable does not match candidate agent\/version/,
+  /Candidate executable does not match candidate agent\/skill\/version/,
   /Candidate baseline\/candidate runtime version mismatch/,
   /Runtime hashes must equal immutable executable artifact digests/,
+  /v_base_art\.skill_key<>v_policy\.skill_key/,
+  /v_cand_art\.skill_key<>v_policy\.skill_key/,
   /Rollback runtime does not match locked policy rollback reference/,
   /Replay artifact must bind a held-out case/,
   /Replay artifact dataset version must match the sealed manifest/,
@@ -80,6 +82,7 @@ assert.equal(migration.split('create or replace function agent.register_learning
 assert.equal(migration.split('create or replace function agent.register_learning_runtime_binding(').length - 1,1)
 assert.equal(migration.split('create or replace function agent.register_learning_evaluator_assignment(').length - 1,1)
 assert.ok(migration.split('\n').length < 700,'activation binding migration unexpectedly expanded or duplicated')
+assert.match(artifacts,/p_skill_key:input\.skillKey/)
 assert.match(artifacts,/p_runtime_version:input\.runtimeVersion/)
 assert.match(artifacts,/p_tool_contract_set_hash:input\.toolContractSetHash/)
 assert.match(executable,/runtimeVersion,definitionHash:runtimeEvidence\.definitionHash,toolContractSetHash:runtimeEvidence\.semanticToolContractSetHash/)
