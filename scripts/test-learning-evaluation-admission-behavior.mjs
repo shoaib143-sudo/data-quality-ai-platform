@@ -50,9 +50,7 @@ const admissionResponses = (policies, results) => {
 }
 const load = () => loadLearningReleaseAdmission({ projectId: 'project', candidateId: 'candidate' })
 setResponses(admissionResponses([policy], [result]))
-const admission = await load()
-assert.equal(admission.evaluationResultId, 'decision')
-assert.equal(admission.decision.quality, 'IMPROVED')
+await assert.rejects(load, /not eligible for release review until it is bound to a server-owned evidence attestation/)
 const lateAcknowledgement = acknowledgementFor(assignmentFor(policy))
 lateAcknowledgement.acknowledged_at = '2026-09-30T04:00:00Z'
 setResponses([data([policy]), data(assignmentFor(policy)), data(lateAcknowledgement), data([result])])
@@ -65,7 +63,7 @@ assert.ok(calls.every(c => !c.filters.some(([key]) => key === 'quality')))
 assert.ok(calls.filter(c => c.limit).every(c => c.orders[0][0] === 'created_at' && c.orders[0][1].ascending === false))
 
 setResponses(admissionResponses([policy, { ...policy, id: 'old-policy', created_at: '2026-09-30T01:30:00Z' }], [result, { ...result, id: 'old-decision', created_at: '2026-09-30T03:30:00Z' }]))
-assert.equal((await load()).evaluationResultId, 'decision')
+await assert.rejects(load, /not eligible for release review until it is bound to a server-owned evidence attestation/)
 
 setResponses([data([])])
 await assert.rejects(load, /locked prospective evaluation policy/)
@@ -100,4 +98,4 @@ setResponses([{ data: null, error: { message: 'database unavailable' } }])
 await assert.rejects(load, /Unable to load latest learning evaluation policy/)
 setResponses([data([policy]), data(assignmentFor(policy)), data(acknowledgementFor(assignmentFor(policy))), { data: null, error: { message: 'database unavailable' } }])
 await assert.rejects(load, /Unable to load latest learning evaluation decision/)
-console.log('Release admission executes latest-policy/result queries, reclassifies evidence, blocks stale positives, database failures and ambiguous chronology.')
+console.log('Release admission rejects unattested legacy positives and fails closed on stale decisions, database failures and ambiguous chronology.')

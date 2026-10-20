@@ -17,4 +17,8 @@ await assert.rejects(() => recordIndependentPairedEvaluations({ ...base, cases: 
 await assert.rejects(() => recordIndependentPairedEvaluations({ ...base, cases: [{ ...base.cases[0], baselineEvidenceRef: '------------------------------------' }] }), /evidence references must be UUIDs/)
 await assert.rejects(() => recordIndependentPairedEvaluations({ ...base, cases: [{ ...base.cases[0], candidateEvidenceRef: base.cases[0].baselineEvidenceRef }] }), /evidence references must be UUIDs and unique/)
 await assert.rejects(() => recordIndependentPairedEvaluations({ ...base, cases: [{ ...base.cases[0], baselineEvidenceRef: 'abcdefab-cdef-4abc-8def-abcdefabcdef', candidateEvidenceRef: 'ABCDEFAB-CDEF-4ABC-8DEF-ABCDEFABCDEF' }] }), /evidence references must be UUIDs and unique/)
-console.log('Independent paired evaluation ledger rejects self-evaluation, unhashed cases, invalid scores, and malformed or reused evidence references before persistence.')
+await assert.rejects(() => recordIndependentPairedEvaluations({
+  ...base,
+  cases: [{ ...base.cases[0], baselineEvidenceRef: 'abcdefab-cdef-4abc-8def-abcdefabcdef', candidateEvidenceRef: '12345678-1234-4234-8234-123456789abc' }],
+}), /disabled until server-owned output evidence attestation is available/)
+console.log('Independent paired evaluation ledger validates shape and keeps persistence disabled until server-owned output evidence attestation exists.')

@@ -76,19 +76,23 @@ const unverifiedResult = {
   confirmationWindowPassed: false,
   accountingComplete: false,
 }
-const written = await call({ result: unverifiedResult })
-assert.equal(written.resultId, 'evaluation-result-id')
-assert.equal(written.decision.quality, 'INCONCLUSIVE')
+await assert.rejects(call({ result: unverifiedResult }), /result writes are disabled until server-owned evidence attestation is available/)
 let calls = fixture.getCalls()
-assert.deepEqual(calls.map(item => item.type), ['auth', 'select', 'maybeSingle', 'authorize', 'select', 'maybeSingle', 'select', 'maybeSingle', 'rpc'])
+assert.deepEqual(calls.map(item => item.type), ['auth', 'select', 'maybeSingle', 'authorize', 'select', 'maybeSingle', 'select', 'maybeSingle'])
 assert.deepEqual(calls.find(item => item.type === 'authorize'), {
   type: 'authorize', userId: evaluator, projectId: 'project-1', capability: 'agent.learning.evaluate',
 })
-assert.equal(calls.find(item => item.type === 'rpc').args.p_recorded_by, evaluator)
-assert.equal(calls.find(item => item.type === 'rpc').args.p_independently_verified, false)
-assert.equal(calls.find(item => item.type === 'rpc').args.p_evidence_complete, false)
-assert.equal(calls.find(item => item.type === 'rpc').args.p_confirmation_window_passed, false)
-assert.equal(calls.find(item => item.type === 'rpc').args.p_accounting_complete, false)
+assert.ok(!calls.some(item => item.type === 'rpc'), 'unattested aggregate must not reach result RPC')
+
+for (const forged of [
+  { ...unverifiedResult, baselineScore: 0, candidateScore: 1, gainLowerConfidenceBound: 1 },
+  { ...unverifiedResult, authorityViolations: 0, safetyFailures: 0, totalCost: 0, totalTokens: 0 },
+  { ...unverifiedResult, authorityViolations: 9, safetyFailures: 9, totalCost: 999, totalTokens: 999 },
+]) {
+  fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow })
+  await assert.rejects(call({ result: forged }), /result writes are disabled until server-owned evidence attestation is available/)
+  assert.ok(!fixture.getCalls().some(item => item.type === 'rpc'), 'fabricated non-positive aggregates must not reach canonical evidence storage')
+}
 
 fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow })
 await assert.rejects(call(), /Caller-supplied verification claims are not accepted/)
@@ -130,8 +134,8 @@ await assert.rejects(call(), /session unavailable/)
 assert.deepEqual(fixture.getCalls().map(item => item.type), ['auth'])
 
 fixture.configure({ userId: evaluator, policyRow, assignmentRow, acknowledgementRow, rpcResponse: { data: null, error: { message: 'write unavailable' } } })
-await assert.rejects(call({ result: unverifiedResult }), /Unable to persist learning evaluation result: write unavailable/)
-assert.equal(fixture.getCalls().filter(item => item.type === 'rpc').length, 1)
+await assert.rejects(call({ result: unverifiedResult }), /result writes are disabled until server-owned evidence attestation is available/)
+assert.equal(fixture.getCalls().filter(item => item.type === 'rpc').length, 0)
 
 const proposer = 'b1234567-89ab-4cde-8fab-123456789abc'
 fixture.configure({ userId: proposer, authUsers: [evaluator] })
@@ -183,6 +187,6 @@ await assert.rejects(acknowledgeLearningEvaluationPolicyAssignment(policyRow.id)
 assert.ok(!fixture.getCalls().some(item => item.type === 'authorize' || item.type === 'rpc'))
 
 console.log('PASS result writes require a session, persisted evaluator binding, current capability, and matching evaluator acknowledgement')
-console.log('PASS caller-supplied positive aggregates cannot be recorded as improved without a server-derived attestation')
-console.log('PASS forged evaluator, missing policy/assignment/acknowledgement, scope mismatch, read outage, authorization denial, auth outage, and write failure are fail-closed')
+console.log('PASS caller-supplied positive and non-positive aggregates cannot enter the canonical ledger without server-derived evidence attestation')
+console.log('PASS forged evaluator, missing policy/assignment/acknowledgement, scope mismatch, read outage, authorization denial, auth outage, and disabled write path are fail-closed')
 console.log('PASS policy registration derives proposer from session, requires distinct existing evaluator, checks both capabilities, and persists assignment')

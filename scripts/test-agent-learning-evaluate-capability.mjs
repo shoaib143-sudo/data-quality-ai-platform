@@ -24,12 +24,12 @@ assert.notEqual(recordEnd, -1)
 const recordBody = service.slice(recordStart, recordEnd)
 const policyRead = recordBody.indexOf(".from('learning_evaluation_policies')")
 const capabilityGate = recordBody.indexOf("authorizeProject(authenticatedUser.id, policy.projectId, 'agent.learning.evaluate')")
-const persistence = recordBody.indexOf("rpc('record_learning_evaluation_result'")
-assert.ok(policyRead >= 0 && capabilityGate > policyRead && persistence > capabilityGate, 'persisted policy binding and authorization must precede service-role persistence')
+const disabledWriteGate = recordBody.indexOf('result writes are disabled until server-owned evidence attestation is available')
+assert.ok(policyRead >= 0 && capabilityGate > policyRead && disabledWriteGate > capabilityGate, 'persisted policy binding and authorization must precede fail-closed result write denial')
+assert.ok(!recordBody.includes("rpc('record_learning_evaluation_result'"), 'caller aggregates must not reach the legacy result RPC')
 assert.match(recordBody, /const authenticatedUser = await requireApiUser\(\)/)
 assert.match(recordBody, /authenticatedUser\.id, policy\.projectId, 'agent\.learning\.evaluate'/)
 assert.match(recordBody, /policyEvaluatorActorId: policy\.evaluatorActorId/)
-assert.match(recordBody, /p_recorded_by: authenticatedUser\.id/)
 
 const reviewer = 'a1234567-89ab-4cde-8fab-123456789abc'
 assert.equal(assertAuthenticatedLearningEvaluator({
@@ -68,7 +68,7 @@ assert.match(registerBody, /authorizeProject\(assignment\.proposerUserId, policy
 assert.match(registerBody, /admin\.auth\.admin\.getUserById\(assignment\.evaluatorUserId\)/)
 assert.match(registerBody, /authorizeProject\(assignment\.evaluatorUserId, policy\.projectId, 'agent\.learning\.evaluate'\)/)
 
-console.log('PASS evaluator capability is catalogued, narrowly role-assigned, and checked before evaluation writes')
+console.log('PASS evaluator capability is catalogued, narrowly role-assigned, and checked before fail-closed result writes')
 console.log('PASS forged, mismatched and malformed evaluator identities are rejected against the persisted policy')
 console.log('PASS proposer and evaluator assignments require distinct canonical user UUIDs')
 console.log('PASS evaluator capability is not exposed as a generic agent execution action')

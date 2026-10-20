@@ -60,53 +60,9 @@ export async function recordIndependentPairedEvaluations(input: IndependentPaire
     }
   }
 
-  const rows = input.cases.flatMap((item) => [
-    {
-      project_id: projectId,
-      evaluation_type: 'AGENT_SKILL',
-      capability: `agent_skill:${agentKey}:${skillKey}`,
-      metric_name: 'held_out_case_score',
-      score: item.baselineScore,
-      pass: item.baselineScore >= 0.5,
-      evaluator_type: input.evaluatorType,
-      evaluator_version: '1.0',
-      evidence_refs: [item.baselineEvidenceRef],
-      dimensions: { benchmark_case_key: item.caseKey, variant: 'BASELINE' },
-      metadata: {
-        benchmark_case_key: item.caseKey, benchmark_variant: 'BASELINE', benchmark_split: 'HELD_OUT',
-        benchmark_dataset_key: datasetKey, learning_candidate_id: candidateId, agent_key: agentKey,
-        skill_key: skillKey, version: baselineVersion, benchmark_evaluator_id: evaluatorId,
-        benchmark_key: benchmarkKey, synthetic: 'false', authority_violation: String(item.authorityViolation),
-        adversarial_failure: String(item.adversarialFailure),
-      },
-      observed_at: input.observedAt,
-    },
-    {
-      project_id: projectId,
-      evaluation_type: 'AGENT_SKILL',
-      capability: `agent_skill:${agentKey}:${skillKey}`,
-      metric_name: 'held_out_case_score',
-      score: item.candidateScore,
-      pass: item.candidateScore >= 0.5,
-      evaluator_type: input.evaluatorType,
-      evaluator_version: '1.0',
-      evidence_refs: [item.candidateEvidenceRef],
-      dimensions: { benchmark_case_key: item.caseKey, variant: 'CANDIDATE' },
-      metadata: {
-        benchmark_case_key: item.caseKey, benchmark_variant: 'CANDIDATE', benchmark_split: 'HELD_OUT',
-        benchmark_dataset_key: datasetKey, learning_candidate_id: candidateId, agent_key: agentKey,
-        skill_key: skillKey, version: candidateVersion, benchmark_evaluator_id: evaluatorId,
-        benchmark_key: benchmarkKey, synthetic: 'false', authority_violation: String(item.authorityViolation),
-        adversarial_failure: String(item.adversarialFailure),
-      },
-      observed_at: input.observedAt,
-    },
-  ])
-  const { createAdminClient } = await import('@/lib/supabase/admin')
-  const admin = createAdminClient()
-  const { data, error } = await admin.schema('governance').from('ai_evaluation_results').insert(rows).select('id,metadata')
-  if (error || !data || data.length !== rows.length) {
-    throw new Error(`Unable to persist independent paired evaluations: ${error?.message ?? 'incomplete insert'}`)
-  }
-  return data.map((row) => String(row.id))
+  // Evidence references are currently supplied by the caller and this writer
+  // marks rows non-synthetic without resolving them to canonical run outputs.
+  // Keep persistence closed until a server-owned output/evaluator loader can
+  // attest each case and arm. This function intentionally does not write rows.
+  throw new Error('Independent paired evaluation writes are disabled until server-owned output evidence attestation is available.')
 }

@@ -241,39 +241,12 @@ export async function recordLearningEvaluationDecision(input: {
     throw new Error('Caller-supplied verification claims are not accepted; a server-derived evidence attestation is required.')
   }
   const decision = classifyLearningEvaluation(policy, input.result)
-  // The current result contract receives aggregates from its caller. Until a
-  // server-owned evidence loader and persisted attestation exist, those values
-  // must never produce a positive learning decision or reach the result RPC.
-  if (decision.quality === 'IMPROVED') {
-    throw new Error('A server-derived evidence attestation is required before recording an improved learning evaluation.')
-  }
-  const { data, error } = await admin.schema('agent').rpc('record_learning_evaluation_result', {
-    p_project_id: policy.projectId,
-    p_policy_id: policyRecordId,
-    p_candidate_id: policy.candidateId,
-    p_observed_at: input.result.observedAt,
-    p_sample_count: input.result.sampleCount,
-    p_baseline_score: input.result.baselineScore,
-    p_candidate_score: input.result.candidateScore,
-    p_gain_lower_confidence_bound: input.result.gainLowerConfidenceBound,
-    p_independently_verified: input.result.independentlyVerified,
-    p_evidence_complete: input.result.evidenceComplete,
-    p_confirmation_window_passed: input.result.confirmationWindowPassed,
-    p_authority_violations: input.result.authorityViolations,
-    p_safety_failures: input.result.safetyFailures,
-    p_accounting_complete: input.result.accountingComplete,
-    p_total_cost: input.result.totalCost,
-    p_max_run_cost: input.result.maxRunCost,
-    p_total_tokens: input.result.totalTokens,
-    p_max_run_tokens: input.result.maxRunTokens,
-    p_max_latency_ms: input.result.maxLatencyMs,
-    p_disposition: decision.disposition,
-    p_quality: decision.quality,
-    p_reasons: decision.reasons,
-    p_recorded_by: authenticatedUser.id,
-  })
-  if (error || !data) throw new Error(`Unable to persist learning evaluation result: ${error?.message ?? 'no result id returned'}`)
-  return { resultId: String(data), decision }
+  // The legacy result RPC receives aggregates from its caller. Caller-supplied
+  // INCONCLUSIVE/REGRESSED/REJECTED aggregates can still poison the immutable
+  // newest-result ledger, so no classification may be persisted until the
+  // server-owned evidence loader and attestation RPC replace this contract.
+  void decision
+  throw new Error('Learning evaluation result writes are disabled until server-owned evidence attestation is available.')
 }
 
 export async function loadLearningReleaseAdmission(input: {
@@ -312,6 +285,9 @@ export async function loadLearningReleaseAdmission(input: {
   if (!Number.isFinite(resultObservedAt) || !Number.isFinite(evaluatorAcknowledgedAt)
     || resultObservedAt < evaluatorAcknowledgedAt || resultObservedAt > Date.now()) {
     throw new Error('Evaluation evidence must postdate evaluator acknowledgement and cannot be future-dated for release review.')
+  }
+  if (String(row.quality) === 'IMPROVED') {
+    throw new Error('An IMPROVED result is not eligible for release review until it is bound to a server-owned evidence attestation.')
   }
   if (String(row.disposition) !== 'REVIEW_REQUIRED' || String(row.quality) !== 'IMPROVED' || row.automatic_promotion_allowed !== false) {
     throw new Error('The latest prospective evaluation decision is not eligible for release review.')
