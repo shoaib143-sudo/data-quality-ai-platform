@@ -100,3 +100,52 @@ The exact-head isolated persistence gate exposed a test-fixture defect after che
 ### Isolated persistence fixture privilege hardening
 
 The behavioral replay originally attempted to set `session_replication_role` to bypass foreign keys for a synthetic project. The isolated Supabase CI role correctly rejected that privilege escalation. The fixture now creates a legitimate temporary organization and project inside the transaction and executes checkpoint, evidence, projection, fencing, immutability and transition tests with normal FK and trigger enforcement. No replication-role bypass remains.
+
+
+## Final independent adversarial closure — 2026-10-20
+
+The final runtime assurance head `6f34eead66b6b8bd6b1b883be772070de33ecb3c` completed 55 of 55 repository workflows successfully while synchronized with main `c5ae583f489cff229964316ef8d1da85a26b92b4`.
+
+### Final adversarial disposition
+
+| Attack objective | Result |
+| --- | --- |
+| Bypass RBAC, execution control, PDP or approval before provider mutation | Not reproduced; preflight and execution-time revalidation remained enforced |
+| Replay an approval against changed intent | Not reproduced; approval is fingerprint- and action-bound |
+| Forge provider actual state through public planning input | Closed; planning uses authoritative provider discovery |
+| Delete provider state through implicit absence | Not reproduced; destructive intent requires explicit absence and confirmation |
+| Delete an object while unmanaged inbound dependents still reference it | Closed fail-closed; broad discovery blocks the delete |
+| Replay mutation after ambiguous RUNNING/PENDING or stale worker recovery | Closed; WAIT/RECOVER semantics and generation fencing prevent automatic replay |
+| Execute after terminal FAILED checkpoint without retry evidence | Closed; FAILED is terminal for automatic resume |
+| Execute PARTIAL mutation without semantic-loss consent | Closed fail-closed |
+| Automatically execute mutation with idempotency NONE | Closed fail-closed |
+| Bypass DataNexus governance through MCP | Not reproduced; MCP tools route through the shared authorization/runtime path |
+| Abuse browser MCP Origin with mismatched scheme/port | Closed; full origin authority is checked |
+| Alter recorded execution evidence | Not reproduced; database append-only enforcement validated behaviorally |
+| Cross provider/project/connection identity in durable projections | Not reproduced in projection contract and persistence checks |
+| Treat provider success without verification as completed | Not reproduced; verification is required for terminal success |
+
+### Independent test evidence
+
+The dedicated Governance Provider Assurance workflow passed all four independent jobs:
+
+1. provider contract, unit, negative, Golden Path and TypeScript checks;
+2. migration, projection, checkpoint-resume and durable-runner contracts;
+3. MCP/security/failure-path trust-boundary campaign plus independent adversarial audit;
+4. isolated Supabase reconstruction and behavioral persistence validation.
+
+The wider repository matrix also passed Quality Gate, Release Governance, Repository Governance, CodeQL Security, P0-P5 Revalidation, Run-scoped AI Capability Evidence and Post Implementation Assurance.
+
+### Residual risk classification
+
+No open Critical or High code-level finding remains for the governance-provider foundation.
+
+Residual items are external activation gates:
+
+- Informatica live read-only conformance requires approved tenant credentials.
+- Official authenticated MCP interoperability requires an authorized test identity or token.
+- Production Supabase migration is intentionally not applied by source-level closure work.
+- Live Informatica mutation remains disabled until conformance and an explicit activation decision.
+- Durable provider projections are code-complete and tested but are not, by themselves, authorization to enable live mutation.
+
+These residuals do not invalidate code completion for the read-only/provider-neutral foundation, but they prevent any claim that live production mutation is activated or certified.
