@@ -14,4 +14,6 @@ const base = {
 await assert.rejects(() => recordIndependentPairedEvaluations({ ...base, evaluatorId: 'profiling_agent' }), /independent/)
 await assert.rejects(() => recordIndependentPairedEvaluations({ ...base, cases: [{ ...base.cases[0], caseKey: 'plain' }] }), /SHA-256/)
 await assert.rejects(() => recordIndependentPairedEvaluations({ ...base, cases: [{ ...base.cases[0], candidateScore: 2 }] }), /between 0 and 1/)
-console.log('Independent paired evaluation ledger rejects self-evaluation, unhashed cases, and invalid scores before persistence.')
+await assert.rejects(() => recordIndependentPairedEvaluations({ ...base, cases: [{ ...base.cases[0], baselineEvidenceRef: '------------------------------------' }] }), /evidence references must be UUIDs/)
+await assert.rejects(() => recordIndependentPairedEvaluations({ ...base, cases: [{ ...base.cases[0], candidateEvidenceRef: base.cases[0].baselineEvidenceRef }] }), /evidence references must be UUIDs and unique/)
+console.log('Independent paired evaluation ledger rejects self-evaluation, unhashed cases, invalid scores, and malformed or reused evidence references before persistence.')
