@@ -81,8 +81,6 @@ create index if not exists learning_artifact_candidate_idx
   on agent.learning_artifact_manifests(project_id,candidate_id)
   where candidate_id is not null;
 
-create index if not exists learning_artifact_object_lifecycle_fk_idx
-  on agent.learning_artifact_manifests(object_artifact_id);
 create index if not exists learning_artifact_definition_fk_idx
   on agent.learning_artifact_manifests(agent_definition_id)
   where agent_definition_id is not null;
