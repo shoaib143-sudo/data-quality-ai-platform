@@ -45,6 +45,12 @@ The branch still cannot safely write a positive self-improvement decision. The f
 - **Zero-cost validation:** run static migration contracts, synthetic application suites, type checks, and diff checks locally. A PostgreSQL behavior fixture can run only against an explicitly disposable local database with its existing opt-in; no hosted database, GitHub Actions, provider call, migration, deployment, or live agent experiment is included under the current $0 cap.
 - **Go/no-go:** keep positive results blocked until the local PostgreSQL fixture, all adversarial cases, independent audit, and full revalidation pass. Then collect prospective results by agent and run mode only through an authorized zero-cost execution path. Do not enable automatic promotion.
 
+### Supabase test environment snapshot, read only, 2026-10-20
+
+The connected project labelled `DataNexus UX E2E Controlled` currently reports no tables in the `testing` schema, six base tables in `agent`, and deployed migration history only through `20260929001618`. The learning evaluation and experiment runner migrations on this branch are not present in that project. No database writes were made.
+
+The repository boundary test currently requires the production runner store and its migrations to remain on `agent`, and requires `testing` to stay a private synthetic fixture harness. That conflicts with using `testing` as a full database-backed runner test environment. Before attempting live SQL validation in this project, this boundary needs an explicit implementation path: either build a fully isolated `testing`-schema mirror with test-only adapters and grants, or use the existing disposable local PostgreSQL fixture to exercise the canonical `agent` SQL. The current snapshot cannot verify the learning migrations against Supabase, and the zero-cost rule rules out provider-backed prospective runs.
+
 Still intentionally external to this implementation:
 - real project/dataset selection and independent evaluator assignment;
 - independently computed confidence/statistical evidence;
