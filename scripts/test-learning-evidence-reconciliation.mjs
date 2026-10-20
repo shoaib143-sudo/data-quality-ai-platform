@@ -68,6 +68,7 @@ broken(x => { x.dispatches.pop() }, /EXPECTED_PAIR_COVERAGE_MISMATCH|SCORE_COVER
 broken(x => { x.dispatches[0].outputBytes = 'tampered' }, /OUTPUT_BYTES_MISMATCH/)
 broken(x => { x.dispatches[0].status = 'failed' }, /DISPATCH_NOT_COMPLETE_OR_UNSEALED/)
 broken(x => { x.dispatches[0].artifactHash = hash('forged artifact') }, /DISPATCH_ARM_OR_ARTIFACT_MISMATCH/)
+broken(x => { x.dispatches[1].invocationId = x.dispatches[0].invocationId }, /INVOCATION_DUPLICATE/)
 broken(x => { x.scores[0].outputHash = hash('different output') }, /SCORE_SCOPE_OR_AUTHENTICITY_MISMATCH/)
 broken(x => { x.scores[0].evaluatorActorId = policy.proposerActorId }, /SCORE_SCOPE_OR_AUTHENTICITY_MISMATCH/)
 broken(x => { x.scores[0].score = 1.1 }, /SCORE_SCOPE_OR_AUTHENTICITY_MISMATCH/)

@@ -191,7 +191,7 @@ export function reconcileLearningEvidence(input: LearningEvidenceReconciliationI
   }
 
   const pairs = new Map<string, { baseline?: LearningDispatchEvidence; candidate?: LearningDispatchEvidence }>()
-  const claimIds = new Set<string>()
+  const claimIds = new Set<string>(), invocationIds = new Set<string>()
   for (const dispatch of input.dispatches) {
     if (!UUID.test(dispatch.claimId) || claimIds.has(dispatch.claimId)) fail('CLAIM_DUPLICATE_OR_INVALID')
     claimIds.add(dispatch.claimId)
@@ -210,6 +210,8 @@ export function reconcileLearningEvidence(input: LearningEvidenceReconciliationI
       || !UUID.test(dispatch.settlementId ?? '') || !UUID.test(dispatch.costEventId ?? '')
       || !Number.isSafeInteger(dispatch.tokens) || dispatch.tokens! < 0
       || !Number.isSafeInteger(dispatch.latencyMs) || dispatch.latencyMs! < 0) fail('DISPATCH_ACCOUNTING_MISSING')
+    if (invocationIds.has(dispatch.invocationId!)) fail('INVOCATION_DUPLICATE')
+    invocationIds.add(dispatch.invocationId!)
     decimalParts(dispatch.costUsd ?? '', 'COST')
     const key = `${dispatch.caseKey}:${dispatch.datasetVersionId}`
     const pair = pairs.get(key) ?? {}
@@ -232,6 +234,7 @@ export function reconcileLearningEvidence(input: LearningEvidenceReconciliationI
       || !UUID.test(score.assignmentId) || !UUID.test(score.acknowledgementId)
       || score.rubricRef !== policy.rubricRef || score.calibrationRef !== policy.calibrationRef
       || score.outputHash !== dispatch.outputHash || !Number.isFinite(score.score) || score.score < 0 || score.score > 1
+      || typeof score.authorityViolation !== 'boolean' || typeof score.safetyFailure !== 'boolean'
       || !Number.isFinite(Date.parse(score.observedAt)) || Date.parse(score.observedAt) < Date.parse(policy.lockedAt)
       || Date.parse(score.observedAt) > finalizedAt) fail('SCORE_SCOPE_OR_AUTHENTICITY_MISMATCH')
     scoresByArm[dispatch.arm].push(score.score)
@@ -240,15 +243,15 @@ export function reconcileLearningEvidence(input: LearningEvidenceReconciliationI
   }
   if (scoredClaims.size !== claimIds.size || [...claimIds].some(id => !scoredClaims.has(id))) fail('SCORE_COVERAGE_MISMATCH')
 
-  const settlements = new Map<string, LearningSettlementEvidence>()
+  const settlements = new Map<string, LearningSettlementEvidence>(), settlementIds = new Set<string>()
   for (const item of input.settlements) {
-    if (!UUID.test(item.id) || !UUID.test(item.reservationId) || settlements.has(item.reservationId)) fail('SETTLEMENT_DUPLICATE_OR_INVALID')
+    if (!UUID.test(item.id) || !UUID.test(item.reservationId) || settlements.has(item.reservationId) || settlementIds.has(item.id)) fail('SETTLEMENT_DUPLICATE_OR_INVALID')
     if (item.status !== 'ACCOUNTED' || item.projectId !== policy.projectId || item.policyRecordId !== input.policyRecordId
       || item.candidateId !== policy.candidateId || item.runId !== input.runId
       || !UUID.test(item.invocationId) || !UUID.test(item.costEventId)
       || !Number.isSafeInteger(item.tokens) || item.tokens < 0) fail('SETTLEMENT_INCOMPLETE')
     decimalParts(item.costUsd, 'SETTLEMENT_COST')
-    settlements.set(item.reservationId, item)
+    settlements.set(item.reservationId, item); settlementIds.add(item.id)
   }
   const costEvents = new Map<string, LearningCostEventEvidence>()
   for (const item of input.costEvents) {
