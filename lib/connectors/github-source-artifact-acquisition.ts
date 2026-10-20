@@ -52,8 +52,7 @@ export async function acquireGitHubSourceArtifacts(input:{repositoryUrl:string;r
   }
   if(!safeRef(ref))throw new Error('GitHub ref contains unsupported characters.')
   const encodedRef=encodeURIComponent(ref)
-  const rawRef=ref.split('/').map(encodeURIComponent).join('/')
-  const tree=await githubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodedRef}?recursive=1`) as {tree?:Array<{path?:string;type?:string;size?:number}>;truncated?:boolean}
+  const tree=await githubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodedRef}?recursive=1`) as {tree?:Array<{path?:string;type?:string;size?:number;sha?:string}>;truncated?:boolean}
   if(tree.truncated)throw new Error('GitHub repository tree is truncated. Narrow the repository/ref before scanning.')
 
   const candidates=(tree.tree??[])
@@ -61,8 +60,8 @@ export async function acquireGitHubSourceArtifacts(input:{repositoryUrl:string;r
       const path=typeof item.path==='string'?item.path:''
       const kind=sourceArtifactKindForPath(path)
       const size=Number(item.size??0)
-      if(item.type!=='blob'||!kind||!path||size<=0||size>MAX_FILE_BYTES)return []
-      return [{path,kind,size}]
+      if(item.type!=='blob'||!kind||!path||!item.sha||!/^[a-f0-9]{40}$/i.test(item.sha)||size<=0||size>MAX_FILE_BYTES)return []
+      return [{path,kind,size,sha:item.sha}]
     })
     .slice(0,MAX_FILES)
 
@@ -70,13 +69,16 @@ export async function acquireGitHubSourceArtifacts(input:{repositoryUrl:string;r
   let totalBytes=0
   for(const item of candidates){
     if(totalBytes+item.size>MAX_TOTAL_BYTES)break
-    const rawUrl=`https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${rawRef}/${item.path.split('/').map(encodeURIComponent).join('/')}`
-    const response=await fetch(rawUrl,{headers:headers(),cache:'no-store'})
-    if(!response.ok)continue
-    const content=await response.text()
-    const bytes=new TextEncoder().encode(content).length
-    if(bytes>MAX_FILE_BYTES||totalBytes+bytes>MAX_TOTAL_BYTES)continue
-    if(content.includes('\u0000'))continue
+    // Read blobs from the authenticated GitHub API. Never forward the repository
+    // token to a raw-content host or a redirect target.
+    const blob=await githubJson(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs/${item.sha}`) as {encoding?:string;content?:string;size?:number}
+    if(blob.encoding!=='base64'||typeof blob.content!=='string')continue
+    if(typeof blob.size==='number'&&blob.size>MAX_FILE_BYTES)continue
+    const bytesBuffer=Buffer.from(blob.content.replace(/\\s/g,''),'base64')
+    const bytes=bytesBuffer.length
+    if(bytes===0||bytes>MAX_FILE_BYTES||totalBytes+bytes>MAX_TOTAL_BYTES)continue
+    const content=bytesBuffer.toString('utf8')
+    if(content.includes('\\u0000'))continue
     totalBytes+=bytes
     artifacts.push({path:item.path,kind:item.kind,content,size:bytes})
   }
