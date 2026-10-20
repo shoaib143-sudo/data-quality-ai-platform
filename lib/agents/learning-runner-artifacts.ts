@@ -164,7 +164,11 @@ export async function stageImmutableLearningArtifact(input:LearningArtifactRegis
     // Clean up only resources created by this invocation and only when canonical
     // persistence proves no manifest won a concurrent registration race.
     if(lifecycle.created) {
-      await admin.schema('orchestration').from('object_artifacts').delete().eq('id',lifecycle.row.id).catch(()=>undefined)
+      try {
+        await admin.schema('orchestration').from('object_artifacts').delete().eq('id',lifecycle.row.id)
+      } catch {
+        // Best-effort cleanup only; preserve the canonical registration failure below.
+      }
     }
     if(createdNewObject && lifecycle.created && !lookupError && !registered) {
       await admin.storage.from(bucket).remove([key]).catch(()=>undefined)
