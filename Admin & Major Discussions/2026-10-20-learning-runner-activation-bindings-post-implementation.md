@@ -9,12 +9,14 @@ This change closes the remaining non-production technical gaps between the merge
 
 1. append-only executable artifact manifests bound to exact agent definitions;
 2. append-only HELD_OUT replay input manifests bound to sealed benchmark cases;
-3. create-only private object writes with immediate byte readback, SHA-256 and size verification;
-4. exact BASELINE/CANDIDATE/rollback runtime-definition bindings to one locked evaluation policy;
+3. create-only private object writes with immediate byte readback, SHA-256 and size verification, generic object-lifecycle registration and deletion/update fencing while referenced;
+4. exact BASELINE/CANDIDATE/rollback runtime-definition bindings to one locked evaluation policy, including immutable skill identity and equivalent runtime/semantic tool contracts across arms;
 5. canonical proposer/evaluator UUID assignment and immutable scope attestation;
 6. server-owned plan construction from canonical policy, runtime binding, sealed manifest and verified bytes;
 7. current project authorization recheck through the existing authorization service;
-8. deterministic $0 synthetic runner executor that refuses prospective provenance and emits no accounting artifacts.
+8. deterministic $0 synthetic runner executor that refuses prospective provenance and emits no accounting artifacts;
+9. exact immutable artifact retries are idempotent, while conflicting scope/content reuse fails closed;
+10. activation tables are read-only to service_role and writable only through validation RPCs.
 
 No production migration, provider call, authority assignment, lifecycle promotion or deployment is part of this branch.
 
@@ -51,7 +53,7 @@ The migration/reconstruction gates must prove:
 
 - foreign-key scope to project/policy/candidate/case identities;
 - append-only mutation denial;
-- service-role-only inserts;
+- service-role SELECT-only table access with all writes forced through service-role-only validation RPCs;
 - baseline/candidate runtime and artifact separation;
 - held-out-only replay registration;
 - evaluator/proposer identity separation;
@@ -78,10 +80,14 @@ The audit is separate from the dynamic runner test and checks for:
 
 | Case | Expected behavior |
 |---|---|
-| object upload succeeds but manifest registration fails | newly-created orphan is removed |
+| object upload succeeds but manifest registration fails | newly-created unreferenced lifecycle/object state is reconciled or removed without deleting a concurrent winner |
 | object already exists with different bytes | readback digest/size fails |
 | missing/corrupt object | fail before runner dispatch |
-| artifact project/role/definition mismatch | reject |
+| artifact project/role/definition/skill mismatch | reject |
+| generic object lifecycle row differs from manifest locator/size/hash/status | reject |
+| referenced generic object is updated/deleted by retention tooling | database trigger rejects mutation |
+| exact immutable artifact is staged again | return the existing manifest idempotently |
+| same content-addressed key is reused with conflicting scope/metadata | reject |
 | training case or wrong manifest/case/version | reject |
 | policy/runtime version mismatch | reject |
 | candidate definition lifecycle outside VALIDATED/CANDIDATE | reject |
