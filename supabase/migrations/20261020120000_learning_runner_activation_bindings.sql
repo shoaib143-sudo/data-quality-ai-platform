@@ -438,6 +438,9 @@ begin
   if v_rollback.lifecycle_state not in ('ACTIVE','DEPRECATED') then
     raise exception 'Rollback runtime is not recoverable';
   end if;
+  if v_policy.rollback_ref<>('agent-definition:'||p_rollback_agent_definition_id::text) then
+    raise exception 'Rollback runtime does not match locked policy rollback reference';
+  end if;
 
   select * into v_base_art
   from agent.learning_artifact_manifests
