@@ -18,6 +18,7 @@ This branch adds zero-cost implementation and guard improvements:
 3. A pure replay-byte resolver recomputes a deterministic content hash that includes each case payload hash, then pins manifest/project/dataset/case identity and held-out split. The canonical dataset manifest schema currently lacks per-case payload hashes and a trusted canonical reader, so this resolver is not production-wired.
 4. A synthetic runtime test with mocked zero-budget admission exercises positive, unknown and non-USD quote rejection at a $0 cap and asserts zero provider calls, accounting writes and prospective results.
 5. The disposable SQL budget fixture checks that a policy with both cost budgets set to zero rejects a positive reservation estimate with `RUN_BUDGET_EXCEEDED` and creates no reservation. It does not verify provider pricing or dispatch behavior.
+6. Added the distinct `agent.learning.evaluate` authorization capability. Its role-array grant is limited to `DATA_GOVERNANCE_ADMIN`; the existing governance RPC still gives organization owners and admins its pre-existing broad bypass. The evaluation result service resolves the authenticated user from the server session, requires that UUID to match the evaluator bound to both the locked policy and result, writes that session identity as recorder, and checks the project capability before its service-role write. This does not make caller-supplied evidence or `independentlyVerified` trustworthy; those still require server-derived attestation and evidence binding before any production learning claim.
 
 ## Five workstream results
 
@@ -25,7 +26,7 @@ This branch adds zero-cost implementation and guard improvements:
 | --- | --- | --- |
 | Immutable candidate artifacts | Added a pure port adapter with atomic create-if-absent contract, content-addressed scoped keys, SHA-256 and readback checks, plus negative tests. Runner still injects artifact/plan loading. | Implement and independently review a production backend that guarantees atomic create-only behavior; add the canonical manifest and server-side access control. |
 | Held-out replay evidence | Added a pure byte resolver that recomputes the snapshot content hash, including per-case payload hashes, and binds manifest/project/dataset/case/split/version. Tests reject tampered manifest fields, missing bytes, payload tampering, leakage and scope mismatch. | The current canonical manifest schema lacks a per-case payload hash and no trusted canonical sealed-byte reader is wired. Add and review both before production use. The resolver's expected hash must come from that trusted reader, not request input. |
-| Proposer and evaluator authority | Reviewed evaluation policy, service and SQL RPC. Actor identifiers are opaque caller-provided strings; distinct strings do not prove independent identity. Caller-supplied `independentlyVerified` and `recordedBy` values are persisted without a separate attestation proof. | Bind actors to authenticated users and current project capabilities; persist an append-only, exact-scope evaluator assignment and evidence attestation; derive verification server-side. The canonical evaluator capability must be selected or added. |
+| Proposer and evaluator authority | Result recording now resolves the session user, loads the immutable policy from storage, binds the session UUID to its persisted evaluator, and checks `agent.learning.evaluate` before the service-role RPC. The session identity supplies `recorded_by`. | Policy registration still accepts proposer/evaluator actor strings without an `auth.users` FK or assignment attestation. Persist an append-only, exact-scope evaluator assignment and evidence attestation; bind both actors to authenticated users; derive `independentlyVerified` and evidence completion server-side. |
 | Independent adversarial review | Re-ran relevant local test gates. Recorded additional failure cases: cancellation after claim may leave an ambiguous claim; transport timeout after provider acceptance must retain its reservation and never retry; settlement read errors or mismatches must block evidence completion. | Add explicit recovery/terminal evidence and fault-injection coverage for those cases when the corresponding adapters exist. |
 | $0 cost boundary | Existing runtime budget fixture covers 24 agent/mode combinations and failure paths. A synthetic runtime test using a mocked zero-budget admission proves the executor makes zero dispatch/accounting/result writes for positive, unknown and non-USD quote outcomes. Added a SQL negative case for a positive reservation estimate against zero budgets. | PostgreSQL/Docker are unavailable in this workspace, so the SQL fixture has not executed here. The runtime test does not prove the persisted database admission path. Validate SQL in a disposable database only if compute is confirmed to cost $0. |
 
@@ -43,8 +44,10 @@ Executed on 2026-10-20 against local code with synthetic records:
 | `node --experimental-strip-types scripts/test-immutable-learning-artifact-store.mjs` | PASS, synthetic backend: duplicate, missing, tampered, scope mismatch and failed readback |
 | `node --experimental-strip-types scripts/test-held-out-replay-byte-resolver.mjs` | PASS, synthetic source: changed manifest fields, missing/stale source, leaked, tampered and cross-scope cases |
 | `node --experimental-strip-types scripts/test-learning-experiment-zero-cost-gate.mjs` | PASS, mocked admission: positive, missing and non-USD quote cases make zero provider calls and zero prospective writes |
-| `pnpm exec tsc --noEmit` | PASS on the clean working branch after the adapter and zero-cap test changes |
-| `git diff --check` | PASS |
+| `pnpm run verify:agent-learning-evaluate-capability` | PASS, role grant/guard contract, authenticated session binding, mismatched and malformed evaluator negatives, and no generic execution mapping |
+| `pnpm run verify:learning-evaluation-policy` | PASS after evaluator capability integration |
+| `pnpm exec tsc --noEmit` | PASS after evaluator capability integration |
+| `git diff --check` | PASS after evaluator capability integration |
 
 The SQL fixture case is not included in the executed test results. `psql` and Docker were unavailable, and no remote Actions job was started because it could incur spend. The TypeScript check was also rerun successfully on the clean branch after these adapters were added.
 
@@ -58,6 +61,8 @@ The independent branch audit found and we corrected these issues before publishi
 - The status plan was updated to mark completed clean-branch checks and to identify that the $0 runtime test uses mocked admission.
 
 The final read-only re-audit confirmed those findings are closed. This audit covers the pure code and local tests on this branch only. It does not certify a Supabase/storage adapter, production authorization, pricing data, migrations, live evidence, or production safety.
+
+The evaluator-capability change received a separate adversarial review. The first pass found that comparing the session UUID to caller-provided policy fields still allowed a forged policy object. The service now loads the immutable policy row by record ID, derives the policy contract from stored fields, binds the session user to the stored evaluator and result evaluator, authorizes the stored project, and only then writes. A second read-only review confirmed that path. Registration actor binding, evidence attestation, and server-derived `independentlyVerified` remain open, so this work does not establish production-trustworthy independent-learning evidence.
 
 ## Post-implementation plan
 
