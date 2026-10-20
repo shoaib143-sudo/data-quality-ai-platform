@@ -182,6 +182,10 @@ begin
   where ack.policy_id = new.policy_id and ack.project_id = new.project_id
     and ack.candidate_id = new.candidate_id and ack.evaluator_user_id::text = new.recorded_by;
   if not found then raise exception 'acknowledged evaluator assignment is required before result recording'; end if;
+  if new.observed_at is null or new.observed_at < v_ack.acknowledged_at
+    or new.observed_at > statement_timestamp() then
+    raise exception 'learning evaluation observations must postdate acknowledgement and cannot be future-dated';
+  end if;
   return new;
 end;
 $$;
