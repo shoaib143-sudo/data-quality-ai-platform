@@ -33,6 +33,7 @@ assert.throws(() => validate([{ ...cases[0], candidateScore: 0 }, ...cases.slice
 assert.throws(() => validate([{ ...cases[0], authorityViolation: true }, ...cases.slice(1)]), /safety counts/)
 assert.throws(() => validate(cases, { ...benchmark, evidenceRefs: benchmark.evidenceRefs.slice(1) }), /evidence references/)
 assert.throws(() => validate([{ ...cases[0], baselineEvidenceRef: cases[0].candidateEvidenceRef }, ...cases.slice(1)]), /unique/)
+assert.throws(() => validate([{ ...cases[0], baselineEvidenceRef: 'abcdefab-cdef-4abc-8def-abcdefabcdef', candidateEvidenceRef: 'ABCDEFAB-CDEF-4ABC-8DEF-ABCDEFABCDEF' }, ...cases.slice(1)]), /UUIDs and unique/)
 assert.throws(() => validate([{ ...cases[0], baselineEvidenceRef: '------------------------------------' }, ...cases.slice(1)]), /UUIDs and unique/)
 assert.throws(() => validate([{ ...cases[0], candidateScore: Number.NaN }, ...cases.slice(1)]), /between 0 and 1/)
 
