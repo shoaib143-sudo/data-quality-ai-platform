@@ -516,3 +516,22 @@ test('GitHub source scan keeps private repository credentials on the API origin'
     else process.env.GITHUB_SOURCE_SCAN_TOKEN = originalToken
   }
 })
+
+test('GitHub source acquisition refuses cross-origin redirects and oversized API bodies', async () => {
+  const originalFetch = globalThis.fetch
+  const seen = []
+  globalThis.fetch = async (_url, options) => {
+    seen.push(options)
+    return new Response('x', { status:200, headers:{'content-length':'10000001'} })
+  }
+  try {
+    await assert.rejects(
+      acquireGitHubSourceArtifacts({repositoryUrl:'https://github.com/acme/private',ref:'main'}),
+      /exceeds the size limit/,
+    )
+    assert.equal(seen[0].redirect, 'error')
+    assert.ok(seen[0].signal)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
